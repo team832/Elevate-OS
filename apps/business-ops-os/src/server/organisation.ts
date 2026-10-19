@@ -28,6 +28,7 @@ import { istToday } from '../domain/dates';
 import { historyChanges } from '../domain/hr/employees';
 import { accessScope, activeStaff, nextCode, notFound, type Actor } from './context';
 import { runDeactivationHook, writeHistory } from './hr/employee-core';
+import './hr/wiring';
 import type {
   createDepartmentBody,
   createStaffBody,

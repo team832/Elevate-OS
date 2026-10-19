@@ -34,7 +34,7 @@ export default async function PoliciesPage({
   });
   const query: Query = parsed.success ? parsed.data : {};
   return (
-    <Frame access={access} active="settings">
+    <Frame access={access} active="policies">
       <PageHeader
         title="Policies & compliance register"
         description="The policies and compliance obligations Elevate records for itself, as written by its staff, with their source, accountable person, dates and approval. Elevate OS does not research or supply policy text."

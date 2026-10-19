@@ -217,7 +217,7 @@ async function ManagerTools({ user }: { user: AuthenticatedUser }) {
           description="No scheduler runs yet. This flags sessions still open after shift end plus the grace period (or after the maximum session length) and notifies each employee once."
         >
           <ActionForm
-            action="/ops/api/v1/hr/attendance/missing-clock-out-check"
+            action="/ops/api/v1/jobs/attendance-missing-clock-out"
             submitLabel="Run missing clock-out check"
             variant="secondary"
           />

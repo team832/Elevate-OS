@@ -308,6 +308,29 @@ describe('policies & compliance register (OPS-066)', () => {
     expect(filtered.data?.map((p) => p.id)).toContain(id);
   });
 
+  it.each([
+    ['director', 200],
+    ['hr_manager', 200],
+    ['hr_contributor', 403],
+    ['auditor', 403],
+  ] as const)('ops:policies:approve — %s deciding a proposed version → %i', async (role, code) => {
+    const created = await callRoute<P>(
+      createPolicy,
+      post(manager, { ...base, accountableStaffId: manager.staffId }),
+    );
+    const id = created.data!.id;
+    await callRoute(policyWorkflow, post(manager, { action: 'propose' }), { id });
+    const decider = await staffIn(ctx.db, [role]);
+    expect(
+      (await callRoute(policyWorkflow, post(decider, { action: 'approve' }), { id })).status,
+    ).toBe(code);
+    // Deciding never lets them propose or retire.
+    expect(
+      (await callRoute(policyWorkflow, post(decider, { action: 'retire', reason: 'x' }), { id }))
+        .status,
+    ).toBe(403);
+  });
+
   it('rejection needs a comment and returns the entry to draft', async () => {
     const created = await callRoute<P>(
       createPolicy,

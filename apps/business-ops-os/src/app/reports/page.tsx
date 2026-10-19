@@ -4,10 +4,7 @@ import { Frame, gate } from '../../ui/frame';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * `available: false` = the report page is not built yet: listed without a link.
- * Flip HR to true when src/app/reports/hr/page.tsx exists (orchestrator).
- */
+/** `available: false` = the report page is not built yet: listed without a link. */
 const REPORTS: {
   href: string;
   title: string;
@@ -27,7 +24,7 @@ const REPORTS: {
     title: 'HR report',
     description: 'Headcount, attendance, leave and lifecycle figures.',
     permission: 'ops:hr_reports:read',
-    available: false,
+    available: true,
   },
   {
     href: '/ops/reports/operations',

@@ -20,7 +20,7 @@ export default async function PolicyPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const access = await gate('ops:settings:read', `/ops/settings/policies/${id}`);
   return (
-    <Frame access={access} active="settings">
+    <Frame access={access} active="policies">
       <p>
         <a href="/ops/settings/policies">Back to the policies &amp; compliance register</a>
       </p>
@@ -134,13 +134,13 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           ) : null}
         </Card>
       ) : null}
-      {d.canManage ? (
+      {d.canManage || d.canApprove ? (
         <Card
           title="Decide or move this entry on"
           description="The person who proposes a version cannot approve it."
         >
           <div className="el-grid">
-            {d.current?.status === 'draft' ? (
+            {d.canManage && d.current?.status === 'draft' ? (
               <ActionForm
                 action={`${api}/workflow`}
                 submitLabel="Propose for approval"
@@ -168,12 +168,14 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
               ) : (
                 <>
                   <p className="el-field-hint">{d.approveBlocker ?? 'Waiting for an approver.'}</p>
-                  <ActionForm
-                    action={`${api}/workflow`}
-                    submitLabel="Withdraw my proposal"
-                    variant="secondary"
-                    extra={{ action: 'withdraw' }}
-                  />
+                  {d.canManage ? (
+                    <ActionForm
+                      action={`${api}/workflow`}
+                      submitLabel="Withdraw my proposal"
+                      variant="secondary"
+                      extra={{ action: 'withdraw' }}
+                    />
+                  ) : null}
                 </>
               )
             ) : null}

@@ -6,10 +6,8 @@
  * that needs approval again). Approval goes through core approvals (policy
  * `ops.policy.approve`, subject = the VERSION); the proposer can never approve.
  *
- * Permissions: read `ops:settings:read`; draft / propose / retire
- * `ops:settings:manage`. Approval is gated behind `ops:settings:manage` plus the
- * no-self-approval rule until a dedicated `ops:policies:approve` permission
- * exists (requested — see docs/parts/operations.md).
+ * Permissions: read `ops:settings:read`; draft / propose / withdraw / retire
+ * `ops:settings:manage`; approve / reject `ops:policies:approve` (never the proposer).
  */
 import { and, asc, desc, eq } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
@@ -70,7 +68,7 @@ export const policyApprovalPolicy = defineApprovalPolicy({
   key: 'ops.policy.approve',
   module: 'ops',
   subjectType: 'policy_version',
-  deciderPermission: 'ops:settings:manage',
+  deciderPermission: 'ops:policies:approve',
   requesterPermission: 'ops:settings:manage',
   allowSelfApproval: false,
   requireCommentOnReject: true,
@@ -234,7 +232,10 @@ export async function getPolicy(db: Database, actor: Actor, id: string, now = ne
             settings['registers.review_due'].value.dueSoonDays,
           ),
     canManage: manage && policy.status !== 'retired',
-    canApprove: manage && policy.status !== 'retired' && approveBlockers.length === 0,
+    canApprove:
+      can(actor, 'ops:policies:approve') &&
+      policy.status !== 'retired' &&
+      approveBlockers.length === 0,
     approveBlocker: approveBlockers.includes('self_approval')
       ? 'You proposed this version, so another person must approve it.'
       : null,
@@ -441,7 +442,8 @@ export async function policyWorkflow(
   input: z.output<typeof policyWorkflowBody>,
   requestId?: string,
 ) {
-  await accessScope(db, actor, 'ops:settings:manage');
+  const deciding = input.action === 'approve' || input.action === 'reject';
+  await accessScope(db, actor, deciding ? 'ops:policies:approve' : 'ops:settings:manage');
   return withTransaction(db, async (tx) => {
     const policy = await lockPolicy(tx, id);
     const version = await versionOf(tx, policy.currentVersionId);

@@ -229,9 +229,14 @@ a:hover {
   border-bottom: 2px solid transparent;
   white-space: nowrap;
 }
-.el-subnav a[aria-current='page'] {
+.el-subnav a[aria-current='page'],
+.el-subnav a[aria-current='true'] {
   color: var(--el-text);
   border-bottom-color: var(--el-accent);
+}
+/* Second row of a grouped module nav: the pages of the active section. */
+.el-subnav-pages {
+  background: var(--el-surface-muted);
 }
 .el-main {
   flex: 1;

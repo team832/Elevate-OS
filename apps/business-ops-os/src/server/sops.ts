@@ -788,9 +788,8 @@ type RequirementRow = typeof opsSopAckRequirements.$inferSelect;
 const canSeeAckNames = (actor: Actor) =>
   can(actor, 'ops:sops:write') || can(actor, 'ops:dashboard:read');
 
-/** Read-only principals (only the auditor role) never write acknowledgements. */
-const isReadOnly = (actor: Actor) =>
-  actor.roles.length > 0 && actor.roles.every((r) => r === 'auditor');
+/** Without `ops:sops:acknowledge` (e.g. the read-only auditor) nobody writes acknowledgements. */
+const isReadOnly = (actor: Actor) => !can(actor, 'ops:sops:acknowledge');
 
 /** Audience of a requirement: active staff of a department, or active users holding a role. */
 async function ackAudience(db: Database, req: RequirementRow): Promise<AckAudienceMember[]> {
@@ -1064,7 +1063,7 @@ export async function acknowledgeSop(
   input: { note?: string | null },
   requestId?: string,
 ) {
-  await accessScope(db, actor, 'ops:sops:read');
+  await accessScope(db, actor, 'ops:sops:acknowledge');
   return withTransaction(db, async (tx) => {
     const sop = await lockSop(tx, id);
     const state = await myAckState(tx, actor, sop);

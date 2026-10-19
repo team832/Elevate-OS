@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import {
   authedRequest,
   buildRequest,
@@ -8,7 +8,12 @@ import {
   setupTestDatabase,
   type TestUser,
 } from '@elevate/testing';
-import { departments, opsEmploymentHistory, staffMembers } from '@elevate/database';
+import {
+  departments,
+  integrationEvents,
+  opsEmploymentHistory,
+  staffMembers,
+} from '@elevate/database';
 import type { DepartmentId, StaffMemberId } from '@elevate/shared-types';
 import { GET as listRoute, POST as createRoute } from '../../src/app/api/v1/hr/employees/route';
 import { GET as getRoute, PATCH as patchRoute } from '../../src/app/api/v1/hr/employees/[id]/route';
@@ -264,20 +269,38 @@ describe('reporting lines and employment history (OPS-032, OPS-033)', () => {
     expect(back.status).toBe(409);
   });
 
-  it('records "not_wired" when a staff row is deactivated without a revocation handler', async () => {
+  it('deactivating a staff row publishes ops.employee.separated once and audits "handled"; no employee record → "not_wired"', async () => {
+    const separations = (staffId: string) =>
+      ctx.db
+        .select()
+        .from(integrationEvents)
+        .where(
+          and(
+            eq(integrationEvents.type, 'ops.employee.separated'),
+            sql`${integrationEvents.payload}->>'staffId' = ${staffId}`,
+          ),
+        );
     const e = await createEmployee(ctx.db, hrManager, { fullName: 'Deactivated (fictional)' });
-    const res = await callRoute(
-      patchStaff,
-      authedRequest(opsManager, '/x', { method: 'PATCH', json: { status: 'inactive' } }),
-      {
-        id: e.staffId,
-      },
-    );
-    expect(res.status).toBe(200);
-    expect((await lastAudit(ctx.db, e.staffId, 'employee.deactivated'))?.metadata).toMatchObject({
-      source: 'staff_inactive',
-      accessRevocation: 'not_wired',
-    });
+    const [plain] = await ctx.db
+      .insert(staffMembers)
+      .values({ fullName: 'No HR record (fictional)' })
+      .returning();
+    for (const [staffId, accessRevocation, events] of [
+      [e.staffId, 'handled', 1],
+      [plain!.id, 'not_wired', 0],
+    ] as const) {
+      const res = await callRoute(
+        patchStaff,
+        authedRequest(opsManager, '/x', { method: 'PATCH', json: { status: 'inactive' } }),
+        { id: staffId },
+      );
+      expect(res.status).toBe(200);
+      expect((await lastAudit(ctx.db, staffId, 'employee.deactivated'))?.metadata).toMatchObject({
+        source: 'staff_inactive',
+        accessRevocation,
+      });
+      expect(await separations(staffId)).toHaveLength(events);
+    }
   });
 
   it('keeps department-head history; one current head', async () => {

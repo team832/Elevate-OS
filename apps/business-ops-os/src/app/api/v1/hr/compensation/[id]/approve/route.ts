@@ -6,6 +6,6 @@ export const dynamic = 'force-dynamic';
 
 /** POST /ops/api/v1/hr/compensation/[id]/approve — Approve a draft (a different person; `confirm: true`). */
 export const POST = defineRoute(
-  { permission: 'ops:compensation:manage', params: staffIdParams, body: approveCompensationBody },
+  { permission: 'ops:compensation:approve', params: staffIdParams, body: approveCompensationBody },
   async ({ user, db, params, requestId }) => approveCompensation(db, user, params.id, requestId),
 );

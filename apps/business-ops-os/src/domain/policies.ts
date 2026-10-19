@@ -519,8 +519,7 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
     defaultState: 'proposed',
     source:
       'Proposal by the Business Ops team (admissions build, 19 Oct 2026); the legacy CRM records only free-text "lost" reasons.',
-    ownerDecision:
-      'OD-ADM-1 (new, to be numbered): confirm the reason list and whether a code is mandatory',
+    ownerDecision: 'OD-046: confirm the reason list and whether a code is mandatory',
     editable: true,
   },
   'fees.recording': {

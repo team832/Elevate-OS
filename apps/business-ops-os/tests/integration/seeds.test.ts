@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { hashPassword } from '@elevate/authentication';
 import {
+  opsCandidates,
   opsDecisions,
+  opsEmployeeRecords,
+  opsFeeRecords,
   opsLeads,
   opsLeadSources,
+  opsRequisitions,
   opsResponsibilities,
+  opsShiftTemplates,
   opsSops,
   opsTasks,
   opsWorkItems,
@@ -37,7 +42,7 @@ describe('Business Ops seeds', () => {
     ).toBe(true);
 
     const leads = await ctx.db.select().from(opsLeads);
-    expect(leads).toHaveLength(4);
+    expect(leads).toHaveLength(6); // 4 pipeline samples + 2 admissions samples
     for (const l of leads) {
       expect(l.studentName).toMatch(/\(fictional\)$/);
       expect(l.studentPhone).toBeNull();
@@ -47,5 +52,15 @@ describe('Business Ops seeds', () => {
     const staff = await ctx.db.select().from(staffMembers);
     expect(staff.length).toBe(10); // 8 core + 2 Ops fictional staff
     expect(staff.every((s) => /\(fictional\)$/.test(s.fullName))).toBe(true);
+
+    // Slice seeds: samples stay undecided (draft / proposed), nothing invented as delivered.
+    expect(await ctx.db.select().from(opsFeeRecords)).toHaveLength(3);
+    expect(await ctx.db.select().from(opsEmployeeRecords)).toHaveLength(staff.length);
+    for (const [table, status] of [
+      [opsShiftTemplates, 'proposed'],
+      [opsRequisitions, 'draft'],
+      [opsCandidates, 'active'],
+    ] as const)
+      expect((await ctx.db.select().from(table)).map((r) => r.status)).toEqual([status]);
   });
 });

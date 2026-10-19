@@ -427,9 +427,16 @@ export const milestoneUpdateBody = z.object({
 
 export const settingBody = z.object({ value: z.unknown(), note: optText(1000) });
 export const settingParams = z.object({ key: z.string().min(1).max(100) });
-export const jobParams = z.object({
-  job: z.enum(['follow-up-reminders', 'task-escalations', 'enrolment-replies']),
-});
+export const OPS_JOBS = [
+  'follow-up-reminders',
+  'task-escalations',
+  'task-reminders',
+  'enrolment-replies',
+  'attendance-missing-clock-out',
+  'lifecycle-reminders',
+  'separations',
+] as const;
+export const jobParams = z.object({ job: z.enum(OPS_JOBS) });
 export const dashboardQuery = z.object({
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),

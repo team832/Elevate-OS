@@ -2,7 +2,7 @@
 
 Elevate OS is the internal operating system for **Elevate Education**, a coaching institute (Sikar + online) preparing students for **CLAT, IPMAT, CUET, Class 11–12 Commerce and CA Foundation**. It replaces scattered spreadsheets, Markdown trackers and chat memory with one system that staff sign in to once.
 
-> Status (2026-10-18): the **Foundation** (wave 1) and the **three modules** (wave 2: Marketing OS, Academic OS, Business Ops OS) are built and tested — `npm run validate` passes 58 files / 506 tests. The **integration pass** (wave 3: baseline migration, seeded dev database, cross-module E2E on PostgreSQL, dashboard wiring) has not run yet. Nothing is deployed. Exact evidence: `IMPLEMENTATION_STATUS.md`; next steps: the `elevate-next-steps` skill in `C:\OPENBOT\.claude\skills`.
+> Status (2026-10-18): the **Foundation** (wave 1) and the **three modules** (wave 2: Marketing OS, Academic OS, Business Ops OS) are built and tested — `npm run validate` passed 58 files / 506 tests at that point. On 19 Oct 2026 Business Ops gained HR, admissions administration and operations work (D-028; `npm test` at commit ce7589c: 86 files, 896 tests passed, 1 todo; screens type-checked, not yet built; no migration). The **integration pass** (wave 3: baseline migration, seeded dev database, cross-module E2E on PostgreSQL, dashboard wiring) has not run yet. Nothing is deployed. Exact evidence: `IMPLEMENTATION_STATUS.md`; next steps: the `elevate-next-steps` skill in `C:\OPENBOT\.claude\skills`.
 
 ## Contents
 1. [The three modules and their boundaries](#1-the-three-modules-and-their-boundaries)
@@ -24,7 +24,7 @@ Elevate OS is the internal operating system for **Elevate Education**, a coachin
 |---|---|---|---|
 | **Marketing OS** (`apps/marketing-os`) | `/marketing` | Social accounts, ideas, content items & versions, placements, publishing records, marketing metrics, campaigns | Leads (Ops), students (Academic) |
 | **Academic OS** (`apps/academic-os`) | `/academic` | Courses, curriculum, batches, teaching assignments, timetable, class records, attendance, assessments, students, enrolments, results, catch-up, interventions; stewards the programme catalogue | Leads/admissions (Ops) |
-| **Business Ops OS** (`apps/business-ops-os`) | `/ops` | Leads, enquiries, counselling, demos, admissions, tasks, SOPs, decisions, risks, projects, responsibilities; stewards departments and staff | Enrolment records (Academic), content (Marketing) |
+| **Business Ops OS** (`apps/business-ops-os`) | `/ops` | Leads, enquiries, counselling, demos, admissions, student administration and manual fee records, tasks, SOPs, policies register, decisions, risks, projects, responsibilities; HR (employee records, recruitment, onboarding and offboarding, staff attendance, shifts, leave, compensation records, assets); stewards departments and staff. Not payroll | Enrolment records (Academic), content (Marketing) |
 | **Platform** (`apps/platform`) | `/` | Sign-in, home, leadership dashboard, users/sessions/roles | Module data |
 
 Modules never import each other. They cooperate through **contracts** in `@elevate/shared-contracts`:
@@ -121,7 +121,7 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `npm run secret-scan` | Fails on credential-like text or non-ignored `.env` files |
 | `npm run validate` | typecheck + lint + test + secret-scan |
 | `npm run db:start` / `db:stop` | Local PostgreSQL (embedded-postgres) |
-| `npm run db:generate` | drizzle-kit migration from all four schema files (wave 3 / Integration) |
+| `npm run db:generate` | drizzle-kit migration from all schema files (the `ops` schema spans five, D-029) (wave 3 / Integration) |
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:seed` | Core + module seeds (local DBs only) |
 | `npm run db:reset` | Dev only: drop Elevate schemas, migrate, seed (refuses non-local URLs) |

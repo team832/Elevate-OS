@@ -5,9 +5,34 @@
  */
 export { MODULE_PATHS } from './paths';
 export { authOptions } from './auth';
-export { ENROLMENT_REPLIES_CONSUMER, processEnrolmentReplies, requestEnrolment } from './enrolment';
+export {
+  ENROLMENT_REPLIES_CONSUMER,
+  knownStudentIdForPerson,
+  processEnrolmentReplies,
+  requestEnrolment,
+  retryEnrolmentHandoff,
+} from './enrolment';
 export { runFollowUpReminders } from './follow-ups';
-export { runTaskEscalations } from './escalations';
+export { runTaskEscalations, runTaskReminders } from './escalations';
+export { APPROVAL_SOURCES, listApprovalInbox, type ApprovalSource } from './approvals';
+export { updateStaff } from './organisation';
+export {
+  changeEmploymentStatus,
+  insertEmployee,
+  registerDeactivationHandler,
+} from './hr/employee-core';
+export { runMissingClockOutCheck } from './hr/attendance';
+export { runLifecycleReminders } from './hr/onboarding';
+export { publishSeparation, runSeparations } from './hr/offboarding';
+export { buildOperationsReport } from './reports/operations';
+export {
+  activeEmployeesMetric,
+  employeesByDepartmentMetric,
+  upcomingJoiningDates,
+} from './reports/hr-records-metrics';
+export { hrLifecycleMetrics } from './reports/hr-lifecycle-metrics';
+export { hrTimeMetrics } from './reports/hr-time-metrics';
 export { buildDashboard } from './dashboard';
 export { fetchCrossModuleSummaries } from './summaries';
 export { getCrmAdapter, MockCrmAdapter, type CrmAdapter } from './adapters/crm';
+export { getAttendanceProvider, MockAttendanceProvider } from './adapters/attendance-provider';

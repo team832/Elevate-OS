@@ -98,13 +98,22 @@ export function formatMetricValue(metric: Pick<Metric, 'value' | 'unit'>): strin
  * - estimated → "≈ number" with an "Estimated" badge and the basis
  * - missing   → "Missing" in a dashed tile with the reason; never a number
  */
-export function StatTile({ label, metric }: { label: string; metric: Metric }) {
+export function StatTile({
+  label,
+  metric,
+  missingLabel = 'Missing',
+}: {
+  label: string;
+  metric: Metric;
+  /** Word shown instead of a value when the metric is missing (never 0). */
+  missingLabel?: string;
+}) {
   const description = `${metric.definition} (${metric.window.label ?? `${metric.window.from} to ${metric.window.to}`})`;
   if (metric.status === 'missing') {
     return (
       <div className="el-stat el-stat-missing" data-status="missing">
         <p className="el-stat-label">{label}</p>
-        <p className="el-stat-value">Missing</p>
+        <p className="el-stat-value">{missingLabel}</p>
         <p className="el-stat-note">{metric.reason}</p>
         <p className="el-stat-note">{description}</p>
       </div>

@@ -88,6 +88,8 @@ Technical decisions below were made by the lead engineering agent on 2026-10-17 
 ## D-015 — Scope limits (not built unless authorized)
 Payroll, biometric device integration, legal employment records, a full HRIS, parent/student portals, the public website, and AI content generation are **out of scope**. Staff leave/attendance is out of scope pending owner decision.
 
+Narrowed by D-028 (19 Oct 2026).
+
 ## D-016 — Development data
 Seeds use **fictional people** (staff, students, leads). Business planning data that is not personal (programmes, chapter lists, planned class counts, idea titles) may be imported from the legacy source with its status label preserved (`locked`, `provisional`, `proposed`, `delivered`). Planned counts are never seeded as completed work.
 

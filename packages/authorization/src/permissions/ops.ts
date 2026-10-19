@@ -53,6 +53,7 @@ export const opsPermissionList = [
   { key: 'ops:sops:read', description: 'Read SOPs and their versions.' },
   { key: 'ops:sops:write', description: 'Draft and edit SOPs, submit them for approval.' },
   { key: 'ops:sops:approve', description: 'Approve or reject an SOP version.' },
+  { key: 'ops:sops:acknowledge', description: 'Acknowledge an SOP version one is asked to read.' },
   { key: 'ops:incidents:read', description: 'Read operational exceptions and incidents.' },
   { key: 'ops:incidents:write', description: 'Record and resolve exceptions and incidents.' },
   { key: 'ops:decisions:read', description: 'Read the decision log.' },
@@ -79,6 +80,7 @@ export const opsPermissionList = [
     key: 'ops:settings:manage',
     description: 'Change Ops configuration values (changes stay "proposed").',
   },
+  { key: 'ops:policies:approve', description: 'Approve or reject a policy register version.' },
   {
     key: 'ops:jobs:run',
     description:
@@ -128,6 +130,7 @@ export const opsPermissionList = [
     description: 'Compensation records (approved terms, components, effective dates).',
   },
   { key: 'ops:compensation:manage', description: 'Record and change compensation terms.' },
+  { key: 'ops:compensation:approve', description: 'Approve drafted compensation terms.' },
   {
     key: 'ops:compensation:export',
     description: 'Export compensation records for an authorised payroll process (no payroll run).',
@@ -232,6 +235,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       own('ops:students:read'),
       own('ops:student_private:read'),
       'ops:sops:read',
+      'ops:sops:acknowledge',
       'ops:organisation:read',
       'ops:employees:read',
     ],
@@ -242,6 +246,8 @@ export const opsPermissions = definePermissions<OpsPermission>({
       'ops:decisions:write',
       'ops:recruitment:decide',
       'ops:lifecycle:approve',
+      'ops:policies:approve',
+      'ops:sops:acknowledge',
     ],
     teacher: [own('ops:tasks:read'), own('ops:tasks:write')],
     auditor: reads,
@@ -259,6 +265,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       'ops:employee_documents:manage',
       'ops:compensation:read',
       'ops:compensation:manage',
+      'ops:compensation:approve',
       'ops:assets:read',
       'ops:assets:manage',
       'ops:recruitment:read',
@@ -282,7 +289,9 @@ export const opsPermissions = definePermissions<OpsPermission>({
       own('ops:tasks:read'),
       own('ops:tasks:write'),
       'ops:sops:read',
+      'ops:sops:acknowledge',
       'ops:settings:read',
+      'ops:policies:approve',
     ],
     hr_contributor: [
       'ops:module:access',
@@ -309,6 +318,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       own('ops:tasks:read'),
       own('ops:tasks:write'),
       'ops:sops:read',
+      'ops:sops:acknowledge',
     ],
     // `own` = requisitions, candidates and interviews assigned to the recruiter.
     recruiter: [
@@ -319,6 +329,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       own('ops:tasks:read'),
       own('ops:tasks:write'),
       'ops:sops:read',
+      'ops:sops:acknowledge',
     ],
     // `own` = themselves plus everyone in their reporting chain (server/hr-scope.ts).
     department_manager: [
@@ -333,11 +344,14 @@ export const opsPermissions = definePermissions<OpsPermission>({
       own('ops:leave:approve'),
       own('ops:leave:request'),
       own('ops:lifecycle:read'),
+      // Interview panels: applications the manager sits on (server/hr/recruitment.ts).
+      own('ops:recruitment:read'),
       own('ops:assets:read'),
       own('ops:hr_reports:read'),
       own('ops:tasks:read'),
       own('ops:tasks:write'),
       'ops:sops:read',
+      'ops:sops:acknowledge',
     ],
     // Self-service. The directory (ops:employees:read) shows non-sensitive fields only.
     employee: [
@@ -356,12 +370,14 @@ export const opsPermissions = definePermissions<OpsPermission>({
       own('ops:tasks:read'),
       own('ops:tasks:write'),
       'ops:sops:read',
+      'ops:sops:acknowledge',
     ],
     finance_officer: [
       'ops:module:access',
       'ops:employees:read',
       'ops:compensation:read',
       'ops:compensation:manage',
+      'ops:compensation:approve',
       'ops:compensation:export',
       'ops:fees:read',
       'ops:fees:record',

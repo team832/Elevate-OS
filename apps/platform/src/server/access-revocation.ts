@@ -7,8 +7,8 @@
  * `user.access_revoked` (module platform) with the session count and the
  * event id, which Business Ops reads to complete its checklist item.
  *
- * A scheduler is a wave-3 integration item: call `processAccessRevocations(db)`
- * from a job runner (no platform job route exists yet).
+ * No scheduler yet: a platform administrator runs it with
+ * `POST /api/v1/jobs/access-revocations`.
  */
 import { eq } from 'drizzle-orm';
 import { sessions, users, type Database } from '@elevate/database';

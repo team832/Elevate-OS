@@ -13,34 +13,50 @@ import { AppShell, ErrorState, LoadingState } from '@elevate/shared-ui';
 import { MODULE } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
 
-const NAV: { key: string; label: string; href: string; permission: Permission }[] = [
-  { key: 'home', label: 'Dashboard', href: '/ops', permission: 'ops:module:access' },
-  { key: 'leads', label: 'Leads', href: '/ops/leads', permission: 'ops:leads:read' },
-  { key: 'schedule', label: 'Schedule', href: '/ops/schedule', permission: 'ops:leads:read' },
-  {
-    key: 'admissions',
-    label: 'Admissions',
-    href: '/ops/admissions',
-    permission: 'ops:admissions:read',
-  },
-  { key: 'tasks', label: 'Tasks', href: '/ops/tasks', permission: 'ops:tasks:read' },
-  { key: 'staff', label: 'Staff', href: '/ops/staff', permission: 'ops:organisation:read' },
-  { key: 'sops', label: 'SOPs', href: '/ops/sops', permission: 'ops:sops:read' },
-  {
-    key: 'incidents',
-    label: 'Incidents',
-    href: '/ops/incidents',
-    permission: 'ops:incidents:read',
-  },
-  {
-    key: 'decisions',
-    label: 'Decisions',
-    href: '/ops/decisions',
-    permission: 'ops:decisions:read',
-  },
-  { key: 'risks', label: 'Risks', href: '/ops/risks', permission: 'ops:risks:read' },
-  { key: 'projects', label: 'Projects', href: '/ops/projects', permission: 'ops:risks:read' },
-  { key: 'settings', label: 'Settings', href: '/ops/settings', permission: 'ops:settings:read' },
+type NavRow = [key: string, label: string, href: string, permission: Permission];
+const section = (group: string | undefined, rows: NavRow[]) =>
+  rows.map(([key, label, href, permission]) => ({ key, label, href, permission, group }));
+
+/** Module navigation: sections in the first row, the active section's pages in the second. */
+const NAV = [
+  ...section(undefined, [['home', 'Dashboard', '/ops', 'ops:module:access']]),
+  ...section('Admissions', [
+    ['leads', 'Leads', '/ops/leads', 'ops:leads:read'],
+    ['schedule', 'Schedule', '/ops/schedule', 'ops:leads:read'],
+    ['admissions', 'Admissions', '/ops/admissions', 'ops:admissions:read'],
+    ['students', 'Students', '/ops/students', 'ops:students:read'],
+  ]),
+  ...section('People', [
+    ['hr-employees', 'Employees', '/ops/hr/employees', 'ops:employees:read'],
+    ['hr-departments', 'Departments', '/ops/hr/departments', 'ops:organisation:read'],
+    ['staff', 'Staff directory', '/ops/staff', 'ops:organisation:read'],
+    ['recruitment', 'Recruitment', '/ops/hr/recruitment', 'ops:recruitment:read'],
+    ['onboarding', 'Onboarding', '/ops/hr/onboarding', 'ops:lifecycle:read'],
+    ['offboarding', 'Offboarding', '/ops/hr/offboarding', 'ops:lifecycle:read'],
+    ['hr-compensation', 'Compensation', '/ops/hr/compensation', 'ops:compensation:read'],
+  ]),
+  ...section('Time & leave', [
+    ['my-time', 'My attendance & leave', '/ops/hr/attendance/me', 'ops:attendance:record'],
+    ['attendance', 'Attendance', '/ops/hr/attendance', 'ops:attendance:read'],
+    ['shifts', 'Shifts', '/ops/hr/shifts', 'ops:shifts:read'],
+    ['leave', 'Leave', '/ops/hr/leave', 'ops:leave:read'],
+    ['timesheets', 'Timesheets', '/ops/hr/timesheets', 'ops:hr_reports:read'],
+  ]),
+  ...section('Operations', [
+    ['tasks', 'Tasks', '/ops/tasks', 'ops:tasks:read'],
+    ['approvals', 'Approvals', '/ops/operations/approvals', 'ops:module:access'],
+    ['sops', 'SOPs', '/ops/sops', 'ops:sops:read'],
+    ['incidents', 'Incidents', '/ops/incidents', 'ops:incidents:read'],
+    ['decisions', 'Decisions', '/ops/decisions', 'ops:decisions:read'],
+    ['risks', 'Risks', '/ops/risks', 'ops:risks:read'],
+    ['projects', 'Projects', '/ops/projects', 'ops:risks:read'],
+    ['assets', 'Assets', '/ops/operations/assets', 'ops:assets:read'],
+  ]),
+  ...section('Reports', [['reports', 'Reports', '/ops/reports', 'ops:module:access']]),
+  ...section('Settings', [
+    ['settings', 'Settings', '/ops/settings', 'ops:settings:read'],
+    ['policies', 'Policies & compliance', '/ops/settings/policies', 'ops:settings:read'],
+  ]),
 ];
 
 export function gate(permission: Permission, returnTo: string): Promise<PageAccess> {
@@ -63,6 +79,7 @@ export function Frame({
   const nav = NAV.filter((n) => can(access.user, n.permission)).map((n) => ({
     href: n.href,
     label: n.label,
+    group: n.group,
     active: n.key === active,
   }));
   return (

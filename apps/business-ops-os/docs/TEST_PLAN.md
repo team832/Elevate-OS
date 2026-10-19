@@ -27,4 +27,53 @@ Run: `npx vitest run apps/business-ops-os` (or `npx vitest run --project busines
 | `routes.test.ts` | health, standalone login, seed export |
 
 ## Not automated
-Browser E2E (Playwright deferred, D-007); real cross-module handoff with the Academic consumer (IR-OPS-03); page rendering of every screen (pages are covered by `npm run build` type-checking plus the panel render test).
+Browser E2E (Playwright deferred, D-007); page rendering of every screen (pages are covered by `npm run build` type-checking plus the panel render test). The cross-module handoff is now tested: see the platform tests below.
+
+
+---
+
+# Added on 19 Oct 2026 (admissions, HR, operations)
+
+**Result at commit ce7589c** (whole repository, `npm test`): Test Files 86 passed, Tests 896 passed, 1 todo (the `it.todo` for Academic reusing `existingStudentId`, IR-OPS-ADM-1). Typecheck, lint and the secret scan (912 files) passed. "it blocks" below are counted from the source and are a guide, not the runner's count.
+
+Fixtures per area: `admissions-fixtures.ts`, `hr-records-fixtures.ts`, `hr-lifecycle-fixtures.ts`, `hr-time-fixtures.ts`, `operations-fixtures.ts`. Each integration file builds a fresh PGlite database (D-025), uses fictional people only, and calls the real route handlers or services. Every HR and fee route has 401 and 403 cases; field-level protection is tested per role.
+
+## Unit tests (`tests/unit/`)
+| File (it blocks) | Algorithms | Covers |
+|---|---|---|
+| `admissions-fees.test.ts` (15) | A-17 | Rupee text to paise without floats; amount limits; direction only on adjustments; receipt reference setting; refund cap; demo credit once and capped; summary with voided rows; balance `null` when no due entry; state labels |
+| `admissions-students-kpis.test.ts` (14) | A-18, A-20 | Directory state mapping; private-key redaction (also deep, in audit payloads); closure reason codes; enquiries count; pipeline snapshot; counselling and demos; handoff success rate and view; retry decision; overdue follow-ups; IST boundary |
+| `hr-records-domain.test.ts` (20) | A-21…A-28 | Field tiers and projection; status transitions; history diff; org tree and head succession; document actions; compensation validation, approval planning, effective dating, CSV formula neutralising; assets; metrics |
+| `hr-lifecycle-domain.test.ts` (14) | A-29…A-38 | Requisition, application and offer edge tables; self-approval; interview feedback rule; onboarding and offboarding checklists; item rules; gating |
+| `hr-time-domain.test.ts` (35) | A-39…A-45 | Calendar and time zones; attendance hours; late/early with grace; missing clock-out; overlap of sessions, assignments (incl. overnight) and leave; working-day counting; balance ledger; RFC 4180 CSV parser and row validation; corrections and leave decision checks; availability grid; timesheet summary |
+| `operations-domain.test.ts` (23) | A-46…A-56 | Comment hiding; task review decision; reminders (10 cases incl. late UTC evening = next IST day); activity lines; SOP publication and review-due flags; acknowledgement audience and status; policy status and proposal checks; incident targets; blocked projects; operations KPIs (missing is not zero) |
+
+## Integration tests (`tests/integration/`, PGlite)
+| File (it blocks) | Covers |
+|---|---|
+| `admissions-fees.test.ts` (5) | 401 without a session; recording needs `ops:fees:record`; reads follow own scope; due, received, refund and credit entries with computed balance, audited and labelled manual; refund cannot exceed what was received; finance list paginated by code |
+| `admissions-students.test.ts` (6) | Directory lists admitted students only; profile 404 before admission and 403 outside scope; reason-coded closure (withdrawal); handoff retry after a dead delivery (refused while Academic retries; superseded attempt's late reply flagged); lead contact masking; consent and preferences |
+| `admissions-report.test.ts` (3), `admissions-seed.test.ts` (1) | Report per role and own scope; missing is not 0; sample admissions and fee seed runs twice without duplicates |
+| `hr-records-employees.test.ts` (15) | Create (401/403/400/201, four concurrent creates give four codes, email normalised and 409 on duplicate, archived department and inactive manager refused, audit without private fields); directory search, filter, sort and pagination on the server; self-management and loops refused; head history; org chart; history row per tracked change incl. the staff screen; status transitions; field tiers |
+| `hr-records-private-documents.test.ts` (9) | Private fields: self only, HR manager all, department manager never; emergency contacts max 5; identity last four; documents: 503 on stored upload and download, 409 reference-only, fake connected adapter issues a 300 s URL, identity documents hidden from the HR contributor, deletion by a second person |
+| `hr-records-compensation-assets.test.ts` (7) | Draft, approval by a different person, never one's own pay, supersede, forward-in-time rule, export with reference and audit; assets assign, return, one open assignment |
+| `hr-records-metrics.test.ts` (2), `hr-records-seed.test.ts` (1) | K-HR missing before any record, counts, department manager scope; seed idempotent |
+| `hr-lifecycle-recruitment.test.ts` (12) | Requisition opening needs a decider who is not the requester; recruiter sees own requisitions only; candidate contacts normalised, duplicates refused, never in lists, auditor and director see none; application table allowed and everything else refused; interviewers see only their applications; feedback notes masked; offers never approved by the preparer; conversion idempotent (two calls, one employee, one case); anonymisation |
+| `hr-lifecycle-cases.test.ts` (7) | Onboarding gated on required items and an approver who is not the employee; department manager reads own reporting chain only; overdue reminders once per IST day; offboarding asset returns and transfers; last working day before start refused; approval puts the employee on notice and separation publishes one event; no-login employee completes access revocation, jobs route guarded; retraction before it applies |
+| `hr-lifecycle-employee-journey.test.ts` (1), `hr-lifecycle-metrics.test.ts` (4) | Requisition to separation end to end (the attendance and leave step is a marked TODO); K-HRL missing and values |
+| `hr-time-attendance.test.ts` (14) | Clock in, break, clock out; second clock-in the same day refused; manual entries need a reason, are audited, late/early against the shift; day without a shift not measured; missing clock-out job flags once; corrections never overwrite (3 cases); CSV import (3 cases: preview, commit, repeat file); provider reports `not_configured`; monthly summary, colleague forbidden |
+| `hr-time-leave.test.ts` (15) | Shift templates and assignments (4 cases), holidays; leave requests (7 cases: working-day counting with Sunday and a Sikar holiday excluded, half days, overlap, never self-approval, cancellation rules); balances (not configured until an allocation, then a ledger; cancellation reversal); team availability; timesheets, export, metrics |
+| `hr-time-jobs-seed.test.ts` (2) | Missing clock-out job needs `ops:jobs:run`; seed idempotent |
+| `operations-tasks.test.ts` (9) | 401/403/400/201 and own scope; comments (hide by author or manager only, body withheld from own-scope readers); references (label and location only, unsafe links rejected, removal needs a reason); completion needs evidence; supervisor review (accept, return reopens, cycle 2); activity history; filters and page meta; reminder job once per task and due date |
+| `operations-sops.test.ts` (5) | Schedule only after approval, published once the effective date is reached, history kept; archive only after retirement; required acknowledgements by department and by role (once per person, outsiders and auditors cannot, report counts); coordinator SOP stays draft |
+| `operations-registers.test.ts` (8) | Policies and compliance register (draft, proposed, approved by another person, new versions, retired stays readable; rejection needs a comment; auditor and director read-only, invalid keys and dates rejected); risk mitigations (add, progress, drop with outcome; director cannot write); blocked projects; incident resolution target flags; operations report (403 for a counsellor, rates missing without data, integration errors counted) |
+| `operations-approvals.test.ts` (4) | Inbox sources, permission filtering, no self-approval items, unavailable source |
+
+## Platform and cross-module tests
+| File | Covers |
+|---|---|
+| `apps/platform/tests/integration/enrolment-handoff.test.ts` (6 cases + 1 `it.todo`) | Ops `requestEnrolment` → Academic consumer `academic.enrolment-intake` → reply → Ops `processEnrolmentReplies`: success with references; repeated request and redelivery never create a second enrolment or student; invalid batch rejected with a reason, corrected re-request (attempt 2) enrols once; recoverable failure retried automatically; dead delivery then audited retry (attempt 2) gives one enrolment; second programme for the same person (Ops sends `existingStudentId`). Closes IR-OPS-03. The todo is the Academic side (IR-OPS-ADM-1). |
+| `apps/platform/tests/integration/access-revocation.test.ts` (3) | `platform.access-revocation` consumer disables the login and deletes sessions once per event; a rerun is a no-op |
+
+## Not automated
+Browser E2E (Playwright deferred, D-007). The new screens are type-checked but were not built or rendered at ce7589c; the wiring step builds them. A real storage provider and attendance provider (not configured, D-014). A scheduler (none exists). Dedicated tests for `ops:compensation:approve`, `ops:policies:approve` and `ops:sops:acknowledge` follow when those permissions are final.

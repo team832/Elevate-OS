@@ -1,3 +1,5 @@
+Merged into `README.md`, `requirements/REQUIREMENTS.md`, `docs/{API,ALGORITHMS,DOMAIN_MODEL,DATA_MODEL,WORKFLOWS,PERMISSIONS,KPI_DEFINITIONS,TEST_PLAN}.md` (algorithms renumbered A-21 to A-28) on 19 Oct 2026.
+
 # Business Ops OS — HR records (OPS-030 … OPS-039)
 
 Part document for the HR records slice (D-028). The orchestrator merges it into the

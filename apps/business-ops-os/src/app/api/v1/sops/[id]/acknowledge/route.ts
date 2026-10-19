@@ -7,10 +7,10 @@ export const dynamic = 'force-dynamic';
 
 /**
  * POST /ops/api/v1/sops/[id]/acknowledge — The signed-in person acknowledges the
- * approved version in force (only when they are in a required audience; once).
+ * approved version in force (`ops:sops:acknowledge`; only when they are in a required audience; once).
  */
 export const POST = defineRoute(
-  { permission: 'ops:sops:read', params: idParams, body: acknowledgeBody },
+  { permission: 'ops:sops:acknowledge', params: idParams, body: acknowledgeBody },
   async ({ user, db, params, body, requestId }) =>
     created(await acknowledgeSop(db, user, params.id, body, requestId)),
 );

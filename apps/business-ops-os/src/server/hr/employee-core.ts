@@ -142,11 +142,11 @@ export async function writeHistory(
  * DEACTIVATION HOOK POINT (integration). When an employee is separated
  * (`changeEmploymentStatus(… 'separated' …)`) or a staff row is set `inactive`
  * (organisation.ts → updateStaff), `runDeactivationHook` runs inside the same
- * transaction. It always writes an `employee.deactivated` audit row saying
- * whether access revocation is wired; registered handlers (e.g. the lifecycle
- * slice's separation publisher / session revocation) run after it. With no
- * handler registered the audit row records `accessRevocation: 'not_wired'`, so
- * a skipped revocation is visible, never silent.
+ * transaction. Registered handlers run first (`./wiring` registers the
+ * `ops.employee.separated` publisher), then an `employee.deactivated` audit row
+ * says whether access revocation was handled. A handler returns `false` when it
+ * could not act (e.g. no employee record); with no handler acting the row records
+ * `accessRevocation: 'not_wired'`, so a skipped revocation is visible, never silent.
  */
 export interface DeactivationEvent {
   staffId: StaffMemberId;
@@ -158,7 +158,7 @@ export type DeactivationHandler = (
   tx: Database,
   actor: Actor,
   event: DeactivationEvent,
-) => Promise<void>;
+) => Promise<boolean | void>;
 
 const deactivationHandlers: DeactivationHandler[] = [];
 
@@ -176,6 +176,9 @@ export async function runDeactivationHook(
   actor: Actor,
   event: DeactivationEvent,
 ): Promise<{ handlers: number }> {
+  let handled = 0;
+  for (const handler of deactivationHandlers)
+    if ((await handler(tx, actor, event)) !== false) handled += 1;
   await recordAudit(tx, {
     actorUserId: actor.id,
     module: 'ops',
@@ -185,12 +188,11 @@ export async function runDeactivationHook(
     metadata: {
       source: event.source,
       effectiveOn: event.effectiveOn,
-      accessRevocation: deactivationHandlers.length ? 'handled' : 'not_wired',
+      accessRevocation: handled ? 'handled' : 'not_wired',
     },
     requestId: event.requestId,
   });
-  for (const handler of deactivationHandlers) await handler(tx, actor, event);
-  return { handlers: deactivationHandlers.length };
+  return { handlers: handled };
 }
 
 export async function insertEmployee(

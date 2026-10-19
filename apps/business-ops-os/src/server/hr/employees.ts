@@ -45,6 +45,7 @@ import {
   writeHistory,
 } from './employee-core';
 import type { CreateEmployeeInput, EmployeeListQuery, UpdateEmployeeInput } from './schemas';
+import './wiring';
 
 const manager = alias(staffMembers, 'manager');
 

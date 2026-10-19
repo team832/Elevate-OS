@@ -78,6 +78,7 @@ import {
   type ItemRow,
 } from './onboarding';
 import { entityHistory, staffNames, userNames } from './recruitment';
+import './wiring';
 
 const OPEN_TASK = ['not_started', 'in_progress', 'waiting', 'at_risk', 'blocked'];
 const CLOSED_ADMISSION = ['enrolled', 'lost'];

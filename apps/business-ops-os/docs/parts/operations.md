@@ -1,3 +1,5 @@
+Merged into `README.md`, `requirements/REQUIREMENTS.md`, `docs/{API,ALGORITHMS,DOMAIN_MODEL,DATA_MODEL,WORKFLOWS,PERMISSIONS,KPI_DEFINITIONS,TEST_PLAN}.md` (algorithms renumbered A-46 to A-56) on 19 Oct 2026.
+
 # Business Ops OS — operations work (OPS-060 … OPS-069)
 
 Tasks, approvals, SOPs, operations registers, the company policies & compliance register and the operations dashboard. This part extends OPS-016/017/019/021–025 (see `requirements/REQUIREMENTS.md`). Status words follow D-013: **Tested** = an automated test passes (commands at the end); nothing is Deployed. Dates are Asia/Kolkata calendar days (`YYYY-MM-DD`); instants are UTC.

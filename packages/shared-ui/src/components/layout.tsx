@@ -20,6 +20,32 @@ export interface NavItem {
   href: string;
   label: string;
   active?: boolean;
+  /** Optional section name. When any item has one, the nav shows sections, then the active section's pages. */
+  group?: string;
+}
+
+/**
+ * First row: ungrouped items plus one link per group (to its first item); second row: the
+ * active group's items. Without groups this is the flat row it always was.
+ */
+function navRows(nav: readonly NavItem[]) {
+  const activeGroup = nav.find((n) => n.active)?.group;
+  const top: { href: string; label: string; current?: 'page' | 'true' }[] = [];
+  const seen = new Set<string>();
+  for (const n of nav) {
+    if (!n.group)
+      top.push({ href: n.href, label: n.label, current: n.active ? 'page' : undefined });
+    else if (!seen.has(n.group)) {
+      seen.add(n.group);
+      top.push({
+        href: n.href,
+        label: n.group,
+        current: n.group === activeGroup ? 'true' : undefined,
+      });
+    }
+  }
+  const sub = activeGroup ? nav.filter((n) => n.group === activeGroup) : [];
+  return { top, sub, activeGroup };
 }
 
 export interface AppShellProps {
@@ -83,19 +109,35 @@ export function AppShell({ user, modules, current, logoutAction, nav, children }
           </div>
         </details>
       </header>
-      {nav && nav.length > 0 ? (
-        <nav className="el-subnav" aria-label={`${MODULES[current].label} sections`}>
-          {nav.map((item) => (
+      {nav && nav.length > 0 ? <ModuleNav nav={nav} label={MODULES[current].label} /> : null}
+      <main id="main" className="el-main">
+        {children}
+      </main>
+    </div>
+  );
+}
+
+function ModuleNav({ nav, label }: { nav: readonly NavItem[]; label: string }) {
+  const { top, sub, activeGroup } = navRows(nav);
+  return (
+    <>
+      <nav className="el-subnav" aria-label={`${label} sections`}>
+        {top.map((item) => (
+          <a key={item.href + item.label} href={item.href} aria-current={item.current}>
+            {item.label}
+          </a>
+        ))}
+      </nav>
+      {sub.length > 0 ? (
+        <nav className="el-subnav el-subnav-pages" aria-label={`${activeGroup} pages`}>
+          {sub.map((item) => (
             <a key={item.href} href={item.href} aria-current={item.active ? 'page' : undefined}>
               {item.label}
             </a>
           ))}
         </nav>
       ) : null}
-      <main id="main" className="el-main">
-        {children}
-      </main>
-    </div>
+    </>
   );
 }
 

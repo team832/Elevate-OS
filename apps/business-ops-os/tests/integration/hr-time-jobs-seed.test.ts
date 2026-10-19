@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import { opsShiftTemplates } from '@elevate/database';
-import { POST as runCheck } from '../../src/app/api/v1/hr/attendance/missing-clock-out-check/route';
+import { POST as runJob } from '../../src/app/api/v1/jobs/[job]/route';
 import { SEED_SHIFT, seedHrTime } from '../../seed/hr-time';
 import { employee, post } from './hr-time-fixtures';
 
 const ctx = setupTestDatabase();
+const runCheck = (req: Request) =>
+  runJob(req, { params: Promise.resolve({ job: 'attendance-missing-clock-out' }) });
 
 describe('missing clock-out job route', () => {
   it('needs ops:jobs:run; returns counts', async () => {

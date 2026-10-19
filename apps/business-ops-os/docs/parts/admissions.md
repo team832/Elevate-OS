@@ -1,3 +1,5 @@
+Merged into `README.md`, `requirements/REQUIREMENTS.md`, `docs/{API,ALGORITHMS,DOMAIN_MODEL,DATA_MODEL,WORKFLOWS,PERMISSIONS,KPI_DEFINITIONS,TEST_PLAN,INTEGRATION_REQUESTS}.md` (algorithms renumbered A-17 to A-20; OD-ADM-1 is now OD-046) on 19 Oct 2026.
+
 # Business Ops OS — admissions administration (part for merging)
 
 Area: admissions, student administration, enrolment handoff. Built 19 Oct 2026 on branch `feature/business-ops-hr-admissions` (D-028). The orchestrator merges this file into `README.md`, `requirements/REQUIREMENTS.md`, `docs/{DOMAIN_MODEL,API,ALGORITHMS,KPI_DEFINITIONS,TEST_PLAN,INTEGRATION_REQUESTS}.md`. Status words follow D-013; nothing is Deployed. "Tested" means a passing automated test named in the Evidence column (commands and results at the end).

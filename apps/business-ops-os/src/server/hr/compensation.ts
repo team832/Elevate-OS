@@ -49,7 +49,11 @@ type CompensationRow = typeof opsCompensationRecords.$inferSelect;
 async function requireCompensation(
   db: Database,
   actor: Actor,
-  permission: 'ops:compensation:read' | 'ops:compensation:manage' | 'ops:compensation:export',
+  permission:
+    | 'ops:compensation:read'
+    | 'ops:compensation:manage'
+    | 'ops:compensation:approve'
+    | 'ops:compensation:export',
 ) {
   const scope = await hrScope(db, actor, permission);
   if (scope.scope !== 'all') throw new ForbiddenError('Compensation records are restricted.');
@@ -246,9 +250,7 @@ export async function approveCompensation(
   id: string,
   requestId?: string,
 ) {
-  // TODO(permission request): a dedicated `ops:compensation:approve` would separate
-  // drafting from approving; today any `manage` holder other than the drafter approves.
-  const scope = await requireCompensation(db, actor, 'ops:compensation:manage');
+  const scope = await requireCompensation(db, actor, 'ops:compensation:approve');
   const approverStaffId = scope.staffId ?? (await staffIdForUser(db, actor.id));
   return withTransaction(db, async (tx) => {
     const record = await lockRecord(tx, id);

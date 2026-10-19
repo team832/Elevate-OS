@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { metric } from '@elevate/shared-contracts';
-import { AppShell, DataTable, ErrorState, LoginForm, StatTile } from '../src/index';
+import { AppShell, DataTable, ErrorState, LoginForm, StatTile, type NavItem } from '../src/index';
 
 const meta = {
   definition: 'Classes marked delivered',
@@ -65,6 +65,59 @@ describe('AppShell', () => {
     expect(html).not.toContain('Marketing OS');
     expect(html).not.toContain('Business Ops OS');
     expect(html).toContain('action="/academic/api/v1/auth/logout"');
+  });
+});
+
+describe('AppShell grouped navigation', () => {
+  const shell = (nav: NavItem[]) =>
+    renderToStaticMarkup(
+      <AppShell
+        user={{ displayName: 'Ola Ops (fictional)', email: 'ops@example.test', roles: [] }}
+        modules={['ops']}
+        current="ops"
+        logoutAction="/ops/api/v1/auth/logout"
+        nav={nav}
+      >
+        <p>content</p>
+      </AppShell>,
+    );
+  const items: NavItem[] = [
+    { href: '/ops', label: 'Dashboard' },
+    { href: '/ops/leads', label: 'Leads', group: 'Admissions' },
+    { href: '/ops/students', label: 'Students', group: 'Admissions' },
+    { href: '/ops/tasks', label: 'Tasks', group: 'Operations' },
+  ];
+
+  it.each([
+    [
+      'an item in a group',
+      2,
+      [
+        'href="/ops/leads" aria-current="true">Admissions<',
+        'href="/ops/students" aria-current="page">Students<',
+        'aria-label="Admissions pages"',
+      ],
+      ['>Tasks<'],
+    ],
+    [
+      'an ungrouped item',
+      0,
+      ['href="/ops" aria-current="page">Dashboard<', 'href="/ops/tasks">Operations<'],
+      ['pages"', '>Leads<'],
+    ],
+  ])('active %s: section row, then only that section’s pages', (_, activeIndex, has, hasNot) => {
+    const html = shell(items.map((n, i) => ({ ...n, active: i === activeIndex })));
+    for (const h of has) expect(html).toContain(h);
+    for (const h of hasNot) expect(html).not.toContain(h);
+  });
+
+  it('without groups renders the single row as before', () => {
+    const html = shell([
+      { href: '/ops', label: 'Dashboard', active: true },
+      { href: '/ops/tasks', label: 'Tasks' },
+    ]);
+    expect(html.match(/<nav class="el-subnav"/g)).toHaveLength(1);
+    expect(html).toContain('href="/ops/tasks">Tasks<');
   });
 });
 

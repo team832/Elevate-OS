@@ -203,5 +203,43 @@ Proposed / not built: OPS-013 onboarding task generation, OPS-018 routines, OPS-
 - Director and auditor can read lead contact details (read-all grants); exports/retention (OPS-028) not built.
 - No migration generated (wave 3); browser E2E not automated.
 
+## Business Ops HR, admissions and operations pass (19 Oct 2026)
+_Owned by the Business Ops team. Branch `feature/business-ops-hr-admissions`, commit ce7589c (D-028, D-029). Details: `apps/business-ops-os/README.md`, `requirements/REQUIREMENTS.md` (OPS-030 to OPS-079), `docs/*`. Nothing is Deployed. Status words per D-013: services and domain rules are **Tested** where a passing automated test is named; screens are **Implemented** (type-checked, not yet built or rendered; the wiring step builds them)._
+
+### Features
+| # | Feature (requirements) | Status | Evidence (tests in `apps/business-ops-os/tests/` unless noted) |
+|---|---|---|---|
+| OPS-F19 | Student directory and profile, reason-coded closure, consent and preferences (OPS-070, 071, 073, 074, 077) | Tested (API) / Implemented (screens) | `integration/admissions-students.test.ts`, `unit/admissions-students-kpis.test.ts` |
+| OPS-F20 | Manual fee records in paise, summary, check by another person, void (OPS-072; A-17) | Tested | `unit/admissions-fees.test.ts`, `integration/admissions-fees.test.ts` |
+| OPS-F21 | Handoff attempts, audited retry after a dead delivery, `existingStudentId` sent (OPS-075, 076; A-19) | Tested (Ops side); Academic side Proposed (IR-OPS-ADM-1, 2) | `integration/admissions-students.test.ts`; `apps/platform/tests/integration/enrolment-handoff.test.ts` (6 cases, 1 todo) |
+| OPS-F22 | Admissions report, 11 KPIs (OPS-078; K-ADM) | Tested (API, domain) / Implemented (screen) | `integration/admissions-report.test.ts` |
+| OPS-F23 | Employee records, directory, field tiers, org history, department heads (OPS-030 to 033, 037) | Tested (API) / Implemented (screens) | `integration/hr-records-employees.test.ts`, `unit/hr-records-domain.test.ts` |
+| OPS-F24 | Private HR fields, document metadata with two-person deletion, storage adapter `not_configured` (OPS-034, 035) | Tested | `integration/hr-records-private-documents.test.ts` |
+| OPS-F25 | Compensation records (draft, approval by another person, export) and assets (OPS-036, 038) | Tested | `integration/hr-records-compensation-assets.test.ts` |
+| OPS-F26 | Requisitions, candidates, applications, interviews, offers, conversion, anonymisation (OPS-040 to 045, 049) | Tested (API) / Implemented (screens) | `integration/hr-lifecycle-recruitment.test.ts`, `unit/hr-lifecycle-domain.test.ts` |
+| OPS-F27 | Onboarding and offboarding cases, separation event, login revocation (OPS-046 to 048) | Tested | `integration/hr-lifecycle-cases.test.ts`, `hr-lifecycle-employee-journey.test.ts`; `apps/platform/tests/integration/access-revocation.test.ts` |
+| OPS-F28 | Staff attendance, breaks, manual and CSV entries, corrections, flags (OPS-050 to 055) | Tested (API, domain) / Implemented (screens) | `integration/hr-time-attendance.test.ts`, `unit/hr-time-domain.test.ts` |
+| OPS-F29 | Shifts, holidays, leave, balances, availability, timesheets (OPS-056 to 059) | Tested (API, domain) / Implemented (screens) | `integration/hr-time-leave.test.ts`, `hr-time-jobs-seed.test.ts` |
+| OPS-F30 | HR, lifecycle, time and operations KPIs (K-HR, K-HRL, K-HRT, K-OPS) | Tested (functions); HR dashboard screen not built | `integration/hr-records-metrics.test.ts`, `hr-lifecycle-metrics.test.ts`, `operations-registers.test.ts` |
+| OPS-F31 | Task comments, references, supervisor review, reminders; SOP dates, archive, acknowledgements; policies register; risk mitigations; incident targets; approvals inbox; operations dashboard (OPS-060 to 069) | Tested (services) / Implemented (screens) | `integration/operations-*.test.ts`, `unit/operations-domain.test.ts` |
+| OPS-F32 | Six HR permission profiles and about 60 new `ops:*` permissions, sensitive sets excluded from blanket reads (D-028) | Implemented; effects Tested | per-role 401/403 and field-level cases in the integration files above |
+
+Proposed or not built: teams, bulk employee import, photo or ID-card generation, document file storage (no provider, D-014), retention enforcement (settings open), audit of read access to private fields, overtime records, leave accrual, carry-forward and encashment, shift change requests, a scheduler for any job, an attendance device or provider (mock only), HR approval sources in the inbox, an HR dashboard screen, routine task templates (OPS-018), merging the old onboarding checklist with HR cases, prototype screens for HR (`Elevate.html` has none). Every HR and attendance rule is a `proposed` or `open` setting until the owner decides (OD-029 to OD-048).
+
+### Commands run and results
+| Command | Result |
+|---|---|
+| `npm test` (repository root, at ce7589c) | PASS: Test Files 86 passed, Tests 896 passed, 1 todo |
+| `npm run typecheck`, `npm run lint` | PASS |
+| `npm run secret-scan` | PASS (912 files) |
+| `next build`, browser check of the new screens | Not run by the slice agents (shared `.next`); the wiring step builds them |
+| `db:generate`, `db:migrate`, `db:seed` against a database | Not run |
+
+### Migrations
+None yet. The baseline migration is generated centrally in wave 3 from all schema files (the `ops` schema spans five files, D-029); nothing here was applied to a database.
+
+### Generated documents to rerun
+`docs/SECURITY_AND_PERMISSIONS.md` is generated: run `npm run docs:permissions` after the permission list is final (IR-OPS-04). It was not edited by hand. `apps/business-ops-os/docs/PERMISSIONS.md` was generated from the same source on 19 Oct 2026.
+
 ## Integration (wave 3)
 _Owned by the Integration agent._ Pending: baseline migration, cross-module tests (enrolment handoff end to end), consumer scheduler, platform consolidated dashboard from the summary contracts, docs reconciliation (`npm run docs:permissions`).

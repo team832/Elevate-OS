@@ -1,6 +1,6 @@
 # Database Design
 
-One PostgreSQL database, four schemas (D-005): `core` (shared), `marketing`, `academic`, `ops` (one per module). Definitions live in `packages/database/src/schema/{core,marketing,academic,ops}.ts`; column-level detail is in `docs/DATA_DICTIONARY.md`; process in `docs/DATABASE_MIGRATION_PLAN.md`.
+One PostgreSQL database, four schemas (D-005): `core` (shared), `marketing`, `academic`, `ops` (one per module). Definitions live in `packages/database/src/schema/{core,marketing,academic,ops}.ts` (the `ops` schema also spans `ops-hr.ts`, `ops-lifecycle.ts`, `ops-time.ts` and `ops-work.ts`, D-029); column-level detail is in `docs/DATA_DICTIONARY.md`; process in `docs/DATABASE_MIGRATION_PLAN.md`.
 
 ## 1. Conventions
 | Topic | Rule |
@@ -55,8 +55,8 @@ Write ownership of core tables: `INTEGRATION_CONTRACT.md` §3.
 **Owned by the Academic team — to be filled.** Declared in `packages/database/src/schema/academic.ts` (no tables yet). Expected entities: courses, curriculum, batches, teachers' assignments, timetable, class records, attendance, assessments, students, enrolments (holding the ops `admission_id` / `lead_id` as plain UUIDs), results, catch-up, interventions.
 
 ## 5. `ops` schema
-**Owned by the Business Ops team — to be filled.** Declared in `packages/database/src/schema/ops.ts` (no tables yet). Expected entities: leads, enquiries, counselling, demos, admissions, tasks, SOPs, decisions, risks, projects, responsibilities. Ops also writes `core.departments` and `core.staff_members` (steward).
+**Owned by the Business Ops team.** 73 tables in five files (D-029): `ops.ts` (leads, enquiries, counselling, demos, admissions, fee records, enrolment attempts, tasks, SOPs, decisions, risks, projects, responsibilities, settings), `ops-hr.ts` (employee records, history, private details, documents, compensation, assets), `ops-lifecycle.ts` (recruitment, onboarding and offboarding), `ops-time.ts` (shifts, attendance, leave), `ops-work.ts` (task, SOP, risk and policy side tables); `ops-columns.ts` holds shared column helpers and defines no tables. All use the one `pgSchema('ops')` exported by `ops.ts`; `SCHEMA_MODULES` and `drizzle.config.ts` list every file. Diagram and table list: `apps/business-ops-os/docs/DATA_MODEL.md`. Ops also writes `core.departments` and `core.staff_members` (steward).
 
 ## 6. How the schema reaches a database
-- **Tests:** `createTestDb()` builds the live schema from the four files in in-memory PGlite (no migrations needed; D-025).
+- **Tests:** `createTestDb()` builds the live schema from all schema files in in-memory PGlite (no migrations needed; D-025).
 - **Dev/prod:** SQL migrations generated centrally (`npm run db:generate`) into `packages/database/migrations/` and applied with `npm run db:migrate`. As of the Foundation wave **no migration exists in the repo**; wave 3 generates the single baseline from all four files (a throwaway run proved the pipeline, D-006a).

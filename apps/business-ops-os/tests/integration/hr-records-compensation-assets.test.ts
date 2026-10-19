@@ -23,6 +23,7 @@ import { setupReference } from './fixtures';
 import { employeeUser, lastAudit, type EmployeeUser } from './hr-records-fixtures';
 
 const ctx = setupTestDatabase();
+const NO_ID = '00000000-0000-4000-8000-000000000000';
 let hrManager: EmployeeUser;
 let finance: EmployeeUser;
 let finance2: EmployeeUser;
@@ -69,6 +70,8 @@ describe('compensation records (OPS-036) — records only, not payroll', () => {
     for (const u of [deptManager, report, colleague, opsManager, hrContributor, ...others]) {
       expect((await callRoute(listComp, req(u))).status).toBe(403);
       expect((await callRoute(exportComp, req(u))).status).toBe(403);
+      const approve = req(u, { confirm: true });
+      expect((await callRoute(approveComp, approve, { id: NO_ID })).status).toBe(403);
     }
     expect((await callRoute(listComp, req(hrManager))).status).toBe(200);
     expect((await callRoute(listComp, req(finance))).status).toBe(200);

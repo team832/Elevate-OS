@@ -60,6 +60,7 @@ async function Records({
   if (!r.ok) return r.view;
   const { list, employees } = r.data;
   const manage = can(user, 'ops:compensation:manage');
+  const approver = can(user, 'ops:compensation:approve');
   const exporter = can(user, 'ops:compensation:export');
   const current = new Set(list.effectiveToday.map((e) => e.recordId).filter(Boolean));
   const conflicts = list.effectiveToday.filter((e) => e.conflict);
@@ -173,18 +174,20 @@ async function Records({
                       </div>
                     ) : (
                       <div className="el-stack">
-                        <ActionForm
-                          action={`/ops/api/v1/hr/compensation/${x.id}/approve`}
-                          submitLabel="Approve these terms"
-                          fields={[
-                            {
-                              name: 'confirm',
-                              label: 'I have checked the amount and the effective date',
-                              type: 'checkbox',
-                            },
-                          ]}
-                          compact
-                        />
+                        {approver ? (
+                          <ActionForm
+                            action={`/ops/api/v1/hr/compensation/${x.id}/approve`}
+                            submitLabel="Approve these terms"
+                            fields={[
+                              {
+                                name: 'confirm',
+                                label: 'I have checked the amount and the effective date',
+                                type: 'checkbox',
+                              },
+                            ]}
+                            compact
+                          />
+                        ) : null}
                         <ActionForm
                           action={`/ops/api/v1/hr/compensation/${x.id}/cancel`}
                           submitLabel="Cancel draft"

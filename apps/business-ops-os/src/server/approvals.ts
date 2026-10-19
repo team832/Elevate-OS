@@ -9,10 +9,8 @@
  * - link to the record where the decision is taken (the inbox decides nothing).
  * A source that throws is shown as "unavailable" (never as 0 items).
  *
- * REGISTRATION POINT for HR sources (leave requests, attendance corrections,
- * offers, lifecycle cases, compensation records, document deletions): each HR
- * service exports an `ApprovalSource` and the orchestrator appends it to
- * `APPROVAL_SOURCES` below. Do not query HR tables from here.
+ * HR sources (leave, attendance corrections, requisitions, offers, lifecycle
+ * cases, compensation drafts, document deletions) live in `./hr/approval-sources`.
  */
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { can, type Permission } from '@elevate/authorization';
@@ -32,6 +30,7 @@ import type { UserId } from '@elevate/shared-types';
 import { SOP_APPROVAL_PROBLEM_LABELS, sopApprovalProblems } from '../domain';
 import { feeArrangementPolicy, sopApprovalPolicy } from './approval-policies';
 import { accessScope, staffIdForUser, type Actor } from './context';
+import { HR_APPROVAL_SOURCES } from './hr/approval-sources';
 import { policyApprovalPolicy } from './policies-register';
 import { hashContent } from './sops';
 import { listTaskReviewsForDecider } from './tasks';
@@ -216,7 +215,7 @@ export const taskReviewSource: ApprovalSource = {
 export const policyVersionApprovalSource: ApprovalSource = {
   key: 'ops.policy_versions',
   label: 'Company policy versions awaiting approval',
-  permission: 'ops:settings:manage',
+  permission: 'ops:policies:approve',
   async list(db, actor) {
     const rows = await db
       .select({ a: approvals, v: opsPolicyVersions, p: opsPolicies, requester: users.displayName })
@@ -251,14 +250,11 @@ export const CORE_APPROVAL_SOURCES: readonly ApprovalSource[] = [
   policyVersionApprovalSource,
 ];
 
-/**
- * The registry used by the inbox and the dashboards.
- * REGISTRATION POINT: append HR sources here (orchestrator, after the HR agents
- * finish), e.g. `leaveRequestApprovalSource`, `attendanceCorrectionApprovalSource`,
- * `offerApprovalSource`, `lifecycleCaseApprovalSource`, `compensationApprovalSource`,
- * `documentDeletionApprovalSource`. Each must follow the rules at the top of this file.
- */
-export const APPROVAL_SOURCES: readonly ApprovalSource[] = [...CORE_APPROVAL_SOURCES];
+/** The registry used by the inbox and the dashboards. Each source follows the rules above. */
+export const APPROVAL_SOURCES: readonly ApprovalSource[] = [
+  ...CORE_APPROVAL_SOURCES,
+  ...HR_APPROVAL_SOURCES,
+];
 
 export interface InboxSourceResult {
   key: string;

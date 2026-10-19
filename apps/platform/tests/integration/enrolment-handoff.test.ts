@@ -8,9 +8,8 @@
  * `admitted` directly (the confirmation gate has its own tests in Business Ops);
  * everything after that runs through the real services of both modules.
  *
- * Dependency note: `@elevate/business-ops-os` and `@elevate/academic-os` are
- * resolved through the npm-workspace links; apps/platform/package.json should
- * declare them as devDependencies (reported to the orchestrator).
+ * `@elevate/business-ops-os` and `@elevate/academic-os` are devDependencies of
+ * apps/platform (workspace links).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
@@ -29,10 +28,12 @@ import { processEvents } from '@elevate/server-kit';
 import { ACADEMIC_CONSUMERS } from '@elevate/shared-contracts';
 import type { BatchId, LeadId, StaffMemberId } from '@elevate/shared-types';
 import { createTestUser, setupTestDatabase, type TestUser } from '@elevate/testing';
-import { processEnrolmentReplies, requestEnrolment } from '@elevate/business-ops-os/server';
+import {
+  processEnrolmentReplies,
+  requestEnrolment,
+  retryEnrolmentHandoff,
+} from '@elevate/business-ops-os/server';
 import { runEnrolmentIntake } from '@elevate/academic-os/server';
-// Not yet re-exported from the Ops server barrel (requested from the orchestrator):
-import { retryEnrolmentHandoff } from '../../../business-ops-os/src/server/enrolment';
 
 const ctx = setupTestDatabase();
 let counsellor: TestUser;

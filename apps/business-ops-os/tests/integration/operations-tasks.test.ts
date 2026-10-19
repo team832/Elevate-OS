@@ -26,12 +26,14 @@ import {
 import { POST as decideReview } from '../../src/app/api/v1/tasks/[id]/review/route';
 import { GET as activity } from '../../src/app/api/v1/tasks/[id]/activity/route';
 import { PATCH as patchTask } from '../../src/app/api/v1/tasks/[id]/route';
-import { POST as runReminders } from '../../src/app/api/v1/jobs/task-reminders/route';
+import { POST as runJob } from '../../src/app/api/v1/jobs/[job]/route';
 import { runTaskReminders } from '../../src/server/escalations';
 import { isoDaysFromNow, setupReference, type StaffUser } from './fixtures';
 import { department, post, staffIn } from './operations-fixtures';
 
 const ctx = setupTestDatabase();
+const runReminders = (req: Request) =>
+  runJob(req, { params: Promise.resolve({ job: 'task-reminders' }) });
 let manager: StaffUser;
 let manager2: StaffUser;
 let counsellor: StaffUser;

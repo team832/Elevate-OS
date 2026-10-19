@@ -24,7 +24,7 @@ export default async function AdmissionsReportPage({
       ? parsed.data
       : {};
   return (
-    <Frame access={access} active="admissions-report">
+    <Frame access={access} active="reports">
       <PageHeader
         title="Admissions report"
         description="Counts from the admissions records in Business Ops. Each figure states what it counts and for which dates (Asia/Kolkata). A rate with nothing to divide by shows as missing, not 0 %. No targets are set (OD-027)."

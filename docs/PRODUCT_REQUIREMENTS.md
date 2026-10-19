@@ -53,7 +53,7 @@ The legacy "Accounts Officer" role has no D-008 equivalent. Whether one is neede
 
 ### 1.3 In scope and out of scope
 - **In scope:** identity and sessions, roles and permissions, audit, approvals, notifications (in-app), the integration outbox and summaries, the programme catalogue and staff directory as core tables, the legacy import framework, consent records, adapter status.
-- **Out of scope (D-015):** payroll, biometric device integration, HRIS and legal employment records, parent or student portals, the public website, AI content generation, and staff leave (pending OD-026).
+- **Out of scope (D-015, narrowed by D-028 on 19 Oct 2026: HR records, recruitment, staff attendance, leave and compensation records are now in scope, see `apps/business-ops-os/requirements/REQUIREMENTS.md` OPS-030 to OPS-079):** payroll runs, biometric device integration, HRIS and legal employment records, parent or student portals, the public website, AI content generation, and staff leave (pending OD-026).
 
 ### 1.4 Functional requirements
 
@@ -320,7 +320,7 @@ Run the institute's operations: enquiries and leads through counselling, demo, a
 
 ### 4.3 In scope and out of scope
 - **In scope:** leads and enquiries with sources; duplicate-contact detection; counselling; demos; the admission pipeline and transitions; admission checklist; enrolment handoff; onboarding tasks; staff directory, departments, responsibilities and backups (core stewardship); tasks with dependencies, escalation and routines; the SOP register and versions; the decision log; the policy register; risks, issues and blockers; projects and milestones; outreach events as lead sources (P2); the management dashboard.
-- **Out of scope (explicit):** payroll; biometric devices and their attendance feeds; HRIS (hiring, contracts, leave, appraisal) and legal employment records; **employee rankings, scorecards or individual performance scoring**; accounting and invoicing (Tally stays the source; fee scope is OD-013); parent and student portals; the public website (D-015).
+- **Out of scope (explicit; D-028 on 19 Oct 2026 brought hiring, staff attendance, leave, employee records and compensation records into scope, see OPS-030 to OPS-079 in `apps/business-ops-os/requirements/REQUIREMENTS.md`):** payroll runs; biometric devices and their attendance feeds; a full HRIS, appraisal and legal employment records; **employee rankings, scorecards or individual performance scoring**; accounting and invoicing (Tally stays the source; fee scope is OD-013); parent and student portals; the public website (D-015).
 
 ### 4.4 Business rules
 

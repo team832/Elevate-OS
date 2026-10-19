@@ -96,6 +96,25 @@ describe('least privilege', () => {
   });
 });
 
+describe('Business Ops approval and acknowledgement grants', () => {
+  const holders = (permission: Parameters<typeof can>[1]) =>
+    ROLE_KEYS.filter((r) => can(as(r), permission)).sort();
+  it.each([
+    ['ops:compensation:approve', ['finance_officer', 'hr_manager']],
+    ['ops:policies:approve', ['director', 'hr_manager', 'operations_manager']],
+    [
+      'ops:sops:acknowledge',
+      ROLE_KEYS.filter((r) => r !== 'auditor' && can(as(r), 'ops:sops:read')).sort(),
+    ],
+  ] as const)('%s is held by exactly %j', (permission, roles) => {
+    expect(holders(permission)).toEqual([...roles]);
+  });
+
+  it('department managers read recruitment only for their interview panels (own)', () => {
+    expect(scopeFor(as('department_manager'), 'ops:recruitment:read')).toBe('own');
+  });
+});
+
 describe('modulesFor', () => {
   it('lists the modules a user can open', () => {
     expect(modulesFor(as('director'))).toEqual(['platform', 'marketing', 'academic', 'ops']);

@@ -4,8 +4,20 @@
  * status label and is never seeded as delivered or approved.
  */
 import type { SeedDefinition } from '@elevate/database/seed';
+import { admissionsSampleSeeds } from './admissions-samples';
+import { hrLifecycleSeeds } from './hr-lifecycle';
+import { hrRecordsSeeds } from './hr-records';
+import { hrTimeSeeds } from './hr-time';
 import { legacySeeds } from './legacy';
 import { referenceSeeds } from './reference';
 import { sampleSeeds } from './samples';
 
-export const seeds: readonly SeedDefinition[] = [...referenceSeeds, ...legacySeeds, ...sampleSeeds];
+export const seeds: readonly SeedDefinition[] = [
+  ...referenceSeeds,
+  ...legacySeeds,
+  ...sampleSeeds,
+  ...admissionsSampleSeeds,
+  ...hrRecordsSeeds,
+  ...hrTimeSeeds,
+  ...hrLifecycleSeeds,
+];
