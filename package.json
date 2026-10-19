@@ -29,21 +29,26 @@
     "secret-scan": "node scripts/validation/secret-scan.mjs",
     "validate": "npm run typecheck && npm run lint && npm run test && npm run secret-scan",
     "db:start": "node scripts/development/db-server.mjs",
+    "db:stop": "node scripts/development/db-server.mjs --stop",
     "db:generate": "npm run db:generate -w @elevate/database",
     "db:migrate": "tsx scripts/development/migrate.ts",
     "db:seed": "tsx scripts/development/seed.ts",
     "db:reset": "tsx scripts/development/db-reset.ts",
-    "db:backup": "node scripts/backup/pg-backup.mjs"
+    "db:backup": "node scripts/backup/pg-backup.mjs",
+    "docs:permissions": "tsx scripts/development/permission-matrix.ts",
+    "docs:code-map": "node scripts/development/code-map.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@next/eslint-plugin-next": "16.4.2",
     "@types/node": "24.19.2",
     "concurrently": "10.0.6",
+    "drizzle-orm": "0.45.4",
     "embedded-postgres": "18.4.0-beta.17",
     "eslint": "10.13.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.13.0",
+    "pg": "8.23.1",
     "prettier": "3.9.10",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
@@ -52,6 +57,8 @@
   },
   "allowScripts": {
     "@embedded-postgres/windows-x64@18.4.0-beta.17": true,
+    "esbuild@0.18.20": true,
+    "esbuild@0.25.12": true,
     "esbuild@0.28.2": true
   }
 }

@@ -1,0 +1,1202 @@
+{
+  "meta": {
+    "source_files": [
+      "handover/Claude.md",
+      "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+      "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+      "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+      "handover/outputs/online-operations/Elevate-Online-Easy.xlsx"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records",
+      "online_operating_rules"
+    ],
+    "notes": [
+      "Documented workflows with the status each source gives. source_status is verbatim; status is the controlled vocabulary (Confirmed->approved, Discussed->documented, User confirmed->documented (user-reported, not verified), Pending verification->unverified).",
+      "Lead sources, platform capabilities (Vacademy) and integrations are user-reported requirements, not verified integrations."
+    ]
+  },
+  "records": [
+    {
+      "id": "WF-OFFLINE-STUDENT",
+      "name": "Offline student workflow (lead to tests)",
+      "steps": [
+        {
+          "seq": 1,
+          "step": "marketing",
+          "work_inventory": [
+            {
+              "id": "OP-001",
+              "function": "Marketing",
+              "process": "Lead generation",
+              "scope": "Meta, Instagram organic/ads, Google ads/SEO, newspapers, seminars and webinars",
+              "proposed_role": "Marketing role",
+              "source_status": "Discussed",
+              "status": "documented",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A5:F5"
+              }
+            }
+          ]
+        },
+        {
+          "seq": 2,
+          "step": "CRM lead",
+          "work_inventory": [
+            {
+              "id": "OP-002",
+              "function": "Admissions",
+              "process": "Enquiry capture",
+              "scope": "Calls/SMS entered in Academy; Meta integration already operating",
+              "proposed_role": "Reception",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A6:F6"
+              }
+            },
+            {
+              "id": "OP-003",
+              "function": "Admissions",
+              "process": "Walk-in form",
+              "scope": "iPad form feeding Academy; not implemented",
+              "proposed_role": "Reception",
+              "source_status": "Planned",
+              "status": "planned",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A7:F7"
+              }
+            },
+            {
+              "id": "OP-007",
+              "function": "Admissions",
+              "process": "Follow-ups",
+              "scope": "WhatsApp next-day feedback and calls within 1–2 days",
+              "proposed_role": "Reception and academic counsellor",
+              "source_status": "Proposed",
+              "status": "proposed",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A11:F11"
+              }
+            }
+          ]
+        },
+        {
+          "seq": 3,
+          "step": "academic counselling",
+          "work_inventory": [
+            {
+              "id": "OP-004",
+              "function": "Admissions",
+              "process": "Academic counselling",
+              "scope": "Reception gives basic details; academic staff handle detailed counselling/conversion",
+              "proposed_role": "Academic counsellor",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A8:F8"
+              }
+            }
+          ]
+        },
+        {
+          "seq": 4,
+          "step": "separate demo",
+          "work_inventory": [
+            {
+              "id": "OP-005",
+              "function": "Admissions",
+              "process": "Two-day demo",
+              "scope": "Separate classes; never regular batch; coordinate teacher booking",
+              "proposed_role": "Academic coordinator",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A9:F9"
+              }
+            },
+            {
+              "id": "OP-006",
+              "function": "Fees",
+              "process": "Demo payment",
+              "scope": "INR 1,000; non-refundable if not joining; adjusted if joining",
+              "proposed_role": "Accounts",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A10:F10"
+              }
+            }
+          ]
+        },
+        {
+          "seq": 5,
+          "step": "approved admission/fees",
+          "work_inventory": [
+            {
+              "id": "OP-008",
+              "function": "Admissions",
+              "process": "Documents",
+              "scope": "Admission form, Aadhaar, marksheet; verify and retain",
+              "proposed_role": "Documentation role",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A12:F12"
+              }
+            },
+            {
+              "id": "OP-009",
+              "function": "Coordination",
+              "process": "School and hostel",
+              "scope": "Separate admission documents and partner-hostel communication",
+              "proposed_role": "Student support",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A13:F13"
+              }
+            },
+            {
+              "id": "OP-010",
+              "function": "Fees",
+              "process": "Fee agreement",
+              "scope": "Two verifications and authorised signed approval of agreed fees",
+              "proposed_role": "Accounts and approver",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A14:F14"
+              }
+            },
+            {
+              "id": "OP-011",
+              "function": "Fees",
+              "process": "Collection and receipts",
+              "scope": "Initial payment, instalments, Tally invoice/payment receipt",
+              "proposed_role": "Accounts",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A15:F15"
+              }
+            }
+          ]
+        },
+        {
+          "seq": 6,
+          "step": "onboarding",
+          "work_inventory": [
+            {
+              "id": "OP-012",
+              "function": "Student support",
+              "process": "Onboarding",
+              "scope": "Issue box, T-shirt, bag; add groups and communicate timetable",
+              "proposed_role": "Reception",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A16:F16"
+              }
+            }
+          ]
+        },
+        {
+          "seq": 7,
+          "step": "timetable/classes",
+          "work_inventory": [
+            {
+              "id": "OP-017",
+              "function": "Academics",
+              "process": "Timetable",
+              "scope": "Prepare and communicate daily changes; proposed stable baseline",
+              "proposed_role": "Academic coordinator",
+              "source_status": "Discussed",
+              "status": "documented",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A21:F21"
+              }
+            },
+            {
+              "id": "OP-018",
+              "function": "Academics",
+              "process": "Curriculum and delivery",
+              "scope": "Batch-wise calendar, chapter hours, actual delivery and recovery",
+              "proposed_role": "Academic coordinator",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A22:F22"
+              }
+            },
+            {
+              "id": "OP-019",
+              "function": "Materials",
+              "process": "DPP and printing",
+              "scope": "Prepare, check, print, sort, track and distribute material",
+              "proposed_role": "Content team and operator",
+              "source_status": "Discussed",
+              "status": "documented",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A23:F23"
+              }
+            }
+          ]
+        },
+        {
+          "seq": 8,
+          "step": "attendance, DPP, tests and parent reporting",
+          "work_inventory": [
+            {
+              "id": "OP-013",
+              "function": "Attendance",
+              "process": "Biometric monitoring",
+              "scope": "Check entry/exit punches; parent departure messages",
+              "proposed_role": "Attendance role",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A17:F17"
+              }
+            },
+            {
+              "id": "OP-014",
+              "function": "Attendance",
+              "process": "Class absence",
+              "scope": "Check class roster and call after 15 minutes; record reason and next action",
+              "proposed_role": "Attendance role",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A18:F18"
+              }
+            },
+            {
+              "id": "OP-015",
+              "function": "Attendance",
+              "process": "Regular lunch exit",
+              "scope": "Student-signed, parent-attested form with authorised daily window",
+              "proposed_role": "Reception",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A19:F19"
+              }
+            },
+            {
+              "id": "OP-016",
+              "function": "Attendance",
+              "process": "Emergency exit",
+              "scope": "Obtain parent approval before departure; record and notify",
+              "proposed_role": "Reception",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A20:F20"
+              }
+            },
+            {
+              "id": "OP-020",
+              "function": "Examinations",
+              "process": "Test delivery",
+              "scope": "Schedule, paper preparation/printing, invigilation, collection and scans",
+              "proposed_role": "Exam operations",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A24:F24"
+              }
+            },
+            {
+              "id": "OP-021",
+              "function": "Examinations",
+              "process": "Evaluation and return",
+              "scope": "Physical checking: return after review; scan checking: return after scan verification",
+              "proposed_role": "Exam operations",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A25:F25"
+              }
+            },
+            {
+              "id": "OP-022",
+              "function": "Examinations",
+              "process": "Results and discussion",
+              "scope": "Digital checked script, marksheet/report; compulsory discussion and parent communication",
+              "proposed_role": "Teachers and exam operations",
+              "source_status": "Confirmed",
+              "status": "approved",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A26:F26"
+              }
+            },
+            {
+              "id": "OP-023",
+              "function": "Student support",
+              "process": "Progress reports",
+              "scope": "Teacher reviews weekly or monthly; cadence unresolved",
+              "proposed_role": "Teachers and student support",
+              "source_status": "Discussed",
+              "status": "documented",
+              "source": {
+                "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+                "locator": "sheet 'Work Inventory'!A27:F27"
+              }
+            }
+          ]
+        }
+      ],
+      "source_status": "documented in the handover narrative",
+      "status": "documented",
+      "notes": [
+        "Reception gives basic information; academic staff handle detailed counselling and conversion.",
+        "Meta leads reportedly enter the CRM automatically; walk-in iPad form integration discussed, not implemented (OP-003 Planned).",
+        "Lead system is called CRM (not 'Academy'); the Work Inventory text still says 'Academy'."
+      ],
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 53"
+        },
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 55"
+        },
+        {
+          "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+          "locator": "sheet 'Work Inventory'!A4:F29"
+        }
+      ]
+    },
+    {
+      "id": "WF-DEMO",
+      "name": "Demo terms",
+      "terms": {
+        "days": 2,
+        "fee_inr": 1000,
+        "refundable_if_not_joining": false,
+        "adjusted_against_fees_on_joining": true,
+        "delivery": "separate subject demo classes; never inserted into the ongoing main class; teacher booking communicated"
+      },
+      "superseded": [
+        "Earlier three-day demo discussion"
+      ],
+      "open_items": [
+        {
+          "id": "D-005",
+          "area": "Demo limits",
+          "decision": "Consecutive/attendance days, subject cap and missed-day treatment",
+          "source_status": "Open",
+          "status": "open",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Decisions'!A9:D9"
+          }
+        }
+      ],
+      "decisions": [
+        {
+          "id": "D-003",
+          "area": "Demo",
+          "decision": "Two days; INR 1,000 adjusted on admission, otherwise non-refundable",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Decisions'!A7:D7"
+          }
+        },
+        {
+          "id": "D-004",
+          "area": "Demo delivery",
+          "decision": "Separate subject demos only; teacher booking communicated",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Decisions'!A8:D8"
+          }
+        }
+      ],
+      "work_inventory": [
+        {
+          "id": "OP-005",
+          "function": "Admissions",
+          "process": "Two-day demo",
+          "scope": "Separate classes; never regular batch; coordinate teacher booking",
+          "proposed_role": "Academic coordinator",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A9:F9"
+          }
+        },
+        {
+          "id": "OP-006",
+          "function": "Fees",
+          "process": "Demo payment",
+          "scope": "INR 1,000; non-refundable if not joining; adjusted if joining",
+          "proposed_role": "Accounts",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A10:F10"
+          }
+        },
+        {
+          "id": "OP-007",
+          "function": "Admissions",
+          "process": "Follow-ups",
+          "scope": "WhatsApp next-day feedback and calls within 1–2 days",
+          "proposed_role": "Reception and academic counsellor",
+          "source_status": "Proposed",
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A11:F11"
+          }
+        }
+      ],
+      "source_status": "Confirmed",
+      "status": "approved",
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 57"
+        }
+      ]
+    },
+    {
+      "id": "WF-ADMISSION-OFFLINE",
+      "name": "Offline admission and fees",
+      "steps": [
+        "form/document collection",
+        "secure document retention",
+        "fee/down-payment verification",
+        "authority approval",
+        "two checks on agreed fees",
+        "Tally invoice/receipt",
+        "instalment tracking",
+        "kit issue (box/T-shirt/bag)",
+        "WhatsApp group",
+        "timetable onboarding"
+      ],
+      "work_inventory": [
+        {
+          "id": "OP-008",
+          "function": "Admissions",
+          "process": "Documents",
+          "scope": "Admission form, Aadhaar, marksheet; verify and retain",
+          "proposed_role": "Documentation role",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A12:F12"
+          }
+        },
+        {
+          "id": "OP-009",
+          "function": "Coordination",
+          "process": "School and hostel",
+          "scope": "Separate admission documents and partner-hostel communication",
+          "proposed_role": "Student support",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A13:F13"
+          }
+        },
+        {
+          "id": "OP-010",
+          "function": "Fees",
+          "process": "Fee agreement",
+          "scope": "Two verifications and authorised signed approval of agreed fees",
+          "proposed_role": "Accounts and approver",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A14:F14"
+          }
+        },
+        {
+          "id": "OP-011",
+          "function": "Fees",
+          "process": "Collection and receipts",
+          "scope": "Initial payment, instalments, Tally invoice/payment receipt",
+          "proposed_role": "Accounts",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A15:F15"
+          }
+        },
+        {
+          "id": "OP-012",
+          "function": "Student support",
+          "process": "Onboarding",
+          "scope": "Issue box, T-shirt, bag; add groups and communicate timetable",
+          "proposed_role": "Reception",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A16:F16"
+          }
+        }
+      ],
+      "privacy_note": "Document types (e.g. Aadhaar, marksheet) are named as process steps only; no student records are extracted.",
+      "source_status": "Confirmed",
+      "status": "approved",
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 59"
+        }
+      ]
+    },
+    {
+      "id": "WF-ATTENDANCE-OFFLINE",
+      "name": "Offline attendance and absence call",
+      "rules": [
+        {
+          "id": "D-006",
+          "area": "Attendance",
+          "decision": "Call parent/guardian after 15 minutes of unexplained class absence",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Decisions'!A10:D10"
+          }
+        },
+        {
+          "id": "D-007",
+          "area": "Notifications",
+          "decision": "Arrival notification was not explicitly confirmed; departure notification required",
+          "source_status": "Open",
+          "status": "open",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Decisions'!A11:D11"
+          }
+        },
+        {
+          "id": "D-008",
+          "area": "Lunch exit",
+          "decision": "Standing student-signed and parent-attested timed permission",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Decisions'!A12:D12"
+          }
+        },
+        {
+          "id": "D-009",
+          "area": "Emergency exit",
+          "decision": "Parent approval before release",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Decisions'!A13:D13"
+          }
+        }
+      ],
+      "work_inventory": [
+        {
+          "id": "OP-013",
+          "function": "Attendance",
+          "process": "Biometric monitoring",
+          "scope": "Check entry/exit punches; parent departure messages",
+          "proposed_role": "Attendance role",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A17:F17"
+          }
+        },
+        {
+          "id": "OP-014",
+          "function": "Attendance",
+          "process": "Class absence",
+          "scope": "Check class roster and call after 15 minutes; record reason and next action",
+          "proposed_role": "Attendance role",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A18:F18"
+          }
+        },
+        {
+          "id": "OP-015",
+          "function": "Attendance",
+          "process": "Regular lunch exit",
+          "scope": "Student-signed, parent-attested form with authorised daily window",
+          "proposed_role": "Reception",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A19:F19"
+          }
+        },
+        {
+          "id": "OP-016",
+          "function": "Attendance",
+          "process": "Emergency exit",
+          "scope": "Obtain parent approval before departure; record and notify",
+          "proposed_role": "Reception",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A20:F20"
+          }
+        }
+      ],
+      "absence_call_after_minutes": 15,
+      "source_status": "Confirmed",
+      "status": "approved",
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 61"
+        }
+      ]
+    },
+    {
+      "id": "WF-ABSENCE-ONLINE",
+      "name": "Online absence-call checkpoint",
+      "rule": "Suggested first attendance check 15 minutes after class starts, subject to manager confirmation; the automatic absence notification does not replace the call.",
+      "absence_call_after_minutes": 15,
+      "source_status": "proposed",
+      "status": "proposed",
+      "notes": [
+        "Based on the offline rule; not separately approved for online (Claude.md)."
+      ],
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 189"
+        },
+        {
+          "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+          "locator": "section 'Attendance and absence calls', paragraph 3"
+        }
+      ]
+    },
+    {
+      "id": "WF-TESTS-OFFLINE",
+      "name": "Offline test cycle",
+      "steps": [
+        "plan",
+        "paper preparation/issue/printing",
+        "invigilation",
+        "collection",
+        "scanning",
+        "checking",
+        "re-evaluation when required",
+        "compulsory discussion",
+        "parent communication",
+        "return originals (after checking/re-evaluation or scan verification)",
+        "digital checked answer sheets, marksheets and performance reports"
+      ],
+      "decisions": [
+        {
+          "id": "D-010",
+          "area": "Test notebooks",
+          "decision": "Two notebooks per student shared across subjects",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Decisions'!A14:D14"
+          }
+        },
+        {
+          "id": "D-011",
+          "area": "Reporting",
+          "decision": "Digital checked answer sheet, marksheet and performance report",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Decisions'!A15:D15"
+          }
+        },
+        {
+          "id": "D-024",
+          "area": "Parent reviews",
+          "decision": "Weekly versus monthly cadence",
+          "source_status": "Open",
+          "status": "open",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Decisions'!A28:D28"
+          }
+        }
+      ],
+      "work_inventory": [
+        {
+          "id": "OP-020",
+          "function": "Examinations",
+          "process": "Test delivery",
+          "scope": "Schedule, paper preparation/printing, invigilation, collection and scans",
+          "proposed_role": "Exam operations",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A24:F24"
+          }
+        },
+        {
+          "id": "OP-021",
+          "function": "Examinations",
+          "process": "Evaluation and return",
+          "scope": "Physical checking: return after review; scan checking: return after scan verification",
+          "proposed_role": "Exam operations",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A25:F25"
+          }
+        },
+        {
+          "id": "OP-022",
+          "function": "Examinations",
+          "process": "Results and discussion",
+          "scope": "Digital checked script, marksheet/report; compulsory discussion and parent communication",
+          "proposed_role": "Teachers and exam operations",
+          "source_status": "Confirmed",
+          "status": "approved",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A26:F26"
+          }
+        },
+        {
+          "id": "OP-023",
+          "function": "Student support",
+          "process": "Progress reports",
+          "scope": "Teacher reviews weekly or monthly; cadence unresolved",
+          "proposed_role": "Teachers and student support",
+          "source_status": "Discussed",
+          "status": "documented",
+          "source": {
+            "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+            "locator": "sheet 'Work Inventory'!A27:F27"
+          }
+        }
+      ],
+      "open_items": [
+        "Alternating two-copy mechanics need a final SOP",
+        "Parent progress review cadence weekly vs monthly (D-024 Open)"
+      ],
+      "source_status": "Confirmed (steps); cadence open",
+      "status": "approved",
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 63"
+        }
+      ]
+    },
+    {
+      "id": "WF-ONLINE-OFFICE-HOURS",
+      "name": "Online office hours",
+      "rule": "Monday-Saturday 11:00-18:00 IST; routine Sunday support closed; Sunday coverage is event-specific with an assigned event team.",
+      "source_status": "Locked (Rules sheet); the coordinator SOP's service timings 'still need management approval' (Claude.md)",
+      "status": "locked",
+      "conflict": "Rules sheet marks office hours Locked; Claude.md section 1 says the SOP's proposed service timings still need management approval; the extraction doc calls the timings proposals.",
+      "source": [
+        {
+          "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+          "locator": "sheet 'Rules'!A5:C6"
+        },
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 179"
+        },
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 9"
+        }
+      ]
+    },
+    {
+      "id": "WF-WEBINARS",
+      "name": "Webinar cadence",
+      "rule": "Two webinars a week: one Saturday, one Sunday. Lead form, WhatsApp + email communications, follow-ups, CRM deduplication, host post-webinar review.",
+      "caveat": "Do not assume Sunday staff availability merely because a webinar is planned.",
+      "source_status": "documented (Routine checklist 'Weekly'; Sunday coverage Locked)",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 179"
+        },
+        {
+          "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+          "locator": "sheet 'Routine'!A14:F14"
+        }
+      ]
+    },
+    {
+      "id": "WF-MONTHLY-REPORT",
+      "name": "Monthly student report release",
+      "rule": "Weekly internal review; monthly release by the fifth working day. App generates reports; team verifies and sends privately.",
+      "source_status": "Proposed",
+      "status": "proposed",
+      "source": [
+        {
+          "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+          "locator": "sheet 'Rules'!A14:C14"
+        },
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 181"
+        }
+      ]
+    },
+    {
+      "id": "WF-MARKETING-WEEK",
+      "name": "Offline marketing weekly rhythm",
+      "defaults": {
+        "feed_posts_per_week": 4,
+        "scheduling_lead_time_hours": 24,
+        "post_review_after_days": 7
+      },
+      "variants": [
+        {
+          "text": "brief Wednesday, shoot Thursday, approve Friday, Saturday scheduling/preparation",
+          "source": {
+            "path": "handover/Claude.md",
+            "locator": "line 175"
+          }
+        },
+        {
+          "text": "Plan Wed; briefs Thu; production Fri; approve/schedule Sat (MKT-01)",
+          "source": {
+            "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+            "locator": "sheet 'SOP Register'!A6:L6"
+          }
+        }
+      ],
+      "conflict": "The two descriptions of the weekly rhythm differ by one day for briefs/production.",
+      "source_status": "agreed starting standards, not measured performance",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Start Here'!A8:C11"
+        },
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 175"
+        }
+      ]
+    }
+  ],
+  "online_operating_rules": [
+    {
+      "area": "Office hours",
+      "source_status": "Locked",
+      "status": "locked",
+      "rule": "Monday–Saturday, 11:00–18:00 IST. Routine Sunday support closed.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A5:C5"
+      }
+    },
+    {
+      "area": "Sunday coverage",
+      "source_status": "Locked",
+      "status": "locked",
+      "rule": "Assigned event team for Sunday webinar and other scheduled activities.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A6:C6"
+      }
+    },
+    {
+      "area": "Platform",
+      "source_status": "User confirmed",
+      "status": "documented",
+      "rule": "Vacademy hosts live classes, homework, doubts, tests and reports. CRM remains separate.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A7:C7"
+      }
+    },
+    {
+      "area": "Recordings",
+      "source_status": "User confirmed",
+      "status": "documented",
+      "rule": "Automatic recording and publication. Team verifies quality and access.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A8:C8"
+      }
+    },
+    {
+      "area": "Attendance",
+      "source_status": "User confirmed",
+      "status": "documented",
+      "rule": "Automatic attendance, time attended and absence notifications. Review exceptions.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A9:C9"
+      }
+    },
+    {
+      "area": "Homework reminders",
+      "source_status": "Locked",
+      "status": "locked",
+      "rule": "Team must arrange reminders; automation is a pending technical setup option.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A10:C10"
+      }
+    },
+    {
+      "area": "Test reminders",
+      "source_status": "Pending verification",
+      "status": "unverified",
+      "rule": "Confirm platform capability before assigning automatic responsibility.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A11:C11"
+      }
+    },
+    {
+      "area": "Weekly tests",
+      "source_status": "Locked",
+      "status": "locked",
+      "rule": "Two flexible test windows shared across enrolled subjects.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A12:C12"
+      }
+    },
+    {
+      "area": "Reports",
+      "source_status": "Locked",
+      "status": "locked",
+      "rule": "App generates reports; team verifies and sends privately.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A13:C13"
+      }
+    },
+    {
+      "area": "Report timing",
+      "source_status": "Proposed",
+      "status": "proposed",
+      "rule": "Weekly internal review; monthly release by fifth working day. Final timing approval pending.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A14:C14"
+      }
+    },
+    {
+      "area": "Parent communication",
+      "source_status": "Locked",
+      "status": "locked",
+      "rule": "Registered guardian for under-18 students; permission-based sharing for adults. Verify app recipients.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A15:C15"
+      }
+    },
+    {
+      "area": "Installments",
+      "source_status": "Locked / verify setup",
+      "status": "locked",
+      "rule": "Full payment or installments; 3 calendar-day grace, then automatic restriction; restore on verified payment.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A16:C16"
+      }
+    },
+    {
+      "area": "Access expiry",
+      "source_status": "Locked",
+      "status": "locked",
+      "rule": "All course resources expire on the target exam date. Exact exam dates must be recorded.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A17:C17"
+      }
+    },
+    {
+      "area": "Expiry cutoff",
+      "source_status": "Implementation detail",
+      "status": "proposed",
+      "rule": "Proposed 23:59 IST on exam date. Restrict access, not deletion of records.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A18:C18"
+      }
+    },
+    {
+      "area": "Late joiners",
+      "source_status": "Locked",
+      "status": "locked",
+      "rule": "Join live classes immediately; earlier recordings and materials for enrolled batch available.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A19:C19"
+      }
+    },
+    {
+      "area": "Fees and exceptions",
+      "source_status": "Pending limits",
+      "status": "open",
+      "rule": "Authorised approval for refunds, waivers, special fees, extensions and spending exceptions.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A20:C20"
+      }
+    },
+    {
+      "area": "Academic response times",
+      "source_status": "Proposed",
+      "status": "proposed",
+      "rule": "Written feedback within 2 working days; first academic doubt response by next working day.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A21:C21"
+      }
+    },
+    {
+      "area": "Attendance thresholds",
+      "source_status": "Proposed",
+      "status": "proposed",
+      "rule": "For 60-minute class: present at least 45 minutes; less is partial; reconcile technical issues first.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A22:C22"
+      }
+    },
+    {
+      "area": "Data handling",
+      "source_status": "Operating control",
+      "status": "documented",
+      "rule": "Use student IDs and private source links. No Aadhaar, passwords, payment credentials or sensitive complaint detail here.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A23:C23"
+      }
+    },
+    {
+      "area": "Record ownership",
+      "source_status": "Operating control",
+      "status": "documented",
+      "rule": "Vacademy, CRM and accounts system remain source records. Workbook is manual and not integrated.",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A24:C24"
+      }
+    }
+  ],
+  "lead_sources": {
+    "values": [
+      "Instagram organic/ads",
+      "Google ads/SEO",
+      "newspaper",
+      "seminars",
+      "webinars",
+      "walk-ins"
+    ],
+    "crm_first_enquiry_source_dropdown": [
+      "Instagram organic",
+      "Meta ads",
+      "Google ads",
+      "Google search / Maps",
+      "Seminar",
+      "Webinar",
+      "Newspaper",
+      "Walk-in",
+      "Referral",
+      "YouTube organic",
+      "Other",
+      "Unknown"
+    ],
+    "status": "documented",
+    "source": [
+      {
+        "path": "handover/Claude.md",
+        "locator": "line 55"
+      },
+      {
+        "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+        "locator": "sheet 'CRM Import'!E6:E1005 (data validation)"
+      }
+    ]
+  },
+  "lead_stages": {
+    "values": [
+      "New",
+      "Contacted",
+      "Counselling booked",
+      "Counselled",
+      "Demo booked",
+      "Demo started",
+      "Demo completed",
+      "Admitted",
+      "Lost",
+      "Not interested"
+    ],
+    "definitions": [
+      "Confirmed admission = approved fee arrangement, required documents and verified down payment; demo fee alone is not admission.",
+      "Contacted = first successful two-way contact; unanswered calls do not count."
+    ],
+    "status": "documented",
+    "source": [
+      {
+        "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+        "locator": "sheet 'CRM Import'!K6:K1005 (data validation)"
+      },
+      {
+        "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+        "locator": "sheet 'Start Here'!A31:C32"
+      }
+    ]
+  }
+}

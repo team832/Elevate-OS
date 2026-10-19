@@ -1,0 +1,492 @@
+{
+  "meta": {
+    "source_files": [
+      "handover/elevate-education-operations/PROJECT_CHARTER.md",
+      "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records",
+      "work_status_standard",
+      "escalation_levels",
+      "common_records",
+      "leadership_layer",
+      "governance_roles"
+    ],
+    "notes": [
+      "The 13-department starting model from SYSTEM_ARCHITECTURE.md ('a starting model ... will be adjusted to Elevate Education's actual structure').",
+      "No owner is named in the source: owner_role is the generic 'Department head (to be named)' from PROJECT_CHARTER governance; owner_named stays null.",
+      "Byte-identical copies exist under outputs/elevate-education-operations/; the elevate-education-operations/ copy is cited."
+    ]
+  },
+  "records": [
+    {
+      "name": "Leadership & Operations",
+      "purpose": "Strategy execution and coordination",
+      "example_measures": [
+        "priorities on track",
+        "overdue work",
+        "issue closure time"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 18"
+      }
+    },
+    {
+      "name": "Admissions & Counselling",
+      "purpose": "Lead-to-enrolment journey",
+      "example_measures": [
+        "response time",
+        "conversion rate",
+        "enrolments"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 19"
+      }
+    },
+    {
+      "name": "Academics",
+      "purpose": "Teaching plan and delivery quality",
+      "example_measures": [
+        "syllabus completion",
+        "class quality",
+        "outcomes"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 20"
+      }
+    },
+    {
+      "name": "Curriculum & Content",
+      "purpose": "Learning-material production",
+      "example_measures": [
+        "on-time delivery",
+        "review accuracy",
+        "revisions"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 21"
+      }
+    },
+    {
+      "name": "Faculty Management",
+      "purpose": "Allocation, readiness, and performance",
+      "example_measures": [
+        "utilisation",
+        "punctuality",
+        "observations"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 22"
+      }
+    },
+    {
+      "name": "Student Success",
+      "purpose": "Attendance, engagement, support, retention",
+      "example_measures": [
+        "attendance",
+        "risk resolution",
+        "retention"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 23"
+      }
+    },
+    {
+      "name": "Examinations",
+      "purpose": "Assessment planning and results",
+      "example_measures": [
+        "on-time papers",
+        "evaluation turnaround",
+        "analysis"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 24"
+      }
+    },
+    {
+      "name": "Parent Communication",
+      "purpose": "Structured updates and issue resolution",
+      "example_measures": [
+        "update compliance",
+        "response time",
+        "satisfaction"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 25"
+      }
+    },
+    {
+      "name": "Marketing & Growth",
+      "purpose": "Awareness and lead generation",
+      "example_measures": [
+        "qualified leads",
+        "campaign performance",
+        "cost per lead"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 26"
+      }
+    },
+    {
+      "name": "Finance",
+      "purpose": "Fees, payroll, budgeting, and controls",
+      "example_measures": [
+        "collections",
+        "overdue fees",
+        "variance"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 27"
+      }
+    },
+    {
+      "name": "Human Resources",
+      "purpose": "Hiring, onboarding, attendance, and performance",
+      "example_measures": [
+        "time to hire",
+        "onboarding completion",
+        "attrition"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 28"
+      }
+    },
+    {
+      "name": "Administration & Facilities",
+      "purpose": "Physical operations and logistics",
+      "example_measures": [
+        "uptime",
+        "issue closure",
+        "inventory accuracy"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 29"
+      }
+    },
+    {
+      "name": "Technology & Data",
+      "purpose": "Systems, access, support, and reporting",
+      "example_measures": [
+        "uptime",
+        "ticket closure",
+        "data completeness"
+      ],
+      "owner_role": "Department head (to be named)",
+      "owner_named": null,
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 30"
+      }
+    }
+  ],
+  "work_status_standard": [
+    {
+      "value": "Not started",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 47"
+      }
+    },
+    {
+      "value": "In progress",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 48"
+      }
+    },
+    {
+      "value": "Waiting",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 49"
+      }
+    },
+    {
+      "value": "At risk",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 50"
+      }
+    },
+    {
+      "value": "Blocked",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 51"
+      }
+    },
+    {
+      "value": "Completed",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 52"
+      }
+    },
+    {
+      "value": "Cancelled",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 53"
+      }
+    }
+  ],
+  "escalation_levels": [
+    {
+      "level": 1,
+      "meaning": "owner resolves within the normal turnaround time.",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 57"
+      }
+    },
+    {
+      "level": 2,
+      "meaning": "department head intervention is required.",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 58"
+      }
+    },
+    {
+      "level": 3,
+      "meaning": "cross-department or operations-lead intervention is required.",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 59"
+      }
+    },
+    {
+      "level": 4,
+      "meaning": "leadership decision, policy change, or resource approval is required.",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 60"
+      }
+    }
+  ],
+  "common_records": [
+    {
+      "record": "Objectives and KPIs",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 36"
+      }
+    },
+    {
+      "record": "Recurring task calendar",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 37"
+      }
+    },
+    {
+      "record": "Project tracker",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 38"
+      }
+    },
+    {
+      "record": "Issue and risk log",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 39"
+      }
+    },
+    {
+      "record": "SOP register",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 40"
+      }
+    },
+    {
+      "record": "Meeting action log",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 41"
+      }
+    },
+    {
+      "record": "Role scorecards",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 42"
+      }
+    },
+    {
+      "record": "Evidence and document links",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 43"
+      }
+    }
+  ],
+  "leadership_layer": [
+    {
+      "item": "Annual and quarterly priorities",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 5"
+      }
+    },
+    {
+      "item": "Weekly operating dashboard",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 6"
+      }
+    },
+    {
+      "item": "Cross-department master tracker",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 7"
+      }
+    },
+    {
+      "item": "KPI scorecard",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 8"
+      }
+    },
+    {
+      "item": "Risk, issue, and decision logs",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 9"
+      }
+    },
+    {
+      "item": "Approval and escalation queue",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+        "locator": "line 10"
+      }
+    }
+  ],
+  "governance_roles": [
+    {
+      "role": "Project sponsor",
+      "responsibility": "approves priorities, policy, and resources.",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/PROJECT_CHARTER.md",
+        "locator": "line 50"
+      }
+    },
+    {
+      "role": "Operations lead",
+      "responsibility": "owns the system, review rhythm, escalation, and adoption.",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/PROJECT_CHARTER.md",
+        "locator": "line 51"
+      }
+    },
+    {
+      "role": "Department heads",
+      "responsibility": "own departmental data, KPIs, and SOP compliance.",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/PROJECT_CHARTER.md",
+        "locator": "line 52"
+      }
+    },
+    {
+      "role": "Process owners",
+      "responsibility": "design and improve assigned workflows.",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/PROJECT_CHARTER.md",
+        "locator": "line 53"
+      }
+    },
+    {
+      "role": "Team members",
+      "responsibility": "complete tasks and attach evidence.",
+      "status": "proposed",
+      "source": {
+        "path": "handover/elevate-education-operations/PROJECT_CHARTER.md",
+        "locator": "line 54"
+      }
+    }
+  ]
+}

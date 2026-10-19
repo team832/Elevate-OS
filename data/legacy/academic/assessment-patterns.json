@@ -1,0 +1,434 @@
+{
+  "meta": {
+    "source_files": [
+      "content-os/accounts/instagram-clat/strategy-oct-dec-2026.md",
+      "content-os/courses/clat/facts.md",
+      "content-os/courses/cuet/facts.md",
+      "content-os/ideas/inbox.md",
+      "content-os/library/CLAT-008-8-week-plan/script.md",
+      "handover/Claude.md",
+      "handover/elevate-education-operations/IPMAT_WEB_REFERENCE_REVIEW.md",
+      "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+      "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+      "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+      "handover/outputs/online-operations/Elevate-Online-Easy.xlsx"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records",
+      "internal_assessment_formats"
+    ],
+    "notes": [
+      "Exam patterns exactly as found in the legacy sources. Values not stated in a source are null/'unknown'; nothing was filled from memory.",
+      "verification_status: official_source_cited (the source cites an official document it checked, with the date), secondary_source, unverified, unknown.",
+      "Patterns are cycle-specific; re-verify against the applicable year's official notice before building mocks or publishing."
+    ]
+  },
+  "records": [
+    {
+      "exam": "CLAT UG",
+      "cycle": "CLAT 2027",
+      "exam_date": "2026-12-06",
+      "exam_time": "14:00-16:00 IST",
+      "registration_closes": "2026-10-31",
+      "total_questions": 120,
+      "duration_minutes": 120,
+      "marks_per_correct": 1,
+      "negative_marking_per_wrong": 0.25,
+      "mode": "pen and paper (OMR)",
+      "sections": [
+        {
+          "name": "English",
+          "questions": null
+        },
+        {
+          "name": "Current Affairs/GK",
+          "questions": null
+        },
+        {
+          "name": "Legal Reasoning",
+          "questions": null
+        },
+        {
+          "name": "Logical Reasoning",
+          "questions": null
+        },
+        {
+          "name": "Quantitative Techniques",
+          "questions": null
+        }
+      ],
+      "section_question_counts": "unknown (not stated in any legacy source)",
+      "verification_status": "secondary_source",
+      "verification_note": "facts.md cites 'official, via BW Education / Testbook' for dates; pattern stated in the CLAT strategy and the CLAT-008 script; answer key/results timing unverified.",
+      "status": "documented",
+      "source": [
+        {
+          "path": "content-os/courses/clat/facts.md",
+          "locator": "line 2"
+        },
+        {
+          "path": "content-os/courses/clat/facts.md",
+          "locator": "line 5"
+        },
+        {
+          "path": "content-os/accounts/instagram-clat/strategy-oct-dec-2026.md",
+          "locator": "line 9"
+        },
+        {
+          "path": "content-os/library/CLAT-008-8-week-plan/script.md",
+          "locator": "line 56"
+        }
+      ]
+    },
+    {
+      "exam": "IIM Bangalore UG Admissions Test (IIMB UG-AT)",
+      "cycle": "2026 test / 2027 intake (FAQ dated 2026-08)",
+      "exam_date": "2026-11-15 (tentative, official page)",
+      "total_questions": 60,
+      "duration_minutes": 135,
+      "question_type": "MCQ",
+      "sections": [
+        {
+          "name": "Quantitative Aptitude / Data Interpretation",
+          "questions": 30
+        },
+        {
+          "name": "Logical Reasoning",
+          "questions": 15
+        },
+        {
+          "name": "Verbal Ability / Reading Comprehension",
+          "questions": 15
+        }
+      ],
+      "marks_per_correct": null,
+      "negative_marking_per_wrong": null,
+      "marking_scheme": "unknown (not recorded in legacy sources)",
+      "syllabus_scope": "NCERT Classes X-XII; Mathematics in XI/XII mandatory (applied mathematics accepted)",
+      "superseded": [
+        "Older October 2025 FAQ stated 120 minutes; must not replace current-cycle rules."
+      ],
+      "verification_status": "official_source_cited",
+      "verification_note": "Checked 10 Sep 2026 against https://ug.iimb.ac.in/wp-content/uploads/2026/08/UG-Admissions-FAQ-2026.pdf; refresh for each cycle.",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/elevate-education-operations/IPMAT_WEB_REFERENCE_REVIEW.md",
+          "locator": "line 7"
+        },
+        {
+          "path": "handover/elevate-education-operations/IPMAT_WEB_REFERENCE_REVIEW.md",
+          "locator": "line 6"
+        }
+      ]
+    },
+    {
+      "exam": "IPMAT Indore",
+      "cycle": "2026",
+      "total_questions": null,
+      "duration_minutes": 120,
+      "duration_note": "three separately timed 40-minute sections (3 x 40 derived; total not stated as such)",
+      "sections": [
+        {
+          "name": "Quantitative Ability (MCQ)",
+          "questions": null,
+          "minutes": 40
+        },
+        {
+          "name": "Quantitative Ability (short answer)",
+          "questions": null,
+          "minutes": 40
+        },
+        {
+          "name": "Verbal Ability",
+          "questions": null,
+          "minutes": 40
+        }
+      ],
+      "marks_per_correct": null,
+      "negative_marking_per_wrong": null,
+      "marking_scheme": "MCQ carries a penalty (value not recorded); no negative marking in short answer",
+      "verification_status": "official_source_cited",
+      "verification_note": "Checked 10 Sep 2026 against the IIM Indore IPM 2026-31 admission procedure PDF.",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/elevate-education-operations/IPMAT_WEB_REFERENCE_REVIEW.md",
+          "locator": "line 8"
+        }
+      ]
+    },
+    {
+      "exam": "IPMAT Rohtak",
+      "cycle": "2026",
+      "total_questions": 120,
+      "duration_minutes": 120,
+      "sections": [
+        {
+          "name": "Quantitative Ability",
+          "questions": 40
+        },
+        {
+          "name": "Logical Reasoning",
+          "questions": 40
+        },
+        {
+          "name": "Verbal Ability",
+          "questions": 40
+        }
+      ],
+      "marks_per_correct": null,
+      "negative_marking_per_wrong": null,
+      "marking_scheme": "unknown (not recorded in legacy sources)",
+      "notes": [
+        "Legal reasoning belongs to the optional IPL selection, not standard IPM scope."
+      ],
+      "verification_status": "official_source_cited",
+      "verification_note": "Checked 10 Sep 2026 against https://iimrohtak.ac.in/ipm-admission.php",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/elevate-education-operations/IPMAT_WEB_REFERENCE_REVIEW.md",
+          "locator": "line 10"
+        }
+      ]
+    },
+    {
+      "exam": "JIPMAT (IIM Jammu, IIM Bodh Gaya; conducted by NTA)",
+      "cycle": "2026",
+      "total_questions": 100,
+      "duration_minutes": 150,
+      "sections": [
+        {
+          "name": "Quantitative Aptitude",
+          "questions": 33
+        },
+        {
+          "name": "Data Interpretation and Logical Reasoning",
+          "questions": 33
+        },
+        {
+          "name": "Verbal Ability and Reading Comprehension",
+          "questions": 34
+        }
+      ],
+      "marks_per_correct": null,
+      "negative_marking_per_wrong": null,
+      "marking_scheme": "unknown (not recorded in legacy sources)",
+      "syllabus_scope": "QA officially up to Class 10",
+      "verification_status": "official_source_cited",
+      "verification_note": "Checked 10 Sep 2026 against the NTA JIPMAT 2026 information bulletin.",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/elevate-education-operations/IPMAT_WEB_REFERENCE_REVIEW.md",
+          "locator": "line 11"
+        }
+      ]
+    },
+    {
+      "exam": "IIM Kozhikode BMS Aptitude Test",
+      "cycle": "2026 FAQ",
+      "total_questions": null,
+      "duration_minutes": null,
+      "sections": [
+        {
+          "name": "Verbal Ability",
+          "questions": null
+        },
+        {
+          "name": "Quantitative Ability",
+          "questions": null
+        }
+      ],
+      "marks_per_correct": null,
+      "negative_marking_per_wrong": null,
+      "marking_scheme": "unknown",
+      "syllabus_scope": "Official topic families: grammar/vocabulary/RC; numbers, algebra, geometry incl. coordinates/trigonometry, mensuration, statistics/probability",
+      "verification_status": "official_source_cited",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/elevate-education-operations/IPMAT_WEB_REFERENCE_REVIEW.md",
+          "locator": "line 9"
+        }
+      ]
+    },
+    {
+      "exam": "NMIMS NPAT",
+      "cycle": "2026",
+      "total_questions": null,
+      "duration_minutes": null,
+      "sections": null,
+      "marks_per_correct": null,
+      "negative_marking_per_wrong": null,
+      "marking_scheme": "unknown",
+      "syllabus_scope": "Quantitative Reasoning section; SAT-style question types (handout)",
+      "verification_status": "official_source_cited",
+      "verification_note": "Quant scope only; no full pattern recorded in legacy sources.",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+          "locator": "sheet 'Exam sources'!A10:G10"
+        }
+      ]
+    },
+    {
+      "exam": "Symbiosis SET General",
+      "cycle": "2026",
+      "total_questions": null,
+      "duration_minutes": null,
+      "sections": null,
+      "marks_per_correct": null,
+      "negative_marking_per_wrong": null,
+      "marking_scheme": "unknown",
+      "syllabus_scope": "Quantitative section (section-level pattern only)",
+      "verification_status": "official_source_cited",
+      "verification_note": "Quant scope only; no full pattern recorded in legacy sources.",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+          "locator": "sheet 'Exam sources'!A11:G11"
+        }
+      ]
+    },
+    {
+      "exam": "CHRIST BBA entrance",
+      "cycle": "2026",
+      "total_questions": null,
+      "duration_minutes": null,
+      "sections": null,
+      "marks_per_correct": null,
+      "negative_marking_per_wrong": null,
+      "marking_scheme": "unknown",
+      "syllabus_scope": "Mathematics; Data Analysis and Interpretation (general BBA group)",
+      "verification_status": "official_source_cited",
+      "verification_note": "Quant scope only; no full pattern recorded in legacy sources.",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+          "locator": "sheet 'Exam sources'!A12:G12"
+        }
+      ]
+    },
+    {
+      "exam": "CUET GAT (501)",
+      "cycle": "2026",
+      "total_questions": null,
+      "duration_minutes": null,
+      "sections": null,
+      "marks_per_correct": null,
+      "negative_marking_per_wrong": null,
+      "marking_scheme": "unknown",
+      "syllabus_scope": "Numerical ability; simple applications of arithmetic, algebra, geometry, mensuration and statistics",
+      "verification_status": "official_source_cited",
+      "verification_note": "Quant scope only; no full pattern recorded in legacy sources.",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+          "locator": "sheet 'Exam sources'!A9:G9"
+        }
+      ]
+    },
+    {
+      "exam": "CUET UG",
+      "cycle": "2027",
+      "total_questions": null,
+      "duration_minutes": null,
+      "sections": null,
+      "marks_per_correct": null,
+      "negative_marking_per_wrong": null,
+      "marking_scheme": "unknown",
+      "notes": [
+        "Domain papers follow the Class 12 syllabus.",
+        "2027 changes (e.g. 4-subject cap, 1-day exam) are proposals/rumours; nothing confirmed by NTA as of Oct 2026."
+      ],
+      "verification_status": "unverified",
+      "status": "documented",
+      "source": [
+        {
+          "path": "content-os/courses/cuet/facts.md",
+          "locator": "line 3"
+        },
+        {
+          "path": "content-os/ideas/inbox.md",
+          "locator": "line 13"
+        }
+      ]
+    },
+    {
+      "exam": "CA Foundation",
+      "cycle": null,
+      "total_questions": null,
+      "duration_minutes": null,
+      "sections": null,
+      "marks_per_correct": null,
+      "negative_marking_per_wrong": null,
+      "marking_scheme": "unknown (no exam pattern recorded in legacy sources)",
+      "notes": [
+        "Papers: Accounting, Business Law, Business Economics, Quantitative Aptitude (Quants, Logical Reasoning, Statistics). Three attempts a year (Jan, May, Sep)."
+      ],
+      "verification_status": "unknown",
+      "status": "documented",
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 75"
+        }
+      ]
+    }
+  ],
+  "internal_assessment_formats": [
+    {
+      "assessment": "IPMAT chapter tests (Class 12)",
+      "detail": "70 papers; per-paper test and discussion minutes in class12-plan.json chapter_tests; Saturday test + Sunday discussion, 210-minute weekend cap",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+        "locator": "sheet 'Chapter tests'!A4:P74"
+      }
+    },
+    {
+      "assessment": "IPMAT sectionals",
+      "detail": "60-minute tests + 75-minute discussions",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+        "locator": "sheet 'Assessment budget'!A9:F12"
+      }
+    },
+    {
+      "assessment": "IPMAT full mocks",
+      "detail": "Test duration blank pending exam mapping; 150-minute discussion each",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+        "locator": "sheet 'Assessment budget'!A13:F19"
+      }
+    },
+    {
+      "assessment": "CA Foundation Accountancy chapter tests",
+      "detail": "ACC-T01..T09 1 h test + 1 h discussion; ACC-T10/T11 1.5 h + 2 h",
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Test Tracker'!A5:M15"
+      }
+    },
+    {
+      "assessment": "Online Class 12 weekly tests",
+      "detail": "Two flexible test windows per week shared across enrolled subjects",
+      "status": "locked",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Rules'!A12:C12"
+      }
+    }
+  ]
+}

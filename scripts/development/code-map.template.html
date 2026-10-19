@@ -1,0 +1,949 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Elevate OS Code Map</title>
+    <style>
+      :root {
+        --bg: #f7f7f5;
+        --panel: #ffffff;
+        --panel-2: #f1f1ee;
+        --text: #1c1c1a;
+        --muted: #6b6b66;
+        --line: #e2e2dc;
+        --accent: #1f4fd1;
+        --marketing: #c2410c;
+        --academic: #1d4ed8;
+        --ops: #047857;
+        --platform: #6d28d9;
+        --shared: #7c3aed;
+        --core: #6d28d9;
+        --legacy: #a16207;
+        --infra: #475569;
+        --docs: #64748b;
+        --warn: #b45309;
+        --radius: 10px;
+        --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --bg: #121211;
+          --panel: #1b1b1a;
+          --panel-2: #232321;
+          --text: #ecece8;
+          --muted: #9a9a93;
+          --line: #2f2f2c;
+          --accent: #7aa2ff;
+          --marketing: #fb923c;
+          --academic: #60a5fa;
+          --ops: #34d399;
+          --platform: #a78bfa;
+          --shared: #a78bfa;
+          --core: #a78bfa;
+          --legacy: #facc15;
+          --infra: #94a3b8;
+          --docs: #94a3b8;
+          --warn: #fbbf24;
+        }
+      }
+      :root[data-theme='dark'] {
+        --bg: #121211;
+        --panel: #1b1b1a;
+        --panel-2: #232321;
+        --text: #ecece8;
+        --muted: #9a9a93;
+        --line: #2f2f2c;
+        --accent: #7aa2ff;
+        --marketing: #fb923c;
+        --academic: #60a5fa;
+        --ops: #34d399;
+        --platform: #a78bfa;
+        --shared: #a78bfa;
+        --core: #a78bfa;
+        --legacy: #facc15;
+        --infra: #94a3b8;
+        --docs: #94a3b8;
+        --warn: #fbbf24;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.5 system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      header {
+        padding: 20px 24px 0;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .brand {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .wordmark {
+        font-weight: 800;
+        font-size: 26px;
+        letter-spacing: -0.03em;
+      }
+      .brand h1 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--muted);
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 4px;
+      }
+      .meta code {
+        font-family: var(--mono);
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 10px;
+        margin: 16px 0;
+      }
+      .stat {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 10px 14px;
+      }
+      .stat b {
+        display: block;
+        font-size: 22px;
+        font-variant-numeric: tabular-nums;
+      }
+      .stat span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      nav.tabs {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--line);
+        overflow-x: auto;
+      }
+      nav.tabs button {
+        background: none;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        padding: 10px 14px;
+        color: var(--muted);
+        font: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      nav.tabs button[aria-selected='true'] {
+        color: var(--text);
+        border-bottom-color: var(--accent);
+        font-weight: 600;
+      }
+      main {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 18px 24px 60px;
+      }
+      section[hidden] {
+        display: none;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .pill {
+        display: inline-block;
+        font-size: 11px;
+        padding: 1px 8px;
+        border-radius: 99px;
+        border: 1px solid currentColor;
+        line-height: 1.6;
+        white-space: nowrap;
+      }
+      .o-marketing {
+        color: var(--marketing);
+      }
+      .o-academic {
+        color: var(--academic);
+      }
+      .o-ops {
+        color: var(--ops);
+      }
+      .o-platform {
+        color: var(--platform);
+      }
+      .o-shared {
+        color: var(--shared);
+      }
+      .o-core {
+        color: var(--core);
+      }
+      .o-legacy {
+        color: var(--legacy);
+      }
+      .o-infra {
+        color: var(--infra);
+      }
+      .o-docs {
+        color: var(--docs);
+      }
+      h2 {
+        font-size: 16px;
+        margin: 0 0 10px;
+      }
+      h3 {
+        font-size: 14px;
+        margin: 14px 0 6px;
+      }
+      table.mods {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      table.mods th,
+      table.mods td {
+        text-align: left;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--line);
+      }
+      table.mods th {
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 12px;
+      }
+      /* architecture diagram */
+      svg.arch {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      svg.arch .box rect {
+        fill: var(--panel-2);
+        stroke: var(--line);
+      }
+      svg.arch text {
+        fill: var(--text);
+        font:
+          12px system-ui,
+          sans-serif;
+      }
+      svg.arch .sub {
+        fill: var(--muted);
+        font-size: 11px;
+      }
+      svg.arch .edge {
+        stroke: var(--muted);
+        stroke-width: 1.4;
+        fill: none;
+      }
+      svg.arch .evt {
+        stroke: var(--warn);
+        stroke-dasharray: 5 4;
+      }
+      svg.arch a:hover rect {
+        stroke: var(--accent);
+        stroke-width: 2;
+      }
+      /* tree */
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      input[type='search'] {
+        flex: 1 1 260px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        font: inherit;
+      }
+      .btn {
+        padding: 7px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        cursor: pointer;
+        font: inherit;
+      }
+      .tree {
+        font-family: var(--mono);
+        font-size: 13px;
+      }
+      .tree ul {
+        list-style: none;
+        margin: 0;
+        padding-left: 18px;
+        border-left: 1px dashed var(--line);
+      }
+      .tree > ul {
+        padding-left: 0;
+        border: 0;
+      }
+      .tree li {
+        margin: 1px 0;
+      }
+      .tree summary {
+        cursor: pointer;
+        list-style: none;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .tree summary::-webkit-details-marker {
+        display: none;
+      }
+      .tree summary::before {
+        content: '▸';
+        color: var(--muted);
+        width: 10px;
+      }
+      .tree details[open] > summary::before {
+        content: '▾';
+      }
+      .tree .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding-left: 18px;
+      }
+      .tree .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+        flex: none;
+      }
+      .tree .info {
+        color: var(--muted);
+        font-size: 11px;
+        margin-left: auto;
+        padding-left: 12px;
+        white-space: nowrap;
+      }
+      .tree .dbtag {
+        font-size: 10px;
+        color: var(--core);
+        border: 1px solid currentColor;
+        border-radius: 4px;
+        padding: 0 4px;
+        cursor: pointer;
+      }
+      .legend {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        font-size: 12px;
+      }
+      .legend span {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .legend i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: currentColor;
+        display: inline-block;
+      }
+      /* database */
+      .db {
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+      .tablelist {
+        max-height: 78vh;
+        overflow: auto;
+        padding: 8px;
+      }
+      .tablelist h4 {
+        margin: 10px 6px 4px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .tablelist button {
+        display: flex;
+        width: 100%;
+        justify-content: space-between;
+        gap: 8px;
+        text-align: left;
+        background: none;
+        border: 0;
+        border-radius: 6px;
+        padding: 4px 8px;
+        color: var(--text);
+        font: 13px var(--mono);
+        cursor: pointer;
+      }
+      .tablelist button:hover {
+        background: var(--panel-2);
+      }
+      .tablelist button[aria-current='true'] {
+        background: var(--panel-2);
+        outline: 1px solid var(--accent);
+      }
+      .tablelist button small {
+        color: var(--muted);
+      }
+      .cols {
+        width: 100%;
+        border-collapse: collapse;
+        font: 12.5px var(--mono);
+      }
+      .cols td,
+      .cols th {
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      .cols th {
+        font:
+          500 12px system-ui,
+          sans-serif;
+        color: var(--muted);
+      }
+      .tag {
+        font-size: 10px;
+        border-radius: 4px;
+        padding: 0 4px;
+        margin-right: 3px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .tag.pk {
+        color: var(--warn);
+        border-color: currentColor;
+      }
+      .tag.fk {
+        color: var(--accent);
+        border-color: currentColor;
+      }
+      .linklist {
+        margin: 0;
+        padding-left: 18px;
+        font: 12.5px var(--mono);
+      }
+      .linklist li {
+        margin: 2px 0;
+        word-break: break-all;
+      }
+      svg.focus {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      svg.focus text {
+        font: 12px var(--mono);
+        fill: var(--text);
+      }
+      svg.focus .n rect {
+        fill: var(--panel-2);
+        stroke: var(--line);
+      }
+      svg.focus .n.center rect {
+        stroke: var(--accent);
+        stroke-width: 2;
+      }
+      svg.focus .n {
+        cursor: pointer;
+      }
+      svg.focus path {
+        stroke: var(--muted);
+        fill: none;
+        stroke-width: 1.2;
+      }
+      .schemamap {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
+      }
+      .schemamap .card b {
+        font-size: 20px;
+      }
+      .note {
+        font-size: 12px;
+        color: var(--muted);
+        border-left: 3px solid var(--line);
+        padding: 4px 10px;
+        margin: 10px 0;
+      }
+      @media (max-width: 860px) {
+        header,
+        main {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+        .grid2,
+        .db {
+          grid-template-columns: 1fr;
+        }
+        .tablelist {
+          max-height: 40vh;
+        }
+        .tree .info {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span class="wordmark">elevate</span>
+        <h1>OS: code &amp; database map</h1>
+        <button class="btn" id="theme" style="margin-left: auto">Theme</button>
+      </div>
+      <div class="meta">
+        Snapshot generated <span id="gen"></span> from <code id="root"></code> by
+        <code>node scripts/development/code-map.mjs</code>. Re-run it to refresh; the modules are
+        still being built.
+      </div>
+      <div class="stats" id="stats"></div>
+      <nav class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="overview">Overview</button>
+        <button role="tab" aria-selected="false" data-tab="folders">Folders &amp; files</button>
+        <button role="tab" aria-selected="false" data-tab="database">Database</button>
+      </nav>
+    </header>
+    <main>
+      <section id="overview"></section>
+      <section id="folders" hidden></section>
+      <section id="database" hidden></section>
+    </main>
+    <script>
+      const DATA = /*__DATA__*/ null;
+    </script>
+    <script>
+      const OWN = {
+        platform: 'Platform shell',
+        shared: 'Shared packages',
+        marketing: 'Marketing OS',
+        academic: 'Academic OS',
+        ops: 'Business Ops OS',
+        legacy: 'Legacy data',
+        infra: 'Infra & scripts',
+        docs: 'Docs & root files',
+      };
+      const HOME = {
+        core: 'packages/database',
+        marketing: 'apps/marketing-os',
+        academic: 'apps/academic-os',
+        ops: 'apps/business-ops-os',
+      };
+      const SCHEMA_OWNER = {
+        core: 'core',
+        marketing: 'marketing',
+        academic: 'academic',
+        ops: 'ops',
+      };
+      const $ = (s, el = document) => el.querySelector(s);
+      const esc = (s) =>
+        String(s).replace(
+          /[&<>"']/g,
+          (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+        );
+      const url = (p) =>
+        DATA.rootUrl + (p ? '/' + p.split('/').map(encodeURIComponent).join('/') : '');
+      const link = (p, label) =>
+        `<a href="${url(p)}" target="_blank" rel="noopener" title="${esc(DATA.rootPath + '\\' + p.replaceAll('/', '\\'))}">${esc(label ?? p)}</a>`;
+      const num = (n) => (n ?? 0).toLocaleString('en-IN');
+      const bytes = (n) =>
+        n < 1024
+          ? n + ' B'
+          : n < 1048576
+            ? (n / 1024).toFixed(1) + ' KB'
+            : (n / 1048576).toFixed(1) + ' MB';
+
+      const tables = DATA.schemas.flatMap((s) => s.tables);
+      const byKey = new Map(tables.map((t) => [t.schema + '.' + t.name, t]));
+      const incoming = new Map();
+      for (const t of tables)
+        for (const r of t.refs)
+          if (r.targetTable) {
+            if (!incoming.has(r.targetTable)) incoming.set(r.targetTable, []);
+            incoming.get(r.targetTable).push({ from: t, column: r.column });
+          }
+      const usesByFile = new Map();
+      for (const t of tables)
+        for (const f of t.usedBy) {
+          if (!usesByFile.has(f)) usesByFile.set(f, []);
+          usesByFile.get(f).push(t);
+        }
+      const definedIn = new Map(DATA.schemas.map((s) => [s.file, s.tables]));
+
+      /* ---------- header ---------- */
+      $('#gen').textContent = new Date(DATA.generatedAt).toLocaleString('en-IN', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+      $('#root').textContent = DATA.rootPath;
+      const S = DATA.stats;
+      $('#stats').innerHTML = [
+        [S.files, 'files (excl. node_modules)'],
+        [S.codeLines, 'lines of source code'],
+        [S.testFiles, 'test files'],
+        [S.tables, 'database tables'],
+        [S.foreignKeys, 'foreign keys'],
+        [DATA.schemas.length, 'PostgreSQL schemas'],
+      ]
+        .map(([v, l]) => `<div class="stat"><b>${num(v)}</b><span>${l}</span></div>`)
+        .join('');
+
+      /* ---------- tabs ---------- */
+      function showTab(name) {
+        document
+          .querySelectorAll('nav.tabs button')
+          .forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+        document.querySelectorAll('main > section').forEach((s) => (s.hidden = s.id !== name));
+      }
+      document
+        .querySelectorAll('nav.tabs button')
+        .forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+      $('#theme').addEventListener('click', () => {
+        const r = document.documentElement;
+        const dark = r.dataset.theme
+          ? r.dataset.theme === 'dark'
+          : matchMedia('(prefers-color-scheme: dark)').matches;
+        r.dataset.theme = dark ? 'light' : 'dark';
+      });
+
+      /* ---------- overview ---------- */
+      function archSvg() {
+        const count = (s) => DATA.schemas.find((x) => x.name === s)?.tables.length ?? 0;
+        const box = (x, y, w, h, title, sub, path, cls = '') =>
+          `<a href="${url(path)}" target="_blank" class="box ${cls}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8"/>` +
+          `<text x="${x + w / 2}" y="${y + 22}" text-anchor="middle" font-weight="600">${esc(title)}</text>` +
+          `<text x="${x + w / 2}" y="${y + 40}" text-anchor="middle" class="sub">${esc(sub)}</text></a>`;
+        const color = (c) => `style="fill:var(--${c});opacity:.12"`;
+        const band = (x, y, w, h, c) =>
+          `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" ${color(c)}/>`;
+        return `<svg class="arch" viewBox="0 0 1000 560" role="img" aria-label="Elevate OS architecture">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  <marker id="ahw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker></defs>
+  ${box(410, 8, 180, 46, 'Browser (staff)', 'one site, one session cookie', '')}
+  ${band(360, 78, 280, 64, 'platform')}${box(370, 84, 260, 52, 'apps/platform  :3000', 'login · home · rewrites /marketing /academic /ops', 'apps/platform')}
+  ${band(30, 186, 300, 70, 'marketing')}${box(40, 192, 280, 58, 'apps/marketing-os  :3001', 'basePath /marketing', 'apps/marketing-os')}
+  ${band(350, 186, 300, 70, 'academic')}${box(360, 192, 280, 58, 'apps/academic-os  :3002', 'basePath /academic', 'apps/academic-os')}
+  ${band(670, 186, 300, 70, 'ops')}${box(680, 192, 280, 58, 'apps/business-ops-os  :3003', 'basePath /ops', 'apps/business-ops-os')}
+  ${band(30, 318, 940, 70, 'shared')}${box(40, 324, 920, 58, 'packages/*  (shared, imported by every app)', 'configuration · shared-types · shared-contracts · database · authentication · authorization · server-kit · notifications · shared-ui · testing', 'packages')}
+  ${band(30, 430, 940, 120, 'core')}
+  <text x="500" y="452" text-anchor="middle" font-weight="600">One PostgreSQL database: schema per owner, central migrations in packages/database</text>
+  ${box(45, 466, 215, 70, 'core  (' + count('core') + ' tables)', 'users · roles · approvals · audit · outbox', 'packages/database/src/schema/core.ts')}
+  ${box(275, 466, 215, 70, 'marketing  (' + count('marketing') + ')', 'schema/marketing.ts', 'packages/database/src/schema/marketing.ts')}
+  ${box(505, 466, 215, 70, 'academic  (' + count('academic') + ')', 'schema/academic.ts', 'packages/database/src/schema/academic.ts')}
+  ${box(735, 466, 215, 70, 'ops  (' + count('ops') + ')', 'schema/ops.ts', 'packages/database/src/schema/ops.ts')}
+  <path class="edge" d="M500,54 L500,84" marker-end="url(#ah)"/>
+  <path class="edge" d="M430,136 C300,160 200,165 180,192" marker-end="url(#ah)"/>
+  <path class="edge" d="M500,136 L500,192" marker-end="url(#ah)"/>
+  <path class="edge" d="M570,136 C700,160 800,165 820,192" marker-end="url(#ah)"/>
+  <text x="250" y="160" class="sub">rewrite</text><text x="730" y="160" class="sub">rewrite</text>
+  <path class="edge" d="M180,250 L180,324" marker-end="url(#ah)"/><path class="edge" d="M500,250 L500,324" marker-end="url(#ah)"/>
+  <path class="edge" d="M820,250 L820,324" marker-end="url(#ah)"/><path class="edge" d="M500,382 L500,430" marker-end="url(#ah)"/>
+  <path class="edge evt" d="M680,232 L640,232" marker-end="url(#ahw)"/>
+  <path class="edge evt" d="M640,212 L680,212" marker-end="url(#ahw)"/>
+  <text x="660" y="282" text-anchor="middle" class="sub" style="fill:var(--warn)">outbox events: ops → academic: enrolment_requested · academic → ops: confirmed / rejected</text>
+  <text x="500" y="302" text-anchor="middle" class="sub">Ops dashboard reads /marketing & /academic internal summary APIs (missing ≠ zero)</text>
+  </svg>`;
+      }
+      function renderOverview() {
+        const rows = S.modules
+          .map(
+            (m) => `<tr><td><span class="pill o-${m.owner}">${esc(OWN[m.owner])}</span></td>
+    <td>${num(m.files)}</td><td>${num(m.codeLines)}</td><td>${num(m.testFiles)}</td><td>${m.owner === 'platform' ? '—' : num(m.tables) + (m.owner === 'shared' ? ' (core)' : '')}</td></tr>`,
+          )
+          .join('');
+        const cross = DATA.schemas
+          .map((s) => {
+            const out = {};
+            for (const t of s.tables)
+              for (const r of t.refs)
+                if (r.targetTable) {
+                  const ts = r.targetTable.split('.')[0];
+                  out[ts] = (out[ts] || 0) + 1;
+                }
+            return `<div class="card"><span class="pill o-${SCHEMA_OWNER[s.name]}">${s.name}</span> <b>${s.tables.length}</b> tables
+      <div class="muted" style="font-size:12px;margin-top:6px">${link(s.file, s.file.split('/').pop())} · ${num(s.lines)} lines<br>
+      FKs → ${
+        Object.entries(out)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(', ') || 'none'
+      }<br>
+      Code: ${link(HOME[s.name], HOME[s.name] + '/')}</div></div>`;
+          })
+          .join('');
+        $('#overview').innerHTML = `
+    <div class="card"><h2>How the pieces connect</h2>${archSvg()}
+      <div class="note">Click any box to open that folder or file on disk. Module schemas may only reference their own tables and <b>core</b>; cross-module links travel through outbox events and summary APIs, never foreign keys.</div></div>
+    <div class="grid2" style="margin-top:16px">
+      <div class="card"><h2>Who owns what</h2><table class="mods"><thead><tr><th>Owner</th><th>Files</th><th>Code lines</th><th>Test files</th><th>Tables</th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="note">Code lines exclude tests. Docs, legacy data and scripts are counted under their own owners in the Folders tab.</div></div>
+      <div><h2>Database schemas</h2><div class="schemamap">${cross}</div></div>
+    </div>`;
+      }
+
+      /* ---------- folders ---------- */
+      function stat(node) {
+        if (node.type === 'file') return { files: 1, lines: node.lines ?? 0 };
+        if (!node._s)
+          node._s = node.children
+            .map(stat)
+            .reduce((a, b) => ({ files: a.files + b.files, lines: a.lines + b.lines }), {
+              files: 0,
+              lines: 0,
+            });
+        return node._s;
+      }
+      function fileRow(f) {
+        const defs = definedIn.get(f.path);
+        const uses = usesByFile.get(f.path);
+        const tags =
+          (defs
+            ? `<span class="dbtag" data-q="${esc(f.path)}" title="Defines ${defs.length} tables">defines ${defs.length} tables</span>`
+            : '') +
+          (uses
+            ? `<span class="dbtag" data-q="${esc(f.path)}" title="${esc(uses.map((t) => t.schema + '.' + t.name).join(', '))}">uses ${uses.length} table${uses.length > 1 ? 's' : ''}</span>`
+            : '');
+        return `<li><span class="row o-${f.owner}"><i class="dot"></i>${link(f.path, f.name)} ${tags}<span class="info">${f.lines != null ? num(f.lines) + ' lines · ' : ''}${bytes(f.size)}</span></span></li>`;
+      }
+      function dirNode(d, open, q) {
+        const kids = d.children
+          .map((c) =>
+            c.type === 'dir'
+              ? dirNode(c, open, q)
+              : !q || c.path.toLowerCase().includes(q)
+                ? fileRow(c)
+                : '',
+          )
+          .filter(Boolean);
+        if (q && !kids.length) return '';
+        const s = stat(d);
+        return `<li><details ${open || q ? 'open' : ''}><summary class="o-${d.owner}"><i class="dot"></i><b style="color:var(--text)">${esc(d.name)}/</b>
+    ${link(d.path, '↗')}<span class="info">${num(s.files)} files · ${num(s.lines)} lines</span></summary><ul>${kids.join('')}</ul></details></li>`;
+      }
+      function renderFolders(q = '', depthOpen = 1) {
+        const root = DATA.tree;
+        const kids = root.children
+          .map((c) =>
+            c.type === 'dir'
+              ? dirNode(c, depthOpen > 1, q)
+              : !q || c.path.toLowerCase().includes(q)
+                ? fileRow(c)
+                : '',
+          )
+          .filter(Boolean);
+        $('#tree').innerHTML =
+          `<ul>${kids.join('') || '<li class="muted">No files match.</li>'}</ul>`;
+      }
+      function initFolders() {
+        $('#folders').innerHTML = `<div class="card">
+    <div class="toolbar"><input type="search" id="fq" placeholder="Filter by path, e.g. schema, ops/src/domain, .test.ts" aria-label="Filter files">
+      <button class="btn" id="expand">Expand all</button><button class="btn" id="collapse">Collapse</button></div>
+    <div class="legend">${Object.entries(OWN)
+      .map(([k, v]) => `<span class="o-${k}"><i></i>${esc(v)}</span>`)
+      .join('')}</div>
+    <p class="muted" style="font-size:12px">Names open the file or folder on disk. <span class="dbtag">uses N tables</span> tags jump to the database view filtered to that file.</p>
+    <div class="tree" id="tree"></div></div>`;
+        let t;
+        $('#fq').addEventListener('input', (e) => {
+          clearTimeout(t);
+          t = setTimeout(() => renderFolders(e.target.value.trim().toLowerCase()), 120);
+        });
+        $('#expand').addEventListener('click', () =>
+          document.querySelectorAll('#tree details').forEach((d) => (d.open = true)),
+        );
+        $('#collapse').addEventListener('click', () =>
+          document.querySelectorAll('#tree details').forEach((d) => (d.open = false)),
+        );
+        $('#folders').addEventListener('click', (e) => {
+          const tag = e.target.closest('.dbtag');
+          if (!tag) return;
+          showTab('database');
+          $('#tq').value = tag.dataset.q;
+          renderTableList(tag.dataset.q);
+          const first = document.querySelector('#tlist button');
+          if (first) first.click();
+        });
+        renderFolders();
+      }
+
+      /* ---------- database ---------- */
+      let current = null;
+      function matches(t, q) {
+        if (!q) return true;
+        q = q.toLowerCase();
+        return (
+          (t.schema + '.' + t.name).toLowerCase().includes(q) ||
+          t.export.toLowerCase().includes(q) ||
+          t.usedBy.some((f) => f.toLowerCase().includes(q)) ||
+          ('packages/database/src/schema/' + t.schema + '.ts').includes(q) ||
+          t.columns.some((c) => c.name.toLowerCase() === q)
+        );
+      }
+      function renderTableList(q = '') {
+        const html = DATA.schemas
+          .map((s) => {
+            const list = s.tables.filter((t) => matches(t, q));
+            if (!list.length) return '';
+            return (
+              `<h4 class="o-${SCHEMA_OWNER[s.name]}">${s.name} · ${list.length}</h4>` +
+              list
+                .map(
+                  (t) =>
+                    `<button data-key="${s.name}.${t.name}" aria-current="${current === s.name + '.' + t.name}"><span>${esc(t.name)}</span><small>${t.columns.length} cols</small></button>`,
+                )
+                .join('')
+            );
+          })
+          .join('');
+        $('#tlist').innerHTML = html || '<p class="muted" style="padding:8px">No tables match.</p>';
+      }
+      function focusSvg(t) {
+        const key = t.schema + '.' + t.name;
+        const outs = [
+          ...new Map(t.refs.filter((r) => r.targetTable).map((r) => [r.targetTable, r])).values(),
+        ];
+        const ins = [
+          ...new Map(
+            (incoming.get(key) || []).map((r) => [r.from.schema + '.' + r.from.name, r]),
+          ).values(),
+        ];
+        const rowH = 34,
+          h = Math.max(outs.length, ins.length, 1) * rowH + 24,
+          cy = h / 2;
+        const node = (
+          x,
+          y,
+          w,
+          k,
+          cls = '',
+        ) => `<g class="n ${cls}" data-key="${k}"><rect x="${x}" y="${y - 13}" width="${w}" height="26" rx="6"/>
+    <text x="${x + 10}" y="${y + 4}"><tspan class="o-${SCHEMA_OWNER[k.split('.')[0]]}" style="fill:currentColor">${esc(k.split('.')[0])}.</tspan>${esc(k.split('.')[1])}</text></g>`;
+        let svg = `<svg class="focus" viewBox="0 0 1000 ${h}" role="img" aria-label="Relationships of ${esc(key)}">`;
+        ins.forEach((r, i) => {
+          const y = 12 + rowH / 2 + i * rowH;
+          const k = r.from.schema + '.' + r.from.name;
+          svg += `<path d="M270,${y} C330,${y} 330,${cy} 380,${cy}"/>` + node(10, y, 260, k);
+        });
+        outs.forEach((r, i) => {
+          const y = 12 + rowH / 2 + i * rowH;
+          svg +=
+            `<path d="M620,${cy} C670,${cy} 670,${y} 730,${y}"/>` +
+            node(730, y, 260, r.targetTable);
+        });
+        svg += node(380, cy, 240, key, 'center');
+        svg += `<text x="140" y="12" text-anchor="middle" style="fill:var(--muted);font-size:11px">${ins.length ? 'referenced by' : ''}</text>
+    <text x="860" y="12" text-anchor="middle" style="fill:var(--muted);font-size:11px">${outs.length ? 'references' : ''}</text></svg>`;
+        return svg;
+      }
+      function selectTable(key) {
+        const t = byKey.get(key);
+        if (!t) return;
+        current = key;
+        document
+          .querySelectorAll('#tlist button')
+          .forEach((b) => b.setAttribute('aria-current', String(b.dataset.key === key)));
+        const fkCol = new Map(t.refs.map((r) => [r.column, r]));
+        const cols = t.columns
+          .map((c) => {
+            const r = fkCol.get(c.name);
+            return `<tr><td>${esc(c.name)}</td><td class="muted">${esc(c.type)}</td><td>${c.pk ? '<span class="tag pk">PK</span>' : ''}${r ? '<span class="tag fk">FK</span>' : ''}${c.notNull ? '<span class="tag">not null</span>' : ''}${c.unique ? '<span class="tag">unique</span>' : ''}</td>
+      <td>${r ? (r.targetTable ? `<a href="#" data-key="${r.targetTable}">→ ${esc(r.targetTable)}</a>` : `<span class="muted">→ ${esc(r.target)}</span>`) : ''}</td></tr>`;
+          })
+          .join('');
+        const ins = incoming.get(key) || [];
+        const groups = {};
+        for (const f of t.usedBy) {
+          const dir = f.split('/').slice(0, -1).join('/');
+          (groups[dir] ||= []).push(f);
+        }
+        const schemaFile = 'packages/database/src/schema/' + t.schema + '.ts';
+        $('#tdetail').innerHTML = `
+    <div class="card">
+      <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><span class="pill o-${SCHEMA_OWNER[t.schema]}">${t.schema}</span>
+        <h2 style="margin:0;font-family:var(--mono)">${esc(t.name)}</h2><span class="muted" style="font-family:var(--mono)">export ${esc(t.export)}</span></div>
+      <p style="margin:8px 0 0">Defined in ${link(schemaFile, schemaFile)} <span class="muted">line ${t.line}</span> · owned by ${link(HOME[t.schema], HOME[t.schema] + '/')}
+        · ${t.columns.length} columns · ${t.refs.length} FKs · ${t.indexes} indexes · ${t.checks} check constraints</p>
+      <h3>Relationships</h3>${t.refs.length || ins.length ? focusSvg(t) : '<p class="muted">No foreign keys in or out.</p>'}
+    </div>
+    <div class="grid2" style="margin-top:16px">
+      <div class="card"><h3 style="margin-top:0">Columns</h3><table class="cols"><thead><tr><th>column</th><th>type</th><th>keys</th><th>links to</th></tr></thead><tbody>${cols}</tbody></table>
+        <div class="note">Parsed from the Drizzle schema source. Columns built by helper functions or spreads may be missing; the schema file is authoritative.</div></div>
+      <div class="card"><h3 style="margin-top:0">Code that imports this table (${t.usedBy.length})</h3>
+        ${
+          t.usedBy.length
+            ? Object.entries(groups)
+                .map(
+                  ([d, fs]) =>
+                    `<div style="margin-bottom:8px">${link(d, d + '/')}<ul class="linklist">${fs.map((f) => `<li>${link(f, f.split('/').pop())}</li>`).join('')}</ul></div>`,
+                )
+                .join('')
+            : '<p class="muted">No source file imports it yet (the module may still be under construction).</p>'
+        }
+        <h3>Referenced by (${ins.length})</h3>${ins.length ? `<ul class="linklist">${ins.map((r) => `<li><a href="#" data-key="${r.from.schema}.${r.from.name}">${esc(r.from.schema + '.' + r.from.name)}</a> <span class="muted">.${esc(r.column)}</span></li>`).join('')}</ul>` : '<p class="muted">Nothing.</p>'}
+      </div>
+    </div>`;
+      }
+      function initDatabase() {
+        $('#database').innerHTML = `<div class="db">
+    <div class="card tablelist"><input type="search" id="tq" placeholder="Filter tables, columns or a file path" aria-label="Filter tables" style="width:100%"><div id="tlist"></div></div>
+    <div id="tdetail"></div></div>`;
+        renderTableList();
+        $('#tq').addEventListener('input', (e) => renderTableList(e.target.value.trim()));
+        $('#database').addEventListener('click', (e) => {
+          const el = e.target.closest('[data-key]');
+          if (!el) return;
+          e.preventDefault();
+          selectTable(el.dataset.key);
+          if (!el.closest('#tlist'))
+            window.scrollTo({ top: $('#database').offsetTop - 10, behavior: 'smooth' });
+        });
+        const start = byKey.has('ops.leads')
+          ? 'ops.leads'
+          : tables[0] && tables[0].schema + '.' + tables[0].name;
+        if (start) selectTable(start);
+      }
+
+      renderOverview();
+      initFolders();
+      initDatabase();
+    </script>
+  </body>
+</html>

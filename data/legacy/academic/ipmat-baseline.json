@@ -1,0 +1,3099 @@
+{
+  "meta": {
+    "source_files": [
+      "handover/Claude.md",
+      "handover/elevate-education-operations/CLASS12_ACCELERATED_BASELINE.md",
+      "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+      "handover/elevate-education-operations/IPMAT_WEB_REFERENCE_REVIEW.md",
+      "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+      "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "quant_teaching_blocks",
+      "quant_higher_maths",
+      "verbal_teaching_blocks",
+      "verbal_teaching_topics",
+      "lr_teaching_topics",
+      "di_teaching_topics",
+      "lr_di_teaching_sequence",
+      "assessments.verbal_test_groups",
+      "assessments.full_mocks.workbook_allocation",
+      "assessments.assessment_budget_rows",
+      "practice_allocations_programme_level.quant_practice_base_rows",
+      "practice_allocations_programme_level.lr_practice",
+      "practice_allocations_programme_level.di_practice"
+    ],
+    "notes": [
+      "Locked IPMAT/combined-entrance teaching baseline (253 classes) and the latest Class 12 override (305 classes), with lineage.",
+      "All counts are planned classes/papers. Nothing here is delivered work. 'locked' = approved for planning by the user in conversation.",
+      "The Class 12 override supersedes the 313- and 360-class allocations for the Class 12 cohort only."
+    ]
+  },
+  "locked_teaching_baseline": {
+    "status": "locked",
+    "approved_on": "2026-09-10",
+    "class_minutes": 75,
+    "totals": {
+      "quant": 151,
+      "quant_base": 114,
+      "quant_higher_maths": 37,
+      "verbal": 57,
+      "lr": 32,
+      "di": 13,
+      "total": 253,
+      "hours": 316.25
+    },
+    "meaning": "Locked for planning; not taught or verified delivery.",
+    "source": [
+      {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 198"
+      },
+      {
+        "path": "handover/Claude.md",
+        "locator": "line 83"
+      }
+    ]
+  },
+  "quant_teaching_blocks": [
+    {
+      "block": "Calculation Foundations",
+      "teaching_classes": 5,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 11"
+      },
+      "subtopics": [
+        {
+          "subtopic": "numerical operations",
+          "classes": 1
+        },
+        {
+          "subtopic": "fractions/decimals",
+          "classes": 1
+        },
+        {
+          "subtopic": "percentage conversions",
+          "classes": 1
+        },
+        {
+          "subtopic": "multiplication/division/cancellation",
+          "classes": 1
+        },
+        {
+          "subtopic": "powers/roots/approximation",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Foundations",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 36"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Number Systems",
+      "teaching_classes": 10,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 12"
+      },
+      "subtopics": [
+        {
+          "subtopic": "types/properties/primes/factorisation",
+          "classes": 1
+        },
+        {
+          "subtopic": "divisibility",
+          "classes": 1
+        },
+        {
+          "subtopic": "factors",
+          "classes": 2
+        },
+        {
+          "subtopic": "HCF/LCM/multiples",
+          "classes": 2
+        },
+        {
+          "subtopic": "remainders",
+          "classes": 2
+        },
+        {
+          "subtopic": "last digits/cyclicity",
+          "classes": 1
+        },
+        {
+          "subtopic": "factorials",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Numbers",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 37"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Percentages",
+      "teaching_classes": 3,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 13"
+      },
+      "subtopics": [
+        {
+          "subtopic": "base/reverse",
+          "classes": 1
+        },
+        {
+          "subtopic": "successive changes",
+          "classes": 1
+        },
+        {
+          "subtopic": "constancy/applications",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Percentages",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 38"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Ratio and Proportion",
+      "teaching_classes": 4,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 14"
+      },
+      "subtopics": [
+        {
+          "subtopic": "ratios/division",
+          "classes": 1
+        },
+        {
+          "subtopic": "combined ratios/proportion",
+          "classes": 1
+        },
+        {
+          "subtopic": "variation",
+          "classes": 1
+        },
+        {
+          "subtopic": "partnership",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Ratio",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 39"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Averages, Mixtures and Alligation",
+      "teaching_classes": 4,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 15"
+      },
+      "subtopics": [
+        {
+          "subtopic": "simple/weighted",
+          "classes": 1
+        },
+        {
+          "subtopic": "changed observations",
+          "classes": 1
+        },
+        {
+          "subtopic": "mixtures/alligation",
+          "classes": 1
+        },
+        {
+          "subtopic": "repeated replacement",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Averages",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 40"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Profit, Loss and Discounts",
+      "teaching_classes": 4,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 16"
+      },
+      "subtopics": [
+        {
+          "subtopic": "fundamentals",
+          "classes": 1
+        },
+        {
+          "subtopic": "discounts",
+          "classes": 1
+        },
+        {
+          "subtopic": "false weights/adulteration",
+          "classes": 1
+        },
+        {
+          "subtopic": "combined transactions",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Profit/loss",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 41"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Interest and Instalments",
+      "teaching_classes": 4,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 17"
+      },
+      "subtopics": [
+        {
+          "subtopic": "SI",
+          "classes": 1
+        },
+        {
+          "subtopic": "CI",
+          "classes": 1
+        },
+        {
+          "subtopic": "comparison/growth",
+          "classes": 1
+        },
+        {
+          "subtopic": "instalments",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Interest",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 42"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Time and Work",
+      "teaching_classes": 4,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 18"
+      },
+      "subtopics": [
+        {
+          "subtopic": "rates",
+          "classes": 1
+        },
+        {
+          "subtopic": "joining/alternate work",
+          "classes": 1
+        },
+        {
+          "subtopic": "person-day-hour/wages",
+          "classes": 1
+        },
+        {
+          "subtopic": "pipes",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Work",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 43"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Time, Speed and Distance",
+      "teaching_classes": 5,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 19"
+      },
+      "subtopics": [
+        {
+          "subtopic": "basics/average",
+          "classes": 1
+        },
+        {
+          "subtopic": "relative",
+          "classes": 1
+        },
+        {
+          "subtopic": "trains",
+          "classes": 1
+        },
+        {
+          "subtopic": "boats",
+          "classes": 1
+        },
+        {
+          "subtopic": "races/circular",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Speed",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 44"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Basic Algebra",
+      "teaching_classes": 7,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 20"
+      },
+      "subtopics": [
+        {
+          "subtopic": "identities/factorisation",
+          "classes": 1
+        },
+        {
+          "subtopic": "indices/surds",
+          "classes": 2
+        },
+        {
+          "subtopic": "linear/simultaneous",
+          "classes": 2
+        },
+        {
+          "subtopic": "quadratic",
+          "classes": 2
+        }
+      ],
+      "subtopic_label_in_source": "Basic algebra",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 45"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Advanced Algebra",
+      "teaching_classes": 10,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 21"
+      },
+      "subtopics": [
+        {
+          "subtopic": "polynomials",
+          "classes": 1
+        },
+        {
+          "subtopic": "logs",
+          "classes": 1
+        },
+        {
+          "subtopic": "exponential/log equations",
+          "classes": 2
+        },
+        {
+          "subtopic": "inequalities",
+          "classes": 2
+        },
+        {
+          "subtopic": "modulus",
+          "classes": 2
+        },
+        {
+          "subtopic": "integral solutions",
+          "classes": 1
+        },
+        {
+          "subtopic": "algebraic extrema",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Advanced algebra",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 46"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Sequences, Series and Binomial",
+      "teaching_classes": 6,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 22"
+      },
+      "subtopics": [
+        {
+          "subtopic": "AP",
+          "classes": 1
+        },
+        {
+          "subtopic": "GP",
+          "classes": 1
+        },
+        {
+          "subtopic": "HP/means",
+          "classes": 1
+        },
+        {
+          "subtopic": "special series",
+          "classes": 1
+        },
+        {
+          "subtopic": "binomial expansion",
+          "classes": 1
+        },
+        {
+          "subtopic": "terms/coefficients",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Series",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 47"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Sets, Relations and Functions",
+      "teaching_classes": 9,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 23"
+      },
+      "subtopics": [
+        {
+          "subtopic": "sets/Venn",
+          "classes": 2
+        },
+        {
+          "subtopic": "relations/domain/range",
+          "classes": 1
+        },
+        {
+          "subtopic": "graphs",
+          "classes": 2
+        },
+        {
+          "subtopic": "composition/inverse",
+          "classes": 1
+        },
+        {
+          "subtopic": "modulus/GIF",
+          "classes": 1
+        },
+        {
+          "subtopic": "functional equations",
+          "classes": 2
+        }
+      ],
+      "subtopic_label_in_source": "Functions",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 48"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Matrices and Determinants",
+      "teaching_classes": 5,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 24"
+      },
+      "subtopics": [
+        {
+          "subtopic": "types/operations",
+          "classes": 1
+        },
+        {
+          "subtopic": "multiplication",
+          "classes": 1
+        },
+        {
+          "subtopic": "determinants",
+          "classes": 1
+        },
+        {
+          "subtopic": "inverse",
+          "classes": 1
+        },
+        {
+          "subtopic": "equations",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Matrices",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 49"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Geometry",
+      "teaching_classes": 8,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 25"
+      },
+      "subtopics": [
+        {
+          "subtopic": "lines/triangle basics",
+          "classes": 1
+        },
+        {
+          "subtopic": "congruence/similarity",
+          "classes": 2
+        },
+        {
+          "subtopic": "centres",
+          "classes": 1
+        },
+        {
+          "subtopic": "quadrilaterals/polygons",
+          "classes": 2
+        },
+        {
+          "subtopic": "circles",
+          "classes": 2
+        }
+      ],
+      "subtopic_label_in_source": "Geometry",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 50"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Mensuration",
+      "teaching_classes": 4,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 26"
+      },
+      "subtopics": [
+        {
+          "subtopic": "perimeter/area",
+          "classes": 1
+        },
+        {
+          "subtopic": "composite figures",
+          "classes": 1
+        },
+        {
+          "subtopic": "surface/volume",
+          "classes": 1
+        },
+        {
+          "subtopic": "combined/scaling",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Mensuration",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 51"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Coordinate Geometry",
+      "teaching_classes": 5,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 27"
+      },
+      "subtopics": [
+        {
+          "subtopic": "basic formulae",
+          "classes": 1
+        },
+        {
+          "subtopic": "lines",
+          "classes": 1
+        },
+        {
+          "subtopic": "intersections/distances",
+          "classes": 1
+        },
+        {
+          "subtopic": "circles",
+          "classes": 1
+        },
+        {
+          "subtopic": "conics intro",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Coordinates",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 52"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Trigonometry",
+      "teaching_classes": 4,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 28"
+      },
+      "subtopics": [
+        {
+          "subtopic": "ratios",
+          "classes": 1
+        },
+        {
+          "subtopic": "identities",
+          "classes": 1
+        },
+        {
+          "subtopic": "equations/graphs",
+          "classes": 1
+        },
+        {
+          "subtopic": "heights",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Trigonometry",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 53"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Counting and Probability",
+      "teaching_classes": 9,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 29"
+      },
+      "subtopics": [
+        {
+          "subtopic": "principles",
+          "classes": 1
+        },
+        {
+          "subtopic": "permutations",
+          "classes": 2
+        },
+        {
+          "subtopic": "combinations",
+          "classes": 2
+        },
+        {
+          "subtopic": "probability/complement",
+          "classes": 1
+        },
+        {
+          "subtopic": "combined events",
+          "classes": 1
+        },
+        {
+          "subtopic": "conditional/independence",
+          "classes": 2
+        }
+      ],
+      "subtopic_label_in_source": "Counting",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 54"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Statistics",
+      "teaching_classes": 4,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 30"
+      },
+      "subtopics": [
+        {
+          "subtopic": "averages",
+          "classes": 1
+        },
+        {
+          "subtopic": "grouped data",
+          "classes": 1
+        },
+        {
+          "subtopic": "dispersion",
+          "classes": 1
+        },
+        {
+          "subtopic": "interpretation",
+          "classes": 1
+        }
+      ],
+      "subtopic_label_in_source": "Statistics",
+      "subtopics_sum_matches": true,
+      "subtopics_source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 55"
+      },
+      "status": "locked"
+    }
+  ],
+  "quant_higher_maths": [
+    {
+      "topic": "Complex Numbers",
+      "subtopic_allocation": "Operations/conjugate (1); modulus/Argand plane (1); quadratic roots/applications (1)",
+      "teaching_classes": 3,
+      "practice_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 179"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Inverse Trigonometry",
+      "subtopic_allocation": "Principal values/domain/range (1); identities/equations (1)",
+      "teaching_classes": 2,
+      "practice_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 180"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Conic Sections extension",
+      "subtopic_allocation": "Parabola (1); ellipse (1); hyperbola/comparisons (1)",
+      "teaching_classes": 3,
+      "practice_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 181"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Limits and Continuity",
+      "subtopic_allocation": "Algebraic limits (1); standard limits (1); one-sided limits/continuity (1)",
+      "teaching_classes": 3,
+      "practice_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 182"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Differentiation",
+      "subtopic_allocation": "Standard derivatives (1); product/quotient rules (1); chain rule (1); implicit/logarithmic differentiation (1)",
+      "teaching_classes": 4,
+      "practice_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 183"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Applications of Derivatives",
+      "subtopic_allocation": "Rates (1); increasing/decreasing functions (1); maxima/minima (1)",
+      "teaching_classes": 3,
+      "practice_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 184"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Integration and Applications",
+      "subtopic_allocation": "Standard integrals (1); substitution (2); parts (1); partial fractions (1); definite integrals/properties (1); areas (1)",
+      "teaching_classes": 7,
+      "practice_classes": 3,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 185"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Differential Equations",
+      "subtopic_allocation": "Order/degree and separable equations (1); separable applications (1); first-order linear equations (1)",
+      "teaching_classes": 3,
+      "practice_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 186"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Vectors and 3D Geometry",
+      "subtopic_allocation": "Vector basics (1); dot product (1); cross product (1); spatial coordinates/lines (1); angles/distances (1)",
+      "teaching_classes": 5,
+      "practice_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 187"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Probability Extensions",
+      "subtopic_allocation": "Total probability/Bayes (1); random variables/distributions (1); expectation/basic distribution applications (1)",
+      "teaching_classes": 3,
+      "practice_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 188"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Linear Programming",
+      "subtopic_allocation": "Constraints, feasible regions and graphical optimisation (1)",
+      "teaching_classes": 1,
+      "practice_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 189"
+      },
+      "status": "locked"
+    }
+  ],
+  "verbal_teaching_blocks": [
+    {
+      "block": "Grammar foundations",
+      "teaching_classes": 12,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 63"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Grammar application",
+      "teaching_classes": 7,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 64"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Vocabulary",
+      "teaching_classes": 8,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 65"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "RC and Critical Reasoning foundations",
+      "teaching_classes": 11,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 66"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Genre-wise RC",
+      "teaching_classes": 7,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 67"
+      },
+      "status": "locked"
+    },
+    {
+      "block": "Verbal question formats",
+      "teaching_classes": 12,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 68"
+      },
+      "status": "locked"
+    }
+  ],
+  "verbal_teaching_topics": [
+    {
+      "id": "G1",
+      "topic": "Parts of Speech",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 7"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "G2",
+      "topic": "Nouns",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 8"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "G3",
+      "topic": "Articles",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 9"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "G4",
+      "topic": "Pronouns",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 10"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "G5",
+      "topic": "Verbs and Verbals",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 11"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "G6",
+      "topic": "Time and Tense",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 12"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "G7",
+      "topic": "Subject–Verb Agreement",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 13"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "G8",
+      "topic": "Adjectives",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 14"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "G9",
+      "topic": "Adverbs",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 15"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "G10",
+      "topic": "Prepositions",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 16"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "G11",
+      "topic": "Conjunctions",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 17"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "G12",
+      "topic": "Conditionals and Modals",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 18"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "A1",
+      "topic": "Direct–Indirect Speech",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 19"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "A2",
+      "topic": "Active–Passive Voice",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 20"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "A3",
+      "topic": "Modifiers and Parallelism",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 21"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "A4",
+      "topic": "Punctuation",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 22"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "A5",
+      "topic": "Sentence Correction and Error Spotting",
+      "teaching_classes": 3,
+      "hours": 3.75,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 23"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "V1",
+      "topic": "Vocabulary Methods",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 24"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "V2",
+      "topic": "Word Usage",
+      "teaching_classes": 2,
+      "hours": 2.5,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 25"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "V3",
+      "topic": "Idioms and Phrasal Verbs",
+      "teaching_classes": 2,
+      "hours": 2.5,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 26"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "V4",
+      "topic": "Analogy",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 27"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "V5",
+      "topic": "Figures of Speech",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 28"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "V6",
+      "topic": "Other Vocabulary Formats",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 29"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "R1",
+      "topic": "Reading Foundations",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 30"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "R2",
+      "topic": "Argument Foundations",
+      "teaching_classes": 2,
+      "hours": 2.5,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 31"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "R3",
+      "topic": "Conclusions and Inferences",
+      "teaching_classes": 2,
+      "hours": 2.5,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 32"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "R4",
+      "topic": "Fact, Inference and Judgement",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 33"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "R5",
+      "topic": "Argument Evaluation",
+      "teaching_classes": 2,
+      "hours": 2.5,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 34"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "R6",
+      "topic": "Cause–Effect and Reasoning Errors",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 35"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "R7",
+      "topic": "Course of Action",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 36"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "R8",
+      "topic": "Tone and Purpose",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 37"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "RC1",
+      "topic": "Business and Economics",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 38"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "RC2",
+      "topic": "Science and Environment",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 39"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "RC3",
+      "topic": "Society and Culture",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 40"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "RC4",
+      "topic": "History and Public Policy",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 41"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "RC5",
+      "topic": "Philosophy and Ethics",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 42"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "RC6",
+      "topic": "Literature and Arts",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 43"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "RC7",
+      "topic": "Psychology",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 44"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "Q1",
+      "topic": "Paragraph Completion",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 45"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "Q2",
+      "topic": "Paragraph Summary",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 46"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "Q3",
+      "topic": "Parajumbles",
+      "teaching_classes": 3,
+      "hours": 3.75,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 47"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "Q4",
+      "topic": "Odd Sentence Out",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 48"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "Q5",
+      "topic": "Fillers",
+      "teaching_classes": 2,
+      "hours": 2.5,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 49"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "Q6",
+      "topic": "Cloze Passages",
+      "teaching_classes": 2,
+      "hours": 2.5,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 50"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "Q7",
+      "topic": "Match the Column",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 51"
+      },
+      "status": "locked"
+    },
+    {
+      "id": "Q8",
+      "topic": "Conversation Analysis",
+      "teaching_classes": 1,
+      "hours": 1.25,
+      "source": {
+        "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+        "locator": "line 52"
+      },
+      "status": "locked"
+    }
+  ],
+  "lr_teaching_topics": [
+    {
+      "topic": "Syllogism",
+      "teaching_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 113"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Venn Diagrams",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 114"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Coding & Decoding",
+      "teaching_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 115"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Blood Relations",
+      "teaching_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 116"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Inequalities",
+      "teaching_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 117"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Arrangements & Puzzles",
+      "teaching_classes": 4,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 118"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Team Selection",
+      "teaching_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 119"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Games & Quantitative Puzzles",
+      "teaching_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 120"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Input & Output",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 121"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Analogy",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 122"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Classification",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 123"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Series",
+      "teaching_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 124"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Direction and Distance",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 125"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Order and Ranking",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 126"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Clocks and Calendars",
+      "teaching_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 127"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Logical Sequence of Words",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 128"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Data Sufficiency",
+      "teaching_classes": 3,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 129"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Cubes and Dice",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 130"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Visual Reasoning",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 131"
+      },
+      "status": "locked"
+    }
+  ],
+  "di_teaching_topics": [
+    {
+      "topic": "Tables",
+      "teaching_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 133"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Bar Graphs",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 134"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Line Graphs",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 135"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Pie Charts",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 136"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Mixed Charts",
+      "teaching_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 137"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Caselets",
+      "teaching_classes": 2,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 138"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Logical DI",
+      "teaching_classes": 3,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 139"
+      },
+      "status": "locked"
+    },
+    {
+      "topic": "Miscellaneous Formats",
+      "teaching_classes": 1,
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 140"
+      },
+      "status": "locked"
+    }
+  ],
+  "lr_di_teaching_sequence": [
+    {
+      "position": 1,
+      "topic": "Syllogism",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 79"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 2,
+      "topic": "Venn Diagrams",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 80"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 3,
+      "topic": "Coding & Decoding",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 81"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 4,
+      "topic": "Blood Relations",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 82"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 5,
+      "topic": "Inequalities",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 83"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 6,
+      "topic": "Arrangements & Puzzles",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 84"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 7,
+      "topic": "Team Selection",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 85"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 8,
+      "topic": "Games & Quantitative Puzzles",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 86"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 9,
+      "topic": "Input & Output",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 87"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 10,
+      "topic": "Analogy",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 88"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 11,
+      "topic": "Classification",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 89"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 12,
+      "topic": "Series",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 90"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 13,
+      "topic": "Direction and Distance",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 91"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 14,
+      "topic": "Order and Ranking",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 92"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 15,
+      "topic": "Clocks and Calendars",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 93"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 16,
+      "topic": "Logical Sequence of Words",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 94"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 17,
+      "topic": "Data Sufficiency",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 95"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 18,
+      "topic": "Cubes and Dice",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 96"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 19,
+      "topic": "Visual Reasoning",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 97"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 20,
+      "topic": "Tables",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 98"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 21,
+      "topic": "Bar Graphs",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 99"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 22,
+      "topic": "Line Graphs",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 100"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 23,
+      "topic": "Pie Charts",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 101"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 24,
+      "topic": "Mixed Charts",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 102"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 25,
+      "topic": "Caselets",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 103"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 26,
+      "topic": "Logical DI",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 104"
+      },
+      "status": "locked"
+    },
+    {
+      "position": 27,
+      "topic": "Miscellaneous Formats",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 105"
+      },
+      "status": "locked"
+    }
+  ],
+  "practice_allocations_programme_level": {
+    "status": "locked",
+    "applies_to": "programme baseline (superseded for the Class 12 cohort by the Class 12 override)",
+    "quant_practice_stated_total": 53,
+    "quant_practice_base_rows": [
+      {
+        "topic": "Calculation Foundations",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 153"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Number Systems",
+        "practice_classes": 3,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 154"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Percentages",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 155"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Ratio and Proportion",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 156"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Averages, Mixtures and Alligation",
+        "practice_classes": 2,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 157"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Profit, Loss and Discounts",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 158"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Interest and Instalments",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 159"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Time and Work",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 160"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Time, Speed and Distance",
+        "practice_classes": 2,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 161"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Basic Algebra",
+        "practice_classes": 2,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 162"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Advanced Algebra",
+        "practice_classes": 3,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 163"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Sequences, Series and Binomial",
+        "practice_classes": 2,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 164"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Sets, Relations and Functions",
+        "practice_classes": 3,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 165"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Matrices and Determinants",
+        "practice_classes": 2,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 166"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Geometry",
+        "practice_classes": 3,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 167"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Mensuration",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 168"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Coordinate Geometry",
+        "practice_classes": 2,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 169"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Trigonometry",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 170"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Counting and Probability",
+        "practice_classes": 3,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 171"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Statistics",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 172"
+        },
+        "status": "locked"
+      }
+    ],
+    "quant_practice_base_rows_stated_total": 38,
+    "quant_practice_base_rows_actual_sum": 36,
+    "quant_practice_note": "Base practice rows sum to 36, not the stated 38 (arithmetic correction recorded in the source); higher maths adds 15 -> 51 mapped + 2 topic-allocation-pending classes = 53.",
+    "verbal_practice": 28,
+    "lr_practice": [
+      {
+        "topic": "Syllogism",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 206"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Venn Diagrams",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 207"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Coding and Decoding",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 208"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Blood Relations",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 209"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Inequalities",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 210"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Arrangements and Puzzles",
+        "practice_classes": 3,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 211"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Team Selection",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 212"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Games and Quantitative Puzzles",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 213"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Input and Output",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 214"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Analogy and Classification combined",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 215"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Series",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 216"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Direction and Order/Ranking combined",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 217"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Clocks and Calendars",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 218"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Logical Sequence of Words",
+        "practice_classes": null,
+        "note": "0 standalone; included in Analogy/Classification practice",
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 219"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Data Sufficiency",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 220"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Cubes and Dice",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 221"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Visual Reasoning",
+        "practice_classes": 1,
+        "note": null,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 222"
+        },
+        "status": "locked"
+      }
+    ],
+    "di_practice": [
+      {
+        "topic": "Tables",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 229"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Bar Graphs",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 230"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Line Graphs and Pie Charts combined",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 231"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Mixed Charts",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 232"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Caselets",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 233"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Logical DI",
+        "practice_classes": 2,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 234"
+        },
+        "status": "locked"
+      },
+      {
+        "topic": "Miscellaneous Formats",
+        "practice_classes": 1,
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 235"
+        },
+        "status": "locked"
+      }
+    ],
+    "programme_total_classes": 360,
+    "programme_total_hours": 450,
+    "source": [
+      {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 246"
+      },
+      {
+        "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+        "locator": "line 293"
+      }
+    ]
+  },
+  "class12_override": {
+    "status": "approved",
+    "status_note": "Latest saved override (user-requested removal of eight practice classes). Lesson dates and exam date remain provisional.",
+    "applies_to": "IPMAT Class 12 cohort only; do not apply to Class 11, dropper or fast-track",
+    "totals": {
+      "quant": {
+        "teaching": 151,
+        "practice": 27,
+        "total": 178
+      },
+      "verbal": {
+        "teaching": 57,
+        "practice": 13,
+        "total": 70
+      },
+      "lr": {
+        "teaching": 32,
+        "practice": 7,
+        "total": 39
+      },
+      "di": {
+        "teaching": 13,
+        "practice": 5,
+        "total": 18
+      },
+      "total": {
+        "teaching": 253,
+        "practice": 52,
+        "total": 305,
+        "hours": 381.25
+      }
+    },
+    "supersedes": [
+      {
+        "label": "313 classes / 391.25 h (253 teaching + 60 practice)",
+        "status": "superseded",
+        "source": {
+          "path": "handover/elevate-education-operations/CLASS12_ACCELERATED_BASELINE.md",
+          "locator": "line 37"
+        }
+      },
+      {
+        "label": "360 classes / 450 h (253 teaching + 107 practice)",
+        "status": "superseded",
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 246"
+        }
+      }
+    ],
+    "removed_practice_to_homework": [
+      "Verbal-P038",
+      "Verbal-P042",
+      "Verbal-P043",
+      "Quant-P024",
+      "Quant-P025",
+      "Quant-P026",
+      "LR-P053",
+      "LR-P054"
+    ],
+    "source": [
+      {
+        "path": "handover/elevate-education-operations/CLASS12_ACCELERATED_BASELINE.md",
+        "locator": "line 11"
+      },
+      {
+        "path": "handover/Claude.md",
+        "locator": "line 87"
+      },
+      {
+        "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+        "locator": "sheet 'Overview'!A4:G9"
+      }
+    ]
+  },
+  "assessments": {
+    "chapter_tests": {
+      "quant": 25,
+      "verbal": 28,
+      "lr": 11,
+      "di": 6,
+      "total": 70,
+      "hours": 85.75,
+      "verbal_note": "28 = 14 topic groups x papers A and B (doubled from 14; locked)",
+      "status": "approved",
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 93"
+        },
+        {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A5:E8"
+        }
+      ]
+    },
+    "verbal_test_groups": [
+      {
+        "group_id": "VT01",
+        "coverage": "Parts of speech, nouns, articles and pronouns",
+        "test_minutes_per_paper": 30,
+        "discussion_minutes_per_paper": 30,
+        "papers": [
+          "VT01-A",
+          "VT01-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 254"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT02",
+        "coverage": "Verbs, tenses and subject–verb agreement",
+        "test_minutes_per_paper": 30,
+        "discussion_minutes_per_paper": 30,
+        "papers": [
+          "VT02-A",
+          "VT02-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 255"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT03",
+        "coverage": "Adjectives, adverbs, prepositions, conjunctions, conditionals and modals",
+        "test_minutes_per_paper": 45,
+        "discussion_minutes_per_paper": 30,
+        "papers": [
+          "VT03-A",
+          "VT03-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 256"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT04",
+        "coverage": "Direct/indirect speech and active/passive voice",
+        "test_minutes_per_paper": 30,
+        "discussion_minutes_per_paper": 30,
+        "papers": [
+          "VT04-A",
+          "VT04-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 257"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT05",
+        "coverage": "Modifiers, parallelism, punctuation and mixed sentence correction",
+        "test_minutes_per_paper": 45,
+        "discussion_minutes_per_paper": 30,
+        "papers": [
+          "VT05-A",
+          "VT05-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 258"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT06",
+        "coverage": "Vocabulary foundations, word usage and confusing words",
+        "test_minutes_per_paper": 30,
+        "discussion_minutes_per_paper": 30,
+        "papers": [
+          "VT06-A",
+          "VT06-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 259"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT07",
+        "coverage": "Idioms, phrasal verbs, analogy, figures of speech and remaining vocabulary formats",
+        "test_minutes_per_paper": 45,
+        "discussion_minutes_per_paper": 30,
+        "papers": [
+          "VT07-A",
+          "VT07-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 260"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT08",
+        "coverage": "CR: assumptions, inference, FIJ, strengthen/weaken, evaluation, cause/effect and course of action",
+        "test_minutes_per_paper": 45,
+        "discussion_minutes_per_paper": 45,
+        "papers": [
+          "VT08-A",
+          "VT08-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 261"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT09",
+        "coverage": "RC: business/economics, science/environment and society/education",
+        "test_minutes_per_paper": 45,
+        "discussion_minutes_per_paper": 45,
+        "papers": [
+          "VT09-A",
+          "VT09-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 262"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT10",
+        "coverage": "RC: history/politics, philosophy, literature and psychology",
+        "test_minutes_per_paper": 45,
+        "discussion_minutes_per_paper": 45,
+        "papers": [
+          "VT10-A",
+          "VT10-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 263"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT11",
+        "coverage": "Paragraph completion and paragraph summary",
+        "test_minutes_per_paper": 30,
+        "discussion_minutes_per_paper": 30,
+        "papers": [
+          "VT11-A",
+          "VT11-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 264"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT12",
+        "coverage": "Parajumbles and odd sentence out",
+        "test_minutes_per_paper": 30,
+        "discussion_minutes_per_paper": 30,
+        "papers": [
+          "VT12-A",
+          "VT12-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 265"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT13",
+        "coverage": "Fillers and cloze tests",
+        "test_minutes_per_paper": 30,
+        "discussion_minutes_per_paper": 30,
+        "papers": [
+          "VT13-A",
+          "VT13-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 266"
+        },
+        "status": "locked"
+      },
+      {
+        "group_id": "VT14",
+        "coverage": "Match-the-column and conversation questions",
+        "test_minutes_per_paper": 30,
+        "discussion_minutes_per_paper": 30,
+        "papers": [
+          "VT14-A",
+          "VT14-B"
+        ],
+        "source": {
+          "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+          "locator": "line 267"
+        },
+        "status": "locked"
+      }
+    ],
+    "sectionals": {
+      "quant": 10,
+      "verbal": 10,
+      "lr": 6,
+      "di": 4,
+      "test_minutes_each": 60,
+      "discussion_minutes_each": 75,
+      "status": "documented",
+      "status_note": "Quant 10 / Verbal 10 stated; LR 6 / DI 4 are 'historical ... check current workbook before changing'.",
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 95"
+        },
+        {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A9:F12"
+        }
+      ]
+    },
+    "full_mocks": {
+      "workbook_allocation": [
+        {
+          "exam": "IPMAT Indore mocks",
+          "papers": 15,
+          "discussion_minutes_total": 2250,
+          "test_duration": "blank (pending exam-cycle mapping)",
+          "active_schedule": true,
+          "status": "planned",
+          "source": {
+            "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+            "locator": "sheet 'Assessment budget'!A13:F13"
+          }
+        },
+        {
+          "exam": "IPMAT Rohtak mocks",
+          "papers": 10,
+          "discussion_minutes_total": 1500,
+          "test_duration": "blank (pending exam-cycle mapping)",
+          "active_schedule": true,
+          "status": "planned",
+          "source": {
+            "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+            "locator": "sheet 'Assessment budget'!A14:F14"
+          }
+        },
+        {
+          "exam": "JIPMAT mocks",
+          "papers": 10,
+          "discussion_minutes_total": 1500,
+          "test_duration": "blank (pending exam-cycle mapping)",
+          "active_schedule": true,
+          "status": "planned",
+          "source": {
+            "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+            "locator": "sheet 'Assessment budget'!A15:F15"
+          }
+        },
+        {
+          "exam": "IIM Bangalore UG mocks",
+          "papers": 8,
+          "discussion_minutes_total": 1200,
+          "test_duration": "blank (pending exam-cycle mapping)",
+          "active_schedule": true,
+          "status": "planned",
+          "source": {
+            "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+            "locator": "sheet 'Assessment budget'!A16:F16"
+          }
+        },
+        {
+          "exam": "IIM Kozhikode BMS mocks",
+          "papers": 7,
+          "discussion_minutes_total": 1050,
+          "test_duration": "blank (pending exam-cycle mapping)",
+          "active_schedule": true,
+          "status": "planned",
+          "source": {
+            "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+            "locator": "sheet 'Assessment budget'!A17:F17"
+          }
+        },
+        {
+          "exam": "NPAT mocks",
+          "papers": 10,
+          "discussion_minutes_total": 1500,
+          "test_duration": "blank (pending exam-cycle mapping)",
+          "active_schedule": false,
+          "status": "superseded",
+          "source": {
+            "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+            "locator": "sheet 'Assessment budget'!A18:F18"
+          }
+        },
+        {
+          "exam": "Other non-IIM mocks",
+          "papers": 10,
+          "discussion_minutes_total": 1500,
+          "test_duration": "blank (pending exam-cycle mapping)",
+          "active_schedule": false,
+          "status": "superseded",
+          "source": {
+            "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+            "locator": "sheet 'Assessment budget'!A19:F19"
+          }
+        }
+      ],
+      "workbook_total": 70,
+      "active_iim_focused_total": 50,
+      "excluded_from_active_schedule": [
+        "NPAT mocks",
+        "Other non-IIM mocks"
+      ],
+      "status": "approved",
+      "status_note": "User excluded 20 non-IIM mocks from the active schedule, leaving 50 IIM-focused (Claude.md). The planner workbook still lists all 70 as annual allocations. No dated 50-mock timetable exists.",
+      "cadence": "Start April; fortnightly in the first two months, weekly thereafter; weekdays available after 15 October",
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 95"
+        },
+        {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A13:F19"
+        }
+      ]
+    },
+    "assessment_budget_rows": [
+      {
+        "assessment": "Quant chapter tests",
+        "papers": 25,
+        "test_minutes_total": 1095,
+        "discussion_minutes_total": 795,
+        "known_hours": 31.5,
+        "known_hours_formula": "=SUM(C5:D5)/60",
+        "planning_basis": "Accepted grouping; teaching/practice are counted separately.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A5:F5"
+        }
+      },
+      {
+        "assessment": "Verbal chapter tests",
+        "papers": 28,
+        "test_minutes_total": 1020,
+        "discussion_minutes_total": 930,
+        "known_hours": 32.5,
+        "known_hours_formula": "=SUM(C6:D6)/60",
+        "planning_basis": "Locked: two distinct papers for each of 14 topic groups.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A6:F6"
+        }
+      },
+      {
+        "assessment": "LR chapter tests",
+        "papers": 11,
+        "test_minutes_total": 480,
+        "discussion_minutes_total": 360,
+        "known_hours": 14,
+        "known_hours_formula": "=SUM(C7:D7)/60",
+        "planning_basis": "Accepted grouping: 11 papers.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A7:F7"
+        }
+      },
+      {
+        "assessment": "DI chapter tests",
+        "papers": 6,
+        "test_minutes_total": 270,
+        "discussion_minutes_total": 195,
+        "known_hours": 7.75,
+        "known_hours_formula": "=SUM(C8:D8)/60",
+        "planning_basis": "Accepted grouping: 6 papers.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A8:F8"
+        }
+      },
+      {
+        "assessment": "Quant sectionals",
+        "papers": 10,
+        "test_minutes_total": 600,
+        "discussion_minutes_total": 750,
+        "known_hours": 22.5,
+        "known_hours_formula": "=SUM(C9:D9)/60",
+        "planning_basis": "60-minute tests; 75-minute discussions.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A9:F9"
+        }
+      },
+      {
+        "assessment": "Verbal sectionals",
+        "papers": 10,
+        "test_minutes_total": 600,
+        "discussion_minutes_total": 750,
+        "known_hours": 22.5,
+        "known_hours_formula": "=SUM(C10:D10)/60",
+        "planning_basis": "60-minute tests; 75-minute discussions.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A10:F10"
+        }
+      },
+      {
+        "assessment": "LR sectionals",
+        "papers": 6,
+        "test_minutes_total": 360,
+        "discussion_minutes_total": 450,
+        "known_hours": 13.5,
+        "known_hours_formula": "=SUM(C11:D11)/60",
+        "planning_basis": "60-minute tests; 75-minute discussions.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A11:F11"
+        }
+      },
+      {
+        "assessment": "DI sectionals",
+        "papers": 4,
+        "test_minutes_total": 240,
+        "discussion_minutes_total": 300,
+        "known_hours": 9,
+        "known_hours_formula": "=SUM(C12:D12)/60",
+        "planning_basis": "60-minute tests; 75-minute discussions.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A12:F12"
+        }
+      },
+      {
+        "assessment": "IPMAT Indore mocks",
+        "papers": 15,
+        "test_minutes_total": null,
+        "discussion_minutes_total": 2250,
+        "known_hours": 37.5,
+        "known_hours_formula": "=SUM(C13:D13)/60",
+        "planning_basis": "Test duration and dates pending exam-cycle mapping.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A13:F13"
+        }
+      },
+      {
+        "assessment": "IPMAT Rohtak mocks",
+        "papers": 10,
+        "test_minutes_total": null,
+        "discussion_minutes_total": 1500,
+        "known_hours": 25,
+        "known_hours_formula": "=SUM(C14:D14)/60",
+        "planning_basis": "Test duration and dates pending exam-cycle mapping.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A14:F14"
+        }
+      },
+      {
+        "assessment": "JIPMAT mocks",
+        "papers": 10,
+        "test_minutes_total": null,
+        "discussion_minutes_total": 1500,
+        "known_hours": 25,
+        "known_hours_formula": "=SUM(C15:D15)/60",
+        "planning_basis": "Test duration and dates pending exam-cycle mapping.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A15:F15"
+        }
+      },
+      {
+        "assessment": "IIM Bangalore UG mocks",
+        "papers": 8,
+        "test_minutes_total": null,
+        "discussion_minutes_total": 1200,
+        "known_hours": 20,
+        "known_hours_formula": "=SUM(C16:D16)/60",
+        "planning_basis": "Confirm target year and early exam deadline before scheduling.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A16:F16"
+        }
+      },
+      {
+        "assessment": "IIM Kozhikode BMS mocks",
+        "papers": 7,
+        "test_minutes_total": null,
+        "discussion_minutes_total": 1050,
+        "known_hours": 17.5,
+        "known_hours_formula": "=SUM(C17:D17)/60",
+        "planning_basis": "Test duration and dates pending exam-cycle mapping.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A17:F17"
+        }
+      },
+      {
+        "assessment": "NPAT mocks",
+        "papers": 10,
+        "test_minutes_total": null,
+        "discussion_minutes_total": 1500,
+        "known_hours": 25,
+        "known_hours_formula": "=SUM(C18:D18)/60",
+        "planning_basis": "Non-IIM scope and exam duration need checking.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A18:F18"
+        }
+      },
+      {
+        "assessment": "Other non-IIM mocks",
+        "papers": 10,
+        "test_minutes_total": null,
+        "discussion_minutes_total": 1500,
+        "known_hours": 25,
+        "known_hours_formula": "=SUM(C19:D19)/60",
+        "planning_basis": "Exam names pending. Reserved count, not a scheduled set.",
+        "status": "planned",
+        "source": {
+          "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+          "locator": "sheet 'Assessment budget'!A19:F19"
+        }
+      }
+    ]
+  },
+  "calendar": {
+    "cycle": "April 2027 - March 2028",
+    "cycle_status": "provisional",
+    "teaching_target": "2027-10-15",
+    "teaching_target_status": "locked",
+    "teaching_target_extension": "User permitted extension to 20 October or selected weekend/extra sessions if needed",
+    "di_start": "2027-06-07",
+    "higher_maths_start": "2027-07-14",
+    "pre_iimb_mock_phase": {
+      "start": "2027-10-16",
+      "end": "2027-11-10",
+      "gross_regular_hours": 55
+    },
+    "iimb_exam_date": "2027-11-14",
+    "iimb_exam_date_status": "unverified",
+    "iimb_exam_date_note": "Approximate planning deadline only; not an official date. The official IIMB 2027-admissions page (checked 10 Sep 2026) gave a tentative test date of 15 November 2026 for the earlier cycle.",
+    "exclusion_allowance": {
+      "holiday_days": 5,
+      "school_exam_days": 5,
+      "slots": 28,
+      "status": "locked",
+      "dates_status": "provisional"
+    },
+    "source": [
+      {
+        "path": "handover/Claude.md",
+        "locator": "line 89"
+      },
+      {
+        "path": "handover/elevate-education-operations/CLASS12_ACCELERATED_BASELINE.md",
+        "locator": "line 47"
+      },
+      {
+        "path": "handover/elevate-education-operations/CLASS12_ACCELERATED_BASELINE.md",
+        "locator": "line 50"
+      },
+      {
+        "path": "handover/elevate-education-operations/IPMAT_WEB_REFERENCE_REVIEW.md",
+        "locator": "line 6"
+      },
+      {
+        "path": "handover/Claude.md",
+        "locator": "line 91"
+      }
+    ]
+  }
+}

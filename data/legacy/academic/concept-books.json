@@ -1,0 +1,3080 @@
+{
+  "meta": {
+    "source_files": [
+      "handover/Claude.md",
+      "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records",
+      "id_history"
+    ],
+    "notes": [
+      "Six concept-book chapter indices (index only; content deliberately empty). Chapter IDs are stable and have deliberate gaps; never renumber.",
+      "Every question count is tagged count_status='planned' and written=0: these are planned allocations, not written or audited questions."
+    ]
+  },
+  "summary": {
+    "books": 6,
+    "numbered_chapters": 133,
+    "numbered_chapters_formula": "=SUM(C5:C10)",
+    "numbered_chapters_cached": 133,
+    "opening_units": 1,
+    "status": "locked",
+    "source": {
+      "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+      "locator": "sheet 'Overview'!A4:E20"
+    }
+  },
+  "records": [
+    {
+      "book_no": 1,
+      "book_id": "B1",
+      "title": "RC + Verbal Ability",
+      "sheet": "1 RC and Verbal",
+      "chapter_count": 18,
+      "chapter_count_formula": "=COUNTA('1 RC and Verbal'!A5:A22)",
+      "chapter_count_cached": 18,
+      "opening_unit": null,
+      "chapters": [
+        {
+          "chapter_id": "B1-01",
+          "chapter_number": 1,
+          "section": "Reading Comprehension",
+          "title": "Reading Foundations",
+          "subtopics": [
+            "Active reading",
+            "paragraph mapping",
+            "central idea and supporting details",
+            "transitions",
+            "passage structure",
+            "reading for meaning"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A5:G5"
+          }
+        },
+        {
+          "chapter_id": "B1-02",
+          "chapter_number": 2,
+          "section": "Reading Comprehension",
+          "title": "Understanding RC Questions",
+          "subtopics": [
+            "Main idea",
+            "title",
+            "stated details",
+            "passage-based inference",
+            "contextual meaning",
+            "paragraph/example function",
+            "applying passage information"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A6:G6"
+          }
+        },
+        {
+          "chapter_id": "B1-03",
+          "chapter_number": 3,
+          "section": "Reading Comprehension",
+          "title": "Tone, Purpose and Author’s Position",
+          "subtopics": [
+            "Tone",
+            "attitude",
+            "purpose",
+            "viewpoint",
+            "qualifying language",
+            "evidence"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A7:G7"
+          }
+        },
+        {
+          "chapter_id": "B1-04",
+          "chapter_number": 4,
+          "section": "Reading Comprehension",
+          "title": "Answer Selection",
+          "subtopics": [
+            "Locating evidence",
+            "paraphrasing",
+            "irrelevant, extreme, distorted and partly correct options",
+            "close choices"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A8:G8"
+          }
+        },
+        {
+          "chapter_id": "B1-05",
+          "chapter_number": 5,
+          "section": "Genre-wise RC",
+          "title": "Business and Economics",
+          "subtopics": [
+            "Markets",
+            "trade",
+            "organisations",
+            "employment",
+            "development",
+            "economic behaviour"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A9:G9"
+          }
+        },
+        {
+          "chapter_id": "B1-06",
+          "chapter_number": 6,
+          "section": "Genre-wise RC",
+          "title": "Science and Environment",
+          "subtopics": [
+            "Scientific explanations",
+            "technology",
+            "ecology",
+            "climate",
+            "evidence-based claims"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A10:G10"
+          }
+        },
+        {
+          "chapter_id": "B1-07",
+          "chapter_number": 7,
+          "section": "Genre-wise RC",
+          "title": "Society and Culture",
+          "subtopics": [
+            "Education",
+            "social institutions",
+            "identity",
+            "media",
+            "cultural change"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A11:G11"
+          }
+        },
+        {
+          "chapter_id": "B1-08",
+          "chapter_number": 8,
+          "section": "Genre-wise RC",
+          "title": "History and Public Policy",
+          "subtopics": [
+            "Historical interpretation",
+            "governance",
+            "institutions",
+            "policy debates"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A12:G12"
+          }
+        },
+        {
+          "chapter_id": "B1-09",
+          "chapter_number": 9,
+          "section": "Genre-wise RC",
+          "title": "Philosophy and Ethics",
+          "subtopics": [
+            "Abstract ideas",
+            "moral questions",
+            "competing viewpoints",
+            "conceptual distinctions"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A13:G13"
+          }
+        },
+        {
+          "chapter_id": "B1-10",
+          "chapter_number": 10,
+          "section": "Genre-wise RC",
+          "title": "Literature and Arts",
+          "subtopics": [
+            "Literary criticism",
+            "artistic expression",
+            "imagery",
+            "interpretation"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A14:G14"
+          }
+        },
+        {
+          "chapter_id": "B1-11",
+          "chapter_number": 11,
+          "section": "Genre-wise RC",
+          "title": "Psychology",
+          "subtopics": [
+            "Cognition",
+            "behaviour",
+            "motivation",
+            "experiments",
+            "individual and group differences"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A15:G15"
+          }
+        },
+        {
+          "chapter_id": "B1-18",
+          "chapter_number": 18,
+          "section": "Verbal Ability",
+          "title": "Paragraph Completion",
+          "subtopics": [
+            "Topic continuity",
+            "tone",
+            "logical flow",
+            "suitable endings"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A16:G16"
+          }
+        },
+        {
+          "chapter_id": "B1-19",
+          "chapter_number": 19,
+          "section": "Verbal Ability",
+          "title": "Paragraph Summary",
+          "subtopics": [
+            "Central message",
+            "essential information",
+            "scope",
+            "avoiding distortion"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A17:G17"
+          }
+        },
+        {
+          "chapter_id": "B1-20",
+          "chapter_number": 20,
+          "section": "Verbal Ability",
+          "title": "Parajumbles",
+          "subtopics": [
+            "Opening sentences",
+            "mandatory pairs",
+            "pronoun references",
+            "connectors",
+            "chronology",
+            "logical sequence"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A18:G18"
+          }
+        },
+        {
+          "chapter_id": "B1-21",
+          "chapter_number": 21,
+          "section": "Verbal Ability",
+          "title": "Odd Sentence Out",
+          "subtopics": [
+            "Paragraph unity",
+            "topic continuity",
+            "unrelated sentences"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A19:G19"
+          }
+        },
+        {
+          "chapter_id": "B1-22",
+          "chapter_number": 22,
+          "section": "Verbal Ability",
+          "title": "Fillers",
+          "subtopics": [
+            "Context clues",
+            "logical relationships",
+            "vocabulary fit",
+            "single and multiple blanks"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A20:G20"
+          }
+        },
+        {
+          "chapter_id": "B1-23",
+          "chapter_number": 23,
+          "section": "Verbal Ability",
+          "title": "Cloze Passages",
+          "subtopics": [
+            "Whole-passage meaning",
+            "transitions",
+            "contextual vocabulary",
+            "consistency"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A21:G21"
+          }
+        },
+        {
+          "chapter_id": "B1-24",
+          "chapter_number": 24,
+          "section": "Verbal Ability",
+          "title": "Match the Column",
+          "subtopics": [
+            "Meaning-based matching",
+            "sentence connections",
+            "coherent combinations",
+            "elimination"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '1 RC and Verbal'!A22:G22"
+          }
+        }
+      ],
+      "scope_note": "Vocabulary chapters moved to Book 6; Conversation Analysis moved to Book 5. Remaining chapter IDs retained. Passage-based inference stays here.",
+      "content": "deliberately empty (index only)",
+      "status": "locked",
+      "source": [
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet 'Overview'!A5:E5"
+        },
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet '1 RC and Verbal'!A1:G32"
+        }
+      ]
+    },
+    {
+      "book_no": 2,
+      "book_id": "B2",
+      "title": "Quantitative Aptitude",
+      "sheet": "2 Quants",
+      "chapter_count": 38,
+      "chapter_count_formula": "=COUNTA('2 Quants'!A5:A43)-1",
+      "chapter_count_cached": 38,
+      "opening_unit": {
+        "chapter_id": "B2-OPEN",
+        "chapter_number": null,
+        "section": "Opening unit",
+        "title": "Calculation Foundations",
+        "subtopics": [
+          "Operations",
+          "fractions/decimals",
+          "conversions",
+          "cancellation",
+          "powers",
+          "roots",
+          "approximation"
+        ],
+        "content_link": null,
+        "content_status_in_source": null,
+        "content_status": "not_started",
+        "status": "locked",
+        "source": {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet '2 Quants'!A5:G5"
+        },
+        "counted_in_chapter_total": false
+      },
+      "chapters": [
+        {
+          "chapter_id": "B2-01",
+          "chapter_number": 1,
+          "section": "Number System",
+          "title": "Classification of Numbers and Divisibility",
+          "subtopics": [
+            "Number types",
+            "primes",
+            "factorisation",
+            "divisibility"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A6:G6"
+          }
+        },
+        {
+          "chapter_id": "B2-02",
+          "chapter_number": 2,
+          "section": "Number System",
+          "title": "Factors, Multiples, HCF and LCM",
+          "subtopics": [
+            "Factors",
+            "factor counting",
+            "multiples",
+            "HCF",
+            "LCM"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A7:G7"
+          }
+        },
+        {
+          "chapter_id": "B2-03",
+          "chapter_number": 3,
+          "section": "Number System",
+          "title": "Unit Digits and Cyclicity",
+          "subtopics": [
+            "Last digits",
+            "repeating cycles"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A8:G8"
+          }
+        },
+        {
+          "chapter_id": "B2-04",
+          "chapter_number": 4,
+          "section": "Number System",
+          "title": "Remainders",
+          "subtopics": [
+            "Numerical remainders",
+            "remainder properties and applications"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A9:G9"
+          }
+        },
+        {
+          "chapter_id": "B2-05",
+          "chapter_number": 5,
+          "section": "Number System",
+          "title": "Factorials and Highest Powers",
+          "subtopics": [
+            "Factorials",
+            "highest powers in products and factorials"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A10:G10"
+          }
+        },
+        {
+          "chapter_id": "B2-06",
+          "chapter_number": 6,
+          "section": "Arithmetic",
+          "title": "Percentages",
+          "subtopics": [
+            "Base and reverse percentages",
+            "successive changes",
+            "constancy"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A11:G11"
+          }
+        },
+        {
+          "chapter_id": "B2-07",
+          "chapter_number": 7,
+          "section": "Arithmetic",
+          "title": "Profit, Loss and Discount",
+          "subtopics": [
+            "Fundamentals",
+            "discounts",
+            "false weights",
+            "combined transactions"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A12:G12"
+          }
+        },
+        {
+          "chapter_id": "B2-08",
+          "chapter_number": 8,
+          "section": "Arithmetic",
+          "title": "Simple Interest, Compound Interest and Instalments",
+          "subtopics": [
+            "SI",
+            "CI",
+            "comparison",
+            "growth",
+            "instalments"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A13:G13"
+          }
+        },
+        {
+          "chapter_id": "B2-09",
+          "chapter_number": 9,
+          "section": "Arithmetic",
+          "title": "Ratio, Proportion and Variation",
+          "subtopics": [
+            "Ratios",
+            "division",
+            "proportion",
+            "direct and inverse variation"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A14:G14"
+          }
+        },
+        {
+          "chapter_id": "B2-10",
+          "chapter_number": 10,
+          "section": "Arithmetic",
+          "title": "Partnership",
+          "subtopics": [
+            "Capital-time relationships",
+            "profit sharing"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A15:G15"
+          }
+        },
+        {
+          "chapter_id": "B2-11",
+          "chapter_number": 11,
+          "section": "Arithmetic",
+          "title": "Time, Speed and Distance",
+          "subtopics": [
+            "Average and relative speed",
+            "trains",
+            "boats",
+            "races",
+            "circular tracks"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A16:G16"
+          }
+        },
+        {
+          "chapter_id": "B2-12",
+          "chapter_number": 12,
+          "section": "Arithmetic",
+          "title": "Time and Work, Wages and Pipes",
+          "subtopics": [
+            "Rates",
+            "alternate work",
+            "person-day-hour",
+            "wages",
+            "pipes"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A17:G17"
+          }
+        },
+        {
+          "chapter_id": "B2-13",
+          "chapter_number": 13,
+          "section": "Arithmetic",
+          "title": "Averages",
+          "subtopics": [
+            "Simple and weighted averages",
+            "changed observations"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A18:G18"
+          }
+        },
+        {
+          "chapter_id": "B2-14",
+          "chapter_number": 14,
+          "section": "Arithmetic",
+          "title": "Mixtures, Alligation and Replacement",
+          "subtopics": [
+            "Mixtures",
+            "alligation",
+            "repeated replacement"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A19:G19"
+          }
+        },
+        {
+          "chapter_id": "B2-15",
+          "chapter_number": 15,
+          "section": "Algebra",
+          "title": "Exponents and Surds",
+          "subtopics": [
+            "Indices",
+            "surds",
+            "exponent equations"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A20:G20"
+          }
+        },
+        {
+          "chapter_id": "B2-16",
+          "chapter_number": 16,
+          "section": "Algebra",
+          "title": "Algebraic Identities and Factorisation",
+          "subtopics": [
+            "Identities",
+            "factorisation methods"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A21:G21"
+          }
+        },
+        {
+          "chapter_id": "B2-17",
+          "chapter_number": 17,
+          "section": "Algebra",
+          "title": "Linear and Simultaneous Equations",
+          "subtopics": [
+            "Linear equations",
+            "simultaneous equations",
+            "applications"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A22:G22"
+          }
+        },
+        {
+          "chapter_id": "B2-18",
+          "chapter_number": 18,
+          "section": "Algebra",
+          "title": "Quadratic Equations",
+          "subtopics": [
+            "Roots",
+            "equations",
+            "applications"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A23:G23"
+          }
+        },
+        {
+          "chapter_id": "B2-19",
+          "chapter_number": 19,
+          "section": "Algebra",
+          "title": "Polynomials",
+          "subtopics": [
+            "Properties",
+            "factors",
+            "polynomial relationships"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A24:G24"
+          }
+        },
+        {
+          "chapter_id": "B2-20",
+          "chapter_number": 20,
+          "section": "Algebra",
+          "title": "Inequalities and Modulus",
+          "subtopics": [
+            "Inequalities",
+            "modulus",
+            "integral solutions",
+            "algebraic extrema"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A25:G25"
+          }
+        },
+        {
+          "chapter_id": "B2-21",
+          "chapter_number": 21,
+          "section": "Algebra",
+          "title": "Sets and Venn Diagrams",
+          "subtopics": [
+            "Set operations",
+            "Venn diagrams",
+            "counting regions"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A26:G26"
+          }
+        },
+        {
+          "chapter_id": "B2-22",
+          "chapter_number": 22,
+          "section": "Algebra",
+          "title": "Relations and Functions",
+          "subtopics": [
+            "Relations",
+            "domain/range",
+            "graphs",
+            "composition",
+            "inverses",
+            "greatest-integer functions",
+            "functional equations"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A27:G27"
+          }
+        },
+        {
+          "chapter_id": "B2-23",
+          "chapter_number": 23,
+          "section": "Algebra",
+          "title": "Matrices and Determinants",
+          "subtopics": [
+            "Types",
+            "operations",
+            "multiplication",
+            "determinants",
+            "inverse",
+            "equations"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A28:G28"
+          }
+        },
+        {
+          "chapter_id": "B2-24",
+          "chapter_number": 24,
+          "section": "Geometry and Mensuration",
+          "title": "Lines and Angles",
+          "subtopics": [
+            "Lines",
+            "angles",
+            "relationships"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A29:G29"
+          }
+        },
+        {
+          "chapter_id": "B2-25",
+          "chapter_number": 25,
+          "section": "Geometry and Mensuration",
+          "title": "Triangles",
+          "subtopics": [
+            "Properties",
+            "congruence",
+            "similarity",
+            "centres"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A30:G30"
+          }
+        },
+        {
+          "chapter_id": "B2-26",
+          "chapter_number": 26,
+          "section": "Geometry and Mensuration",
+          "title": "Quadrilaterals",
+          "subtopics": [
+            "Properties",
+            "special quadrilaterals"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A31:G31"
+          }
+        },
+        {
+          "chapter_id": "B2-27",
+          "chapter_number": 27,
+          "section": "Geometry and Mensuration",
+          "title": "Circles",
+          "subtopics": [
+            "Properties",
+            "chords",
+            "tangents"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A32:G32"
+          }
+        },
+        {
+          "chapter_id": "B2-28",
+          "chapter_number": 28,
+          "section": "Geometry and Mensuration",
+          "title": "Polygons",
+          "subtopics": [
+            "Properties",
+            "angles"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A33:G33"
+          }
+        },
+        {
+          "chapter_id": "B2-29",
+          "chapter_number": 29,
+          "section": "Geometry and Mensuration",
+          "title": "Mensuration — 2D",
+          "subtopics": [
+            "Perimeter",
+            "area",
+            "composite figures"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A34:G34"
+          }
+        },
+        {
+          "chapter_id": "B2-30",
+          "chapter_number": 30,
+          "section": "Geometry and Mensuration",
+          "title": "Mensuration — 3D",
+          "subtopics": [
+            "Surface area",
+            "volume",
+            "combined solids",
+            "scaling"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A35:G35"
+          }
+        },
+        {
+          "chapter_id": "B2-31",
+          "chapter_number": 31,
+          "section": "Geometry and Mensuration",
+          "title": "Coordinate Geometry",
+          "subtopics": [
+            "Coordinate formulae",
+            "lines",
+            "distances",
+            "circles",
+            "introductory conics"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A36:G36"
+          }
+        },
+        {
+          "chapter_id": "B2-32",
+          "chapter_number": 32,
+          "section": "Geometry and Mensuration",
+          "title": "Trigonometry and Heights & Distances",
+          "subtopics": [
+            "Ratios",
+            "identities",
+            "equations",
+            "graphs",
+            "heights and distances"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A37:G37"
+          }
+        },
+        {
+          "chapter_id": "B2-33",
+          "chapter_number": 33,
+          "section": "Modern Maths",
+          "title": "Permutations and Combinations",
+          "subtopics": [
+            "Counting principles",
+            "permutations",
+            "combinations"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A38:G38"
+          }
+        },
+        {
+          "chapter_id": "B2-34",
+          "chapter_number": 34,
+          "section": "Modern Maths",
+          "title": "Probability",
+          "subtopics": [
+            "Complement",
+            "combined events",
+            "conditional probability",
+            "independence"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A39:G39"
+          }
+        },
+        {
+          "chapter_id": "B2-35",
+          "chapter_number": 35,
+          "section": "Modern Maths",
+          "title": "Logarithms",
+          "subtopics": [
+            "Properties",
+            "logarithmic equations"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A40:G40"
+          }
+        },
+        {
+          "chapter_id": "B2-36",
+          "chapter_number": 36,
+          "section": "Modern Maths",
+          "title": "Sequences and Series",
+          "subtopics": [
+            "AP",
+            "GP",
+            "HP",
+            "means",
+            "special series"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A41:G41"
+          }
+        },
+        {
+          "chapter_id": "B2-37",
+          "chapter_number": 37,
+          "section": "Modern Maths",
+          "title": "Binomial Theorem",
+          "subtopics": [
+            "Expansion",
+            "terms",
+            "coefficients"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A42:G42"
+          }
+        },
+        {
+          "chapter_id": "B2-38",
+          "chapter_number": 38,
+          "section": "Modern Maths",
+          "title": "Statistics",
+          "subtopics": [
+            "Central tendency",
+            "grouped data",
+            "dispersion",
+            "interpretation"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '2 Quants'!A43:G43"
+          }
+        }
+      ],
+      "scope_note": "Locked: 38 numbered chapters plus Calculation Foundations as an opening unit. Matrices and Determinants stays here. Higher-maths extensions remain in Book 3.",
+      "content": "deliberately empty (index only)",
+      "status": "locked",
+      "source": [
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet 'Overview'!A6:E6"
+        },
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet '2 Quants'!A1:G46"
+        }
+      ]
+    },
+    {
+      "book_no": 3,
+      "book_id": "B3",
+      "title": "Higher Mathematics",
+      "sheet": "3 Higher Maths",
+      "chapter_count": 11,
+      "chapter_count_formula": "=COUNTA('3 Higher Maths'!A5:A15)",
+      "chapter_count_cached": 11,
+      "opening_unit": null,
+      "chapters": [
+        {
+          "chapter_id": "B3-01",
+          "chapter_number": 1,
+          "section": "Higher Mathematics",
+          "title": "Complex Numbers",
+          "subtopics": [
+            "Operations/conjugate",
+            "modulus/Argand plane",
+            "quadratic roots/applications"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '3 Higher Maths'!A5:G5"
+          }
+        },
+        {
+          "chapter_id": "B3-02",
+          "chapter_number": 2,
+          "section": "Higher Mathematics",
+          "title": "Inverse Trigonometry",
+          "subtopics": [
+            "Principal values/domain/range",
+            "identities/equations"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '3 Higher Maths'!A6:G6"
+          }
+        },
+        {
+          "chapter_id": "B3-03",
+          "chapter_number": 3,
+          "section": "Higher Mathematics",
+          "title": "Conic Sections extension",
+          "subtopics": [
+            "Parabola",
+            "ellipse",
+            "hyperbola/comparisons"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '3 Higher Maths'!A7:G7"
+          }
+        },
+        {
+          "chapter_id": "B3-04",
+          "chapter_number": 4,
+          "section": "Higher Mathematics",
+          "title": "Limits and Continuity",
+          "subtopics": [
+            "Algebraic limits",
+            "standard limits",
+            "one-sided limits/continuity"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '3 Higher Maths'!A8:G8"
+          }
+        },
+        {
+          "chapter_id": "B3-05",
+          "chapter_number": 5,
+          "section": "Higher Mathematics",
+          "title": "Differentiation",
+          "subtopics": [
+            "Standard derivatives",
+            "product/quotient rules",
+            "chain rule",
+            "implicit/logarithmic differentiation"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '3 Higher Maths'!A9:G9"
+          }
+        },
+        {
+          "chapter_id": "B3-06",
+          "chapter_number": 6,
+          "section": "Higher Mathematics",
+          "title": "Applications of Derivatives",
+          "subtopics": [
+            "Rates",
+            "increasing/decreasing functions",
+            "maxima/minima"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '3 Higher Maths'!A10:G10"
+          }
+        },
+        {
+          "chapter_id": "B3-07",
+          "chapter_number": 7,
+          "section": "Higher Mathematics",
+          "title": "Integration and Applications",
+          "subtopics": [
+            "Standard integrals",
+            "substitution",
+            "parts",
+            "partial fractions",
+            "definite integrals/properties",
+            "areas"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '3 Higher Maths'!A11:G11"
+          }
+        },
+        {
+          "chapter_id": "B3-08",
+          "chapter_number": 8,
+          "section": "Higher Mathematics",
+          "title": "Differential Equations",
+          "subtopics": [
+            "Order/degree and separable equations",
+            "separable applications",
+            "first-order linear equations"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '3 Higher Maths'!A12:G12"
+          }
+        },
+        {
+          "chapter_id": "B3-09",
+          "chapter_number": 9,
+          "section": "Higher Mathematics",
+          "title": "Vectors and 3D Geometry",
+          "subtopics": [
+            "Vector basics",
+            "dot product",
+            "cross product",
+            "spatial coordinates/lines",
+            "angles/distances"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '3 Higher Maths'!A13:G13"
+          }
+        },
+        {
+          "chapter_id": "B3-10",
+          "chapter_number": 10,
+          "section": "Higher Mathematics",
+          "title": "Probability Extensions",
+          "subtopics": [
+            "Total probability/Bayes",
+            "random variables/distributions",
+            "expectation/basic distribution applications"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '3 Higher Maths'!A14:G14"
+          }
+        },
+        {
+          "chapter_id": "B3-11",
+          "chapter_number": 11,
+          "section": "Higher Mathematics",
+          "title": "Linear Programming",
+          "subtopics": [
+            "Constraints, feasible regions and graphical optimisation"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '3 Higher Maths'!A15:G15"
+          }
+        }
+      ],
+      "scope_note": "Uses the 11 agreed higher-maths additions. Basic conics and probability are introduced in Book 2; extension detail belongs here.",
+      "content": "deliberately empty (index only)",
+      "status": "locked",
+      "source": [
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet 'Overview'!A7:E7"
+        },
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet '3 Higher Maths'!A1:G18"
+        }
+      ]
+    },
+    {
+      "book_no": 4,
+      "book_id": "B4",
+      "title": "Logical Reasoning + Data Interpretation",
+      "sheet": "4 LR and DI",
+      "chapter_count": 26,
+      "chapter_count_formula": "=COUNTA('4 LR and DI'!A5:A30)",
+      "chapter_count_cached": 26,
+      "opening_unit": null,
+      "chapters": [
+        {
+          "chapter_id": "B4-01",
+          "chapter_number": 1,
+          "section": "Logical Reasoning",
+          "title": "Syllogism",
+          "subtopics": [
+            "Statements and conclusions",
+            "categorical relationships",
+            "possibility cases",
+            "diagram methods"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A5:G5"
+          }
+        },
+        {
+          "chapter_id": "B4-02",
+          "chapter_number": 2,
+          "section": "Logical Reasoning",
+          "title": "Venn Diagrams",
+          "subtopics": [
+            "Set relationships",
+            "overlapping groups",
+            "diagram selection",
+            "region interpretation"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A6:G6"
+          }
+        },
+        {
+          "chapter_id": "B4-03",
+          "chapter_number": 3,
+          "section": "Logical Reasoning",
+          "title": "Coding & Decoding",
+          "subtopics": [
+            "Letter and number coding",
+            "substitutions",
+            "coded language",
+            "mixed patterns"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A7:G7"
+          }
+        },
+        {
+          "chapter_id": "B4-04",
+          "chapter_number": 4,
+          "section": "Logical Reasoning",
+          "title": "Blood Relations",
+          "subtopics": [
+            "Family trees",
+            "generations",
+            "coded relations",
+            "mixed relationship problems"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A8:G8"
+          }
+        },
+        {
+          "chapter_id": "B4-05",
+          "chapter_number": 5,
+          "section": "Logical Reasoning",
+          "title": "Inequalities",
+          "subtopics": [
+            "Direct inequalities",
+            "chained comparisons",
+            "coded inequalities",
+            "conclusions"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A9:G9"
+          }
+        },
+        {
+          "chapter_id": "B4-06",
+          "chapter_number": 6,
+          "section": "Logical Reasoning",
+          "title": "Arrangements & Puzzles",
+          "subtopics": [
+            "Linear and multiple rows",
+            "circular arrangements",
+            "scheduling",
+            "distribution",
+            "combined constraints"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A10:G10"
+          }
+        },
+        {
+          "chapter_id": "B4-07",
+          "chapter_number": 7,
+          "section": "Logical Reasoning",
+          "title": "Team Selection",
+          "subtopics": [
+            "Selection conditions",
+            "inclusion and exclusion",
+            "group formation",
+            "conditional choices"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A11:G11"
+          }
+        },
+        {
+          "chapter_id": "B4-08",
+          "chapter_number": 8,
+          "section": "Logical Reasoning",
+          "title": "Games & Quantitative Puzzles",
+          "subtopics": [
+            "Games and tournaments",
+            "scoring and ranking constraints",
+            "quantitative logic puzzles"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A12:G12"
+          }
+        },
+        {
+          "chapter_id": "B4-09",
+          "chapter_number": 9,
+          "section": "Logical Reasoning",
+          "title": "Input & Output",
+          "subtopics": [
+            "Transformation rules",
+            "step tracing",
+            "intermediate steps",
+            "reverse identification"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A13:G13"
+          }
+        },
+        {
+          "chapter_id": "B4-10",
+          "chapter_number": 10,
+          "section": "Logical Reasoning",
+          "title": "Analogy and Classification",
+          "subtopics": [
+            "Letter, number and symbolic relationships",
+            "corresponding patterns",
+            "Number, letter and symbolic classification",
+            "odd member",
+            "common properties"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A14:G14"
+          }
+        },
+        {
+          "chapter_id": "B4-12",
+          "chapter_number": 12,
+          "section": "Logical Reasoning",
+          "title": "Series",
+          "subtopics": [
+            "Number series",
+            "letter series",
+            "mixed series",
+            "missing and incorrect terms"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A15:G15"
+          }
+        },
+        {
+          "chapter_id": "B4-13",
+          "chapter_number": 13,
+          "section": "Logical Reasoning",
+          "title": "Direction and Distance",
+          "subtopics": [
+            "Turns",
+            "routes",
+            "displacement",
+            "relative positions"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A16:G16"
+          }
+        },
+        {
+          "chapter_id": "B4-14",
+          "chapter_number": 14,
+          "section": "Logical Reasoning",
+          "title": "Order and Ranking",
+          "subtopics": [
+            "Positions",
+            "total count",
+            "interchanges",
+            "overlapping ranks"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A17:G17"
+          }
+        },
+        {
+          "chapter_id": "B4-15",
+          "chapter_number": 15,
+          "section": "Logical Reasoning",
+          "title": "Clocks and Calendars",
+          "subtopics": [
+            "Clock angles",
+            "coincidence and opposition",
+            "clock gain/loss",
+            "odd days",
+            "day/date problems"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A18:G18"
+          }
+        },
+        {
+          "chapter_id": "B4-16",
+          "chapter_number": 16,
+          "section": "Logical Reasoning",
+          "title": "Logical Sequence of Words",
+          "subtopics": [
+            "Chronological order",
+            "process order",
+            "logical progression"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A19:G19"
+          }
+        },
+        {
+          "chapter_id": "B4-17",
+          "chapter_number": 17,
+          "section": "Logical Reasoning",
+          "title": "Data Sufficiency",
+          "subtopics": [
+            "Testing statements independently and jointly",
+            "unique determination",
+            "avoiding unnecessary calculation"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A20:G20"
+          }
+        },
+        {
+          "chapter_id": "B4-18",
+          "chapter_number": 18,
+          "section": "Logical Reasoning",
+          "title": "Cubes and Dice",
+          "subtopics": [
+            "Cube counting and painting",
+            "dice faces",
+            "opposite and adjacent faces",
+            "nets"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A21:G21"
+          }
+        },
+        {
+          "chapter_id": "B4-19",
+          "chapter_number": 19,
+          "section": "Logical Reasoning",
+          "title": "Visual Reasoning",
+          "subtopics": [
+            "Figure patterns",
+            "sequences",
+            "classification",
+            "mirror/water images",
+            "folding and embedded figures"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A22:G22"
+          }
+        },
+        {
+          "chapter_id": "B4-20",
+          "chapter_number": 20,
+          "section": "Data Interpretation",
+          "title": "Tables",
+          "subtopics": [
+            "Reading tables",
+            "totals",
+            "comparisons",
+            "ratios",
+            "percentages",
+            "missing values"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A23:G23"
+          }
+        },
+        {
+          "chapter_id": "B4-21",
+          "chapter_number": 21,
+          "section": "Data Interpretation",
+          "title": "Bar Graphs",
+          "subtopics": [
+            "Simple, grouped and stacked bars",
+            "comparisons",
+            "change"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A24:G24"
+          }
+        },
+        {
+          "chapter_id": "B4-22",
+          "chapter_number": 22,
+          "section": "Data Interpretation",
+          "title": "Line Graphs",
+          "subtopics": [
+            "Trends",
+            "comparisons",
+            "growth",
+            "multiple series"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A25:G25"
+          }
+        },
+        {
+          "chapter_id": "B4-23",
+          "chapter_number": 23,
+          "section": "Data Interpretation",
+          "title": "Pie Charts",
+          "subtopics": [
+            "Shares",
+            "angles",
+            "totals",
+            "comparing pies"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A26:G26"
+          }
+        },
+        {
+          "chapter_id": "B4-24",
+          "chapter_number": 24,
+          "section": "Data Interpretation",
+          "title": "Mixed Charts",
+          "subtopics": [
+            "Combining representations",
+            "linked calculations",
+            "base consistency"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A27:G27"
+          }
+        },
+        {
+          "chapter_id": "B4-25",
+          "chapter_number": 25,
+          "section": "Data Interpretation",
+          "title": "Caselets",
+          "subtopics": [
+            "Converting prose into tables",
+            "organising conditions",
+            "linked calculations"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A28:G28"
+          }
+        },
+        {
+          "chapter_id": "B4-26",
+          "chapter_number": 26,
+          "section": "Data Interpretation",
+          "title": "Logical DI",
+          "subtopics": [
+            "Conditional sets",
+            "grouping and distribution",
+            "Venn-based data",
+            "linked constraints"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A29:G29"
+          }
+        },
+        {
+          "chapter_id": "B4-27",
+          "chapter_number": 27,
+          "section": "Data Interpretation",
+          "title": "Miscellaneous Formats",
+          "subtopics": [
+            "Unfamiliar representations",
+            "identifying units and bases",
+            "integrated data sets"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '4 LR and DI'!A30:G30"
+          }
+        }
+      ],
+      "scope_note": "B4-10 combines Analogy and Classification (formerly B4-11). Other chapter IDs are retained. No statement-based CR chapter here.",
+      "content": "deliberately empty (index only)",
+      "status": "locked",
+      "source": [
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet 'Overview'!A8:E8"
+        },
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet '4 LR and DI'!A1:G34"
+        }
+      ]
+    },
+    {
+      "book_no": 5,
+      "book_id": "B5",
+      "title": "Critical Reasoning",
+      "sheet": "5 CR",
+      "chapter_count": 17,
+      "chapter_count_formula": "=COUNTA('5 CR'!A5:A21)",
+      "chapter_count_cached": 17,
+      "opening_unit": null,
+      "chapters": [
+        {
+          "chapter_id": "B5-01",
+          "chapter_number": 1,
+          "section": "Critical Reasoning",
+          "title": "Premises and Evidence",
+          "subtopics": [
+            "Supporting statements",
+            "evidence and its role"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A5:K5"
+          },
+          "planned_questions": {
+            "concept_building": 10,
+            "practice_application": 25,
+            "rankers_zone": 15,
+            "total": 50,
+            "total_formula": "=SUM(H5:J5)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-02",
+          "chapter_number": 2,
+          "section": "Critical Reasoning",
+          "title": "Finding the Main Conclusion / Main Point",
+          "subtopics": [
+            "Identifying the central claim",
+            "main versus intermediate conclusions"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A6:K6"
+          },
+          "planned_questions": {
+            "concept_building": 15,
+            "practice_application": 40,
+            "rankers_zone": 25,
+            "total": 80,
+            "total_formula": "=SUM(H6:J6)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-03",
+          "chapter_number": 3,
+          "section": "Critical Reasoning",
+          "title": "Background Information",
+          "subtopics": [
+            "Context",
+            "distinction from premises and conclusions"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A7:K7"
+          },
+          "planned_questions": {
+            "concept_building": 10,
+            "practice_application": 25,
+            "rankers_zone": 15,
+            "total": 50,
+            "total_formula": "=SUM(H7:J7)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-04",
+          "chapter_number": 4,
+          "section": "Critical Reasoning",
+          "title": "Argument Structure",
+          "subtopics": [
+            "Relationships between claims",
+            "argument organisation"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A8:K8"
+          },
+          "planned_questions": {
+            "concept_building": 15,
+            "practice_application": 40,
+            "rankers_zone": 25,
+            "total": 80,
+            "total_formula": "=SUM(H8:J8)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-05",
+          "chapter_number": 5,
+          "section": "Critical Reasoning",
+          "title": "Conclusion-Based Questions",
+          "subtopics": [
+            "Selecting supported conclusions",
+            "scope",
+            "overstatement"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A9:K9"
+          },
+          "planned_questions": {
+            "concept_building": 15,
+            "practice_application": 40,
+            "rankers_zone": 25,
+            "total": 80,
+            "total_formula": "=SUM(H9:J9)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-06",
+          "chapter_number": 6,
+          "section": "Critical Reasoning",
+          "title": "Fact, Inference and Judgement",
+          "subtopics": [
+            "Verifiable claims",
+            "supported inferences",
+            "evaluative opinions",
+            "mixed statements"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A10:K10"
+          },
+          "planned_questions": {
+            "concept_building": 10,
+            "practice_application": 25,
+            "rankers_zone": 15,
+            "total": 50,
+            "total_formula": "=SUM(H10:J10)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-07",
+          "chapter_number": 7,
+          "section": "Critical Reasoning",
+          "title": "Conversation Analysis",
+          "subtopics": [
+            "Speaker intent",
+            "suitable responses",
+            "tone",
+            "register",
+            "relevance",
+            "continuity"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A11:K11"
+          },
+          "planned_questions": {
+            "concept_building": 10,
+            "practice_application": 25,
+            "rankers_zone": 15,
+            "total": 50,
+            "total_formula": "=SUM(H11:J11)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-08",
+          "chapter_number": 8,
+          "section": "Critical Reasoning",
+          "title": "Assumptions",
+          "subtopics": [
+            "Unstated links",
+            "necessary assumptions"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A12:K12"
+          },
+          "planned_questions": {
+            "concept_building": 15,
+            "practice_application": 40,
+            "rankers_zone": 25,
+            "total": 80,
+            "total_formula": "=SUM(H12:J12)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-09",
+          "chapter_number": 9,
+          "section": "Critical Reasoning",
+          "title": "Strengthening and Weakening Arguments",
+          "subtopics": [
+            "Supporting and undermining reasoning",
+            "effect of new information"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A13:K13"
+          },
+          "planned_questions": {
+            "concept_building": 15,
+            "practice_application": 40,
+            "rankers_zone": 25,
+            "total": 80,
+            "total_formula": "=SUM(H13:J13)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-10",
+          "chapter_number": 10,
+          "section": "Critical Reasoning",
+          "title": "Relevant Evidence",
+          "subtopics": [
+            "Selecting evidence that affects an argument"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A14:K14"
+          },
+          "planned_questions": {
+            "concept_building": 10,
+            "practice_application": 25,
+            "rankers_zone": 15,
+            "total": 50,
+            "total_formula": "=SUM(H14:J14)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-11",
+          "chapter_number": 11,
+          "section": "Critical Reasoning",
+          "title": "Argument Evaluation—Testing Arguments and Strong/Weak Arguments",
+          "subtopics": [
+            "Testing reasoning",
+            "judging arguments for and against a proposition"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A15:K15"
+          },
+          "planned_questions": {
+            "concept_building": 15,
+            "practice_application": 40,
+            "rankers_zone": 25,
+            "total": 80,
+            "total_formula": "=SUM(H15:J15)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-12",
+          "chapter_number": 12,
+          "section": "Critical Reasoning",
+          "title": "Cause and Effect",
+          "subtopics": [
+            "Causal claims",
+            "correlation",
+            "alternative causes",
+            "reversed causation"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A16:K16"
+          },
+          "planned_questions": {
+            "concept_building": 15,
+            "practice_application": 40,
+            "rankers_zone": 25,
+            "total": 80,
+            "total_formula": "=SUM(H16:J16)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-13",
+          "chapter_number": 13,
+          "section": "Critical Reasoning",
+          "title": "Reasoning Errors / Flaws in Arguments",
+          "subtopics": [
+            "Identifying errors and flawed reasoning patterns"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A17:K17"
+          },
+          "planned_questions": {
+            "concept_building": 15,
+            "practice_application": 40,
+            "rankers_zone": 25,
+            "total": 80,
+            "total_formula": "=SUM(H17:J17)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-14",
+          "chapter_number": 14,
+          "section": "Critical Reasoning",
+          "title": "Course of Action",
+          "subtopics": [
+            "Relevance",
+            "feasibility",
+            "effectiveness",
+            "justified action"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A18:K18"
+          },
+          "planned_questions": {
+            "concept_building": 10,
+            "practice_application": 25,
+            "rankers_zone": 15,
+            "total": 50,
+            "total_formula": "=SUM(H18:J18)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-15",
+          "chapter_number": 15,
+          "section": "Critical Reasoning",
+          "title": "Resolving Paradoxes",
+          "subtopics": [
+            "Reconciling apparently contradictory facts"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A19:K19"
+          },
+          "planned_questions": {
+            "concept_building": 15,
+            "practice_application": 40,
+            "rankers_zone": 25,
+            "total": 80,
+            "total_formula": "=SUM(H19:J19)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-16",
+          "chapter_number": 16,
+          "section": "Critical Reasoning",
+          "title": "Parallel Reasoning",
+          "subtopics": [
+            "Matching argument structures",
+            "parallel flaws"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A20:K20"
+          },
+          "planned_questions": {
+            "concept_building": 15,
+            "practice_application": 40,
+            "rankers_zone": 25,
+            "total": 80,
+            "total_formula": "=SUM(H20:J20)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        },
+        {
+          "chapter_id": "B5-17",
+          "chapter_number": 17,
+          "section": "Critical Reasoning",
+          "title": "Bold-Faced Questions",
+          "subtopics": [
+            "Roles of highlighted statements"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '5 CR'!A21:K21"
+          },
+          "planned_questions": {
+            "concept_building": 10,
+            "practice_application": 25,
+            "rankers_zone": 15,
+            "total": 50,
+            "total_formula": "=SUM(H21:J21)",
+            "count_status": "planned",
+            "written": 0,
+            "note": "Planned question counts, not written questions."
+          }
+        }
+      ],
+      "scope_note": "Locked: 17 chapters. FIJ is combined; strengthening/weakening combined; argument evaluation includes strong/weak arguments. Conversation Analysis moved from B1-25 to B5-07.",
+      "content": "deliberately empty (index only)",
+      "status": "locked",
+      "source": [
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet 'Overview'!A9:E9"
+        },
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet '5 CR'!A1:K27"
+        }
+      ]
+    },
+    {
+      "book_no": 6,
+      "book_id": "B6",
+      "title": "Grammar and Vocabulary",
+      "sheet": "6 Grammar",
+      "chapter_count": 23,
+      "chapter_count_formula": "=COUNTA('6 Grammar'!A5:A27)",
+      "chapter_count_cached": 23,
+      "opening_unit": null,
+      "chapters": [
+        {
+          "chapter_id": "B6-01",
+          "chapter_number": 1,
+          "section": "Grammar Foundations",
+          "title": "Parts of Speech",
+          "subtopics": [
+            "Word classes",
+            "identification",
+            "functions in sentences"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A5:G5"
+          }
+        },
+        {
+          "chapter_id": "B6-02",
+          "chapter_number": 2,
+          "section": "Grammar Foundations",
+          "title": "Nouns",
+          "subtopics": [
+            "Types",
+            "number",
+            "countability",
+            "possessives"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A6:G6"
+          }
+        },
+        {
+          "chapter_id": "B6-03",
+          "chapter_number": 3,
+          "section": "Grammar Foundations",
+          "title": "Articles",
+          "subtopics": [
+            "Definite and indefinite articles",
+            "zero article",
+            "usage"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A7:G7"
+          }
+        },
+        {
+          "chapter_id": "B6-04",
+          "chapter_number": 4,
+          "section": "Grammar Foundations",
+          "title": "Pronouns",
+          "subtopics": [
+            "Types",
+            "reference",
+            "agreement",
+            "case"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A8:G8"
+          }
+        },
+        {
+          "chapter_id": "B6-05",
+          "chapter_number": 5,
+          "section": "Grammar Foundations",
+          "title": "Verbs and Verbals",
+          "subtopics": [
+            "Main and auxiliary verbs",
+            "finite and non-finite forms",
+            "infinitives",
+            "gerunds",
+            "participles"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A9:G9"
+          }
+        },
+        {
+          "chapter_id": "B6-06",
+          "chapter_number": 6,
+          "section": "Grammar Foundations",
+          "title": "Time and Tense",
+          "subtopics": [
+            "Time reference",
+            "tense forms",
+            "sequence",
+            "contextual usage"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A10:G10"
+          }
+        },
+        {
+          "chapter_id": "B6-07",
+          "chapter_number": 7,
+          "section": "Grammar Foundations",
+          "title": "Subject–Verb Agreement",
+          "subtopics": [
+            "Subject identification",
+            "agreement rules",
+            "compound subjects",
+            "special cases"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A11:G11"
+          }
+        },
+        {
+          "chapter_id": "B6-08",
+          "chapter_number": 8,
+          "section": "Grammar Foundations",
+          "title": "Adjectives",
+          "subtopics": [
+            "Types",
+            "position",
+            "order",
+            "degrees of comparison"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A12:G12"
+          }
+        },
+        {
+          "chapter_id": "B6-09",
+          "chapter_number": 9,
+          "section": "Grammar Foundations",
+          "title": "Adverbs",
+          "subtopics": [
+            "Types",
+            "placement",
+            "comparison",
+            "adjective/adverb distinctions"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A13:G13"
+          }
+        },
+        {
+          "chapter_id": "B6-10",
+          "chapter_number": 10,
+          "section": "Grammar Foundations",
+          "title": "Prepositions",
+          "subtopics": [
+            "Time",
+            "place",
+            "movement",
+            "dependent combinations"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A14:G14"
+          }
+        },
+        {
+          "chapter_id": "B6-11",
+          "chapter_number": 11,
+          "section": "Grammar Foundations",
+          "title": "Conjunctions",
+          "subtopics": [
+            "Coordinating and subordinating links",
+            "correlative pairs",
+            "logical connections"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A15:G15"
+          }
+        },
+        {
+          "chapter_id": "B6-12",
+          "chapter_number": 12,
+          "section": "Grammar Foundations",
+          "title": "Conditionals and Modals",
+          "subtopics": [
+            "Conditional structures",
+            "modal meanings",
+            "form and usage"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A16:G16"
+          }
+        },
+        {
+          "chapter_id": "B6-13",
+          "chapter_number": 13,
+          "section": "Grammar Application",
+          "title": "Direct–Indirect Speech",
+          "subtopics": [
+            "Reporting statements, questions and commands",
+            "tense and reference changes"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A17:G17"
+          }
+        },
+        {
+          "chapter_id": "B6-14",
+          "chapter_number": 14,
+          "section": "Grammar Application",
+          "title": "Active–Passive Voice",
+          "subtopics": [
+            "Voice identification",
+            "transformation",
+            "tense",
+            "agent and object"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A18:G18"
+          }
+        },
+        {
+          "chapter_id": "B6-15",
+          "chapter_number": 15,
+          "section": "Grammar Application",
+          "title": "Modifiers and Parallelism",
+          "subtopics": [
+            "Misplaced and dangling modifiers",
+            "parallel structures",
+            "comparison consistency"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A19:G19"
+          }
+        },
+        {
+          "chapter_id": "B6-16",
+          "chapter_number": 16,
+          "section": "Grammar Application",
+          "title": "Punctuation",
+          "subtopics": [
+            "Sentence boundaries",
+            "commas",
+            "apostrophes",
+            "colons",
+            "semicolons",
+            "quotation marks"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A20:G20"
+          }
+        },
+        {
+          "chapter_id": "B6-17",
+          "chapter_number": 17,
+          "section": "Grammar Application",
+          "title": "Sentence Correction and Error Spotting",
+          "subtopics": [
+            "Integrated error identification",
+            "correction",
+            "agreement",
+            "tense",
+            "pronouns",
+            "modifiers",
+            "structure",
+            "usage"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A21:G21"
+          }
+        },
+        {
+          "chapter_id": "B6-18",
+          "chapter_number": 18,
+          "section": "Vocabulary",
+          "title": "Vocabulary-Building Methods",
+          "subtopics": [
+            "Roots",
+            "prefixes",
+            "suffixes",
+            "word families",
+            "contextual learning",
+            "vocabulary records"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A22:G22"
+          }
+        },
+        {
+          "chapter_id": "B6-19",
+          "chapter_number": 19,
+          "section": "Vocabulary",
+          "title": "Word Usage",
+          "subtopics": [
+            "Multiple meanings",
+            "collocations",
+            "connotation",
+            "commonly confused words",
+            "appropriate usage"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A23:G23"
+          }
+        },
+        {
+          "chapter_id": "B6-20",
+          "chapter_number": 20,
+          "section": "Vocabulary",
+          "title": "Idioms and Phrasal Verbs",
+          "subtopics": [
+            "Meaning in context",
+            "literal and idiomatic usage",
+            "expressions",
+            "phrasal-verb distinctions"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A24:G24"
+          }
+        },
+        {
+          "chapter_id": "B6-21",
+          "chapter_number": 21,
+          "section": "Vocabulary",
+          "title": "Verbal Analogies",
+          "subtopics": [
+            "Semantic relationships",
+            "precise relationships",
+            "direction and strength"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A25:G25"
+          }
+        },
+        {
+          "chapter_id": "B6-22",
+          "chapter_number": 22,
+          "section": "Vocabulary",
+          "title": "Figures of Speech",
+          "subtopics": [
+            "Simile",
+            "metaphor",
+            "personification",
+            "hyperbole",
+            "irony",
+            "other relevant devices and their effects"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A26:G26"
+          }
+        },
+        {
+          "chapter_id": "B6-23",
+          "chapter_number": 23,
+          "section": "Vocabulary",
+          "title": "Other Vocabulary Formats",
+          "subtopics": [
+            "Synonyms",
+            "antonyms",
+            "one-word substitutions",
+            "spelling",
+            "word formation"
+          ],
+          "content_link": null,
+          "content_status_in_source": null,
+          "content_status": "not_started",
+          "status": "locked",
+          "source": {
+            "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+            "locator": "sheet '6 Grammar'!A27:G27"
+          }
+        }
+      ],
+      "scope_note": "Grammar and vocabulary. B6-18–B6-23 moved from B1-12–B1-17. Grammar rules and detailed sentence correction stay here. Book 1 applies these rules in fillers and cloze without duplicating chapters.",
+      "content": "deliberately empty (index only)",
+      "status": "locked",
+      "source": [
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet 'Overview'!A10:E10"
+        },
+        {
+          "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+          "locator": "sheet '6 Grammar'!A1:G30"
+        }
+      ]
+    }
+  ],
+  "cr_question_bank": {
+    "concept_building": 220,
+    "practice_application": 575,
+    "rankers_zone": 355,
+    "total": 1150,
+    "formulas": {
+      "H23": "=SUM(H5:H21)",
+      "I23": "=SUM(I5:I21)",
+      "J23": "=SUM(J5:J21)",
+      "K23": "=SUM(K5:K21)"
+    },
+    "split_rule": "50-question chapters 10/25/15; 80-question chapters 15/40/25; 7 x 50 + 10 x 80 = 1,150",
+    "count_status": "planned",
+    "written": 0,
+    "excluded": "mixed-passage section (pending), class sheets, DPP and tests",
+    "superseded_proposals": [
+      "1,890",
+      "1,840"
+    ],
+    "status": "locked",
+    "source": [
+      {
+        "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+        "locator": "sheet '5 CR'!G23:K27"
+      },
+      {
+        "path": "handover/Claude.md",
+        "locator": "line 143"
+      }
+    ]
+  },
+  "quant_higher_maths_question_model": {
+    "description": "Earlier Quants/Higher Maths practice-question model: Narrow 60 = 12/30/18, Wide 100 = 20/50/30, Broad 150 = 30/75/45. Recorded totals: Quants 4,470 across 39 units (7 narrow / 15 wide / 17 broad), Higher Maths 1,220 across 11, combined 5,690.",
+    "quants_total": 4470,
+    "quants_units": 39,
+    "quants_category_counts": {
+      "narrow": 7,
+      "wide": 15,
+      "broad": 17
+    },
+    "higher_maths_total": 1220,
+    "higher_maths_units": 11,
+    "combined_total": 5690,
+    "chapter_to_category_mapping": null,
+    "mapping_status": "unrecoverable",
+    "note": "The exact chapter-to-category mapping is not reliably saved. Do not invent it or call a reconstruction locked. Counts are planned, not written. Verbal practice allocation is pending.",
+    "count_status": "planned",
+    "status": "unverified",
+    "source": [
+      {
+        "path": "handover/Claude.md",
+        "locator": "line 149"
+      }
+    ]
+  },
+  "id_history": [
+    {
+      "change": "B4-10 Analogy and B4-11 Classification merged into B4-10 Analogy and Classification; B4-11 retired, later IDs kept",
+      "status": "locked",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 111"
+      }
+    },
+    {
+      "change": "B1-25 Conversation Analysis moved to B5-07; subsequent CR IDs shifted by 1",
+      "status": "locked",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 112"
+      }
+    },
+    {
+      "change": "B1-12..B1-17 vocabulary moved to B6-18..B6-23; remaining B1 IDs unchanged (gaps are deliberate)",
+      "status": "locked",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 113"
+      }
+    }
+  ]
+}

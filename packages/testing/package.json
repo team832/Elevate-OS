@@ -1,0 +1,22 @@
+{
+  "name": "@elevate/testing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Test helpers: in-memory database, users with roles, authenticated Requests for route handlers, envelope parsing.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@elevate/authentication": "0.1.0",
+    "@elevate/database": "0.1.0",
+    "@elevate/shared-contracts": "0.1.0",
+    "@elevate/shared-types": "0.1.0"
+  },
+  "peerDependencies": {
+    "vitest": "5.0.5"
+  }
+}

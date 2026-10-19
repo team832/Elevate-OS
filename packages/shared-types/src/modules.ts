@@ -17,7 +17,13 @@ export const MODULES: Readonly<
 };
 
 /** Feature status vocabulary (D-013). Order matters: each step requires the previous. */
-export const FEATURE_STATUSES = ['Proposed', 'Approved', 'Implemented', 'Tested', 'Deployed'] as const;
+export const FEATURE_STATUSES = [
+  'Proposed',
+  'Approved',
+  'Implemented',
+  'Tested',
+  'Deployed',
+] as const;
 export type FeatureStatus = (typeof FEATURE_STATUSES)[number];
 
 /**

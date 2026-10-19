@@ -1,9 +1,6 @@
 import { defineProject } from 'vitest/config';
+import { sharedTest } from '../../vitest.shared.ts';
 
 export default defineProject({
-  test: {
-    name: 'shared-types',
-    environment: 'node',
-    include: ['tests/**/*.test.ts'],
-  },
+  test: { ...sharedTest, name: 'shared-types' },
 });

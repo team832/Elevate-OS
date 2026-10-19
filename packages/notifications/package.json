@@ -1,0 +1,22 @@
+{
+  "name": "@elevate/notifications",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "In-app notifications (core.notifications) and channel adapters; the email adapter is a mock that only logs and never claims delivery (D-014).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@elevate/configuration": "0.1.0",
+    "@elevate/database": "0.1.0",
+    "@elevate/shared-types": "0.1.0",
+    "drizzle-orm": "0.45.4"
+  },
+  "devDependencies": {
+    "@elevate/testing": "0.1.0"
+  }
+}

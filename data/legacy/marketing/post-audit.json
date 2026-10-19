@@ -1,0 +1,1568 @@
+{
+  "meta": {
+    "source_files": [
+      "content-os/accounts/instagram-clat/README.md",
+      "content-os/accounts/instagram-clat/post-audit.csv"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records"
+    ],
+    "notes": [
+      "The 60-post audit of the CLAT Instagram page (logged-in, 7 Oct 2026). Metrics are as reported in the CSV, not re-measured.",
+      "Personal handles and private names in topics are redacted; brand handles (e.g. @elevateeducation_sikar) are kept."
+    ]
+  },
+  "columns_in_source": [
+    "n",
+    "posted",
+    "type",
+    "link",
+    "topic",
+    "owner",
+    "views",
+    "likes",
+    "comments",
+    "boosted?",
+    "verdict",
+    "reason"
+  ],
+  "summary": {
+    "audited_on": "2026-10-07",
+    "account_code": "IGC",
+    "posts": 60,
+    "verdict_counts": {
+      "keep": 34,
+      "keep_and_pin": 2,
+      "archive": 26,
+      "archive_only": 25,
+      "unpin": 2
+    },
+    "likely_boosted_posts": 13,
+    "likely_boosted_views_total": 2964600,
+    "likely_boosted_likes_total": 253,
+    "readme_statement": "34 keep (2 to pin) · 25 archive · unpin 2; 13 reels were boosted ads: about 2.9M views together, but only about 250 likes",
+    "notes": [
+      "Row 28 is 'UNPIN + ARCHIVE' (counted in archive and unpin); row 29 is 'KEEP, UNPIN' (counted in keep and unpin).",
+      "Views are blank for photo posts and three recent reels have no likes/comments recorded; null, not zero."
+    ],
+    "status": "documented",
+    "source": [
+      {
+        "path": "content-os/accounts/instagram-clat/README.md",
+        "locator": "line 49"
+      },
+      {
+        "path": "content-os/accounts/instagram-clat/README.md",
+        "locator": "line 52"
+      }
+    ]
+  },
+  "records": [
+    {
+      "n": 1,
+      "posted": "2025-12-24",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DSpMnOQCSmj/",
+      "topic": "CLAT = gateway to law (eligibility, careers)",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 2901,
+      "likes": 52,
+      "comments": 15,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen explainer; your first post; 15 comments",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 2"
+      }
+    },
+    {
+      "n": 2,
+      "posted": "2025-12-27",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DSxauH6ibuT/",
+      "topic": "Book 1:1 CLAT counselling (strategy, colleges)",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 3281,
+      "likes": 97,
+      "comments": 4,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Most-liked own post; counselling = the bio CTA",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 3"
+      }
+    },
+    {
+      "n": 3,
+      "posted": "2025-12-29",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DS2f7fTibeZ/",
+      "topic": "Career in law: aim for top NLUs",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 244000,
+      "likes": 23,
+      "comments": 2,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 4"
+      }
+    },
+    {
+      "n": 4,
+      "posted": "2025-12-30",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DS5FoXICWa7/",
+      "topic": "Shekhawati students no longer need Jaipur/Jodhpur: Elevate in Sikar",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 132000,
+      "likes": 19,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Sikar-local pitch; belongs on the Sikar page",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 5"
+      }
+    },
+    {
+      "n": 5,
+      "posted": "2025-12-31",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DS7XkaCiQPa/",
+      "topic": "Mega Scholarship Test, Sikar, 4 Jan",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 285000,
+      "likes": 21,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Expired date",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 6"
+      }
+    },
+    {
+      "n": 6,
+      "posted": "2026-01-04",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTF8-s9Ddur/",
+      "topic": "1:1 CLAT counselling, 5-7 Jan",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 67100,
+      "likes": 26,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Expired date",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 7"
+      }
+    },
+    {
+      "n": 7,
+      "posted": "2026-01-05",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTIZKYCCbpE/",
+      "topic": "Sikar's biggest scholarship test, 11 Jan",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 188000,
+      "likes": 14,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Expired date",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 8"
+      }
+    },
+    {
+      "n": 8,
+      "posted": "2026-01-07",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTNiUAuCaFQ/",
+      "topic": "Students on why they chose Elevate",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 4768,
+      "likes": 112,
+      "comments": 9,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Real student voices = trust; best likes on the grid",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 9"
+      }
+    },
+    {
+      "n": 9,
+      "posted": "2026-01-08",
+      "type": "photo",
+      "link": "https://www.instagram.com/p/DTQDFbzgZba/",
+      "topic": "Mega Scholarship Test poster, 11 Jan",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": null,
+      "likes": 5,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Expired date",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 10"
+      }
+    },
+    {
+      "n": 10,
+      "posted": "2026-01-10",
+      "type": "photo",
+      "link": "https://www.instagram.com/p/DTVSuI7CbrN/",
+      "topic": "Career seminar, SS Mody Vidya Vihar, Jhunjhunu",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": null,
+      "likes": 59,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Proof of real activity; fine to keep",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 11"
+      }
+    },
+    {
+      "n": 11,
+      "posted": "2026-01-11",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTXnpqwCbrG/",
+      "topic": "Students: why Elevate worked for them",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 2290,
+      "likes": 61,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Testimonial",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 12"
+      }
+    },
+    {
+      "n": 12,
+      "posted": "2026-01-12",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTaYanuidHL/",
+      "topic": "(Hindi) CLAT 2026 evening batch with 11th/12th",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 412000,
+      "likes": 11,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Expired batch ad; Devanagari breaks the page's language",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 13"
+      }
+    },
+    {
+      "n": 13,
+      "posted": "2026-01-13",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTdAJIAiQpo/",
+      "topic": "CLAT Special Evening Batch from 19 Jan",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 436000,
+      "likes": 17,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Expired batch ad",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 14"
+      }
+    },
+    {
+      "n": 14,
+      "posted": "2026-01-14",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTfgIDzCT5r/",
+      "topic": "Myth: law is only for Arts students",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 447000,
+      "likes": 19,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen; directly serves commerce/science students",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 15"
+      }
+    },
+    {
+      "n": 15,
+      "posted": "2026-01-15",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTh7504CboY/",
+      "topic": "CLAT ke baad career kaise banta hai",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 416,
+      "likes": 13,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 16"
+      }
+    },
+    {
+      "n": 16,
+      "posted": "2026-01-16",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTkrdIlCbQM/",
+      "topic": "Subjects in CLAT",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 333,
+      "likes": 14,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 17"
+      }
+    },
+    {
+      "n": 17,
+      "posted": "2026-01-17",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTnImF8iZ0W/",
+      "topic": "CLAT or CUET for law? Do both",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 251,
+      "likes": 11,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 18"
+      }
+    },
+    {
+      "n": 18,
+      "posted": "2026-01-18",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTpwDhViWir/",
+      "topic": "Last announcement: evening batch from 19 Jan, Sikar",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 44400,
+      "likes": 25,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Expired",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 19"
+      }
+    },
+    {
+      "n": 19,
+      "posted": "2026-01-19",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTsYRDoid0r/",
+      "topic": "Which NLUs are the top ones",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 297,
+      "likes": 15,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 20"
+      }
+    },
+    {
+      "n": 20,
+      "posted": "2026-01-20",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTu9POZiYB7/",
+      "topic": "CLAT vs AILET vs CUET for law",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 687,
+      "likes": 20,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen; matches bio (CLAT & AILET)",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 21"
+      }
+    },
+    {
+      "n": 21,
+      "posted": "2026-01-21",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DTxef7QCUAs/",
+      "topic": "Student story: 1:1 counselling cleared her doubts",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 535,
+      "likes": 21,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Testimonial + counselling",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 22"
+      }
+    },
+    {
+      "n": 22,
+      "posted": "2026-01-24",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DT5MyasiXMs/",
+      "topic": "Quant decides single/double-digit ranks",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 379,
+      "likes": 19,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 23"
+      }
+    },
+    {
+      "n": 23,
+      "posted": "2026-01-26",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DT965pYgY5m/",
+      "topic": "Honouring students at the Next Scholarship Test",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 4935,
+      "likes": 60,
+      "comments": 4,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Event, not CLAT; stays on the Sikar page",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 24"
+      }
+    },
+    {
+      "n": 24,
+      "posted": "2026-01-27",
+      "type": "photo",
+      "link": "https://www.instagram.com/p/DUArqrtCbuQ/",
+      "topic": "Scholarship test rankers (names)",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": null,
+      "likes": 75,
+      "comments": 2,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Not CLAT; lists minors' names",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 25"
+      }
+    },
+    {
+      "n": 25,
+      "posted": "2026-01-30",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DUI4cI0iZ13/",
+      "topic": "70-80 with school; imagine one focused year",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 744,
+      "likes": 29,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Speaks to droppers; evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 26"
+      }
+    },
+    {
+      "n": 26,
+      "posted": "2026-02-03",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DUSyFIbiXx8/",
+      "topic": "Basic Mathematics classes starting",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 2408,
+      "likes": 47,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Not CLAT; Sikar notice",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 27"
+      }
+    },
+    {
+      "n": 27,
+      "posted": "2026-02-09",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DUijTEiCcCm/",
+      "topic": "Best CLAT prep doesn't disturb school",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 430,
+      "likes": 24,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Exactly our positioning",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 28"
+      }
+    },
+    {
+      "n": 28,
+      "posted": "2026-02-10",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DUlJRi1CTEp/",
+      "topic": "Your CLAT journey starts here; book your seat (currently PINNED)",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 709,
+      "likes": 21,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "UNPIN + ARCHIVE",
+      "verdict_actions": [
+        "archive",
+        "unpin"
+      ],
+      "reason": "Seat-booking ad, weakest pin (709 views)",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 29"
+      }
+    },
+    {
+      "n": 29,
+      "posted": "2026-02-19",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DU8T5Ihge7B/",
+      "topic": "Right strategy > endless studying (currently PINNED)",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 2142,
+      "likes": 43,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP, UNPIN",
+      "verdict_actions": [
+        "keep",
+        "unpin"
+      ],
+      "reason": "Good, but not a top-3 pin",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 30"
+      }
+    },
+    {
+      "n": 30,
+      "posted": "2026-02-20",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DU-qHhNCScp/",
+      "topic": "CLAT + UPSC overlap in 11th-12th",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 2002,
+      "likes": 41,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 31"
+      }
+    },
+    {
+      "n": 31,
+      "posted": "2026-02-21",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DVBereWidJr/",
+      "topic": "Crack CLAT current affairs: the approach",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 1702,
+      "likes": 32,
+      "comments": 1,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 32"
+      }
+    },
+    {
+      "n": 32,
+      "posted": "2026-03-06",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DVi7wCXCKJT/",
+      "topic": "Board subject combination for CLAT: take Eco",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 865,
+      "likes": 20,
+      "comments": 1,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen; boards + CLAT angle",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 33"
+      }
+    },
+    {
+      "n": 33,
+      "posted": "2026-03-12",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DVyv1MBk2er/",
+      "topic": "Scholarship NeXt Exam, 15 Mar",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 289000,
+      "likes": 9,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Expired date",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 34"
+      }
+    },
+    {
+      "n": 34,
+      "posted": "2026-03-14",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DV5JDadCKBr/",
+      "topic": "Admissions open: 1-year and 2-year CLAT programs",
+      "owner_raw": "Collab owned by [personal handle redacted]",
+      "ownership": "collab",
+      "collab_owner_handle": "[personal handle redacted]",
+      "views": 3153,
+      "likes": 54,
+      "comments": 1,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Admissions ad from the last cycle",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 35"
+      }
+    },
+    {
+      "n": 35,
+      "posted": "2026-03-22",
+      "type": "photo",
+      "link": "https://www.instagram.com/p/DWN6eQnFP9-/",
+      "topic": "Scholarship test top achievers (names)",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": null,
+      "likes": 90,
+      "comments": 4,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Not CLAT; minors' names",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 36"
+      }
+    },
+    {
+      "n": 36,
+      "posted": "2026-03-22",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DWMX9_diV0Y/",
+      "topic": "Student testimonial, CLAT batch (currently PINNED)",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 3639,
+      "likes": 42,
+      "comments": 3,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP + PIN",
+      "verdict_actions": [
+        "keep",
+        "pin"
+      ],
+      "reason": "Best trust signal we have",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 37"
+      }
+    },
+    {
+      "n": 37,
+      "posted": "2026-04-02",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DWoRsgggYut/",
+      "topic": "A CLAT student shares his experience",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 2258,
+      "likes": 34,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Testimonial",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 38"
+      }
+    },
+    {
+      "n": 38,
+      "posted": "2026-04-08",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DW3l8uOAY4J/",
+      "topic": "Team D? (fun clip)",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 5124,
+      "likes": 54,
+      "comments": 1,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Not CLAT; stays on the Sikar page",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 39"
+      }
+    },
+    {
+      "n": 39,
+      "posted": "2026-04-10",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DW9Q8sOAX4U/",
+      "topic": "Expert session with [guest expert] (NLSIU Bangalore)",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 2659,
+      "likes": 33,
+      "comments": 2,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "CLAT-relevant expert; authority",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 40"
+      }
+    },
+    {
+      "n": 40,
+      "posted": "2026-04-13",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DXEstW6jU3-/",
+      "topic": "Top NLU = strategy + timing; start right after 10th",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 322000,
+      "likes": 15,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen; Class 10-11 hook",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 41"
+      }
+    },
+    {
+      "n": 41,
+      "posted": "2026-04-15",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DXJ44YPDhoi/",
+      "topic": "Choose Legal Studies in 11th-12th",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 1059,
+      "likes": 21,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 42"
+      }
+    },
+    {
+      "n": 42,
+      "posted": "2026-04-16",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DXMT4WbAa0z/",
+      "topic": "'What started as an idea is now in every student's hands'",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 7635,
+      "likes": 83,
+      "comments": 1,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Not CLAT",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 43"
+      }
+    },
+    {
+      "n": 43,
+      "posted": "2026-04-20",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DXW_C2eCeVx/",
+      "topic": "Want to know more about CLAT? Call us",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 1226,
+      "likes": 27,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Pure contact ad, no value",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 44"
+      }
+    },
+    {
+      "n": 44,
+      "posted": "2026-04-23",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DXes2ToAWJJ/",
+      "topic": "Why Economics matters if you're opting for CLAT",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 2816,
+      "likes": 31,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 45"
+      }
+    },
+    {
+      "n": 45,
+      "posted": "2026-04-26",
+      "type": "photo",
+      "link": "https://www.instagram.com/p/DXmXLbNFGqj/",
+      "topic": "Our CLAT students beat law students at an ICJ moot",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": null,
+      "likes": 88,
+      "comments": 5,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP + PIN",
+      "verdict_actions": [
+        "keep",
+        "pin"
+      ],
+      "reason": "Strongest proof on the page",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 46"
+      }
+    },
+    {
+      "n": 46,
+      "posted": "2026-04-30",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DXw1IjIhMBN/",
+      "topic": "First competition, first win",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 6778,
+      "likes": 65,
+      "comments": 2,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Proof (same win)",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 47"
+      }
+    },
+    {
+      "n": 47,
+      "posted": "2026-05-02",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DX2DHr5pjrs/",
+      "topic": "Skip IIT? Go to IIM after 12th (IPMAT)",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 3124,
+      "likes": 56,
+      "comments": 7,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "IPMAT content; belongs on the IPMAT page",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 48"
+      }
+    },
+    {
+      "n": 48,
+      "posted": "2026-05-05",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DX9h4zZBqoe/",
+      "topic": "What difference you'll feel at Elevate; admissions open",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 4042,
+      "likes": 47,
+      "comments": 1,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "General admissions ad",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 49"
+      }
+    },
+    {
+      "n": 49,
+      "posted": "2026-05-07",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DYClcjopld1/",
+      "topic": "Second batch from 15 May",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 51500,
+      "likes": 23,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Expired",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 50"
+      }
+    },
+    {
+      "n": 50,
+      "posted": "2026-05-09",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DYH6Zv7JqJf/",
+      "topic": "SUPER 20 batch for repeaters, 15 May",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 46600,
+      "likes": 31,
+      "comments": 0,
+      "boosted_flag_raw": "likely ad",
+      "likely_boosted": true,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Expired",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 51"
+      }
+    },
+    {
+      "n": 51,
+      "posted": "2026-05-15",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DYXNbiBhAK4/",
+      "topic": "Startup Tank teaser",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 4060,
+      "likes": 50,
+      "comments": 2,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Not CLAT",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 52"
+      }
+    },
+    {
+      "n": 52,
+      "posted": "2026-05-16",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DYZ0mQShvRQ/",
+      "topic": "Startup Tank live, classes 9-12",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 2544,
+      "likes": 47,
+      "comments": 7,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Not CLAT",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 53"
+      }
+    },
+    {
+      "n": 53,
+      "posted": "2026-05-17",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DYcYEBGJ6d1/",
+      "topic": "Free 1:1 counselling",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 449,
+      "likes": 15,
+      "comments": 1,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Duplicate of the stronger 27 Dec counselling reel",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 54"
+      }
+    },
+    {
+      "n": 54,
+      "posted": "2026-06-23",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DZ7zJeqBD44/",
+      "topic": "Startup Tank memories",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 5723,
+      "likes": 48,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "ARCHIVE",
+      "verdict_actions": [
+        "archive"
+      ],
+      "reason": "Not CLAT",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 55"
+      }
+    },
+    {
+      "n": 55,
+      "posted": "2026-07-07",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DafJwwvJacz/",
+      "topic": "5 mistakes to avoid, CLAT 2027 ([faculty:current_affairs])",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 444,
+      "likes": 17,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Value",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 56"
+      }
+    },
+    {
+      "n": 56,
+      "posted": "2026-07-10",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DampBGSB2Z7/",
+      "topic": "Top 5 highlights, PM Modi's Indonesia visit ([faculty:current_affairs])",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 2328,
+      "likes": 26,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Current affairs series",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 57"
+      }
+    },
+    {
+      "n": 57,
+      "posted": "2026-07-22",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DbFy9vMpkTT/",
+      "topic": "CLAT current affairs strategy ([faculty:current_affairs])",
+      "owner_raw": "own post",
+      "ownership": "own_post",
+      "collab_owner_handle": null,
+      "views": 1220,
+      "likes": 19,
+      "comments": 0,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Evergreen",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 58"
+      }
+    },
+    {
+      "n": 58,
+      "posted": "2026-09-16",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DdWLy5fh7-B/",
+      "topic": "Be ready for CLAT 2027 (warning)",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 1600,
+      "likes": null,
+      "comments": null,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Timely",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 59"
+      }
+    },
+    {
+      "n": 59,
+      "posted": "2026-10-03",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DeCAluqBe7V/",
+      "topic": "CLAT 2027 aspirants: start seriously",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 989,
+      "likes": null,
+      "comments": null,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Timely",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 60"
+      }
+    },
+    {
+      "n": 60,
+      "posted": "2026-10-05",
+      "type": "reel",
+      "link": "https://www.instagram.com/p/DeHKQd1BIVw/",
+      "topic": "Mock analysis is the real game",
+      "owner_raw": "Collab owned by @elevateeducation_sikar",
+      "ownership": "collab",
+      "collab_owner_handle": "@elevateeducation_sikar",
+      "views": 754,
+      "likes": null,
+      "comments": null,
+      "boosted_flag_raw": null,
+      "likely_boosted": false,
+      "verdict_raw": "KEEP",
+      "verdict_actions": [
+        "keep"
+      ],
+      "reason": "Timely; matches the 60-day plan",
+      "status": "documented",
+      "source": {
+        "path": "content-os/accounts/instagram-clat/post-audit.csv",
+        "locator": "line 61"
+      }
+    }
+  ]
+}

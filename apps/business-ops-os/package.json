@@ -1,0 +1,39 @@
+{
+  "name": "@elevate/business-ops-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Business Ops OS (port 3003, basePath /ops). Skeleton from the Foundation wave; owned by the Business Ops team.",
+  "exports": {
+    "./domain": "./src/domain/index.ts",
+    "./server": "./src/server/index.ts",
+    "./seed": "./seed/index.ts"
+  },
+  "scripts": {
+    "dev": "next dev --port 3003",
+    "build": "next build",
+    "start": "next start --port 3003",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@elevate/authentication": "0.1.0",
+    "@elevate/authorization": "0.1.0",
+    "@elevate/configuration": "0.1.0",
+    "@elevate/database": "0.1.0",
+    "@elevate/notifications": "0.1.0",
+    "@elevate/server-kit": "0.1.0",
+    "@elevate/shared-contracts": "0.1.0",
+    "@elevate/shared-types": "0.1.0",
+    "@elevate/shared-ui": "0.1.0",
+    "drizzle-orm": "0.45.4",
+    "next": "16.4.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@elevate/testing": "0.1.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
+  }
+}

@@ -1,0 +1,342 @@
+{
+  "meta": {
+    "source_files": [
+      "handover/Claude.md"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records",
+      "build_up",
+      "subjects"
+    ],
+    "notes": [
+      "Online Class 12 boards + CUET: only Accountancy is planned (226 hours, 60-minute classes). Source is the handover narrative (Claude.md section 9); no workbook holds this plan.",
+      "CBSE chapter hours sum to the 118 CBSE teaching hours; the remaining 108 hours (CUET approach, practice, assessments, discussions, revision) are not itemised per chapter in the source.",
+      "No project guidance hours (removing institute project guidance does not remove school/board obligations). Assessment durations and current-year content must be checked before implementation.",
+      "classes = hours because classes are 60 minutes."
+    ]
+  },
+  "summary": {
+    "programme": "ONL-C12-CUET",
+    "subject": "Accountancy",
+    "class_minutes": 60,
+    "total_hours": 226,
+    "cbse_teaching_hours": 118,
+    "status": "provisional",
+    "programme_status": "paused",
+    "source": [
+      {
+        "path": "handover/Claude.md",
+        "locator": "line 165"
+      },
+      {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      },
+      {
+        "path": "handover/Claude.md",
+        "locator": "line 163"
+      }
+    ]
+  },
+  "build_up": [
+    {
+      "step": "CBSE teaching",
+      "add_hours": 118,
+      "running_total": 118,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 165"
+      }
+    },
+    {
+      "step": "CUET approach",
+      "add_hours": 4,
+      "running_total": 122,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 165"
+      }
+    },
+    {
+      "step": "Practice (board 24 / CUET 16)",
+      "add_hours": 40,
+      "running_total": 162,
+      "split": {
+        "board": 24,
+        "cuet": 16
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 165"
+      }
+    },
+    {
+      "step": "Assessments",
+      "add_hours": 30,
+      "running_total": 192,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 165"
+      }
+    },
+    {
+      "step": "Discussions",
+      "add_hours": 13,
+      "running_total": 205,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 165"
+      }
+    },
+    {
+      "step": "Revision (board 15 / CUET 6)",
+      "add_hours": 21,
+      "running_total": 226,
+      "split": {
+        "board": 15,
+        "cuet": 6
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 165"
+      }
+    }
+  ],
+  "records": [
+    {
+      "seq": 1,
+      "chapter": "Fundamentals",
+      "chapter_note": null,
+      "cbse_teaching_hours": 12,
+      "class_minutes": 60,
+      "classes": 12,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 2,
+      "chapter": "Goodwill",
+      "chapter_note": null,
+      "cbse_teaching_hours": 5,
+      "class_minutes": 60,
+      "classes": 5,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 3,
+      "chapter": "ChangePSR",
+      "chapter_note": "source abbreviation; read as 'Change in profit-sharing ratio'",
+      "cbse_teaching_hours": 6,
+      "class_minutes": 60,
+      "classes": 6,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 4,
+      "chapter": "Admission",
+      "chapter_note": null,
+      "cbse_teaching_hours": 12,
+      "class_minutes": 60,
+      "classes": 12,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 5,
+      "chapter": "Retirement",
+      "chapter_note": null,
+      "cbse_teaching_hours": 10,
+      "class_minutes": 60,
+      "classes": 10,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 6,
+      "chapter": "Death",
+      "chapter_note": null,
+      "cbse_teaching_hours": 5,
+      "class_minutes": 60,
+      "classes": 5,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 7,
+      "chapter": "Dissolution",
+      "chapter_note": null,
+      "cbse_teaching_hours": 9,
+      "class_minutes": 60,
+      "classes": 9,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 8,
+      "chapter": "Shares",
+      "chapter_note": null,
+      "cbse_teaching_hours": 15,
+      "class_minutes": 60,
+      "classes": 15,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 9,
+      "chapter": "Debentures",
+      "chapter_note": null,
+      "cbse_teaching_hours": 9,
+      "class_minutes": 60,
+      "classes": 9,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 10,
+      "chapter": "Company Financial Statements",
+      "chapter_note": null,
+      "cbse_teaching_hours": 5,
+      "class_minutes": 60,
+      "classes": 5,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 11,
+      "chapter": "Analysis Introduction",
+      "chapter_note": null,
+      "cbse_teaching_hours": 2,
+      "class_minutes": 60,
+      "classes": 2,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 12,
+      "chapter": "Comparative/Common-size",
+      "chapter_note": null,
+      "cbse_teaching_hours": 4,
+      "class_minutes": 60,
+      "classes": 4,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 13,
+      "chapter": "Ratios",
+      "chapter_note": null,
+      "cbse_teaching_hours": 12,
+      "class_minutes": 60,
+      "classes": 12,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    },
+    {
+      "seq": 14,
+      "chapter": "Cash Flow",
+      "chapter_note": null,
+      "cbse_teaching_hours": 12,
+      "class_minutes": 60,
+      "classes": 12,
+      "status": "provisional",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 167"
+      }
+    }
+  ],
+  "subjects": [
+    {
+      "subject": "Accountancy",
+      "status": "provisional",
+      "detail": "226-hour itemised plan (this file)",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 165"
+      }
+    },
+    {
+      "subject": "Mathematics",
+      "status": "not_started",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 163"
+      }
+    },
+    {
+      "subject": "Business Studies",
+      "status": "not_started",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 163"
+      }
+    },
+    {
+      "subject": "Economics",
+      "status": "not_started",
+      "note": "Needs additional content",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 163"
+      }
+    },
+    {
+      "subject": "English",
+      "status": "not_started",
+      "note": "English board and entrance Verbal are different",
+      "source": {
+        "path": "handover/Claude.md",
+        "locator": "line 163"
+      }
+    }
+  ]
+}

@@ -1,0 +1,1460 @@
+{
+  "meta": {
+    "source_files": [
+      "content-os/CLAUDE.md",
+      "content-os/HANDOFF.md",
+      "content-os/accounts/instagram-clat/PROFILE.md",
+      "content-os/accounts/instagram-clat/README.md",
+      "content-os/accounts/instagram-clat/calendar-oct-dec-2026.md",
+      "content-os/accounts/instagram-clat/post-audit.csv",
+      "content-os/accounts/linkedin-{founder}/README.md",
+      "content-os/accounts/youtube-clat/README.md",
+      "content-os/brand/BRAND.md",
+      "content-os/courses/README.md",
+      "content-os/library/_broll/README.md",
+      "content-os/tracker/ideas.csv",
+      "handover/Claude.md",
+      "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+      "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records"
+    ],
+    "notes": [
+      "Machine-readable brand/claims rules for the approval workflow. matcher=null means not meaningfully checkable by text (manual_check=true).",
+      "Regex matchers are deliberately broad and mostly 'flag_for_review'; 'block' only where a match is almost certainly a violation.",
+      "matcher.field says what the matcher reads: text (caption/script/on-screen text), title, format, or date_ist (scheduling).",
+      "source_text is the exact source line with personal names replaced by role labels.",
+      "Counts by kind: {'banned_phrase': 19, 'channel_rule': 13, 'requires_approval': 6, 'consent': 7}."
+    ]
+  },
+  "account_codes": [
+    "IGC",
+    "YTC",
+    "IGU",
+    "YTU",
+    "IGI",
+    "YTI",
+    "IGS",
+    "LIP",
+    "LI",
+    "IGN"
+  ],
+  "records": [
+    {
+      "id": "CR-001",
+      "kind": "banned_phrase",
+      "description": "Never use 'after 12th' as a framing for when students should join (they join in Class 10, 11 or 12).",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bafter\\s+(the\\s+)?(12th|class\\s*12|class\\s*xii)\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "flag_for_review",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **Never say \"after 12th\"** as if students should join then: they join in Class 10, 11 or 12 and prepare alongside school. (\"IIM straight after Class 12\" describes the programme's admission, which is fine.)",
+      "notes": "Exception in the same line: 'IIM straight after Class 12' describing the programme's admission is fine, so a match is flagged for review, not auto-blocked.",
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 35"
+        },
+        {
+          "path": "content-os/HANDOFF.md",
+          "locator": "line 111"
+        }
+      ]
+    },
+    {
+      "id": "CR-002",
+      "kind": "banned_phrase",
+      "description": "Never mention RP Mody & Co in public content (Deloitte is the brand to use).",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bR\\.?\\s*P\\.?\\s*Mody\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **Never mention RP Mody & Co in public content** (not a recognisable brand). Deloitte is the brand to use.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 41"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 70"
+        }
+      ]
+    },
+    {
+      "id": "CR-003",
+      "kind": "banned_phrase",
+      "description": "Never mention NLSIU or the founder's MBL studies in public content.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bNLSIU\\b|\\bMBL\\b|Master of Business Laws",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "flag_for_review",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **Never mention NLSIU / the MBL (his ongoing studies) in public content** ([founder], 6 Oct 2026):",
+      "notes": "Aimed at founder-credential mentions; an unrelated NLSIU reference (e.g. a guest speaker's institution) needs human review, hence flag.",
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 42"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 70"
+        }
+      ]
+    },
+    {
+      "id": "CR-004",
+      "kind": "banned_phrase",
+      "description": "Do not label Elevate as 'online' (no mode in the message).",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bonline\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "flag_for_review",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **No location, no mode.** Don't mention Sikar / the offline centre, and don't label Elevate as",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 39"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 70"
+        }
+      ]
+    },
+    {
+      "id": "CR-005",
+      "kind": "banned_phrase",
+      "description": "No Sikar / offline-centre mentions except on the Elevate Sikar Instagram page.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bSikar\\b|\\boffline\\s+(cent(re|er)|coaching|classes?)\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **No location, no mode.** Don't mention Sikar / the offline centre, and don't label Elevate as",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 39"
+        },
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 38"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 49"
+        }
+      ]
+    },
+    {
+      "id": "CR-006",
+      "kind": "banned_phrase",
+      "description": "No student results, toppers, selections, ranks or '100% results' claims in year one.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\b(our\\s+)?toppers?\\b|\\bAIR\\s*\\d+|\\b\\d+\\+?\\s*selections?\\b|\\b100\\s*%\\s*results?\\b|\\bselected\\s+(in|at|for)\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **First year: no student results exist yet.** No \"our toppers\", \"X selections\", \"100%",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 194"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 70"
+        },
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 191"
+        }
+      ]
+    },
+    {
+      "id": "CR-007",
+      "kind": "banned_phrase",
+      "description": "Avoid AIR / topper / 'best faculty' claims.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bbest\\s+(faculty|teachers?|coaching)\\b|\\bAIR\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "flag_for_review",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "choose, then prepare\" for parents. That is Elevate's space. Avoid AIR / topper / \"best faculty\" claims.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 84"
+        }
+      ]
+    },
+    {
+      "id": "CR-008",
+      "kind": "banned_phrase",
+      "description": "'Full marks' / '99%ile' only as a goal, never as a promise or past result.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bfull\\s+marks\\b|\\b99\\s*(%ile|percentile)\\b|\\bguarantee(d)?\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "flag_for_review",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- \"Full marks\" / \"99%ile\" are fine as the *goal* a strategy aims for, never as a promise or a",
+      "notes": "Context decides goal vs promise; always human review.",
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 196"
+        }
+      ]
+    },
+    {
+      "id": "CR-009",
+      "kind": "banned_phrase",
+      "description": "No CA vs CLAT comparisons (rejected by the founder on 6 Oct 2026).",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bCA\\s*(vs\\.?|versus|or)\\s*CLAT\\b|\\bCLAT\\s*(vs\\.?|versus|or)\\s*CA\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "**Cadence:** 6 posts/week (one per CLAT section + strategy; see strategy-oct-dec-2026.md) + stories. Reels 20-45 s (hook on screen in the first second), carousels (legal reasoning, NLU fees/ROI, section practice). No CA vs CLAT comparisons (rejected 6 Oct), countdown to 6 Dec 2026.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/accounts/instagram-clat/README.md",
+          "locator": "line 3"
+        },
+        {
+          "path": "content-os/tracker/ideas.csv",
+          "locator": "line 22"
+        }
+      ]
+    },
+    {
+      "id": "CR-010",
+      "kind": "banned_phrase",
+      "description": "CA Foundation only: never imply CA Inter or Final are offered.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bCA\\s+(Inter|Intermediate|Final)\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "| CA Foundation | CA aspirants at Foundation level ([founder] teaches it). **Inter and Final are not offered yet**: never imply them. |",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 24"
+        }
+      ]
+    },
+    {
+      "id": "CR-011",
+      "kind": "banned_phrase",
+      "description": "The founder's Deloitte tenure is about 1 year: never say 'four years'.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "Deloitte[^.\\n]{0,80}\\b(four|4)\\s+years\\b|\\b(four|4)\\s+years\\b[^.\\n]{0,80}Deloitte",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **Deloitte**, Audit & Assurance Associate, Mumbai, 2022-2023 (about 1 year: never say \"four years\")",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 102"
+        }
+      ]
+    },
+    {
+      "id": "CR-012",
+      "kind": "banned_phrase",
+      "description": "Credential is NMIMS Rank 3 (the LinkedIn profile wrongly says Rank 2).",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bRank\\s*(2|two)\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **B.Com (Finance), NMIMS**: Rank 3 (his LinkedIn wrongly says Rank 2), TEE topper",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 101"
+        }
+      ]
+    },
+    {
+      "id": "CR-013",
+      "kind": "banned_phrase",
+      "description": "The founder's title is Co-Founder, not Founder.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "(?<!co-)(?<!co )\\bfounder\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "flag_for_review",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **Co-Founder**, Elevate Education, since Dec 2025 (title is Co-Founder, not Founder)",
+      "notes": "Pattern catches 'Founder' not preceded by 'Co-'; generic uses ('founders' as an audience) need review.",
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 106"
+        }
+      ]
+    },
+    {
+      "id": "CR-014",
+      "kind": "banned_phrase",
+      "description": "Do not use the unverified '44 lakh commerce students' or '78% unaware (CBSE 2024)' figures.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\b44\\s*lakh\\b|\\b78\\s*%",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "Do NOT use: the \"44 lakh commerce students\" or \"78% unaware (CBSE 2024)\" figures (both unverified).",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 79"
+        }
+      ]
+    },
+    {
+      "id": "CR-015",
+      "kind": "banned_phrase",
+      "description": "Team size is '15-20 teachers'; never round it up.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\b(2[1-9]|[3-9]\\d|\\d{3,})\\+?\\s+(expert\\s+)?teachers\\b|\\b20\\s*\\+\\s*(expert\\s+)?teachers\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "Team size: **15–20 teachers** (confirmed 2026-10-05). Say \"a team of 15–20 expert teachers\";",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 94"
+        }
+      ]
+    },
+    {
+      "id": "CR-016",
+      "kind": "banned_phrase",
+      "description": "Never use the chevron alone as the logo; the logo is the lowercase 'elevate' wordmark.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **The logo is the \"elevate\" wordmark** (lowercase, the chevron is the \"a\"); never use the chevron alone as the logo.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 36"
+        },
+        {
+          "path": "content-os/HANDOFF.md",
+          "locator": "line 110"
+        }
+      ]
+    },
+    {
+      "id": "CR-017",
+      "kind": "banned_phrase",
+      "description": "CA is not promoted as a course; no CA-course marketing or CA exam content (the founder's CA stays a personal credential).",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **CA is not promoted as a course.** CA Foundation exists, but no CA-course marketing or CA exam",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 60"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 71"
+        }
+      ]
+    },
+    {
+      "id": "CR-018",
+      "kind": "banned_phrase",
+      "description": "No invented anecdotes; stories only if the founder confirmed them.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- Facts only from BRAND.md, the course folders (with sources) or [founder]. Stories only if he confirmed them.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 69"
+        }
+      ]
+    },
+    {
+      "id": "CR-019",
+      "kind": "banned_phrase",
+      "description": "Do not list what the founder personally teaches in bios or profiles.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **Don't list what [founder] personally teaches** in bios or profiles; it doesn't matter to the reader.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 45"
+        }
+      ]
+    },
+    {
+      "id": "CR-020",
+      "kind": "channel_rule",
+      "description": "'Taught by [founder]' only for CA Foundation, CLAT Legal Reasoning and Class 11-12 BST; 'our faculty' for everything else.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "**[founder] personally teaches:** CA Foundation · CLAT Legal Reasoning · Class 11 & 12 Business",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 109"
+        },
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 110"
+        }
+      ]
+    },
+    {
+      "id": "CR-021",
+      "kind": "channel_rule",
+      "description": "Founder's name and credentials only on the founder's own footage; ask other teachers for theirs.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "credentials on [founder]'s own footage. For another teacher, ask for their name and credentials.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 133"
+        }
+      ]
+    },
+    {
+      "id": "CR-022",
+      "kind": "channel_rule",
+      "description": "CLAT page goal is presence, not a course launch: no pitch, no 'join us', no 'meet the faculty' launch.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bjoin\\s+us\\b|\\benrol+\\s+now\\b|\\badmissions?\\s+(are\\s+)?open\\b|\\bbook\\s+your\\s+seat\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "flag_for_review",
+      "applies_to": [
+        "IGC",
+        "YTC"
+      ],
+      "status": "approved",
+      "source_text": "- **Goal now = presence, not a course launch.** No course is being sold; no \"join us\" pitch, no \"meet the faculty\" launch.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 114"
+        },
+        {
+          "path": "content-os/accounts/instagram-clat/PROFILE.md",
+          "locator": "line 2"
+        }
+      ]
+    },
+    {
+      "id": "AP-001",
+      "kind": "requires_approval",
+      "description": "Nothing is scheduled or published without the founder's explicit yes.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- Nothing is scheduled or published without [founder]'s explicit yes.",
+      "notes": "Workflow gate: a placement cannot move to scheduled/published without an approval record from the approver role.",
+      "source": [
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 68"
+        }
+      ]
+    },
+    {
+      "id": "AP-002",
+      "kind": "requires_approval",
+      "description": "Facts only from BRAND.md, a course facts file with a source, or the founder.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- Facts only from BRAND.md, the course folders (with sources) or [founder]. Stories only if he confirmed them.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 69"
+        },
+        {
+          "path": "content-os/courses/README.md",
+          "locator": "line 5"
+        }
+      ]
+    },
+    {
+      "id": "AP-003",
+      "kind": "requires_approval",
+      "description": "Items marked (confirm) must not go on screen until the founder confirms them.",
+      "matcher": {
+        "type": "literal",
+        "pattern": "(confirm)",
+        "case_sensitive": false,
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "marked **(confirm)** must not go on screen until [founder] confirms them.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 5"
+        }
+      ]
+    },
+    {
+      "id": "AP-004",
+      "kind": "requires_approval",
+      "description": "An example the speaker didn't say is flagged for approval; subject facts must match the syllabus.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "syllabus. When I add an example the speaker didn't say, I flag it for approval.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 199"
+        }
+      ]
+    },
+    {
+      "id": "AP-005",
+      "kind": "requires_approval",
+      "description": "Market figures must be verified against the official source before use on screen.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "## 1c. Market facts we can use (researched 5 Oct 2026; verify against the official source before use on screen)",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 63"
+        }
+      ]
+    },
+    {
+      "id": "AP-006",
+      "kind": "requires_approval",
+      "description": "Fees, offers and sensitive claims need Institute Authority approval; no sole self-approval (offline marketing SOP MKT-03).",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "documented",
+      "source_text": "## 10. Marketing operations — paused",
+      "notes": "From the operations handover (Project B); agreed operating summary in the marketing workbooks, not a signed SOP.",
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 169"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'SOP Register'!G8"
+        }
+      ]
+    },
+    {
+      "id": "CH-001",
+      "kind": "channel_rule",
+      "description": "LinkedIn (founder personal): no hashtags.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "(^|\\s)#[A-Za-z0-9_]+",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "LI"
+      ],
+      "status": "approved",
+      "source_text": "one specific question; he replies to every comment in the first hour. No polls, no \"comment X\", no hashtags.",
+      "notes": "Stated in the personal LinkedIn README only; whether it also applies to the company page (LIP) is not stated.",
+      "source": [
+        {
+          "path": "content-os/accounts/linkedin-{founder}/README.md",
+          "locator": "line 6"
+        }
+      ]
+    },
+    {
+      "id": "CH-002",
+      "kind": "channel_rule",
+      "description": "LinkedIn (founder personal): no polls.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bpoll\\b",
+        "flags": "i",
+        "field": "format"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "LI"
+      ],
+      "status": "approved",
+      "source_text": "one specific question; he replies to every comment in the first hour. No polls, no \"comment X\", no hashtags.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/accounts/linkedin-{founder}/README.md",
+          "locator": "line 6"
+        }
+      ]
+    },
+    {
+      "id": "CH-003",
+      "kind": "channel_rule",
+      "description": "LinkedIn (founder personal): no 'comment X' calls to action.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bcomment\\s+(karo\\s+)?[\\\"“']?[A-Z]{2,}\\b|\\bcomment\\s+[\\\"“'][^\\\"”']+[\\\"”']",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "LI"
+      ],
+      "status": "approved",
+      "source_text": "one specific question; he replies to every comment in the first hour. No polls, no \"comment X\", no hashtags.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/accounts/linkedin-{founder}/README.md",
+          "locator": "line 6"
+        }
+      ]
+    },
+    {
+      "id": "CH-004",
+      "kind": "channel_rule",
+      "description": "LinkedIn is for parents, young professionals and founders; never student exam tips there.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "LI",
+        "LIP"
+      ],
+      "status": "approved",
+      "source_text": "- LinkedIn is for parents, young professionals and founders; never student exam tips there.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 72"
+        }
+      ]
+    },
+    {
+      "id": "CH-005",
+      "kind": "channel_rule",
+      "description": "LinkedIn (founder personal): at most 1 post a day and 4 a week.",
+      "matcher": {
+        "type": "schedule_limit",
+        "max_per_day": 1,
+        "max_per_week": 4,
+        "field": "date_ist"
+      },
+      "manual_check": false,
+      "action_on_match": "block",
+      "applies_to": [
+        "LI"
+      ],
+      "status": "approved",
+      "source_text": "**Cadence:** 4 posts/week, max 1 a day. **Formula:** his mistake or cost -> a framework the reader can use ->",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/accounts/linkedin-{founder}/README.md",
+          "locator": "line 5"
+        }
+      ]
+    },
+    {
+      "id": "CH-006",
+      "kind": "channel_rule",
+      "description": "Collab rule: pure exam content is posted solo on that exam's page; comparisons (e.g. CLAT vs IPMAT) and 'every path' content go out as an Instagram/YouTube Collab across the exam pages involved.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI"
+      ],
+      "status": "approved",
+      "source_text": "**Collab rule:** exam pages stay pure (solo); comparisons and \"every path\" content = Instagram/YouTube Collab across the exam pages involved. Each exam page gets its own teacher-face (TBD); [founder] = founder on comparisons and the big picture.",
+      "notes": "Structural check: a placement on an exam page whose idea is cross-exam (course GEN or a comparison) should have collab_with set.",
+      "source": [
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 51"
+        },
+        {
+          "path": "content-os/HANDOFF.md",
+          "locator": "line 66"
+        }
+      ]
+    },
+    {
+      "id": "CH-007",
+      "kind": "channel_rule",
+      "description": "Exam pages stay pure: a decided student must not see mixed content.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI"
+      ],
+      "status": "approved",
+      "source_text": "1. Exam pages must stay PURE: a decided CLAT student must not see a mix and get confused.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/HANDOFF.md",
+          "locator": "line 58"
+        }
+      ]
+    },
+    {
+      "id": "CH-008",
+      "kind": "channel_rule",
+      "description": "Commerce and CUET are equal domains on the Commerce + CUET page; neither is the main one.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGU",
+        "YTU"
+      ],
+      "status": "approved",
+      "source_text": "- **Commerce and CUET are equal domains** on the Commerce + CUET page; neither is the main one.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 37"
+        }
+      ]
+    },
+    {
+      "id": "CH-009",
+      "kind": "channel_rule",
+      "description": "YouTube CLAT titles: exam + year + intent.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\bCLAT\\b.*\\b20\\d\\d\\b",
+        "flags": "i",
+        "field": "title"
+      },
+      "manual_check": false,
+      "action_on_match": "flag_if_no_match",
+      "applies_to": [
+        "YTC"
+      ],
+      "status": "approved",
+      "source_text": "**Lives:** exam-day analysis on 6 Dec 2026 within 1-2 h. Titles: exam + year + intent.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/accounts/youtube-clat/README.md",
+          "locator": "line 4"
+        }
+      ]
+    },
+    {
+      "id": "CH-010",
+      "kind": "channel_rule",
+      "description": "CLAT Instagram contact button: email only; no WhatsApp or 'book a call' while not selling.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC"
+      ],
+      "status": "approved",
+      "source_text": "| Contact button | Email only (Elevate's official email). No WhatsApp or \"book a call\" while we're not selling. |",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/accounts/instagram-clat/PROFILE.md",
+          "locator": "line 14"
+        }
+      ]
+    },
+    {
+      "id": "CO-001",
+      "kind": "consent",
+      "description": "Students on camera (mostly minors) only with the student's and a parent's OK; without consent, faces blurred or hands/desks/papers only.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **Students on camera** are mostly minors. Use them only with the student's and a parent's OK; Elevate's enrolment form or a",
+      "notes": "Workflow gate: content showing students needs a recorded student consent and a parent/guardian consent reference before approval.",
+      "source": [
+        {
+          "path": "content-os/library/_broll/README.md",
+          "locator": "line 19"
+        },
+        {
+          "path": "content-os/accounts/instagram-clat/calendar-oct-dec-2026.md",
+          "locator": "line 62"
+        },
+        {
+          "path": "content-os/tracker/ideas.csv",
+          "locator": "line 54"
+        }
+      ]
+    },
+    {
+      "id": "CO-002",
+      "kind": "consent",
+      "description": "Do not publish minors' names (the audit archived scholarship-ranker posts that listed minors' names).",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "documented",
+      "source_text": "24,2026-01-27,photo,https://www.instagram.com/p/DUArqrtCbuQ/,Scholarship test rankers (names),Collab owned by @elevateeducation_sikar,,75,2,,ARCHIVE,Not CLAT; lists minors' names",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/accounts/instagram-clat/post-audit.csv",
+          "locator": "line 25"
+        }
+      ]
+    },
+    {
+      "id": "CO-003",
+      "kind": "consent",
+      "description": "Testimonials only when real ones are given with permission.",
+      "matcher": {
+        "type": "regex",
+        "pattern": "\\btestimonials?\\b",
+        "flags": "i",
+        "field": "text"
+      },
+      "manual_check": false,
+      "action_on_match": "flag_for_review",
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **First year: no student results exist yet.** No \"our toppers\", \"X selections\", \"100%",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 194"
+        }
+      ]
+    },
+    {
+      "id": "CO-004",
+      "kind": "consent",
+      "description": "In screenshots of comments/reposts/DMs, blur names, handles and profile photos of private people; DMs always blurred; names only for public publishers/creators.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- **Rule:** blur the names, handles and profile photos of private people. DMs are always blurred.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 166"
+        }
+      ]
+    },
+    {
+      "id": "CO-005",
+      "kind": "consent",
+      "description": "Never edit or invent a comment; use real screenshots only.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- Never edit or invent a comment; use real screenshots only.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 168"
+        }
+      ]
+    },
+    {
+      "id": "CO-006",
+      "kind": "consent",
+      "description": "Third-party clip (the founder's viral CA-result reel on his brother's account): needs the original file and the brother's OK, and must credit the brother's account; never imply it is a student result.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "approved",
+      "source_text": "- So the reel, its views and its followers belong to his brother's account. To use the clip, we need the original file and his brother's OK, and we credit the brother's account. We can't move the reel or its views to [founder]'s account.",
+      "notes": null,
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 152"
+        },
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 163"
+        }
+      ]
+    },
+    {
+      "id": "CO-007",
+      "kind": "consent",
+      "description": "Clip cutting (online coordinator SOP draft): remove private student information and unapproved student footage.",
+      "matcher": null,
+      "manual_check": true,
+      "action_on_match": null,
+      "applies_to": [
+        "IGC",
+        "YTC",
+        "IGU",
+        "YTU",
+        "IGI",
+        "YTI",
+        "IGS",
+        "LIP",
+        "LI",
+        "IGN"
+      ],
+      "status": "proposed",
+      "source_text": "## 11. Online operations — current operational focus",
+      "notes": "Source is the draft online coordinator SOP (docx), section 'Video clip cutting'.",
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 177"
+        },
+        {
+          "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+          "locator": "section 'Video clip cutting', paragraph 2"
+        }
+      ]
+    }
+  ]
+}

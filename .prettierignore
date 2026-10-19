@@ -8,3 +8,5 @@ data/legacy
 docs/EXISTING_PROJECT_AUDIT.md
 docs/PRODUCT_REQUIREMENTS.md
 *.md
+
+docs/code-map.html

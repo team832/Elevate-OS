@@ -1,0 +1,29 @@
+/* Business Ops OS layout helpers (uses shared-ui tokens; no new colours). */
+.el-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.el-board ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.el-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+.el-inline-form .el-field {
+  margin: 0;
+}
+.el-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  margin: 0;
+  max-height: 32rem;
+  overflow: auto;
+}

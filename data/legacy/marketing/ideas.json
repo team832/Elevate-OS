@@ -1,0 +1,1358 @@
+{
+  "meta": {
+    "source_files": [
+      "content-os/CLAUDE.md",
+      "content-os/tracker/ideas.csv"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records",
+      "duplicate_groups"
+    ],
+    "notes": [
+      "Every row of tracker/ideas.csv, all columns kept. The CSV column 'source' (where the idea came from) is renamed 'origin' so it does not clash with provenance 'source'.",
+      "Reused IDs are flagged in duplicate_of_legacy_id_group. The second occurrence gets a proposed non-colliding code (highest number for that prefix + 1, assigned in file order). Status 'proposed_renumbering': NOT applied; legacy_id is unchanged and remains the key used by versions.csv.",
+      "Per D-009 the new system stores its own UUID plus a unique business code; codes are never reused.",
+      "Highest legacy number per prefix: {'CLAT': 27, 'COM': 5, 'CUET': 5, 'GEN': 13, 'IPMAT': 5}."
+    ]
+  },
+  "columns_in_source": [
+    "id",
+    "title",
+    "course",
+    "pillar",
+    "source",
+    "master_asset",
+    "status",
+    "notes"
+  ],
+  "records": [
+    {
+      "legacy_id": "GEN-001",
+      "title": "Deloitte \"quiet Tuesday\" moment",
+      "course": "GEN",
+      "pillar": "Founder story",
+      "origin": "Taplio queue (confirmed true 6 Oct)",
+      "master_asset": "text + image",
+      "legacy_status": "published",
+      "status": "published",
+      "notes": null,
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 2"
+      }
+    },
+    {
+      "legacy_id": "GEN-002",
+      "title": "Parents: ask what happens after a bad mock",
+      "course": "GEN",
+      "pillar": "Parents",
+      "origin": "Taplio queue",
+      "master_asset": "text",
+      "legacy_status": "published",
+      "status": "published",
+      "notes": null,
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 3"
+      }
+    },
+    {
+      "legacy_id": "GEN-003",
+      "title": "Two coachings one calendar (boards + entrance together)",
+      "course": "GEN",
+      "pillar": "Selling point",
+      "origin": "LinkedIn plan",
+      "master_asset": "text + image (calendar)",
+      "legacy_status": "scheduled",
+      "status": "scheduled",
+      "notes": "Image: studio/out/linkedin/post-two-coachings.png",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [
+        "GEN-003-two-coachings"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 4"
+      }
+    },
+    {
+      "legacy_id": "GEN-004",
+      "title": "Counselling stops at a report; coaching assumes you chose",
+      "course": "GEN",
+      "pillar": "Positioning",
+      "origin": "Market research 5 Oct",
+      "master_asset": "text",
+      "legacy_status": "scheduled",
+      "status": "scheduled",
+      "notes": null,
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 5"
+      }
+    },
+    {
+      "legacy_id": "GEN-005",
+      "title": "Five doors: IPMAT CFA FRM CAIA then CA",
+      "course": "GEN",
+      "pillar": "Founder story",
+      "origin": "[founder] 6 Oct",
+      "master_asset": "text + image + reel",
+      "legacy_status": "held",
+      "status": "held",
+      "notes": "Target Wed 28 Oct in the winning slot; story in brand/BRAND.md",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 6"
+      }
+    },
+    {
+      "legacy_id": "GEN-006",
+      "title": "Every path after Class 12 Commerce (map)",
+      "course": "GEN",
+      "pillar": "Paths",
+      "origin": "LinkedIn plan",
+      "master_asset": "carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Wed 21 Oct; ideal for Elevate page",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 7"
+      }
+    },
+    {
+      "legacy_id": "IPMAT-001",
+      "title": "IIM Indore takes 150 after Class 12 (paths post)",
+      "course": "IPMAT",
+      "pillar": "Paths",
+      "origin": "Market research 5 Oct",
+      "master_asset": "text",
+      "legacy_status": "published",
+      "status": "published",
+      "notes": null,
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 8"
+      }
+    },
+    {
+      "legacy_id": "IPMAT-002",
+      "title": "IPMAT explained to a parent in 60 seconds",
+      "course": "IPMAT",
+      "pillar": "Paths",
+      "origin": "Video scripts",
+      "master_asset": "60s video",
+      "legacy_status": "scripted",
+      "status": "scripted",
+      "notes": "Script: studio/content/LinkedIn-video-scripts.md #1",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [
+        "IPMAT-002-ipmat-explained"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 9"
+      }
+    },
+    {
+      "legacy_id": "CUET-001",
+      "title": "CUET: the mistake is the subjects not the exam",
+      "course": "CUET",
+      "pillar": "Paths",
+      "origin": "Video scripts",
+      "master_asset": "60s video",
+      "legacy_status": "scripted",
+      "status": "scripted",
+      "notes": "Script #2",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [
+        "CUET-001-cuet-subjects"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 10"
+      }
+    },
+    {
+      "legacy_id": "COM-001",
+      "title": "Ratta isn't a study method (BST half yearly)",
+      "course": "COM",
+      "pillar": "Opinion",
+      "origin": "Video scripts",
+      "master_asset": "45s video",
+      "legacy_status": "scripted",
+      "status": "scripted",
+      "notes": "Script #3",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [
+        "COM-001-ratta-opinion"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 11"
+      }
+    },
+    {
+      "legacy_id": "CLAT-001",
+      "title": "CLAT explained to a parent in 60 seconds",
+      "course": "CLAT",
+      "pillar": "Paths",
+      "origin": "Video scripts",
+      "master_asset": "60s video",
+      "legacy_status": "scripted",
+      "status": "scripted",
+      "notes": "Script #4",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [
+        "CLAT-001-clat-explained"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 12"
+      }
+    },
+    {
+      "legacy_id": "CLAT-002",
+      "title": "CLAT 2027 registration closes 31 Oct: what parents should know",
+      "course": "CLAT",
+      "pillar": "Paths",
+      "origin": "Exam calendar",
+      "master_asset": "text + photo",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Thu 22 Oct",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 13"
+      }
+    },
+    {
+      "legacy_id": "GEN-007",
+      "title": "IIM NLU or DU: which fits your child",
+      "course": "GEN",
+      "pillar": "Paths",
+      "origin": "LinkedIn plan",
+      "master_asset": "text + photo",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Wed 28 Oct slot (may move for GEN-005)",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 14"
+      }
+    },
+    {
+      "legacy_id": "GEN-008",
+      "title": "CA CFA Big 4: what each path asks of a 17-year-old",
+      "course": "GEN",
+      "pillar": "Founder story",
+      "origin": "LinkedIn plan",
+      "master_asset": "text + photo",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Thu 29 Oct; never mention NLSIU",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 15"
+      }
+    },
+    {
+      "legacy_id": "GEN-009",
+      "title": "Month one building Elevate in public",
+      "course": "GEN",
+      "pillar": "Building Elevate",
+      "origin": "LinkedIn plan",
+      "master_asset": "text",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Sun 1 Nov",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 16"
+      }
+    },
+    {
+      "legacy_id": "COM-002",
+      "title": "BST: ratta se marks nahi aayenge (Business Environment explainer)",
+      "course": "COM",
+      "pillar": "Subject",
+      "origin": "[founder]'s footage 5 Oct",
+      "master_asset": "9:16 reel (draft 1)",
+      "legacy_status": "parked",
+      "status": "parked",
+      "notes": "For the Elevate Instagram page; draft at studio/out/bst-boards/",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [
+        "COM-002-bst-ratta-reel"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 17"
+      }
+    },
+    {
+      "legacy_id": "COM-003",
+      "title": "BST strategy carousel (8 slides)",
+      "course": "COM",
+      "pillar": "Subject",
+      "origin": "From COM-002",
+      "master_asset": "carousel (8 slides)",
+      "legacy_status": "edited",
+      "status": "edited",
+      "notes": "studio/out/bst-boards/carousel/",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [
+        "COM-003-bst-carousel"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 18"
+      }
+    },
+    {
+      "legacy_id": "IPMAT-003",
+      "title": "IPM vs CA after 12th Commerce: an honest comparison from a CA",
+      "course": "IPMAT",
+      "pillar": "Paths",
+      "origin": "scan ipmat 2026-10-06 (gap: stale comparisons)",
+      "master_asset": "long video + reel cuts + LinkedIn post",
+      "legacy_status": "on hold",
+      "status": "on_hold",
+      "notes": "Ask [founder]: he rejected CA comparisons for CLAT (6 Oct); same for IPMAT? | [founder] is the natural voice; don't market CA as a course: compare paths",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 19"
+      }
+    },
+    {
+      "legacy_id": "IPMAT-004",
+      "title": "Parents' guide to IPM: ₹38 lakh fees vs loan EMI vs median salary",
+      "course": "IPMAT",
+      "pillar": "Parents",
+      "origin": "scan ipmat 2026-10-06 (gap: parent content <600 views)",
+      "master_asset": "long video (Hinglish) + LinkedIn post + carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Say \"combined MBA+IPM batch\" honestly; check fees on the official site first",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 20"
+      }
+    },
+    {
+      "legacy_id": "IPMAT-005",
+      "title": "IPMAT for commerce students without maths: honest plan",
+      "course": "IPMAT",
+      "pillar": "Paths",
+      "origin": "scan ipmat 2026-10-06 (proven 85K non-maths story)",
+      "master_asset": "reel + Short + long",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": null,
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 21"
+      }
+    },
+    {
+      "legacy_id": "CLAT-003",
+      "title": "CA vs CLAT for commerce students: honest comparison",
+      "course": "CLAT",
+      "pillar": "Paths",
+      "origin": "scan clat 2026-10-06 (gap: only Quora threads)",
+      "master_asset": "long video + reel cuts",
+      "legacy_status": "rejected",
+      "status": "rejected",
+      "notes": "[founder] 6 Oct: no CA vs CLAT comparisons",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 22"
+      }
+    },
+    {
+      "legacy_id": "CLAT-004",
+      "title": "Law as a career after 12th Commerce (NLU vs non-NLU)",
+      "course": "CLAT",
+      "pillar": "Paths",
+      "origin": "scan clat 2026-10-06 (gap: no big brand owns it)",
+      "master_asset": "long video + carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": null,
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 23"
+      }
+    },
+    {
+      "legacy_id": "CLAT-005",
+      "title": "CLAT explained to parents in 10 minutes (Hinglish)",
+      "course": "CLAT",
+      "pillar": "Parents",
+      "origin": "scan clat 2026-10-06 (gap: parents watch but nobody explains to them)",
+      "master_asset": "long video + LinkedIn video",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Extends CLAT-001",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 24"
+      }
+    },
+    {
+      "legacy_id": "GEN-010",
+      "title": "Class 11 Commerce: start now (IPMAT / CLAT 2-year roadmap with boards)",
+      "course": "GEN",
+      "pillar": "Selling point",
+      "origin": "both scans 2026-10-06 (gap: Class 11 content near empty)",
+      "master_asset": "long video + carousel + LinkedIn post",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Elevate's offer in one piece",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 25"
+      }
+    },
+    {
+      "legacy_id": "GEN-011",
+      "title": "The CA result reaction that hit 15M views (end of the Five doors story)",
+      "course": "GEN",
+      "pillar": "Founder story",
+      "origin": "[founder] 2026-10-06",
+      "master_asset": "original clip from brother's IG account (to collect, with his OK) + press screenshots",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Also B-roll/proof for GEN-005 and founder posts. Verify view count + each publisher link before posting. Personal credential, not a student result. Plus screenshots of comments/reposts/DMs as a reaction B-roll montage (blur private names).",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [
+        "GEN-011-ca-result-viral"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 26"
+      }
+    },
+    {
+      "legacy_id": "CLAT-006",
+      "title": "Legal Reasoning in 60 seconds (series: principle + facts + answer)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy 2026-10-06",
+      "master_asset": "reel + weekly carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "2 reels/week; signature series; [founder] teaches LR",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 27"
+      }
+    },
+    {
+      "legacy_id": "CLAT-007",
+      "title": "CLAT current affairs: weekly 10 (quiz carousel) + daily story poll",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy 2026-10-06",
+      "master_asset": "carousel + stories",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Every Monday; written from sources; never copied",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 28"
+      }
+    },
+    {
+      "legacy_id": "CLAT-008",
+      "title": "CLAT 2027: the 8-week plan (was 60-day)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy 2026-10-06",
+      "master_asset": "reel + YouTube long",
+      "legacy_status": "scripted",
+      "status": "scripted",
+      "notes": "[faculty:current_affairs] records Thu 8 Oct; reel Fri 9 7 PM; long Sun 11 11 AM; script library/CLAT-008-8-week-plan/script.md",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [
+        "CLAT-008-8-week-plan"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 29"
+      }
+    },
+    {
+      "legacy_id": "CLAT-009",
+      "title": "Is maths needed for CLAT? Commerce edition",
+      "course": "CLAT",
+      "pillar": "Paths",
+      "origin": "intel.md title 3",
+      "master_asset": "long video + reel cuts",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Week 3",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 30"
+      }
+    },
+    {
+      "legacy_id": "CLAT-010",
+      "title": "CLAT admit card: check these 5 things",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy 2026-10-06",
+      "master_asset": "reel + carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "~3rd week Nov when released",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 31"
+      }
+    },
+    {
+      "legacy_id": "CLAT-011",
+      "title": "Attempt order and when to skip (-0.25 rule; pen-and-paper OMR)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy 2026-10-06",
+      "master_asset": "reel + carousel + Short",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Week 8",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 32"
+      }
+    },
+    {
+      "legacy_id": "CLAT-012",
+      "title": "CLAT exam-day guide (what to carry; timing)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "intel.md title 11",
+      "master_asset": "reel + Short",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Week 9",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 33"
+      }
+    },
+    {
+      "legacy_id": "CLAT-013",
+      "title": "6 Dec evening: honest paper reaction + what it means for CLAT 2028",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy 2026-10-06",
+      "master_asset": "reel + Short",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Don't race the big live analyses",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 34"
+      }
+    },
+    {
+      "legacy_id": "CLAT-014",
+      "title": "CLAT 2027 answer key: calculate your score",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "intel.md title 12",
+      "master_asset": "reel + carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "~8-11 Dec",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 35"
+      }
+    },
+    {
+      "legacy_id": "CLAT-015",
+      "title": "NLU fees: the real total cost (parents)",
+      "course": "CLAT",
+      "pillar": "Parents",
+      "origin": "intel.md title 6",
+      "master_asset": "long video + carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Week 6; verify fee figures before recording",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 36"
+      }
+    },
+    {
+      "legacy_id": "CLAT-016",
+      "title": "Monthly current affairs recap (Oct; Nov in 2 parts)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy 2026-10-06",
+      "master_asset": "long video",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Weeks 4 7 9",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 37"
+      }
+    },
+    {
+      "legacy_id": "CLAT-017",
+      "title": "How to analyse a mock (not just take it)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy 2026-10-06",
+      "master_asset": "reel + carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Week 5",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 38"
+      }
+    },
+    {
+      "legacy_id": "CLAT-018",
+      "title": "English/RC series: Read faster, answer better (one passage trick)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy rev 2026-10-06",
+      "master_asset": "reel (Wed) + Short",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Weekly",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 39"
+      }
+    },
+    {
+      "legacy_id": "CLAT-019",
+      "title": "Logical Reasoning series: Spot the flaw (assumption/strengthen/weaken)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy rev 2026-10-06",
+      "master_asset": "reel (Thu) + Short",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Weekly",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 40"
+      }
+    },
+    {
+      "legacy_id": "CLAT-020",
+      "title": "Quant in 60 seconds (commerce students' edge)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy rev 2026-10-06",
+      "master_asset": "reel (Fri) + Short",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Weekly; links to CLAT-009",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 41"
+      }
+    },
+    {
+      "legacy_id": "CLAT-021",
+      "title": "Last 30 days: how to score in each section (5 deep-dives)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy rev 2026-10-06",
+      "master_asset": "long videos + reels",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Nov weeks 6-7",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 42"
+      }
+    },
+    {
+      "legacy_id": "CLAT-022",
+      "title": "5 questions, 5 sections: score yourself",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT strategy rev 2026-10-06",
+      "master_asset": "carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Every other Sunday",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 43"
+      }
+    },
+    {
+      "legacy_id": "CLAT-023",
+      "title": "CLAT 2027 at a glance (dates · pattern · 5 sections · what it means)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT 15-day plan 2026-10-07",
+      "master_asset": "carousel (6 slides)",
+      "legacy_status": "ready",
+      "status": "ready",
+      "notes": "Studio comp clat-at-a-glance-carousel; files in Downloads/CLAT post 1 - at a glance; post Wed 7 Oct 7 PM on @elevate.clat; pin it",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [
+        "CLAT-023-at-a-glance"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 44"
+      }
+    },
+    {
+      "legacy_id": "COM-004",
+      "title": "BST boards: last chapter (Consumer Protection) = 2 questions 6 marks",
+      "course": "COM",
+      "pillar": "Exam strategy",
+      "origin": "[founder] recording 2026-10-07",
+      "master_asset": "9:16 reel FINAL (Downloads)",
+      "legacy_status": "ready",
+      "status": "ready",
+      "notes": "Studio comp bst-boards-2-916; for the Commerce & CUET page; script by [founder]",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 45"
+      }
+    },
+    {
+      "legacy_id": "CLAT-024",
+      "title": "5 hard questions 5 sections: score yourself #1 (quiz carousel)",
+      "course": "CLAT",
+      "pillar": "Exam strategy",
+      "origin": "CLAT 15-day plan v3",
+      "master_asset": "carousel (7 slides)",
+      "legacy_status": "ready",
+      "status": "ready",
+      "notes": "Post Thu 8 Oct 7 PM; studio comp clat-5q-carousel; key 1C 2B 3B 4C 5D (hard set; [founder] wants hardest-level questions)",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 46"
+      }
+    },
+    {
+      "legacy_id": "CLAT-025",
+      "title": "Nobel Prize 2026 Physiology or Medicine: optogenetics (CLAT current affairs)",
+      "course": "CLAT",
+      "pillar": "Current affairs",
+      "origin": "[faculty:current_affairs] recording 2026-10-09",
+      "master_asset": "9:16 reel 96s + YouTube Short",
+      "legacy_status": "ready",
+      "status": "ready",
+      "notes": "Studio comp clat-nobel-2026-916; fixed CLAT 2027 · Current Affairs tag; revision card at end",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 47"
+      }
+    },
+    {
+      "legacy_id": "CLAT-026",
+      "title": "CJP protest vs CEC + Article 19 (CLAT current affairs)",
+      "course": "CLAT",
+      "pillar": "Current affairs",
+      "origin": "[faculty:current_affairs] recording 2026-10-10",
+      "master_asset": "9:16 reel 73s + YouTube Short",
+      "legacy_status": "edited",
+      "status": "edited",
+      "notes": "Studio comp clat-ca-protest-916; allegation framed neutrally (EC denies; SC notice); post 10 Oct",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 48"
+      }
+    },
+    {
+      "legacy_id": "CUET-002",
+      "title": "CUET 2027: kya confirmed hai, kya sirf afwaah (myth vs fact)",
+      "course": "CUET",
+      "pillar": "Paths",
+      "origin": "scan cuet 2026-10-12",
+      "master_asset": "long video + reel cut",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Proposals only (4 subjects, 1-day exam); re-check NTA the day before recording; needs a CUET face",
+      "duplicate_of_legacy_id_group": "CUET-002",
+      "duplicate_occurrence": 1,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 49"
+      },
+      "library_folders_note": "Library folder names use the legacy ID and cannot tell the two ideas apart; check folder content before renaming."
+    },
+    {
+      "legacy_id": "CUET-003",
+      "title": "Agar CUET mein sirf 4 subjects hue: commerce student kaunse 4 le",
+      "course": "CUET",
+      "pillar": "Paths",
+      "origin": "scan cuet 2026-10-12",
+      "master_asset": "reel + carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Builds on CUET-001; label the cap as a proposal; verify university subject rules",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 50"
+      }
+    },
+    {
+      "legacy_id": "CUET-004",
+      "title": "Parents: CUET ki 5 baatein jo abhi pata honi chahiye",
+      "course": "CUET",
+      "pillar": "Parents",
+      "origin": "scan cuet 2026-10-12",
+      "master_asset": "long video + carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "No competitor talks to parents",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 51"
+      }
+    },
+    {
+      "legacy_id": "CUET-005",
+      "title": "Ek chapter, do exam: board answer vs CUET MCQ (series)",
+      "course": "CUET",
+      "pillar": "Subject",
+      "origin": "scan cuet 2026-10-12",
+      "master_asset": "reel series",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Start: Staffing or Fayol",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 52"
+      }
+    },
+    {
+      "legacy_id": "COM-005",
+      "title": "Class 12 Accounts: chapters heavy in boards AND CUET",
+      "course": "COM",
+      "pillar": "Exam strategy",
+      "origin": "scan cuet 2026-10-12",
+      "master_asset": "long video + carousel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Weightages from CBSE 2026-27 sample paper + CUET syllabus, verified",
+      "duplicate_of_legacy_id_group": "COM-005",
+      "duplicate_occurrence": 1,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 53"
+      },
+      "library_folders_note": "Library folder names use the legacy ID and cannot tell the two ideas apart; check folder content before renaming."
+    },
+    {
+      "legacy_id": "CLAT-027",
+      "title": "Student voice: 50 din pehle meri CLAT prep (proof)",
+      "course": "CLAT",
+      "pillar": "Proof",
+      "origin": "CLAT 15-day plan v3",
+      "master_asset": "reel + Short",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Student + parent OK required; no results claims",
+      "duplicate_of_legacy_id_group": "CLAT-027",
+      "duplicate_occurrence": 1,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 54"
+      },
+      "library_folders_note": "Library folder names use the legacy ID and cannot tell the two ideas apart; check folder content before renaming."
+    },
+    {
+      "legacy_id": "GEN-012",
+      "title": "Mock test day at Elevate (classroom proof)",
+      "course": "GEN",
+      "pillar": "Proof",
+      "origin": "CLAT 15-day plan v3",
+      "master_asset": "reel",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Sikar page version; faces only with consent",
+      "duplicate_of_legacy_id_group": "GEN-012",
+      "duplicate_occurrence": 1,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [
+        "GEN-012-big4-scoreboards"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 55"
+      },
+      "library_folders_note": "Library folder names use the legacy ID and cannot tell the two ideas apart; check folder content before renaming."
+    },
+    {
+      "legacy_id": "GEN-013",
+      "title": "NMIMS rank 3, then a first Deloitte week where it counted for nothing",
+      "course": "GEN",
+      "pillar": "Founder story",
+      "origin": "LinkedIn plan option (b)",
+      "master_asset": "text + photo",
+      "legacy_status": "idea",
+      "status": "idea",
+      "notes": "Sun 18 Oct; needs his real scene; options a (Sikar) and c (NLU MA) dropped by brand rules",
+      "duplicate_of_legacy_id_group": null,
+      "duplicate_occurrence": null,
+      "proposed_code": null,
+      "proposed_code_status": null,
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 56"
+      }
+    },
+    {
+      "legacy_id": "CLAT-027",
+      "title": "Nobel Prize 2026 Economic Sciences: Woodford & Hall (CLAT current affairs)",
+      "course": "CLAT",
+      "pillar": "Current affairs",
+      "origin": "[faculty:current_affairs] recording 2026-10-12",
+      "master_asset": "9:16 reel 89s + YouTube Short",
+      "legacy_status": "ready",
+      "status": "ready",
+      "notes": "Studio comp clat-nobel-econ-2026-916; Swiss Bank corrected to Sveriges Riksbank on screen; quiz answer (Frisch & Tinbergen) to pin next day",
+      "duplicate_of_legacy_id_group": "CLAT-027",
+      "duplicate_occurrence": 2,
+      "proposed_code": "CLAT-028",
+      "proposed_code_status": "proposed_renumbering",
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 57"
+      },
+      "library_folders_note": "Library folder names use the legacy ID and cannot tell the two ideas apart; check folder content before renaming."
+    },
+    {
+      "legacy_id": "GEN-012",
+      "title": "What Big 4 does not tell you (two scoreboards)",
+      "course": "GEN",
+      "pillar": "Founder story",
+      "origin": "His 31 Aug post (2052 imp) + 13 Oct data check",
+      "master_asset": "LinkedIn video 70s",
+      "legacy_status": "scripted",
+      "status": "scripted",
+      "notes": "Confirm the flight-delay story before recording; LinkedIn audience = CA freshers / young pros",
+      "duplicate_of_legacy_id_group": "GEN-012",
+      "duplicate_occurrence": 2,
+      "proposed_code": "GEN-014",
+      "proposed_code_status": "proposed_renumbering",
+      "library_folders": [
+        "GEN-012-big4-scoreboards"
+      ],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 58"
+      },
+      "library_folders_note": "Library folder names use the legacy ID and cannot tell the two ideas apart; check folder content before renaming."
+    },
+    {
+      "legacy_id": "CUET-002",
+      "title": "DU colleges for Commerce & Eco: tier list Part 1 (S: SSCBS SRCC · A: LSR Stephens · B: Hindu Hansraj)",
+      "course": "CUET",
+      "pillar": "Paths",
+      "origin": "Recording 2026-10-13",
+      "master_asset": "9:16 reel 77s + YouTube Short",
+      "legacy_status": "ready",
+      "status": "ready",
+      "notes": "Studio comp cuet-du-tierlist-916; real logos (Wikimedia); opinion label; Part 2 pending",
+      "duplicate_of_legacy_id_group": "CUET-002",
+      "duplicate_occurrence": 2,
+      "proposed_code": "CUET-006",
+      "proposed_code_status": "proposed_renumbering",
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 59"
+      },
+      "library_folders_note": "Library folder names use the legacy ID and cannot tell the two ideas apart; check folder content before renaming."
+    },
+    {
+      "legacy_id": "COM-005",
+      "title": "Private colleges for Commerce & Eco: tier list Part 2 (S MU · A NMIMS · B FLAME · C Christ Symbiosis)",
+      "course": "COM",
+      "pillar": "Paths",
+      "origin": "Recording 2026-10-13",
+      "master_asset": "9:16 reel 80s + YouTube Short",
+      "legacy_status": "ready",
+      "status": "ready",
+      "notes": "Studio comp cuet-du-tierlist-2-916; FLAME logo from flame.edu.in; Part 3 = IIMs (IPM)",
+      "duplicate_of_legacy_id_group": "COM-005",
+      "duplicate_occurrence": 2,
+      "proposed_code": "COM-006",
+      "proposed_code_status": "proposed_renumbering",
+      "library_folders": [],
+      "source": {
+        "path": "content-os/tracker/ideas.csv",
+        "locator": "line 60"
+      },
+      "library_folders_note": "Library folder names use the legacy ID and cannot tell the two ideas apart; check folder content before renaming."
+    }
+  ],
+  "duplicate_groups": [
+    {
+      "legacy_id": "CUET-002",
+      "occurrences": [
+        {
+          "line": 49,
+          "title": "CUET 2027: kya confirmed hai, kya sirf afwaah (myth vs fact)",
+          "proposed_code": null
+        },
+        {
+          "line": 59,
+          "title": "DU colleges for Commerce & Eco: tier list Part 1 (S: SSCBS SRCC · A: LSR Stephens · B: Hindu Hansraj)",
+          "proposed_code": "CUET-006"
+        }
+      ],
+      "rule_broken": "Next number = the highest in ideas.csv + 1 (CLAUDE.md)",
+      "status": "proposed_renumbering",
+      "resolution_hint": "No placement row references CUET-002.",
+      "source": [
+        {
+          "path": "content-os/tracker/ideas.csv",
+          "locator": "lines 49, 59"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 36"
+        }
+      ]
+    },
+    {
+      "legacy_id": "COM-005",
+      "occurrences": [
+        {
+          "line": 53,
+          "title": "Class 12 Accounts: chapters heavy in boards AND CUET",
+          "proposed_code": null
+        },
+        {
+          "line": 60,
+          "title": "Private colleges for Commerce & Eco: tier list Part 2 (S MU · A NMIMS · B FLAME · C Christ Symbiosis)",
+          "proposed_code": "COM-006"
+        }
+      ],
+      "rule_broken": "Next number = the highest in ideas.csv + 1 (CLAUDE.md)",
+      "status": "proposed_renumbering",
+      "resolution_hint": "No placement row references COM-005.",
+      "source": [
+        {
+          "path": "content-os/tracker/ideas.csv",
+          "locator": "lines 53, 60"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 36"
+        }
+      ]
+    },
+    {
+      "legacy_id": "CLAT-027",
+      "occurrences": [
+        {
+          "line": 54,
+          "title": "Student voice: 50 din pehle meri CLAT prep (proof)",
+          "proposed_code": null
+        },
+        {
+          "line": 57,
+          "title": "Nobel Prize 2026 Economic Sciences: Woodford & Hall (CLAT current affairs)",
+          "proposed_code": "CLAT-028"
+        }
+      ],
+      "rule_broken": "Next number = the highest in ideas.csv + 1 (CLAUDE.md)",
+      "status": "proposed_renumbering",
+      "resolution_hint": "versions.csv CLAT-027-IGC notes 'student + parent OK' and reports/2026-10-11-next-week-plan.md line 35 describe the student-voice reel (first occurrence).",
+      "source": [
+        {
+          "path": "content-os/tracker/ideas.csv",
+          "locator": "lines 54, 57"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 36"
+        }
+      ]
+    },
+    {
+      "legacy_id": "GEN-012",
+      "occurrences": [
+        {
+          "line": 55,
+          "title": "Mock test day at Elevate (classroom proof)",
+          "proposed_code": null
+        },
+        {
+          "line": 58,
+          "title": "What Big 4 does not tell you (two scoreboards)",
+          "proposed_code": "GEN-014"
+        }
+      ],
+      "rule_broken": "Next number = the highest in ideas.csv + 1 (CLAUDE.md)",
+      "status": "proposed_renumbering",
+      "resolution_hint": "versions.csv GEN-012-IGS (Sikar, 'consent for faces') matches the mock-test-day reel (first occurrence); library/GEN-012-big4-scoreboards/ holds the second occurrence's script.",
+      "source": [
+        {
+          "path": "content-os/tracker/ideas.csv",
+          "locator": "lines 55, 58"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 36"
+        }
+      ]
+    }
+  ]
+}

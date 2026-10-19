@@ -1,0 +1,270 @@
+/** Collab placement groups (BR-MKT-4, CH-006) and campaigns (MKT-018, organic only). */
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { z } from 'zod';
+import {
+  isUniqueViolation,
+  marketingCampaigns,
+  marketingIdeas,
+  marketingPlacementGroups,
+  marketingPlacements,
+  marketingSocialAccounts,
+  type Database,
+  type MarketingPlacementGroupId,
+  type MarketingPlacementId,
+} from '@elevate/database';
+import {
+  ConflictError,
+  InvalidStateTransitionError,
+  NotFoundError,
+  ValidationError,
+  recordAudit,
+  withTransaction,
+} from '@elevate/server-kit';
+import type { CampaignId } from '@elevate/shared-types';
+import {
+  CAMPAIGN_STATUSES,
+  isCampaignCode,
+  validateCollabGroup,
+  type CollabValidation,
+} from '../domain';
+import { assertCan, type Actor } from './access';
+
+export const createGroupBody = z
+  .object({
+    ideaId: z.uuid(),
+    platform: z.enum(['instagram', 'youtube']),
+    placementIds: z.array(z.uuid()).min(2).max(10),
+  })
+  .strict();
+
+async function membersOf(db: Database, placementIds: readonly string[]) {
+  return db
+    .select({
+      placement: marketingPlacements,
+      accountCode: marketingSocialAccounts.code,
+      platform: marketingSocialAccounts.platform,
+      scope: marketingSocialAccounts.scope,
+      examPrefixes: marketingSocialAccounts.examPrefixes,
+    })
+    .from(marketingPlacements)
+    .innerJoin(
+      marketingSocialAccounts,
+      eq(marketingSocialAccounts.id, marketingPlacements.accountId),
+    )
+    .where(inArray(marketingPlacements.id, placementIds as MarketingPlacementId[]));
+}
+
+export async function createPlacementGroup(
+  db: Database,
+  actor: Actor,
+  input: z.output<typeof createGroupBody>,
+  requestId?: string,
+): Promise<{ group: typeof marketingPlacementGroups.$inferSelect; validation: CollabValidation }> {
+  assertCan(actor, 'marketing:schedule:manage');
+  return withTransaction(db, async (tx) => {
+    const [idea] = await tx
+      .select()
+      .from(marketingIdeas)
+      .where(eq(marketingIdeas.id, input.ideaId as never));
+    if (!idea?.code) throw new NotFoundError('Idea not found (or quarantined without a code).');
+    const members = await membersOf(tx, input.placementIds);
+    if (members.length !== new Set(input.placementIds).size)
+      throw new NotFoundError('One or more placements were not found.');
+    for (const m of members) {
+      if (m.placement.ideaId !== idea.id)
+        throw new ValidationError(`${m.placement.code} belongs to another idea.`);
+      if (m.placement.status === 'cancelled' || m.placement.status === 'published') {
+        throw new InvalidStateTransitionError(`${m.placement.code} is ${m.placement.status}.`);
+      }
+      if (m.placement.placementGroupId)
+        throw new ConflictError(`${m.placement.code} is already in a collab.`);
+    }
+    const validation = validateCollabGroup(
+      { code: idea.code, scope: idea.scope, scopePrefixes: idea.scopePrefixes },
+      input.platform,
+      members.map((m) => ({
+        placementId: m.placement.id,
+        accountCode: m.accountCode,
+        platform: m.platform,
+        scope: m.scope,
+        examPrefixes: m.examPrefixes,
+      })),
+    );
+    if (!validation.valid) {
+      throw new ValidationError('This collab breaks the collab rule (BR-MKT-4).', {
+        details: validation,
+      });
+    }
+    const code = `${idea.code}-COLLAB-${input.platform === 'instagram' ? 'IG' : 'YT'}`;
+    try {
+      const [group] = await tx
+        .insert(marketingPlacementGroups)
+        .values({ code, ideaId: idea.id, platform: input.platform, createdBy: actor.id })
+        .returning();
+      await tx
+        .update(marketingPlacements)
+        .set({ placementGroupId: group!.id })
+        .where(
+          and(
+            inArray(marketingPlacements.id, input.placementIds as MarketingPlacementId[]),
+            isNull(marketingPlacements.placementGroupId),
+          ),
+        );
+      await recordAudit(tx, {
+        actorUserId: actor.id,
+        module: 'marketing',
+        action: 'placement_group.created',
+        entityType: 'placement_group',
+        entityId: group!.id,
+        after: {
+          ...group,
+          members: members.map((m) => m.placement.code),
+          warnings: validation.warnings,
+        },
+        requestId,
+      });
+      return { group: group!, validation };
+    } catch (error) {
+      if (isUniqueViolation(error, 'placement_groups_code_key')) {
+        throw new ConflictError(`${code} already exists for this idea and platform.`);
+      }
+      throw error;
+    }
+  });
+}
+
+export async function getPlacementGroup(db: Database, id: string) {
+  const [group] = await db
+    .select()
+    .from(marketingPlacementGroups)
+    .where(eq(marketingPlacementGroups.id, id as MarketingPlacementGroupId));
+  if (!group) throw new NotFoundError('Collab group not found.');
+  const [idea] = await db.select().from(marketingIdeas).where(eq(marketingIdeas.id, group.ideaId));
+  const ids = (
+    await db
+      .select({ id: marketingPlacements.id })
+      .from(marketingPlacements)
+      .where(eq(marketingPlacements.placementGroupId, group.id))
+  ).map((r) => r.id);
+  const members = ids.length ? await membersOf(db, ids) : [];
+  const validation = validateCollabGroup(
+    { code: idea!.code, scope: idea!.scope, scopePrefixes: idea!.scopePrefixes },
+    group.platform,
+    members.map((m) => ({
+      accountCode: m.accountCode,
+      platform: m.platform,
+      scope: m.scope,
+      examPrefixes: m.examPrefixes,
+    })),
+  );
+  return {
+    group,
+    members: members.map((m) => ({ ...m.placement, accountCode: m.accountCode })),
+    validation,
+  };
+}
+
+// --- campaigns ---------------------------------------------------------------------
+
+export const createCampaignBody = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine(isCampaignCode, 'Use upper-case letters, digits and dashes (2–40).'),
+    name: z.string().trim().min(2).max(200),
+    objective: z.string().trim().max(1000).nullable().optional(),
+    startsOn: z.iso.date().nullable().optional(),
+    endsOn: z.iso.date().nullable().optional(),
+    status: z.enum(CAMPAIGN_STATUSES).default('draft'),
+  })
+  .strict()
+  .refine((v) => !v.startsOn || !v.endsOn || v.startsOn <= v.endsOn, {
+    error: 'startsOn must not be after endsOn',
+  });
+
+export const placementCampaignBody = z.object({ campaignId: z.uuid().nullable() }).strict();
+
+export async function listCampaigns(db: Database) {
+  return db.select().from(marketingCampaigns).orderBy(asc(marketingCampaigns.code));
+}
+
+export async function createCampaign(
+  db: Database,
+  actor: Actor,
+  input: z.output<typeof createCampaignBody>,
+  requestId?: string,
+) {
+  assertCan(actor, 'marketing:campaigns:write');
+  return withTransaction(db, async (tx) => {
+    try {
+      const [row] = await tx
+        .insert(marketingCampaigns)
+        .values({
+          code: input.code,
+          name: input.name,
+          objective: input.objective ?? null,
+          startsOn: input.startsOn ?? null,
+          endsOn: input.endsOn ?? null,
+          status: input.status,
+          createdBy: actor.id,
+        })
+        .returning();
+      await recordAudit(tx, {
+        actorUserId: actor.id,
+        module: 'marketing',
+        action: 'campaign.created',
+        entityType: 'campaign',
+        entityId: row!.id,
+        after: row,
+        requestId,
+      });
+      return row!;
+    } catch (error) {
+      if (isUniqueViolation(error, 'campaigns_code_key'))
+        throw new ConflictError(`Campaign ${input.code} already exists.`);
+      throw error;
+    }
+  });
+}
+
+export async function setPlacementCampaign(
+  db: Database,
+  actor: Actor,
+  placementId: string,
+  campaignId: string | null,
+  requestId?: string,
+) {
+  assertCan(actor, 'marketing:campaigns:write');
+  return withTransaction(db, async (tx) => {
+    const [before] = await tx
+      .select()
+      .from(marketingPlacements)
+      .where(eq(marketingPlacements.id, placementId as MarketingPlacementId));
+    if (!before) throw new NotFoundError('Placement not found.');
+    if (campaignId) {
+      const [c] = await tx
+        .select()
+        .from(marketingCampaigns)
+        .where(eq(marketingCampaigns.id, campaignId as CampaignId));
+      if (!c) throw new NotFoundError('Campaign not found.');
+    }
+    const [after] = await tx
+      .update(marketingPlacements)
+      .set({ campaignId: campaignId as CampaignId | null })
+      .where(eq(marketingPlacements.id, before.id))
+      .returning();
+    await recordAudit(tx, {
+      actorUserId: actor.id,
+      module: 'marketing',
+      action: 'placement.campaign_changed',
+      entityType: 'placement',
+      entityId: before.id,
+      before: { campaignId: before.campaignId },
+      after: { campaignId },
+      requestId,
+    });
+    return after!;
+  });
+}

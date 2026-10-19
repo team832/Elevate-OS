@@ -1,0 +1,1043 @@
+{
+  "meta": {
+    "source_files": [
+      "handover/elevate-education-operations/ACADEMIC_PLANNING_DECISIONS.md",
+      "handover/elevate-education-operations/CA_FOUNDATION_ACCOUNTANCY_DRAFT.md",
+      "handover/elevate-education-operations/IPMAT_REFERENCE_NOTES.md",
+      "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+      "handover/outputs/elevate-operations/Elevate-Operations.xlsx"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records",
+      "other_subject_reference_budgets",
+      "calendar_rules"
+    ],
+    "notes": [
+      "CA Foundation Accountancy plan v0.2 (Sept 2027 Regular): 11 chapters / 46 topic blocks. All hours provisional planning judgments, not ICAI-prescribed.",
+      "Cross-checked topic by topic against the Operations workbook 'Accountancy Plan' and 'Test Tracker' sheets (mismatch lists in summary.workbook_cross_check)."
+    ]
+  },
+  "summary": {
+    "batch_id": "CAF-SEP27-REG",
+    "programme": "CA Foundation",
+    "target_attempt": "September 2027",
+    "route": "Regular",
+    "subject": "Accountancy",
+    "plan_version": "v0.2",
+    "chapters": 11,
+    "topic_blocks": 46,
+    "teaching_hours": 98,
+    "practice_hours": 52,
+    "teaching_plus_practice_hours": 150,
+    "chapter_test_hours": 12.0,
+    "discussion_hours": 13.0,
+    "first_pass_student_hours": 175,
+    "faculty_hours": 163,
+    "class_equivalents_note": "150 h = 120 x 75-minute class equivalents; not an approved 120-class timetable.",
+    "excluded": "revision, full mocks, marking, repeat catch-up, remediation and contingency",
+    "chapter_structure_source": "ICAI study material, May 2027 onwards (https://www.icai.org/post/sm-foundation-p1-may2027)",
+    "dates": null,
+    "session_length_status": "unresolved",
+    "workbook_cross_check": {
+      "topic_hour_mismatches": [],
+      "test_hour_mismatches": [],
+      "source": [
+        {
+          "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+          "locator": "sheet 'Accountancy Plan'!A5:P50"
+        },
+        {
+          "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+          "locator": "sheet 'Test Tracker'!A5:M15"
+        }
+      ]
+    },
+    "status": "provisional",
+    "source": [
+      {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 7"
+      },
+      {
+        "path": "handover/elevate-education-operations/ACADEMIC_PLANNING_DECISIONS.md",
+        "locator": "line 5"
+      }
+    ]
+  },
+  "records": [
+    {
+      "chapter_no": 1,
+      "title": "Theoretical Framework",
+      "topics": [
+        {
+          "topic_id": "ACC-01-01",
+          "topic": "Purpose and scope",
+          "teaching_hours": 0.75,
+          "practice_hours": 0.25,
+          "total_hours": 1,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 13"
+          }
+        },
+        {
+          "topic_id": "ACC-01-02",
+          "topic": "Concepts and conventions",
+          "teaching_hours": 1.5,
+          "practice_hours": 0.5,
+          "total_hours": 2,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 14"
+          }
+        },
+        {
+          "topic_id": "ACC-01-03",
+          "topic": "Capital versus revenue",
+          "teaching_hours": 0.75,
+          "practice_hours": 0.25,
+          "total_hours": 1,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 15"
+          }
+        },
+        {
+          "topic_id": "ACC-01-04",
+          "topic": "Contingent items",
+          "teaching_hours": 0.5,
+          "practice_hours": 0.25,
+          "total_hours": 0.75,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 16"
+          }
+        },
+        {
+          "topic_id": "ACC-01-05",
+          "topic": "Policy selection",
+          "teaching_hours": 0.75,
+          "practice_hours": 0.25,
+          "total_hours": 1,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 17"
+          }
+        },
+        {
+          "topic_id": "ACC-01-06",
+          "topic": "Valuation and estimates",
+          "teaching_hours": 0.75,
+          "practice_hours": 0.25,
+          "total_hours": 1,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 18"
+          }
+        },
+        {
+          "topic_id": "ACC-01-07",
+          "topic": "Standards overview",
+          "teaching_hours": 1,
+          "practice_hours": 0.25,
+          "total_hours": 1.25,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 19"
+          }
+        }
+      ],
+      "teaching_hours": 6,
+      "practice_hours": 2,
+      "total_hours": 8,
+      "assessment": {
+        "test_id": "ACC-T01",
+        "test_hours": 1.0,
+        "discussion_hours": 1.0,
+        "status": "provisional",
+        "source": {
+          "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+          "locator": "line 22"
+        }
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 9"
+      }
+    },
+    {
+      "chapter_no": 2,
+      "title": "Accounting Process",
+      "topics": [
+        {
+          "topic_id": "ACC-02-01",
+          "topic": "Journal entries",
+          "teaching_hours": 3,
+          "practice_hours": 1.5,
+          "total_hours": 4.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 28"
+          }
+        },
+        {
+          "topic_id": "ACC-02-02",
+          "topic": "Ledger posting",
+          "teaching_hours": 1.5,
+          "practice_hours": 0.5,
+          "total_hours": 2,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 29"
+          }
+        },
+        {
+          "topic_id": "ACC-02-03",
+          "topic": "Trial balance",
+          "teaching_hours": 1,
+          "practice_hours": 0.5,
+          "total_hours": 1.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 30"
+          }
+        },
+        {
+          "topic_id": "ACC-02-04",
+          "topic": "Subsidiary books",
+          "teaching_hours": 1.5,
+          "practice_hours": 0.5,
+          "total_hours": 2,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 31"
+          }
+        },
+        {
+          "topic_id": "ACC-02-05",
+          "topic": "Cash book",
+          "teaching_hours": 2,
+          "practice_hours": 1,
+          "total_hours": 3,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 32"
+          }
+        },
+        {
+          "topic_id": "ACC-02-06",
+          "topic": "Error correction",
+          "teaching_hours": 3,
+          "practice_hours": 2,
+          "total_hours": 5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 33"
+          }
+        }
+      ],
+      "teaching_hours": 12,
+      "practice_hours": 6,
+      "total_hours": 18,
+      "assessment": {
+        "test_id": "ACC-T02",
+        "test_hours": 1.0,
+        "discussion_hours": 1.0,
+        "status": "provisional",
+        "source": {
+          "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+          "locator": "line 36"
+        }
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 24"
+      }
+    },
+    {
+      "chapter_no": 3,
+      "title": "Bank Reconciliation",
+      "topics": [
+        {
+          "topic_id": "ACC-03-01",
+          "topic": "Reasons for differences and balance signs",
+          "teaching_hours": 1,
+          "practice_hours": 0.5,
+          "total_hours": 1.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 42"
+          }
+        },
+        {
+          "topic_id": "ACC-03-02",
+          "topic": "Reconciliation from either starting balance",
+          "teaching_hours": 1.5,
+          "practice_hours": 0.75,
+          "total_hours": 2.25,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 43"
+          }
+        },
+        {
+          "topic_id": "ACC-03-03",
+          "topic": "Cash-book adjustments and integrated problems",
+          "teaching_hours": 1.5,
+          "practice_hours": 0.75,
+          "total_hours": 2.25,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 44"
+          }
+        }
+      ],
+      "teaching_hours": 4,
+      "practice_hours": 2,
+      "total_hours": 6,
+      "assessment": {
+        "test_id": "ACC-T03",
+        "test_hours": 1.0,
+        "discussion_hours": 1.0,
+        "status": "provisional",
+        "source": {
+          "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+          "locator": "line 47"
+        }
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 38"
+      }
+    },
+    {
+      "chapter_no": 4,
+      "title": "Inventories",
+      "topics": [
+        {
+          "topic_id": "ACC-04-01",
+          "topic": "Cost components and valuation principles",
+          "teaching_hours": 1.5,
+          "practice_hours": 0.5,
+          "total_hours": 2,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 53"
+          }
+        },
+        {
+          "topic_id": "ACC-04-02",
+          "topic": "Cost-flow methods and numerical applications",
+          "teaching_hours": 2,
+          "practice_hours": 1.5,
+          "total_hours": 3.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 54"
+          }
+        },
+        {
+          "topic_id": "ACC-04-03",
+          "topic": "Net realisable value and stock adjustments",
+          "teaching_hours": 1.5,
+          "practice_hours": 1,
+          "total_hours": 2.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 55"
+          }
+        }
+      ],
+      "teaching_hours": 5,
+      "practice_hours": 3,
+      "total_hours": 8,
+      "assessment": {
+        "test_id": "ACC-T04",
+        "test_hours": 1.0,
+        "discussion_hours": 1.0,
+        "status": "provisional",
+        "source": {
+          "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+          "locator": "line 58"
+        }
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 49"
+      }
+    },
+    {
+      "chapter_no": 5,
+      "title": "Depreciation and Amortisation",
+      "topics": [
+        {
+          "topic_id": "ACC-05-01",
+          "topic": "Asset cost, useful life and residual value",
+          "teaching_hours": 1,
+          "practice_hours": 0.5,
+          "total_hours": 1.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 64"
+          }
+        },
+        {
+          "topic_id": "ACC-05-02",
+          "topic": "Depreciation methods and calculations",
+          "teaching_hours": 2,
+          "practice_hours": 1,
+          "total_hours": 3,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 65"
+          }
+        },
+        {
+          "topic_id": "ACC-05-03",
+          "topic": "Additions, disposals, estimates and amortisation",
+          "teaching_hours": 2,
+          "practice_hours": 1.5,
+          "total_hours": 3.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 66"
+          }
+        }
+      ],
+      "teaching_hours": 5,
+      "practice_hours": 3,
+      "total_hours": 8,
+      "assessment": {
+        "test_id": "ACC-T05",
+        "test_hours": 1.0,
+        "discussion_hours": 1.0,
+        "status": "provisional",
+        "source": {
+          "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+          "locator": "line 69"
+        }
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 60"
+      }
+    },
+    {
+      "chapter_no": 6,
+      "title": "Bills of Exchange",
+      "topics": [
+        {
+          "topic_id": "ACC-06-01",
+          "topic": "Terminology, dates and initial entries",
+          "teaching_hours": 1,
+          "practice_hours": 0.5,
+          "total_hours": 1.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 75"
+          }
+        },
+        {
+          "topic_id": "ACC-06-02",
+          "topic": "Holding, discounting, endorsement and collection",
+          "teaching_hours": 2,
+          "practice_hours": 1,
+          "total_hours": 3,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 76"
+          }
+        },
+        {
+          "topic_id": "ACC-06-03",
+          "topic": "Dishonour, renewal, retirement and mixed problems",
+          "teaching_hours": 2,
+          "practice_hours": 1.5,
+          "total_hours": 3.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 77"
+          }
+        }
+      ],
+      "teaching_hours": 5,
+      "practice_hours": 3,
+      "total_hours": 8,
+      "assessment": {
+        "test_id": "ACC-T06",
+        "test_hours": 1.0,
+        "discussion_hours": 1.0,
+        "status": "provisional",
+        "source": {
+          "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+          "locator": "line 80"
+        }
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 71"
+      }
+    },
+    {
+      "chapter_no": 7,
+      "title": "Sole-proprietor Final Accounts",
+      "topics": [
+        {
+          "topic_id": "ACC-07-01",
+          "topic": "Statement structure and closing entries",
+          "teaching_hours": 2,
+          "practice_hours": 1,
+          "total_hours": 3,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 86"
+          }
+        },
+        {
+          "topic_id": "ACC-07-02",
+          "topic": "Adjustments for non-manufacturing businesses",
+          "teaching_hours": 4,
+          "practice_hours": 2.5,
+          "total_hours": 6.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 87"
+          }
+        },
+        {
+          "topic_id": "ACC-07-03",
+          "topic": "Manufacturing businesses and integrated statements",
+          "teaching_hours": 4,
+          "practice_hours": 2.5,
+          "total_hours": 6.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 88"
+          }
+        }
+      ],
+      "teaching_hours": 10,
+      "practice_hours": 6,
+      "total_hours": 16,
+      "assessment": {
+        "test_id": "ACC-T07",
+        "test_hours": 1.0,
+        "discussion_hours": 1.0,
+        "status": "provisional",
+        "source": {
+          "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+          "locator": "line 91"
+        }
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 82"
+      }
+    },
+    {
+      "chapter_no": 8,
+      "title": "Not-for-Profit Accounts",
+      "topics": [
+        {
+          "topic_id": "ACC-08-01",
+          "topic": "Receipts/payments versus income/expenditure",
+          "teaching_hours": 1,
+          "practice_hours": 0.5,
+          "total_hours": 1.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 97"
+          }
+        },
+        {
+          "topic_id": "ACC-08-02",
+          "topic": "Subscriptions, funds and related adjustments",
+          "teaching_hours": 2.5,
+          "practice_hours": 1.5,
+          "total_hours": 4,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 98"
+          }
+        },
+        {
+          "topic_id": "ACC-08-03",
+          "topic": "Complete statements and balance sheet",
+          "teaching_hours": 2.5,
+          "practice_hours": 2,
+          "total_hours": 4.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 99"
+          }
+        }
+      ],
+      "teaching_hours": 6,
+      "practice_hours": 4,
+      "total_hours": 10,
+      "assessment": {
+        "test_id": "ACC-T08",
+        "test_hours": 1.0,
+        "discussion_hours": 1.0,
+        "status": "provisional",
+        "source": {
+          "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+          "locator": "line 102"
+        }
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 93"
+      }
+    },
+    {
+      "chapter_no": 9,
+      "title": "Incomplete Records",
+      "topics": [
+        {
+          "topic_id": "ACC-09-01",
+          "topic": "Opening/closing capital and profit calculation",
+          "teaching_hours": 1.5,
+          "practice_hours": 1,
+          "total_hours": 2.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 108"
+          }
+        },
+        {
+          "topic_id": "ACC-09-02",
+          "topic": "Reconstruction of missing transactions",
+          "teaching_hours": 2.5,
+          "practice_hours": 1.5,
+          "total_hours": 4,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 109"
+          }
+        },
+        {
+          "topic_id": "ACC-09-03",
+          "topic": "Integrated final-account problems",
+          "teaching_hours": 2,
+          "practice_hours": 1.5,
+          "total_hours": 3.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 110"
+          }
+        }
+      ],
+      "teaching_hours": 6,
+      "practice_hours": 4,
+      "total_hours": 10,
+      "assessment": {
+        "test_id": "ACC-T09",
+        "test_hours": 1.0,
+        "discussion_hours": 1.0,
+        "status": "provisional",
+        "source": {
+          "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+          "locator": "line 113"
+        }
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 104"
+      }
+    },
+    {
+      "chapter_no": 10,
+      "title": "Partnership and LLP Accounts",
+      "topics": [
+        {
+          "topic_id": "ACC-10-01",
+          "topic": "Capital accounts and profit appropriation",
+          "teaching_hours": 3,
+          "practice_hours": 1,
+          "total_hours": 4,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 119"
+          }
+        },
+        {
+          "topic_id": "ACC-10-02",
+          "topic": "Goodwill adjustments",
+          "teaching_hours": 2,
+          "practice_hours": 1,
+          "total_hours": 3,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 120"
+          }
+        },
+        {
+          "topic_id": "ACC-10-03",
+          "topic": "Partner admission",
+          "teaching_hours": 4,
+          "practice_hours": 2,
+          "total_hours": 6,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 121"
+          }
+        },
+        {
+          "topic_id": "ACC-10-04",
+          "topic": "Partner retirement",
+          "teaching_hours": 3,
+          "practice_hours": 1.5,
+          "total_hours": 4.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 122"
+          }
+        },
+        {
+          "topic_id": "ACC-10-05",
+          "topic": "Partner death",
+          "teaching_hours": 2,
+          "practice_hours": 1,
+          "total_hours": 3,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 123"
+          }
+        },
+        {
+          "topic_id": "ACC-10-06",
+          "topic": "Dissolution and LLP applications",
+          "teaching_hours": 5,
+          "practice_hours": 2.5,
+          "total_hours": 7.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 124"
+          }
+        }
+      ],
+      "teaching_hours": 19,
+      "practice_hours": 9,
+      "total_hours": 28,
+      "assessment": {
+        "test_id": "ACC-T10",
+        "test_hours": 1.5,
+        "discussion_hours": 2.0,
+        "status": "provisional",
+        "source": {
+          "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+          "locator": "line 127"
+        }
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 115"
+      }
+    },
+    {
+      "chapter_no": 11,
+      "title": "Company Accounts",
+      "topics": [
+        {
+          "topic_id": "ACC-11-01",
+          "topic": "Company capital fundamentals",
+          "teaching_hours": 1.5,
+          "practice_hours": 0.5,
+          "total_hours": 2,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 133"
+          }
+        },
+        {
+          "topic_id": "ACC-11-02",
+          "topic": "Share issue, forfeiture and reissue",
+          "teaching_hours": 6,
+          "practice_hours": 3,
+          "total_hours": 9,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 134"
+          }
+        },
+        {
+          "topic_id": "ACC-11-03",
+          "topic": "Debenture issue",
+          "teaching_hours": 3,
+          "practice_hours": 1.5,
+          "total_hours": 4.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 135"
+          }
+        },
+        {
+          "topic_id": "ACC-11-04",
+          "topic": "Bonus and rights issues",
+          "teaching_hours": 2.5,
+          "practice_hours": 1,
+          "total_hours": 3.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 136"
+          }
+        },
+        {
+          "topic_id": "ACC-11-05",
+          "topic": "Preference-share redemption",
+          "teaching_hours": 3.5,
+          "practice_hours": 2,
+          "total_hours": 5.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 137"
+          }
+        },
+        {
+          "topic_id": "ACC-11-06",
+          "topic": "Debenture redemption",
+          "teaching_hours": 3.5,
+          "practice_hours": 2,
+          "total_hours": 5.5,
+          "status": "provisional",
+          "source": {
+            "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+            "locator": "line 138"
+          }
+        }
+      ],
+      "teaching_hours": 20,
+      "practice_hours": 10,
+      "total_hours": 30,
+      "assessment": {
+        "test_id": "ACC-T11",
+        "test_hours": 1.5,
+        "discussion_hours": 2.0,
+        "status": "provisional",
+        "source": {
+          "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+          "locator": "line 141"
+        }
+      },
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+        "locator": "line 129"
+      }
+    }
+  ],
+  "v01_chapter_estimates": {
+    "rows": [
+      {
+        "chapter": "1 Theoretical Framework",
+        "teaching_hours": 6,
+        "practice_hours": 2,
+        "total_hours": 8
+      },
+      {
+        "chapter": "2 Accounting Process",
+        "teaching_hours": 12,
+        "practice_hours": 6,
+        "total_hours": 18
+      },
+      {
+        "chapter": "3 Bank Reconciliation Statement",
+        "teaching_hours": 4,
+        "practice_hours": 2,
+        "total_hours": 6
+      },
+      {
+        "chapter": "4 Inventories",
+        "teaching_hours": 5,
+        "practice_hours": 3,
+        "total_hours": 8
+      },
+      {
+        "chapter": "5 Depreciation and Amortisation",
+        "teaching_hours": 5,
+        "practice_hours": 3,
+        "total_hours": 8
+      },
+      {
+        "chapter": "6 Bills of Exchange and Promissory Notes",
+        "teaching_hours": 5,
+        "practice_hours": 3,
+        "total_hours": 8
+      },
+      {
+        "chapter": "7 Final Accounts of Sole Proprietors",
+        "teaching_hours": 10,
+        "practice_hours": 6,
+        "total_hours": 16
+      },
+      {
+        "chapter": "8 Not-for-Profit Financial Statements",
+        "teaching_hours": 6,
+        "practice_hours": 4,
+        "total_hours": 10
+      },
+      {
+        "chapter": "9 Accounts from Incomplete Records",
+        "teaching_hours": 6,
+        "practice_hours": 4,
+        "total_hours": 10
+      },
+      {
+        "chapter": "10 Partnership and LLP Accounts",
+        "teaching_hours": 19,
+        "practice_hours": 9,
+        "total_hours": 28
+      },
+      {
+        "chapter": "11 Company Accounts",
+        "teaching_hours": 20,
+        "practice_hours": 10,
+        "total_hours": 30
+      }
+    ],
+    "status": "superseded",
+    "note": "v0.1 chapter-level draft; v0.2 keeps the same chapter totals and splits them into 46 blocks.",
+    "source": {
+      "path": "handover/elevate-education-operations/CA_FOUNDATION_ACCOUNTANCY_DRAFT.md",
+      "locator": "lines 7-20"
+    }
+  },
+  "other_subject_reference_budgets": [
+    {
+      "subject": "Business Law",
+      "hours": 120,
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Decisions'!A24:D24"
+      }
+    },
+    {
+      "subject": "Quantitative Aptitude",
+      "hours": 150,
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Decisions'!A24:D24"
+      }
+    },
+    {
+      "subject": "Business Economics",
+      "hours": 100,
+      "status": "provisional",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Decisions'!A24:D24"
+      }
+    }
+  ],
+  "calendar_rules": [
+    {
+      "rule": "March-April: weekdays teaching; Saturday tests; regular Sunday holiday",
+      "status": "approved",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Decisions'!A16:D16"
+      }
+    },
+    {
+      "rule": "May-June: Saturday teaching; Sunday tests; extra weekday hours allowed",
+      "status": "approved",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Decisions'!A17:D17"
+      }
+    },
+    {
+      "rule": "June-end first coverage; July revision; August revision and full mocks",
+      "status": "approved",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Decisions'!A18:D18"
+      }
+    },
+    {
+      "rule": "One main batch with temporary catch-up groups and merging",
+      "status": "approved",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Decisions'!A19:D19"
+      }
+    },
+    {
+      "rule": "Exact March/April start date, holidays and faculty hours",
+      "status": "open",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Decisions'!A20:D20"
+      }
+    },
+    {
+      "rule": "Proposed weekly split 6 Accounts / 4 Law / 6 QA / 4 Economics",
+      "status": "rejected",
+      "status_note": "NOT accepted before the stream was paused",
+      "source": {
+        "path": "handover/elevate-education-operations/IPMAT_REFERENCE_NOTES.md",
+        "locator": "line 21"
+      }
+    }
+  ]
+}

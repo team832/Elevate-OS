@@ -1,0 +1,31 @@
+{
+  "name": "@elevate/authentication",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "scrypt password hashing, database sessions (hashed tokens, expiry, revocation), the elevate_session cookie, login throttling, and Next.js helpers (getCurrentUser, login/logout handler factories).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./next": "./src/next.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@elevate/authorization": "0.1.0",
+    "@elevate/configuration": "0.1.0",
+    "@elevate/database": "0.1.0",
+    "@elevate/shared-contracts": "0.1.0",
+    "@elevate/shared-types": "0.1.0",
+    "drizzle-orm": "0.45.4",
+    "zod": "4.6.7"
+  },
+  "peerDependencies": {
+    "next": "16.4.2"
+  },
+  "devDependencies": {
+    "next": "16.4.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}

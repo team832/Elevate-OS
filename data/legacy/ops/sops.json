@@ -1,0 +1,1032 @@
+{
+  "meta": {
+    "source_files": [
+      "handover/Claude.md",
+      "handover/elevate-education-operations/templates/sop_register.csv",
+      "handover/elevate-education-operations/templates/sop_template.md",
+      "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+      "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+      "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+      "handover/outputs/online-operations/Elevate-Online-Easy.xlsx"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records",
+      "registers"
+    ],
+    "notes": [
+      "SOP template + register template (elevate-education-operations/templates), the three SOP registers found in the workbooks, and the online coordinator SOP (docx) parsed into sections and steps.",
+      "No SOP is approved. Operations-workbook register says 'Register only: these are not approved SOPs'; online register rows are 'To draft'; the marketing register holds agreed operating summaries (v1.0, no approver/date).",
+      "Owner/backup/manager fields are blank in the source and stay null; never fill them with names."
+    ]
+  },
+  "sop_template": {
+    "sections": [
+      {
+        "section": "Document control",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 3"
+        }
+      },
+      {
+        "section": "1. Purpose",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 13"
+        }
+      },
+      {
+        "section": "2. Scope",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 17"
+        }
+      },
+      {
+        "section": "3. Roles and responsibilities",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 21"
+        }
+      },
+      {
+        "section": "4. Trigger and frequency",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 30"
+        }
+      },
+      {
+        "section": "5. Inputs and tools",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 34"
+        }
+      },
+      {
+        "section": "6. Procedure",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 38"
+        }
+      },
+      {
+        "section": "7. Quality checks",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 44"
+        }
+      },
+      {
+        "section": "8. Exceptions and escalation",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 48"
+        }
+      },
+      {
+        "section": "9. Records",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 52"
+        }
+      },
+      {
+        "section": "10. Performance measures",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 56"
+        }
+      },
+      {
+        "section": "11. Training and acknowledgement",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 60"
+        }
+      },
+      {
+        "section": "12. Revision history",
+        "source": {
+          "path": "handover/elevate-education-operations/templates/sop_template.md",
+          "locator": "line 64"
+        }
+      }
+    ],
+    "document_control_fields": [
+      "SOP ID",
+      "Department",
+      "Process owner",
+      "Approver",
+      "Version",
+      "Effective date",
+      "Next review date"
+    ],
+    "status": "documented",
+    "source": {
+      "path": "handover/elevate-education-operations/templates/sop_template.md",
+      "locator": "lines 1-68"
+    }
+  },
+  "sop_register_template": {
+    "columns": [
+      "SOP ID",
+      "Department",
+      "Process Name",
+      "Process Owner",
+      "Risk Level",
+      "Priority",
+      "Draft Status",
+      "Approver",
+      "Version",
+      "Effective Date",
+      "Next Review Date",
+      "Training Complete",
+      "Backup Owner",
+      "SOP Link",
+      "Notes"
+    ],
+    "rows": [
+      {
+        "SOP ID": "SOP-001",
+        "Department": "Leadership & Operations",
+        "Process Name": "Weekly operating review",
+        "Process Owner": "Operations Lead",
+        "Risk Level": "High",
+        "Priority": "Critical",
+        "Draft Status": "Not started",
+        "Approver": "Project Sponsor",
+        "Version": "0.1",
+        "Effective Date": "",
+        "Next Review Date": "",
+        "Training Complete": "",
+        "Backup Owner": "",
+        "SOP Link": "",
+        "Notes": ""
+      }
+    ],
+    "status": "documented",
+    "source": {
+      "path": "handover/elevate-education-operations/templates/sop_register.csv",
+      "locator": "lines 1-2"
+    }
+  },
+  "registers": [
+    {
+      "id": "operations",
+      "workbook": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+      "sheet": "SOP Register",
+      "state": "visible",
+      "dimensions": "A1:H29",
+      "data_validations": [],
+      "tables": [
+        {
+          "name": "SOPRegisterTable",
+          "ref": "A4:H29"
+        }
+      ],
+      "header_row": 4,
+      "columns": [
+        "SOP ID",
+        "Function",
+        "Process",
+        "Status",
+        "Owner role",
+        "Version",
+        "SOP link",
+        "Review date"
+      ],
+      "data_rows_prepared": 25,
+      "rows_with_input_values": 25,
+      "formula_columns": {},
+      "rows": [
+        {
+          "SOP ID": "SOP-001",
+          "Function": "Marketing",
+          "Process": "Lead generation",
+          "Status": "Not drafted",
+          "Owner role": "Marketing role",
+          "_row": 5,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-002",
+          "Function": "Admissions",
+          "Process": "Enquiry capture",
+          "Status": "Not drafted",
+          "Owner role": "Reception",
+          "_row": 6,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-003",
+          "Function": "Admissions",
+          "Process": "Walk-in form",
+          "Status": "Not drafted",
+          "Owner role": "Reception",
+          "_row": 7,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-004",
+          "Function": "Admissions",
+          "Process": "Academic counselling",
+          "Status": "Not drafted",
+          "Owner role": "Academic counsellor",
+          "_row": 8,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-005",
+          "Function": "Admissions",
+          "Process": "Two-day demo",
+          "Status": "Not drafted",
+          "Owner role": "Academic coordinator",
+          "_row": 9,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-006",
+          "Function": "Fees",
+          "Process": "Demo payment",
+          "Status": "Not drafted",
+          "Owner role": "Accounts",
+          "_row": 10,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-007",
+          "Function": "Admissions",
+          "Process": "Follow-ups",
+          "Status": "Not drafted",
+          "Owner role": "Reception and academic counsellor",
+          "_row": 11,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-008",
+          "Function": "Admissions",
+          "Process": "Documents",
+          "Status": "Not drafted",
+          "Owner role": "Documentation role",
+          "_row": 12,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-009",
+          "Function": "Coordination",
+          "Process": "School and hostel",
+          "Status": "Not drafted",
+          "Owner role": "Student support",
+          "_row": 13,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-010",
+          "Function": "Fees",
+          "Process": "Fee agreement",
+          "Status": "Not drafted",
+          "Owner role": "Accounts and approver",
+          "_row": 14,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-011",
+          "Function": "Fees",
+          "Process": "Collection and receipts",
+          "Status": "Not drafted",
+          "Owner role": "Accounts",
+          "_row": 15,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-012",
+          "Function": "Student support",
+          "Process": "Onboarding",
+          "Status": "Not drafted",
+          "Owner role": "Reception",
+          "_row": 16,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-013",
+          "Function": "Attendance",
+          "Process": "Biometric monitoring",
+          "Status": "Not drafted",
+          "Owner role": "Attendance role",
+          "_row": 17,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-014",
+          "Function": "Attendance",
+          "Process": "Class absence",
+          "Status": "Not drafted",
+          "Owner role": "Attendance role",
+          "_row": 18,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-015",
+          "Function": "Attendance",
+          "Process": "Regular lunch exit",
+          "Status": "Not drafted",
+          "Owner role": "Reception",
+          "_row": 19,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-016",
+          "Function": "Attendance",
+          "Process": "Emergency exit",
+          "Status": "Not drafted",
+          "Owner role": "Reception",
+          "_row": 20,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-017",
+          "Function": "Academics",
+          "Process": "Timetable",
+          "Status": "Not drafted",
+          "Owner role": "Academic coordinator",
+          "_row": 21,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-018",
+          "Function": "Academics",
+          "Process": "Curriculum and delivery",
+          "Status": "Not drafted",
+          "Owner role": "Academic coordinator",
+          "_row": 22,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-019",
+          "Function": "Materials",
+          "Process": "DPP and printing",
+          "Status": "Not drafted",
+          "Owner role": "Content team and operator",
+          "_row": 23,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-020",
+          "Function": "Examinations",
+          "Process": "Test delivery",
+          "Status": "Not drafted",
+          "Owner role": "Exam operations",
+          "_row": 24,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-021",
+          "Function": "Examinations",
+          "Process": "Evaluation and return",
+          "Status": "Not drafted",
+          "Owner role": "Exam operations",
+          "_row": 25,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-022",
+          "Function": "Examinations",
+          "Process": "Results and discussion",
+          "Status": "Not drafted",
+          "Owner role": "Teachers and exam operations",
+          "_row": 26,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-023",
+          "Function": "Student support",
+          "Process": "Progress reports",
+          "Status": "Not drafted",
+          "Owner role": "Teachers and student support",
+          "_row": 27,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-024",
+          "Function": "Centre support",
+          "Process": "Housekeeping",
+          "Status": "Not drafted",
+          "Owner role": "Office attendant",
+          "_row": 28,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "SOP-025",
+          "Function": "People",
+          "Process": "Staff and capacity",
+          "Status": "Not drafted",
+          "Owner role": "Operations lead",
+          "_row": 29,
+          "status": "not_started"
+        }
+      ],
+      "other_cells": [
+        {
+          "cell": "A1",
+          "value": "SOP Register",
+          "formula": null
+        },
+        {
+          "cell": "A2",
+          "value": "Register only: these are not approved SOPs.",
+          "formula": null
+        },
+        {
+          "cell": "A3",
+          "value": "Back to dashboard",
+          "formula": null
+        }
+      ],
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'SOP Register'!A1:H29"
+      },
+      "status": "documented"
+    },
+    {
+      "id": "online",
+      "workbook": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+      "sheet": "SOP Register",
+      "state": "hidden",
+      "dimensions": "A1:I20",
+      "data_validations": [
+        {
+          "range": "I5:I20",
+          "type": "list",
+          "formula": "\"To draft,Draft,Approved,Active,Under revision\"",
+          "allowed_values": [
+            "To draft",
+            "Draft",
+            "Approved",
+            "Active",
+            "Under revision"
+          ]
+        }
+      ],
+      "tables": [
+        {
+          "name": "SOPRegisterTable",
+          "ref": "A4:I20"
+        }
+      ],
+      "header_row": 4,
+      "columns": [
+        "SOP ID",
+        "Process",
+        "Role owner",
+        "Named owner",
+        "Backup",
+        "Scope",
+        "System / record",
+        "SOP / record link",
+        "Document status"
+      ],
+      "data_rows_prepared": 16,
+      "rows_with_input_values": 16,
+      "formula_columns": {},
+      "rows": [
+        {
+          "SOP ID": "ON-01",
+          "Process": "Marketing and lead capture",
+          "Role owner": "Marketing Lead",
+          "Scope": "Approved content; CRM lead capture; source tracking",
+          "System / record": "CRM",
+          "Document status": "To draft",
+          "_row": 5,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-02",
+          "Process": "Webinar operations",
+          "Role owner": "Webinar Coordinator",
+          "Scope": "Registration, reminders, delivery, host review and follow-up",
+          "System / record": "CRM / event records",
+          "Document status": "To draft",
+          "_row": 6,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-03",
+          "Process": "Counselling and admissions",
+          "Role owner": "Admissions Lead",
+          "Scope": "Appointments, academic counselling and follow-up",
+          "System / record": "CRM",
+          "Document status": "To draft",
+          "_row": 7,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-04",
+          "Process": "Payment and installments",
+          "Role owner": "Accounts",
+          "Scope": "Verify payment, receipts, schedule and approved exceptions",
+          "System / record": "Accounts system",
+          "Document status": "To draft",
+          "_row": 8,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-05",
+          "Process": "Access and onboarding",
+          "Role owner": "Operations Lead",
+          "Scope": "Correct entitlement, login, late-joiner access and expiry",
+          "System / record": "Vacademy",
+          "Document status": "To draft",
+          "_row": 9,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-06",
+          "Process": "Daily academic delivery",
+          "Role owner": "Academic Operations",
+          "Scope": "Timetable, class readiness, lesson log and recording check",
+          "System / record": "Vacademy",
+          "Document status": "To draft",
+          "_row": 10,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-07",
+          "Process": "Attendance follow-up",
+          "Role owner": "Student Support",
+          "Scope": "Review automatic logs/notifications and act on exceptions",
+          "System / record": "Vacademy",
+          "Document status": "To draft",
+          "_row": 11,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-08",
+          "Process": "Homework and DPP",
+          "Role owner": "Academic Operations",
+          "Scope": "Publish, remind, evaluate and follow up",
+          "System / record": "Vacademy",
+          "Document status": "To draft",
+          "_row": 12,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-09",
+          "Process": "Doubt resolution",
+          "Role owner": "Academic Head",
+          "Scope": "Assign, answer, clarify and track closure",
+          "System / record": "Vacademy",
+          "Document status": "To draft",
+          "_row": 13,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-10",
+          "Process": "Tests",
+          "Role owner": "Academic Operations",
+          "Scope": "Prepare, review, conduct, check, release and discuss",
+          "System / record": "Vacademy",
+          "Document status": "To draft",
+          "_row": 14,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-11",
+          "Process": "Performance reports",
+          "Role owner": "Student Support",
+          "Scope": "Verify app report, send privately and follow up",
+          "System / record": "Vacademy",
+          "Document status": "To draft",
+          "_row": 15,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-12",
+          "Process": "Support and complaints",
+          "Role owner": "Student Support",
+          "Scope": "Acknowledge, assign, resolve, verify and escalate",
+          "System / record": "Support records",
+          "Document status": "To draft",
+          "_row": 16,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-13",
+          "Process": "Website and technical",
+          "Role owner": "Technical Lead",
+          "Scope": "Website, forms, integrations, access and incident recovery",
+          "System / record": "Technical records",
+          "Document status": "To draft",
+          "_row": 17,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-14",
+          "Process": "Management reviews",
+          "Role owner": "Operations Lead",
+          "Scope": "Daily readiness and weekly action review",
+          "System / record": "Actions",
+          "Document status": "To draft",
+          "_row": 18,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-15",
+          "Process": "Approvals",
+          "Role owner": "Operations Lead",
+          "Scope": "Record authorised decisions before execution",
+          "System / record": "Approval records",
+          "Document status": "To draft",
+          "_row": 19,
+          "status": "not_started"
+        },
+        {
+          "SOP ID": "ON-16",
+          "Process": "Backup and escalation",
+          "Role owner": "Operations Lead",
+          "Scope": "Cover absence, hand over work and escalate delays",
+          "System / record": "Actions",
+          "Document status": "To draft",
+          "_row": 20,
+          "status": "not_started"
+        }
+      ],
+      "other_cells": [
+        {
+          "cell": "A1",
+          "value": "SOP register",
+          "formula": null
+        },
+        {
+          "cell": "A2",
+          "value": "Process scope captured from discussion. Full SOP documents are not yet drafted or approved.",
+          "formula": null
+        }
+      ],
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'SOP Register'!A1:I20"
+      },
+      "status": "documented"
+    },
+    {
+      "id": "marketing",
+      "workbook": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+      "sheet": "SOP Register",
+      "state": "hidden",
+      "dimensions": "A1:L40",
+      "data_validations": [],
+      "tables": [
+        {
+          "name": "SOPRegisterTable",
+          "ref": "A5:L25"
+        }
+      ],
+      "header_row": 5,
+      "columns": [
+        "SOP ID",
+        "Procedure",
+        "Owner",
+        "Trigger / input",
+        "Steps",
+        "Turnaround / rhythm",
+        "Checks / escalation",
+        "Completion evidence",
+        "Version",
+        "Approved by",
+        "Approved on",
+        "Full SOP link"
+      ],
+      "data_rows_prepared": 20,
+      "rows_with_input_values": 9,
+      "formula_columns": {},
+      "rows": [
+        {
+          "SOP ID": "MKT-01",
+          "Procedure": "Marketing planning",
+          "Owner": "Marketing Lead",
+          "Trigger / input": "Admission priorities",
+          "Steps": "Set course priorities, four weekly feed posts, campaign briefs and owners.",
+          "Turnaround / rhythm": "Plan Wed; briefs Thu; production Fri; approve/schedule Sat.",
+          "Checks / escalation": "Start complex items earlier; retain original deadlines.",
+          "Completion evidence": "Calendar and approved briefs",
+          "Version": "1.0",
+          "_row": 6,
+          "status": "documented"
+        },
+        {
+          "SOP ID": "MKT-02",
+          "Procedure": "Content production",
+          "Owner": "Content Coordinator",
+          "Trigger / input": "Assigned brief",
+          "Steps": "Prepare script; collect inputs; coordinate shooting; edit; hand off with owner and deadline.",
+          "Turnaround / rhythm": "Brief 1 working day; standard edit 1 working day after complete inputs.",
+          "Checks / escalation": "Flag missing inputs and delays before deadline.",
+          "Completion evidence": "Draft link and updated tracker",
+          "Version": "1.0",
+          "_row": 7,
+          "status": "documented"
+        },
+        {
+          "SOP ID": "MKT-03",
+          "Procedure": "Accuracy and approval",
+          "Owner": "Marketing Lead",
+          "Trigger / input": "Final draft",
+          "Steps": "Obtain academic checks, claims verification and permissions; approve a specific version.",
+          "Turnaround / rhythm": "Academic/final approval 1 working day each; revisions/reapproval half day each.",
+          "Checks / escalation": "Fees/offers/sensitive claims need Institute Authority. No sole self-approval.",
+          "Completion evidence": "Approved version, approver and date",
+          "Version": "1.0",
+          "_row": 8,
+          "status": "documented"
+        },
+        {
+          "SOP ID": "MKT-04",
+          "Procedure": "Publishing",
+          "Owner": "Publishing Executive",
+          "Trigger / input": "Approved content",
+          "Steps": "Schedule; verify live; record actual publication and link.",
+          "Turnaround / rhythm": "Schedule 24 hours ahead; check within 30 minutes during assigned coverage.",
+          "Checks / escalation": "No approval means no publication; arrange out-of-hours cover.",
+          "Completion evidence": "Live link and actual timestamp",
+          "Version": "1.0",
+          "_row": 9,
+          "status": "documented"
+        },
+        {
+          "SOP ID": "MKT-05",
+          "Procedure": "Enquiry handoff",
+          "Owner": "Publishing Executive",
+          "Trigger / input": "DM/comment enquiry",
+          "Steps": "Reply; collect sufficient details; deduplicate; assign in CRM; obtain acceptance.",
+          "Turnaround / rhythm": "Hourly inbox checks; reply within 1 operating hour; CRM entry within 30 minutes.",
+          "Checks / escalation": "Admissions accepts within 1 operating hour. Offer counselling same day or next day for late enquiries.",
+          "Completion evidence": "Lead ID, accepted owner and next action",
+          "Version": "1.0",
+          "_row": 10,
+          "status": "documented"
+        },
+        {
+          "SOP ID": "MKT-06",
+          "Procedure": "Campaign launch",
+          "Owner": "Paid Marketing Owner",
+          "Trigger / input": "Approved campaign brief",
+          "Steps": "Configure campaign; verify creative, targeting, dates, budget, links and CRM test lead.",
+          "Turnaround / rhythm": "Before every launch; monitor daily.",
+          "Checks / escalation": "Do not launch without admissions receiving owner and completed checks.",
+          "Completion evidence": "Approval record and readiness checklist",
+          "Version": "1.0",
+          "_row": 11,
+          "status": "documented"
+        },
+        {
+          "SOP ID": "MKT-07",
+          "Procedure": "Campaign changes and closure",
+          "Owner": "Paid Marketing Owner",
+          "Trigger / input": "Performance or operational issue",
+          "Steps": "Review quality and cost; document adjustment; reconcile spending at closure.",
+          "Turnaround / rhythm": "Daily checks and weekly review.",
+          "Checks / escalation": "Pause broken capture/wrong claims/uncontrolled spend. Budget increases, offers and extensions need approval.",
+          "Completion evidence": "Change log and final spending",
+          "Version": "1.0",
+          "_row": 12,
+          "status": "documented"
+        },
+        {
+          "SOP ID": "MKT-08",
+          "Procedure": "Outreach execution",
+          "Owner": "Outreach Coordinator",
+          "Trigger / input": "Approved activity",
+          "Steps": "Confirm partner, budget and presenter; prepare registration/materials; execute; hand over enquiries.",
+          "Turnaround / rhythm": "Confirm 5 days before; readiness 2 days; reconfirm 1 day; CRM next working day.",
+          "Checks / escalation": "Permission required; attendees are not automatic leads; review within 3 working days.",
+          "Completion evidence": "Activity results and assigned CRM leads",
+          "Version": "1.0",
+          "_row": 13,
+          "status": "documented"
+        },
+        {
+          "SOP ID": "MKT-09",
+          "Procedure": "Reporting and review",
+          "Owner": "Marketing Lead",
+          "Trigger / input": "CRM export, spend and content records",
+          "Steps": "Validate data; review weekly activity separately from cohorts; record decisions.",
+          "Turnaround / rhythm": "Monday 30-minute review; post review after 7 days; cohort checks 7/14/30 days.",
+          "Checks / escalation": "No duplicate leads or guessed attribution. No weekly admissions / new-leads conversion ratio.",
+          "Completion evidence": "Dashboard and action-owner-deadline log",
+          "Version": "1.0",
+          "_row": 14,
+          "status": "documented"
+        }
+      ],
+      "other_cells": [
+        {
+          "cell": "A1",
+          "value": "Marketing procedures",
+          "formula": null
+        },
+        {
+          "cell": "A2",
+          "value": "Agreed operating summaries. Add full procedure links and signed-off versions when available.",
+          "formula": null
+        }
+      ],
+      "source": {
+        "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+        "locator": "sheet 'SOP Register'!A1:L40"
+      },
+      "status": "documented"
+    }
+  ],
+  "records": [
+    {
+      "id": "SOP-ONLINE-COORDINATOR",
+      "title": "Online Class Coordinator SOP",
+      "subtitle": "Staff responsibilities and daily workflow",
+      "organisation": "Elevate Education",
+      "dated": "2026-09-18",
+      "owner": null,
+      "backup": null,
+      "reporting_manager": null,
+      "effective_date": null,
+      "approved_by": null,
+      "approval_date": null,
+      "blank_fields_in_source": [
+        "Assigned staff",
+        "Backup",
+        "Reporting manager",
+        "Effective date",
+        "Manager approval",
+        "Date",
+        "Staff acknowledgement",
+        "Date"
+      ],
+      "status": "draft",
+      "status_note": "Shareable draft awaiting approval; named owner, backup, manager, coverage and approval date must be assigned before it is issued policy. Proposed service timings and the 15-minute absence checkpoint need management approval.",
+      "sections": [
+        {
+          "section": "Role and working arrangements",
+          "steps": [
+            "Your responsibility is to keep online classes organised, students informed and recordings accessible. Coordinate with faculty, Accounts and Technical Support, and follow up until each assigned issue is resolved.",
+            "Office hours: Monday to Saturday, 11:00 a.m. to 6:00 p.m. IST. Classes and events outside office hours need a named duty person. Sunday coverage is event-specific, not routine office support.",
+            "Assigned staff: ____________________    Backup: ____________________",
+            "Reporting manager: ____________________    Effective date: ____________________",
+            "Priority order: live-class problems and student access first; attendance calls and urgent communication next; recording and academic follow-up next; clip cutting during allocated non-class time."
+          ],
+          "seq": 1,
+          "source": {
+            "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+            "locator": "word/document.xml, Heading1 #1 'Role and working arrangements'"
+          }
+        },
+        {
+          "section": "Calls and WhatsApp communication",
+          "steps": [
+            "Answer student calls, return missed calls and respond to routine WhatsApp queries during office hours. Record unresolved requests and give the student a clear next-update time.",
+            "Send the latest timetable, reminders, class instructions, approved changes and recording updates to the correct batch. Verify dates, times and recipients before sending. Use official institute accounts.",
+            "Communicate personal attendance, marks and concerns privately. Share with registered guardians for under-18 students and with parents of adult students only under the agreed permission."
+          ],
+          "seq": 2,
+          "source": {
+            "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+            "locator": "word/document.xml, Heading1 #2 'Calls and WhatsApp communication'"
+          }
+        },
+        {
+          "section": "Teachers classes and timetable",
+          "steps": [
+            "Confirm teacher availability, subject, topic and duration. Check batch and faculty clashes before preparing the timetable. Schedule each class correctly in Vacademy and communicate the confirmed timetable.",
+            "Before each class, verify teacher readiness, student access and required notes or class sheets. Check that the session starts. Escalate a missing teacher or a failed class immediately.",
+            "For a cancellation or change, obtain the required approval, arrange a replacement slot, update Vacademy and notify students and faculty. After class, obtain the actual topic covered and any unfinished work."
+          ],
+          "seq": 3,
+          "source": {
+            "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+            "locator": "word/document.xml, Heading1 #3 'Teachers classes and timetable'"
+          }
+        },
+        {
+          "section": "Attendance and absence calls",
+          "steps": [
+            "Use Vacademy attendance records. Check late joins, approved leave and technical problems before marking an unexplained absence. Call students who have not attended, ask the reason and help them join if the class is ongoing.",
+            "Record the call outcome, reason and next action. If unanswered, send a private follow-up and keep the item pending. Escalate repeated absences to the reporting manager and relevant faculty.",
+            "The automatic absence notification does not replace the absence call. Suggested first attendance check: 15 minutes after class starts, subject to manager confirmation. Simultaneous classes require agreed backup coverage."
+          ],
+          "seq": 4,
+          "source": {
+            "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+            "locator": "word/document.xml, Heading1 #4 'Attendance and absence calls'"
+          }
+        },
+        {
+          "section": "Recordings and LMS availability",
+          "steps": [
+            "Vacademy records and publishes classes automatically. Verify that each recording is complete, audible, playable and visible to the correct batch from the student-access view. Check the beginning, middle and end and investigate reported gaps.",
+            "Use clear subject, topic, faculty and date labels. Keep recordings in the correct chapter sequence. Check for missing or duplicate entries.",
+            "If automation fails, raise a technical issue and arrange authorised upload or publication. Do not mark the task complete until student access works. Preserve the original recording and coordinate a recovery lesson if no usable recording exists."
+          ],
+          "seq": 5,
+          "source": {
+            "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+            "locator": "word/document.xml, Heading1 #5 'Recordings and LMS availability'"
+          }
+        },
+        {
+          "section": "Video clip cutting",
+          "steps": [
+            "Use faculty or Marketing timestamps, or flag useful explanations, shortcuts and FAQs. Cut the selected segment and trim dead time without changing the meaning.",
+            "Remove private student information and unapproved student footage. Label the clip with subject, topic, teacher and date, and retain the source recording and timestamps.",
+            "Obtain faculty approval for academic accuracy. Hand approved promotional clips to Marketing for captions, branding and publishing. Upload academic clips only to the authorised LMS section.",
+            "This role covers basic cutting and trimming. Advanced editing and independent social-media publishing are outside scope."
+          ],
+          "seq": 6,
+          "source": {
+            "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+            "locator": "word/document.xml, Heading1 #6 'Video clip cutting'"
+          }
+        },
+        {
+          "section": "Student onboarding and academic support",
+          "steps": [
+            "For new admissions, act after Accounts confirms payment. Verify login, correct course and batch access, timetable and communication-group membership. Explain where to find recordings, submit work and raise doubts.",
+            "Late joiners start ongoing live classes immediately. Provide earlier recordings and materials for the enrolled batch and obtain faculty guidance on missed-topic priorities. Do not independently extend target-exam access validity.",
+            "Collect approved notes, class sheets and DPP from faculty and upload them to the correct subject and chapter. Arrange homework reminders and follow up on non-submission. Track pending faculty checking and unanswered app doubts; faculty remains responsible for answers and evaluation."
+          ],
+          "seq": 7,
+          "source": {
+            "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+            "locator": "word/document.xml, Heading1 #7 'Student onboarding and academic support'"
+          }
+        },
+        {
+          "section": "Tests reports and webinars",
+          "steps": [
+            "Coordinate two flexible weekly test windows shared across subjects. Obtain the approved paper and settings, check student access, send instructions and track non-attempts, pending evaluation and compulsory test discussion. Confirm whether test reminders need manual sending.",
+            "After review, send app-generated performance reports privately. Check failed deliveries and arrange faculty follow-up for concerns. Use the release schedule approved by the manager.",
+            "Assist the Saturday and Sunday webinars as rostered: reminders, joining support, recording checks and host-review collection. Hand counselling requests to Admissions. Do not promise academic counselling or fee exceptions independently."
+          ],
+          "seq": 8,
+          "source": {
+            "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+            "locator": "word/document.xml, Heading1 #8 'Tests reports and webinars'"
+          }
+        },
+        {
+          "section": "Daily checklist and closing update",
+          "steps": [
+            "At opening: review missed calls, WhatsApp messages, pending issues, today’s timetable, faculty confirmation and previous recordings awaiting checks.",
+            "Before and during classes: check readiness, send reminders, verify start and access, review absences and complete or assign absence calls.",
+            "After classes: verify recordings, upload approved materials, follow up on missed classes and update unresolved issues. Cut clips only when priority work is covered.",
+            "Before closing: confirm tomorrow’s timetable, return pending calls, hand over evening activities and assign an owner and next-update time to every unresolved item.",
+            "Send this daily update to the manager: classes planned and conducted; absence calls and pending callbacks; recordings checked or missing; materials and clips completed; open issues; approvals needed; tomorrow’s risks and duty cover."
+          ],
+          "seq": 9,
+          "source": {
+            "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+            "locator": "word/document.xml, Heading1 #9 'Daily checklist and closing update'"
+          }
+        },
+        {
+          "section": "Records escalation and authority",
+          "steps": [
+            "Use Vacademy as the academic source record. In the Actions tracker record: date, student or batch reference, task or issue, responsible person, due date, status and completion note. Avoid duplicating detailed marks or attendance.",
+            "Escalate immediately when a class or test cannot run, students cannot join, a teacher is unavailable, or a privacy/security concern arises. Contact the relevant team and reporting manager; retain follow-up ownership until handover is acknowledged.",
+            "Faculty owns teaching, academic counselling, doubt answers and checking. Accounts owns payment verification. The authorised approver decides refunds, discounts and extensions. Technical Support fixes systems. Marketing approves and publishes promotional content.",
+            "The coordinator must not share passwords, expose student data, approve fee exceptions, delete source recordings or close unresolved issues merely because they were forwarded."
+          ],
+          "seq": 10,
+          "source": {
+            "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+            "locator": "word/document.xml, Heading1 #10 'Records escalation and authority'"
+          }
+        },
+        {
+          "section": "Manager setup before issue",
+          "steps": [
+            "Confirm the assigned batches, backup and after-hours roster. Fill in escalation contacts and approve the absence-call checkpoint, response deadlines, recording-check deadline and report-sharing schedule.",
+            "Manager approval: ____________________    Date: ____________________",
+            "Staff acknowledgement: ____________________    Date: ____________________"
+          ],
+          "seq": 11,
+          "source": {
+            "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+            "locator": "word/document.xml, Heading1 #11 'Manager setup before issue'"
+          }
+        }
+      ],
+      "source": [
+        {
+          "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+          "locator": "word/document.xml"
+        },
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 189"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,217 @@
+{
+  "meta": {
+    "source_files": [
+      "content-os/tools/import-metrics.mjs"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records"
+    ],
+    "notes": [
+      "The CSV export formats tools/import-metrics.mjs understands, read from the script source (not from real exports).",
+      "The script's header comment names inbox folders 'instagram-elevate'/'youtube-elevate', which pre-date the 9-account structure; any folder name is accepted as the account."
+    ]
+  },
+  "output_file": {
+    "path": "tracker/metrics.csv",
+    "exists_in_source": false,
+    "columns": [
+      "account",
+      "platform",
+      "published",
+      "title",
+      "link",
+      "format",
+      "views",
+      "reach",
+      "likes",
+      "comments",
+      "shares",
+      "saves",
+      "watch_hours",
+      "impressions",
+      "ctr_pct",
+      "imported_on"
+    ],
+    "row_key": "account + '|' + (link or title + '|' + published); a newer export updates numbers in place",
+    "missing_values": "a missing column stays blank, never a fake 0",
+    "source": [
+      {
+        "path": "content-os/tools/import-metrics.mjs",
+        "locator": "line 21"
+      },
+      {
+        "path": "content-os/tools/import-metrics.mjs",
+        "locator": "line 124"
+      }
+    ]
+  },
+  "inbox": {
+    "convention": "reports/inbox/<account>/*.csv; the folder name says whose numbers they are; imported files move to reports/inbox/processed/<date>/<account>/",
+    "header_matching": "case-insensitive; first an exact header match for any listed name, then a 'contains' match, in the listed order",
+    "detection_order": [
+      "youtube if any header contains 'video title' or 'watch time'",
+      "instagram if any header contains 'permalink', 'reach' or 'post type'",
+      "otherwise skipped ('not an Instagram or YouTube export I recognise')"
+    ],
+    "parsing": "RFC 4180 CSV; BOM stripped; blank rows dropped; numbers strip ',', '%' and spaces; dates parsed by Date.parse and written as YYYY-MM-DD",
+    "source": [
+      {
+        "path": "content-os/tools/import-metrics.mjs",
+        "locator": "line 7"
+      },
+      {
+        "path": "content-os/tools/import-metrics.mjs",
+        "locator": "line 112"
+      },
+      {
+        "path": "content-os/tools/import-metrics.mjs",
+        "locator": "line 24"
+      },
+      {
+        "path": "content-os/tools/import-metrics.mjs",
+        "locator": "line 45"
+      }
+    ]
+  },
+  "records": [
+    {
+      "id": "instagram_meta_business_suite",
+      "platform": "instagram",
+      "export_origin": "Meta Business Suite > Insights > Content > Export (CSV)",
+      "detect_if_header_contains_any": [
+        "permalink",
+        "reach",
+        "post type"
+      ],
+      "fields": {
+        "published": [
+          "publish time",
+          "date"
+        ],
+        "title": [
+          "description",
+          "caption"
+        ],
+        "link": [
+          "permalink"
+        ],
+        "format": [
+          "post type"
+        ],
+        "views": [
+          "views",
+          "plays",
+          "impressions"
+        ],
+        "reach": [
+          "reach"
+        ],
+        "likes": [
+          "likes"
+        ],
+        "comments": [
+          "comments"
+        ],
+        "shares": [
+          "shares"
+        ],
+        "saves": [
+          "saves"
+        ]
+      },
+      "transforms": {
+        "title": "truncated to 120 characters",
+        "published": "any date format -> YYYY-MM-DD",
+        "not_provided": [
+          "watch_hours",
+          "impressions",
+          "ctr_pct"
+        ]
+      },
+      "status": "documented",
+      "verification": "tested on sample data only per the content OS notes; no real export exists in reports/inbox",
+      "source": [
+        {
+          "path": "content-os/tools/import-metrics.mjs",
+          "locator": "line 8"
+        },
+        {
+          "path": "content-os/tools/import-metrics.mjs",
+          "locator": "line 73"
+        }
+      ]
+    },
+    {
+      "id": "youtube_studio_table_data",
+      "platform": "youtube",
+      "export_origin": "YouTube Studio > Analytics > Advanced mode > Export > CSV ('Table data.csv')",
+      "detect_if_header_contains_any": [
+        "video title",
+        "watch time"
+      ],
+      "fields": {
+        "content_id": [
+          "content"
+        ],
+        "title": [
+          "video title"
+        ],
+        "published": [
+          "video publish time",
+          "publish time"
+        ],
+        "views": [
+          "views"
+        ],
+        "watch_hours": [
+          "watch time (hours)",
+          "watch time"
+        ],
+        "impressions": [
+          "impressions"
+        ],
+        "ctr_pct": [
+          "impressions click-through rate",
+          "click-through rate"
+        ],
+        "likes": [
+          "likes"
+        ],
+        "comments": [
+          "comments added",
+          "comments"
+        ],
+        "shares": [
+          "shares"
+        ],
+        "duration_seconds": [
+          "duration"
+        ]
+      },
+      "transforms": {
+        "link": "https://youtu.be/<content id> when the Content column is non-empty",
+        "format": "'short (<=3 min)' if duration <= 180 s, 'video' otherwise, blank if no duration",
+        "skip_rows": "rows whose Content value is 'total' (case-insensitive)",
+        "title": "truncated to 120 characters",
+        "not_provided": [
+          "reach",
+          "saves"
+        ]
+      },
+      "status": "documented",
+      "verification": "tested on sample data only per the content OS notes; no real export exists in reports/inbox",
+      "source": [
+        {
+          "path": "content-os/tools/import-metrics.mjs",
+          "locator": "line 9"
+        },
+        {
+          "path": "content-os/tools/import-metrics.mjs",
+          "locator": "line 89"
+        }
+      ]
+    }
+  ]
+}

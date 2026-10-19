@@ -1,0 +1,43 @@
+# Business Ops OS — requirements and status
+
+IDs and text: `docs/PRODUCT_REQUIREMENTS.md` §4 (OPS-001 … OPS-029). Status vocabulary D-013: Proposed → Approved → Implemented → **Tested** (passing automated test listed in `IMPLEMENTATION_STATUS.md`) → Deployed. **Nothing is Deployed.** "Rule status" repeats the PRD's record of whether the *business rule* was approved in the legacy files; software status is ours. Traceability columns point to the code; test files are in `tests/`.
+
+| ID | Requirement (short) | P | Rule status (PRD) | Software status | Where | Notes / deviations |
+|---|---|---|---|---|---|---|
+| OPS-001 | Lead capture (student/parent contacts, school, programme interest, mode, received at, first source, channel, discovery source, campaign/content refs) | P0 | Proposed (OD-010) | **Tested** | `leads`, `enquiries`; `server/leads.ts`; `/ops/leads` | Manual entry. Leads from Marketing (MKT-036 contract) are **Proposed** (no event yet). |
+| OPS-002 | Configurable source list; Unknown stays Unknown | P0 | Proposed | **Tested** (list) | `lead_sources` seeded from the legacy CRM dropdown | Editing the list in the UI is Proposed (rows can be changed in the DB). |
+| OPS-003 | Duplicate-contact detection; no automatic merge; explicit audited merge keeping enquiries and sources | P0 | Proposed | **Tested** | A-01, A-02; `duplicate_flags`; merge review on `/ops/leads` | Shared **parent** contact alone = "possible" (siblings), a documented proposal. |
+| OPS-004 | Assignment and handoff acceptance (unassigned / handoff_pending / accepted) | P0 | Proposed | **Tested** | `leads.owner_*`, `accepted_at` | Acceptance SLA is not timed (OD-011). |
+| OPS-005 | Pipeline states enforced on the server; lost with reason; reopen with reason; forward skips; first-attainment times | P0 | Proposed | **Tested** | A-03; `admissions`, `admission_transitions` | States follow the wave-2 brief: new, contacted, counselling_scheduled, counselled, demo_scheduled, demo_attended, admission_pending, admitted, enrolment_requested, enrolled, lost, on_hold. PRD `not_interested` = `lost` + reason; `demo_in_progress` not modelled. Demo skip is an explicit proposal (setting). |
+| OPS-006 | Contact attempts; only two-way contact sets first contact | P0 | Proposed | **Tested** | `lead_activities`; BR-OPS-4 guard | |
+| OPS-007 | Follow-ups with owner + due date; flags missing_next_action / overdue / upcoming; configurable service hours | P0 | Approved (BR-OPS-9) | **Tested** | A-05, A-06; `follow_ups`; reminders job | Calendar days + closed weekdays, not service hours (OD-011). |
+| OPS-008 | Counselling sessions | P1 | Proposed | **Tested** | `counselling_sessions`; `/ops/schedule` | |
+| OPS-009 | Demo per BR-OPS-2: subjects, 2 days, separate sessions, teachers booked and notified, fee status, configurable amount; adjust/non-refundable; limits configurable | P0 | Approved | **Tested** | `demos`, `demo_teachers`; settings `demo.terms` (approved, read-only), `demo.fee` (pending_verification, OD-013), `demo.limits` (open, OD-012, not enforced) | Fee amount is configuration, not approved policy (OD-013). |
+| OPS-010 | Admission confirmation gate: two verifications by different users + authorised approval + documents + verified down payment; demo fee alone never | P0 | Approved (OP-010) / definition Proposed | **Tested** | A-04; `admission_checks`; core approval `ops.admission.fee_arrangement` | Status and references only (OD-013). |
+| OPS-011 | Admission checklist (form, documents, school/hostel coordination, kit, group, timetable) | P1 | Approved | **Tested** (as checklist items) | `admission_checks` | School and hostel coordination are checklist items, not separate linked records (Proposed). No document storage (OD-014). |
+| OPS-012 | Enrolment handoff via outbox in the same transaction; status pending / enrolled / rejected with reason / failed with retry; no duplicates | P0 | Proposed | **Tested** | A-15; `server/enrolment.ts` | Event is `ops.admission.enrolment_requested` v1 (INTEGRATION_CONTRACT), not the PRD's `ops.admission.confirmed.v1`. "Failed" = delivery `failed/dead` shown from `core.event_deliveries`. |
+| OPS-013 | Onboarding tasks generated on admission | P1 | Proposed | Proposed | — | Kit/group/timetable appear as checklist items; automatic task generation not built. |
+| OPS-014 | Departments (13 provisional) and staff directory; fictional seeds; reporting lines; linked user; roles held | P0 | Proposed | **Tested** | `core.departments`, `core.staff_members` (steward), `staff_profiles`; `/ops/staff` | No payroll, biometrics, leave or HRIS (D-015, OD-026) — scope decision. |
+| OPS-015 | Responsibilities with accountable role, holder, backup, hand-over role; gap report | P1 | Proposed | **Tested** | A-10; `responsibilities` | Legacy role list imported without names (OD-009). |
+| OPS-016 | Tasks with owner, due date, priority, status standard, links, dependencies, evidence; cycles rejected; flags | P0 | Proposed | **Tested** | A-07, A-08; `tasks`, `task_dependencies` | Accountable owner and backup added; links to lead, admission, SOP, decision, project. |
+| OPS-017 | Escalation L1–L4 with configurable thresholds, recipient, reason, response time, acknowledged and resolved; owner keeps ownership | P1 | Proposed | **Tested** | A-09; `escalations`; job | Thresholds proposed (OD-011/OD-027). |
+| OPS-018 | Routine templates generating dated tasks | P2 | Proposed | Proposed | — | Not built. |
+| OPS-019 | SOP register and lifecycle; approval via PLT-006; versions never erased; review-due flags | P1 | Proposed | **Tested** | A-11; `sops`, `sop_versions`, `sop_checklist_items`; legacy import (A-13) | Owner cannot approve own SOP; reviewer required. `effective`/`under_revision` folded into approved + draft version. Review-due flags Proposed. Coordinator SOP imported as **draft** (OD-028). |
+| OPS-020 | SOP training acknowledgements | P2 | Proposed | Proposed | — | Not built. |
+| OPS-021 | Decision log with states; legacy decisions imported with namespaced IDs and legacy state | P0 | Proposed | **Tested** | `decisions`; A-13 | |
+| OPS-022 | Policy register: rules with decision states; config values linked; proposed values marked | P1 | Approved (BR-OPS-13) | **Tested** (settings) | `settings`, `domain/policies.ts`; `/ops/settings` | Director approval of a changed value is Proposed — edits stay `proposed`. |
+| OPS-023 | Risks, issues, blockers; flags for high severity and no owner | P1 | Proposed | **Tested** | `risks` | Operational exceptions/incidents (BR-OPS-15) added in `incidents`; fee exceptions flagged, approval routing waits for OD-013. |
+| OPS-024 | Management dashboard with defined KPIs, as-of, "source unavailable"; targets proposed | P1 | Proposed | **Tested** (6 KPIs + 2 panels) | A-12, A-14; `docs/KPI_DEFINITIONS.md` | Other K-xx Proposed; targets OD-027. |
+| OPS-025 | Projects, milestones, linked tasks, timeline | P2 | Proposed | **Tested** (no timeline view) | `projects`, `milestones`, `milestone_dependencies` | |
+| OPS-026 | CRM export import | P1 | Proposed | Proposed | `server/adapters/crm.ts` (interface + mock, `not_configured`) | Depends on OD-010. |
+| OPS-027 | Outreach events | P2 | Proposed | Proposed | — | |
+| OPS-028 | Lead data protection: contact fields visible to admissions/ops roles; exports audited; retention | P1 | Proposed | Proposed (partial) | own scope for counsellors; duplicate warnings hide other counsellors' names | Director and auditor can read contacts (read-all grants); no exports; retention not built. |
+| OPS-029 | Department intake form | P2 | Proposed | Proposed | — | |
+
+## Platform requirements used
+PLT-002 (server-side permissions), PLT-004 (no self-approval: fee arrangement, SOP), PLT-005 (audit of every change), PLT-006 (approval of a specific SOP version via content hash), PLT-007 (decision states), PLT-008 (outbox), PLT-009 (summaries, source unavailable), PLT-010 (in-app notifications: assignment, reminders, escalations, enrolment replies), PLT-011 (legacy import), PLT-012 (fictional seeds), PLT-013 (IST dates, Monday weeks), PLT-016 (staff directory steward).
+
+## Scope decisions recorded
+- **Out of scope** (D-015, OD-026): payroll, biometric devices, leave/availability, appraisal, HRIS and legal employment records — the staff directory stores only operational fields.
+- **No employee ranking or scoring** (PRD 4.3): workload is a count of assigned open items sorted by name.
+- **External CRM and Vacademy are unverified** (OD-010, D-014): CRM adapter interface with a mock that reports `not_configured`; Vacademy is Academic's integration.

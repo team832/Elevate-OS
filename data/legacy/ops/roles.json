@@ -1,0 +1,584 @@
+{
+  "meta": {
+    "source_files": [
+      "content-os/plans/team-and-volume-oct-dec-2026.md",
+      "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+      "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+      "handover/outputs/online-operations/Elevate-Online-Easy.xlsx"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records",
+      "marketing_roles",
+      "offline_operations_roles",
+      "content_team_plan_roles"
+    ],
+    "notes": [
+      "Role labels, not people and not hires. 'Twelve role labels across eight functions do not mean twelve hires' (Claude.md). Assigned person/backup are blank in the source and stay null.",
+      "records = the 12 online-operations roles (Elevate-Online-Easy.xlsx Roles sheet). Other role sets found in the sources are listed separately for mapping; several labels overlap (e.g. Marketing Lead, Admissions Coordinator, Academic Counsellor).",
+      "The content OS team plan (4 teacher-faces + founder + helper) is PROPOSED and awaits approval; teacher names are never extracted."
+    ]
+  },
+  "records": [
+    {
+      "role": "Marketing Lead",
+      "function": "Marketing",
+      "main_work": "Content, campaigns, direct enquiries and source tracking",
+      "hand_over_to": "Admissions for lead follow-up",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A5:F5"
+      }
+    },
+    {
+      "role": "Webinar Coordinator",
+      "function": "Webinars",
+      "main_work": "Saturday/Sunday webinars, reminders, readiness and host review",
+      "hand_over_to": "Academic Counsellor for requested counselling",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A6:F6"
+      }
+    },
+    {
+      "role": "Admissions Coordinator",
+      "function": "Admissions",
+      "main_work": "CRM updates, appointments, follow-up and enrolment records",
+      "hand_over_to": "Counsellor for advice; Accounts for payment",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A7:F7"
+      }
+    },
+    {
+      "role": "Academic Counsellor",
+      "function": "Admissions",
+      "main_work": "Course suitability, detailed counselling and academic objections",
+      "hand_over_to": "Admissions with agreed course and approved offer",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A8:F8"
+      }
+    },
+    {
+      "role": "Accounts Officer",
+      "function": "Accounts",
+      "main_work": "Verify payment, receipts, installments and reconciliation",
+      "hand_over_to": "Operations / Technical for access entitlement",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A9:F9"
+      }
+    },
+    {
+      "role": "Academic Coordinator",
+      "function": "Academic Operations",
+      "main_work": "Timetable, materials, class readiness, tests and pending evaluation",
+      "hand_over_to": "Faculty for academic work; Support for communication",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A10:F10"
+      }
+    },
+    {
+      "role": "Faculty",
+      "function": "Academic Operations",
+      "main_work": "Teaching, checking, doubt answers, paper creation and feedback",
+      "hand_over_to": "Academic Coordinator with completion and concerns",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A11:F11"
+      }
+    },
+    {
+      "role": "Academic Head",
+      "function": "Academic Operations",
+      "main_work": "Academic review, paper approval and teaching-quality escalation",
+      "hand_over_to": "Coordinator for execution",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A12:F12"
+      }
+    },
+    {
+      "role": "Support Coordinator",
+      "function": "Student Support",
+      "main_work": "Onboarding, homework reminders, absence follow-up, reports and requests",
+      "hand_over_to": "Relevant owner; retain follow-up responsibility",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A13:F13"
+      }
+    },
+    {
+      "role": "Technical Lead",
+      "function": "Technical Support",
+      "main_work": "Website, app access, integrations, recordings and incident recovery",
+      "hand_over_to": "Requesting team verifies the fix",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A14:F14"
+      }
+    },
+    {
+      "role": "Operations Lead",
+      "function": "Management",
+      "main_work": "Daily readiness, weekly review, coverage and overdue actions",
+      "hand_over_to": "Main authority for exceptions beyond authority",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A15:F15"
+      }
+    },
+    {
+      "role": "Main authority",
+      "function": "Management",
+      "main_work": "Financial exceptions, policy, hiring and additional commitments",
+      "hand_over_to": "Responsible role to execute approved decision",
+      "assigned_person": null,
+      "backup": null,
+      "role_set": "online",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+        "locator": "sheet 'Roles'!A16:F16"
+      }
+    }
+  ],
+  "marketing_roles": [
+    {
+      "role": "Marketing Lead",
+      "owns_procedures": [
+        "MKT-01 Marketing planning",
+        "MKT-03 Accuracy and approval",
+        "MKT-09 Reporting and review"
+      ],
+      "role_set": "marketing",
+      "status": "proposed",
+      "source": [
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Content'!I6:I205 (data validation)"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'SOP Register'!A6:C14"
+        }
+      ]
+    },
+    {
+      "role": "Content Coordinator",
+      "owns_procedures": [
+        "MKT-02 Content production"
+      ],
+      "role_set": "marketing",
+      "status": "proposed",
+      "source": [
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Content'!I6:I205 (data validation)"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'SOP Register'!A6:C14"
+        }
+      ]
+    },
+    {
+      "role": "Editor / Designer",
+      "owns_procedures": [],
+      "role_set": "marketing",
+      "status": "proposed",
+      "source": [
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Content'!I6:I205 (data validation)"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'SOP Register'!A6:C14"
+        }
+      ]
+    },
+    {
+      "role": "Publishing Executive",
+      "owns_procedures": [
+        "MKT-04 Publishing",
+        "MKT-05 Enquiry handoff"
+      ],
+      "role_set": "marketing",
+      "status": "proposed",
+      "source": [
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Content'!I6:I205 (data validation)"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'SOP Register'!A6:C14"
+        }
+      ]
+    },
+    {
+      "role": "Paid Marketing Owner",
+      "owns_procedures": [
+        "MKT-06 Campaign launch",
+        "MKT-07 Campaign changes and closure"
+      ],
+      "role_set": "marketing",
+      "status": "proposed",
+      "source": [
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Content'!I6:I205 (data validation)"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'SOP Register'!A6:C14"
+        }
+      ]
+    },
+    {
+      "role": "Outreach Coordinator",
+      "owns_procedures": [
+        "MKT-08 Outreach execution"
+      ],
+      "role_set": "marketing",
+      "status": "proposed",
+      "source": [
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Content'!I6:I205 (data validation)"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'SOP Register'!A6:C14"
+        }
+      ]
+    },
+    {
+      "role": "Academic Reviewer",
+      "owns_procedures": [],
+      "role_set": "marketing",
+      "status": "proposed",
+      "source": [
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Content'!I6:I205 (data validation)"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'SOP Register'!A6:C14"
+        }
+      ]
+    },
+    {
+      "role": "Admissions Coordinator",
+      "owns_procedures": [],
+      "role_set": "marketing",
+      "status": "proposed",
+      "source": [
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Content'!I6:I205 (data validation)"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'SOP Register'!A6:C14"
+        }
+      ]
+    },
+    {
+      "role": "Academic Counsellor",
+      "owns_procedures": [],
+      "role_set": "marketing",
+      "status": "proposed",
+      "source": [
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Content'!I6:I205 (data validation)"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'SOP Register'!A6:C14"
+        }
+      ]
+    },
+    {
+      "role": "Institute Authority",
+      "owns_procedures": [],
+      "role_set": "marketing",
+      "status": "proposed",
+      "source": [
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Content'!I6:I205 (data validation)"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'SOP Register'!A6:C14"
+        }
+      ]
+    }
+  ],
+  "offline_operations_roles": [
+    {
+      "role": "Academic coordinator",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Academic counsellor",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Accounts",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Accounts and approver",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Attendance role",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Content team and operator",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Documentation role",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Exam operations",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Marketing role",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Office attendant",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Operations lead",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Reception",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Reception and academic counsellor",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Student support",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Teachers and exam operations",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    },
+    {
+      "role": "Teachers and student support",
+      "role_set": "offline_operations",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+        "locator": "sheet 'Work Inventory'!E5:E29"
+      }
+    }
+  ],
+  "content_team_plan_roles": [
+    {
+      "role": "Quant teacher-face",
+      "covers": "CLAT Quant · IPMAT Quant · CUET GAT maths",
+      "role_set": "content_os_team_plan",
+      "status": "proposed",
+      "source": {
+        "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+        "locator": "line 41"
+      }
+    },
+    {
+      "role": "English + Logical teacher-face",
+      "covers": "CLAT English + Logical · IPMAT Verbal · CUET English",
+      "role_set": "content_os_team_plan",
+      "status": "proposed",
+      "source": {
+        "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+        "locator": "line 42"
+      }
+    },
+    {
+      "role": "GK & Current Affairs teacher-face",
+      "covers": "CLAT GK (the \"Weekly 10\") · CUET GAT GK",
+      "role_set": "content_os_team_plan",
+      "status": "proposed",
+      "source": {
+        "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+        "locator": "line 43"
+      }
+    },
+    {
+      "role": "Commerce teacher-face",
+      "covers": "Commerce & CUET page: board strategy, CUET domain subjects",
+      "role_set": "content_os_team_plan",
+      "status": "proposed",
+      "source": {
+        "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+        "locator": "line 44"
+      }
+    },
+    {
+      "role": "Founder (on camera)",
+      "covers": "CLAT Legal Reasoning · founder content · BST sometimes",
+      "role_set": "content_os_team_plan",
+      "status": "proposed",
+      "source": {
+        "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+        "locator": "line 45"
+      }
+    },
+    {
+      "role": "Content helper (off camera)",
+      "covers": "books the weekly recording slot, films on a phone, sends Claude the originals, posts daily stories, replies to comments and DMs",
+      "role_set": "content_os_team_plan",
+      "status": "proposed",
+      "source": {
+        "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+        "locator": "line 46"
+      }
+    }
+  ],
+  "label_note": {
+    "text": "These are roles, not a required headcount.",
+    "source": {
+      "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+      "locator": "sheet 'Roles'!A18"
+    }
+  }
+}

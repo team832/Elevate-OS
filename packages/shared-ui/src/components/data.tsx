@@ -1,0 +1,132 @@
+import type { ReactNode } from 'react';
+import type { Metric } from '@elevate/shared-contracts';
+import type { FeatureStatus } from '@elevate/shared-types';
+import { EmptyState } from './states';
+
+export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+
+export function StatusBadge({ children, tone = 'neutral' }: { children: ReactNode; tone?: Tone }) {
+  return <span className={`el-badge el-tone-${tone}`}>{children}</span>;
+}
+
+const FEATURE_TONES: Record<FeatureStatus, Tone> = {
+  Proposed: 'neutral',
+  Approved: 'info',
+  Implemented: 'warning',
+  Tested: 'success',
+  Deployed: 'success',
+};
+
+/** Badge for the D-013 feature status vocabulary. */
+export function FeatureStatusBadge({ status }: { status: FeatureStatus }) {
+  return <StatusBadge tone={FEATURE_TONES[status]}>{status}</StatusBadge>;
+}
+
+export interface Column<T> {
+  key: string;
+  header: ReactNode;
+  /** Cell content; defaults to `String(row[key])`. */
+  render?: (row: T) => ReactNode;
+  /** Right-align numbers. */
+  numeric?: boolean;
+}
+
+export interface DataTableProps<T> {
+  columns: readonly Column<T>[];
+  rows: readonly T[];
+  rowKey: (row: T) => string;
+  /** Accessible table caption (visible). */
+  caption?: ReactNode;
+  /** Shown instead of the table when `rows` is empty. */
+  empty?: ReactNode;
+}
+
+export function DataTable<T>({ columns, rows, rowKey, caption, empty }: DataTableProps<T>) {
+  if (rows.length === 0) {
+    return <>{empty ?? <EmptyState title="Nothing here yet" />}</>;
+  }
+  return (
+    <div className="el-table-wrap">
+      <table className="el-table">
+        {caption ? <caption>{caption}</caption> : null}
+        <thead>
+          <tr>
+            {columns.map((c) => (
+              <th key={c.key} scope="col" className={c.numeric ? 'el-num' : undefined}>
+                {c.header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={rowKey(row)}>
+              {columns.map((c) => (
+                <td key={c.key} className={c.numeric ? 'el-num' : undefined}>
+                  {c.render ? c.render(row) : String((row as Record<string, unknown>)[c.key] ?? '')}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const numberFormat = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 });
+
+export function formatMetricValue(metric: Pick<Metric, 'value' | 'unit'>): string {
+  if (metric.value === null) return '';
+  switch (metric.unit) {
+    case 'percent':
+      return `${numberFormat.format(metric.value)}%`;
+    case 'inr':
+      return `₹${numberFormat.format(metric.value)}`;
+    case 'minutes':
+      return `${numberFormat.format(metric.value)} min`;
+    case 'hours':
+      return `${numberFormat.format(metric.value)} h`;
+    default:
+      return numberFormat.format(metric.value);
+  }
+}
+
+/**
+ * One metric. MISSING IS NOT ZERO:
+ * - ok        → the number (0 shows as "0")
+ * - estimated → "≈ number" with an "Estimated" badge and the basis
+ * - missing   → "Missing" in a dashed tile with the reason; never a number
+ */
+export function StatTile({ label, metric }: { label: string; metric: Metric }) {
+  const description = `${metric.definition} (${metric.window.label ?? `${metric.window.from} to ${metric.window.to}`})`;
+  if (metric.status === 'missing') {
+    return (
+      <div className="el-stat el-stat-missing" data-status="missing">
+        <p className="el-stat-label">{label}</p>
+        <p className="el-stat-value">Missing</p>
+        <p className="el-stat-note">{metric.reason}</p>
+        <p className="el-stat-note">{description}</p>
+      </div>
+    );
+  }
+  if (metric.status === 'estimated') {
+    return (
+      <div className="el-stat el-stat-estimated" data-status="estimated">
+        <p className="el-stat-label">
+          {label} <StatusBadge tone="warning">Estimated</StatusBadge>
+        </p>
+        <p className="el-stat-value">≈ {formatMetricValue(metric)}</p>
+        <p className="el-stat-note">Basis: {metric.basis}</p>
+        <p className="el-stat-note">{description}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="el-stat" data-status="ok">
+      <p className="el-stat-label">{label}</p>
+      <p className="el-stat-value">{formatMetricValue(metric)}</p>
+      <p className="el-stat-note">{description}</p>
+    </div>
+  );
+}

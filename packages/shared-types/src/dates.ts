@@ -24,7 +24,8 @@ export function isIsoDate(value: unknown): value is IsoDate {
 }
 
 export function parseIsoDate(value: string): IsoDate {
-  if (!isIsoDate(value)) throw new RangeError(`Not a valid YYYY-MM-DD date: ${JSON.stringify(value)}`);
+  if (!isIsoDate(value))
+    throw new RangeError(`Not a valid YYYY-MM-DD date: ${JSON.stringify(value)}`);
   return value;
 }
 

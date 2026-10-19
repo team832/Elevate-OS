@@ -1,0 +1,642 @@
+{
+  "meta": {
+    "source_files": [
+      "content-os/CLAUDE.md",
+      "content-os/HANDOFF.md",
+      "content-os/accounts/instagram-clat/PROFILE.md",
+      "content-os/accounts/instagram-clat/README.md",
+      "content-os/accounts/instagram-cuet12/README.md",
+      "content-os/accounts/instagram-ipmat/README.md",
+      "content-os/accounts/instagram-{founder}/README.md",
+      "content-os/accounts/instagram-sikar/README.md",
+      "content-os/accounts/linkedin-elevate/README.md",
+      "content-os/accounts/linkedin-{founder}/README.md",
+      "content-os/accounts/youtube-clat/README.md",
+      "content-os/accounts/youtube-clat/channels.json",
+      "content-os/accounts/youtube-cuet12/README.md",
+      "content-os/accounts/youtube-cuet12/channels.json",
+      "content-os/accounts/youtube-ipmat/README.md",
+      "content-os/accounts/youtube-ipmat/channels.json",
+      "content-os/plans/team-and-volume-oct-dec-2026.md",
+      "handover/Claude.md",
+      "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records",
+      "conflicts"
+    ],
+    "notes": [
+      "Handles are null unless the source records them as confirmed; suggested handles are in proposed_handle.",
+      "status: active = legacy 'live'; planned = legacy 'starting' or 'later' (legacy_status keeps the raw word).",
+      "team_plan comes from plans/team-and-volume-oct-dec-2026.md, which is PROPOSED (not approved)."
+    ]
+  },
+  "summary": {
+    "approved_structure": "9 accounts, 6 Metricool brands (approved by the founder 6 Oct 2026)",
+    "approved_structure_codes": [
+      "IGC",
+      "YTC",
+      "IGU",
+      "YTU",
+      "IGI",
+      "YTI",
+      "IGS",
+      "LIP",
+      "LI"
+    ],
+    "later_codes": [
+      "IGN"
+    ],
+    "metricool_brands": [
+      "Elevate CLAT",
+      "Elevate CUET + 12th",
+      "Elevate Education",
+      "Elevate IPMAT",
+      "Elevate Sikar",
+      "[founder] (personal LinkedIn brand)"
+    ],
+    "version_suffix_rule": "Placement/version ID = idea ID + '-' + account code; add 'S' for a YouTube Short (-YTCS) and 'L' for a long video (-YTCL) when one idea gets both.",
+    "collab_rule": "Exam pages stay pure (solo); comparisons and 'every path' content = Instagram/YouTube Collab across the exam pages involved.",
+    "status": "approved",
+    "source": [
+      {
+        "path": "content-os/CLAUDE.md",
+        "locator": "line 47"
+      },
+      {
+        "path": "content-os/CLAUDE.md",
+        "locator": "line 51"
+      },
+      {
+        "path": "content-os/CLAUDE.md",
+        "locator": "line 45"
+      }
+    ]
+  },
+  "records": [
+    {
+      "code": "IGC",
+      "legacy_slug": "instagram-clat",
+      "platform": "instagram",
+      "exam_or_scope": "CLAT",
+      "display_name": "Elevate Law School | CLAT Prep",
+      "display_name_status": "approved",
+      "handle": "@elevate.clat",
+      "handle_status": "confirmed_live",
+      "audience": "Class 11-12 commerce students considering law, and their parents",
+      "job": "own CLAT for commerce families",
+      "cadence": "6 posts/week (one per CLAT section + strategy) + stories",
+      "content_rules": [
+        "Reels 20-45 s, hook on screen in the first second",
+        "No CA vs CLAT comparisons (rejected 6 Oct 2026)",
+        "Countdown to 6 Dec 2026",
+        "Hinglish",
+        "No result/topper claims (year one)",
+        "Pure exam content solo; comparisons/every-path content as Collab"
+      ],
+      "status": "active",
+      "legacy_status": "live",
+      "metricool_brand": "Elevate CLAT",
+      "exam_page": true,
+      "team_plan": {
+        "posts_per_week": "6 + daily stories",
+        "formats": "4 reels, 2 carousels",
+        "on_camera": "Section teachers + [founder] (Legal)",
+        "status": "proposed",
+        "source": {
+          "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+          "locator": "line 9"
+        }
+      },
+      "proposed_handle": null,
+      "proposed_display_name": null,
+      "collab_rule_applies": true,
+      "source": [
+        {
+          "path": "content-os/accounts/instagram-clat/README.md",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/accounts/instagram-clat/README.md",
+          "locator": "line 3"
+        },
+        {
+          "path": "content-os/accounts/instagram-clat/PROFILE.md",
+          "locator": "line 9"
+        },
+        {
+          "path": "content-os/accounts/instagram-clat/PROFILE.md",
+          "locator": "line 10"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 40"
+        }
+      ]
+    },
+    {
+      "code": "YTC",
+      "legacy_slug": "youtube-clat",
+      "platform": "youtube",
+      "exam_or_scope": "CLAT",
+      "display_name": null,
+      "display_name_status": "proposed",
+      "proposed_display_name": "Elevate Law School | CLAT Prep",
+      "handle_status": "tbd",
+      "proposed_handle": "@elevate.clat (fallback @elevateclat)",
+      "audience": null,
+      "job": "CLAT search + trust",
+      "cadence": "1 long video + 3-4 Shorts a week",
+      "content_rules": [
+        "Long-form from courses/clat/intel.md '15 search titles'",
+        "No CA vs CLAT comparisons (rejected 6 Oct 2026)",
+        "Exam-day analysis live on 6 Dec 2026 within 1-2 h",
+        "Titles: exam + year + intent"
+      ],
+      "status": "active",
+      "legacy_status": "live",
+      "metricool_brand": "Elevate CLAT",
+      "exam_page": true,
+      "team_plan": {
+        "posts_per_week": "1 long + 4-5 Shorts",
+        "formats": "Shorts = re-cut reels",
+        "on_camera": "same",
+        "status": "proposed",
+        "source": {
+          "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+          "locator": "line 10"
+        }
+      },
+      "notes": [
+        "README says handle TBD; channels.json still holds the placeholder '@REPLACE-WITH-OUR-HANDLE'. PROFILE.md is a setup specification, not confirmation that the channel uses that handle."
+      ],
+      "handle": null,
+      "collab_rule_applies": true,
+      "source": [
+        {
+          "path": "content-os/accounts/youtube-clat/README.md",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/accounts/youtube-clat/README.md",
+          "locator": "line 2"
+        },
+        {
+          "path": "content-os/accounts/instagram-clat/PROFILE.md",
+          "locator": "line 45"
+        },
+        {
+          "path": "content-os/accounts/youtube-clat/channels.json",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 40"
+        }
+      ]
+    },
+    {
+      "code": "IGU",
+      "legacy_slug": "instagram-cuet12",
+      "platform": "instagram",
+      "exam_or_scope": "Class 11-12 Commerce + CUET",
+      "display_name": null,
+      "display_name_status": "proposed",
+      "proposed_display_name": "Elevate Commerce & CUET",
+      "handle_status": "tbd",
+      "proposed_handle": "@elevate.commerce",
+      "audience": "commerce students, parents",
+      "job": "Class 11-12 Commerce boards + CUET (same syllabus)",
+      "cadence": "4-5 posts/week + stories",
+      "content_rules": [
+        "Subject reels, board strategy, CUET subject choice, carousels",
+        "Hinglish",
+        "Commerce and CUET are equal domains"
+      ],
+      "status": "active",
+      "legacy_status": "live",
+      "metricool_brand": "Elevate CUET + 12th",
+      "exam_page": true,
+      "team_plan": {
+        "posts_per_week": "3 + stories",
+        "formats": "2 reels, 1 carousel",
+        "on_camera": "Commerce teacher (+ [founder] for BST sometimes)",
+        "status": "proposed",
+        "source": {
+          "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+          "locator": "line 13"
+        }
+      },
+      "handle": null,
+      "collab_rule_applies": true,
+      "source": [
+        {
+          "path": "content-os/accounts/instagram-cuet12/README.md",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/accounts/instagram-cuet12/README.md",
+          "locator": "line 3"
+        },
+        {
+          "path": "content-os/HANDOFF.md",
+          "locator": "line 118"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 40"
+        }
+      ]
+    },
+    {
+      "code": "YTU",
+      "legacy_slug": "youtube-cuet12",
+      "platform": "youtube",
+      "exam_or_scope": "Class 11-12 Commerce + CUET",
+      "display_name": null,
+      "display_name_status": "unknown",
+      "handle_status": "tbd",
+      "audience": null,
+      "job": "board + CUET search",
+      "cadence": "1 long + 3-4 Shorts a week",
+      "content_rules": [
+        "Angle: boards + the right entrance together, explained honestly"
+      ],
+      "status": "active",
+      "legacy_status": "live",
+      "metricool_brand": "Elevate CUET + 12th",
+      "exam_page": true,
+      "team_plan": {
+        "posts_per_week": "1 long every 2 weeks + 2-3 Shorts",
+        "formats": null,
+        "on_camera": "same",
+        "status": "proposed",
+        "source": {
+          "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+          "locator": "line 14"
+        }
+      },
+      "notes": [
+        "channels.json still holds the placeholder '@REPLACE-WITH-OUR-HANDLE'."
+      ],
+      "handle": null,
+      "proposed_handle": null,
+      "proposed_display_name": null,
+      "collab_rule_applies": true,
+      "source": [
+        {
+          "path": "content-os/accounts/youtube-cuet12/README.md",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/accounts/youtube-cuet12/channels.json",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 40"
+        }
+      ]
+    },
+    {
+      "code": "IGI",
+      "legacy_slug": "instagram-ipmat",
+      "platform": "instagram",
+      "exam_or_scope": "IPMAT",
+      "display_name": null,
+      "display_name_status": "proposed",
+      "proposed_display_name": "Elevate IPMAT | IIM Entrance",
+      "handle_status": "tbd",
+      "proposed_handle": "@elevate.ipmat",
+      "audience": null,
+      "job": "own IPMAT for commerce families",
+      "cadence": "4-5 posts/week + stories",
+      "content_rules": [
+        "Honest takes beat coaching content (courses/ipmat/intel.md)"
+      ],
+      "status": "planned",
+      "legacy_status": "starting",
+      "metricool_brand": "Elevate IPMAT",
+      "exam_page": true,
+      "team_plan": {
+        "posts_per_week": "3 + stories",
+        "formats": "2 reels, 1 carousel",
+        "on_camera": "Quant + Verbal teachers",
+        "status": "proposed",
+        "source": {
+          "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+          "locator": "line 11"
+        }
+      },
+      "handle": null,
+      "collab_rule_applies": true,
+      "source": [
+        {
+          "path": "content-os/accounts/instagram-ipmat/README.md",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/HANDOFF.md",
+          "locator": "line 117"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 40"
+        }
+      ]
+    },
+    {
+      "code": "YTI",
+      "legacy_slug": "youtube-ipmat",
+      "platform": "youtube",
+      "exam_or_scope": "IPMAT",
+      "display_name": null,
+      "display_name_status": "unknown",
+      "handle_status": "tbd",
+      "audience": null,
+      "job": null,
+      "cadence": "1 long + 3-4 Shorts a week",
+      "content_rules": [
+        "Parent explainers are an empty space in the market"
+      ],
+      "status": "planned",
+      "legacy_status": "starting",
+      "metricool_brand": "Elevate IPMAT",
+      "exam_page": true,
+      "team_plan": {
+        "posts_per_week": "1 long every 2 weeks + 2-3 Shorts",
+        "formats": null,
+        "on_camera": "same",
+        "status": "proposed",
+        "source": {
+          "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+          "locator": "line 12"
+        }
+      },
+      "notes": [
+        "channels.json still holds the placeholder '@REPLACE-WITH-OUR-HANDLE'."
+      ],
+      "handle": null,
+      "proposed_handle": null,
+      "proposed_display_name": null,
+      "collab_rule_applies": true,
+      "source": [
+        {
+          "path": "content-os/accounts/youtube-ipmat/README.md",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/accounts/youtube-ipmat/channels.json",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 40"
+        }
+      ]
+    },
+    {
+      "code": "IGS",
+      "legacy_slug": "instagram-sikar",
+      "platform": "instagram",
+      "exam_or_scope": "Sikar centre (local)",
+      "display_name": null,
+      "display_name_status": "proposed",
+      "proposed_display_name": "Elevate Education Sikar",
+      "handle_status": "tbd",
+      "proposed_handle": "@elevate.sikar",
+      "audience": "Sikar families and students",
+      "job": "local presence for the Sikar centre",
+      "cadence": null,
+      "content_rules": [
+        "The ONE account where Sikar and the offline centre are the point",
+        "Classroom life, teachers, local events, admissions for the centre; local Hinglish/Hindi",
+        "No result/topper claims (year one)"
+      ],
+      "status": "active",
+      "legacy_status": "live",
+      "metricool_brand": "Elevate Sikar",
+      "exam_page": false,
+      "team_plan": {
+        "posts_per_week": "2-3 + stories",
+        "formats": "phone clips: classroom, events, local notices",
+        "on_camera": "Sikar centre staff",
+        "status": "proposed",
+        "source": {
+          "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+          "locator": "line 15"
+        }
+      },
+      "notes": [
+        "Sikar has no YouTube channel (HANDOFF section 8)."
+      ],
+      "handle": null,
+      "collab_rule_applies": false,
+      "source": [
+        {
+          "path": "content-os/accounts/instagram-sikar/README.md",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/HANDOFF.md",
+          "locator": "line 119"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 40"
+        }
+      ]
+    },
+    {
+      "code": "LIP",
+      "legacy_slug": "linkedin-elevate",
+      "platform": "linkedin",
+      "exam_or_scope": "Company page",
+      "display_name": "ElevateEducation",
+      "display_name_status": "documented",
+      "proposed_display_name": "Elevate Education",
+      "handle_status": "not_recorded",
+      "audience": "parents, young professionals and founders (LinkedIn rule)",
+      "job": "amplify the founder; the brand home",
+      "cadence": "Same-day repost within 1-2 h of founder posts; native posts the day after; own posts (hiring, admissions news)",
+      "content_rules": [
+        "No results claims",
+        "Scheduled through Metricool (brand: Elevate Education) once connected; manual reposts until then"
+      ],
+      "status": "active",
+      "legacy_status": "live",
+      "metricool_brand": "Elevate Education",
+      "exam_page": false,
+      "team_plan": {
+        "posts_per_week": "2",
+        "formats": "reshares + page posts",
+        "on_camera": "none",
+        "status": "proposed",
+        "source": {
+          "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+          "locator": "line 17"
+        }
+      },
+      "notes": [
+        "Page currently shows 'ElevateEducation'; rename to 'Elevate Education' is an open owner task (HANDOFF section 6)."
+      ],
+      "handle": null,
+      "proposed_handle": null,
+      "collab_rule_applies": false,
+      "source": [
+        {
+          "path": "content-os/accounts/linkedin-elevate/README.md",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/accounts/linkedin-elevate/README.md",
+          "locator": "line 4"
+        },
+        {
+          "path": "content-os/HANDOFF.md",
+          "locator": "line 93"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 40"
+        }
+      ]
+    },
+    {
+      "code": "LI",
+      "legacy_slug": "linkedin-{founder}",
+      "platform": "linkedin",
+      "exam_or_scope": "Founder (personal profile)",
+      "display_name": "[founder] (personal)",
+      "display_name_status": "documented",
+      "handle_status": "withheld_personal_data",
+      "audience": "parents of Class 10-12 commerce students, young professionals, educators/founders",
+      "job": "trust in the founder and the message",
+      "cadence": "4 posts/week, max 1 a day",
+      "content_rules": [
+        "Never student exam tips",
+        "No polls, no 'comment X', no hashtags",
+        "Formula: his mistake or cost -> a framework the reader can use -> one specific question",
+        "Mix (Oct-Nov): 8 text+photo, 4 short videos, 2 carousels, 2 text-only per 4 weeks",
+        "Timing test until 1 Nov 2026: 8:30am / 1:00pm / 8:00pm IST rotation",
+        "Scheduling: Taplio until 15 Oct 2026, then Metricool; only after the founder's yes"
+      ],
+      "status": "active",
+      "legacy_status": "live",
+      "metricool_brand": "[founder] (personal LinkedIn brand)",
+      "exam_page": false,
+      "team_plan": {
+        "posts_per_week": "4",
+        "formats": "text / image / video",
+        "on_camera": "[founder]",
+        "status": "proposed",
+        "source": {
+          "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+          "locator": "line 16"
+        }
+      },
+      "notes": [
+        "The personal profile URL exists in the legacy README but is personal data and is not extracted.",
+        "strategy.md, plan.md, log.md and voice.md in this folder are 38-43 byte stubs pointing to a Mac path; their content is not in the source."
+      ],
+      "handle": null,
+      "proposed_handle": null,
+      "proposed_display_name": null,
+      "collab_rule_applies": false,
+      "source": [
+        {
+          "path": "content-os/accounts/linkedin-{founder}/README.md",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/accounts/linkedin-{founder}/README.md",
+          "locator": "line 5"
+        },
+        {
+          "path": "content-os/accounts/linkedin-{founder}/README.md",
+          "locator": "line 9"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 40"
+        }
+      ]
+    },
+    {
+      "code": "IGN",
+      "legacy_slug": "instagram-{founder}",
+      "platform": "instagram",
+      "exam_or_scope": "Founder (personal)",
+      "display_name": null,
+      "display_name_status": "unknown",
+      "handle_status": "withheld_personal_data",
+      "audience": "parents and students",
+      "job": "the founder's face and story",
+      "cadence": "3 reels/week + stories (when started)",
+      "content_rules": [
+        "Collab posts with the exam pages when relevant",
+        "Reels 20-45 s, hook as on-screen text in the first second",
+        "Bio never mentions NLSIU"
+      ],
+      "status": "planned",
+      "legacy_status": "later",
+      "metricool_brand": null,
+      "exam_page": false,
+      "team_plan": {
+        "posts_per_week": "later",
+        "formats": null,
+        "on_camera": null,
+        "status": "proposed",
+        "source": {
+          "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+          "locator": "line 18"
+        }
+      },
+      "notes": [
+        "An existing personal handle and a rename recommendation (awaiting the founder's yes) are recorded in the legacy README; personal data, not extracted.",
+        "Not one of the 9 approved accounts; CLAUDE.md lists its code as '(later)'. No Metricool brand stated."
+      ],
+      "handle": null,
+      "proposed_handle": null,
+      "proposed_display_name": null,
+      "collab_rule_applies": false,
+      "source": [
+        {
+          "path": "content-os/accounts/instagram-{founder}/README.md",
+          "locator": "line 1"
+        },
+        {
+          "path": "content-os/CLAUDE.md",
+          "locator": "line 40"
+        }
+      ]
+    }
+  ],
+  "conflicts": [
+    {
+      "id": "ACC-CONFLICT-001",
+      "description": "The operations/marketing handover (Project B, Sept 2026) uses a different account model: Instagram pages Elevate CA, Elevate CLAT, Elevate Sikar, Elevate Online and YouTube channels Elevate IPMAT, Elevate Commerce & CUET, Elevate CLAT. 'Elevate CA' and 'Elevate Online' do not exist in the Content OS model approved 6 Oct 2026 (which also forbids marketing CA as a course and labelling Elevate 'online').",
+      "status": "unreconciled",
+      "accounts_in_other_model": [
+        "Elevate Sikar",
+        "Elevate CA",
+        "Elevate CLAT",
+        "Elevate Online",
+        "Elevate IPMAT",
+        "Elevate Commerce & CUET"
+      ],
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 171"
+        },
+        {
+          "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+          "locator": "sheet 'Content'!B6:B205 (data validation)"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@elevate/authorization",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Role catalogue (D-008), per-module permission files and role grants, can()/requirePermission()/modulesFor() and record-level scope hooks.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@elevate/shared-contracts": "0.1.0",
+    "@elevate/shared-types": "0.1.0"
+  }
+}

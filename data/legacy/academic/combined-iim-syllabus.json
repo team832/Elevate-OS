@@ -1,0 +1,1437 @@
+{
+  "meta": {
+    "source_files": [
+      "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+      "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records",
+      "exam_application_layer",
+      "quant_topic_evidence",
+      "quant_evidence_sources"
+    ],
+    "notes": [
+      "Combined Undergraduate Entrance Syllabus v1.0 (curriculum draft for discussion): one programme for IIMB UG-AT, IPMAT Indore, IIM Kozhikode BMS, IPMAT Rohtak and JIPMAT.",
+      "The markdown does NOT map individual topics to exams; every module applies to all five targets, with exam differences handled in a separate practice/mock 'application layer'.",
+      "Per-topic exam evidence exists only for Quant, in Quant-Exam-Index-Comparison.xlsx (checked 11 Sep 2026; eight exams; IPMAT Rohtak is not in that comparison). Its 'Our location' column refers to an older 32-chapter Quant index, not the locked 38-chapter Book 2.",
+      "Official scope is distinguished from coaching-derived detail; verify the applicable year's official syllabus before use."
+    ]
+  },
+  "target_exams": [
+    "IIMB UG-AT",
+    "IPMAT Indore",
+    "IIM Kozhikode BMS",
+    "IPMAT Rohtak",
+    "JIPMAT"
+  ],
+  "records": [
+    {
+      "area": "Quantitative Ability",
+      "modules": [
+        {
+          "module_id": "Q01",
+          "module": "Calculation foundations",
+          "topics": [
+            "Fractions and decimals",
+            "fraction-percentage conversions",
+            "multiplication and division",
+            "squares, cubes and roots",
+            "approximation",
+            "order of operations",
+            "estimation and calculation efficiency"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 15"
+          }
+        },
+        {
+          "module_id": "Q02",
+          "module": "Number systems",
+          "topics": [
+            "Number types and properties",
+            "primes",
+            "factors and multiples",
+            "divisibility",
+            "HCF/LCM",
+            "remainders",
+            "unit/last digits and cyclicity",
+            "factorials",
+            "elementary base-system questions"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 16"
+          }
+        },
+        {
+          "module_id": "Q03",
+          "module": "Percentages",
+          "topics": [
+            "Base values",
+            "percentage increase/decrease",
+            "successive changes",
+            "reverse percentages",
+            "product constancy and applications"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 17"
+          }
+        },
+        {
+          "module_id": "Q04",
+          "module": "Ratio, proportion and variation",
+          "topics": [
+            "Equivalent/combined ratios",
+            "direct and inverse proportion",
+            "variation",
+            "partnership applications",
+            "proportional comparisons"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 18"
+          }
+        },
+        {
+          "module_id": "Q05",
+          "module": "Averages, mixtures and alligation",
+          "topics": [
+            "Simple/weighted averages",
+            "changing averages",
+            "mixtures",
+            "concentration",
+            "alligation",
+            "removal and replacement"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 19"
+          }
+        },
+        {
+          "module_id": "Q06",
+          "module": "Commercial arithmetic",
+          "topics": [
+            "Profit, loss, marked price, discount and successive discounts",
+            "false weights/adulteration",
+            "simple/compound interest",
+            "growth and depreciation",
+            "instalment problems"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 20"
+          }
+        },
+        {
+          "module_id": "Q07",
+          "module": "Work and movement",
+          "topics": [
+            "Time/work",
+            "efficiency",
+            "wages and person-day-hour relationships",
+            "pipes/cisterns",
+            "speed/distance/time",
+            "relative/average speed",
+            "trains",
+            "boats/streams",
+            "races and circular motion"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 21"
+          }
+        },
+        {
+          "module_id": "Q08",
+          "module": "Algebra foundations",
+          "topics": [
+            "Expressions",
+            "identities",
+            "factorisation",
+            "surds/indices",
+            "exponential and logarithmic expressions/equations"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 22"
+          }
+        },
+        {
+          "module_id": "Q09",
+          "module": "Equations and inequalities",
+          "topics": [
+            "Linear/simultaneous equations",
+            "quadratic equations and roots",
+            "polynomial equations",
+            "integral solutions",
+            "linear/quadratic/rational/modulus inequalities",
+            "algebraic maxima/minima"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 23"
+          }
+        },
+        {
+          "module_id": "Q10",
+          "module": "Sequences and binomial expansion",
+          "topics": [
+            "AP, GP and HP",
+            "sums and special series",
+            "binomial theorem and coefficient questions"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 24"
+          }
+        },
+        {
+          "module_id": "Q11",
+          "module": "Sets, relations and functions",
+          "topics": [
+            "Set operations",
+            "Venn diagrams",
+            "relations",
+            "domain/range",
+            "composition/inverse",
+            "function graphs",
+            "modulus/greatest-integer functions",
+            "functional equations"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 25"
+          }
+        },
+        {
+          "module_id": "Q12",
+          "module": "Matrices and determinants",
+          "topics": [
+            "Matrix types and operations",
+            "determinants and properties",
+            "inverses",
+            "solving simultaneous equations"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 26"
+          }
+        },
+        {
+          "module_id": "Q13",
+          "module": "Geometry and mensuration",
+          "topics": [
+            "Lines/angles",
+            "triangles",
+            "congruence/similarity",
+            "triangle centres",
+            "quadrilaterals/polygons",
+            "circles/tangents/chords",
+            "perimeter/area",
+            "surface area/volume and combined shapes"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 27"
+          }
+        },
+        {
+          "module_id": "Q14",
+          "module": "Coordinate geometry and trigonometry",
+          "topics": [
+            "Distance, midpoint and section formula",
+            "straight lines",
+            "circles and introductory conics",
+            "trigonometric ratios/identities/equations",
+            "heights/distances",
+            "function graphs"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 28"
+          }
+        },
+        {
+          "module_id": "Q15",
+          "module": "Counting and probability",
+          "topics": [
+            "Counting principles",
+            "permutations and combinations",
+            "repetition/identical objects",
+            "selections and arrangements",
+            "probability",
+            "conditional and independent events",
+            "elementary distributions"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 29"
+          }
+        },
+        {
+          "module_id": "Q16",
+          "module": "Statistics",
+          "topics": [
+            "Mean, median and mode",
+            "weighted/grouped data",
+            "range, variance and standard deviation",
+            "interpretation of statistical summaries"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 30"
+          }
+        },
+        {
+          "module_id": "Q17",
+          "module": "Higher-maths coverage review",
+          "topics": [
+            "Limits",
+            "continuity",
+            "differentiation and applications of derivatives. Also verify the required depth of complex numbers, inverse trigonometry, Bayes' theorem, integration and 3D coordinate geometry against the applicable IIMB NCERT scope and sample material before final lesson allocation"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": true,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 31"
+          }
+        }
+      ],
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+        "locator": "line 11"
+      }
+    },
+    {
+      "area": "Verbal Ability and Reading Comprehension",
+      "modules": [
+        {
+          "module_id": "V01",
+          "module": "Reading comprehension",
+          "topics": [
+            "Passage structure",
+            "main idea",
+            "supporting detail",
+            "inference",
+            "tone/purpose",
+            "fact/opinion",
+            "titles/summaries",
+            "vocabulary in context",
+            "argument flow",
+            "timed reading across factual, literary, social, business and scientific passages"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 39"
+          }
+        },
+        {
+          "module_id": "V02",
+          "module": "Grammar foundations",
+          "topics": [
+            "Parts of speech",
+            "nouns, pronouns and articles",
+            "verbs/tenses",
+            "subject-verb agreement",
+            "adjectives/adverbs",
+            "prepositions/conjunctions",
+            "conditionals/modals",
+            "sentence structure"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 40"
+          }
+        },
+        {
+          "module_id": "V03",
+          "module": "Grammar application",
+          "topics": [
+            "Modifiers",
+            "parallelism",
+            "reference and agreement",
+            "active/passive voice",
+            "direct/indirect speech",
+            "punctuation",
+            "error spotting and sentence correction"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 41"
+          }
+        },
+        {
+          "module_id": "V04",
+          "module": "Vocabulary and usage",
+          "topics": [
+            "Roots/etymology",
+            "contextual vocabulary",
+            "synonyms/antonyms",
+            "confusing words",
+            "incorrect word usage",
+            "spelling",
+            "one-word substitutions",
+            "idioms/phrases",
+            "phrasal verbs",
+            "foreign expressions",
+            "figures of speech and verbal analogies"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 42"
+          }
+        },
+        {
+          "module_id": "V05",
+          "module": "Sentence and paragraph skills",
+          "topics": [
+            "Single/multiple blanks",
+            "sentence completion",
+            "cloze passages",
+            "parajumbles with/without options",
+            "odd sentence out",
+            "paragraph completion",
+            "paragraph summaries",
+            "conversation/dialogue analysis"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 43"
+          }
+        }
+      ],
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+        "locator": "line 35"
+      }
+    },
+    {
+      "area": "Logical Reasoning",
+      "modules": [
+        {
+          "module_id": "L01",
+          "module": "Basic analytical reasoning",
+          "topics": [
+            "Directions",
+            "blood relations",
+            "order/ranking",
+            "coding/decoding",
+            "number/letter/alphanumeric series",
+            "analogy/classification/odd-one-out",
+            "word formation"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 51"
+          }
+        },
+        {
+          "module_id": "L02",
+          "module": "Arrangements and selection",
+          "topics": [
+            "Linear/circular seating",
+            "ordering",
+            "comparison/classification arrangements",
+            "grouping/team selection",
+            "scheduling",
+            "distribution and conditional puzzles"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 52"
+          }
+        },
+        {
+          "module_id": "L03",
+          "module": "Logical conditions",
+          "topics": [
+            "Syllogisms",
+            "logical inequalities",
+            "input-output",
+            "eligibility/selection conditions",
+            "mathematical operations",
+            "statement-based data sufficiency"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 53"
+          }
+        },
+        {
+          "module_id": "L04",
+          "module": "Special reasoning formats",
+          "topics": [
+            "Clocks/calendars",
+            "cubes/dice",
+            "figure counting",
+            "games/tournaments",
+            "quantitative reasoning puzzles and weight/comparison puzzles"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 54"
+          }
+        },
+        {
+          "module_id": "L05",
+          "module": "Critical reasoning",
+          "topics": [
+            "Arguments",
+            "assumptions",
+            "conclusions/inference",
+            "strengthen/weaken",
+            "cause/effect",
+            "course of action",
+            "assertion/reason",
+            "strong/weak arguments"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 55"
+          }
+        },
+        {
+          "module_id": "L06",
+          "module": "Visual-reasoning coverage review",
+          "topics": [
+            "Mirror/water images",
+            "paper folding/cutting",
+            "embedded figures",
+            "figure completion",
+            "visual series/analogies. Retained from the reference sheet",
+            "exam relevance and depth need verification before substantial hours are allocated"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": true,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 56"
+          }
+        }
+      ],
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+        "locator": "line 47"
+      }
+    },
+    {
+      "area": "Data Interpretation",
+      "modules": [
+        {
+          "module_id": "D01",
+          "module": "Tables and charts",
+          "topics": [
+            "Tables",
+            "bar/line/pie charts",
+            "combined charts",
+            "reading units, scales and legends"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 62"
+          }
+        },
+        {
+          "module_id": "D02",
+          "module": "Numerical interpretation",
+          "topics": [
+            "Totals",
+            "percentages",
+            "ratios",
+            "averages",
+            "growth/change",
+            "comparisons",
+            "approximation",
+            "missing values"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 63"
+          }
+        },
+        {
+          "module_id": "D03",
+          "module": "Caselets and mixed sets",
+          "topics": [
+            "Text-based datasets",
+            "multi-table/multi-chart sets",
+            "logical and quantitative DI",
+            "data sufficiency",
+            "set-based data interpretation"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": false,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 64"
+          }
+        },
+        {
+          "module_id": "D04",
+          "module": "Additional chart-format review",
+          "topics": [
+            "Radar and unfamiliar chart formats from the reference sheet",
+            "practise interpretation rather than assume a separate compulsory exam chapter"
+          ],
+          "exams": [
+            "IIMB UG-AT",
+            "IPMAT Indore",
+            "IIM Kozhikode BMS",
+            "IPMAT Rohtak",
+            "JIPMAT"
+          ],
+          "exam_mapping_basis": "combined programme: all students receive the combined concepts; not a claim that each topic appears in each exam",
+          "review_flag": true,
+          "status": "proposed",
+          "source": {
+            "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+            "locator": "line 65"
+          }
+        }
+      ],
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+        "locator": "line 58"
+      }
+    }
+  ],
+  "exam_application_layer": [
+    {
+      "exam": "IPMAT Indore",
+      "application": "QA MCQ/short-answer and timed sections",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+        "locator": "line 78"
+      }
+    },
+    {
+      "exam": "IIMB UG-AT",
+      "application": "integrated Quant/DI plus LR/VARC",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+        "locator": "line 78"
+      }
+    },
+    {
+      "exam": "IIM Kozhikode BMS",
+      "application": "QA/VA",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+        "locator": "line 78"
+      }
+    },
+    {
+      "exam": "IPMAT Rohtak",
+      "application": "QA/LR/VA",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+        "locator": "line 78"
+      }
+    },
+    {
+      "exam": "JIPMAT",
+      "application": "QA/DILR/VARC",
+      "status": "proposed",
+      "source": {
+        "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+        "locator": "line 78"
+      }
+    }
+  ],
+  "quant_topic_evidence_legend": {
+    "N": "named by the official source",
+    "L": "school level only",
+    "B": "broad parent group (editorial mapping)",
+    "S": "observed in official sample",
+    "U": "unspecified (does NOT mean excluded)",
+    "X": "beyond the stated level (not an official exclusion)"
+  },
+  "quant_topic_evidence": [
+    {
+      "topic": "Number System",
+      "our_location": "1–3",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "L",
+        "IIMK S4": "N",
+        "GAT S5": "B",
+        "NPAT S6/S9": "U",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "CUET numerical ability is broader than these specific chapters.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A5:K5"
+      }
+    },
+    {
+      "topic": "Arithmetic",
+      "our_location": "4–11",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "L",
+        "IIMK S4": "U",
+        "GAT S5": "N",
+        "NPAT S6/S9": "S",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "NPAT sample: work, mixtures, ratios and percentages; not every arithmetic chapter.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A6:K6"
+      }
+    },
+    {
+      "topic": "Algebra",
+      "our_location": "12–16, 29",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "L",
+        "IIMK S4": "N",
+        "GAT S5": "N",
+        "NPAT S6/S9": "S",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "Named broad algebra does not individually confirm every advanced subtopic.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A7:K7"
+      }
+    },
+    {
+      "topic": "Matrices and Determinants",
+      "our_location": "17",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "X",
+        "IIMK S4": "B",
+        "GAT S5": "B",
+        "NPAT S6/S9": "U",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "Retained in Book 2 by user choice; not individually named by reviewed exam sources.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A8:K8"
+      }
+    },
+    {
+      "topic": "Geometry",
+      "our_location": "18–22",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "L",
+        "IIMK S4": "N",
+        "GAT S5": "N",
+        "NPAT S6/S9": "S",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "NPAT sample specifically includes triangles.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A9:K9"
+      }
+    },
+    {
+      "topic": "Mensuration",
+      "our_location": "23–24",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "L",
+        "IIMK S4": "N",
+        "GAT S5": "N",
+        "NPAT S6/S9": "S",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "NPAT sample includes solids/volume and areas.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A10:K10"
+      }
+    },
+    {
+      "topic": "Coordinate Geometry",
+      "our_location": "25",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "L",
+        "IIMK S4": "N",
+        "GAT S5": "B",
+        "NPAT S6/S9": "U",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "Only basic Class 10 coverage can be inferred for JIPMAT, not conic extensions.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A11:K11"
+      }
+    },
+    {
+      "topic": "Trigonometry",
+      "our_location": "26",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "L",
+        "IIMK S4": "N",
+        "GAT S5": "U",
+        "NPAT S6/S9": "U",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "Kozhikode explicitly names it; other broad sources do not prove exclusion.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A12:K12"
+      }
+    },
+    {
+      "topic": "Permutations and Combinations",
+      "our_location": "27",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "X",
+        "IIMK S4": "U",
+        "GAT S5": "U",
+        "NPAT S6/S9": "U",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "Do not equate broad probability with a detailed combinatorics syllabus.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A13:K13"
+      }
+    },
+    {
+      "topic": "Probability",
+      "our_location": "28",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "L",
+        "IIMK S4": "N",
+        "GAT S5": "U",
+        "NPAT S6/S9": "U",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "JIPMAT level statement supports elementary probability, not conditional-probability depth.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A14:K14"
+      }
+    },
+    {
+      "topic": "Sequences and Series",
+      "our_location": "30",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "L",
+        "IIMK S4": "B",
+        "GAT S5": "B",
+        "NPAT S6/S9": "S",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "NPAT Q19 uses arithmetic progression with statistics. JIPMAT level does not establish GP/HP depth.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A15:K15"
+      }
+    },
+    {
+      "topic": "Binomial Theorem",
+      "our_location": "31",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "X",
+        "IIMK S4": "B",
+        "GAT S5": "B",
+        "NPAT S6/S9": "U",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "Broad algebra is not specific confirmation of binomial theorem.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A16:K16"
+      }
+    },
+    {
+      "topic": "Statistics",
+      "our_location": "32",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "L",
+        "IIMK S4": "N",
+        "GAT S5": "N",
+        "NPAT S6/S9": "S",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "NPAT sample includes mean, median and range.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A17:K17"
+      }
+    },
+    {
+      "topic": "Data Interpretation",
+      "our_location": "Book 4",
+      "evidence": {
+        "IIMB S1": "N",
+        "Indore S2": "U",
+        "JIPMAT S3": "N",
+        "IIMK S4": "U",
+        "GAT S5": "U",
+        "NPAT S6/S9": "S",
+        "SET S7": "U",
+        "CHRIST S8": "N"
+      },
+      "interpretation": "Book 4 owns DI. Add cross-references, not duplicated Quant chapters.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A18:K18"
+      }
+    },
+    {
+      "topic": "Quantitative comparison format",
+      "our_location": "Not explicit",
+      "evidence": {
+        "IIMB S1": "U",
+        "Indore S2": "U",
+        "JIPMAT S3": "U",
+        "IIMK S4": "U",
+        "GAT S5": "U",
+        "NPAT S6/S9": "S",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "Propose an exam-format guide; a question format, not another mathematical chapter.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A19:K19"
+      }
+    },
+    {
+      "topic": "Always/sometimes/never format",
+      "our_location": "Not explicit",
+      "evidence": {
+        "IIMB S1": "U",
+        "Indore S2": "U",
+        "JIPMAT S3": "U",
+        "IIMK S4": "U",
+        "GAT S5": "U",
+        "NPAT S6/S9": "S",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "Observed in NPAT sample; add as an application format.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A20:K20"
+      }
+    },
+    {
+      "topic": "Calculus, vectors and other extensions",
+      "our_location": "Book 3",
+      "evidence": {
+        "IIMB S1": "L",
+        "Indore S2": "U",
+        "JIPMAT S3": "X",
+        "IIMK S4": "U",
+        "GAT S5": "U",
+        "NPAT S6/S9": "U",
+        "SET S7": "U",
+        "CHRIST S8": "U"
+      },
+      "interpretation": "IIMB broad X–XII statement is not a topic-by-topic weighting or guarantee.",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Topic comparison'!A21:K21"
+      }
+    }
+  ],
+  "quant_evidence_sources": [
+    {
+      "id": "S1",
+      "exam": "IIM Bangalore UG",
+      "source_cycle": "2026 test / 2027 intake",
+      "evidence_type": "School-level scope",
+      "quant_scope": "Quantitative Aptitude and Data Interpretation; NCERT Classes X, XI and XII.",
+      "limits": "No individual chapter list in this FAQ. Broad school scope is not a per-chapter guarantee. BSc UG, not DBE.",
+      "url": "https://ug.iimb.ac.in/wp-content/uploads/2026/08/UG-Admissions-FAQ-2026.pdf",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Exam sources'!A5:G5"
+      }
+    },
+    {
+      "id": "S2",
+      "exam": "IPMAT Indore",
+      "source_cycle": "2026",
+      "evidence_type": "Section-level pattern",
+      "quant_scope": "Quantitative Ability: multiple-choice and short-answer sections.",
+      "limits": "The admission procedure reviewed gives test sections, not a chapter-by-chapter syllabus. Detailed chapter relevance needs paper-level evidence.",
+      "url": "https://iimidr.ac.in/wp-content/uploads/2026/01/AdmissionProcedure_IPM-2026-31_-Domestic-Applicants.pdf",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Exam sources'!A6:G6"
+      }
+    },
+    {
+      "id": "S3",
+      "exam": "JIPMAT",
+      "source_cycle": "2026",
+      "evidence_type": "School-level scope",
+      "quant_scope": "Quantitative Aptitude through Class 10 mathematics; Data Interpretation is grouped with Logical Reasoning.",
+      "limits": "No individual chapter list in section 2.5. Higher-maths chapters must not be inferred from this Class 10 scope.",
+      "url": "https://cdnbbsr.s3waas.gov.in/s388a839f2f6f1427879fc33ee4acf4f66/uploads/2026/04/20260416666062493.pdf",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Exam sources'!A7:G7"
+      }
+    },
+    {
+      "id": "S4",
+      "exam": "IIM Kozhikode BMS",
+      "source_cycle": "2026 FAQ",
+      "evidence_type": "Named topic groups",
+      "quant_scope": "Number systems; algebra; basic geometry; coordinate geometry; trigonometry; mensuration; statistics; probability.",
+      "limits": "These are the named groups in the FAQ, not detailed chapter weights or an exclusion list.",
+      "url": "https://iimk.ac.in/academic-programmes/BMS/bms-faqs",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Exam sources'!A8:G8"
+      }
+    },
+    {
+      "id": "S5",
+      "exam": "CUET GAT (501)",
+      "source_cycle": "2026",
+      "evidence_type": "Named broad groups",
+      "quant_scope": "Numerical ability; simple applications of arithmetic, algebra, geometry, mensuration and statistics.",
+      "limits": "Only the mathematical portion is indexed here. GAT is not CUET Mathematics/Applied Mathematics (319). Probability is not separately named in this PDF.",
+      "url": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227140287889.pdf",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Exam sources'!A9:G9"
+      }
+    },
+    {
+      "id": "S6",
+      "exam": "NMIMS NPAT",
+      "source_cycle": "2026",
+      "evidence_type": "Section-level pattern",
+      "quant_scope": "Quantitative Reasoning; handout refers to SAT-style question types and difficulty.",
+      "limits": "No detailed Quant chapter list in the handout reviewed. Sample observations are recorded separately as S9, not treated as the complete syllabus.",
+      "url": "https://nmims.edu/docs/2026/NPAT_NCET_MST_NLAT_2026-(For-SF).pdf",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Exam sources'!A10:G10"
+      }
+    },
+    {
+      "id": "S7",
+      "exam": "Symbiosis SET General",
+      "source_cycle": "2026",
+      "evidence_type": "Section-level pattern",
+      "quant_scope": "Quantitative section.",
+      "limits": "Bulletin gives a section-level pattern, not a chapter list. This comparison excludes SITEEE engineering mathematics.",
+      "url": "https://www.set-test.org/assets/pdf/SET_2026_Bulletin_new.pdf",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Exam sources'!A11:G11"
+      }
+    },
+    {
+      "id": "S8",
+      "exam": "CHRIST BBA entrance",
+      "source_cycle": "2026",
+      "evidence_type": "Programme-specific pattern",
+      "quant_scope": "Mathematics; Data Analysis and Interpretation.",
+      "limits": "General BBA group assumed. Decision Science and other programmes can have different patterns. Detailed chapters are not named in this document.",
+      "url": "https://christuniversity.in/uploads/userfiles/file/ADMISSIONS/NEW/BCC/CHRIST-CUET%20GUIDELINES%20%26%20TEST%20PATTERN%20-%202026.pdf",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Exam sources'!A12:G12"
+      }
+    },
+    {
+      "id": "S9",
+      "exam": "NPAT official sample",
+      "source_cycle": "2023 filename; linked on 2026 site",
+      "evidence_type": "Observed sample topics",
+      "quant_scope": "Algebra/functions and equations (Q1–4); work, mixtures, ratios/percentages (Q5–8); triangles/mensuration (Q9–12); tabular DI (Q13–16); statistics (Q17–20).",
+      "limits": "Sample also uses quantitative comparisons and always/sometimes/never formats. Observed coverage is not exhaustive or a promise of future exam content.",
+      "url": "https://npat.nmims.edu/doc/NMIMS-Sample-Paper-Web-Copy-26122023.pdf",
+      "status": "documented",
+      "source": {
+        "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+        "locator": "sheet 'Exam sources'!A13:G13"
+      }
+    }
+  ]
+}

@@ -1,0 +1,297 @@
+/**
+ * Admission pipeline state machine (OPS-005, BR-OPS-1). Pure.
+ * Algorithm documentation: docs/ALGORITHMS.md → A-03 (legal-transition table).
+ */
+
+export const ADMISSION_STATUSES = [
+  'new',
+  'contacted',
+  'counselling_scheduled',
+  'counselled',
+  'demo_scheduled',
+  'demo_attended',
+  'admission_pending',
+  'admitted',
+  'enrolment_requested',
+  'enrolled',
+  'lost',
+  'on_hold',
+] as const;
+export type AdmissionStatus = (typeof ADMISSION_STATUSES)[number];
+
+export const ADMISSION_STATUS_LABELS: Record<AdmissionStatus, string> = {
+  new: 'New',
+  contacted: 'Contacted',
+  counselling_scheduled: 'Counselling scheduled',
+  counselled: 'Counselled',
+  demo_scheduled: 'Demo scheduled',
+  demo_attended: 'Demo attended',
+  admission_pending: 'Admission pending',
+  admitted: 'Admitted',
+  enrolment_requested: 'Enrolment requested (awaiting Academic OS)',
+  enrolled: 'Enrolled',
+  lost: 'Lost',
+  on_hold: 'On hold',
+};
+
+/** The forward path, in order (used for board columns and "reached at least" checks). */
+export const PIPELINE_ORDER: readonly AdmissionStatus[] = [
+  'new',
+  'contacted',
+  'counselling_scheduled',
+  'counselled',
+  'demo_scheduled',
+  'demo_attended',
+  'admission_pending',
+  'admitted',
+  'enrolment_requested',
+  'enrolled',
+];
+
+/** Open = still being worked (not enrolled, not lost). `on_hold` is open. */
+export function isOpenStatus(status: AdmissionStatus): boolean {
+  return status !== 'enrolled' && status !== 'lost';
+}
+
+/** Statuses from which a person may mark the case lost / on hold (everything a counsellor still owns). */
+const WORKABLE: readonly AdmissionStatus[] = [
+  'new',
+  'contacted',
+  'counselling_scheduled',
+  'counselled',
+  'demo_scheduled',
+  'demo_attended',
+  'admission_pending',
+  'admitted',
+];
+
+export type TransitionActor = 'user' | 'system';
+export type TransitionGuard =
+  | 'successful_contact'
+  | 'demo_skip_policy'
+  | 'admission_readiness'
+  | 'enrolment_handoff'
+  | 'enrolment_reply'
+  | 'resume_to_held_status';
+
+export interface TransitionRule {
+  from: AdmissionStatus;
+  to: AdmissionStatus;
+  actor: TransitionActor;
+  requiresReason: boolean;
+  guard?: TransitionGuard;
+  /** Why the edge exists / what it means. Shown in docs and the UI. */
+  meaning: string;
+  /** True when the sources do not say this; the edge is our proposal (decision state `proposed`). */
+  proposal?: boolean;
+}
+
+const rule = (
+  from: AdmissionStatus,
+  to: AdmissionStatus,
+  meaning: string,
+  extra: Partial<Omit<TransitionRule, 'from' | 'to' | 'meaning'>> = {},
+): TransitionRule => ({ from, to, meaning, actor: 'user', requiresReason: false, ...extra });
+
+/** The legal-transition table. Anything not listed is illegal. */
+export const TRANSITIONS: readonly TransitionRule[] = [
+  rule('new', 'contacted', 'First successful two-way contact (BR-OPS-4).', {
+    guard: 'successful_contact',
+  }),
+  rule('contacted', 'counselling_scheduled', 'Counselling appointment booked.'),
+  rule('contacted', 'counselled', 'Counselled on the spot (e.g. walk-in) without an appointment.', {
+    requiresReason: true,
+  }),
+  rule('counselling_scheduled', 'counselled', 'Counselling completed.'),
+  rule('counselling_scheduled', 'contacted', 'Appointment cancelled or missed; rebook.', {
+    requiresReason: true,
+  }),
+  rule('counselled', 'demo_scheduled', 'Demo booked (separate demo classes, BR-OPS-2).'),
+  rule(
+    'counselled',
+    'admission_pending',
+    'Demo skipped: the family wants to join without a demo. Allowed only while the demo-skip setting allows it.',
+    { requiresReason: true, guard: 'demo_skip_policy', proposal: true },
+  ),
+  rule('demo_scheduled', 'demo_attended', 'Demo attended.'),
+  rule('demo_scheduled', 'counselled', 'Demo cancelled or missed; back to counselled to rebook.', {
+    requiresReason: true,
+  }),
+  rule('demo_attended', 'admission_pending', 'Family wants to join; admission paperwork starts.'),
+  rule(
+    'admission_pending',
+    'admitted',
+    'Admission confirmed: documents, two fee verifications, authorised fee approval, verified down payment (BR-OPS-6/7).',
+    { guard: 'admission_readiness' },
+  ),
+  rule(
+    'admitted',
+    'enrolment_requested',
+    'Enrolment requested from Academic OS; publishes ops.admission.enrolment_requested v1 in the same transaction.',
+    { guard: 'enrolment_handoff' },
+  ),
+  rule(
+    'enrolment_requested',
+    'enrolled',
+    'Academic OS confirmed the enrolment (academic.enrolment.confirmed).',
+    { actor: 'system', guard: 'enrolment_reply' },
+  ),
+  rule(
+    'enrolment_requested',
+    'admitted',
+    'Academic OS rejected the request (academic.enrolment.rejected); correct and re-request with attempt + 1.',
+    { actor: 'system', requiresReason: true, guard: 'enrolment_reply' },
+  ),
+  ...WORKABLE.map((from) =>
+    rule(from, 'lost', 'Lost or not interested.', { requiresReason: true }),
+  ),
+  ...WORKABLE.map((from) =>
+    rule(from, 'on_hold', 'Paused (e.g. family asked to wait).', { requiresReason: true }),
+  ),
+  ...WORKABLE.map((to) =>
+    rule('on_hold', to, 'Resume at the status held before the pause.', {
+      requiresReason: true,
+      guard: 'resume_to_held_status',
+    }),
+  ),
+  rule('on_hold', 'lost', 'Lost while on hold.', { requiresReason: true }),
+  rule('lost', 'new', 'Reopened (a reason is required).', { requiresReason: true }),
+];
+
+export function findTransition(
+  from: AdmissionStatus,
+  to: AdmissionStatus,
+): TransitionRule | undefined {
+  return TRANSITIONS.find((t) => t.from === from && t.to === to);
+}
+
+/** User-initiated targets reachable from a status (for action buttons). */
+export function allowedUserTargets(
+  from: AdmissionStatus,
+  context: { heldFromStatus?: AdmissionStatus | null; demoSkipAllowed?: boolean } = {},
+): AdmissionStatus[] {
+  return TRANSITIONS.filter((t) => t.from === from && t.actor === 'user')
+    .filter((t) => t.guard !== 'resume_to_held_status' || t.to === context.heldFromStatus)
+    .filter((t) => t.guard !== 'demo_skip_policy' || context.demoSkipAllowed !== false)
+    .map((t) => t.to);
+}
+
+export interface TransitionContext {
+  actor: TransitionActor;
+  reason?: string | null;
+  /** The lead has a recorded successful two-way contact (BR-OPS-4). */
+  hasSuccessfulContact?: boolean;
+  /** Demo-skip setting (proposal; default allowed). */
+  demoSkipAllowed?: boolean;
+  /** Missing confirmation items from evaluateAdmissionReadiness(); empty = ready. */
+  readinessMissing?: readonly string[];
+  /** Status before on_hold. */
+  heldFromStatus?: AdmissionStatus | null;
+  /** True only inside the enrolment-handoff service (which publishes the event). */
+  viaEnrolmentHandoff?: boolean;
+  /** True only inside the enrolment-reply consumer. */
+  viaEnrolmentReply?: boolean;
+}
+
+export type TransitionCheck =
+  | { ok: true; rule: TransitionRule }
+  | {
+      ok: false;
+      code: 'ILLEGAL' | 'REASON_REQUIRED' | 'GUARD_FAILED' | 'WRONG_ACTOR' | 'NO_CHANGE';
+      message: string;
+      missing?: readonly string[];
+    };
+
+/** Decide whether `from → to` is allowed in this context. Pure; no side effects. */
+export function checkTransition(
+  from: AdmissionStatus,
+  to: AdmissionStatus,
+  ctx: TransitionContext,
+): TransitionCheck {
+  if (from === to)
+    return { ok: false, code: 'NO_CHANGE', message: `The admission is already ${from}.` };
+  const found = findTransition(from, to);
+  if (!found) {
+    return {
+      ok: false,
+      code: 'ILLEGAL',
+      message: `An admission cannot move from "${ADMISSION_STATUS_LABELS[from]}" to "${ADMISSION_STATUS_LABELS[to]}".`,
+    };
+  }
+  if (found.actor !== ctx.actor) {
+    return {
+      ok: false,
+      code: 'WRONG_ACTOR',
+      message:
+        found.actor === 'system'
+          ? 'Only Academic OS replies can make this change.'
+          : 'This change must be made by a person.',
+    };
+  }
+  if (found.requiresReason && !ctx.reason?.trim()) {
+    return { ok: false, code: 'REASON_REQUIRED', message: 'Give a reason for this change.' };
+  }
+  switch (found.guard) {
+    case 'successful_contact':
+      if (!ctx.hasSuccessfulContact)
+        return {
+          ok: false,
+          code: 'GUARD_FAILED',
+          message:
+            'Log a successful two-way contact first; unanswered calls do not count as contacted (BR-OPS-4).',
+        };
+      break;
+    case 'demo_skip_policy':
+      if (ctx.demoSkipAllowed === false)
+        return {
+          ok: false,
+          code: 'GUARD_FAILED',
+          message: 'Skipping the demo is switched off in the pipeline settings.',
+        };
+      break;
+    case 'admission_readiness':
+      if (ctx.readinessMissing === undefined || ctx.readinessMissing.length > 0)
+        return {
+          ok: false,
+          code: 'GUARD_FAILED',
+          message: 'The admission cannot be confirmed yet.',
+          missing: ctx.readinessMissing ?? ['readiness not evaluated'],
+        };
+      break;
+    case 'enrolment_handoff':
+      if (!ctx.viaEnrolmentHandoff)
+        return {
+          ok: false,
+          code: 'GUARD_FAILED',
+          message:
+            'Use "Request enrolment" so the request to Academic OS is published with the change.',
+        };
+      break;
+    case 'enrolment_reply':
+      if (!ctx.viaEnrolmentReply)
+        return {
+          ok: false,
+          code: 'GUARD_FAILED',
+          message: 'Only Academic OS replies can make this change.',
+        };
+      break;
+    case 'resume_to_held_status':
+      if (ctx.heldFromStatus !== to)
+        return {
+          ok: false,
+          code: 'GUARD_FAILED',
+          message: `Resume to the status held before the pause (${ctx.heldFromStatus ?? 'unknown'}).`,
+        };
+      break;
+    default:
+      break;
+  }
+  return { ok: true, rule: found };
+}
+
+/** True when `status` has reached `target` on the forward path (lost/on_hold never count). */
+export function hasReached(status: AdmissionStatus, target: AdmissionStatus): boolean {
+  const a = PIPELINE_ORDER.indexOf(status);
+  const b = PIPELINE_ORDER.indexOf(target);
+  return a >= 0 && b >= 0 && a >= b;
+}

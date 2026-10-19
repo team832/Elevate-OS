@@ -1,0 +1,235 @@
+{
+  "meta": {
+    "source_files": [
+      "content-os/accounts/instagram-clat/README.md",
+      "content-os/brand/BRAND.md",
+      "handover/Claude.md",
+      "handover/elevate-education-operations/ACADEMIC_PLANNING_DECISIONS.md",
+      "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+      "handover/elevate-education-operations/IPMAT_REFERENCE_NOTES.md"
+    ],
+    "extracted_at": "2026-10-17",
+    "extractor": "data/legacy/_extract/extract_legacy.py",
+    "record_arrays": [
+      "records"
+    ],
+    "notes": [
+      "Programme catalogue as documented. mode/class length are null where no source states them; nothing is inferred.",
+      "status: offered = listed as a current course in BRAND.md; paused = planning stream paused in the operations handover; variant statuses as stated."
+    ]
+  },
+  "records": [
+    {
+      "code": "CLAT",
+      "name": "CLAT UG preparation",
+      "family": "CLAT",
+      "audience": "Class 11-12 students targeting National Law Universities",
+      "mode": null,
+      "class_duration_minutes": null,
+      "status": "offered",
+      "delivery_notes": [
+        "A CLAT 2027 batch exists (live-page audit, 7 Oct 2026).",
+        "Class length, weekly pattern and batch structure are not documented in any source."
+      ],
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 23"
+        },
+        {
+          "path": "content-os/accounts/instagram-clat/README.md",
+          "locator": "line 20"
+        }
+      ]
+    },
+    {
+      "code": "COM-11",
+      "name": "Class 11 Commerce",
+      "family": "Commerce boards",
+      "audience": "Students starting commerce (Accounts, BST, Economics)",
+      "mode": null,
+      "class_duration_minutes": null,
+      "status": "offered",
+      "delivery_notes": [
+        "Boards CBSE and some RBSE (operations handover)."
+      ],
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 19"
+        },
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 51"
+        }
+      ]
+    },
+    {
+      "code": "COM-12",
+      "name": "Class 12 Commerce",
+      "family": "Commerce boards",
+      "audience": "Board-year students",
+      "mode": null,
+      "class_duration_minutes": null,
+      "status": "offered",
+      "delivery_notes": [],
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 20"
+        }
+      ]
+    },
+    {
+      "code": "CUET",
+      "name": "CUET UG preparation",
+      "family": "CUET",
+      "audience": "Class 12 students targeting central universities",
+      "mode": null,
+      "class_duration_minutes": null,
+      "status": "offered",
+      "delivery_notes": [],
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 21"
+        }
+      ]
+    },
+    {
+      "code": "ONL-C12-CUET",
+      "name": "Online Class 12 boards + CUET curriculum",
+      "family": "Commerce boards + CUET",
+      "audience": "Class 12 (CBSE base followed by CUET additions)",
+      "mode": "online",
+      "class_duration_minutes": 60,
+      "status": "paused",
+      "delivery_notes": [
+        "Intakes March/July/September and January revision; boards February / CUET May are planning windows.",
+        "Subjects Accounts, Maths, BST, Economics, English; only Accountancy is planned (see online-class12-accountancy.json).",
+        "Two test windows a week shared across subjects."
+      ],
+      "source": [
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 163"
+        }
+      ]
+    },
+    {
+      "code": "IPMAT",
+      "name": "Combined IIM entrance preparation (IPMAT and related)",
+      "family": "IPMAT",
+      "audience": "Students targeting IIM integrated programmes; coverage IIMB UG, IPMAT Indore, Rohtak, JIPMAT, Kozhikode, CUET GAT, NPAT, Symbiosis, Christ",
+      "mode": null,
+      "class_duration_minutes": 75,
+      "status": "paused",
+      "delivery_notes": [
+        "Teaching/practice class length 75 minutes (confirmed).",
+        "Batch variants below; only the Class 12 timetable is locked."
+      ],
+      "variants": [
+        {
+          "code": "IPMAT-C12",
+          "name": "Class 12, April start, one year",
+          "status": "locked",
+          "timetable": "Two 75-minute classes daily; April-June 5 days/week (12.5 h); July onward 6 days/week (15 h); third class Tue/Thu July-15 Oct (Class 12 override)",
+          "source": [
+            {
+              "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+              "locator": "line 275"
+            }
+          ]
+        },
+        {
+          "code": "IPMAT-DROP",
+          "name": "Dropper, June start, one year",
+          "status": "provisional",
+          "timetable": "Shares Class 12 teaching with extra practice; weekly timetable not locked",
+          "source": [
+            {
+              "path": "handover/Claude.md",
+              "locator": "line 81"
+            }
+          ]
+        },
+        {
+          "code": "IPMAT-C11",
+          "name": "Class 11, April start, two years",
+          "status": "provisional",
+          "timetable": "Not locked",
+          "source": [
+            {
+              "path": "handover/Claude.md",
+              "locator": "line 81"
+            }
+          ]
+        },
+        {
+          "code": "IPMAT-FT",
+          "name": "Fast-track, March start, two months",
+          "status": "proposed",
+          "timetable": "Four daily 75-minute classes over six days (separate proposal); detailed allocation pending",
+          "source": [
+            {
+              "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+              "locator": "line 287"
+            }
+          ]
+        }
+      ],
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 22"
+        },
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 79"
+        },
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 81"
+        }
+      ]
+    },
+    {
+      "code": "CAF",
+      "name": "CA Foundation",
+      "family": "CA",
+      "audience": "CA aspirants at Foundation level",
+      "mode": "offline",
+      "class_duration_minutes": 75,
+      "status": "paused",
+      "delivery_notes": [
+        "Three target attempts a year: January, May, September.",
+        "Batch planned: September 2027 Regular (CAF-SEP27-REG).",
+        "75-minute teaching classes selected in conversation; 1 March start selected per Claude.md, but ACADEMIC_PLANNING_DECISIONS.md and the Operations workbook (D-016) still list the March/April start as open: conflicting sources, reconcile before dating.",
+        "Approximate campus window 11:30-17:00, flexible.",
+        "Inter and Final are not offered; never imply them (BRAND.md). CA is not marketed as a course."
+      ],
+      "source": [
+        {
+          "path": "content-os/brand/BRAND.md",
+          "locator": "line 24"
+        },
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 69"
+        },
+        {
+          "path": "handover/Claude.md",
+          "locator": "line 71"
+        },
+        {
+          "path": "handover/elevate-education-operations/ACADEMIC_PLANNING_DECISIONS.md",
+          "locator": "line 17"
+        },
+        {
+          "path": "handover/elevate-education-operations/IPMAT_REFERENCE_NOTES.md",
+          "locator": "line 21"
+        }
+      ]
+    }
+  ]
+}

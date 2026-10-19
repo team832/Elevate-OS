@@ -1,0 +1,526 @@
+{
+  "roots": {
+    "content-os": "C:/OPENBOT/OLD/01-original-elevate-os/ (read-only legacy content OS)",
+    "handover": "Elevate-Education/ inside content-os/Elevate-Education-Agent-Handover-2026-10-15.zip (read from an extracted copy; hashes compared with the zip members)"
+  },
+  "files": [
+    {
+      "path": "content-os/CLAUDE.md",
+      "sha256": "d981ee0b2d775f06de50b247d4dcedf0a0ea073ef40f1cbaf8ce12f1e0bb7295",
+      "bytes": 6813,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/Claude1.md",
+      "sha256": "8f9452c2c9e91fb79625442d90999fd75c66359afd1dcbdd828bd049c4bd43d7",
+      "bytes": 24990,
+      "use": "consulted"
+    },
+    {
+      "path": "content-os/HANDOFF.md",
+      "sha256": "e602aa93243406a7b35a882ed63fa5603863ea65e7a61396da4f76d00905f430",
+      "bytes": 10472,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/instagram-clat/PROFILE.md",
+      "sha256": "fbb69ba8b712af2eeede5495588a762dd9e1b6d15a6d16739d63cb4022b63186",
+      "bytes": 3894,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/instagram-clat/README.md",
+      "sha256": "6204db6b69d3cac721d0471d871ceea1fc11ccc8f6720c14e273344b8d31c644",
+      "bytes": 4590,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/instagram-clat/calendar-oct-dec-2026.md",
+      "sha256": "e87aa935fd9afc499a1985a84dbf9ad6c887de5485ddf34ee3018935845ca729",
+      "bytes": 10472,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/instagram-clat/post-audit.csv",
+      "sha256": "1140ac8091d28df164407a170860289fa2e964f6773baf77c6dbf233c6453aad",
+      "bytes": 9930,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/instagram-clat/strategy-oct-dec-2026.md",
+      "sha256": "45e49c0559d53b64c6e53eac912ac648f4c941bb1e300d7ec806227cf931ef40",
+      "bytes": 8639,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/instagram-cuet12/README.md",
+      "sha256": "09faa03f52263de5cf4f007771ea6d9c50aafcbef1f043b8f22eea343326b617",
+      "bytes": 805,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/instagram-ipmat/README.md",
+      "sha256": "4ed414ee0de74de4236fad463f6b2fd4bb6798f40380526d0f84a4dea78d960f",
+      "bytes": 765,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/instagram-{founder}/README.md",
+      "sha256": "1fe0b92c7ef49b39e18d2dd4bd349a5b41d71bb720d9b31ea7722d4ecab632ce",
+      "bytes": 2352,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/instagram-sikar/README.md",
+      "sha256": "cbc26ec75f0a72e0f3ea206fe85a548b642ef6d72c698583626637f4616eed13",
+      "bytes": 410,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/linkedin-elevate/README.md",
+      "sha256": "0f6cccef912ba5aac9b96432ee196978389cb12721e282544b4a09c870a57d3d",
+      "bytes": 450,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/linkedin-{founder}/README.md",
+      "sha256": "7b913235ae09e07bbd8aff910950655d59e7a0df3148e0c4b5d330daa3c0e591",
+      "bytes": 1107,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/youtube-clat/README.md",
+      "sha256": "3d1920e9ca3238dd662a8352f782a0cdb014138aaf65932a8780bb8bf665047a",
+      "bytes": 810,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/youtube-clat/channels.json",
+      "sha256": "fc90d875f2a4ef35662a9f2ff5d77e0f1b86062874d272f1f5297e987939becb",
+      "bytes": 72,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/youtube-cuet12/README.md",
+      "sha256": "d3e1601dd93a676d96e9ac2ad4bd7a16cfa806f5053a41606a3d4bf7ca31d983",
+      "bytes": 777,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/youtube-cuet12/channels.json",
+      "sha256": "523d31405a4607ea037cbd32ac8b4de792c32a9dfcf6fdc02689665a06efda87",
+      "bytes": 74,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/youtube-ipmat/README.md",
+      "sha256": "a64c8a5104b8b896e5dc5a0618bf0719b9fa0d2122740024597b9de448120c97",
+      "bytes": 692,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/accounts/youtube-ipmat/channels.json",
+      "sha256": "6bda25b83a22700c3107c625a3ec5534ea0ecf5c6621a9678907f31c4039aea6",
+      "bytes": 73,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/brand/BRAND.md",
+      "sha256": "4eedac4751143c5d03168d6958a39129b87a12e547ea820d37953e9e346dc135",
+      "bytes": 13363,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/courses/README.md",
+      "sha256": "e5b0f2a0c394f069a183e9f775d6275fa89e105471981ab8cb5fb31c4bd76628",
+      "bytes": 334,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/courses/clat/channels.json",
+      "sha256": "1f2c8f3f332d2ef66200f54563b69244873ffa79a17600aef9a15b9e64a45586",
+      "bytes": 392,
+      "use": "consulted"
+    },
+    {
+      "path": "content-os/courses/clat/facts.md",
+      "sha256": "15e2c60e0380601689cf8182594611c5bacc361ed2fb6099cf1fd5cc1d02b189",
+      "bytes": 483,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/courses/commerce/channels.json",
+      "sha256": "cf9a5fc56be2f675b2d4b382f9e0e121af0dc920b514df3dde565e89b9591ad1",
+      "bytes": 210,
+      "use": "consulted"
+    },
+    {
+      "path": "content-os/courses/commerce/facts.md",
+      "sha256": "c61631f56c4e4254950fa46953ef5f001e4f4819342f3eb63061a9dd31b34529",
+      "bytes": 405,
+      "use": "consulted"
+    },
+    {
+      "path": "content-os/courses/cuet/channels.json",
+      "sha256": "72b6a169efd50c1ed20ded0a094224d6ca026eb261e3e6960d507eba181f9e8f",
+      "bytes": 501,
+      "use": "consulted"
+    },
+    {
+      "path": "content-os/courses/cuet/facts.md",
+      "sha256": "b6779c3b5bb82758d4b470935725ad7c63ba2f992cf4483da612aba0fbc21668",
+      "bytes": 557,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/courses/ipmat/channels.json",
+      "sha256": "33e3aefd9daf4c027c29bde4afce3e1ab0265a6b07f5f6ae872eabb8ab0ec522",
+      "bytes": 877,
+      "use": "consulted"
+    },
+    {
+      "path": "content-os/courses/ipmat/facts.md",
+      "sha256": "11cdf69119642a7c8736bbc792e8f8268289ad7c9e30eed63966a0ff0ee1ee1c",
+      "bytes": 1373,
+      "use": "consulted"
+    },
+    {
+      "path": "content-os/ideas/inbox.md",
+      "sha256": "7c37236d975c51f8452b349b0a74cd4346ce85132bd4629894d15466ad5388ec",
+      "bytes": 2638,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/library/CLAT-008-8-week-plan/script.md",
+      "sha256": "802729b26c828ab5ea6a3710c2b3064c8d270a3a18c23f5584e9fbf82836cf48",
+      "bytes": 6808,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/library/GEN-012-big4-scoreboards/script.md",
+      "sha256": "4a73f1ed1a2c0fd695baa07ba001e5ef359a8719ad28b683672c9390ee645828",
+      "bytes": 2950,
+      "use": "consulted"
+    },
+    {
+      "path": "content-os/library/_broll/README.md",
+      "sha256": "d736834e9e5f81d9992722fd4779a7b18366ef27d1e20e38c46b7c368ba2ec1a",
+      "bytes": 1609,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/plans/team-and-volume-oct-dec-2026.md",
+      "sha256": "9074ffddef3b3411a56915b736be16de2f685d725c00ffa7179d3317406e6586",
+      "bytes": 4520,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/reports/2026-10-11-next-week-plan.md",
+      "sha256": "a3d26aa74add52b1b3344266be3b8ed4aa640eb7c578c177963eebc0e2d074c0",
+      "bytes": 7275,
+      "use": "consulted"
+    },
+    {
+      "path": "content-os/reports/2026-10-11-week.md",
+      "sha256": "1e32fdc5daaedb51fafc86e0f7a3985f33c605a31d00eaf0aee3530c7888556f",
+      "bytes": 4776,
+      "use": "consulted"
+    },
+    {
+      "path": "content-os/tools/import-metrics.mjs",
+      "sha256": "2f9f24ff7afc784bf99de5ca1a2b2abea0558f9dc14d50f43ffeeba49da73845",
+      "bytes": 7257,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/tracker/ideas.csv",
+      "sha256": "a4a0310873c280044766d3a4e7b999d3d82289e4fb5b20882c8fe39e69745a73",
+      "bytes": 10702,
+      "use": "extracted"
+    },
+    {
+      "path": "content-os/tracker/versions.csv",
+      "sha256": "ffa3c65a0ac640cd5ea4ecc2e9bb795d42e9131e9b7ec6614d83615b7e848ecd",
+      "bytes": 4073,
+      "use": "extracted"
+    },
+    {
+      "path": "handover/Claude.md",
+      "sha256": "8f9452c2c9e91fb79625442d90999fd75c66359afd1dcbdd828bd049c4bd43d7",
+      "bytes": 24990,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/Claude.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/PACKAGE_NOTES.md",
+      "sha256": "1f78606da2e02136bb3fd6afcab599af92d8aa39bf35c52fff2716633f6c2400",
+      "bytes": 1951,
+      "use": "consulted",
+      "zip_member": "Elevate-Education/PACKAGE_NOTES.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/ACADEMIC_PLANNING_DECISIONS.md",
+      "sha256": "6d800d32b0f5fc067e374a38b6bf891b4abc0e58a069895d0bab4ccd57c5b78c",
+      "bytes": 3909,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/ACADEMIC_PLANNING_DECISIONS.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/CA_FOUNDATION_ACCOUNTANCY_DRAFT.md",
+      "sha256": "22bfdbbad366d3aea0f5b5a3d29149e8eec8bca07040f319fa1320462a331f6f",
+      "bytes": 2213,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/CA_FOUNDATION_ACCOUNTANCY_DRAFT.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/CLASS12_ACCELERATED_BASELINE.md",
+      "sha256": "067dadc8e6cca49b630c6ebed3b48cf3a31060459a692486f89ed97571497e2c",
+      "bytes": 12677,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/CLASS12_ACCELERATED_BASELINE.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/IMPLEMENTATION_ROADMAP.md",
+      "sha256": "37cbadce31d4561e8be6a941530e7afbc214c4dfdefd16fb5e53c719a3433ad1",
+      "bytes": 1516,
+      "use": "consulted",
+      "zip_member": "Elevate-Education/elevate-education-operations/IMPLEMENTATION_ROADMAP.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+      "sha256": "cde6149fda2da423b82c414614ac3cc5d814bf5c736c18e48f259310f69001a5",
+      "bytes": 18986,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/IPMAT_LOCKED_BASELINES.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/IPMAT_REFERENCE_NOTES.md",
+      "sha256": "d9f338b28d34057af69c246be4ba78f2eb00dc2d7367241d7ee9113b6adac755",
+      "bytes": 2462,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/IPMAT_REFERENCE_NOTES.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/IPMAT_WEB_REFERENCE_REVIEW.md",
+      "sha256": "c6609139b03f7392ad840c0249770fd64650108d1014a1abc293d6c30fe389f8",
+      "bytes": 4032,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/IPMAT_WEB_REFERENCE_REVIEW.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/PROJECT_CHARTER.md",
+      "sha256": "338c251f4e19b0909d6baa82197e2633802367bce3ac8e038f532ea3391ebce8",
+      "bytes": 2291,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/PROJECT_CHARTER.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/README.md",
+      "sha256": "a01276829fbafbae878445630b1ba934957e73632078da768afc4dc395067647",
+      "bytes": 2978,
+      "use": "consulted",
+      "zip_member": "Elevate-Education/elevate-education-operations/README.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+      "sha256": "82a7a1b9ab82a01b255d5d81059f38625576818d808fb8e987ef7fe696e8cb8f",
+      "bytes": 2476,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/SYSTEM_ARCHITECTURE.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/templates/department_intake.md",
+      "sha256": "3d7d4d94121a1892255d4d2a7ac6b7cb164cf5180e4ef9dff26ebd34b57bcfea",
+      "bytes": 1148,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/templates/department_intake.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/templates/master_tracker.csv",
+      "sha256": "1fc708ac73418c9920769120679b763961778002a5466e604de2b661b65b1862",
+      "bytes": 611,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/templates/master_tracker.csv",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/templates/sop_register.csv",
+      "sha256": "9fc5dc7e2e55ba0f73a248ffb2975bba871ff0d06460d2ecbe0b365e573fe2c7",
+      "bytes": 297,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/templates/sop_register.csv",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/elevate-education-operations/templates/sop_template.md",
+      "sha256": "5a6bf1f2924b6ad866fa11268287fde0754551bdda5a0f3243f11278e30801d3",
+      "bytes": 1553,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/elevate-education-operations/templates/sop_template.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+      "sha256": "55500cec0fa7b4800f4b76ba9a684c4b8840dd74120c04add7295da9132236a1",
+      "bytes": 10863,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/CA-Foundation-Accountancy-Full-Plan.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/Combined-IIM-Entrance-Syllabus.md",
+      "sha256": "71ecf9e6a519829f6ebdb805efd00c57a259282db8f8ea7510f302d1ca76a2a3",
+      "bytes": 9877,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/Combined-IIM-Entrance-Syllabus.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/Quant-Class-Estimates.md",
+      "sha256": "16dc5c8d52da5ab1c6436691323b8747501c764675c6a99c58464144562bb69e",
+      "bytes": 2037,
+      "use": "consulted",
+      "zip_member": "Elevate-Education/outputs/Quant-Class-Estimates.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/Quant-Teaching-Estimates-v2.md",
+      "sha256": "38ca90bc9c42e17e26ac73a13c44888f976ca73a4e97f99dc71353531dd47e1a",
+      "bytes": 1734,
+      "use": "consulted",
+      "zip_member": "Elevate-Education/outputs/Quant-Teaching-Estimates-v2.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/Verbal-Teaching-Estimates-v2.md",
+      "sha256": "66eef682a082fb5b51678320ae19589e646533b625c69a6fe5a0b12ed5e74c33",
+      "bytes": 2597,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/Verbal-Teaching-Estimates-v2.md",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+      "sha256": "24cd4e30d2dfed3638fe25d551ca2386a8416bec10102b31c843fdfa61b557b0",
+      "bytes": 66762,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/class12-planner/Class-12-Course-Planner.xlsx",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+      "sha256": "4c331640e65e98d9e8b1c8ddfc97e5f4a7a0d94fed886ac5857dc3f0fde0879c",
+      "bytes": 26410,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/concept-books/Elevate-Concept-Book-Indices.xlsx",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+      "sha256": "3393d55d80963ab402bdb5da1681754aa41e98ef4d8c97fd516d24c5b45c3dea",
+      "bytes": 18261,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/concept-books/Quant-Exam-Index-Comparison.xlsx",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/elevate-operations/Elevate-Operations.xlsx",
+      "sha256": "1d6e5d6f8ba403371e57e8056c05f61f50a0602e946eff423a85dc351cb9f9d3",
+      "bytes": 40732,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/elevate-operations/Elevate-Operations.xlsx",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+      "sha256": "12b6df1e6dc4a555e8d2f2a28d9909718ff5717a79f0ce8fdb7239114ad26982",
+      "bytes": 2882487,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/marketing-operations/Elevate-Marketing-Easy.xlsx",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/marketing-operations/Elevate-Marketing-Operations.xlsx",
+      "sha256": "ddf5d3af253b8f17687e7025cb1dbcab9a6622ed12e5c89b275e90f09cd75e8c",
+      "bytes": 291347,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/marketing-operations/Elevate-Marketing-Operations.xlsx",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+      "sha256": "98a52d68bc817670bd4f6a64e861405186f62e816f727e38ceb989d2f646445a",
+      "bytes": 201370,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/online-operations/Elevate-Online-Coordinator-SOP.docx",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/online-operations/Elevate-Online-Easy.xlsx",
+      "sha256": "dd602d6bd6d5b3019b7e6293acd7caab56c21f60868d3bf638ea16a3b2568432",
+      "bytes": 176848,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/online-operations/Elevate-Online-Easy.xlsx",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/outputs/online-operations/Elevate-Online-Operations.xlsx",
+      "sha256": "96371555cd33110d1e93b720262db93cda50871c802c3730ab752eaa305d8a16",
+      "bytes": 27650,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/outputs/online-operations/Elevate-Online-Operations.xlsx",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/work/build_class12.mjs",
+      "sha256": "f775224e20fc904ad53ceb226c6daab5021dba234c1d7dfc3f65ad5137a9433a",
+      "bytes": 70023,
+      "use": "consulted",
+      "zip_member": "Elevate-Education/work/build_class12.mjs",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/work/build_operations.mjs",
+      "sha256": "76aaf76ea5e2dc56a814280b2245832a28b2984847b614ad4e3a3b70df7bb4fa",
+      "bytes": 17314,
+      "use": "consulted",
+      "zip_member": "Elevate-Education/work/build_operations.mjs",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/work/class12-accelerated-summary.json",
+      "sha256": "cd4cabcd7242e041f6d5f0aa78b162716cf22689aee2030595f33acbd2ba4581",
+      "bytes": 42770,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/work/class12-accelerated-summary.json",
+      "matches_zip_member": true
+    },
+    {
+      "path": "handover/work/class12-weekend-map.json",
+      "sha256": "f125bc672fc8a82813e6a682b7c6435d4d087c1551e684dbd50fbf7460b63d15",
+      "bytes": 4465,
+      "use": "extracted",
+      "zip_member": "Elevate-Education/work/class12-weekend-map.json",
+      "matches_zip_member": true
+    },
+    {
+      "path": "content-os/Elevate-Education-Agent-Handover-2026-10-15.zip",
+      "sha256": "6b1dca9fc331a7c67e715d06f63797d62485ec9fd87d0169d33ed690be46d94b",
+      "bytes": 11035646,
+      "use": "archive containing every handover/ file"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@elevate/configuration",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "zod-validated environment loader with per-app subsets; fails loudly listing every missing or invalid variable.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/load-root-env.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  }
+}

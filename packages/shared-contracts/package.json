@@ -1,0 +1,17 @@
+{
+  "name": "@elevate/shared-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "zod schemas and inferred types for shared entities, the API envelope and error codes, integration events and cross-module summary contracts.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@elevate/shared-types": "0.1.0",
+    "zod": "4.6.7"
+  }
+}
