@@ -31,7 +31,6 @@ export const KPI_IDS = [
   'overdue_work',
   'unresolved_blockers',
 ] as const;
-export type KpiId = (typeof KPI_IDS)[number];
 
 // --- K-01 new leads ------------------------------------------------------------------------------
 
@@ -235,4 +234,131 @@ export function unresolvedBlockers(
     registerItems,
     blockedTasks,
   };
+}
+
+// --- operations dashboard (OPS-069) ----------------------------------------------------------------
+
+const asOfMeta = (definition: string, asOf: Date, unit: Metric['unit']) => {
+  const today = istToday(asOf);
+  return meta(definition, { from: today, to: today }, unit, `As of ${windowLabel(today, today)}`);
+};
+
+/** A point-in-time count from Ops' own complete tables (a real 0 is 0). */
+export function pointCount(n: number, definition: string, asOf: Date): Metric {
+  return metric.ok(n, asOfMeta(definition, asOf, 'count'));
+}
+
+/** O-01 Open tasks: tasks whose status is open (not completed / cancelled). */
+export function openTasksMetric(tasks: readonly TaskKpiRow[], asOf: Date): Metric {
+  return pointCount(
+    tasks.filter((t) => isOpenTask(t.status)).length,
+    'Tasks whose status is Not started, In progress, Waiting, At risk or Blocked. Point in time.',
+    asOf,
+  );
+}
+
+/** O-02 Overdue tasks: open tasks with a due date before today (IST). */
+export function overdueTasksMetric(tasks: readonly TaskKpiRow[], asOf: Date): Metric {
+  const today = istToday(asOf);
+  return pointCount(
+    tasks.filter((t) => isOpenTask(t.status) && t.dueDate !== null && t.dueDate < today).length,
+    'Open tasks whose due date (Asia/Kolkata) is before today. Tasks without a due date are not counted (flagged missing_due). Point in time.',
+    asOf,
+  );
+}
+
+/** O-03 Overdue share: overdue open tasks ÷ open tasks that have a due date; 0 denominator → missing. */
+export function overdueTaskShare(tasks: readonly TaskKpiRow[], asOf: Date): Metric {
+  const today = istToday(asOf);
+  const dated = tasks.filter((t) => isOpenTask(t.status) && t.dueDate !== null);
+  const m = asOfMeta(
+    'Open tasks whose due date is before today ÷ open tasks that have a due date (Asia/Kolkata). Point in time.',
+    asOf,
+    'percent',
+  );
+  if (dated.length === 0) return metric.missing('No open task has a due date.', m);
+  return metric.ok(
+    pct(dated.filter((t) => (t.dueDate as IsoDate) < today).length, dated.length),
+    m,
+  );
+}
+
+export interface CapacityRow {
+  key: string;
+  label: string;
+  open: number;
+  overdue: number;
+  blocked: number;
+  dueNext7Days: number;
+}
+
+/**
+ * Open-task capacity by a grouping key (department or owner). Rows are sorted by
+ * label — a capacity view, never a ranking or score. A null key is "Not assigned".
+ */
+export function taskCapacity(
+  tasks: readonly (TaskKpiRow & { groupKey: string | null; groupLabel: string | null })[],
+  asOf: Date,
+  unassignedLabel = 'Not assigned',
+): CapacityRow[] {
+  const today = istToday(asOf);
+  const horizon = addDays(today, 7);
+  const rows = new Map<string, CapacityRow>();
+  for (const t of tasks) {
+    if (!isOpenTask(t.status)) continue;
+    const key = t.groupKey ?? '__none__';
+    const row = rows.get(key) ?? {
+      key,
+      label: t.groupKey ? (t.groupLabel ?? 'Unknown') : unassignedLabel,
+      open: 0,
+      overdue: 0,
+      blocked: 0,
+      dueNext7Days: 0,
+    };
+    row.open += 1;
+    if (t.status === 'blocked') row.blocked += 1;
+    if (t.dueDate !== null && t.dueDate < today) row.overdue += 1;
+    if (t.dueDate !== null && t.dueDate >= today && t.dueDate <= horizon) row.dueNext7Days += 1;
+    rows.set(key, row);
+  }
+  return [...rows.values()].sort((a, b) =>
+    a.key === '__none__' ? 1 : b.key === '__none__' ? -1 : a.label.localeCompare(b.label),
+  );
+}
+
+/** O-06 SOP acknowledgement coverage: acknowledged ÷ required (people with a login); 0 required → missing. */
+export function sopAcknowledgementCoverage(
+  required: number,
+  acknowledged: number,
+  asOf: Date,
+): Metric {
+  const m = asOfMeta(
+    'Audience members (with a login) who acknowledged the approved SOP version in force ÷ audience members required to acknowledge it, over all active requirements. Point in time.',
+    asOf,
+    'percent',
+  );
+  if (required === 0)
+    return metric.missing('No SOP version currently requires acknowledgement.', m);
+  return metric.ok(pct(acknowledged, required), m);
+}
+
+export interface DeadlineItem {
+  kind: 'task' | 'milestone' | 'sop_review' | 'sop_acknowledgement' | 'policy_review';
+  id: string;
+  title: string;
+  dueDate: IsoDate;
+  link: string;
+}
+
+/** Deadlines from today to today + `days` (IST), soonest first, then by title. */
+export function upcomingDeadlines(
+  items: readonly DeadlineItem[],
+  asOf: Date,
+  days = 7,
+): DeadlineItem[] {
+  const today = istToday(asOf);
+  const until = addDays(today, days);
+  return items
+    .filter((i) => i.dueDate >= today && i.dueDate <= until)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.title.localeCompare(b.title));
 }

@@ -20,6 +20,7 @@
  */
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   check,
   date,
@@ -77,6 +78,8 @@ export type OpsRiskId = Brand<string, 'OpsRiskId'>;
 export type OpsProjectId = Brand<string, 'OpsProjectId'>;
 export type OpsMilestoneId = Brand<string, 'OpsMilestoneId'>;
 export type OpsWorkItemId = Brand<string, 'OpsWorkItemId'>;
+export type OpsFeeRecordId = Brand<string, 'OpsFeeRecordId'>;
+export type OpsEnrolmentAttemptId = Brand<string, 'OpsEnrolmentAttemptId'>;
 
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -195,6 +198,26 @@ export const OPS_DECISION_LOG_STATES = [
   'superseded',
 ] as const;
 export const OPS_LEVELS = ['low', 'medium', 'high'] as const;
+// Admissions administration (OPS-070…, D-028)
+export const OPS_FEE_RECORD_KINDS = ['due', 'received', 'refund', 'adjustment'] as const;
+export const OPS_FEE_RECORD_STATUSES = ['recorded', 'verified', 'voided'] as const;
+export const OPS_FEE_METHODS = [
+  'cash',
+  'upi',
+  'bank_transfer',
+  'cheque',
+  'card_terminal',
+  'other',
+] as const;
+export const OPS_HANDOFF_ATTEMPT_KINDS = ['initial', 'after_rejection', 'after_failure'] as const;
+export const OPS_HANDOFF_ATTEMPT_OUTCOMES = [
+  'pending',
+  'confirmed',
+  'rejected',
+  'superseded',
+] as const;
+export const OPS_CONSENT_STATUSES = ['given', 'refused', 'withdrawn'] as const;
+export const OPS_CONTACT_CHANNELS = ['call', 'whatsapp', 'sms', 'email'] as const;
 
 // --- configuration -----------------------------------------------------------------------
 
@@ -466,6 +489,15 @@ export const opsAdmissions = ops.table(
     rejectionCode: text('rejection_code'),
     rejectionReason: text('rejection_reason'),
     rejectedAt: timestamp('rejected_at', { withTimezone: true }),
+    /** Coded reason of the current status (closure codes, setting `admissions.closure_reasons`). */
+    statusReasonCode: text('status_reason_code'),
+    /** Asia/Kolkata calendar day the admission first reached `admitted`. */
+    admissionDate: isoDate('admission_date'),
+    /** From academic.enrolment.confirmed: Academic reused an existing student record. */
+    academicExistingStudent: boolean('academic_existing_student'),
+    /** Course/batch Academic actually enrolled into (may differ from the intended ones). */
+    enrolledCourseId: uuid('enrolled_course_id').$type<CourseId>(),
+    enrolledBatchId: uuid('enrolled_batch_id').$type<BatchId>(),
     createdBy: userRef('created_by').notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -487,6 +519,10 @@ export const opsAdmissions = ops.table(
     check('admissions_handoff_check', sql`${t.handoffStatus} IN ${inList(OPS_HANDOFF_STATUSES)}`),
     check('admissions_attempt_check', sql`${t.enrolmentAttempt} >= 0`),
     check(
+      'admissions_reason_code_format',
+      sql`${t.statusReasonCode} IS NULL OR ${t.statusReasonCode} ~ '^[a-z][a-z0-9_]{1,39}$'`,
+    ),
+    check(
       'admissions_enrolled_has_ids',
       sql`${t.status} <> 'enrolled' OR (${t.enrolmentId} IS NOT NULL AND ${t.studentId} IS NOT NULL)`,
     ),
@@ -505,6 +541,8 @@ export const opsAdmissionTransitions = ops.table(
     fromStatus: text('from_status'),
     toStatus: text('to_status').notNull(),
     reason: text('reason'),
+    /** Coded reason (closure), e.g. `chose_competitor`; null = not coded. */
+    reasonCode: text('reason_code'),
     actorType: text('actor_type', { enum: ['user', 'system'] }).notNull(),
     actorUserId: uuid('actor_user_id')
       .references(() => users.id, { onDelete: 'restrict' })
@@ -716,6 +754,182 @@ export const opsDemoTeachers = ops.table(
     notifiedAt: timestamp('notified_at', { withTimezone: true }),
   },
   (t) => [primaryKey({ name: 'demo_teachers_pkey', columns: [t.demoId, t.staffId] })],
+);
+
+// --- admissions administration (OPS-070…) ----------------------------------------------------
+
+/**
+ * Manually recorded administrative fee records per admission (OPS-072). NOT a
+ * payment system: no gateway, no card data, never a verified transaction. The
+ * accounts system stays the record (OD-013); these rows are what an authorised
+ * staff member typed in, optionally checked by a second, different person.
+ * Amounts are integer paise in INR (no floats). Rows are never deleted: a
+ * mistake is voided with a reason. Summary rules: domain/fees.ts.
+ */
+export const opsFeeRecords = ops.table(
+  'fee_records',
+  {
+    id: uuid('id').primaryKey().defaultRandom().$type<OpsFeeRecordId>(),
+    /** FEE-000001 (never reused). */
+    code: text('code').notNull(),
+    admissionId: uuid('admission_id')
+      .notNull()
+      .references(() => opsAdmissions.id, { onDelete: 'restrict' })
+      .$type<AdmissionId>(),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => opsLeads.id, { onDelete: 'restrict' })
+      .$type<LeadId>(),
+    kind: text('kind').notNull(),
+    /** For `adjustment`: `credit` lowers the balance due (e.g. demo fee adjusted), `debit` raises it. */
+    direction: text('direction'),
+    amountPaise: bigint('amount_paise', { mode: 'number' }).notNull(),
+    currency: text('currency').notNull().default('INR'),
+    /** Free-text reference to the fee schedule used (no fee schedule is approved in Elevate OS). */
+    pricingReference: text('pricing_reference'),
+    /** Receipt or transaction reference in the accounts system / bank statement. */
+    receiptReference: text('receipt_reference'),
+    method: text('method'),
+    /** Asia/Kolkata date the money moved (received/refund) or the date it is due (due). */
+    paymentDate: isoDate('payment_date'),
+    dueDate: isoDate('due_date'),
+    /** Demo whose fee this adjustment carries over (demo terms: adjusted against fees). */
+    demoId: uuid('demo_id')
+      .references(() => opsDemos.id, { onDelete: 'restrict' })
+      .$type<OpsDemoId>(),
+    status: text('status').notNull().default('recorded'),
+    notes: text('notes'),
+    recordedBy: userRef('recorded_by').notNull(),
+    recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+    verifiedBy: uuid('verified_by')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .$type<UserId>(),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    verificationNote: text('verification_note'),
+    voidedBy: uuid('voided_by')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .$type<UserId>(),
+    voidedAt: timestamp('voided_at', { withTimezone: true }),
+    voidReason: text('void_reason'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('fee_records_code_key').on(t.code),
+    index('fee_records_admission_idx').on(t.admissionId, t.recordedAt),
+    index('fee_records_status_idx').on(t.status),
+    check('fee_records_code_format', sql`${t.code} ~ '^FEE-[0-9]{6}$'`),
+    check('fee_records_kind_check', sql`${t.kind} IN ${inList(OPS_FEE_RECORD_KINDS)}`),
+    check('fee_records_status_check', sql`${t.status} IN ${inList(OPS_FEE_RECORD_STATUSES)}`),
+    check(
+      'fee_records_method_check',
+      sql`${t.method} IS NULL OR ${t.method} IN ${inList(OPS_FEE_METHODS)}`,
+    ),
+    check('fee_records_amount_positive', sql`${t.amountPaise} > 0`),
+    check('fee_records_currency_inr', sql`${t.currency} = 'INR'`),
+    check(
+      'fee_records_direction_check',
+      sql`(${t.kind} = 'adjustment') = (${t.direction} IS NOT NULL) AND (${t.direction} IS NULL OR ${t.direction} IN ('credit', 'debit'))`,
+    ),
+    check(
+      'fee_records_verified_check',
+      sql`(${t.status} <> 'verified' OR (${t.verifiedBy} IS NOT NULL AND ${t.verifiedAt} IS NOT NULL)) AND (${t.verifiedBy} IS NULL OR ${t.verifiedBy} <> ${t.recordedBy})`,
+    ),
+    check(
+      'fee_records_voided_check',
+      sql`${t.status} <> 'voided' OR (${t.voidedBy} IS NOT NULL AND ${t.voidReason} IS NOT NULL)`,
+    ),
+  ],
+);
+
+/**
+ * Every enrolment-handoff attempt of an admission (OPS-075, IR-OPS-03): one row
+ * per published `ops.admission.enrolment_requested` event, so the attempt
+ * history and each outcome stay visible. The business identity (admission id)
+ * is the same for every attempt; a new attempt is only allowed once the
+ * previous one can no longer create an enrolment (rejected, or its Academic
+ * delivery is `dead` — rolled back).
+ */
+export const opsEnrolmentAttempts = ops.table(
+  'enrolment_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom().$type<OpsEnrolmentAttemptId>(),
+    admissionId: uuid('admission_id')
+      .notNull()
+      .references(() => opsAdmissions.id, { onDelete: 'restrict' })
+      .$type<AdmissionId>(),
+    attempt: integer('attempt').notNull(),
+    requestEventId: uuid('request_event_id')
+      .notNull()
+      .references(() => integrationEvents.id, { onDelete: 'restrict' })
+      .$type<IntegrationEventId>(),
+    kind: text('kind').notNull(),
+    /** Why a new attempt was made (required after a failure). */
+    reason: text('reason'),
+    requestedBy: userRef('requested_by').notNull(),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    outcome: text('outcome').notNull().default('pending'),
+    outcomeAt: timestamp('outcome_at', { withTimezone: true }),
+    replyEventId: uuid('reply_event_id')
+      .references(() => integrationEvents.id, { onDelete: 'set null' })
+      .$type<IntegrationEventId>(),
+    rejectionCode: text('rejection_code'),
+    rejectionReason: text('rejection_reason'),
+    /** E.g. "late confirmation for a superseded attempt — check Academic for a duplicate". */
+    note: text('note'),
+  },
+  (t) => [
+    uniqueIndex('enrolment_attempts_admission_attempt_key').on(t.admissionId, t.attempt),
+    uniqueIndex('enrolment_attempts_request_event_key').on(t.requestEventId),
+    check('enrolment_attempts_attempt_check', sql`${t.attempt} >= 1`),
+    check('enrolment_attempts_kind_check', sql`${t.kind} IN ${inList(OPS_HANDOFF_ATTEMPT_KINDS)}`),
+    check(
+      'enrolment_attempts_outcome_check',
+      sql`${t.outcome} IN ${inList(OPS_HANDOFF_ATTEMPT_OUTCOMES)}`,
+    ),
+    check(
+      'enrolment_attempts_failure_reason',
+      sql`${t.kind} <> 'after_failure' OR ${t.reason} IS NOT NULL`,
+    ),
+  ],
+);
+
+/**
+ * Contact consent and communication preferences of a student/family (OPS-077).
+ * Private (ops:student_private:read): never shown in the unrestricted student
+ * directory, never sent to Marketing. Absent row = not recorded (never "given").
+ */
+export const opsContactPreferences = ops.table(
+  'contact_preferences',
+  {
+    leadId: uuid('lead_id')
+      .primaryKey()
+      .references(() => opsLeads.id, { onDelete: 'restrict' })
+      .$type<LeadId>(),
+    consentStatus: text('consent_status').notNull(),
+    /** Who gave or refused consent (minors: the guardian). */
+    consentBy: text('consent_by', { enum: ['student', 'guardian', 'both'] }).notNull(),
+    allowedChannels: text('allowed_channels').array().notNull(),
+    preferredContact: text('preferred_contact', { enum: ['student', 'guardian'] }),
+    note: text('note'),
+    recordedBy: userRef('recorded_by').notNull(),
+    recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      'contact_preferences_status_check',
+      sql`${t.consentStatus} IN ${inList(OPS_CONSENT_STATUSES)}`,
+    ),
+    check('contact_preferences_by_check', sql`${t.consentBy} IN ('student', 'guardian', 'both')`),
+    check(
+      'contact_preferences_channels_check',
+      sql`${t.allowedChannels} <@ ARRAY['call', 'whatsapp', 'sms', 'email']::text[]`,
+    ),
+    check(
+      'contact_preferences_refused_no_channels',
+      sql`${t.consentStatus} = 'given' OR cardinality(${t.allowedChannels}) = 0`,
+    ),
+  ],
 );
 
 // --- tasks and escalation ---------------------------------------------------------------------

@@ -3,14 +3,16 @@
  * instead of `accessScope` because `own` means something wider here:
  *
  * - `all`: every employee.
- * - `own`: the staff member linked to the user, plus — when the user holds the
- *   `department_manager` role — everyone in their reporting chain (direct and
- *   indirect reports via core.staff_members.manager_id).
+ * - `own`: the staff member linked to the user, plus — only when the permission
+ *   is one the `department_manager` role grants and the user holds that role —
+ *   everyone in their reporting chain (direct and indirect reports via
+ *   core.staff_members.manager_id). Permissions a manager holds only through
+ *   another role (e.g. `employee` → own private details) stay self-only.
  *
  * A user with no staff record has an empty `own` scope (sees nothing).
  * Deciders may never decide their own request (`assertNotSelf`), whatever scope.
  */
-import { requirePermission, type Permission } from '@elevate/authorization';
+import { grantsForRole, requirePermission, type Permission } from '@elevate/authorization';
 import { staffMembers, type Database } from '@elevate/database';
 import { ForbiddenError } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
@@ -55,7 +57,10 @@ export async function hrScope(
   const staffIds = new Set<StaffMemberId>();
   if (staffId) {
     staffIds.add(staffId);
-    if (actor.roles.includes('department_manager')) {
+    if (
+      actor.roles.includes('department_manager') &&
+      grantsForRole('department_manager').has(permission)
+    ) {
       const staff = await db
         .select({ id: staffMembers.id, managerId: staffMembers.managerId })
         .from(staffMembers);

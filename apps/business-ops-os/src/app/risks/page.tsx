@@ -4,7 +4,7 @@ import { Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/s
 import { formOptions } from '../../server/options';
 import { listRisks } from '../../server/planning';
 import { ActionForm } from '../../ui/action-form';
-import { fmtDate, statusTone } from '../../ui/format';
+import { fmtDate, humanise, statusTone } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
 
 export const dynamic = 'force-dynamic';
@@ -68,6 +68,18 @@ async function Register({ user, canWrite }: { user: AuthenticatedUser; canWrite:
           },
           { key: 'targetDate', header: 'Target', render: (x) => fmtDate(x.targetDate) },
           {
+            key: 'mitigations',
+            header: 'Mitigation actions',
+            render: (x) => {
+              const open = x.mitigations.filter(
+                (m) => m.status === 'planned' || m.status === 'in_progress',
+              ).length;
+              return x.mitigations.length
+                ? `${open} open of ${x.mitigations.length}`
+                : 'None recorded';
+            },
+          },
+          {
             key: 'act',
             header: '',
             render: (x) =>
@@ -75,7 +87,7 @@ async function Register({ user, canWrite }: { user: AuthenticatedUser; canWrite:
                 <ActionForm
                   action={`/ops/api/v1/risks/${x.id}`}
                   method="PATCH"
-                  submitLabel="Set"
+                  submitLabel="Set status"
                   compact
                   fields={[
                     {
@@ -91,8 +103,91 @@ async function Register({ user, canWrite }: { user: AuthenticatedUser; canWrite:
                 />
               ) : null,
           },
+          {
+            key: 'addMitigation',
+            header: '',
+            render: (x) =>
+              canWrite && x.status !== 'closed' && x.status !== 'resolved' ? (
+                <ActionForm
+                  action={`/ops/api/v1/risks/${x.id}/mitigations`}
+                  submitLabel="Add mitigation action"
+                  variant="secondary"
+                  compact
+                  fields={[
+                    { name: 'action', label: 'Action', required: true },
+                    {
+                      name: 'ownerStaffId',
+                      label: 'Owner',
+                      type: 'select',
+                      options: r.data.options.staff,
+                    },
+                    { name: 'dueDate', label: 'Due', type: 'date' },
+                  ]}
+                />
+              ) : null,
+          },
         ]}
       />
+      <Card
+        title="Mitigation actions"
+        description="Concrete actions against each risk, issue or blocker, with an owner and a due date (IST). Dropping an action needs an outcome."
+      >
+        <DataTable
+          rows={r.data.risks.flatMap((risk) =>
+            risk.mitigations.map((m) => ({ ...m, riskCode: risk.code, riskTitle: risk.title })),
+          )}
+          rowKey={(m) => m.id}
+          empty={<EmptyState title="No mitigation actions recorded" />}
+          columns={[
+            { key: 'riskCode', header: 'Risk', render: (m) => `${m.riskCode} ${m.riskTitle}` },
+            { key: 'action', header: 'Action' },
+            { key: 'ownerName', header: 'Owner', render: (m) => m.ownerName ?? '—' },
+            {
+              key: 'dueDate',
+              header: 'Due',
+              render: (m) => (
+                <>
+                  {fmtDate(m.dueDate)}
+                  {m.overdue ? <StatusBadge tone="danger">Overdue</StatusBadge> : null}
+                </>
+              ),
+            },
+            {
+              key: 'status',
+              header: 'Status',
+              render: (m) => (
+                <StatusBadge tone={statusTone(m.status)}>{humanise(m.status)}</StatusBadge>
+              ),
+            },
+            { key: 'outcome', header: 'Outcome', render: (m) => m.outcome ?? '—' },
+            {
+              key: 'act',
+              header: '',
+              render: (m) =>
+                canWrite && (m.status === 'planned' || m.status === 'in_progress') ? (
+                  <ActionForm
+                    action={`/ops/api/v1/risks/${m.riskId}/mitigations/${m.id}`}
+                    method="PATCH"
+                    submitLabel="Update action"
+                    compact
+                    fields={[
+                      {
+                        name: 'status',
+                        label: 'Status',
+                        type: 'select',
+                        required: true,
+                        options: ['planned', 'in_progress', 'done', 'dropped']
+                          .filter((v) => v !== m.status)
+                          .map((v) => ({ value: v, label: humanise(v) })),
+                      },
+                      { name: 'outcome', label: 'Outcome' },
+                    ]}
+                  />
+                ) : null,
+            },
+          ]}
+        />
+      </Card>
       {canWrite ? (
         <Card title="Record a risk, issue or blocker">
           <ActionForm

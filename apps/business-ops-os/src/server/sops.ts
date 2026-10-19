@@ -5,16 +5,29 @@
  * approve their own SOP; the requester cannot decide their own request.
  */
 import { createHash } from 'node:crypto';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
+import { can, scopeFor } from '@elevate/authorization';
 import {
+  auditEvents,
   departments,
+  opsIncidents,
+  opsSopAckRequirements,
+  opsSopAcknowledgements,
+  opsSopArchives,
   opsSopChecklistItems,
   opsSops,
   opsSopVersions,
+  opsSopVersionSchedules,
+  opsTasks,
   staffMembers,
+  userRoles,
+  users,
   type Database,
+  type OpsSopAckRequirementId,
   type OpsSopId,
+  type OpsSopVersionId,
 } from '@elevate/database';
+import { notify } from '@elevate/notifications';
 import {
   decideApproval,
   findPendingApproval,
@@ -33,13 +46,24 @@ import {
 import type { DepartmentId, StaffMemberId, UserId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import {
+  ACKNOWLEDGE_PROBLEM_LABELS,
+  acknowledgementStatus,
+  acknowledgeProblems,
+  inAckAudience,
+  istToday,
   nextSopStatus,
   nextVersionLabel,
   SOP_APPROVAL_PROBLEM_LABELS,
+  SOP_PUBLICATION_LABELS,
   sopApprovalProblems,
   sopDecisionState,
+  sopPublicationState,
+  reviewDueFlag,
+  sopScheduleProblems,
   sopSubmissionProblems,
+  type AckAudienceMember,
   type SopStatus,
+  type SopVersionStatus,
 } from '../domain';
 import { sopApprovalPolicy } from './approval-policies';
 import {
@@ -51,6 +75,8 @@ import {
   type Actor,
 } from './context';
 import type { createSopBody, sopDraftBody, sopWorkflowBody, updateSopBody } from './schemas';
+import { loadSettings } from './settings';
+import type { ackRequirementBody, sopScheduleBody } from './work-schemas';
 
 type SopRow = typeof opsSops.$inferSelect;
 type VersionRow = typeof opsSopVersions.$inferSelect;
@@ -103,8 +129,14 @@ export async function listSops(db: Database, actor: Actor) {
   const versions = versionIds.length
     ? await db.select().from(opsSopVersions).where(inArray(opsSopVersions.id, versionIds))
     : [];
+  const schedules = await db.select().from(opsSopVersionSchedules);
+  const archived = new Set((await db.select().from(opsSopArchives)).map((a) => a.sopId as string));
+  const settings = await loadSettings(db);
+  const today = istToday(new Date());
+  const dueSoonDays = settings['registers.review_due'].value.dueSoonDays;
   return rows.map(({ sop, departmentName }) => {
     const v = versions.find((x) => x.id === sop.currentVersionId);
+    const schedule = schedules.find((s) => s.versionId === sop.approvedVersionId) ?? null;
     return {
       ...sop,
       departmentName,
@@ -112,6 +144,20 @@ export async function listSops(db: Database, actor: Actor) {
       reviewerName: name(sop.reviewerStaffId),
       decisionState: sopDecisionState(sop.status as SopStatus),
       currentVersion: v ? { label: v.versionLabel, status: v.status } : null,
+      effectiveDate: schedule?.effectiveDate ?? null,
+      archived: archived.has(sop.id),
+      publicationState: sopPublicationState(
+        {
+          status: sop.status as SopStatus,
+          hasApprovedVersion: Boolean(sop.approvedVersionId),
+          effectiveDate: schedule?.effectiveDate ?? null,
+          archived: archived.has(sop.id),
+        },
+        today,
+      ),
+      reviewDue: sop.approvedVersionId
+        ? reviewDueFlag(schedule?.nextReviewDate ?? sop.nextReviewDate, today, dueSoonDays)
+        : ('not_set' as const),
     };
   });
 }
@@ -185,6 +231,7 @@ export async function getSop(db: Database, actor: Actor, id: string) {
     approvals,
     approvalBlockersForYou: approvalBlockers,
     youAreReviewer: Boolean(reviewerUserId && reviewerUserId === actor.id),
+    ...(await sopExtras(db, actor, sop)),
   };
 }
 
@@ -552,4 +599,589 @@ export async function sopWorkflow(
       }
     }
   });
+}
+
+// --- schedule, publication, archive (OPS-064) ----------------------------------------------------
+
+async function scheduleOf(db: Database, versionId: string | null) {
+  if (!versionId) return null;
+  const [row] = await db
+    .select()
+    .from(opsSopVersionSchedules)
+    .where(eq(opsSopVersionSchedules.versionId, versionId as OpsSopVersionId));
+  return row ?? null;
+}
+
+async function archiveOf(db: Database, sopId: string) {
+  const [row] = await db
+    .select()
+    .from(opsSopArchives)
+    .where(eq(opsSopArchives.sopId, sopId as OpsSopId));
+  return row ?? null;
+}
+
+/** Derived fields for the SOP detail: publication, review due, acknowledgements, links, history. */
+async function sopExtras(db: Database, actor: Actor, sop: SopRow) {
+  const today = istToday(new Date());
+  const settings = await loadSettings(db);
+  const schedule = await scheduleOf(db, sop.approvedVersionId);
+  const archive = await archiveOf(db, sop.id);
+  const publicationState = sopPublicationState(
+    {
+      status: sop.status as SopStatus,
+      hasApprovedVersion: Boolean(sop.approvedVersionId),
+      effectiveDate: schedule?.effectiveDate ?? null,
+      archived: Boolean(archive),
+    },
+    today,
+  );
+  const acknowledgements = await acknowledgementSummary(db, sop, canSeeAckNames(actor));
+  const me = await myAckState(db, actor, sop);
+  const relatedTasks =
+    scopeFor(actor, 'ops:tasks:read') === 'all'
+      ? await db
+          .select({
+            id: opsTasks.id,
+            code: opsTasks.code,
+            title: opsTasks.title,
+            status: opsTasks.status,
+            dueDate: opsTasks.dueDate,
+          })
+          .from(opsTasks)
+          .where(eq(opsTasks.sopId, sop.id))
+          .orderBy(asc(opsTasks.code))
+      : null;
+  const relatedIncidents = can(actor, 'ops:incidents:read')
+    ? await db
+        .select({
+          id: opsIncidents.id,
+          code: opsIncidents.code,
+          title: opsIncidents.title,
+          status: opsIncidents.status,
+        })
+        .from(opsIncidents)
+        .where(eq(opsIncidents.sopId, sop.id))
+        .orderBy(desc(opsIncidents.occurredAt))
+    : null;
+  return {
+    schedule,
+    archive,
+    publicationState,
+    publicationLabel: SOP_PUBLICATION_LABELS[publicationState],
+    reviewDue: sop.approvedVersionId
+      ? reviewDueFlag(
+          schedule?.nextReviewDate ?? sop.nextReviewDate,
+          today,
+          settings['registers.review_due'].value.dueSoonDays,
+        )
+      : ('not_set' as const),
+    acknowledgements,
+    myAcknowledgement: me,
+    relatedTasks,
+    relatedIncidents,
+  };
+}
+
+export async function setSopSchedule(
+  db: Database,
+  actor: Actor,
+  id: string,
+  input: z.output<typeof sopScheduleBody>,
+  requestId?: string,
+) {
+  await accessScope(db, actor, 'ops:sops:write');
+  return withTransaction(db, async (tx) => {
+    const sop = await lockSop(tx, id);
+    const versionId = input.versionId ?? sop.approvedVersionId;
+    if (!versionId)
+      throw new InvalidStateTransitionError(
+        'This SOP has no approved version, so it cannot have an effective date.',
+      );
+    const [version] = await tx
+      .select()
+      .from(opsSopVersions)
+      .where(
+        and(eq(opsSopVersions.id, versionId as OpsSopVersionId), eq(opsSopVersions.sopId, sop.id)),
+      );
+    if (!version) notFound('SOP version');
+    const problems = sopScheduleProblems({
+      sopStatus: sop.status as SopStatus,
+      versionStatus: version.status as SopVersionStatus,
+      isVersionInForce: version.id === sop.approvedVersionId,
+      effectiveDate: input.effectiveDate,
+      nextReviewDate: input.nextReviewDate ?? null,
+    });
+    if (problems.includes('review_before_effective'))
+      throw new ValidationError('The next review date is before the effective date.', {
+        details: [{ location: 'body', path: ['nextReviewDate'], message: 'Before effective date' }],
+      });
+    if (problems.length)
+      throw new InvalidStateTransitionError(
+        'Only the approved version in force of a live SOP can get an effective date.',
+        { details: { problems } },
+      );
+    const before = await scheduleOf(tx, version.id);
+    const values = {
+      versionId: version.id,
+      effectiveDate: input.effectiveDate,
+      nextReviewDate: input.nextReviewDate ?? null,
+      setBy: actor.id,
+    };
+    const [after] = before
+      ? await tx
+          .update(opsSopVersionSchedules)
+          .set(values)
+          .where(eq(opsSopVersionSchedules.versionId, version.id))
+          .returning()
+      : await tx.insert(opsSopVersionSchedules).values(values).returning();
+    await recordAudit(tx, {
+      actorUserId: actor.id,
+      module: 'ops',
+      action: 'sop.schedule_set',
+      entityType: 'sop',
+      entityId: sop.id,
+      before,
+      after,
+      requestId,
+      metadata: { versionId: version.id },
+    });
+    return after;
+  });
+}
+
+/** Archive a retired SOP (flag row; the SOP and its versions are unchanged and stay readable). */
+export async function archiveSop(
+  db: Database,
+  actor: Actor,
+  id: string,
+  input: { reason: string },
+  requestId?: string,
+) {
+  await accessScope(db, actor, 'ops:sops:write');
+  return withTransaction(db, async (tx) => {
+    const sop = await lockSop(tx, id);
+    if (sop.status !== 'retired')
+      throw new InvalidStateTransitionError('Retire the SOP before archiving it.');
+    if (await archiveOf(tx, sop.id)) throw new ConflictError('This SOP is already archived.');
+    const [row] = await tx
+      .insert(opsSopArchives)
+      .values({ sopId: sop.id, reason: input.reason.trim(), archivedBy: actor.id })
+      .returning();
+    await recordAudit(tx, {
+      actorUserId: actor.id,
+      module: 'ops',
+      action: 'sop.archived',
+      entityType: 'sop',
+      entityId: sop.id,
+      after: row,
+      requestId,
+    });
+    return row;
+  });
+}
+
+// --- required acknowledgements (OPS-065) ---------------------------------------------------------
+
+type RequirementRow = typeof opsSopAckRequirements.$inferSelect;
+
+/** Who sees named outstanding lists: SOP writers and dashboard readers. Others see counts. */
+const canSeeAckNames = (actor: Actor) =>
+  can(actor, 'ops:sops:write') || can(actor, 'ops:dashboard:read');
+
+/** Read-only principals (only the auditor role) never write acknowledgements. */
+const isReadOnly = (actor: Actor) =>
+  actor.roles.length > 0 && actor.roles.every((r) => r === 'auditor');
+
+/** Audience of a requirement: active staff of a department, or active users holding a role. */
+async function ackAudience(db: Database, req: RequirementRow): Promise<AckAudienceMember[]> {
+  if (req.audienceType === 'department' && req.departmentId) {
+    const rows = await db
+      .select({ id: staffMembers.id, userId: staffMembers.userId, name: staffMembers.fullName })
+      .from(staffMembers)
+      .where(
+        and(eq(staffMembers.departmentId, req.departmentId), eq(staffMembers.status, 'active')),
+      );
+    return rows.map((r) => ({ staffId: r.id, userId: r.userId, name: r.name }));
+  }
+  if (req.audienceType === 'role' && req.role) {
+    const rows = await db
+      .select({ userId: users.id, displayName: users.displayName })
+      .from(userRoles)
+      .innerJoin(users, eq(users.id, userRoles.userId))
+      .where(and(eq(userRoles.role, req.role as never), eq(users.status, 'active')));
+    const staff = rows.length
+      ? await db
+          .select({ id: staffMembers.id, userId: staffMembers.userId, name: staffMembers.fullName })
+          .from(staffMembers)
+          .where(
+            inArray(
+              staffMembers.userId,
+              rows.map((r) => r.userId),
+            ),
+          )
+      : [];
+    return rows.map((r) => {
+      const s = staff.find((x) => x.userId === r.userId);
+      return { staffId: s?.id ?? null, userId: r.userId, name: s?.name ?? r.displayName };
+    });
+  }
+  return [];
+}
+
+async function activeRequirements(db: Database, versionId: string | null) {
+  if (!versionId) return [];
+  return db
+    .select({ req: opsSopAckRequirements, departmentName: departments.name })
+    .from(opsSopAckRequirements)
+    .leftJoin(departments, eq(departments.id, opsSopAckRequirements.departmentId))
+    .where(
+      and(
+        eq(opsSopAckRequirements.versionId, versionId as OpsSopVersionId),
+        isNull(opsSopAckRequirements.withdrawnAt),
+      ),
+    )
+    .orderBy(asc(opsSopAckRequirements.createdAt));
+}
+
+async function acknowledgedUsers(db: Database, versionId: string | null) {
+  if (!versionId) return new Set<string>();
+  const rows = await db
+    .select({ userId: opsSopAcknowledgements.userId })
+    .from(opsSopAcknowledgements)
+    .where(eq(opsSopAcknowledgements.versionId, versionId as OpsSopVersionId));
+  return new Set(rows.map((r) => r.userId as string));
+}
+
+/**
+ * Acknowledgement status of the approved version in force. A person in several
+ * requirements of the same version is counted once (`totals`).
+ */
+async function acknowledgementSummary(db: Database, sop: SopRow, withNames: boolean) {
+  const versionId = sop.approvedVersionId;
+  const requirements = await activeRequirements(db, versionId);
+  const acked = await acknowledgedUsers(db, versionId);
+  const everyone = new Map<string, AckAudienceMember>();
+  const perRequirement = [];
+  for (const { req, departmentName } of requirements) {
+    const audience = await ackAudience(db, req);
+    for (const m of audience) everyone.set(m.userId ?? `staff:${m.staffId}`, m);
+    const split = acknowledgementStatus(audience, acked);
+    perRequirement.push({
+      id: req.id,
+      audienceType: req.audienceType,
+      audienceLabel:
+        req.audienceType === 'department' ? (departmentName ?? 'Department') : req.role,
+      departmentId: req.departmentId,
+      role: req.role,
+      dueDate: req.dueDate,
+      note: req.note,
+      createdAt: req.createdAt,
+      counts: {
+        required: split.acknowledged.length + split.outstanding.length,
+        acknowledged: split.acknowledged.length,
+        outstanding: split.outstanding.length,
+        noLogin: split.noLogin.length,
+      },
+      outstanding: withNames ? split.outstanding.map((m) => m.name) : null,
+      noLogin: withNames ? split.noLogin.map((m) => m.name) : null,
+    });
+  }
+  const total = acknowledgementStatus([...everyone.values()], acked);
+  return {
+    versionId,
+    requirements: perRequirement,
+    totals: {
+      required: total.acknowledged.length + total.outstanding.length,
+      acknowledged: total.acknowledged.length,
+      outstanding: total.outstanding.length,
+      noLogin: total.noLogin.length,
+    },
+  };
+}
+
+/** Is the actor in the audience of the version in force, and have they acknowledged it? */
+async function myAckState(db: Database, actor: Actor, sop: SopRow) {
+  const versionId = sop.approvedVersionId;
+  const requirements = await activeRequirements(db, versionId);
+  const [staff] = await db
+    .select({ departmentId: staffMembers.departmentId })
+    .from(staffMembers)
+    .where(eq(staffMembers.userId, actor.id));
+  const person = {
+    departmentId: (staff?.departmentId as string | null) ?? null,
+    roles: actor.roles,
+  };
+  const inAudience = requirements.some(({ req }) =>
+    inAckAudience(
+      {
+        id: req.id,
+        audienceType: req.audienceType as 'department' | 'role',
+        departmentId: req.departmentId,
+        role: req.role,
+      },
+      person,
+    ),
+  );
+  const [mine] = versionId
+    ? await db
+        .select()
+        .from(opsSopAcknowledgements)
+        .where(
+          and(
+            eq(opsSopAcknowledgements.versionId, versionId),
+            eq(opsSopAcknowledgements.userId, actor.id),
+          ),
+        )
+    : [];
+  const problems = acknowledgeProblems({
+    versionInForce: Boolean(versionId) && sop.status !== 'retired',
+    inAudience,
+    alreadyAcknowledged: Boolean(mine),
+    readOnly: isReadOnly(actor),
+  });
+  return {
+    required: inAudience,
+    acknowledgedAt: mine?.acknowledgedAt ?? null,
+    canAcknowledge: problems.length === 0,
+    problems: problems.map((p) => ACKNOWLEDGE_PROBLEM_LABELS[p]),
+  };
+}
+
+export async function createAckRequirement(
+  db: Database,
+  actor: Actor,
+  id: string,
+  input: z.output<typeof ackRequirementBody>,
+  requestId?: string,
+) {
+  await accessScope(db, actor, 'ops:sops:write');
+  return withTransaction(db, async (tx) => {
+    const sop = await lockSop(tx, id);
+    if (!sop.approvedVersionId || sop.status === 'retired')
+      throw new InvalidStateTransitionError(
+        'Only the approved version in force of a live SOP can require acknowledgement.',
+      );
+    if (input.audienceType === 'department') {
+      const [dept] = await tx
+        .select({ id: departments.id })
+        .from(departments)
+        .where(eq(departments.id, input.departmentId as DepartmentId));
+      if (!dept)
+        throw new ValidationError('Unknown department.', {
+          details: [{ location: 'body', path: ['departmentId'], message: 'Unknown department' }],
+        });
+    }
+    const [row] = await tx
+      .insert(opsSopAckRequirements)
+      .values({
+        versionId: sop.approvedVersionId,
+        audienceType: input.audienceType,
+        departmentId:
+          input.audienceType === 'department' ? (input.departmentId as DepartmentId) : null,
+        role: input.audienceType === 'role' ? (input.role ?? null) : null,
+        dueDate: input.dueDate ?? null,
+        note: input.note ?? null,
+        createdBy: actor.id,
+      })
+      .returning();
+    if (!row) throw new Error('requirement insert returned no row');
+    await recordAudit(tx, {
+      actorUserId: actor.id,
+      module: 'ops',
+      action: 'sop.acknowledgement_required',
+      entityType: 'sop',
+      entityId: sop.id,
+      after: row,
+      requestId,
+      metadata: { versionId: sop.approvedVersionId },
+    });
+    const audience = (await ackAudience(tx, row))
+      .map((m) => m.userId)
+      .filter((u): u is UserId => Boolean(u) && u !== actor.id);
+    if (audience.length)
+      await notify(tx, {
+        userIds: [...new Set(audience)],
+        module: 'ops',
+        kind: 'sop.acknowledgement_required',
+        title: `Please read and acknowledge ${sop.code}: ${sop.title}`,
+        body: row.dueDate ? `Acknowledge by ${row.dueDate}.` : undefined,
+        link: `/ops/sops/${sop.id}`,
+        entityType: 'sop',
+        entityId: sop.id,
+      });
+    return row;
+  });
+}
+
+export async function withdrawAckRequirement(
+  db: Database,
+  actor: Actor,
+  id: string,
+  requirementId: string,
+  input: { reason: string },
+  requestId?: string,
+) {
+  await accessScope(db, actor, 'ops:sops:write');
+  return withTransaction(db, async (tx) => {
+    const sop = await lockSop(tx, id);
+    const [req] = await tx
+      .select()
+      .from(opsSopAckRequirements)
+      .innerJoin(opsSopVersions, eq(opsSopVersions.id, opsSopAckRequirements.versionId))
+      .where(
+        and(
+          eq(opsSopAckRequirements.id, requirementId as OpsSopAckRequirementId),
+          eq(opsSopVersions.sopId, sop.id),
+        ),
+      );
+    if (!req) notFound('Acknowledgement requirement');
+    if (req.sop_ack_requirements.withdrawnAt)
+      throw new ConflictError('This requirement is already withdrawn.');
+    const [after] = await tx
+      .update(opsSopAckRequirements)
+      .set({ withdrawnAt: new Date(), withdrawnBy: actor.id, withdrawnReason: input.reason.trim() })
+      .where(eq(opsSopAckRequirements.id, req.sop_ack_requirements.id))
+      .returning();
+    await recordAudit(tx, {
+      actorUserId: actor.id,
+      module: 'ops',
+      action: 'sop.acknowledgement_requirement_withdrawn',
+      entityType: 'sop',
+      entityId: sop.id,
+      before: req.sop_ack_requirements,
+      after,
+      requestId,
+    });
+    return after;
+  });
+}
+
+/** The signed-in person acknowledges the approved version in force (append-only, once). */
+export async function acknowledgeSop(
+  db: Database,
+  actor: Actor,
+  id: string,
+  input: { note?: string | null },
+  requestId?: string,
+) {
+  await accessScope(db, actor, 'ops:sops:read');
+  return withTransaction(db, async (tx) => {
+    const sop = await lockSop(tx, id);
+    const state = await myAckState(tx, actor, sop);
+    if (!state.canAcknowledge) {
+      const Err = state.acknowledgedAt ? ConflictError : ForbiddenError;
+      throw new Err(state.problems.join(' ') || 'You cannot acknowledge this SOP.');
+    }
+    const staffId = await staffIdForUser(tx, actor.id);
+    const [row] = await tx
+      .insert(opsSopAcknowledgements)
+      .values({
+        versionId: sop.approvedVersionId as OpsSopVersionId,
+        userId: actor.id,
+        staffId,
+        note: input.note ?? null,
+      })
+      .returning();
+    await recordAudit(tx, {
+      actorUserId: actor.id,
+      module: 'ops',
+      action: 'sop.acknowledged',
+      entityType: 'sop',
+      entityId: sop.id,
+      after: row,
+      requestId,
+      metadata: { versionId: sop.approvedVersionId },
+    });
+    return row;
+  });
+}
+
+/** Outstanding-acknowledgement report for one SOP (names only for writers / dashboard readers). */
+export async function sopAcknowledgementReport(db: Database, actor: Actor, id: string) {
+  await accessScope(db, actor, 'ops:sops:read');
+  const [sop] = await db
+    .select()
+    .from(opsSops)
+    .where(eq(opsSops.id, id as OpsSopId));
+  if (!sop) notFound('SOP');
+  return acknowledgementSummary(db, sop, canSeeAckNames(actor));
+}
+
+/** Organisation-wide acknowledgement totals over all live SOPs (no permission check: dashboards). */
+export async function acknowledgementTotals(db: Database) {
+  const sops = await db
+    .select()
+    .from(opsSops)
+    .where(and(isNotNull(opsSops.approvedVersionId), ne(opsSops.status, 'retired')));
+  const bySop = [];
+  const totals = { required: 0, acknowledged: 0, outstanding: 0, noLogin: 0 };
+  for (const sop of sops) {
+    const s = await acknowledgementSummary(db, sop, false);
+    if (!s.requirements.length) continue;
+    totals.required += s.totals.required;
+    totals.acknowledged += s.totals.acknowledged;
+    totals.outstanding += s.totals.outstanding;
+    totals.noLogin += s.totals.noLogin;
+    const due = s.requirements
+      .map((r) => r.dueDate)
+      .filter((d): d is string => Boolean(d))
+      .sort()[0];
+    bySop.push({ id: sop.id, code: sop.code, title: sop.title, dueDate: due ?? null, ...s.totals });
+  }
+  return { totals, bySop };
+}
+
+/** Organisation-wide outstanding report (SOP readers; named lists are not included here). */
+export async function listOutstandingAcknowledgements(db: Database, actor: Actor) {
+  await accessScope(db, actor, 'ops:sops:read');
+  return acknowledgementTotals(db);
+}
+
+// --- change history ------------------------------------------------------------------------------
+
+const SOP_HISTORY_LABELS: Record<string, string> = {
+  'sop.created': 'SOP created (draft 0.1)',
+  'sop.updated': 'Register details edited',
+  'sop.draft_saved': 'Draft saved',
+  'sop.submitted': 'Submitted for approval',
+  'sop.reviewed': 'Reviewer recorded a review',
+  'sop.withdrawn': 'Submission withdrawn',
+  'sop.approved': 'Version approved',
+  'sop.rejected': 'Version rejected',
+  'sop.retired': 'SOP retired',
+  'sop.schedule_set': 'Effective / next review date set',
+  'sop.archived': 'SOP archived',
+  'sop.acknowledgement_required': 'Acknowledgement required from an audience',
+  'sop.acknowledgement_requirement_withdrawn': 'Acknowledgement requirement withdrawn',
+  'sop.acknowledged': 'Acknowledged by a staff member',
+};
+
+/** Change history of an SOP from the audit log, newest first. */
+export async function getSopHistory(db: Database, actor: Actor, id: string) {
+  await accessScope(db, actor, 'ops:sops:read');
+  const [sop] = await db
+    .select({ id: opsSops.id })
+    .from(opsSops)
+    .where(eq(opsSops.id, id as OpsSopId));
+  if (!sop) notFound('SOP');
+  const rows = await db
+    .select({ e: auditEvents, actorName: users.displayName })
+    .from(auditEvents)
+    .leftJoin(users, eq(users.id, auditEvents.actorUserId))
+    .where(
+      and(
+        eq(auditEvents.module, 'ops'),
+        eq(auditEvents.entityType, 'sop'),
+        eq(auditEvents.entityId, sop.id),
+      ),
+    )
+    .orderBy(desc(auditEvents.at), desc(auditEvents.id))
+    .limit(500);
+  return rows.map(({ e, actorName }) => ({
+    id: e.id,
+    at: e.at,
+    action: e.action,
+    label: SOP_HISTORY_LABELS[e.action] ?? e.action,
+    actorName,
+  }));
 }

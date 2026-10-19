@@ -37,7 +37,17 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
       />
       <Card
         title="Profile"
-        description="Operational data only — no payroll, leave or HR records (D-015)."
+        description={
+          d.employeeCode ? (
+            <>
+              Employee {d.employeeCode}:{' '}
+              <a href={`/ops/hr/employees/${d.staff.id}`}>open the HR record</a> for employment
+              details, documents and history.
+            </>
+          ) : (
+            'No HR employee record yet. HR can register this staff member under Employees.'
+          )
+        }
       >
         <p>
           Employment type: {humanise(d.profile?.employmentType ?? 'not_recorded')} · Role labels:{' '}

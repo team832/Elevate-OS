@@ -3,13 +3,15 @@
  * (OPS-023), projects and milestones with dependencies (OPS-025), and the
  * imported work inventory.
  */
-import { asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import {
   opsDecisions,
   opsMilestoneDependencies,
   opsMilestones,
   opsProjects,
+  opsRiskMitigations,
   opsRisks,
+  opsTasks,
   opsWorkItems,
   staffMembers,
   type Database,
@@ -17,11 +19,22 @@ import {
   type OpsMilestoneId,
   type OpsProjectId,
   type OpsRiskId,
+  type OpsRiskMitigationId,
 } from '@elevate/database';
 import { recordAudit, withTransaction } from '@elevate/server-kit';
 import { ConflictError, ValidationError } from '@elevate/shared-contracts';
 import type { z } from 'zod';
-import { riskFlags, riskSeverity, wouldCreateCycle, type Level } from '../domain';
+import {
+  checkMitigationTransition,
+  istToday,
+  PROJECT_BLOCK_REASON_LABELS,
+  projectBlockReasons,
+  riskFlags,
+  riskSeverity,
+  wouldCreateCycle,
+  type Level,
+  type MitigationStatus,
+} from '../domain';
 import { accessScope, activeStaff, nextCode, notFound, type Actor } from './context';
 import type {
   decisionBody,
@@ -33,6 +46,7 @@ import type {
   updateProjectBody,
   updateRiskBody,
 } from './schemas';
+import type { mitigationBody, mitigationUpdateBody } from './work-schemas';
 
 const defined = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
@@ -154,9 +168,11 @@ export async function listRisks(db: Database, actor: Actor) {
   await accessScope(db, actor, 'ops:risks:read');
   const rows = await db.select().from(opsRisks).orderBy(desc(opsRisks.createdAt));
   const name = await staffNames(db);
+  const mitigations = await listMitigations(db, actor);
   return rows.map((r) => ({
     ...r,
     ownerName: name(r.ownerStaffId),
+    mitigations: mitigations.filter((m) => m.riskId === r.id),
     severity: riskSeverity(r.likelihood as Level | null, r.impact as Level | null),
     flags: riskFlags({
       status: r.status,
@@ -462,4 +478,204 @@ export async function updateMilestone(
 export async function listWorkInventory(db: Database, actor: Actor) {
   await accessScope(db, actor, 'ops:risks:read');
   return db.select().from(opsWorkItems).orderBy(asc(opsWorkItems.code));
+}
+
+// --- risk mitigations (OPS-067) ------------------------------------------------------------------
+
+export async function listMitigations(db: Database, actor: Actor, riskId?: string) {
+  await accessScope(db, actor, 'ops:risks:read');
+  const rows = await db
+    .select()
+    .from(opsRiskMitigations)
+    .where(riskId ? eq(opsRiskMitigations.riskId, riskId as OpsRiskId) : undefined)
+    .orderBy(asc(opsRiskMitigations.createdAt));
+  const name = await staffNames(db);
+  const today = istToday(new Date());
+  return rows.map((m) => ({
+    ...m,
+    ownerName: name(m.ownerStaffId),
+    overdue:
+      (m.status === 'planned' || m.status === 'in_progress') &&
+      m.dueDate !== null &&
+      m.dueDate < today,
+  }));
+}
+
+export async function addMitigation(
+  db: Database,
+  actor: Actor,
+  riskId: string,
+  input: z.output<typeof mitigationBody>,
+  requestId?: string,
+) {
+  await accessScope(db, actor, 'ops:risks:write');
+  if (input.ownerStaffId) await activeStaff(db, input.ownerStaffId, 'ownerStaffId');
+  return withTransaction(db, async (tx) => {
+    const [risk] = await tx
+      .select()
+      .from(opsRisks)
+      .where(eq(opsRisks.id, riskId as OpsRiskId))
+      .for('update');
+    if (!risk) notFound('Risk');
+    if (risk.status === 'closed' || risk.status === 'resolved')
+      throw new ConflictError('Reopen the risk before adding mitigation actions.');
+    const [row] = await tx
+      .insert(opsRiskMitigations)
+      .values({
+        riskId: risk.id,
+        action: input.action,
+        ownerStaffId: (input.ownerStaffId as never) ?? null,
+        dueDate: input.dueDate ?? null,
+        createdBy: actor.id,
+      })
+      .returning();
+    await recordAudit(tx, {
+      actorUserId: actor.id,
+      module: 'ops',
+      action: 'risk.mitigation_added',
+      entityType: 'risk',
+      entityId: risk.id,
+      after: row,
+      requestId,
+    });
+    return row;
+  });
+}
+
+export async function updateMitigation(
+  db: Database,
+  actor: Actor,
+  riskId: string,
+  mitigationId: string,
+  input: z.output<typeof mitigationUpdateBody>,
+  requestId?: string,
+) {
+  await accessScope(db, actor, 'ops:risks:write');
+  if (input.ownerStaffId) await activeStaff(db, input.ownerStaffId, 'ownerStaffId');
+  return withTransaction(db, async (tx) => {
+    const [before] = await tx
+      .select()
+      .from(opsRiskMitigations)
+      .where(
+        and(
+          eq(opsRiskMitigations.id, mitigationId as OpsRiskMitigationId),
+          eq(opsRiskMitigations.riskId, riskId as OpsRiskId),
+        ),
+      )
+      .for('update');
+    if (!before) notFound('Mitigation');
+    const patch: Partial<typeof opsRiskMitigations.$inferInsert> = {};
+    if (input.status && input.status !== before.status) {
+      const check = checkMitigationTransition(
+        before.status as MitigationStatus,
+        input.status,
+        input.outcome ?? before.outcome,
+      );
+      if (!check.ok) throw new ValidationError(check.message);
+      patch.status = input.status;
+      patch.completedAt = input.status === 'done' ? new Date() : null;
+    } else if (before.status === 'done' || before.status === 'dropped') {
+      throw new ConflictError('A finished mitigation action cannot be changed.');
+    }
+    if (input.outcome !== undefined) patch.outcome = input.outcome;
+    if ('ownerStaffId' in input) patch.ownerStaffId = (input.ownerStaffId as never) ?? null;
+    if ('dueDate' in input) patch.dueDate = input.dueDate ?? null;
+    const [after] = await tx
+      .update(opsRiskMitigations)
+      .set(patch)
+      .where(eq(opsRiskMitigations.id, before.id))
+      .returning();
+    await recordAudit(tx, {
+      actorUserId: actor.id,
+      module: 'ops',
+      action: 'risk.mitigation_updated',
+      entityType: 'risk',
+      entityId: before.riskId,
+      before,
+      after,
+      requestId,
+    });
+    return after;
+  });
+}
+
+// --- blocked projects (OPS-067) ------------------------------------------------------------------
+
+/** Live projects with at least one block reason (pure rules: domain/registers.ts). */
+export async function listBlockedProjects(db: Database, actor: Actor, now = new Date()) {
+  await accessScope(db, actor, 'ops:risks:read');
+  return blockedProjectRows(db, now);
+}
+
+/** No permission check: used by the operations report after its own check. */
+export async function blockedProjectRows(db: Database, now = new Date()) {
+  const today = istToday(now);
+  const projects = await db
+    .select()
+    .from(opsProjects)
+    .where(inArray(opsProjects.status, ['planned', 'active', 'on_hold']))
+    .orderBy(asc(opsProjects.code));
+  if (!projects.length) return [];
+  const ids = projects.map((p) => p.id);
+  const milestones = await db
+    .select()
+    .from(opsMilestones)
+    .where(inArray(opsMilestones.projectId, ids));
+  const deps = milestones.length
+    ? await db
+        .select()
+        .from(opsMilestoneDependencies)
+        .where(
+          inArray(
+            opsMilestoneDependencies.milestoneId,
+            milestones.map((m) => m.id),
+          ),
+        )
+    : [];
+  const blockedTasks = await db
+    .select({ projectId: opsTasks.projectId })
+    .from(opsTasks)
+    .where(and(inArray(opsTasks.projectId, ids), eq(opsTasks.status, 'blocked')));
+  const blockers = await db
+    .select({ projectId: opsRisks.projectId })
+    .from(opsRisks)
+    .where(
+      and(
+        inArray(opsRisks.projectId, ids),
+        inArray(opsRisks.kind, ['issue', 'blocker']),
+        inArray(opsRisks.status, ['open', 'mitigating']),
+      ),
+    );
+  const name = await staffNames(db);
+  return projects
+    .map((p) => {
+      const ms = milestones
+        .filter((m) => m.projectId === p.id)
+        .map((m) => ({
+          id: m.id as string,
+          title: m.title,
+          status: m.status,
+          dueDate: m.dueDate,
+          dependsOn: deps
+            .filter((d) => d.milestoneId === m.id)
+            .map((d) => d.dependsOnMilestoneId as string),
+        }));
+      const counts = {
+        blockedTasks: blockedTasks.filter((t) => t.projectId === p.id).length,
+        openBlockers: blockers.filter((b) => b.projectId === p.id).length,
+      };
+      const reasons = projectBlockReasons(p, ms, counts, today);
+      return {
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        status: p.status,
+        ownerName: name(p.ownerStaffId),
+        reasons,
+        reasonLabels: reasons.map((r) => PROJECT_BLOCK_REASON_LABELS[r]),
+        missedMilestones: ms.filter((m) => m.status === 'missed').map((m) => m.title),
+        ...counts,
+      };
+    })
+    .filter((p) => p.reasons.length > 0);
 }

@@ -162,3 +162,327 @@ export function taskFlags(task: TaskLike, now: Date): { flags: TaskFlag[]; daysO
   }
   return { flags, daysOverdue };
 }
+
+// --- comments (OPS-060) ---------------------------------------------------------------------------
+
+export const TASK_COMMENT_MAX_LENGTH = 4000;
+
+export type CommentHideCheck =
+  | { ok: true }
+  | { ok: false; code: 'ALREADY_HIDDEN' | 'NOT_ALLOWED' | 'REASON_REQUIRED'; message: string };
+
+/**
+ * Comments are append-only: the body is never edited. Hiding ("deleting") is
+ * allowed for the author or an operations manager (all-scope task writer), needs
+ * a reason, and happens at most once.
+ */
+export function checkCommentHide(input: {
+  actorUserId: string;
+  authorUserId: string;
+  actorIsManager: boolean;
+  alreadyHidden: boolean;
+  reason: string | null | undefined;
+}): CommentHideCheck {
+  if (input.alreadyHidden)
+    return { ok: false, code: 'ALREADY_HIDDEN', message: 'This comment is already hidden.' };
+  if (input.actorUserId !== input.authorUserId && !input.actorIsManager)
+    return {
+      ok: false,
+      code: 'NOT_ALLOWED',
+      message: 'Only the author or an operations manager can hide a comment.',
+    };
+  if (blank(input.reason))
+    return { ok: false, code: 'REASON_REQUIRED', message: 'Give a reason for hiding the comment.' };
+  return { ok: true };
+}
+
+// --- supervisor review (OPS-062) ------------------------------------------------------------------
+
+export const TASK_REVIEW_STATUSES = ['pending', 'accepted', 'returned'] as const;
+export type TaskReviewStatus = (typeof TASK_REVIEW_STATUSES)[number];
+
+export type TaskReviewState =
+  'not_required' | 'required_not_submitted' | 'awaiting_review' | 'accepted' | 'returned';
+
+export const TASK_REVIEW_STATE_LABELS: Record<TaskReviewState, string> = {
+  not_required: 'No review required',
+  required_not_submitted: 'Review required on completion',
+  awaiting_review: 'Completed — awaiting supervisor review',
+  accepted: 'Review accepted',
+  returned: 'Returned by the reviewer',
+};
+
+/**
+ * Derived review state. The task keeps its BR-OPS-10 status; "awaiting review"
+ * is a completed task whose latest review cycle is pending.
+ */
+export function taskReviewState(input: {
+  required: boolean;
+  latest: { status: TaskReviewStatus } | null;
+}): TaskReviewState {
+  if (input.latest?.status === 'pending') return 'awaiting_review';
+  if (!input.latest) return input.required ? 'required_not_submitted' : 'not_required';
+  return input.latest.status === 'accepted' ? 'accepted' : 'returned';
+}
+
+export interface TaskReviewDecisionInput {
+  status: TaskReviewStatus;
+  decision: 'accept' | 'return';
+  note?: string | null;
+  deciderUserId: string;
+  submitterUserId: string;
+  /** Login of the task owner (responsible), if any. */
+  ownerUserId: string | null;
+  /** Login of the named reviewer, if one is named. */
+  reviewerUserId: string | null;
+  /** Login of the accountable owner, if any. */
+  accountableUserId: string | null;
+  /** Holds all-scope `ops:tasks:write` (operations manager). */
+  deciderIsManager: boolean;
+}
+
+export type TaskReviewDecisionCheck =
+  | { ok: true }
+  | {
+      ok: false;
+      code: 'NOT_PENDING' | 'SELF_REVIEW' | 'OWNER_REVIEW' | 'NOT_REVIEWER' | 'NOTE_REQUIRED';
+      message: string;
+    };
+
+/** True when this user may decide the review (before the self-review rules). */
+export function isAllowedTaskReviewer(
+  input: Pick<
+    TaskReviewDecisionInput,
+    'deciderUserId' | 'reviewerUserId' | 'accountableUserId' | 'deciderIsManager'
+  >,
+): boolean {
+  if (input.deciderIsManager) return true;
+  if (input.reviewerUserId) return input.reviewerUserId === input.deciderUserId;
+  return input.accountableUserId !== null && input.accountableUserId === input.deciderUserId;
+}
+
+/**
+ * Review rules: only a pending review can be decided; the person who completed
+ * the task and the task owner can never review it (no self-approval); the
+ * decider is the named reviewer, else the accountable owner, or an operations
+ * manager; returning needs a note (it reopens the task).
+ */
+export function checkTaskReviewDecision(input: TaskReviewDecisionInput): TaskReviewDecisionCheck {
+  if (input.status !== 'pending')
+    return { ok: false, code: 'NOT_PENDING', message: `This review is already ${input.status}.` };
+  if (input.deciderUserId === input.submitterUserId)
+    return {
+      ok: false,
+      code: 'SELF_REVIEW',
+      message: 'You completed this task, so someone else must review it.',
+    };
+  if (input.ownerUserId && input.deciderUserId === input.ownerUserId)
+    return {
+      ok: false,
+      code: 'OWNER_REVIEW',
+      message: 'The task owner cannot review their own task.',
+    };
+  if (!isAllowedTaskReviewer(input))
+    return {
+      ok: false,
+      code: 'NOT_REVIEWER',
+      message:
+        'Only the named reviewer, the accountable owner or an operations manager can review this task.',
+    };
+  if (input.decision === 'return' && blank(input.note))
+    return {
+      ok: false,
+      code: 'NOTE_REQUIRED',
+      message: 'Say what needs to change before the task is completed again.',
+    };
+  return { ok: true };
+}
+
+// --- reminders and overdue handling (OPS-063) -----------------------------------------------------
+
+export interface TaskReminderSettings {
+  /** Remind the owner this many calendar days before the due date (0 = on the due date only). */
+  leadDays: number;
+  /** Also notify the backup owner when a task becomes overdue. */
+  notifyBackupWhenOverdue: boolean;
+}
+
+export const DEFAULT_TASK_REMINDER_SETTINGS: TaskReminderSettings = {
+  leadDays: 1,
+  notifyBackupWhenOverdue: true,
+};
+
+export type TaskReminderKind = 'due_soon' | 'overdue';
+
+/**
+ * Reminders to send now for one task. `due_soon`: open, due within `leadDays`
+ * days (today counts). `overdue`: open and the due date has passed. Each kind is
+ * sent once per due date (a changed due date can be reminded again); tasks
+ * without a due date never get reminders (they are flagged `missing_due`).
+ */
+export function taskRemindersDue(
+  task: { status: TaskStatus; dueDate: IsoDate | null },
+  now: Date,
+  settings: TaskReminderSettings,
+  alreadySent: readonly { kind: string; dueDate: string }[],
+): TaskReminderKind[] {
+  if (!isOpenTask(task.status) || !task.dueDate) return [];
+  const sent = (kind: TaskReminderKind) =>
+    alreadySent.some((s) => s.kind === kind && s.dueDate === task.dueDate);
+  const daysUntil = daysBetween(istToday(now), task.dueDate);
+  if (daysUntil < 0) return sent('overdue') ? [] : ['overdue'];
+  if (daysUntil <= Math.max(0, settings.leadDays) && !sent('due_soon')) return ['due_soon'];
+  return [];
+}
+
+// --- activity history (OPS-060) -------------------------------------------------------------------
+
+export type TaskActivityKind =
+  | 'created'
+  | 'status'
+  | 'reassignment'
+  | 'edit'
+  | 'dependency'
+  | 'comment'
+  | 'reference'
+  | 'escalation'
+  | 'review'
+  | 'reminder'
+  | 'other';
+
+export interface TaskAuditLike {
+  action: string;
+  before: unknown;
+  after: unknown;
+  metadata?: unknown;
+}
+
+const PEOPLE_FIELDS = [
+  ['ownerStaffId', 'owner'],
+  ['accountableStaffId', 'accountable owner'],
+  ['backupStaffId', 'backup'],
+] as const;
+const EDIT_FIELD_LABELS: Record<string, string> = {
+  title: 'title',
+  description: 'description',
+  dueDate: 'due date',
+  priority: 'priority',
+  departmentId: 'department',
+  leadId: 'lead link',
+  admissionId: 'admission link',
+  sopId: 'SOP link',
+  decisionId: 'decision link',
+  projectId: 'project link',
+};
+
+const rec = (v: unknown): Record<string, unknown> =>
+  v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
+const statusLabel = (v: unknown) =>
+  typeof v === 'string' && v in TASK_STATUS_LABELS ? TASK_STATUS_LABELS[v as TaskStatus] : str(v);
+
+/**
+ * One line of the task activity panel from an audit event (pure). `nameOf`
+ * resolves staff ids to names (null = unknown / none).
+ */
+export function describeTaskActivity(
+  event: TaskAuditLike,
+  nameOf: (staffId: string) => string | null,
+): { kind: TaskActivityKind; summary: string } {
+  const before = rec(event.before);
+  const after = rec(event.after);
+  const meta = rec(event.metadata);
+  const person = (v: unknown) =>
+    typeof v === 'string' && v ? (nameOf(v) ?? 'unknown person') : 'nobody';
+  switch (event.action) {
+    case 'task.created':
+      return { kind: 'created', summary: 'Task created.' };
+    case 'task.updated': {
+      const moves = PEOPLE_FIELDS.filter(([f]) => (before[f] ?? null) !== (after[f] ?? null)).map(
+        ([f, label]) => `${label}: ${person(before[f])} → ${person(after[f])}`,
+      );
+      if (moves.length)
+        return { kind: 'reassignment', summary: `Reassigned — ${moves.join('; ')}.` };
+      const edited = Object.keys(EDIT_FIELD_LABELS).filter(
+        (f) => JSON.stringify(before[f] ?? null) !== JSON.stringify(after[f] ?? null),
+      );
+      return {
+        kind: 'edit',
+        summary: edited.length
+          ? `Edited ${edited.map((f) => EDIT_FIELD_LABELS[f]).join(', ')}.`
+          : 'Edited.',
+      };
+    }
+    case 'task.status_changed':
+    case 'task.completed_with_override': {
+      const reason = str(after.reason) ? ` Reason: ${str(after.reason)}` : '';
+      const override =
+        event.action === 'task.completed_with_override'
+          ? ` Completed despite open blockers (${str(after.override)}).`
+          : '';
+      return {
+        kind: 'status',
+        summary: `Status ${statusLabel(before.status)} → ${statusLabel(after.status)}.${reason}${override}`,
+      };
+    }
+    case 'task.dependency_added':
+      return { kind: 'dependency', summary: `Now blocked by ${str(after.blockedBy) || 'a task'}.` };
+    case 'task.dependency_removed':
+      return { kind: 'dependency', summary: 'A blocking dependency was removed.' };
+    case 'task.escalated':
+      return {
+        kind: 'escalation',
+        summary: `Escalated to L${str(after.level ?? meta.level) || '?'}: ${str(after.reason)}`,
+      };
+    case 'escalation.acknowledged':
+      return {
+        kind: 'escalation',
+        summary: `L${str(after.level) || '?'} escalation acknowledged.`,
+      };
+    case 'escalation.resolved':
+      return {
+        kind: 'escalation',
+        summary: `L${str(after.level) || '?'} escalation resolved${str(after.resolutionNote) ? `: ${str(after.resolutionNote)}` : '.'}`,
+      };
+    case 'task.comment_added':
+      return { kind: 'comment', summary: 'Comment added.' };
+    case 'task.comment_hidden':
+      return {
+        kind: 'comment',
+        summary: `A comment was hidden. Reason: ${str(after.hiddenReason)}`,
+      };
+    case 'task.reference_added':
+      return { kind: 'reference', summary: `Reference added: ${str(after.label)}.` };
+    case 'task.reference_removed':
+      return {
+        kind: 'reference',
+        summary: `Reference removed: ${str(after.label)}. Reason: ${str(after.removedReason)}`,
+      };
+    case 'task.review_required':
+      return { kind: 'review', summary: 'Supervisor review required on completion.' };
+    case 'task.review_requirement_removed':
+      return { kind: 'review', summary: 'Supervisor review requirement removed.' };
+    case 'task.review_submitted':
+      return {
+        kind: 'review',
+        summary: `Submitted for supervisor review (cycle ${str(after.cycle) || '?'}).`,
+      };
+    case 'task.review_accepted':
+      return { kind: 'review', summary: 'Supervisor review accepted the completion.' };
+    case 'task.review_returned':
+      return {
+        kind: 'review',
+        summary: `Returned by the reviewer and reopened: ${str(after.decisionNote)}`,
+      };
+    case 'task.reminder_sent':
+      return {
+        kind: 'reminder',
+        summary:
+          after.kind === 'overdue'
+            ? `Overdue reminder sent (due ${str(after.dueDate)}).`
+            : `Due-soon reminder sent (due ${str(after.dueDate)}).`,
+      };
+    default:
+      return { kind: 'other', summary: event.action };
+  }
+}

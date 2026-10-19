@@ -14,8 +14,11 @@
  * Do not import other modules' files from here.
  */
 import type { EventDefinition } from '../events/define';
+import { opsHrEvents } from './ops-hr';
+
+export * from './ops-hr';
 
 /** Consumer name Ops uses with processEvents for Academic's enrolment replies. */
 export const OPS_ENROLMENT_REPLIES_CONSUMER = 'ops.enrolment-replies' as const;
 
-export const opsEvents = [] as const satisfies readonly EventDefinition[];
+export const opsEvents = [...opsHrEvents] as const satisfies readonly EventDefinition[];

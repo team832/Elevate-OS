@@ -18,6 +18,17 @@ export default async function SettingsPage() {
         title="Configuration and policy states"
         description="Each value shows its decision state and source. Changing a value here keeps it Proposed — approving a policy is a leadership decision."
       />
+      <nav className="el-subnav" aria-label="Settings sections">
+        <a href="/ops/settings" aria-current="page">
+          Configurable settings
+        </a>
+        <a href="/ops/settings/policies">Policies &amp; compliance register</a>
+      </nav>
+      <p className="el-field-hint">
+        Settings are the values the system uses. Company policy documents and compliance
+        obligations, and which settings implement them, are kept in the{' '}
+        <a href="/ops/settings/policies">policies &amp; compliance register</a>.
+      </p>
       <Section>
         <Settings user={access.user} />
       </Section>

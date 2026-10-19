@@ -1,11 +1,17 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { SOP_STATUS_LABELS, type SopStatus } from '../../../domain';
+import { ROLE_KEYS } from '@elevate/shared-types';
+import {
+  SOP_STATUS_LABELS,
+  TASK_STATUS_LABELS,
+  type SopStatus,
+  type TaskStatus,
+} from '../../../domain';
 import { formOptions } from '../../../server/options';
-import { getSop } from '../../../server/sops';
+import { getSop, getSopHistory } from '../../../server/sops';
 import { ActionForm } from '../../../ui/action-form';
-import { decisionTone, fmtDate, fmtDateTime } from '../../../ui/format';
+import { decisionTone, fmtDate, fmtDateTime, humanise, statusTone } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 
 export const dynamic = 'force-dynamic';
@@ -17,6 +23,9 @@ export default async function SopPage({ params }: { params: Promise<{ id: string
     <Frame access={access} active="sops">
       <Section>
         <Detail user={access.user} id={id} />
+      </Section>
+      <Section label="Loading change history…">
+        <History user={access.user} id={id} />
       </Section>
     </Frame>
   );
@@ -47,8 +56,41 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
               ? 'Retired'
               : 'Proposed — not policy'}
         </StatusBadge>{' '}
-        {SOP_STATUS_LABELS[s.status as SopStatus]}
+        {SOP_STATUS_LABELS[s.status as SopStatus]}{' '}
+        <StatusBadge
+          tone={
+            d.publicationState === 'published'
+              ? 'success'
+              : d.publicationState === 'not_approved'
+                ? 'info'
+                : 'neutral'
+          }
+        >
+          {d.publicationLabel}
+        </StatusBadge>{' '}
+        {d.reviewDue === 'overdue' ? <StatusBadge tone="danger">Review overdue</StatusBadge> : null}
+        {d.reviewDue === 'due_soon' ? (
+          <StatusBadge tone="warning">Review due soon</StatusBadge>
+        ) : null}
       </p>
+      {d.myAcknowledgement.required ? (
+        d.myAcknowledgement.acknowledgedAt ? (
+          <Alert tone="success" title="You have acknowledged this version">
+            {fmtDateTime(d.myAcknowledgement.acknowledgedAt)}
+          </Alert>
+        ) : d.myAcknowledgement.canAcknowledge ? (
+          <Card
+            title="Your acknowledgement is required"
+            description="Read the approved version, then confirm. It is recorded once per version and cannot be undone."
+          >
+            <ActionForm
+              action={`${api}/acknowledge`}
+              submitLabel="I have read this version"
+              fields={[{ name: 'note', label: 'Note (optional)' }]}
+            />
+          </Card>
+        ) : null
+      ) : null}
       {s.legacySource ? (
         <Alert tone="info" title="Imported from the legacy register">
           {s.legacySource}: “{s.legacyStatus}”. {s.legacyRef}
@@ -198,6 +240,205 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           />
         </Card>
       ) : null}
+      <Card
+        title="Effective date and review"
+        description="Published means approved and the effective date (IST) has been reached. Only the approved version in force gets dates."
+      >
+        {s.approvedVersionId ? (
+          <p>
+            Effective {d.schedule ? fmtDate(d.schedule.effectiveDate) : 'date not set'} · next
+            review{' '}
+            {d.schedule?.nextReviewDate
+              ? fmtDate(d.schedule.nextReviewDate)
+              : s.nextReviewDate
+                ? `${fmtDate(s.nextReviewDate)} (register date)`
+                : 'not set'}
+          </p>
+        ) : (
+          <p>
+            No approved version yet, so there is no effective date. Until approval this SOP is a
+            proposal, not policy.
+          </p>
+        )}
+        {write && s.approvedVersionId && s.status !== 'retired' ? (
+          <ActionForm
+            action={`${api}/schedule`}
+            method="PUT"
+            submitLabel="Save dates"
+            variant="secondary"
+            compact
+            fields={[
+              {
+                name: 'effectiveDate',
+                label: 'Effective date',
+                type: 'date',
+                required: true,
+                defaultValue: d.schedule?.effectiveDate ?? '',
+              },
+              {
+                name: 'nextReviewDate',
+                label: 'Next review date',
+                type: 'date',
+                defaultValue: d.schedule?.nextReviewDate ?? '',
+              },
+            ]}
+          />
+        ) : null}
+      </Card>
+      <Card
+        title="Required acknowledgements"
+        description="Staff in a required department or role confirm they have read the approved version in force. A newly approved version needs new acknowledgements."
+      >
+        {d.acknowledgements.requirements.length ? (
+          <>
+            <p>
+              {d.acknowledgements.totals.acknowledged} of {d.acknowledgements.totals.required}{' '}
+              acknowledged
+              {d.acknowledgements.totals.noLogin
+                ? ` · ${d.acknowledgements.totals.noLogin} staff without a login cannot acknowledge`
+                : ''}
+            </p>
+            <DataTable
+              rows={d.acknowledgements.requirements}
+              rowKey={(x) => x.id}
+              columns={[
+                {
+                  key: 'audienceLabel',
+                  header: 'Audience',
+                  render: (x) =>
+                    `${x.audienceType === 'role' ? 'Role' : 'Department'}: ${humanise(x.audienceLabel)}`,
+                },
+                {
+                  key: 'dueDate',
+                  header: 'Acknowledge by',
+                  render: (x) => (x.dueDate ? fmtDate(x.dueDate) : '—'),
+                },
+                {
+                  key: 'counts',
+                  header: 'Acknowledged',
+                  render: (x) => `${x.counts.acknowledged} of ${x.counts.required}`,
+                },
+                {
+                  key: 'outstanding',
+                  header: 'Still to acknowledge',
+                  render: (x) =>
+                    x.outstanding === null
+                      ? `${x.counts.outstanding} person(s)`
+                      : x.outstanding.length
+                        ? x.outstanding.join(', ')
+                        : 'Nobody',
+                },
+                {
+                  key: 'act',
+                  header: '',
+                  render: (x) =>
+                    write ? (
+                      <ActionForm
+                        action={`${api}/acknowledgement-requirements/${x.id}/withdraw`}
+                        submitLabel="Withdraw requirement"
+                        variant="secondary"
+                        compact
+                        fields={[{ name: 'reason', label: 'Reason', required: true }]}
+                      />
+                    ) : null,
+                },
+              ]}
+            />
+          </>
+        ) : (
+          <EmptyState
+            title="No acknowledgement required"
+            description={
+              s.approvedVersionId
+                ? undefined
+                : 'Acknowledgements can be required once a version is approved.'
+            }
+          />
+        )}
+        {write && s.approvedVersionId && s.status !== 'retired' ? (
+          <div className="el-grid">
+            <ActionForm
+              action={`${api}/acknowledgement-requirements`}
+              submitLabel="Require from a department"
+              variant="secondary"
+              extra={{ audienceType: 'department' }}
+              fields={[
+                {
+                  name: 'departmentId',
+                  label: 'Department',
+                  type: 'select',
+                  required: true,
+                  options: options.departments,
+                },
+                { name: 'dueDate', label: 'Acknowledge by', type: 'date' },
+              ]}
+            />
+            <ActionForm
+              action={`${api}/acknowledgement-requirements`}
+              submitLabel="Require from a role"
+              variant="secondary"
+              extra={{ audienceType: 'role' }}
+              fields={[
+                {
+                  name: 'role',
+                  label: 'Role',
+                  type: 'select',
+                  required: true,
+                  options: ROLE_KEYS.filter((r) => r !== 'auditor').map((r) => ({
+                    value: r,
+                    label: humanise(r),
+                  })),
+                },
+                { name: 'dueDate', label: 'Acknowledge by', type: 'date' },
+              ]}
+            />
+          </div>
+        ) : null}
+      </Card>
+      {d.relatedTasks || d.relatedIncidents ? (
+        <div className="el-grid">
+          {d.relatedTasks ? (
+            <Card title="Tasks linked to this SOP">
+              <DataTable
+                rows={d.relatedTasks}
+                rowKey={(x) => x.id}
+                empty={<EmptyState title="No linked tasks" />}
+                columns={[
+                  {
+                    key: 'code',
+                    header: 'Task',
+                    render: (x) => <a href={`/ops/tasks/${x.id}`}>{x.code}</a>,
+                  },
+                  { key: 'title', header: 'Title' },
+                  {
+                    key: 'status',
+                    header: 'Status',
+                    render: (x) => (
+                      <StatusBadge tone={statusTone(x.status)}>
+                        {TASK_STATUS_LABELS[x.status as TaskStatus]}
+                      </StatusBadge>
+                    ),
+                  },
+                ]}
+              />
+            </Card>
+          ) : null}
+          {d.relatedIncidents ? (
+            <Card title="Incidents linked to this SOP">
+              <DataTable
+                rows={d.relatedIncidents}
+                rowKey={(x) => x.id}
+                empty={<EmptyState title="No linked incidents" />}
+                columns={[
+                  { key: 'code', header: 'Incident' },
+                  { key: 'title', header: 'Title' },
+                  { key: 'status', header: 'Status', render: (x) => humanise(x.status) },
+                ]}
+              />
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
       <Card title="Checklist of the current version">
         <DataTable
           rows={d.checklist}
@@ -270,6 +511,40 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           variant="danger"
         />
       ) : null}
+      {s.status === 'retired' ? (
+        d.archive ? (
+          <Alert tone="info" title="Archived">
+            {fmtDateTime(d.archive.archivedAt)} — {d.archive.reason}. Archived SOPs stay readable
+            here.
+          </Alert>
+        ) : write ? (
+          <ActionForm
+            action={`${api}/archive`}
+            submitLabel="Archive SOP"
+            fields={[{ name: 'reason', label: 'Reason for archiving', required: true }]}
+            variant="secondary"
+          />
+        ) : null
+      ) : null}
     </div>
+  );
+}
+
+async function History({ user, id }: { user: AuthenticatedUser; id: string }) {
+  const r = await load((db) => getSopHistory(db, user, id));
+  if (!r.ok) return null; // the detail section shows the access / not-found state
+  return (
+    <Card title="Change history" description="From the audit log, newest first.">
+      <DataTable
+        rows={r.data}
+        rowKey={(h) => h.id}
+        empty={<EmptyState title="No recorded changes" />}
+        columns={[
+          { key: 'at', header: 'When', render: (h) => fmtDateTime(h.at) },
+          { key: 'actorName', header: 'Who', render: (h) => h.actorName ?? 'System' },
+          { key: 'label', header: 'Change' },
+        ]}
+      />
+    </Card>
   );
 }

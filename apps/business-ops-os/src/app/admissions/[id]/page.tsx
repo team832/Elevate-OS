@@ -7,7 +7,18 @@ import {
   ADMISSION_STATUS_LABELS,
   type AdmissionStatus,
 } from '../../../domain';
+import {
+  downPaymentHint,
+  FEE_BALANCE_LABELS,
+  FEE_KIND_LABELS,
+  FEE_METHODS,
+  FEE_STATUS_LABELS,
+  formatPaise,
+  type FeeRecordKind,
+  type FeeRecordStatus,
+} from '../../../domain/fees';
 import { getAdmission } from '../../../server/admissions';
+import { listAdmissionFees } from '../../../server/fees';
 import { formOptions } from '../../../server/options';
 import { ActionForm } from '../../../ui/action-form';
 import { decisionTone, fmtDate, fmtDateTime, humanise, statusTone } from '../../../ui/format';
@@ -31,9 +42,10 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
   const r = await load(async (db) => ({
     d: await getAdmission(db, user, id),
     options: await formOptions(db),
+    fees: can(user, 'ops:fees:read') ? await listAdmissionFees(db, user, id) : null,
   }));
   if (!r.ok) return r.view;
-  const { d, options } = r.data;
+  const { d, options, fees } = r.data;
   const a = d.admission;
   const api = `/ops/api/v1/admissions/${a.id}`;
   const write = can(user, 'ops:admissions:write');
@@ -45,24 +57,47 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         description={
           <>
             Lead <a href={`/ops/leads/${a.leadId}`}>{d.lead?.code}</a> · programme{' '}
-            {d.programme?.code ?? 'not chosen'} · counsellor {d.counsellor?.fullName ?? 'none'}
+            {d.programme?.code ?? 'not chosen'} · admission owner (counsellor){' '}
+            {d.counsellor?.fullName ?? 'none'}
+            {a.admissionDate ? ` · admitted on ${fmtDate(a.admissionDate)}` : ''}
           </>
         }
       />
       <p>
         Status:{' '}
         <StatusBadge tone={statusTone(status)}>{ADMISSION_STATUS_LABELS[status]}</StatusBadge>
+        {a.statusReasonCode
+          ? ` — ${d.closureReasonLabels[a.statusReasonCode] ?? a.statusReasonCode}`
+          : ''}
         {a.statusReason ? ` — ${a.statusReason}` : ''}
       </p>
       {status === 'enrolment_requested' ? (
-        <Alert tone="info" title="Awaiting Academic OS">
+        <Alert
+          tone={
+            d.handoffView.tone === 'danger'
+              ? 'danger'
+              : d.handoffView.tone === 'warning'
+                ? 'warning'
+                : 'info'
+          }
+          title={d.handoffView.label}
+        >
           Enrolment requested (attempt {a.enrolmentAttempt}) at{' '}
-          {fmtDateTime(a.enrolmentRequestedAt)}. Academic delivery:{' '}
-          {d.handoff?.academicDelivery
-            ? `${d.handoff.academicDelivery.status} (${d.handoff.academicDelivery.attempts} attempt(s))`
-            : 'not yet picked up'}
-          . This is not an enrolment until Academic OS confirms.
+          {fmtDateTime(a.enrolmentRequestedAt)}. {d.handoffView.detail ?? ''} This is not an
+          enrolment until Academic OS confirms.
         </Alert>
+      ) : null}
+      {write && d.retry.allowed && d.retry.via === 'retry' ? (
+        <Card
+          title="Send a new enrolment request"
+          description="Academic OS gave up on the previous request after every automatic retry, so it created no enrolment. A new attempt keeps the same admission; the old one is marked superseded."
+        >
+          <ActionForm
+            action={`${api}/enrolment-retry`}
+            submitLabel="Send a new enrolment request"
+            fields={[{ name: 'reason', label: 'Why it is safe to try again', required: true }]}
+          />
+        </Card>
       ) : null}
       {a.handoffStatus === 'rejected' ? (
         <Alert tone="danger" title="Academic OS rejected the enrolment">
@@ -95,6 +130,13 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                 })),
               },
               { name: 'reason', label: 'Reason' },
+              {
+                name: 'reasonCode',
+                label: 'Reason code (when closing as lost)',
+                type: 'select',
+                options: d.closureReasons.map((c) => ({ value: c.code, label: c.label })),
+                hint: `Used in reports; a closure without a code is counted as not coded. Code list: ${d.settings.closureReasons.decisionState}.`,
+              },
             ]}
           />
           <p className="el-field-hint">
@@ -132,8 +174,14 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           <StatusBadge tone={decisionTone(d.settings.confirmation.decisionState)}>
             {d.settings.confirmation.decisionState}
           </StatusBadge>
-          . References only — no files or amounts are stored (OD-013, OD-014).
+          . The checklist stores references only; amounts live in the fee records below and do not
+          decide the gate (OD-013, OD-014).
         </p>
+        {d.feeSummary ? (
+          <p className="el-field-hint">
+            For the down-payment check: {downPaymentHint(d.feeSummary)}
+          </p>
+        ) : null}
       </Card>
       <Card title="Checklist">
         <DataTable
@@ -237,6 +285,224 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             </>
           ) : null}
         </div>
+      </Card>
+      {fees ? (
+        <section id="fees">
+          <Card
+            title="Fee records (manually recorded)"
+            description={`${fees.disclaimer} No fee schedule is approved (${fees.settings.schedule.decisionState}); each entry quotes its own pricing reference.`}
+          >
+            <p>
+              <strong>{FEE_BALANCE_LABELS[fees.summary.balanceState]}.</strong> Due{' '}
+              {formatPaise(fees.summary.duePaise)} · credits{' '}
+              {formatPaise(fees.summary.creditAdjustmentsPaise)} · received{' '}
+              {formatPaise(fees.summary.netReceivedPaise)} (checked by a second person:{' '}
+              {formatPaise(fees.summary.verifiedNetReceivedPaise)}) · balance{' '}
+              {formatPaise(fees.summary.balancePaise)}
+            </p>
+            <DataTable
+              rows={fees.records}
+              rowKey={(f) => f.id}
+              empty={
+                <EmptyState
+                  title="No fee entries yet"
+                  description="Nothing has been recorded for this admission. The balance stays unknown until an amount due is recorded."
+                />
+              }
+              columns={[
+                { key: 'code', header: 'Entry', render: (f) => f.code },
+                {
+                  key: 'kind',
+                  header: 'Type',
+                  render: (f) =>
+                    `${FEE_KIND_LABELS[f.kind as FeeRecordKind]}${f.direction ? ` (${f.direction})` : ''}`,
+                },
+                { key: 'amount', header: 'Amount', render: (f) => formatPaise(f.amountPaise) },
+                {
+                  key: 'date',
+                  header: 'Date',
+                  render: (f) => fmtDate(f.paymentDate ?? f.dueDate),
+                },
+                {
+                  key: 'refs',
+                  header: 'References',
+                  render: (f) =>
+                    [f.receiptReference, f.pricingReference, f.method ? humanise(f.method) : null]
+                      .filter(Boolean)
+                      .join(' · '),
+                },
+                {
+                  key: 'status',
+                  header: 'Status',
+                  render: (f) => (
+                    <>
+                      <StatusBadge
+                        tone={
+                          f.status === 'verified'
+                            ? 'success'
+                            : f.status === 'voided'
+                              ? 'neutral'
+                              : 'info'
+                        }
+                      >
+                        {FEE_STATUS_LABELS[f.status as FeeRecordStatus]}
+                      </StatusBadge>
+                      <br />
+                      <span className="el-field-hint">
+                        by {f.recordedByName ?? 'unknown'}
+                        {f.verifiedByName ? `; checked by ${f.verifiedByName}` : ''}
+                        {f.voidReason ? `; voided: ${f.voidReason}` : ''}
+                      </span>
+                    </>
+                  ),
+                },
+                {
+                  key: 'act',
+                  header: '',
+                  render: (f) =>
+                    can(user, 'ops:fees:record') && f.status !== 'voided' ? (
+                      <div className="el-stack">
+                        {f.status === 'recorded' && f.recordedBy !== user.id ? (
+                          <ActionForm
+                            action={`/ops/api/v1/fees/${f.id}`}
+                            submitLabel="Mark as checked"
+                            extra={{ action: 'verify' }}
+                            fields={[{ name: 'note', label: 'Checked against' }]}
+                            compact
+                            variant="secondary"
+                          />
+                        ) : null}
+                        <ActionForm
+                          action={`/ops/api/v1/fees/${f.id}`}
+                          submitLabel="Void entry"
+                          extra={{ action: 'void' }}
+                          fields={[{ name: 'reason', label: 'Why void it', required: true }]}
+                          compact
+                          variant="danger"
+                        />
+                      </div>
+                    ) : null,
+                },
+              ]}
+            />
+            {can(user, 'ops:fees:record') ? (
+              <ActionForm
+                action={`${api}/fees`}
+                submitLabel="Save fee entry"
+                variant="secondary"
+                fields={[
+                  {
+                    name: 'kind',
+                    label: 'Type',
+                    type: 'select',
+                    required: true,
+                    options: Object.entries(FEE_KIND_LABELS).map(([value, label]) => ({
+                      value,
+                      label,
+                    })),
+                  },
+                  {
+                    name: 'direction',
+                    label: 'Adjustment direction',
+                    type: 'select',
+                    options: [
+                      {
+                        value: 'credit',
+                        label: 'Credit — lowers the balance (e.g. demo fee adjusted)',
+                      },
+                      { value: 'debit', label: 'Debit — raises the balance' },
+                    ],
+                    hint: 'Only for adjustments.',
+                  },
+                  {
+                    name: 'amountRupees',
+                    label: 'Amount in ₹',
+                    required: true,
+                    hint: 'Up to two decimals, e.g. 15000 or 15000.50. Stored as whole paise.',
+                  },
+                  {
+                    name: 'paymentDate',
+                    label: 'Date the money moved (received / refund)',
+                    type: 'date',
+                  },
+                  { name: 'dueDate', label: 'Due date (amount due)', type: 'date' },
+                  { name: 'receiptReference', label: 'Receipt or transaction reference' },
+                  {
+                    name: 'method',
+                    label: 'Method',
+                    type: 'select',
+                    options: FEE_METHODS.map((m) => ({ value: m, label: humanise(m) })),
+                  },
+                  {
+                    name: 'pricingReference',
+                    label: 'Pricing reference (which quote or schedule)',
+                  },
+                  {
+                    name: 'demoId',
+                    label: 'Demo whose fee is adjusted',
+                    type: 'select',
+                    options: d.demos.map((x) => ({
+                      value: x.id,
+                      label: `${x.dayDates.map(fmtDate).join(', ')} (${humanise(x.feeStatus)})`,
+                    })),
+                    hint: 'Only for a credit adjustment of a paid demo fee.',
+                  },
+                  { name: 'notes', label: 'Notes', type: 'textarea' },
+                ]}
+              />
+            ) : null}
+          </Card>
+        </section>
+      ) : null}
+      <Card
+        title="Enrolment requests to Academic OS"
+        description="One row per request. A new attempt never runs alongside a live one."
+      >
+        <DataTable
+          rows={d.attempts}
+          rowKey={(x) => x.id}
+          empty={
+            <EmptyState
+              title={
+                a.enrolmentAttempt > 0
+                  ? 'Requested before attempts were tracked'
+                  : 'Enrolment not requested yet'
+              }
+              description={
+                a.enrolmentAttempt > 0
+                  ? `Latest attempt ${a.enrolmentAttempt} at ${fmtDateTime(a.enrolmentRequestedAt)}.`
+                  : 'Request enrolment once the admission is confirmed.'
+              }
+            />
+          }
+          columns={[
+            { key: 'n', header: 'Attempt', render: (x) => x.attempt },
+            { key: 'kind', header: 'Why', render: (x) => humanise(x.kind) },
+            {
+              key: 'at',
+              header: 'Requested',
+              render: (x) => `${fmtDateTime(x.requestedAt)} by ${x.requestedByName ?? 'unknown'}`,
+            },
+            { key: 'outcome', header: 'Outcome', render: (x) => humanise(x.outcome) },
+            {
+              key: 'detail',
+              header: 'Detail',
+              render: (x) =>
+                [
+                  x.rejectionCode ? `${x.rejectionCode}: ${x.rejectionReason}` : null,
+                  x.reason,
+                  x.note,
+                ]
+                  .filter(Boolean)
+                  .join(' · '),
+            },
+          ]}
+        />
+        {['admitted', 'enrolment_requested', 'enrolled'].includes(status) ? (
+          <p>
+            <a href={`/ops/students/${a.id}`}>Open the student profile</a>
+          </p>
+        ) : null}
       </Card>
       <div className="el-grid">
         <Card title="Counselling">
@@ -356,7 +622,17 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
               render: (t) =>
                 t.actorType === 'system' ? 'Academic OS reply (system)' : (t.actorName ?? 'user'),
             },
-            { key: 'reason', header: 'Reason', render: (t) => t.reason ?? '' },
+            {
+              key: 'reason',
+              header: 'Reason',
+              render: (t) =>
+                [
+                  t.reasonCode ? (d.closureReasonLabels[t.reasonCode] ?? t.reasonCode) : null,
+                  t.reason,
+                ]
+                  .filter(Boolean)
+                  .join(' — '),
+            },
           ]}
         />
       </Card>

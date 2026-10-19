@@ -1,9 +1,9 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { SOP_STATUS_LABELS, type SopStatus } from '../../domain';
+import { SOP_PUBLICATION_LABELS, SOP_STATUS_LABELS, type SopStatus } from '../../domain';
 import { formOptions } from '../../server/options';
-import { listSops } from '../../server/sops';
+import { listOutstandingAcknowledgements, listSops } from '../../server/sops';
 import { ActionForm } from '../../ui/action-form';
 import { decisionTone } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
@@ -20,6 +20,9 @@ export default async function SopsPage() {
       />
       <Section>
         <Register user={access.user} />
+      </Section>
+      <Section label="Loading acknowledgements…">
+        <Acknowledgements user={access.user} />
       </Section>
       {can(access.user, 'ops:sops:write') ? (
         <Section label="Loading form…">
@@ -64,6 +67,21 @@ async function Register({ user }: { user: AuthenticatedUser }) {
           ),
         },
         {
+          key: 'publication',
+          header: 'Published',
+          render: (s) => (
+            <>
+              {SOP_PUBLICATION_LABELS[s.publicationState]}
+              {s.reviewDue === 'overdue' ? (
+                <StatusBadge tone="danger">Review overdue</StatusBadge>
+              ) : null}
+              {s.reviewDue === 'due_soon' ? (
+                <StatusBadge tone="warning">Review due soon</StatusBadge>
+              ) : null}
+            </>
+          ),
+        },
+        {
           key: 'version',
           header: 'Current version',
           render: (s) =>
@@ -77,6 +95,35 @@ async function Register({ user }: { user: AuthenticatedUser }) {
         },
       ]}
     />
+  );
+}
+
+async function Acknowledgements({ user }: { user: AuthenticatedUser }) {
+  const r = await load((db) => listOutstandingAcknowledgements(db, user));
+  if (!r.ok) return r.view;
+  return (
+    <Card
+      title="Outstanding acknowledgements"
+      description="Approved SOP versions that staff must confirm they have read. Open an SOP to see who is still to acknowledge."
+    >
+      <DataTable
+        rows={r.data.bySop}
+        rowKey={(x) => x.id}
+        empty={<EmptyState title="No SOP currently requires acknowledgement" />}
+        columns={[
+          {
+            key: 'code',
+            header: 'SOP',
+            render: (x) => <a href={`/ops/sops/${x.id}`}>{x.code}</a>,
+          },
+          { key: 'title', header: 'Title' },
+          { key: 'required', header: 'Required', numeric: true },
+          { key: 'acknowledged', header: 'Acknowledged', numeric: true },
+          { key: 'outstanding', header: 'Outstanding', numeric: true },
+          { key: 'noLogin', header: 'No login', numeric: true },
+        ]}
+      />
+    </Card>
   );
 }
 

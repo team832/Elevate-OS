@@ -7,6 +7,8 @@ import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import {
   approvals,
   eventDeliveries,
+  opsEnrolmentAttempts,
+  opsFeeRecords,
   integrationEvents,
   opsAdmissionChecks,
   opsAdmissions,
@@ -46,8 +48,10 @@ import type {
 import {
   ADMISSION_CHECK_LABELS,
   allowedUserTargets,
+  checkReasonCode,
   checkVerifierSeparation,
   evaluateAdmissionReadiness,
+  SYSTEM_CLOSURE_REASONS,
   isOpenStatus,
   READINESS_GAP_LABELS,
   type AdmissionCheckItem,
@@ -55,6 +59,8 @@ import {
   type CheckState,
   type FeeApprovalState,
 } from '../domain';
+import { can } from '@elevate/authorization';
+import { deriveHandoffView, retryDecision } from '../domain/students';
 import { feeArrangementPolicy } from './approval-policies';
 import {
   accessScope,
@@ -67,6 +73,7 @@ import {
 import { applyTransition, lockAdmission, type AdmissionRow } from './pipeline';
 import type { UpdateAdmissionInput } from './schemas';
 import { loadSettings } from './settings';
+import { summariseFees, type FeeRecordLike } from '../domain/fees';
 
 /** Academic's consumer name for the enrolment request (INTEGRATION_CONTRACT.md §6). */
 export const ACADEMIC_INTAKE_CONSUMER = 'academic.enrolment-intake';
@@ -309,6 +316,32 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
       };
   }
   const status = admission.status as AdmissionStatus;
+  const attempts = await db
+    .select({ a: opsEnrolmentAttempts, requestedByName: users.displayName })
+    .from(opsEnrolmentAttempts)
+    .leftJoin(users, eq(users.id, opsEnrolmentAttempts.requestedBy))
+    .where(eq(opsEnrolmentAttempts.admissionId, admission.id))
+    .orderBy(asc(opsEnrolmentAttempts.attempt));
+  const handoffInput = {
+    status,
+    handoffStatus: admission.handoffStatus,
+    enrolmentAttempt: admission.enrolmentAttempt,
+    academicDelivery: handoff?.academicDelivery ?? null,
+    rejectionCode: admission.rejectionCode,
+    rejectionReason: admission.rejectionReason,
+  };
+  const feeRecords = can(actor, 'ops:fees:read')
+    ? await db
+        .select({
+          kind: opsFeeRecords.kind,
+          direction: opsFeeRecords.direction,
+          amountPaise: opsFeeRecords.amountPaise,
+          status: opsFeeRecords.status,
+        })
+        .from(opsFeeRecords)
+        .where(eq(opsFeeRecords.admissionId, admission.id))
+    : null;
+  const closure = settings['admissions.closure_reasons'];
   return {
     admission,
     lead: lead ?? null,
@@ -334,7 +367,15 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
       demoSkipAllowed: settings['pipeline.demo_skip'].value.allowed,
     }).filter((t) => t !== 'enrolment_requested'),
     canRequestEnrolment: status === 'admitted',
+    handoffView: deriveHandoffView(handoffInput),
+    retry: retryDecision(handoffInput),
+    attempts: attempts.map((x) => ({ ...x.a, requestedByName: x.requestedByName })),
+    /** null = the caller may not read fee records. */
+    feeSummary: feeRecords ? summariseFees(feeRecords as FeeRecordLike[]) : null,
+    closureReasons: closure.value.codes.filter((c) => !SYSTEM_CLOSURE_REASONS.includes(c.code)),
+    closureReasonLabels: Object.fromEntries(closure.value.codes.map((c) => [c.code, c.label])),
     settings: {
+      closureReasons: closure,
       demoSkip: settings['pipeline.demo_skip'],
       confirmation: settings['admission.confirmation'],
     },
@@ -347,7 +388,7 @@ export async function transitionAdmission(
   db: Database,
   actor: Actor,
   id: string,
-  input: { to: AdmissionStatus; reason?: string | null },
+  input: { to: AdmissionStatus; reason?: string | null; reasonCode?: string | null },
   requestId?: string,
 ) {
   const access = await accessScope(db, actor, 'ops:admissions:write');
@@ -368,6 +409,20 @@ export async function transitionAdmission(
       .select({ firstSuccessfulContactAt: opsLeads.firstSuccessfulContactAt })
       .from(opsLeads)
       .where(eq(opsLeads.id, admission.leadId));
+    const closure = settings['admissions.closure_reasons'].value;
+    const coded = checkReasonCode({
+      from: admission.status as AdmissionStatus,
+      to: input.to,
+      code: input.reasonCode,
+      heldFromStatus: admission.heldFromStatus as AdmissionStatus | null,
+      allowed: closure.codes.map((c) => c.code),
+      requireCode: closure.requireCode,
+      actor: 'user',
+    });
+    if (!coded.ok)
+      throw new ValidationError(coded.message, {
+        details: [{ location: 'body', path: ['reasonCode'], message: coded.message }],
+      });
     const readinessMissing =
       input.to === 'admitted'
         ? (await readinessOf(tx, admission)).gaps.map((g) => READINESS_GAP_LABELS[g])
@@ -378,6 +433,7 @@ export async function transitionAdmission(
       actorType: 'user',
       actorUserId: actor.id,
       reason: input.reason,
+      reasonCode: coded.code,
       context: {
         hasSuccessfulContact: Boolean(lead?.firstSuccessfulContactAt),
         demoSkipAllowed: settings['pipeline.demo_skip'].value.allowed,

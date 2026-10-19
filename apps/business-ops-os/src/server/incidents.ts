@@ -19,10 +19,12 @@ import type { z } from 'zod';
 import {
   checkIncidentTransition,
   incidentNeedsAuthorisedApproval,
+  incidentSla,
   type IncidentStatus,
 } from '../domain';
 import { accessScope, activeStaff, nextCode, notFound, type Actor } from './context';
 import type { incidentBody, incidentUpdateBody } from './schemas';
+import { loadSettings } from './settings';
 
 export async function listIncidents(db: Database, actor: Actor) {
   await accessScope(db, actor, 'ops:incidents:read');
@@ -33,7 +35,19 @@ export async function listIncidents(db: Database, actor: Actor) {
     .leftJoin(opsSops, eq(opsSops.id, opsIncidents.sopId))
     .orderBy(desc(opsIncidents.occurredAt))
     .limit(500);
-  return rows.map((r) => ({ ...r.incident, ownerName: r.ownerName, sopCode: r.sopCode }));
+  const sla = (await loadSettings(db))['incidents.resolution_sla'];
+  const now = new Date();
+  return rows.map((r) => ({
+    ...r.incident,
+    ownerName: r.ownerName,
+    sopCode: r.sopCode,
+    sla: incidentSla(r.incident, now, sla.value),
+  }));
+}
+
+/** Resolution-SLA setting shown beside the list (its decision state is proposed). */
+export async function incidentSlaSetting(db: Database) {
+  return (await loadSettings(db))['incidents.resolution_sla'];
 }
 
 export async function createIncident(

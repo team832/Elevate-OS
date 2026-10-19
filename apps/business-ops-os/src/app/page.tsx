@@ -10,6 +10,7 @@ import {
   StatusBadge,
 } from '@elevate/shared-ui';
 import { buildDashboard, myWork } from '../server/dashboard';
+import { buildOperationsReport } from '../server/reports/operations';
 import { CrossModulePanels } from '../ui/cross-module';
 import { decisionTone } from '../ui/format';
 import { Frame, gate, load, Section } from '../ui/frame';
@@ -29,6 +30,9 @@ export default async function HomePage() {
           />
           <Section label="Calculating KPIs…">
             <Dashboard user={access.user} />
+          </Section>
+          <Section label="Loading operations…">
+            <Operations user={access.user} />
           </Section>
         </>
       ) : (
@@ -102,6 +106,34 @@ async function Dashboard({ user }: { user: AuthenticatedUser }) {
   );
 }
 
+async function Operations({ user }: { user: AuthenticatedUser }) {
+  const r = await load((db) => buildOperationsReport(db, user));
+  if (!r.ok) return r.view;
+  const k = r.data.kpis;
+  return (
+    <Card
+      title="Operations"
+      description="Tasks, SOPs, incidents and approvals right now. The full breakdown is in the operations report."
+    >
+      <div className="el-grid">
+        <StatTile label="Overdue tasks" metric={k.overdueTasks} />
+        <StatTile label="SOP versions awaiting approval" metric={k.sopsAwaitingApproval} />
+        <StatTile
+          label="Outstanding SOP acknowledgements"
+          metric={k.outstandingSopAcknowledgements}
+        />
+        <StatTile label="Incidents past resolution target" metric={k.incidentsBreachingTarget} />
+        <StatTile label="Approvals waiting for you" metric={k.pendingApprovalsForYou} />
+        <StatTile label="Unresolved integration errors" metric={k.unresolvedIntegrationErrors} />
+      </div>
+      <p>
+        <a href="/ops/reports/operations">Open the operations report</a> ·{' '}
+        <a href="/ops/operations/approvals">Open your approvals</a>
+      </p>
+    </Card>
+  );
+}
+
 async function MyWork({ user }: { user: AuthenticatedUser }) {
   const r = await load((db) => myWork(db, user));
   if (!r.ok) return r.view;
@@ -128,6 +160,9 @@ async function MyWork({ user }: { user: AuthenticatedUser }) {
       <Card title="My open tasks">
         <p className="el-stat-value">{r.data.openTasks}</p>
         <a href="/ops/tasks?view=mine">Tasks</a>
+      </Card>
+      <Card title="Approvals">
+        <a href="/ops/operations/approvals">See what is waiting for your decision</a>
       </Card>
     </div>
   );

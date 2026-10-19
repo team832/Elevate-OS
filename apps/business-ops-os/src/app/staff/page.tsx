@@ -17,9 +17,11 @@ export default async function StaffPage() {
         title="Staff directory and responsibilities"
         description="Departments, people, reporting lines and who holds each responsibility with a backup. Business Ops stewards these records."
       />
-      <Alert tone="info" title="Out of scope (D-015, OD-026)">
-        No payroll, biometric attendance, leave, appraisal or HR records are kept here. Staff leave
-        is pending owner decision OD-026. Named holders and backups are owner decision OD-009.
+      <Alert tone="info" title="Where HR records are">
+        Employee records, private HR details, documents and compensation are under{' '}
+        <a href="/ops/hr/employees">Employees</a>; department heads and the reporting tree under{' '}
+        <a href="/ops/hr/departments">Departments and reporting lines</a> (D-028). Payroll and
+        biometric devices are out of scope. Named holders and backups are owner decision OD-009.
       </Alert>
       <Section>
         <Directory user={access.user} />

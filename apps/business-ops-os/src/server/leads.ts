@@ -17,6 +17,7 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
+import { scopeFor } from '@elevate/authorization';
 import { notify } from '@elevate/notifications';
 import { recordAudit, withTransaction } from '@elevate/server-kit';
 import { ConflictError, ForbiddenError, ValidationError } from '@elevate/shared-contracts';
@@ -33,6 +34,7 @@ import {
   type DuplicateMatch,
   type IsoDate,
 } from '../domain';
+import { redactStudentPrivate, stripPrivateKeys, type Redacted } from '../domain/students';
 import {
   accessScope,
   activeStaff,
@@ -145,6 +147,31 @@ function ownLeadFilter(db: Database, staffId: StaffMemberId): SQL {
         .where(eq(opsAdmissions.counsellorStaffId, staffId)),
     ),
   ) as SQL;
+}
+
+/**
+ * Field-level protection (D-028): student and guardian contact details are
+ * shown only to holders of `ops:student_private:read` — all records
+ * (operations manager) or own scope (the counsellor who owns the lead or
+ * counsels its admission). Director and auditor read leads without them.
+ * Duplicate detection still reads contacts server-side.
+ */
+export async function canSeeLeadPrivate(
+  db: Database,
+  actor: Actor,
+  lead: Pick<LeadRow, 'id' | 'ownerStaffId'>,
+): Promise<boolean> {
+  const scope = scopeFor(actor, 'ops:student_private:read');
+  if (scope === 'all') return true;
+  if (scope !== 'own') return false;
+  return leadCovered(db, { scope: 'own', staffId: await staffIdForUser(db, actor.id) }, lead);
+}
+
+export type MaskedLead = Redacted<LeadRow>;
+
+/** The lead DTO: private fields removed unless `visible`; `privateFields` says which. */
+export function maskLead(lead: LeadRow, visible: boolean): MaskedLead {
+  return redactStudentPrivate(lead, visible);
 }
 
 async function getLeadRow(db: Database, id: string, lock = false): Promise<LeadRow> {
@@ -424,7 +451,11 @@ export async function createLead(
         entityId: lead.id,
       });
     }
-    return { lead, admission, duplicates: await describeMatches(tx, access, matches) };
+    return {
+      lead: maskLead(lead, await canSeeLeadPrivate(tx, actor, lead)),
+      admission,
+      duplicates: await describeMatches(tx, access, matches),
+    };
   });
 }
 
@@ -632,8 +663,10 @@ export async function getLead(db: Database, actor: Actor, id: string) {
       otherAccessible: await leadCovered(db, access, { id: f.otherId, ownerStaffId: f.otherOwner }),
     })),
   );
+  const privateVisible = await canSeeLeadPrivate(db, actor, lead);
   return {
-    lead,
+    lead: maskLead(lead, privateVisible),
+    privateVisible,
     assignment: assignmentStatus(lead),
     owner: owner ?? null,
     programme: programme ?? null,
@@ -650,7 +683,13 @@ export async function getLead(db: Database, actor: Actor, id: string) {
     })),
     followUps: followUps.map((f) => ({ ...f.followUp, ownerName: f.ownerName })),
     duplicates,
-    history,
+    history: privateVisible
+      ? history
+      : history.map((h) => ({
+          ...h,
+          before: stripPrivateKeys(h.before),
+          after: stripPrivateKeys(h.after),
+        })),
   };
 }
 
@@ -768,7 +807,7 @@ export async function updateLead(
       requestId,
       metadata: { leadId: before.id },
     });
-    return after as LeadRow;
+    return maskLead(after as LeadRow, await canSeeLeadPrivate(tx, actor, after as LeadRow));
   });
 }
 
@@ -1058,6 +1097,7 @@ export async function mergeLeads(
         actorType: 'user',
         actorUserId: actor.id,
         reason: `Merged duplicate into ${target.code}`,
+        reasonCode: 'duplicate_merged',
         context: {},
         requestId,
         settings,

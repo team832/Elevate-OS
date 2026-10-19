@@ -2,7 +2,7 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import { formOptions } from '../../server/options';
-import { listProjects, listWorkInventory } from '../../server/planning';
+import { listBlockedProjects, listProjects, listWorkInventory } from '../../server/planning';
 import { ActionForm } from '../../ui/action-form';
 import { decisionTone, fmtDate } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
@@ -17,6 +17,9 @@ export default async function ProjectsPage() {
         title="Projects and work inventory"
         description="Projects with milestones and milestone dependencies, plus the imported legacy work inventory (processes with their decision status — not delivered work)."
       />
+      <Section label="Checking for blocked projects…">
+        <Blocked user={access.user} />
+      </Section>
       <Section>
         <Projects user={access.user} canWrite={can(access.user, 'ops:risks:write')} />
       </Section>
@@ -24,6 +27,30 @@ export default async function ProjectsPage() {
         <Inventory user={access.user} />
       </Section>
     </Frame>
+  );
+}
+
+async function Blocked({ user }: { user: AuthenticatedUser }) {
+  const r = await load((db) => listBlockedProjects(db, user));
+  if (!r.ok) return r.view;
+  return (
+    <Card
+      title="Blocked projects"
+      description="Planned, active or on-hold projects that are on hold, missed a milestone, have a milestone waiting on an overdue dependency, or have blocked tasks or open blockers linked."
+    >
+      <DataTable
+        rows={r.data}
+        rowKey={(p) => p.id}
+        empty={<EmptyState title="No project is blocked" />}
+        columns={[
+          { key: 'code', header: 'Project', render: (p) => `${p.code} — ${p.name}` },
+          { key: 'ownerName', header: 'Owner', render: (p) => p.ownerName ?? '—' },
+          { key: 'reasons', header: 'Why', render: (p) => p.reasonLabels.join('; ') },
+          { key: 'blockedTasks', header: 'Blocked tasks', numeric: true },
+          { key: 'openBlockers', header: 'Open blockers', numeric: true },
+        ]}
+      />
+    </Card>
   );
 }
 

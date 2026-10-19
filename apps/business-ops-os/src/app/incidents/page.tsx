@@ -2,10 +2,10 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import { INCIDENT_CATEGORIES } from '../../domain';
-import { listIncidents } from '../../server/incidents';
+import { incidentSlaSetting, listIncidents } from '../../server/incidents';
 import { formOptions } from '../../server/options';
 import { ActionForm } from '../../ui/action-form';
-import { fmtDateTime, humanise, statusTone } from '../../ui/format';
+import { decisionTone, fmtDate, fmtDateTime, humanise, statusTone } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
 
 export const dynamic = 'force-dynamic';
@@ -28,11 +28,21 @@ export default async function IncidentsPage() {
 async function List({ user, canWrite }: { user: AuthenticatedUser; canWrite: boolean }) {
   const r = await load(async (db) => ({
     list: await listIncidents(db, user),
+    sla: await incidentSlaSetting(db),
     options: await formOptions(db),
   }));
   if (!r.ok) return r.view;
   return (
     <div className="el-stack">
+      <p className="el-field-hint">
+        Resolution targets: high {r.data.sla.value.highDays} day(s), medium{' '}
+        {r.data.sla.value.mediumDays}, low {r.data.sla.value.lowDays}, counted from the day it
+        occurred (IST).{' '}
+        <StatusBadge tone={decisionTone(r.data.sla.decisionState)}>
+          {r.data.sla.decisionState}
+        </StatusBadge>{' '}
+        Change them in <a href="/ops/settings">Settings</a>.
+      </p>
       <DataTable
         rows={r.data.list}
         rowKey={(i) => i.id}
@@ -57,6 +67,22 @@ async function List({ user, canWrite }: { user: AuthenticatedUser; canWrite: boo
             render: (i) => <StatusBadge tone={statusTone(i.status)}>{i.status}</StatusBadge>,
           },
           {
+            key: 'sla',
+            header: 'Resolution target',
+            render: (i) => (
+              <>
+                {i.sla.targetDate ? fmtDate(i.sla.targetDate) : 'Not rated'}{' '}
+                {i.sla.state === 'breached' ? (
+                  <StatusBadge tone="danger">Past target</StatusBadge>
+                ) : i.sla.state === 'due_today' ? (
+                  <StatusBadge tone="warning">Due today</StatusBadge>
+                ) : i.sla.state === 'resolved_late' ? (
+                  <StatusBadge tone="neutral">Resolved after target</StatusBadge>
+                ) : null}
+              </>
+            ),
+          },
+          {
             key: 'act',
             header: '',
             render: (i) =>
@@ -64,7 +90,7 @@ async function List({ user, canWrite }: { user: AuthenticatedUser; canWrite: boo
                 <ActionForm
                   action={`/ops/api/v1/incidents/${i.id}`}
                   method="PATCH"
-                  submitLabel="Update"
+                  submitLabel="Update incident"
                   compact
                   fields={[
                     {

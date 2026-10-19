@@ -88,18 +88,27 @@ async function LeadDetail({ user, id }: { user: AuthenticatedUser; id: string })
       <div className="el-grid">
         <Card
           title="Contact"
-          description="Visible to admissions and operations roles only (OPS-028)."
+          description="Student and guardian contacts need the private-data permission (ops:student_private:read, D-028); many students are minors."
         >
-          <p>
-            Student: {lead.studentPhone ?? '—'} · {lead.studentEmail ?? '—'}
-          </p>
-          <p>
-            Parent/guardian: {lead.guardianName ?? '—'} ({lead.guardianRelationship ?? '—'}) ·{' '}
-            {lead.guardianPhone ?? '—'} · {lead.guardianEmail ?? '—'}
-          </p>
-          <p>
-            School: {lead.previousSchool ?? '—'} · Stage: {humanise(lead.currentStage)}
-          </p>
+          {d.privateVisible ? (
+            <>
+              <p>
+                Student: {lead.studentPhone ?? '—'} · {lead.studentEmail ?? '—'}
+              </p>
+              <p>
+                Parent/guardian: {lead.guardianName ?? '—'} ({lead.guardianRelationship ?? '—'}) ·{' '}
+                {lead.guardianPhone ?? '—'} · {lead.guardianEmail ?? '—'}
+              </p>
+              <p>
+                School: {lead.previousSchool ?? '—'} · City: {lead.city ?? '—'}
+              </p>
+            </>
+          ) : (
+            <Alert tone="info" title="Contact details restricted">
+              Your roles can read this lead but not its private contact details.
+            </Alert>
+          )}
+          <p>Stage: {humanise(lead.currentStage)}</p>
           <p>First successful contact: {fmtDateTime(lead.firstSuccessfulContactAt)}</p>
         </Card>
         <Card

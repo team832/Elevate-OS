@@ -85,6 +85,13 @@ export const enrolmentRequestedV1Payload = z
     counsellorStaffId: staffMemberIdSchema,
     /** core.users.id of the person who triggered the request. */
     requestedByUserId: userIdSchema,
+    /**
+     * Optional, additive (19 Oct 2026, non-breaking per INTEGRATION_CONTRACT §8):
+     * the Academic student id Ops already received for THE SAME PERSON from an
+     * earlier confirmed admission (e.g. a second programme). Academic should
+     * reuse that student instead of creating a second one. Omitted when unknown.
+     */
+    existingStudentId: studentIdSchema.optional(),
     notes: z.string().trim().max(2000).optional(),
   })
   .strict()

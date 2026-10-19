@@ -22,7 +22,7 @@ import type {
   StaffMemberId,
   UserId,
 } from '@elevate/shared-types';
-import { checkTransition, type AdmissionStatus, type TransitionContext } from '../domain';
+import { checkTransition, istToday, type AdmissionStatus, type TransitionContext } from '../domain';
 import { nextCode } from './context';
 import type { ResolvedSettings } from '../domain';
 
@@ -88,6 +88,8 @@ export interface ApplyTransitionInput {
   actorType: 'user' | 'system';
   actorUserId: UserId | null;
   reason?: string | null;
+  /** Validated closure code (checkReasonCode); stored on the case and the transition row. */
+  reasonCode?: string | null;
   eventId?: IntegrationEventId | null;
   context: Omit<TransitionContext, 'actor' | 'reason' | 'heldFromStatus'>;
   requestId?: string;
@@ -124,10 +126,12 @@ export async function applyTransition(
     statusReason: input.reason?.trim() || null,
     statusChangedAt: now,
     heldFromStatus: to === 'on_hold' ? from : null,
+    statusReasonCode: input.reasonCode ?? null,
     ...input.patch,
   };
   if (from === 'counselled' && to === 'admission_pending') values.demoSkipped = true;
   if (to === 'admitted' && !admission.admittedAt) values.admittedAt = now;
+  if (to === 'admitted' && !admission.admissionDate) values.admissionDate = istToday(now);
   const [updated] = await tx
     .update(opsAdmissions)
     .set(values)
@@ -142,6 +146,7 @@ export async function applyTransition(
     fromStatus: from,
     toStatus: to,
     reason: input.reason?.trim() || null,
+    reasonCode: input.reasonCode ?? null,
     actorType: input.actorType,
     actorUserId: input.actorUserId,
     eventId: input.eventId ?? null,
@@ -155,7 +160,7 @@ export async function applyTransition(
     entityType: 'admission',
     entityId: admission.id,
     before: { status: from },
-    after: { status: to, reason: input.reason ?? null },
+    after: { status: to, reason: input.reason ?? null, reasonCode: input.reasonCode ?? null },
     requestId: input.requestId,
     metadata: {
       leadId: admission.leadId,

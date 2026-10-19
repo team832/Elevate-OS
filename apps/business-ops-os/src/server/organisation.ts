@@ -6,6 +6,7 @@
 import { asc, eq } from 'drizzle-orm';
 import {
   departments,
+  opsEmployeeRecords,
   opsOnboardingItems,
   opsResponsibilities,
   opsStaffProfiles,
@@ -23,7 +24,10 @@ import {
   responsibilityGaps,
   RESPONSIBILITY_GAP_LABELS,
 } from '../domain';
+import { istToday } from '../domain/dates';
+import { historyChanges } from '../domain/hr/employees';
 import { accessScope, activeStaff, nextCode, notFound, type Actor } from './context';
+import { runDeactivationHook, writeHistory } from './hr/employee-core';
 import type {
   createDepartmentBody,
   createStaffBody,
@@ -83,7 +87,12 @@ async function staffRow(db: Database, id: string) {
   return row;
 }
 
-async function assertManager(tx: Database, staffId: string, managerId: string | null | undefined) {
+/** Manager must be active and the change must not create a reporting loop (A-10). */
+export async function assertManager(
+  tx: Database,
+  staffId: string,
+  managerId: string | null | undefined,
+) {
   if (!managerId) return;
   await activeStaff(tx, managerId, 'managerId');
   const all = await tx
@@ -172,6 +181,32 @@ export async function updateStaff(
     const [after] = Object.keys(patch).length
       ? await tx.update(staffMembers).set(patch).where(eq(staffMembers.id, before.id)).returning()
       : [before];
+    const [profileBefore] = await tx
+      .select({ employmentType: opsStaffProfiles.employmentType })
+      .from(opsStaffProfiles)
+      .where(eq(opsStaffProfiles.staffId, before.id));
+    // Employment history (OPS-033): every tracked change, whichever screen made it.
+    await writeHistory(tx, {
+      staffId: before.id,
+      changes: historyChanges(
+        {
+          departmentId: before.departmentId,
+          title: before.title,
+          managerId: before.managerId,
+          employmentType: profileBefore?.employmentType ?? 'not_recorded',
+          employmentStatus: null,
+        },
+        {
+          ...('departmentId' in patch ? { departmentId: patch.departmentId ?? null } : {}),
+          ...('title' in patch ? { title: patch.title ?? null } : {}),
+          ...('managerId' in patch ? { managerId: patch.managerId ?? null } : {}),
+          ...(input.employmentType ? { employmentType: input.employmentType } : {}),
+        },
+      ),
+      effectiveOn: istToday(new Date()),
+      reason: 'Changed from the staff directory',
+      actorId: actor.id,
+    });
     if (input.employmentType || input.roleLabels) {
       const values = {
         staffId: before.id,
@@ -184,6 +219,13 @@ export async function updateStaff(
         .values(values)
         .onConflictDoUpdate({ target: opsStaffProfiles.staffId, set: values });
     }
+    if (input.status === 'inactive' && before.status !== 'inactive')
+      await runDeactivationHook(tx, actor, {
+        staffId: before.id,
+        source: 'staff_inactive',
+        effectiveOn: istToday(new Date()),
+        requestId,
+      });
     await recordAudit(tx, {
       actorUserId: actor.id,
       module: 'ops',
@@ -379,8 +421,14 @@ export async function getStaffDetail(db: Database, actor: Actor, id: string) {
   const [dept] = staff.departmentId
     ? await db.select().from(departments).where(eq(departments.id, staff.departmentId))
     : [];
+  const [employee] = await db
+    .select({ employeeCode: opsEmployeeRecords.employeeCode })
+    .from(opsEmployeeRecords)
+    .where(eq(opsEmployeeRecords.staffId, staff.id));
   return {
     staff,
+    /** EMP code when this staff member has an HR employee record (link to /ops/hr/employees/[id]). */
+    employeeCode: employee?.employeeCode ?? null,
     profile: profile ?? null,
     onboarding,
     reports,
