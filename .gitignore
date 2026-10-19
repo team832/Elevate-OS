@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# build output
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# local data (dev PostgreSQL cluster, PGlite dirs, backups)
+.data/
+
+# environment files — never commit real values
+.env
+.env.*
+!.env.example
+
+# test / tooling output
+coverage/
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+node_modules

@@ -1,0 +1,13 @@
+{
+  "name": "@elevate/shared-types",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Branded ID types, module keys, status vocabulary, Result type and Asia/Kolkata date helpers shared by every Elevate OS package and app.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

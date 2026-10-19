@@ -1,0 +1,57 @@
+{
+  "name": "elevate-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Elevate OS — internal operating system for Elevate Education (Marketing OS, Academic OS, Business Operations OS on a shared platform).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n platform,marketing,academic,ops -c blue,magenta,green,yellow \"npm:dev:platform\" \"npm:dev:marketing\" \"npm:dev:academic\" \"npm:dev:ops\"",
+    "dev:platform": "npm run dev -w @elevate/platform",
+    "dev:marketing": "npm run dev -w @elevate/marketing-os",
+    "dev:academic": "npm run dev -w @elevate/academic-os",
+    "dev:ops": "npm run dev -w @elevate/business-ops-os",
+    "build": "npm run build -w @elevate/platform -w @elevate/marketing-os -w @elevate/academic-os -w @elevate/business-ops-os",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.scripts.json",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "secret-scan": "node scripts/validation/secret-scan.mjs",
+    "validate": "npm run typecheck && npm run lint && npm run test && npm run secret-scan",
+    "db:start": "node scripts/development/db-server.mjs",
+    "db:generate": "npm run db:generate -w @elevate/database",
+    "db:migrate": "tsx scripts/development/migrate.ts",
+    "db:seed": "tsx scripts/development/seed.ts",
+    "db:reset": "tsx scripts/development/db-reset.ts",
+    "db:backup": "node scripts/backup/pg-backup.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@next/eslint-plugin-next": "16.4.2",
+    "@types/node": "24.19.2",
+    "concurrently": "10.0.6",
+    "embedded-postgres": "18.4.0-beta.17",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.2",
+    "vitest": "5.0.5"
+  },
+  "allowScripts": {
+    "@embedded-postgres/windows-x64@18.4.0-beta.17": true,
+    "esbuild@0.28.2": true
+  }
+}
