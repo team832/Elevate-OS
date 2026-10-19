@@ -84,35 +84,289 @@ export const opsPermissionList = [
     description:
       'Run Ops jobs by hand: follow-up reminders, task escalations, enrolment-reply processing.',
   },
+  // --- admissions administration (OPS-070…) -------------------------------------------------
+  {
+    key: 'ops:fees:read',
+    description: 'Read manually recorded admission fee records (never verified transactions).',
+  },
+  {
+    key: 'ops:fees:record',
+    description: 'Record fee amounts due/received, receipt references, refunds (manual records).',
+  },
+  {
+    key: 'ops:students:read',
+    description: 'Student administration: admitted students, admission history, handoff status.',
+  },
+  {
+    key: 'ops:student_private:read',
+    description: 'Student and guardian contact details, consent and administrative documents.',
+  },
+  // --- HR records (OPS-030…) ----------------------------------------------------------------
+  {
+    key: 'ops:employees:read',
+    description: 'Employee directory and non-sensitive employee record fields.',
+  },
+  {
+    key: 'ops:employees:manage',
+    description: 'Create and edit employee records, assignments and their history.',
+  },
+  {
+    key: 'ops:employee_private:read',
+    description: 'Private HR fields: personal contacts, emergency contacts, identity references.',
+  },
+  { key: 'ops:employee_private:manage', description: 'Edit private HR fields.' },
+  {
+    key: 'ops:employee_documents:read',
+    description: 'Employment document metadata and authorised downloads.',
+  },
+  {
+    key: 'ops:employee_documents:manage',
+    description: 'Add, replace and retire employment document records.',
+  },
+  {
+    key: 'ops:compensation:read',
+    description: 'Compensation records (approved terms, components, effective dates).',
+  },
+  { key: 'ops:compensation:manage', description: 'Record and change compensation terms.' },
+  {
+    key: 'ops:compensation:export',
+    description: 'Export compensation records for an authorised payroll process (no payroll run).',
+  },
+  { key: 'ops:assets:read', description: 'Read work assets and their assignments.' },
+  { key: 'ops:assets:manage', description: 'Register assets, assign and record returns.' },
+  // --- recruitment, onboarding, offboarding (OPS-040…) --------------------------------------
+  {
+    key: 'ops:recruitment:read',
+    description: 'Read requisitions, candidates, applications, interviews and offers.',
+  },
+  {
+    key: 'ops:recruitment:manage',
+    description: 'Work requisitions, candidates, applications, interviews and feedback.',
+  },
+  {
+    key: 'ops:recruitment:decide',
+    description: 'Select or reject candidates, approve offers, convert a candidate to an employee.',
+  },
+  { key: 'ops:lifecycle:read', description: 'Read onboarding and offboarding cases.' },
+  {
+    key: 'ops:lifecycle:manage',
+    description: 'Open onboarding/offboarding cases and work their checklists.',
+  },
+  {
+    key: 'ops:lifecycle:approve',
+    description: 'Give the final approval on onboarding completion or a separation.',
+  },
+  // --- staff attendance, shifts, leave (OPS-050…) -------------------------------------------
+  { key: 'ops:attendance:read', description: 'Read staff attendance sessions and summaries.' },
+  {
+    key: 'ops:attendance:record',
+    description: 'Clock in/out and request corrections for oneself.',
+  },
+  {
+    key: 'ops:attendance:manage',
+    description: 'Manual attendance entries (reason required) and validated CSV imports.',
+  },
+  {
+    key: 'ops:attendance:approve',
+    description: 'Review and decide attendance correction requests.',
+  },
+  { key: 'ops:shifts:read', description: 'Read shift templates, assignments and calendars.' },
+  {
+    key: 'ops:shifts:manage',
+    description: 'Maintain shift templates, assignments, work calendars and holidays.',
+  },
+  { key: 'ops:leave:read', description: 'Read leave requests, balances and team availability.' },
+  { key: 'ops:leave:request', description: 'Request and cancel leave for oneself.' },
+  { key: 'ops:leave:approve', description: 'Approve or reject leave requests.' },
+  {
+    key: 'ops:leave:manage',
+    description: 'Maintain leave types, balances and the holiday calendar (policy stays proposed).',
+  },
+  // --- reporting ----------------------------------------------------------------------------
+  { key: 'ops:hr_reports:read', description: 'Read HR dashboards and timesheet summaries.' },
+  {
+    key: 'ops:hr_reports:export',
+    description: 'Export employee-level attendance and timesheet reports.',
+  },
 ] as const satisfies readonly PermissionDefinition[];
 
 export type OpsPermission = (typeof opsPermissionList)[number]['key'];
 
-const reads = opsPermissionList
-  .map((p) => p.key)
-  .filter((k) => k.endsWith(':read') || k.endsWith(':access'));
+const keys: OpsPermission[] = opsPermissionList.map((p) => p.key);
+
+/**
+ * Sensitive record sets (D-028): private HR fields, employment documents,
+ * compensation and student/guardian contact data. Nobody receives them through a
+ * blanket "all reads" grant — every holder is listed explicitly below.
+ */
+const SENSITIVE_RESOURCES = [
+  'employee_private',
+  'employee_documents',
+  'compensation',
+  'student_private',
+] as const;
+const isSensitive = (k: OpsPermission) =>
+  SENSITIVE_RESOURCES.some((r) => k.startsWith(`ops:${r}:`));
+
+/** Read/access permissions outside the sensitive sets (director and auditor baseline). */
+const reads = keys.filter((k) => (k.endsWith(':read') || k.endsWith(':access')) && !isSensitive(k));
+
+const own = (permission: OpsPermission) => ({ permission, scope: 'own' as const });
 
 export const opsPermissions = definePermissions<OpsPermission>({
   module: 'ops',
   permissions: opsPermissionList,
   grants: {
-    operations_manager: opsPermissionList.map((p) => p.key),
+    // Everything except the sensitive HR sets (salary, private HR fields, employment
+    // documents); student/guardian contacts are part of running admissions.
+    operations_manager: keys.filter((k) => !isSensitive(k) || k === 'ops:student_private:read'),
     admissions_counsellor: [
       'ops:module:access',
-      { permission: 'ops:leads:read', scope: 'own' },
-      { permission: 'ops:leads:write', scope: 'own' },
-      { permission: 'ops:admissions:read', scope: 'own' },
-      { permission: 'ops:admissions:write', scope: 'own' },
-      { permission: 'ops:tasks:read', scope: 'own' },
-      { permission: 'ops:tasks:write', scope: 'own' },
+      own('ops:leads:read'),
+      own('ops:leads:write'),
+      own('ops:admissions:read'),
+      own('ops:admissions:write'),
+      own('ops:tasks:read'),
+      own('ops:tasks:write'),
+      own('ops:fees:read'),
+      own('ops:students:read'),
+      own('ops:student_private:read'),
       'ops:sops:read',
       'ops:organisation:read',
+      'ops:employees:read',
     ],
-    director: [...reads, 'ops:sops:approve', 'ops:admissions:approve', 'ops:decisions:write'],
-    teacher: [
-      { permission: 'ops:tasks:read', scope: 'own' },
-      { permission: 'ops:tasks:write', scope: 'own' },
+    director: [
+      ...reads,
+      'ops:sops:approve',
+      'ops:admissions:approve',
+      'ops:decisions:write',
+      'ops:recruitment:decide',
+      'ops:lifecycle:approve',
     ],
+    teacher: [own('ops:tasks:read'), own('ops:tasks:write')],
     auditor: reads,
+    // Sees admitted students and their enrolment-handoff status only.
+    academic_coordinator: ['ops:module:access', 'ops:students:read'],
+    hr_manager: [
+      'ops:module:access',
+      'ops:organisation:read',
+      'ops:organisation:manage',
+      'ops:employees:read',
+      'ops:employees:manage',
+      'ops:employee_private:read',
+      'ops:employee_private:manage',
+      'ops:employee_documents:read',
+      'ops:employee_documents:manage',
+      'ops:compensation:read',
+      'ops:compensation:manage',
+      'ops:assets:read',
+      'ops:assets:manage',
+      'ops:recruitment:read',
+      'ops:recruitment:manage',
+      'ops:recruitment:decide',
+      'ops:lifecycle:read',
+      'ops:lifecycle:manage',
+      'ops:lifecycle:approve',
+      'ops:attendance:read',
+      'ops:attendance:manage',
+      'ops:attendance:approve',
+      own('ops:attendance:record'),
+      'ops:shifts:read',
+      'ops:shifts:manage',
+      'ops:leave:read',
+      'ops:leave:approve',
+      'ops:leave:manage',
+      own('ops:leave:request'),
+      'ops:hr_reports:read',
+      'ops:hr_reports:export',
+      own('ops:tasks:read'),
+      own('ops:tasks:write'),
+      'ops:sops:read',
+      'ops:settings:read',
+    ],
+    hr_contributor: [
+      'ops:module:access',
+      'ops:organisation:read',
+      'ops:employees:read',
+      'ops:employees:manage',
+      'ops:employee_documents:read',
+      'ops:employee_documents:manage',
+      'ops:assets:read',
+      'ops:assets:manage',
+      'ops:recruitment:read',
+      'ops:recruitment:manage',
+      'ops:lifecycle:read',
+      'ops:lifecycle:manage',
+      'ops:attendance:read',
+      'ops:attendance:manage',
+      own('ops:attendance:record'),
+      'ops:shifts:read',
+      'ops:shifts:manage',
+      'ops:leave:read',
+      'ops:leave:manage',
+      own('ops:leave:request'),
+      'ops:hr_reports:read',
+      own('ops:tasks:read'),
+      own('ops:tasks:write'),
+      'ops:sops:read',
+    ],
+    // `own` = requisitions, candidates and interviews assigned to the recruiter.
+    recruiter: [
+      'ops:module:access',
+      'ops:organisation:read',
+      own('ops:recruitment:read'),
+      own('ops:recruitment:manage'),
+      own('ops:tasks:read'),
+      own('ops:tasks:write'),
+      'ops:sops:read',
+    ],
+    // `own` = themselves plus everyone in their reporting chain (server/hr-scope.ts).
+    department_manager: [
+      'ops:module:access',
+      'ops:organisation:read',
+      own('ops:employees:read'),
+      own('ops:attendance:read'),
+      own('ops:attendance:approve'),
+      own('ops:attendance:record'),
+      own('ops:shifts:read'),
+      own('ops:leave:read'),
+      own('ops:leave:approve'),
+      own('ops:leave:request'),
+      own('ops:lifecycle:read'),
+      own('ops:assets:read'),
+      own('ops:hr_reports:read'),
+      own('ops:tasks:read'),
+      own('ops:tasks:write'),
+      'ops:sops:read',
+    ],
+    // Self-service. The directory (ops:employees:read) shows non-sensitive fields only.
+    employee: [
+      'ops:module:access',
+      'ops:organisation:read',
+      'ops:employees:read',
+      own('ops:employee_private:read'),
+      own('ops:employee_private:manage'),
+      own('ops:employee_documents:read'),
+      own('ops:attendance:read'),
+      own('ops:attendance:record'),
+      own('ops:shifts:read'),
+      own('ops:leave:read'),
+      own('ops:leave:request'),
+      own('ops:assets:read'),
+      own('ops:tasks:read'),
+      own('ops:tasks:write'),
+      'ops:sops:read',
+    ],
+    finance_officer: [
+      'ops:module:access',
+      'ops:employees:read',
+      'ops:compensation:read',
+      'ops:compensation:manage',
+      'ops:compensation:export',
+      'ops:fees:read',
+      'ops:fees:record',
+      'ops:admissions:read',
+      'ops:hr_reports:read',
+    ],
   },
 });

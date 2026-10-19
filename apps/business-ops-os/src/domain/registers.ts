@@ -14,6 +14,15 @@ export const CODE_FORMATS = {
   project: { prefix: 'PRJ', width: 4 },
   incident: { prefix: 'INC', width: 5 },
   responsibility: { prefix: 'RESP', width: 4 },
+  // HR, attendance and admissions administration (D-028)
+  employee: { prefix: 'EMP', width: 4 },
+  asset: { prefix: 'AST', width: 5 },
+  requisition: { prefix: 'REQ', width: 4 },
+  candidate: { prefix: 'CAND', width: 5 },
+  lifecycleCase: { prefix: 'HRC', width: 5 },
+  leaveRequest: { prefix: 'LVR', width: 6 },
+  attendanceCorrection: { prefix: 'ATC', width: 6 },
+  feeRecord: { prefix: 'FEE', width: 6 },
 } as const;
 export type CodeKind = keyof typeof CODE_FORMATS;
 
