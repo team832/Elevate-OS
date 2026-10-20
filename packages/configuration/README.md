@@ -7,7 +7,7 @@ import { loadEnv } from '@elevate/configuration';
 const env = loadEnv('marketing'); // typed; throws ConfigurationError listing ALL problems
 ```
 
-Subsets (`ENV_SUBSETS`): `platform`, `marketing`, `academic`, `ops`, `server`, `database`, `seed`. A missing or placeholder value (`replace-with…`) fails with a message like:
+Subsets (`ENV_SUBSETS`): `platform`, `marketing`, `academic`, `ops`, `server`, `database`, `seed`, `googleSignIn` (`PLATFORM_URL` plus the optional `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`; unset means Google sign-in is off). `BOOTSTRAP_OWNER_EMAILS` (optional, read at sign-in by @elevate/authentication) parses to a lower-cased list and accepts only exact `@elevateeducation.in` addresses. A missing or placeholder value (`replace-with…`) fails with a message like:
 
 ```
 Invalid environment configuration for "platform" — 2 problem(s):

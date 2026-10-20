@@ -5,7 +5,7 @@ Elevate OS never makes up your business facts. Wherever a fact is missing, the s
 ## People and organisation
 | What is missing | Where it shows | What to send |
 |---|---|---|
-| Who works at Elevate and in which role | Staff and Employees screens (today only fictional sample staff) | Name, department, designation and manager for each person. Say which roles each person should have; nobody gets access until a platform administrator assigns it (OD-009) |
+| Who works at Elevate and in which role | Staff and Employees screens (today only fictional sample staff); access is given on **Users & roles** (`/admin/users`, also the Settings link) | Name, department, designation and manager for each person. Say which roles each person should have; nobody gets access until a platform administrator ticks their roles on Users & roles and clicks **Save roles** (OD-009) |
 | Department list | Departments (13 provisional departments from the old files) | Confirm, rename or remove them (D-026) |
 | Who may see salaries and private HR details | Compensation and private employee fields | Whether the director and operations manager should see them (OD-037, OD-040) |
 | Logo file | Sidebar and sign-in page (today a screenshot of the logo) | The original logo file (SVG or a large PNG). Put it in the `elevate-os` folder and it replaces the screenshot |
@@ -38,6 +38,7 @@ Elevate OS never makes up your business facts. Wherever a fact is missing, the s
 | Account | Why it needs you | When |
 |---|---|---|
 | Hosting account | It must be in your name and may need a card on file | At go-live |
+| First administrator | Put your own @elevateeducation.in email in `BOOTSTRAP_OWNER_EMAILS` in the live `.env`, so you become the first administrator when you sign in. Then open Users & roles and give everyone else their roles | At go-live |
 | Database account | Holds all the data; must be in your name | At go-live |
 | Email-sending service | So the system can email reminders (today it records notifications but sends nothing) | When you want email reminders |
 | Document storage | So staff can upload documents (today only references are recorded) | When you want uploads |

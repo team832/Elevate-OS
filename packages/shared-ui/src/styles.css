@@ -1221,6 +1221,17 @@ a:hover {
 .el-login-alert {
   margin-bottom: var(--el-space-4);
 }
+.el-login-hint {
+  margin: 0 0 var(--el-space-4);
+  color: var(--el-text-muted);
+  font-size: var(--el-text-sm);
+}
+.el-login-or {
+  margin: var(--el-space-3) 0;
+  text-align: center;
+  color: var(--el-text-muted);
+  font-size: var(--el-text-xs);
+}
 .el-login-card .el-wordmark {
   display: block;
   text-align: center;

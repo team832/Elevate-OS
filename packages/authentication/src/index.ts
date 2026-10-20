@@ -4,3 +4,4 @@ export * from './sessions';
 export * from './throttle';
 export * from './login';
 export * from './email-domain';
+export * from './google';

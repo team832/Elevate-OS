@@ -73,3 +73,31 @@ describe('isLocalDatabaseUrl', () => {
     expect(isLocalDatabaseUrl('postgres://u:p@db.example.com/elevate')).toBe(false);
   });
 });
+
+describe('BOOTSTRAP_OWNER_EMAILS', () => {
+  const owners = (value?: string) =>
+    loadEnvKeys(['BOOTSTRAP_OWNER_EMAILS'], { BOOTSTRAP_OWNER_EMAILS: value })
+      .BOOTSTRAP_OWNER_EMAILS;
+
+  it('is optional and parses a comma-separated, lower-cased list', () => {
+    expect(owners()).toEqual([]);
+    expect(owners('')).toEqual([]);
+    expect(owners(' Owner@ElevateEducation.in , second@elevateeducation.in,')).toEqual([
+      'owner@elevateeducation.in',
+      'second@elevateeducation.in',
+    ]);
+  });
+
+  it.each([
+    'someone@gmail.com',
+    'tara@example.test',
+    'a@sub.elevateeducation.in',
+    'a@elevateeducation.in.evil.com',
+    '@elevateeducation.in',
+    'owner@elevateeducation.in, someone@gmail.com',
+  ])('refuses %s', (value) => {
+    expect(() => owners(value)).toThrow(
+      /BOOTSTRAP_OWNER_EMAILS may list only @elevateeducation.in/,
+    );
+  });
+});

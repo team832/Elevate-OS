@@ -13,6 +13,7 @@ Status of everything here: **Implemented + Tested** in the Foundation wave unles
 | Login errors | Generic "Email or password is incorrect." for unknown email, wrong password and disabled user | `packages/authentication/src/login.ts` |
 | Open redirects | Post-login `next` must be a same-site relative path (`safeRelativePath`) | `packages/shared-contracts/src/http.ts` |
 | Login throttling | 5 failures per (email, IP) / 15 min → 15-min lock; 50 per IP → lock; 429 `RATE_LIMITED` | `packages/authentication/src/throttle.ts` |
+| Google sign-in (D-030, optional) | OIDC code flow + PKCE; state/nonce/verifier in a 10-min HttpOnly SameSite=Lax cookie HMAC'd with `SESSION_SECRET`, compared in constant time; ID token verified locally (RS256 + Google JWKS, `iss`, `aud`, `exp`/`iat` ±5 min, `nonce`, `email_verified`, `hd = elevateeducation.in`, production domain rule); new accounts get no roles; disabled accounts refused; refusals throttled per IP (50 / 15 min) and logged without tokens or emails; `GOOGLE_CLIENT_SECRET` is server-only | `packages/authentication/src/google.ts` |
 
 **Known limitations (must be resolved before internet exposure):**
 1. The throttle is in memory per process: it resets on restart and is not shared between the four apps or replicas. Add a shared limiter (DB table or reverse proxy).

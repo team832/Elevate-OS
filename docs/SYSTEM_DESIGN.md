@@ -21,6 +21,8 @@ For platform pages, `proxy.ts` first redirects requests with **no** `elevate_ses
 ### Sign-in
 `POST /api/v1/auth/login` (or `/<zone>/api/v1/auth/login`): throttle check → `checkPassword` (scrypt; dummy hash for unknown emails) → transaction { insert session (token hash), update `last_login_at`, audit `auth.login` } → `Set-Cookie: elevate_session=…` → JSON envelope or 303 to the safe `next`. Sign-out revokes the session, audits `auth.logout`, clears the cookie.
 
+Google sign-in (D-030, optional): every zone's login page links to `PLATFORM_URL/api/v1/auth/google/start?next=…` → signed 10-minute state cookie → Google → `/api/v1/auth/google/callback` on the platform: state check → code exchange (PKCE) → ID-token verification (JWKS, claims, `hd`) → find or create the user (no roles) → the same session transaction as the password login → 303 to `next`. The session cookie is set on the platform host, which serves every zone (D-004).
+
 ## 2. State changes inside a module
 ```ts
 await withTransaction(db, async (tx) => {

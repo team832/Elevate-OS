@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { googleSignInHref } from '@elevate/authentication';
 import { safeRelativePath } from '@elevate/shared-contracts';
 import { getCurrentUser, toAppPath } from '@elevate/server-kit/next';
 import { LoginForm } from '@elevate/shared-ui';
@@ -30,6 +31,7 @@ export default async function LoginPage({
       action={MODULE_PATHS.loginApi}
       next={next}
       error={error}
+      googleHref={googleSignInHref(next)}
       subtitle="Sign in to Business Ops OS"
     />
   );

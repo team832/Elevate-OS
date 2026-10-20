@@ -1,0 +1,59 @@
+/* Users & roles (shared-ui tokens only; no new colours). */
+.ur-filters,
+.ur-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--el-space-3);
+  align-items: flex-end;
+}
+.ur-filters .el-field {
+  margin: 0;
+  min-width: min(100%, 12rem);
+}
+.ur-pager {
+  align-items: baseline;
+  margin-top: var(--el-space-3);
+}
+.ur-cell-email {
+  overflow-wrap: anywhere;
+}
+
+/* Role checklist: one column on phones, two from 720px. */
+.ur-roles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--el-space-3) var(--el-space-5);
+}
+.ur-roles .el-checkbox {
+  font-weight: 600;
+}
+.ur-roles .el-field-hint {
+  margin: var(--el-space-1) 0 0 1.6rem;
+}
+@media (min-width: 720px) {
+  .ur-roles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.ur-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--el-space-3) var(--el-space-5);
+  margin: 0;
+}
+.ur-facts dt {
+  font-size: var(--el-text-sm);
+  color: var(--el-text-muted);
+}
+.ur-facts dd {
+  margin: 0;
+}
+@media (min-width: 720px) {
+  .ur-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

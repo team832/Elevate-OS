@@ -63,6 +63,38 @@ export const ENV_FIELDS = {
     description:
       'Origin of the Business Ops OS app, e.g. http://localhost:3003 (platform rewrites).',
   },
+  GOOGLE_CLIENT_ID: {
+    schema: z.string().trim().min(1).optional(),
+    description:
+      'OAuth client ID for "Sign in with Google" (docs/GOOGLE_SIGN_IN_SETUP.md). Unset = no Google button.',
+  },
+  GOOGLE_CLIENT_SECRET: {
+    schema: z.string().trim().min(1).optional(),
+    description:
+      'OAuth client secret paired with GOOGLE_CLIENT_ID. Server-only; never NEXT_PUBLIC_.',
+  },
+  BOOTSTRAP_OWNER_EMAILS: {
+    // Same rule as isAllowedEmail(email, 'production') in @elevate/authentication (D-030),
+    // which this package cannot import: exact @elevateeducation.in, never @example.test.
+    schema: z
+      .string()
+      .optional()
+      .transform((v) =>
+        (v ?? '')
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean),
+      )
+      .pipe(
+        z.array(
+          z.string().regex(/^[^@\s]+@elevateeducation\.in$/, {
+            error: 'BOOTSTRAP_OWNER_EMAILS may list only @elevateeducation.in addresses',
+          }),
+        ),
+      ),
+    description:
+      'Comma-separated @elevateeducation.in emails that get platform_admin + director at every sign-in (first administrator at go-live). Optional.',
+  },
   SEED_USER_PASSWORD: {
     schema: z
       .string({ error: 'SEED_USER_PASSWORD is required' })
@@ -122,6 +154,8 @@ export const ENV_SUBSETS = {
   ops: [...SERVER_BASE, 'PLATFORM_URL', 'NOTIFICATIONS_EMAIL_ADAPTER'],
   /** Shared runtime needs of every server package (auth, server-kit). */
   server: SERVER_BASE,
+  /** Google sign-in (optional): the redirect URI is PLATFORM_URL + /api/v1/auth/google/callback. */
+  googleSignIn: ['PLATFORM_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
   database: ['NODE_ENV', 'DATABASE_URL'],
   seed: ['NODE_ENV', 'DATABASE_URL', 'SEED_USER_PASSWORD'],
 } as const satisfies Record<string, readonly EnvKey[]>;

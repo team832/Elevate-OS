@@ -370,4 +370,25 @@ describe('DataTable and states', () => {
       'src="/brand/elevate-logo.png"',
     );
   });
+  it('login form states the account domain and shows the Google link only when given', () => {
+    const plain = renderToStaticMarkup(<LoginForm action="/api/v1/auth/login" next="/" />);
+    expect(plain).toContain('Use your @elevateeducation.in account.');
+    expect(plain).not.toContain('Sign in with Google');
+    const href = 'http://localhost:3000/api/v1/auth/google/start?next=%2Facademic';
+    const google = renderToStaticMarkup(
+      <LoginForm action="/academic/api/v1/auth/login" next="/academic" googleHref={href} />,
+    );
+    expect(google).toContain(`href="${href}"`);
+    expect(google).toContain('Sign in with Google');
+    expect(google).toContain('action="/academic/api/v1/auth/login" method="post"');
+  });
+  it.each([
+    ['google_domain', 'That Google account is not an Elevate Education account.'],
+    ['google_cancelled', 'Google sign-in was cancelled.'],
+    ['google_expired', 'Sign-in link expired — try again.'],
+  ])('login error %s reads “%s”', (code, text) => {
+    expect(
+      renderToStaticMarkup(<LoginForm action="/api/v1/auth/login" next="/" error={code} />),
+    ).toContain(text);
+  });
 });

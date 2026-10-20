@@ -3,6 +3,7 @@ export const PLATFORM_PATHS = {
   login: '/login',
   home: '/',
   dashboard: '/dashboard',
+  users: '/admin/users',
   loginApi: '/api/v1/auth/login',
   logoutApi: '/api/v1/auth/logout',
 } as const;

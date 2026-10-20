@@ -41,14 +41,28 @@ Conventions apply to every zone (D-012). Module endpoints are specified by their
 - Errors (JSON): 400 `VALIDATION_FAILED`, 401 `UNAUTHENTICATED` ("Email or password is incorrect." for any credential problem), 429 `RATE_LIMITED`.
 - Audited as `auth.login`.
 
+### `GET /api/v1/auth/google/start?next=/path` — public (D-030)
+404 `NOT_FOUND` when `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are not set. Otherwise 303 to Google's authorization endpoint (from Google's discovery document) with `scope=openid email profile`, `state`, `nonce`, PKCE `code_challenge` (S256), `hd=elevateeducation.in` (hint only), `prompt=select_account`, and `Set-Cookie: elevate_google_signin=…; Path=/api/v1/auth/google; Max-Age=600; HttpOnly; SameSite=Lax[; Secure]` (state, nonce, verifier and the safe relative `next`, HMAC'd with `SESSION_SECRET`). An unsafe `next` (`//x`, `https://x`) becomes `/`.
+
+### `GET /api/v1/auth/google/callback` — public (D-030)
+404 when not configured. Verifies the state cookie (constant-time, ≤ 10 min old), exchanges the code (with the PKCE verifier), verifies the ID token (RS256 against Google's JWKS, `iss`, `aud`, `exp`/`iat` ±5 min, `nonce`, `email_verified`, `hd = elevateeducation.in`, organisation email), finds or creates the user (no roles; audited `user.created_via_google`), then sets `elevate_session` exactly like the password login (audited `auth.login`, `metadata.method = "google"`) and 303s to `next`. Refusals 303 to `/login?error=<code>&next=…`: `google_cancelled` (Google returned `access_denied`), `google_expired` (state cookie missing, expired, tampered or not matching), `google_domain` (not a verified @elevateeducation.in Workspace account), `google_disabled` (account switched off), `google_failed` (any token problem), `locked` (50 refusals per IP / 15 min), `unavailable` (server error). The state cookie is cleared on every outcome.
+
 ### `POST /api/v1/auth/logout` — any
 Revokes the current session (if any), clears the cookie. JSON → 200 `{ "data": { "signedOut": true } }`; form → 303 `Location: /login`. Audited as `auth.logout`.
 
 ### `GET /api/v1/auth/me` — permission `authenticated`
 200 `{ "data": { "id", "email", "displayName", "roles": [..], "modules": ["platform", …], "permissions": { "<permission>": "all" | "own" } } }`; 401 without a session.
 
+### Users & roles (D-030) — `/api/v1/admin/users/**`
+All JSON; errors are the standard envelope. Nobody may change their own roles or status (403); the last active `platform_admin` cannot lose the role or be disabled (409). Every change is audited (`user.created`, `user.roles_changed`, `user.disabled`, `user.enabled`).
+- `GET /api/v1/admin/users?q=&role=<role key>|none&status=active|disabled&sort=name|email|created|last_sign_in&dir=asc|desc&page=` — `platform:users:read`. 200 `{ data: { items: [{ id, email, displayName, status, roles, lastLoginAt, createdAt, viaGoogle }], total, page, pageSize: 25 } }`; 400 for an unknown role or sort.
+- `POST /api/v1/admin/users` `{ email, displayName, roles? }` — `platform:users:manage` (+ `platform:roles:manage` when `roles` is not empty). 201 `{ data: { id } }`; 403 outside @elevateeducation.in; 400 malformed email, empty name or unknown role; 409 duplicate email. No password is set.
+- `GET /api/v1/admin/users/[id]` — `platform:users:read`. 200 `{ data: { user: { id, email, displayName, status, hasPassword, lastLoginAt, createdAt, viaGoogle }, roles, history: [{ id, at, action, actorName, before, after }] } }` (last 50 audit rows on that account); 404.
+- `PUT /api/v1/admin/users/[id]/roles` `{ roles: [...] }` — `platform:roles:manage`. Replaces the role set. 200 `{ data: { id, roles } }`; 400 unknown key; 403 own account; 404; 409 last admin.
+- `PUT /api/v1/admin/users/[id]/status` `{ status: "active" | "disabled" }` — `platform:users:manage`. Disabling revokes every session. 200 `{ data: { id, status, sessionsRevoked } }`; 403 own account; 404; 409 last admin.
+
 ### Pages
-`/login` (public), `/` (home; `platform:module:access`), `/dashboard` (`platform:dashboard:read`; states honestly that consolidated reporting arrives in wave 3 — no figures).
+`/login` (public), `/` (home; `platform:module:access`), `/dashboard` (`platform:dashboard:read`; states honestly that consolidated reporting arrives in wave 3 — no figures), `/admin/users` and `/admin/users/[id]` (Users & roles; `platform:users:read`, changes need the permissions above).
 
 ## 3. Endpoints every module skeleton provides
 | Method | Path | Access | Notes |
@@ -57,7 +71,7 @@ Revokes the current session (if any), clears the cookie. JSON → 200 `{ "data":
 | POST | `/<base>/api/v1/auth/login` | public | Same contract as the platform login; form failures redirect to `/<base>/login?error=…` |
 | POST | `/<base>/api/v1/auth/logout` | any | Form → 303 `/<base>/login` |
 | page | `/<base>` | `<module>:module:access` | AppShell home |
-| page | `/<base>/login` | public | Standalone sign-in |
+| page | `/<base>/login` | public | Standalone sign-in; shows "Sign in with Google" (a link to `PLATFORM_URL/api/v1/auth/google/start?next=/<base>…`) when Google sign-in is configured |
 
 ## 4. Planned internal endpoints (wave 2/3, contracts fixed now)
 | Method | Path | Contract | Callers |

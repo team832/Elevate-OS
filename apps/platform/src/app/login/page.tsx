@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { googleSignInHref } from '@elevate/authentication';
 import { safeRelativePath } from '@elevate/shared-contracts';
 import { getCurrentUser } from '@elevate/server-kit/next';
 import { LoginForm } from '@elevate/shared-ui';
@@ -20,5 +21,12 @@ export default async function LoginPage({
   );
   const error = typeof params.error === 'string' ? params.error : undefined;
   if (!error && (await getCurrentUser())) redirect(next);
-  return <LoginForm action={PLATFORM_PATHS.loginApi} next={next} error={error} />;
+  return (
+    <LoginForm
+      action={PLATFORM_PATHS.loginApi}
+      next={next}
+      error={error}
+      googleHref={googleSignInHref(next)}
+    />
+  );
 }

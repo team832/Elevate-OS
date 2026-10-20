@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { createLogger, loadEnvKeys } from '@elevate/configuration';
-import { getDb, insertAuditEvent, users, type Database } from '@elevate/database';
+import { getDb, insertAuditEvent, userRoles, users, type Database } from '@elevate/database';
 import {
   ForbiddenError,
   RateLimitedError,
@@ -12,7 +12,7 @@ import {
   seeOther,
   successResponse,
 } from '@elevate/shared-contracts';
-import type { ModuleKey, UserId } from '@elevate/shared-types';
+import type { ModuleKey, RoleKey, UserId } from '@elevate/shared-types';
 import {
   SESSION_COOKIE,
   clearSessionCookie,
@@ -96,7 +96,7 @@ export interface AuthHandlerOptions {
   ipThrottle?: LoginThrottle;
 }
 
-function clientIp(request: Request): string {
+export function clientIp(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
   return forwarded?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown';
 }
@@ -120,7 +120,96 @@ async function readBody(request: Request): Promise<unknown> {
   }
 }
 
-function withQuery(path: string, params: Record<string, string>): string {
+/** Roles a BOOTSTRAP_OWNER_EMAILS address holds after signing in (first administrator, D-030). */
+export const BOOTSTRAP_ROLES = ['director', 'platform_admin'] as const satisfies readonly RoleKey[];
+
+/**
+ * If the signing-in email is listed in BOOTSTRAP_OWNER_EMAILS, add the missing
+ * BOOTSTRAP_ROLES and audit `role.bootstrapped` (only when something was added).
+ * An invalid list throws ConfigurationError, so sign-in fails loudly until it is fixed.
+ */
+async function bootstrapOwner(
+  tx: Database,
+  input: { userId: UserId; module: ModuleKey; requestId: string },
+  email: string,
+): Promise<void> {
+  const owners = loadEnvKeys(['BOOTSTRAP_OWNER_EMAILS']).BOOTSTRAP_OWNER_EMAILS;
+  if (!owners.includes(email) || !isAllowedEmail(email, 'production')) return;
+  const added = await tx
+    .insert(userRoles)
+    .values(BOOTSTRAP_ROLES.map((role) => ({ userId: input.userId, role })))
+    .onConflictDoNothing()
+    .returning({ role: userRoles.role });
+  if (added.length === 0) return;
+  await insertAuditEvent(tx, {
+    actorType: 'system',
+    module: input.module,
+    action: 'role.bootstrapped',
+    entityType: 'user',
+    entityId: input.userId,
+    requestId: input.requestId,
+    after: { roles: added.map((r) => r.role).sort() },
+    metadata: { source: 'BOOTSTRAP_OWNER_EMAILS' },
+  });
+  log.warn('bootstrap owner roles granted', { requestId: input.requestId, userId: input.userId });
+}
+
+/**
+ * Create a session for an already-verified user, stamp `last_login_at`, audit
+ * `auth.login` (with the sign-in method) in one transaction, and return the
+ * `Set-Cookie` value. Shared by password and Google sign-in.
+ */
+export async function openSession(
+  db: Database,
+  request: Request,
+  input: {
+    userId: UserId;
+    secret: string;
+    module: ModuleKey;
+    requestId: string;
+    method: 'password' | 'google';
+  },
+): Promise<{ cookie: string; expiresAt: Date }> {
+  const session = await db.transaction(async (tx) => {
+    const created = await createSession(tx as unknown as Database, {
+      userId: input.userId,
+      secret: input.secret,
+      ipAddress: clientIp(request),
+      userAgent: request.headers.get('user-agent'),
+    });
+    const [signedIn] = await tx
+      .update(users)
+      .set({ lastLoginAt: new Date() })
+      .where(eq(users.id, input.userId))
+      .returning({ email: users.email });
+    if (signedIn) await bootstrapOwner(tx as unknown as Database, input, signedIn.email);
+    await insertAuditEvent(tx as unknown as Database, {
+      actorType: 'user',
+      actorUserId: input.userId,
+      module: input.module,
+      action: 'auth.login',
+      entityType: 'session',
+      entityId: created.sessionId,
+      requestId: input.requestId,
+      metadata: { method: input.method },
+    });
+    return created;
+  });
+  const cookie = serializeCookie(
+    SESSION_COOKIE,
+    session.token,
+    sessionCookieOptions(Math.floor(SESSION_TTL_MS / 1000)),
+  );
+  log.info('login succeeded', {
+    requestId: input.requestId,
+    module: input.module,
+    userId: input.userId,
+    method: input.method,
+  });
+  return { cookie, expiresAt: session.expiresAt };
+}
+
+export function withQuery(path: string, params: Record<string, string>): string {
   const query = new URLSearchParams(params).toString();
   return query ? `${path}?${query}` : path;
 }
@@ -173,31 +262,14 @@ export function createLoginHandler(options: AuthHandlerOptions) {
         throw new UnauthenticatedError('Email or password is incorrect.');
       }
       throttle.reset(key);
-      const session = await db.transaction(async (tx) => {
-        const created = await createSession(tx as unknown as Database, {
-          userId: user.userId,
-          secret,
-          ipAddress: ip,
-          userAgent: request.headers.get('user-agent'),
-        });
-        await tx.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.userId));
-        await insertAuditEvent(tx as unknown as Database, {
-          actorType: 'user',
-          actorUserId: user.userId,
-          module: options.module,
-          action: 'auth.login',
-          entityType: 'session',
-          entityId: created.sessionId,
-          requestId,
-        });
-        return created;
+      const session = await openSession(db, request, {
+        userId: user.userId,
+        secret,
+        module: options.module,
+        requestId,
+        method: 'password',
       });
-      const cookie = serializeCookie(
-        SESSION_COOKIE,
-        session.token,
-        sessionCookieOptions(Math.floor(SESSION_TTL_MS / 1000)),
-      );
-      log.info('login succeeded', { requestId, module: options.module, userId: user.userId });
+      const { cookie } = session;
       if (form) return seeOther(nextPath, { 'set-cookie': cookie });
       const roles = await loadRoles(db, user.userId);
       return successResponse(

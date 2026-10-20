@@ -241,5 +241,43 @@ Baseline generated on 20 Oct 2026: `packages/database/migrations/0000_baseline.s
 ### Generated documents to rerun
 `docs/SECURITY_AND_PERMISSIONS.md` is generated: run `npm run docs:permissions` after the permission list is final (IR-OPS-04). It was not edited by hand. `apps/business-ops-os/docs/PERMISSIONS.md` was generated from the same source on 19 Oct 2026.
 
+## Google sign-in (D-030) — 20 Oct 2026
+
+### Features
+| # | Feature | Status | Evidence |
+|---|---|---|---|
+| G-01 | "Sign in with Google": OIDC authorization code + PKCE, signed 10-min state cookie, ID token verified locally (RS256 + JWKS, `iss`, `aud`, `exp`/`iat` ±5 min, `nonce`, `email_verified`, `hd`, production domain rule), first sign-in creates a user with no roles, disabled users refused, per-IP throttle, session + `auth.login` audit shared with the password login (`openSession`) | Tested (offline) | `packages/authentication/tests/google.test.ts` (32 tests: valid sign-in, account reuse, wrong/missing hd, unverified email, outside / fictional / look-alike domain, wrong aud/iss, expired, future iat, nonce mismatch, bad signature, unknown kid + JWKS refetch, malformed token, alg none, state mismatch, missing/tampered/expired state cookie, cancelled, disabled user, throttle, open redirects `//evil.com`, `https://evil.com`, `/\evil.com`) |
+| G-02 | Optional configuration `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (server-only, subset `googleSignIn`); routes answer 404 and the button is hidden when unset | Tested | `google.test.ts` ("answers 404 … button link is absent"); `apps/platform/tests/integration/google-routes.test.ts` |
+| G-03 | Platform routes `GET /api/v1/auth/google/start` and `/callback` | Tested + manual | Smoke run below |
+| G-04 | Login pages (platform + three zones): "Use your @elevateeducation.in account.", "Sign in with Google" link-button (to `PLATFORM_URL/api/v1/auth/google/start?next=<zone path>`) only when configured, messages for the `google_*` error codes | Tested | `packages/shared-ui/tests/shared-ui.test.tsx`; smoke run below |
+| G-05 | Owner setup guide | Implemented | `docs/GOOGLE_SIGN_IN_SETUP.md` (labels marked *(not verified)* could not be checked against the live console) |
+| G-06 | Real Google round trip with the owner's client | **Not verified** | Needs the owner's client ID and secret (setup guide) |
+
+### Commands run and results
+- `npx tsc --noEmit -p <tsconfig>` for packages/authentication, packages/configuration, packages/shared-ui, apps/platform, apps/marketing-os, apps/academic-os, apps/business-ops-os → exit 0 each.
+- `npx eslint <changed files> --max-warnings=0` → exit 0.
+- `npx vitest run packages/authentication packages/configuration packages/shared-ui apps/platform` → `Test Files 15 passed (15)`, `Tests 146 passed | 1 todo (147)`.
+- `npm run secret-scan` → `secret-scan — OK (973 files checked, no secrets or .env files found).`
+- `npx vitest run apps/marketing-os apps/academic-os apps/business-ops-os` (login pages changed) → `Test Files 14 failed | 56 passed (70)`, `Tests 766 passed | 84 skipped`; all 14 were business-ops-os files that failed to start while other agents were running tests at the same time (suite-level, not assertions). Rerun: `leads.test.ts` alone → 10 passed; the other 13 with `--maxWorkers=2` → `Test Files 13 passed (13)`, `Tests 74 passed (74)`.
+- `npm run build -w @elevate/platform` → success; `/api/v1/auth/google/start` and `/callback` listed as dynamic routes.
+- Mutation probe: with the `hd` check removed, 3 tests fail (wrong hd, missing hd, throttle); check restored.
+- Live discovery check (public GETs, no credentials): Google's discovery document parsed (`https://accounts.google.com/o/oauth2/v2/auth`), the real JWKS (2 RSA keys) parsed into keys, and a token we signed ourselves under a real Google key ID was refused with `bad signature`.
+- Smoke (`next start --port 3100` with `PLATFORM_URL=http://localhost:3100` and dummy `test-only-` Google values, stopped afterwards): `/login` shows the domain line and the Google link; `/api/v1/auth/google/start?next=//evil.com` → 303 to `accounts.google.com/o/oauth2/v2/auth` with all parameters, `Set-Cookie: elevate_google_signin=…; Path=/api/v1/auth/google; Max-Age=600; HttpOnly; Secure; SameSite=Lax`; `/callback?code=x&state=y` without the cookie → 303 `/login?error=google_expired&next=%2F`; `/callback?error=access_denied` → 303 `/login?error=google_cancelled&next=%2F`.
+
+### Known limitations
+- A first-time Google user sees "No access" until an administrator gives roles on Users & roles (below).
+- The per-IP throttle is in memory per process (same limitation as the password login).
+- The "G" logo is not shown (text-only button): Google's official mark could not be verified for inline use, and Google requires it on a white background, which the dark theme does not give.
+
+## Users & roles and first-owner bootstrap (D-030) — 20 Oct 2026
+
+| # | Feature | Status | Evidence |
+|---|---|---|---|
+| U-01 | `BOOTSTRAP_OWNER_EMAILS` (optional; exact @elevateeducation.in only): listed email gets `platform_admin` + `director` at password or Google sign-in, audited `role.bootstrapped` once | Tested | `packages/authentication/tests/bootstrap.test.ts` (listed once, unlisted nothing, invalid list → sign-in 500 and no session, rule = `isAllowedEmail(…, 'production')`); `google.test.ts` (Google path); `packages/configuration/tests/env.test.ts` |
+| U-02 | `/admin/users` list (search, role / status / "No roles yet" filters, sort, 25 per page, "via Google") and `/admin/users/[id]` (roles checklist, Save roles, Disable / Enable account with confirmation, history); sidebar "Users & roles" + Settings link for `platform:users:read` | Tested | `apps/platform/tests/integration/admin-users-pages.test.ts` (signed-out redirect, teacher "No access" and no links, director allowed); manual `next start` check below |
+| U-03 | API `GET/POST /api/v1/admin/users`, `GET /api/v1/admin/users/[id]`, `PUT …/[id]/roles`, `PUT …/[id]/status`; no self-change (403), last active admin kept (409), unknown role 400, outside domain 403, duplicate 409, disabling revokes sessions, every change audited | Tested | `apps/platform/tests/integration/admin-users.test.ts` (26 tests: 401/403 per route, director/auditor read-only, add person, role save, disable/enable, last admin, list filters, detail) |
+
+Commands (20 Oct 2026): `npx tsc --noEmit -p` apps/platform, packages/authentication, packages/configuration → exit 0 each; `npx eslint <changed files> --max-warnings=0` → exit 0; `npx vitest run packages/authentication packages/configuration apps/platform` → `Test Files 17 passed (17)`, `Tests 160 passed | 1 todo (161)`; `npm run build -w @elevate/platform` → success, the two pages and four API routes listed. Manual: `next start --port 3010` on a scratch PGlite with fictional @elevateeducation.in users (stopped afterwards): signed-out `/admin/users` → 307 `/login?next=%2Fadmin%2Fusers`; admin → 200 with "No roles yet" and "via Google"; teacher → "No access"; detail shows Save roles and Disable account, own account shows the "your own account" note and neither; `PUT …/roles` → 200; `PUT` own status → 403. Not verified: a browser walk-through with screenshots, axe and keyboard-only use.
+
 ## Integration (wave 3)
 _Owned by the Integration agent._ Pending: baseline migration, cross-module tests (enrolment handoff end to end), consumer scheduler, platform consolidated dashboard from the summary contracts, docs reconciliation (`npm run docs:permissions`).

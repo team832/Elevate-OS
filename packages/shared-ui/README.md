@@ -24,7 +24,7 @@ Near-black sidebar (`--el-ink #16140F`), warm off-white canvas (`--el-bg #F5F4F1
 | `SourceBadge` | "Sample data" label for fictional data; renders nothing for live data. |
 | `PageHeader`, `Card` (+ `actions`, `meta`, `id`) | Page and panel headings. |
 | `DataTable` (+ `compact`) | `columns`, `rows`, `rowKey`, `caption`, `empty`. `compact` rows become labelled blocks on phones. |
-| `StatusBadge`, `FeatureStatusBadge`, `Button`, `ButtonLink`, `Field`, `TextInput`, `Select`, `TextArea`, `Checkbox`, `Alert`, `EmptyState`, `ErrorState`, `LoadingState`, `StatTile`, `LoginForm` | As before. `LoginForm` now shows the zone's logo (basePath taken from its `action`). |
+| `StatusBadge`, `FeatureStatusBadge`, `Button`, `ButtonLink`, `Field`, `TextInput`, `Select`, `TextArea`, `Checkbox`, `Alert`, `EmptyState`, `ErrorState`, `LoadingState`, `StatTile`, `LoginForm` | As before. `LoginForm` now shows the zone's logo (basePath taken from its `action`), says "Use your @elevateeducation.in account.", shows a "Sign in with Google" link-button only when `googleHref` is passed, and has messages for the `google_*` error codes. |
 
 ## Swapping the logo
 Put the new PNG in the repo root and run

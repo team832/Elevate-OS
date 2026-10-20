@@ -1,4 +1,5 @@
 import {
+  createGoogleSignInHandlers,
   createLoginHandler,
   createLogoutHandler,
   type AuthHandlerOptions,
@@ -14,3 +15,4 @@ export const platformAuth: AuthHandlerOptions = {
 
 export const loginHandler = createLoginHandler(platformAuth);
 export const logoutHandler = createLogoutHandler(platformAuth);
+export const google = createGoogleSignInHandlers(platformAuth);

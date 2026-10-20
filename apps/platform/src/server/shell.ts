@@ -10,7 +10,10 @@ import { countUnread } from '@elevate/notifications';
 import type { AppShellProps } from '@elevate/shared-ui';
 import { PLATFORM_PATHS } from '../lib/shell';
 
-type Extras = Pick<AppShellProps, 'nav' | 'search' | 'myWorkHref' | 'unreadNotifications'>;
+type Extras = Pick<
+  AppShellProps,
+  'nav' | 'search' | 'myWorkHref' | 'settings' | 'unreadNotifications'
+>;
 
 /** Top-bar search: the first searchable list the user may open. */
 export function searchFor(user: AuthenticatedUser): AppShellProps['search'] {
@@ -24,8 +27,9 @@ export function searchFor(user: AuthenticatedUser): AppShellProps['search'] {
 
 export async function platformShell(
   user: AuthenticatedUser,
-  active: 'overview' | 'dashboard',
+  active: 'overview' | 'dashboard' | 'users',
 ): Promise<Extras> {
+  const canUsers = can(user, 'platform:users:read');
   let unread: number | null = null;
   if (can(user, 'platform:notifications:read')) {
     try {
@@ -35,17 +39,23 @@ export async function platformShell(
     }
   }
   return {
-    nav: can(user, 'platform:dashboard:read')
-      ? [
-          {
-            href: PLATFORM_PATHS.dashboard,
-            label: 'Leadership dashboard',
-            active: active === 'dashboard',
-          },
-        ]
-      : [],
+    nav: [
+      ...(can(user, 'platform:dashboard:read')
+        ? [
+            {
+              href: PLATFORM_PATHS.dashboard,
+              label: 'Leadership dashboard',
+              active: active === 'dashboard',
+            },
+          ]
+        : []),
+      ...(canUsers
+        ? [{ href: PLATFORM_PATHS.users, label: 'Users & roles', active: active === 'users' }]
+        : []),
+    ],
     search: searchFor(user),
     myWorkHref: can(user, 'ops:tasks:read') ? '/ops/tasks?view=mine' : undefined,
+    settings: canUsers ? { href: PLATFORM_PATHS.users } : undefined,
     unreadNotifications: unread,
   };
 }
