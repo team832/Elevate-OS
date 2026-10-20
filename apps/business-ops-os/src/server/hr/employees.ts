@@ -16,7 +16,7 @@ import {
   userRoles,
   type Database,
 } from '@elevate/database';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import { ForbiddenError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import type { DepartmentId, StaffMemberId } from '@elevate/shared-types';
 import { istToday } from '../../domain/dates';
@@ -32,6 +32,7 @@ import {
 import type { Actor } from '../context';
 import { assertHrScope, assertNotSelf, hrScope, hrScopeIds } from '../hr-scope';
 import { assertManager } from '../organisation';
+import { opsAudit } from '../ops-common';
 import { employeeVisibility, likePattern } from './access';
 import {
   assertDepartmentUsable,
@@ -46,6 +47,8 @@ import {
 } from './employee-core';
 import type { CreateEmployeeInput, EmployeeListQuery, UpdateEmployeeInput } from './schemas';
 import './wiring';
+
+const audit = opsAudit('employee');
 
 const manager = alias(staffMembers, 'manager');
 
@@ -83,7 +86,7 @@ function baseQuery(db: Database) {
 
 type RawRow = Awaited<ReturnType<ReturnType<typeof baseQuery>['execute']>>[number];
 
-function toRow(r: RawRow): EmployeeRow {
+function toRow(r: RawRow): EmployeeRow & Pick<RawRow, 'userId'> {
   return {
     ...r,
     employmentType: r.employmentType ?? 'not_recorded',
@@ -171,7 +174,7 @@ export async function listEmployees(db: Database, actor: Actor, query: EmployeeL
   };
 }
 
-async function loadRow(db: Database, staffId: string): Promise<EmployeeRow> {
+async function loadRow(db: Database, staffId: string) {
   const [r] = await baseQuery(db)
     .where(eq(opsEmployeeRecords.staffId, staffId as StaffMemberId))
     .limit(1);
@@ -216,16 +219,12 @@ export async function getEmployee(db: Database, actor: Actor, staffId: string) {
   let roles: string[] | null = null;
   let lifecycle: Awaited<ReturnType<typeof lifecycleCases>> | null = null;
   if (tiers.record) {
-    const [staff] = await db
-      .select({ userId: staffMembers.userId })
-      .from(staffMembers)
-      .where(eq(staffMembers.id, row.staffId as StaffMemberId));
-    roles = staff?.userId
+    roles = row.userId
       ? (
           await db
             .select({ role: userRoles.role })
             .from(userRoles)
-            .where(eq(userRoles.userId, staff.userId))
+            .where(eq(userRoles.userId, row.userId))
             .orderBy(asc(userRoles.role))
         ).map((r) => r.role as string)
       : [];
@@ -308,45 +307,21 @@ export async function createEmployee(
   const scope = await hrScope(db, actor, 'ops:employees:manage');
   if (scope.scope !== 'all')
     throw new ForbiddenError('Creating employees needs HR access to all records.');
+  const { existingStaffId, fullName, departmentId, title, managerId, ...record } = input;
   const result = await withTransaction(db, async (tx) => {
-    if (input.existingStaffId)
-      return registerExistingStaff(
-        tx,
-        actor,
-        input.existingStaffId as StaffMemberId,
-        {
-          workEmail: input.workEmail,
-          workPhone: input.workPhone,
-          workLocation: input.workLocation,
-          timezone: input.timezone,
-          employmentType: input.employmentType,
-          employmentStartDate: input.employmentStartDate,
-          employmentStatus: input.employmentStatus,
-        },
-        requestId,
-      );
-    if (!input.fullName)
+    if (existingStaffId)
+      return registerExistingStaff(tx, actor, existingStaffId as StaffMemberId, record, requestId);
+    if (!fullName)
       throw new ValidationError('Name is required.', {
         details: [{ location: 'body', path: ['fullName'], message: 'Required' }],
       });
-    return insertEmployee(
-      tx,
-      actor,
-      {
-        fullName: input.fullName,
-        workEmail: input.workEmail,
-        workPhone: input.workPhone,
-        workLocation: input.workLocation,
-        timezone: input.timezone,
-        departmentId: (input.departmentId as DepartmentId | null) ?? null,
-        title: input.title,
-        managerId: (input.managerId as StaffMemberId | null) ?? null,
-        employmentType: input.employmentType,
-        employmentStartDate: input.employmentStartDate,
-        employmentStatus: input.employmentStatus,
-      },
-      requestId,
-    );
+    const staff = {
+      fullName,
+      title,
+      departmentId: (departmentId as DepartmentId | null) ?? null,
+      managerId: (managerId as StaffMemberId | null) ?? null,
+    };
+    return insertEmployee(tx, actor, { ...record, ...staff }, requestId);
   });
   return { id: result.staffId, ...result };
 }
@@ -484,18 +459,19 @@ export async function updateEmployee(
     const fieldsChanged = Object.keys(input).filter((k) => !['effectiveOn', 'reason'].includes(k));
     const pick = (o: Record<string, unknown>) =>
       Object.fromEntries(NON_SENSITIVE_AUDIT_FIELDS.map((k) => [k, o[k] ?? null]));
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'employee.updated',
-      entityType: 'employee',
-      entityId: staff.id,
-      before: pick(before),
-      after: pick(after),
-      // Work contacts are named, never copied (OPS-037).
-      metadata: { fieldsChanged, effectiveOn },
+    await audit(
+      tx,
+      actor,
+      staff.id,
+      'employee.updated',
+      {
+        before: pick(before),
+        after: pick(after),
+        // Work contacts are named, never copied (OPS-037).
+        metadata: { fieldsChanged, effectiveOn },
+      },
       requestId,
-    });
+    );
   });
   return getEmployee(db, actor, staffId);
 }

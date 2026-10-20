@@ -13,7 +13,6 @@
  */
 import { and, desc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 import {
-  eventDeliveries,
   opsAdmissions,
   opsEnrolmentAttempts,
   opsLeads,
@@ -40,14 +39,16 @@ import {
 } from '@elevate/shared-contracts';
 import type { IntegrationEventId, LeadId, StaffMemberId, StudentId } from '@elevate/shared-types';
 import { retryDecision } from '../domain/students';
-import { accessScope, notFound, userIdsForStaff, userIdsWithRole, type Actor } from './context';
-import { ACADEMIC_INTAKE_CONSUMER, assertAdmissionAccess } from './admissions';
+import { accessScope, userIdsForStaff, userIdsWithRole, notFound, type Actor } from './context';
+import { opsAudit } from './ops-common';
+import { academicDeliveryOf, handoffInputOf, leadOwnerOf, lockAccessible } from './admissions';
 import { applyTransition, lockAdmission, type AdmissionRow } from './pipeline';
 import { loadSettings } from './settings';
 
 export const ENROLMENT_REPLIES_CONSUMER = OPS_ENROLMENT_REPLIES_CONSUMER;
 
 type RequestPayload = EventPayload<'ops.admission.enrolment_requested', 1>;
+type Reply = IntegrationEvent<'academic.enrolment.confirmed' | 'academic.enrolment.rejected'>;
 
 /**
  * The Academic student id Ops already holds for the same person (OPS-076):
@@ -64,13 +65,12 @@ export async function knownStudentIdForPerson(
     .select({ id: opsLeads.id })
     .from(opsLeads)
     .where(eq(opsLeads.mergedIntoLeadId, leadId));
-  const leadIds = [leadId, ...merged.map((m) => m.id)];
   const [row] = await tx
     .select({ studentId: opsAdmissions.studentId })
     .from(opsAdmissions)
     .where(
       and(
-        inArray(opsAdmissions.leadId, leadIds),
+        inArray(opsAdmissions.leadId, [leadId, ...merged.map((m) => m.id)]),
         ne(opsAdmissions.id, excludeAdmissionId as never),
         isNotNull(opsAdmissions.studentId),
       ),
@@ -78,25 +78,6 @@ export async function knownStudentIdForPerson(
     .orderBy(desc(opsAdmissions.enrolledAt))
     .limit(1);
   return row?.studentId ?? null;
-}
-
-/** Academic's delivery state of a request event (consumer academic.enrolment-intake). */
-export async function academicDeliveryOf(db: Database, eventId: IntegrationEventId | null) {
-  if (!eventId) return null;
-  const [d] = await db
-    .select({
-      status: eventDeliveries.status,
-      attempts: eventDeliveries.attempts,
-      lastError: eventDeliveries.lastError,
-    })
-    .from(eventDeliveries)
-    .where(
-      and(
-        eq(eventDeliveries.eventId, eventId),
-        eq(eventDeliveries.consumer, ACADEMIC_INTAKE_CONSUMER),
-      ),
-    );
-  return d ?? null;
 }
 
 /** Update the attempt row of a request event (no-op for requests made before attempts were tracked). */
@@ -109,6 +90,13 @@ async function updateAttempt(
     .update(opsEnrolmentAttempts)
     .set(patch)
     .where(eq(opsEnrolmentAttempts.requestEventId, requestEventId as IntegrationEventId));
+}
+
+/** The given fields without empty ones (the v1 payload omits absent optional fields). */
+function present<T extends Record<string, string | null | undefined>>(fields: T) {
+  return Object.fromEntries(Object.entries(fields).filter(([, v]) => v)) as Partial<
+    Record<keyof T, string>
+  >;
 }
 
 /** Build (and validate) the v1 payload from the admission and its lead. */
@@ -131,40 +119,43 @@ async function buildPayload(
     lead.ownerStaffId) as StaffMemberId | null;
   if (!counsellorStaffId)
     throw new ValidationError('Assign a counsellor before requesting enrolment.');
-  const existingStudentId = await knownStudentIdForPerson(tx, lead.id, admission.id);
   const payload = {
     admissionId: admission.id,
     leadId: lead.id,
     attempt,
     programmeCode: programme?.code ?? '',
-    ...(admission.intendedCourseId ? { intendedCourseId: admission.intendedCourseId } : {}),
-    ...(admission.intendedBatchId ? { intendedBatchId: admission.intendedBatchId } : {}),
-    ...(admission.deliveryMode ? { deliveryMode: admission.deliveryMode } : {}),
-    ...(admission.intendedStartDate ? { intendedStartDate: admission.intendedStartDate } : {}),
+    ...present({
+      intendedCourseId: admission.intendedCourseId,
+      intendedBatchId: admission.intendedBatchId,
+      deliveryMode: admission.deliveryMode,
+      intendedStartDate: admission.intendedStartDate,
+    }),
     student: {
       fullName: lead.studentName,
-      ...(lead.preferredName ? { preferredName: lead.preferredName } : {}),
-      ...(lead.currentStage ? { currentStage: lead.currentStage } : {}),
-      ...(lead.schoolBoard ? { schoolBoard: lead.schoolBoard } : {}),
-      ...(lead.studentEmail ? { email: lead.studentEmail } : {}),
-      ...(lead.studentPhone ? { phone: lead.studentPhone } : {}),
-      ...(lead.city ? { city: lead.city } : {}),
+      ...present({
+        preferredName: lead.preferredName,
+        currentStage: lead.currentStage,
+        schoolBoard: lead.schoolBoard,
+        email: lead.studentEmail,
+        phone: lead.studentPhone,
+        city: lead.city,
+      }),
     },
     ...(lead.guardianName
       ? {
           guardian: {
             fullName: lead.guardianName,
-            relationship: (lead.guardianRelationship ?? 'guardian') as
-              'mother' | 'father' | 'guardian' | 'other',
-            ...(lead.guardianEmail ? { email: lead.guardianEmail } : {}),
-            ...(lead.guardianPhone ? { phone: lead.guardianPhone } : {}),
+            relationship: lead.guardianRelationship ?? 'guardian',
+            ...present({ email: lead.guardianEmail, phone: lead.guardianPhone }),
           },
         }
       : {}),
     counsellorStaffId,
     requestedByUserId: requestedBy,
-    ...(notes ? { notes } : {}),
-    ...(existingStudentId ? { existingStudentId } : {}),
+    ...present({
+      notes,
+      existingStudentId: await knownStudentIdForPerson(tx, lead.id, admission.id),
+    }),
   };
   const parsed = enrolmentRequestedV1Payload.safeParse(payload);
   if (!parsed.success) {
@@ -177,6 +168,22 @@ async function buildPayload(
     });
   }
   return payload as RequestPayload;
+}
+
+/** Publish the request event of `attempt` (idempotency key = admission + attempt). */
+async function publishRequest(
+  tx: Database,
+  admission: AdmissionRow,
+  attempt: number,
+  actor: Actor,
+  notes: string | null,
+) {
+  return publishEvent(tx, {
+    type: 'ops.admission.enrolment_requested',
+    version: 1,
+    idempotencyKey: enrolmentKeys.request(admission.id, attempt),
+    payload: await buildPayload(tx, admission, attempt, actor.id, notes),
+  });
 }
 
 /**
@@ -193,38 +200,23 @@ export async function requestEnrolment(
   const access = await accessScope(db, actor, 'ops:admissions:write');
   const settings = await loadSettings(db);
   return withTransaction(db, async (tx) => {
-    const admission = await lockAdmission(tx, admissionId);
-    if (!admission) notFound('Admission');
-    await assertAdmissionAccess(tx, access, admission);
+    const admission = await lockAccessible(tx, access, admissionId);
     const attempt = admission.enrolmentAttempt + 1;
-    // Check the transition before building the payload (clear 409 on double submit).
-    if (admission.status !== 'admitted') {
-      await applyTransition(tx, {
-        admission,
-        to: 'enrolment_requested',
-        actorType: 'user',
-        actorUserId: actor.id,
-        context: { viaEnrolmentHandoff: true },
-        settings,
-      });
-    }
-    const payload = await buildPayload(tx, admission, attempt, actor.id, options.notes ?? null);
-    const event = await publishEvent(tx, {
-      type: 'ops.admission.enrolment_requested',
-      version: 1,
-      idempotencyKey: enrolmentKeys.request(admission.id, attempt),
-      payload,
-    });
-    const updated = await applyTransition(tx, {
+    const transition = {
       admission,
-      to: 'enrolment_requested',
-      actorType: 'user',
+      to: 'enrolment_requested' as const,
       actorUserId: actor.id,
+      context: { viaEnrolmentHandoff: true },
+      settings,
+    };
+    // Check the transition before building the payload (clear 409 on double submit).
+    if (admission.status !== 'admitted') await applyTransition(tx, transition);
+    const event = await publishRequest(tx, admission, attempt, actor, options.notes ?? null);
+    const updated = await applyTransition(tx, {
+      ...transition,
       reason: `Enrolment requested from Academic OS (attempt ${attempt})`,
       eventId: event.id,
-      context: { viaEnrolmentHandoff: true },
       requestId: options.requestId,
-      settings,
       patch: {
         enrolmentAttempt: attempt,
         handoffStatus: 'pending',
@@ -268,21 +260,15 @@ export async function retryEnrolmentHandoff(
   requestId?: string,
 ) {
   const access = await accessScope(db, actor, 'ops:admissions:write');
-  if (!input.reason?.trim())
+  const reason = input.reason?.trim();
+  if (!reason)
     throw new ValidationError('Give the reason for retrying the handoff.', {
       details: [{ location: 'body', path: ['reason'], message: 'Reason required' }],
     });
   return withTransaction(db, async (tx) => {
-    const admission = await lockAdmission(tx, admissionId);
-    if (!admission) notFound('Admission');
-    await assertAdmissionAccess(tx, access, admission);
+    const admission = await lockAccessible(tx, access, admissionId);
     const delivery = await academicDeliveryOf(tx, admission.lastRequestEventId);
-    const decision = retryDecision({
-      status: admission.status as never,
-      handoffStatus: admission.handoffStatus,
-      enrolmentAttempt: admission.enrolmentAttempt,
-      academicDelivery: delivery,
-    });
+    const decision = retryDecision(handoffInputOf(admission, delivery));
     if (!decision.allowed) throw new InvalidStateTransitionError(decision.reason);
     if (decision.via !== 'retry')
       throw new InvalidStateTransitionError(
@@ -290,13 +276,7 @@ export async function retryEnrolmentHandoff(
       );
     const previousEventId = admission.lastRequestEventId;
     const attempt = admission.enrolmentAttempt + 1;
-    const payload = await buildPayload(tx, admission, attempt, actor.id, input.reason.trim());
-    const event = await publishEvent(tx, {
-      type: 'ops.admission.enrolment_requested',
-      version: 1,
-      idempotencyKey: enrolmentKeys.request(admission.id, attempt),
-      payload,
-    });
+    const event = await publishRequest(tx, admission, attempt, actor, reason);
     const now = new Date();
     const [updated] = await tx
       .update(opsAdmissions)
@@ -326,21 +306,22 @@ export async function retryEnrolmentHandoff(
       attempt,
       requestEventId: event.id,
       kind: 'after_failure',
-      reason: input.reason.trim(),
+      reason,
       requestedBy: actor.id,
       requestedAt: now,
     });
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'enrolment.handoff_retried',
-      entityType: 'admission',
-      entityId: admission.id,
-      before: { attempt: admission.enrolmentAttempt, requestEventId: previousEventId },
-      after: { attempt, requestEventId: event.id, reason: input.reason.trim() },
+    await opsAudit('admission')(
+      tx,
+      actor,
+      admission.id,
+      'enrolment.handoff_retried',
+      {
+        before: { attempt: admission.enrolmentAttempt, requestEventId: previousEventId },
+        after: { attempt, requestEventId: event.id, reason },
+        metadata: { leadId: admission.leadId, eventId: event.id },
+      },
       requestId,
-      metadata: { leadId: admission.leadId, eventId: event.id },
-    });
+    );
     return { admission: updated, eventId: event.id, attempt, eventCreated: event.created };
   });
 }
@@ -352,13 +333,11 @@ async function notifyCounsellor(
   title: string,
   body: string,
 ) {
-  const [lead] = await tx
-    .select({ ownerStaffId: opsLeads.ownerStaffId })
-    .from(opsLeads)
-    .where(eq(opsLeads.id, admission.leadId));
-  const userIds = await userIdsForStaff(tx, [admission.counsellorStaffId, lead?.ownerStaffId]);
   await notify(tx, {
-    userIds,
+    userIds: await userIdsForStaff(tx, [
+      admission.counsellorStaffId,
+      await leadOwnerOf(tx, admission),
+    ]),
     module: 'ops',
     kind,
     title,
@@ -369,11 +348,7 @@ async function notifyCounsellor(
   });
 }
 
-async function ignoreReply(
-  tx: Database,
-  event: IntegrationEvent<'academic.enrolment.confirmed' | 'academic.enrolment.rejected'>,
-  reason: string,
-) {
+async function ignoreReply(tx: Database, event: Reply, reason: string) {
   await recordAudit(tx, {
     actorType: 'system',
     module: 'ops',
@@ -392,9 +367,8 @@ async function ignoreReply(
   });
   // A confirmation Ops cannot apply may mean Academic enrolled twice: a person must check (IR-OPS-ADM-2).
   if (confirmed && reason !== 'Already enrolled') {
-    const managers = await userIdsWithRole(tx, 'operations_manager');
     await notify(tx, {
-      userIds: managers,
+      userIds: await userIdsWithRole(tx, 'operations_manager'),
       module: 'ops',
       kind: 'enrolment.duplicate_risk',
       title: 'Academic OS confirmed a superseded enrolment request',
@@ -406,30 +380,44 @@ async function ignoreReply(
   }
 }
 
-/** academic.enrolment.confirmed → enrolled (idempotent). */
-export async function applyEnrolmentConfirmed(
-  event: IntegrationEvent<'academic.enrolment.confirmed'>,
-  { db: tx }: ConsumerContext,
-): Promise<void> {
+/**
+ * The admission a reply applies to, locked; null after ignoring (and auditing)
+ * a reply to an older request or to an admission no longer awaiting Academic.
+ */
+async function replyTarget(tx: Database, event: Reply): Promise<AdmissionRow | null> {
   const p = event.payload;
   const admission = await lockAdmission(tx, p.admissionId);
   // Unknown admission: retrying cannot help, but losing a reply silently is worse → fail (dead after retries).
   if (!admission) throw new Error(`Enrolment reply for unknown admission ${p.admissionId}`);
-  if (admission.lastRequestEventId !== p.requestEventId)
-    return ignoreReply(tx, event, 'Reply to an older or unknown enrolment request');
-  if (admission.status === 'enrolled') return ignoreReply(tx, event, 'Already enrolled');
-  if (admission.status !== 'enrolment_requested')
-    return ignoreReply(tx, event, `Admission is ${admission.status}, not awaiting Academic OS`);
-  const settings = await loadSettings(tx);
+  const ignored =
+    admission.lastRequestEventId !== p.requestEventId
+      ? 'Reply to an older or unknown enrolment request'
+      : event.type === 'academic.enrolment.confirmed' && admission.status === 'enrolled'
+        ? 'Already enrolled'
+        : admission.status !== 'enrolment_requested'
+          ? `Admission is ${admission.status}, not awaiting Academic OS`
+          : null;
+  if (!ignored) return admission;
+  await ignoreReply(tx, event, ignored);
+  return null;
+}
+
+/** academic.enrolment.confirmed → enrolled (idempotent). */
+async function applyEnrolmentConfirmed(
+  event: IntegrationEvent<'academic.enrolment.confirmed'>,
+  { db: tx }: ConsumerContext,
+): Promise<void> {
+  const p = event.payload;
+  const admission = await replyTarget(tx, event);
+  if (!admission) return;
   const updated = await applyTransition(tx, {
     admission,
     to: 'enrolled',
-    actorType: 'system',
     actorUserId: null,
     reason: 'Academic OS confirmed the enrolment',
     eventId: event.id,
     context: { viaEnrolmentReply: true },
-    settings,
+    settings: await loadSettings(tx),
     patch: {
       handoffStatus: 'enrolled',
       enrolmentId: p.enrolmentId,
@@ -455,27 +443,21 @@ export async function applyEnrolmentConfirmed(
 }
 
 /** academic.enrolment.rejected → back to admitted with the reason (re-request = attempt + 1). */
-export async function applyEnrolmentRejected(
+async function applyEnrolmentRejected(
   event: IntegrationEvent<'academic.enrolment.rejected'>,
   { db: tx }: ConsumerContext,
 ): Promise<void> {
   const p = event.payload;
-  const admission = await lockAdmission(tx, p.admissionId);
-  if (!admission) throw new Error(`Enrolment reply for unknown admission ${p.admissionId}`);
-  if (admission.lastRequestEventId !== p.requestEventId)
-    return ignoreReply(tx, event, 'Reply to an older or unknown enrolment request');
-  if (admission.status !== 'enrolment_requested')
-    return ignoreReply(tx, event, `Admission is ${admission.status}, not awaiting Academic OS`);
-  const settings = await loadSettings(tx);
+  const admission = await replyTarget(tx, event);
+  if (!admission) return;
   const updated = await applyTransition(tx, {
     admission,
     to: 'admitted',
-    actorType: 'system',
     actorUserId: null,
     reason: `Academic OS rejected the enrolment (${p.reasonCode}): ${p.reason}`,
     eventId: event.id,
     context: { viaEnrolmentReply: true },
-    settings,
+    settings: await loadSettings(tx),
     patch: {
       handoffStatus: 'rejected',
       rejectionCode: p.reasonCode,

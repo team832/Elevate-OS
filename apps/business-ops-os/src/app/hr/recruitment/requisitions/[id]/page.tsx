@@ -1,18 +1,23 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { Alert, Card, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import {
-  APPLICATION_STAGE_LABELS,
+  needsReason,
   REQUISITION_EMPLOYMENT_TYPES,
   REQUISITION_STATUS_LABELS,
-  type ApplicationStage,
+  REQUISITION_TRANSITIONS,
   type RequisitionStatus,
 } from '../../../../../domain/hr/recruitment';
 import { formOptions } from '../../../../../server/options';
 import { getRequisition, listCandidates } from '../../../../../server/hr/recruitment';
 import { ActionForm } from '../../../../../ui/action-form';
 import { fmtDateTime, humanise, statusTone } from '../../../../../ui/format';
-import { Frame, gate, load, Section } from '../../../../../ui/frame';
-import { HistoryPanel } from '../../_components/lifecycle-ui';
+import { load, Section } from '../../../../../ui/frame';
+import {
+  ApplicationsTable,
+  detailPage,
+  HistoryPanel,
+  REASON_FIELD,
+} from '../../_components/lifecycle-ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,29 +28,13 @@ const ACTION_LABELS: Record<RequisitionStatus, string> = {
   filled: 'Mark as filled',
   cancelled: 'Cancel requisition',
 };
-const NEEDS_REASON: RequisitionStatus[] = ['on_hold', 'cancelled'];
-
-export default async function RequisitionPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const access = await gate('ops:recruitment:read', `/ops/hr/recruitment/requisitions/${id}`);
-  return (
-    <Frame access={access} active="recruitment">
-      <p>
-        <a href="/ops/hr/recruitment">Back to recruitment</a>
-      </p>
-      <Section>
-        <Detail user={access.user} id={id} />
-      </Section>
-    </Frame>
-  );
-}
 
 async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
   const r = await load((db) => getRequisition(db, user, id));
   if (!r.ok) return r.view;
   const d = r.data;
   const req = d.requisition;
-  const status = req.status as RequisitionStatus;
+  const status = req.status;
   return (
     <div className="el-stack">
       <PageHeader
@@ -102,20 +91,20 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                 }
                 extra={{ to }}
                 variant={to === 'cancelled' ? 'danger' : to === 'open' ? 'primary' : 'secondary'}
-                fields={
-                  NEEDS_REASON.includes(to) || (status === 'on_hold' && to === 'open')
-                    ? [{ name: 'reason', label: 'Reason', required: true }]
-                    : []
-                }
+                fields={needsReason(REQUISITION_TRANSITIONS, status, to) ? [REASON_FIELD] : []}
               />
             ))}
           </div>
         </Card>
       ) : null}
       <Card title="Applications">
-        <DataTable
+        <ApplicationsTable
           rows={d.applications}
-          rowKey={(a) => a.id}
+          link={{
+            key: 'candidateCode',
+            header: 'Candidate',
+            text: (a) => `${a.candidateCode} ${a.candidateName}`,
+          }}
           empty={
             <EmptyState
               title="No applications yet"
@@ -126,31 +115,6 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
               }
             />
           }
-          columns={[
-            {
-              key: 'candidateCode',
-              header: 'Candidate',
-              render: (a) => (
-                <a href={`/ops/hr/recruitment/applications/${a.id}`}>
-                  {a.candidateCode} {a.candidateName}
-                </a>
-              ),
-            },
-            {
-              key: 'stage',
-              header: 'Stage',
-              render: (a) => (
-                <StatusBadge tone={statusTone(a.stage)}>
-                  {APPLICATION_STAGE_LABELS[a.stage as ApplicationStage]}
-                </StatusBadge>
-              ),
-            },
-            {
-              key: 'stageChangedAt',
-              header: 'Since',
-              render: (a) => fmtDateTime(a.stageChangedAt),
-            },
-          ]}
         />
       </Card>
       {d.canManage && status === 'open' ? (
@@ -167,6 +131,14 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
     </div>
   );
 }
+
+export default detailPage(
+  'ops:recruitment:read',
+  'recruitment',
+  '/ops/hr/recruitment/requisitions',
+  { href: '/ops/hr/recruitment', label: 'Back to recruitment' },
+  Detail,
+);
 
 async function AddApplication({
   user,

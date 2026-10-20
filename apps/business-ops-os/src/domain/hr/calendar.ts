@@ -45,9 +45,9 @@ export function isValidTimeZone(tz: unknown): tz is string {
 
 const partsFormatters = new Map<string, Intl.DateTimeFormat>();
 function formatterFor(tz: string): Intl.DateTimeFormat {
-  let f = partsFormatters.get(tz);
-  if (!f) {
-    f = new Intl.DateTimeFormat('en-US', {
+  const f =
+    partsFormatters.get(tz) ??
+    new Intl.DateTimeFormat('en-US', {
       timeZone: tz,
       hourCycle: 'h23',
       year: 'numeric',
@@ -57,8 +57,7 @@ function formatterFor(tz: string): Intl.DateTimeFormat {
       minute: '2-digit',
       second: '2-digit',
     });
-    partsFormatters.set(tz, f);
-  }
+  partsFormatters.set(tz, f);
   return f;
 }
 
@@ -110,10 +109,7 @@ export function zonedDate(instant: Date, tz: string): IsoDate {
 }
 
 /** Day of week of a calendar date: 0 = Sunday … 6 = Saturday. */
-export function weekday(date: IsoDate): number {
-  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
-  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-}
+export { weekdayOf as weekday } from '../dates';
 
 /** Every date from `from` to `to` inclusive (empty when to < from; capped at `max`). */
 export function eachDate(from: IsoDate, to: IsoDate, max = 400): IsoDate[] {

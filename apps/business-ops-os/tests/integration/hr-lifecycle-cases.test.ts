@@ -33,6 +33,7 @@ import {
   get,
   json,
   setupCast,
+  status,
   type Cast,
 } from './hr-lifecycle-fixtures';
 import { staffUser } from './fixtures';
@@ -44,6 +45,7 @@ beforeAll(async () => {
   cast = await setupCast(ctx.db);
 });
 
+type Who = { token: string };
 type Item = { id: string; kind: string; status: string; required: boolean; itemKey: string };
 type Detail = {
   case: { id: string; status: string; separationReason: string | null; reasonHidden: boolean };
@@ -52,8 +54,28 @@ type Detail = {
   canApprove: boolean;
 };
 
-const detail = async (who: { token: string }, id: string) =>
-  call<Detail>(getCase, get(who), { id });
+const detail = async (who: Who, id: string) => call<Detail>(getCase, get(who), { id });
+const open = (who: Who, body: Record<string, unknown>) => status(createCase, json(who, body));
+const openCase = async (body: Record<string, unknown>) => {
+  const c = await call<{ id: string; code: string }>(createCase, json(cast.hrManager, body));
+  return { ...c, id: c.data?.id as string };
+};
+const patchItem = (id: string, itemId: string, body: Record<string, unknown>) =>
+  status(updateItem, json(cast.hrManager, body, 'PATCH'), { id, itemId });
+const approveAs = (who: Who, id: string, body: Record<string, unknown> = { confirm: true }) =>
+  status(approve, json(who, body), { id });
+const employeeRecord = async (staffId: string) =>
+  (
+    await ctx.db
+      .select()
+      .from(opsEmployeeRecords)
+      .where(eq(opsEmployeeRecords.staffId, staffId as never))
+  )[0]!;
+const historyOf = (staffId: string) =>
+  ctx.db
+    .select()
+    .from(opsEmploymentHistory)
+    .where(eq(opsEmploymentHistory.staffId, staffId as never));
 
 async function resolveAll(id: string, skipKinds: string[] = []) {
   const d = (await detail(cast.hrManager, id)).data!;
@@ -71,52 +93,26 @@ async function resolveAll(id: string, skipKinds: string[] = []) {
 describe('onboarding cases', () => {
   it('gates completion on required items and needs an approver who is not the employee', async () => {
     const emp = await employeeWithLogin(ctx.db, { status: 'onboarding', roles: ['hr_manager'] });
-    expect(
-      (
-        await call(
-          createCase,
-          buildRequest('/ops/api/v1/hr/lifecycle-cases', {
-            json: { kind: 'onboarding', staffId: emp.staffId },
-          }),
-        )
-      ).status,
-    ).toBe(401);
-    expect(
-      (await call(createCase, json(cast.deptManager, { kind: 'onboarding', staffId: emp.staffId })))
-        .status,
-    ).toBe(403);
-    expect((await call(createCase, json(cast.hrManager, { kind: 'onboarding' }))).status).toBe(400);
-    const c = await call<{ id: string; code: string }>(
-      createCase,
-      json(cast.hrManager, { kind: 'onboarding', staffId: emp.staffId }),
-    );
+    const body = { kind: 'onboarding', staffId: emp.staffId };
+    const anonymous = buildRequest('/ops/api/v1/hr/lifecycle-cases', { json: body });
+    expect(await status(createCase, anonymous)).toBe(401);
+    expect(await open(cast.deptManager, body)).toBe(403);
+    expect(await open(cast.hrManager, { kind: 'onboarding' })).toBe(400);
+    const c = await openCase(body);
     expect(c.status).toBe(201);
     expect(c.data!.code).toMatch(/^HRC-\d{5}$/);
-    expect(
-      (await call(createCase, json(cast.hrManager, { kind: 'onboarding', staffId: emp.staffId })))
-        .status,
-    ).toBe(409);
-    const id = c.data!.id;
-    const blocked = await call(approve, json(cast.hrManager, { confirm: true }), { id });
-    expect(blocked.status).toBe(409);
+    expect(await open(cast.hrManager, body)).toBe(409);
+    const id = c.id;
+    expect(await approveAs(cast.hrManager, id)).toBe(409);
     // A required item cannot be skipped silently.
     const first = (await detail(cast.hrManager, id)).data!.items.find((i) => i.required)!;
-    expect(
-      (
-        await call(updateItem, json(cast.hrManager, { status: 'not_applicable' }, 'PATCH'), {
-          id,
-          itemId: first.id,
-        })
-      ).status,
-    ).toBe(400);
+    expect(await patchItem(id, first.id, { status: 'not_applicable' })).toBe(400);
     await resolveAll(id);
     expect((await detail(cast.hrManager, id)).data!.gaps).toEqual([]);
     // The employee (who is an HR manager here) cannot approve their own onboarding.
-    expect((await call(approve, json(emp, { confirm: true }), { id })).status).toBe(403);
-    expect((await call(approve, json(cast.hrContributor, { confirm: true }), { id })).status).toBe(
-      403,
-    );
-    expect((await call(approve, json(cast.hrManager, {}), { id })).status).toBe(400);
+    expect(await approveAs(emp, id)).toBe(403);
+    expect(await approveAs(cast.hrContributor, id)).toBe(403);
+    expect(await approveAs(cast.hrManager, id, {})).toBe(400);
     const ok = await call<{ status: string }>(
       approve,
       json(cast.hrManager, { confirm: true, comment: 'All set' }),
@@ -124,15 +120,8 @@ describe('onboarding cases', () => {
     );
     expect(ok.status).toBe(200);
     expect(ok.data!.status).toBe('completed');
-    const [rec] = await ctx.db
-      .select()
-      .from(opsEmployeeRecords)
-      .where(eq(opsEmployeeRecords.staffId, emp.staffId));
-    expect(rec!.employmentStatus).toBe('active');
-    const history = await ctx.db
-      .select()
-      .from(opsEmploymentHistory)
-      .where(eq(opsEmploymentHistory.staffId, emp.staffId));
+    expect((await employeeRecord(emp.staffId)).employmentStatus).toBe('active');
+    const history = await historyOf(emp.staffId);
     expect(history.some((h) => h.field === 'employment_status' && h.toValue === 'active')).toBe(
       true,
     );
@@ -144,42 +133,28 @@ describe('onboarding cases', () => {
       managerId: cast.deptManager.staffId,
     });
     const stranger = await employeeWithLogin(ctx.db, { status: 'onboarding' });
-    const a = await call<{ id: string }>(
-      createCase,
-      json(cast.hrManager, { kind: 'onboarding', staffId: report.staffId }),
-    );
-    const b = await call<{ id: string }>(
-      createCase,
-      json(cast.hrManager, { kind: 'onboarding', staffId: stranger.staffId }),
-    );
-    expect((await detail(cast.deptManager, a.data!.id)).status).toBe(200);
-    expect((await detail(cast.deptManager, b.data!.id)).status).toBe(403);
+    const a = await openCase({ kind: 'onboarding', staffId: report.staffId });
+    const b = await openCase({ kind: 'onboarding', staffId: stranger.staffId });
+    expect((await detail(cast.deptManager, a.id)).status).toBe(200);
+    expect((await detail(cast.deptManager, b.id)).status).toBe(403);
     const list = await call<{ rows: { id: string }[] }>(
       listCases,
       get(cast.deptManager, '/ops/api/v1/hr/lifecycle-cases'),
     );
     const ids = list.data!.rows.map((r) => r.id);
-    expect(ids).toContain(a.data!.id);
-    expect(ids).not.toContain(b.data!.id);
-    expect((await detail(cast.recruiter, a.data!.id)).status).toBe(403);
+    expect(ids).toContain(a.id);
+    expect(ids).not.toContain(b.id);
+    expect((await detail(cast.recruiter, a.id)).status).toBe(403);
   });
 
   it('overdue items get one reminder per IST day', async () => {
     const emp = await employeeWithLogin(ctx.db, { status: 'onboarding' });
-    const c = await call<{ id: string }>(
-      createCase,
-      json(cast.hrManager, { kind: 'onboarding', staffId: emp.staffId }),
-    );
-    const item = (await detail(cast.hrManager, c.data!.id)).data!.items[0]!;
-    await call(
-      updateItem,
-      json(
-        cast.hrManager,
-        { dueDate: addDays(istToday(new Date()), -3), assigneeStaffId: emp.staffId },
-        'PATCH',
-      ),
-      { id: c.data!.id, itemId: item.id },
-    );
+    const c = await openCase({ kind: 'onboarding', staffId: emp.staffId });
+    const item = (await detail(cast.hrManager, c.id)).data!.items[0]!;
+    await patchItem(c.id, item.id, {
+      dueDate: addDays(istToday(new Date()), -3),
+      assigneeStaffId: emp.staffId,
+    });
     const mine = () =>
       ctx.db
         .select()
@@ -218,33 +193,20 @@ describe('offboarding and separation', () => {
       })
       .returning();
     const lwd = addDays(istToday(new Date()), 5);
-    expect(
-      (
-        await call(
-          createCase,
-          json(cast.hrManager, {
-            kind: 'offboarding',
-            staffId: emp.staffId,
-            separationType: 'resignation',
-            noticeDate: addDays(lwd, 1),
-            lastWorkingDay: lwd,
-          }),
-        )
-      ).status,
-    ).toBe(400);
-    const c = await call<{ id: string }>(
-      createCase,
-      json(cast.hrManager, {
-        kind: 'offboarding',
-        staffId: emp.staffId,
-        separationType: 'resignation',
-        noticeDate: istToday(new Date()),
-        lastWorkingDay: lwd,
-        reason: 'Moving cities (fictional)',
-      }),
-    );
+    const resignation = {
+      kind: 'offboarding',
+      staffId: emp.staffId,
+      separationType: 'resignation',
+      lastWorkingDay: lwd,
+    };
+    expect(await open(cast.hrManager, { ...resignation, noticeDate: addDays(lwd, 1) })).toBe(400);
+    const c = await openCase({
+      ...resignation,
+      noticeDate: istToday(new Date()),
+      reason: 'Moving cities (fictional)',
+    });
     expect(c.status).toBe(201);
-    const id = c.data!.id;
+    const id = c.id;
     const d = (await detail(cast.hrManager, id)).data!;
     expect(d.items.filter((i) => i.kind === 'asset_return')).toHaveLength(1);
     expect(d.items.find((i) => i.kind === 'ownership_transfer')?.itemKey).toBe(
@@ -269,14 +231,7 @@ describe('offboarding and separation', () => {
     expect(JSON.stringify(audit)).not.toContain('Moving cities');
 
     const asset = d.items.find((i) => i.kind === 'asset_return')!;
-    expect(
-      (
-        await call(updateItem, json(cast.hrManager, { status: 'done' }, 'PATCH'), {
-          id,
-          itemId: asset.id,
-        })
-      ).status,
-    ).toBe(409);
+    expect(await patchItem(id, asset.id, { status: 'done' })).toBe(409);
     await ctx.db
       .update(opsAssetAssignments)
       .set({ returnedAt: new Date(), returnedBy: cast.hrManager.id })
@@ -285,21 +240,11 @@ describe('offboarding and separation', () => {
       (await detail(cast.hrManager, id)).data!.items.find((i) => i.id === asset.id)!.status,
     ).toBe('done');
 
-    const transferItem = d.items.find((i) => i.kind === 'ownership_transfer')!;
-    expect(
-      (
-        await call(transfer, json(cast.hrManager, { targetStaffId: emp.staffId }), {
-          id,
-          itemId: transferItem.id,
-        })
-      ).status,
-    ).toBe(400);
-    const t = await call(
-      transfer,
-      json(cast.hrManager, { targetStaffId: cast.deptManager.staffId }),
-      { id, itemId: transferItem.id },
-    );
-    expect(t.status).toBe(200);
+    const itemId = d.items.find((i) => i.kind === 'ownership_transfer')!.id;
+    const handTo = (targetStaffId: string) =>
+      status(transfer, json(cast.hrManager, { targetStaffId }), { id, itemId });
+    expect(await handTo(emp.staffId)).toBe(400);
+    expect(await handTo(cast.deptManager.staffId)).toBe(200);
     const [moved] = await ctx.db.select().from(opsTasks).where(eq(opsTasks.id, task!.id));
     expect(moved!.ownerStaffId).toBe(cast.deptManager.staffId);
   });
@@ -307,31 +252,21 @@ describe('offboarding and separation', () => {
   it('approval puts the employee on notice; separation publishes one event and history survives', async () => {
     const emp = await employeeWithLogin(ctx.db, { status: 'active', roles: ['hr_manager'] });
     const lwd = addDays(istToday(new Date()), 3);
-    const c = await call<{ id: string }>(
-      createCase,
-      json(cast.hrManager, {
-        kind: 'offboarding',
-        staffId: emp.staffId,
-        separationType: 'contract_end',
-        lastWorkingDay: lwd,
-      }),
-    );
-    const id = c.data!.id;
+    const { id } = await openCase({
+      kind: 'offboarding',
+      staffId: emp.staffId,
+      separationType: 'contract_end',
+      lastWorkingDay: lwd,
+    });
     await resolveAll(id, ['access_revocation']);
-    expect((await call(approve, json(emp, { confirm: true }), { id })).status).toBe(403);
-    expect((await call(approve, json(cast.deptManager, { confirm: true }), { id })).status).toBe(
-      403,
-    );
+    expect(await approveAs(emp, id)).toBe(403);
+    expect(await approveAs(cast.deptManager, id)).toBe(403);
     const ok = await call<{ status: string }>(approve, json(cast.director, { confirm: true }), {
       id,
     });
     expect(ok.status).toBe(200);
     expect(ok.data!.status).toBe('approved');
-    const [onNotice] = await ctx.db
-      .select()
-      .from(opsEmployeeRecords)
-      .where(eq(opsEmployeeRecords.staffId, emp.staffId));
-    expect(onNotice!.employmentStatus).toBe('on_notice');
+    expect((await employeeRecord(emp.staffId)).employmentStatus).toBe('on_notice');
 
     // Not due yet: nothing applied.
     expect((await runSeparations(ctx.db, lwd)).applied).toBe(0);
@@ -356,23 +291,16 @@ describe('offboarding and separation', () => {
       }),
     );
     expect(again.created).toBe(false);
-    const [sep] = await ctx.db
-      .select()
-      .from(opsEmployeeRecords)
-      .where(eq(opsEmployeeRecords.staffId, emp.staffId));
-    expect(sep!.employmentStatus).toBe('separated');
-    expect(sep!.employmentEndDate).toBe(lwd);
+    const sep = await employeeRecord(emp.staffId);
+    expect(sep.employmentStatus).toBe('separated');
+    expect(sep.employmentEndDate).toBe(lwd);
     const [staff] = await ctx.db
       .select()
       .from(staffMembers)
       .where(eq(staffMembers.id, emp.staffId));
     expect(staff!.status).toBe('inactive');
     // History is kept: employment history rows, the case and its audit trail all remain.
-    const history = await ctx.db
-      .select()
-      .from(opsEmploymentHistory)
-      .where(eq(opsEmploymentHistory.staffId, emp.staffId));
-    expect(history.map((h) => h.toValue)).toEqual(
+    expect((await historyOf(emp.staffId)).map((h) => h.toValue)).toEqual(
       expect.arrayContaining(['on_notice', 'separated']),
     );
     expect((await detail(cast.hrManager, id)).data!.case.status).toBe('completed');
@@ -399,19 +327,15 @@ describe('offboarding and separation', () => {
     await ctx.db
       .insert(opsEmployeeRecords)
       .values({ staffId: plain.staffId, employeeCode: 'EMP-8801', employmentStatus: 'active' });
-    const past = addDays(istToday(new Date()), -1);
-    const c = await call<{ id: string }>(
-      createCase,
-      json(cast.hrManager, {
-        kind: 'offboarding',
-        staffId: plain.staffId,
-        separationType: 'retirement',
-        lastWorkingDay: past,
-      }),
-    );
-    await resolveAll(c.data!.id, ['access_revocation']);
+    const { id } = await openCase({
+      kind: 'offboarding',
+      staffId: plain.staffId,
+      separationType: 'retirement',
+      lastWorkingDay: addDays(istToday(new Date()), -1),
+    });
+    await resolveAll(id, ['access_revocation']);
     const ok = await call<{ status: string }>(approve, json(cast.hrManager, { confirm: true }), {
-      id: c.data!.id,
+      id,
     });
     expect(ok.data!.status).toBe('completed');
     const items = await ctx.db
@@ -419,47 +343,30 @@ describe('offboarding and separation', () => {
       .from(opsLifecycleItems)
       .where(
         and(
-          eq(opsLifecycleItems.caseId, c.data!.id as never),
+          eq(opsLifecycleItems.caseId, id as never),
           eq(opsLifecycleItems.kind, 'access_revocation'),
         ),
       );
     expect(items[0]!.status).toBe('done');
-    expect((await call(runJob, json(cast.hrContributor, { job: 'separations' }))).status).toBe(403);
-    expect((await call(runJob, json(cast.hrManager, { job: 'nope' }))).status).toBe(400);
-    expect((await call(runJob, json(cast.hrManager, { job: 'separations' }))).status).toBe(200);
+    expect(await status(runJob, json(cast.hrContributor, { job: 'separations' }))).toBe(403);
+    expect(await status(runJob, json(cast.hrManager, { job: 'nope' }))).toBe(400);
+    expect(await status(runJob, json(cast.hrManager, { job: 'separations' }))).toBe(200);
   });
 
   it('an approved separation can be retracted before it applies', async () => {
     const emp = await employeeWithLogin(ctx.db, { status: 'active' });
-    const c = await call<{ id: string }>(
-      createCase,
-      json(cast.hrManager, {
-        kind: 'offboarding',
-        staffId: emp.staffId,
-        separationType: 'resignation',
-        lastWorkingDay: addDays(istToday(new Date()), 10),
-      }),
-    );
-    await resolveAll(c.data!.id, ['access_revocation']);
-    await call(approve, json(cast.hrManager, { confirm: true }), { id: c.data!.id });
-    expect(
-      (
-        await call(cancel, json(cast.hrContributor, { reason: 'Resignation withdrawn' }), {
-          id: c.data!.id,
-        })
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await call(cancel, json(cast.hrManager, { reason: 'Resignation withdrawn' }), {
-          id: c.data!.id,
-        })
-      ).status,
-    ).toBe(200);
-    const [rec] = await ctx.db
-      .select()
-      .from(opsEmployeeRecords)
-      .where(eq(opsEmployeeRecords.staffId, emp.staffId));
-    expect(rec!.employmentStatus).toBe('active');
+    const { id } = await openCase({
+      kind: 'offboarding',
+      staffId: emp.staffId,
+      separationType: 'resignation',
+      lastWorkingDay: addDays(istToday(new Date()), 10),
+    });
+    await resolveAll(id, ['access_revocation']);
+    await approveAs(cast.hrManager, id);
+    const retract = (who: Who) =>
+      status(cancel, json(who, { reason: 'Resignation withdrawn' }), { id });
+    expect(await retract(cast.hrContributor)).toBe(403);
+    expect(await retract(cast.hrManager)).toBe(200);
+    expect((await employeeRecord(emp.staffId)).employmentStatus).toBe('active');
   });
 });

@@ -43,8 +43,11 @@ const academicPayload = {
   programmes: [],
 };
 
-const stub = (handler: (url: string) => Response | Promise<Response>) =>
-  (async (input: RequestInfo | URL) => handler(String(input))) as typeof fetch;
+/** Summary-fetch options with a stubbed fetch. */
+const stub = (handler: (url: string) => Response | Promise<Response>) => ({
+  fetchImpl: (async (input: RequestInfo | URL) => handler(String(input))) as typeof fetch,
+  token: 'test-only-token-0123456789-0123456789',
+});
 
 beforeAll(async () => {
   await setupReference(ctx.db);
@@ -54,18 +57,18 @@ beforeAll(async () => {
 
 describe('cross-module summaries (stubbed fetch)', () => {
   it('a failing or unreachable source is "unavailable", never zeros', async () => {
-    const res = await fetchCrossModuleSummaries(window, {
-      fetchImpl: stub(() => new Response('nope', { status: 503 })),
-      token: 'test-only-token-0123456789-0123456789',
-    });
+    const res = await fetchCrossModuleSummaries(
+      window,
+      stub(() => new Response('nope', { status: 503 })),
+    );
     expect(res.academic).toMatchObject({ status: 'unavailable', reason: 'HTTP 503' });
     expect(res.marketing).toMatchObject({ status: 'unavailable' });
-    const thrown = await fetchCrossModuleSummaries(window, {
-      fetchImpl: stub(() => {
+    const thrown = await fetchCrossModuleSummaries(
+      window,
+      stub(() => {
         throw new TypeError('connect ECONNREFUSED');
       }),
-      token: 'test-only-token-0123456789-0123456789',
-    });
+    );
     expect(thrown.academic).toMatchObject({
       status: 'unavailable',
       reason: 'Could not reach the source',
@@ -73,14 +76,14 @@ describe('cross-module summaries (stubbed fetch)', () => {
   });
 
   it('a wrong-shaped payload is unavailable; a valid one is available', async () => {
-    const res = await fetchCrossModuleSummaries(window, {
-      fetchImpl: stub((url) =>
+    const res = await fetchCrossModuleSummaries(
+      window,
+      stub((url) =>
         url.includes('/academic/')
           ? Response.json({ data: academicPayload })
           : Response.json({ data: { contract: 'marketing.summary', version: 1, metrics: {} } }),
       ),
-      token: 'test-only-token-0123456789-0123456789',
-    });
+    );
     expect(res.academic.status).toBe('available');
     expect(res.marketing).toMatchObject({
       status: 'unavailable',
@@ -93,11 +96,10 @@ describe('cross-module summaries (stubbed fetch)', () => {
     await fetchCrossModuleSummaries(window, {
       academicBaseUrl: 'http://a.test',
       marketingBaseUrl: 'http://m.test',
-      fetchImpl: stub((u) => {
+      ...stub((u) => {
         urls.push(u);
         return new Response('', { status: 404 });
       }),
-      token: 'test-only-token-0123456789-0123456789',
     });
     expect(urls.sort()).toEqual([
       'http://a.test/academic/api/internal/v1/summary?from=2026-10-12&to=2026-10-18',
@@ -154,10 +156,7 @@ describe('dashboard KPIs (live DB)', () => {
       dueDate: isoDaysFromNow(-2),
     });
     const d = await buildDashboard(ctx.db, manager, {
-      summaries: {
-        fetchImpl: stub(() => new Response('', { status: 500 })),
-        token: 'test-only-token-0123456789-0123456789',
-      },
+      summaries: stub(() => new Response('', { status: 500 })),
     });
     expect(d.kpis.newLeads.value).toBeGreaterThanOrEqual(1);
     expect(d.breakdown.overdueFollowUps).toBeGreaterThanOrEqual(1);
@@ -167,17 +166,12 @@ describe('dashboard KPIs (live DB)', () => {
   });
 
   it('reminder job notifies the owner once per day (idempotent) and is manager-only', async () => {
-    const post = (u: { token: string }) => authedRequest(u, '/x', { method: 'POST', json: {} });
-    expect((await callRoute(runJob, post(counsellor), { job: 'follow-up-reminders' })).status).toBe(
-      403,
-    );
-    const first = await callRoute<{ sent: number }>(runJob, post(manager), {
-      job: 'follow-up-reminders',
-    });
-    expect(first.data?.sent).toBeGreaterThanOrEqual(1);
-    const second = await callRoute<{ sent: number }>(runJob, post(manager), {
-      job: 'follow-up-reminders',
-    });
-    expect(second.data?.sent).toBe(0);
+    const run = (u: { token: string }) =>
+      callRoute<{ sent: number }>(runJob, authedRequest(u, '/x', { method: 'POST', json: {} }), {
+        job: 'follow-up-reminders',
+      });
+    expect((await run(counsellor)).status).toBe(403);
+    expect((await run(manager)).data?.sent).toBeGreaterThanOrEqual(1);
+    expect((await run(manager)).data?.sent).toBe(0);
   });
 });

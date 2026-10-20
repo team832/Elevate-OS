@@ -15,7 +15,7 @@
  * - Candidate email/phone are returned only to managers covering the
  *   candidate; never in lists or audit payloads.
  */
-import { and, asc, count, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
   auditEvents,
@@ -33,8 +33,6 @@ import {
   users,
   type Database,
 } from '@elevate/database';
-import { notify } from '@elevate/notifications';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
   ForbiddenError,
@@ -64,15 +62,10 @@ import {
   type RecruitmentCheck,
   type RequisitionStatus,
 } from '../../domain/hr/recruitment';
-import {
-  accessScope,
-  activeStaff,
-  nextCode,
-  notFound,
-  userIdsForStaff,
-  type Actor,
-} from '../context';
+import { accessScope, activeStaff, clean, nextCode, staffIdForUser, type Actor } from '../context';
 import { loadSettings } from '../settings';
+import { withTransaction } from '@elevate/server-kit';
+import { defined, rowById } from '../ops-common';
 import { insertEmployee } from './employee-core';
 import type {
   ApplicationListQuery,
@@ -86,33 +79,25 @@ import type {
   UpdateCandidateInput,
   UpdateRequisitionInput,
 } from './lifecycle-schemas';
-import { openOnboardingCase } from './onboarding';
+import {
+  auditOf,
+  fieldError,
+  notifyPeople,
+  openOnboardingCase,
+  pageOf,
+  search,
+  sortBy,
+} from './onboarding';
 
-type Tx = Database;
-export type RequisitionRow = typeof opsRequisitions.$inferSelect;
-export type CandidateRow = typeof opsCandidates.$inferSelect;
-export type ApplicationRow = typeof opsJobApplications.$inferSelect;
-export type OfferRow = typeof opsJobOffers.$inferSelect;
+type RequisitionRow = typeof opsRequisitions.$inferSelect;
+type ApplicationRow = typeof opsJobApplications.$inferSelect;
 
-const LIVE_OFFER_STATUSES: OfferStatus[] = ['draft', 'approved', 'extended', 'accepted'];
-
-export interface Page<T> {
-  rows: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-function offsetOf(q: { page: number; pageSize: number }) {
-  return (q.page - 1) * q.pageSize;
-}
+const LIVE_OFFER_STATUSES = OFFER_STATUSES.filter(isLiveOffer);
+const offsetOf = (q: { page: number; pageSize: number }) => (q.page - 1) * q.pageSize;
 
 /** Turn a failed domain check into the right AppError. */
-export function throwCheck(check: Exclude<RecruitmentCheck, { ok: true }>): never {
-  if (check.code === 'REASON_REQUIRED')
-    throw new ValidationError(check.message, {
-      details: [{ location: 'body', path: ['reason'], message: check.message }],
-    });
+function throwCheck(check: Exclude<RecruitmentCheck, { ok: true }>): never {
+  if (check.code === 'REASON_REQUIRED') throw fieldError('reason', check.message);
   if (check.code === 'NOT_AUTHORISED' || check.code === 'SELF_APPROVAL')
     throw new ForbiddenError(check.message, { details: { code: check.code } });
   throw new InvalidStateTransitionError(check.message, { details: { code: check.code } });
@@ -163,25 +148,45 @@ export async function entityHistory(db: Database, entityType: string, entityId: 
   return rows.map((r) => ({ at: r.at, action: r.action, actorName: r.actorName ?? 'System' }));
 }
 
-export async function staffNames(db: Database, ids: readonly (string | null | undefined)[]) {
-  const list = [...new Set(ids.filter((v): v is string => Boolean(v)))] as StaffMemberId[];
-  if (list.length === 0) return new Map<string, string>();
-  const rows = await db
-    .select({ id: staffMembers.id, fullName: staffMembers.fullName })
-    .from(staffMembers)
-    .where(inArray(staffMembers.id, list));
-  return new Map(rows.map((r) => [r.id as string, r.fullName]));
+/** id → name lookup over the distinct, non-empty ids. */
+function nameLookup(
+  load: (db: Database, ids: string[]) => Promise<{ id: string; name: string }[]>,
+) {
+  return async (db: Database, ids: readonly (string | null | undefined)[]) => {
+    const list = [...new Set(ids.filter((v): v is string => Boolean(v)))];
+    const rows = list.length ? await load(db, list) : [];
+    return new Map<string, string>(rows.map((r) => [r.id, r.name]));
+  };
 }
 
-export async function userNames(db: Database, ids: readonly (string | null | undefined)[]) {
-  const list = [...new Set(ids.filter((v): v is string => Boolean(v)))] as UserId[];
-  if (list.length === 0) return new Map<string, string>();
-  const rows = await db
-    .select({ id: users.id, displayName: users.displayName })
+export const staffNames = nameLookup((db, ids) =>
+  db
+    .select({ id: staffMembers.id, name: staffMembers.fullName })
+    .from(staffMembers)
+    .where(inArray(staffMembers.id, ids as StaffMemberId[])),
+);
+
+export const userNames = nameLookup((db, ids) =>
+  db
+    .select({ id: users.id, name: users.displayName })
     .from(users)
-    .where(inArray(users.id, list));
-  return new Map(rows.map((r) => [r.id as string, r.displayName]));
-}
+    .where(inArray(users.id, ids as UserId[])),
+);
+
+/** The name of `id` from a staffNames / userNames map; null when unset or unknown. */
+export const nameOf = (names: Map<string, string>, id: string | null | undefined) =>
+  id ? (names.get(id) ?? null) : null;
+
+const auditRequisition = auditOf('requisition');
+const auditCandidate = auditOf('candidate');
+const auditApplication = auditOf('job_application');
+
+/** Notification link + entity for an application. */
+const applicationRef = (id: string) => ({
+  link: `/ops/hr/recruitment/applications/${id}`,
+  entityType: 'job_application',
+  entityId: id,
+});
 
 // --- coverage (own scope) ----------------------------------------------------------------------
 
@@ -198,19 +203,10 @@ export interface Coverage {
   managedCandidateIds: Set<string>;
 }
 
-/** Applications on which `staffId` sits on an interview panel. */
-async function panelApplicationIds(db: Database, staffId: StaffMemberId): Promise<Set<string>> {
-  const rows = await db
-    .selectDistinct({ applicationId: opsInterviews.applicationId })
-    .from(opsInterviewPanelists)
-    .innerJoin(opsInterviews, eq(opsInterviews.id, opsInterviewPanelists.interviewId))
-    .where(eq(opsInterviewPanelists.staffId, staffId));
-  return new Set(rows.map((r) => r.applicationId as string));
-}
-
 /**
  * Permission check + recruitment coverage. `all` scope covers everything; `own`
- * resolves the sets above for the staff member linked to the user.
+ * resolves the sets above for the staff member linked to the user. Even
+ * all-scope users get their staff id (for "interviewing me" and no-self rules).
  */
 export async function recruitmentCoverage(
   db: Database,
@@ -218,124 +214,94 @@ export async function recruitmentCoverage(
   permission: 'ops:recruitment:read' | 'ops:recruitment:manage' | 'ops:recruitment:decide',
 ): Promise<Coverage> {
   const access = await accessScope(db, actor, permission);
-  const empty = (): Set<string> => new Set();
-  const base: Coverage = {
+  const me = access.scope === 'own' ? access.staffId : await staffIdForUser(db, actor.id);
+  const cov: Coverage = {
     scope: access.scope,
-    staffId: access.scope === 'own' ? access.staffId : null,
-    managedApplicationIds: empty(),
-    interviewApplicationIds: empty(),
-    requisitionIds: empty(),
-    managedRequisitionIds: empty(),
-    candidateIds: empty(),
-    managedCandidateIds: empty(),
+    staffId: me,
+    managedApplicationIds: new Set(),
+    interviewApplicationIds: new Set(),
+    requisitionIds: new Set(),
+    managedRequisitionIds: new Set(),
+    candidateIds: new Set(),
+    managedCandidateIds: new Set(),
   };
-  if (access.scope === 'all') {
-    // Even all-scope users have a staff id (for "interviewing me" and no-self rules).
-    const [own] = await db
-      .select({ id: staffMembers.id })
-      .from(staffMembers)
-      .where(eq(staffMembers.userId, actor.id))
-      .limit(1);
-    base.staffId = own?.id ?? null;
-    if (base.staffId) base.interviewApplicationIds = await panelApplicationIds(db, base.staffId);
-    return base;
-  }
-  const me = access.staffId;
-  if (!me) return base;
-  const reqs = await db
-    .select({ id: opsRequisitions.id })
-    .from(opsRequisitions)
-    .where(eq(opsRequisitions.recruiterStaffId, me));
-  for (const r of reqs) {
-    base.managedRequisitionIds.add(r.id);
-    base.requisitionIds.add(r.id);
-  }
-  const cands = await db
-    .select({ id: opsCandidates.id })
-    .from(opsCandidates)
-    .where(eq(opsCandidates.recruiterStaffId, me));
-  for (const c of cands) {
-    base.managedCandidateIds.add(c.id);
-    base.candidateIds.add(c.id);
-  }
-  const managedReqs = [...base.managedRequisitionIds];
-  const managedCands = [...base.managedCandidateIds];
-  if (managedReqs.length || managedCands.length) {
-    const conds: SQL[] = [];
-    if (managedReqs.length)
-      conds.push(inArray(opsJobApplications.requisitionId, managedReqs as never));
-    if (managedCands.length)
-      conds.push(inArray(opsJobApplications.candidateId, managedCands as never));
-    const apps = await db
-      .select({
-        id: opsJobApplications.id,
-        candidateId: opsJobApplications.candidateId,
-        requisitionId: opsJobApplications.requisitionId,
-      })
-      .from(opsJobApplications)
-      .where(or(...conds));
-    for (const a of apps) {
-      base.managedApplicationIds.add(a.id);
-      base.candidateIds.add(a.candidateId);
-      base.managedCandidateIds.add(a.candidateId);
-      base.requisitionIds.add(a.requisitionId);
+  if (!me) return cov;
+  const panel = await db
+    .selectDistinct({ applicationId: opsInterviews.applicationId })
+    .from(opsInterviewPanelists)
+    .innerJoin(opsInterviews, eq(opsInterviews.id, opsInterviewPanelists.interviewId))
+    .where(eq(opsInterviewPanelists.staffId, me));
+  cov.interviewApplicationIds = new Set(panel.map((r) => r.applicationId as string));
+  if (cov.scope === 'all') return cov;
+  const reqIds = (
+    await db
+      .select({ id: opsRequisitions.id })
+      .from(opsRequisitions)
+      .where(eq(opsRequisitions.recruiterStaffId, me))
+  ).map((r) => r.id as string);
+  const candIds = (
+    await db
+      .select({ id: opsCandidates.id })
+      .from(opsCandidates)
+      .where(eq(opsCandidates.recruiterStaffId, me))
+  ).map((r) => r.id as string);
+  const myReqs = new Set(reqIds);
+  const myCands = new Set(candIds);
+  cov.managedRequisitionIds = new Set(reqIds);
+  cov.requisitionIds = new Set(reqIds);
+  cov.managedCandidateIds = new Set(candIds);
+  cov.candidateIds = new Set(candIds);
+  if (!reqIds.length && !candIds.length && !panel.length) return cov;
+  // Applications on my requisitions or candidates (managed) and those I interview for (read).
+  const apps = await db
+    .select({
+      id: opsJobApplications.id,
+      candidateId: opsJobApplications.candidateId,
+      requisitionId: opsJobApplications.requisitionId,
+    })
+    .from(opsJobApplications)
+    .where(
+      or(
+        reqIds.length ? inArray(opsJobApplications.requisitionId, reqIds as never) : undefined,
+        candIds.length ? inArray(opsJobApplications.candidateId, candIds as never) : undefined,
+        panel.length
+          ? inArray(opsJobApplications.id, [...cov.interviewApplicationIds] as never)
+          : undefined,
+      ),
+    );
+  for (const a of apps) {
+    cov.candidateIds.add(a.candidateId);
+    cov.requisitionIds.add(a.requisitionId);
+    if (myReqs.has(a.requisitionId) || myCands.has(a.candidateId)) {
+      cov.managedApplicationIds.add(a.id);
+      cov.managedCandidateIds.add(a.candidateId);
     }
   }
-  base.interviewApplicationIds = await panelApplicationIds(db, me);
-  const interviewOnly = [...base.interviewApplicationIds].filter(
-    (id) => !base.managedApplicationIds.has(id),
-  );
-  if (interviewOnly.length) {
-    const apps = await db
-      .select({
-        candidateId: opsJobApplications.candidateId,
-        requisitionId: opsJobApplications.requisitionId,
-      })
-      .from(opsJobApplications)
-      .where(inArray(opsJobApplications.id, interviewOnly as never));
-    for (const a of apps) {
-      base.candidateIds.add(a.candidateId);
-      base.requisitionIds.add(a.requisitionId);
-    }
-  }
-  return base;
+  return cov;
 }
 
-function readsApplication(c: Coverage, id: string) {
-  return c.scope === 'all' || c.managedApplicationIds.has(id) || c.interviewApplicationIds.has(id);
-}
-function managesApplication(c: Coverage, id: string) {
-  return c.scope === 'all' || c.managedApplicationIds.has(id);
-}
-function readsRequisition(c: Coverage, id: string) {
-  return c.scope === 'all' || c.requisitionIds.has(id);
-}
-function managesRequisition(c: Coverage, id: string) {
-  return c.scope === 'all' || c.managedRequisitionIds.has(id);
-}
-function readsCandidate(c: Coverage, id: string) {
-  return c.scope === 'all' || c.candidateIds.has(id);
-}
-function managesCandidate(c: Coverage, id: string) {
-  return c.scope === 'all' || c.managedCandidateIds.has(id);
-}
+const all = (c: Coverage) => c.scope === 'all';
+const readsApplication = (c: Coverage, id: string) =>
+  all(c) || c.managedApplicationIds.has(id) || c.interviewApplicationIds.has(id);
+const managesApplication = (c: Coverage, id: string) => all(c) || c.managedApplicationIds.has(id);
+const readsRequisition = (c: Coverage, id: string) => all(c) || c.requisitionIds.has(id);
+const managesRequisition = (c: Coverage, id: string) => all(c) || c.managedRequisitionIds.has(id);
+const readsCandidate = (c: Coverage, id: string) => all(c) || c.candidateIds.has(id);
+const managesCandidate = (c: Coverage, id: string) => all(c) || c.managedCandidateIds.has(id);
 
 function deny(what: string): never {
   throw new ForbiddenError(`You can only work on ${what} assigned to you.`);
 }
 
-// --- requisitions ------------------------------------------------------------------------------
-
-async function getRequisitionRow(db: Database, id: string, lock = false): Promise<RequisitionRow> {
-  const q = db
-    .select()
-    .from(opsRequisitions)
-    .where(eq(opsRequisitions.id, id as RequisitionRow['id']))
-    .limit(1);
-  const [row] = lock ? await q.for('update') : await q;
-  if (!row) notFound('Requisition');
-  return row;
+/** Recruiter on create: own-scope users always recruit for themselves (`refusal` otherwise). */
+function recruiterOnCreate(cov: Coverage, requested: string | null | undefined, refusal: string) {
+  if (cov.scope === 'all') return (requested ?? null) as StaffMemberId | null;
+  if (!cov.staffId) throw new ForbiddenError('Your account is not linked to a staff record.');
+  if (requested && requested !== cov.staffId) throw new ForbiddenError(refusal);
+  return cov.staffId;
 }
+
+// --- requisitions ------------------------------------------------------------------------------
 
 async function validateDepartment(db: Database, id: string | null | undefined) {
   if (!id) return;
@@ -344,25 +310,17 @@ async function validateDepartment(db: Database, id: string | null | undefined) {
     .from(departments)
     .where(eq(departments.id, id as DepartmentId));
   if (!row || row.status === 'archived')
-    throw new ValidationError('Unknown or archived department.', {
-      details: [{ location: 'body', path: ['departmentId'], message: 'Unknown department' }],
-    });
+    throw fieldError('departmentId', 'Unknown or archived department.', 'Unknown department');
 }
 
 export async function listRequisitions(db: Database, actor: Actor, q: RequisitionListQuery) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:read');
-  const conds: SQL[] = [];
-  if (cov.scope === 'own') {
-    if (cov.requisitionIds.size === 0)
-      return { rows: [], total: 0, page: q.page, pageSize: q.pageSize };
-    conds.push(inArray(opsRequisitions.id, [...cov.requisitionIds] as never));
-  }
-  if (q.status) conds.push(eq(opsRequisitions.status, q.status));
-  if (q.q)
-    conds.push(
-      or(ilike(opsRequisitions.title, `%${q.q}%`), ilike(opsRequisitions.code, `%${q.q}%`))!,
-    );
-  const where = conds.length ? and(...conds) : undefined;
+  if (cov.scope === 'own' && cov.requisitionIds.size === 0) return pageOf(q, []);
+  const where = and(
+    cov.scope === 'own' ? inArray(opsRequisitions.id, [...cov.requisitionIds] as never) : undefined,
+    q.status ? eq(opsRequisitions.status, q.status) : undefined,
+    q.q ? search(q.q, opsRequisitions.title, opsRequisitions.code) : undefined,
+  );
   const sortCol = {
     code: opsRequisitions.code,
     title: opsRequisitions.title,
@@ -378,7 +336,7 @@ export async function listRequisitions(db: Database, actor: Actor, q: Requisitio
     .from(opsRequisitions)
     .leftJoin(departments, eq(departments.id, opsRequisitions.departmentId))
     .where(where)
-    .orderBy(q.dir === 'asc' ? asc(sortCol) : desc(sortCol), asc(opsRequisitions.code))
+    .orderBy(sortBy(q.dir, sortCol), asc(opsRequisitions.code))
     .limit(q.pageSize)
     .offset(offsetOf(q));
   const ids = rows.map((r) => r.r.id);
@@ -395,34 +353,30 @@ export async function listRequisitions(db: Database, actor: Actor, q: Requisitio
     db,
     rows.map((r) => r.r.recruiterStaffId),
   );
-  return {
-    rows: rows.map(({ r, departmentName }) => {
-      const mine = apps.filter((a) => a.requisitionId === r.id);
-      return {
-        id: r.id,
-        code: r.code,
-        title: r.title,
-        departmentName,
-        openings: r.openings,
-        employmentType: r.employmentType,
-        location: r.location,
-        status: r.status as RequisitionStatus,
-        recruiterName: r.recruiterStaffId ? (names.get(r.recruiterStaffId) ?? null) : null,
-        applications: mine.length,
-        openApplications: mine.filter((a) => isOpenApplication(a.stage as ApplicationStage)).length,
-        hired: mine.filter((a) => a.stage === 'hired').length,
-        updatedAt: r.updatedAt,
-      };
-    }),
-    total: Number(total),
-    page: q.page,
-    pageSize: q.pageSize,
-  };
+  const mapped = rows.map(({ r, departmentName }) => {
+    const mine = apps.filter((a) => a.requisitionId === r.id);
+    return {
+      id: r.id,
+      code: r.code,
+      title: r.title,
+      departmentName,
+      openings: r.openings,
+      employmentType: r.employmentType,
+      location: r.location,
+      status: r.status,
+      recruiterName: nameOf(names, r.recruiterStaffId),
+      applications: mine.length,
+      openApplications: mine.filter((a) => isOpenApplication(a.stage)).length,
+      hired: mine.filter((a) => a.stage === 'hired').length,
+      updatedAt: r.updatedAt,
+    };
+  });
+  return pageOf(q, mapped, total);
 }
 
 export async function getRequisition(db: Database, actor: Actor, id: string) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:read');
-  const r = await getRequisitionRow(db, id);
+  const r = await rowById(db, opsRequisitions, id, 'Requisition');
   if (!readsRequisition(cov, r.id)) deny('requisitions');
   const [dept] = r.departmentId
     ? await db
@@ -447,30 +401,29 @@ export async function getRequisition(db: Database, actor: Actor, id: string) {
     .orderBy(desc(opsJobApplications.stageChangedAt));
   const canManage = can(actor, 'ops:recruitment:manage') && managesRequisition(cov, r.id);
   const canDecide = can(actor, 'ops:recruitment:decide');
-  const status = r.status as RequisitionStatus;
-  const targets = permitted(
-    REQUISITION_STATUSES,
-    (to) =>
-      checkRequisitionTransition(status, to, {
-        canDecide,
-        actorIsRequester: r.createdBy === actor.id,
-        reason: 'x',
-      }),
-    canDecide,
-    canManage,
-  );
+  const isRequester = r.createdBy === actor.id;
   return {
     requisition: r,
     departmentName: dept?.name ?? null,
-    recruiterName: r.recruiterStaffId ? (names.get(r.recruiterStaffId) ?? null) : null,
-    hiringManagerName: r.hiringManagerStaffId ? (names.get(r.hiringManagerStaffId) ?? null) : null,
-    requestedByName: uNames.get(r.createdBy) ?? null,
-    approvedByName: r.approvedBy ? (uNames.get(r.approvedBy) ?? null) : null,
+    recruiterName: nameOf(names, r.recruiterStaffId),
+    hiringManagerName: nameOf(names, r.hiringManagerStaffId),
+    requestedByName: nameOf(uNames, r.createdBy),
+    approvedByName: nameOf(uNames, r.approvedBy),
     applications: apps.filter((a) => readsApplication(cov, a.id)),
     canManage,
     canDecide,
-    isRequester: r.createdBy === actor.id,
-    allowedTargets: targets,
+    isRequester,
+    allowedTargets: permitted(
+      REQUISITION_STATUSES,
+      (to) =>
+        checkRequisitionTransition(r.status, to, {
+          canDecide,
+          actorIsRequester: isRequester,
+          reason: 'x',
+        }),
+      canDecide,
+      canManage,
+    ),
     history: await entityHistory(db, 'requisition', r.id),
   };
 }
@@ -482,13 +435,11 @@ export async function createRequisition(
   requestId?: string,
 ) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:manage');
-  let recruiter = input.recruiterStaffId ?? null;
-  if (cov.scope === 'own') {
-    if (!cov.staffId) throw new ForbiddenError('Your account is not linked to a staff record.');
-    if (recruiter && recruiter !== cov.staffId)
-      throw new ForbiddenError('You can only create requisitions you recruit for.');
-    recruiter = cov.staffId;
-  }
+  const recruiter = recruiterOnCreate(
+    cov,
+    input.recruiterStaffId,
+    'You can only create requisitions you recruit for.',
+  );
   await validateDepartment(db, input.departmentId);
   if (recruiter) await activeStaff(db, recruiter, 'recruiterStaffId');
   if (input.hiringManagerStaffId)
@@ -506,18 +457,13 @@ export async function createRequisition(
           openings: input.openings,
           employmentType: input.employmentType,
           location: input.location ?? null,
-          recruiterStaffId: recruiter as StaffMemberId | null,
+          recruiterStaffId: recruiter,
           hiringManagerStaffId: (input.hiringManagerStaffId as StaffMemberId | null) ?? null,
           createdBy: actor.id,
         })
         .returning()
     )[0]!;
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'requisition.created',
-      entityType: 'requisition',
-      entityId: row.id,
+    await auditRequisition(tx, actor, row.id, 'requisition.created', {
       after: row,
       requestId,
     });
@@ -540,24 +486,17 @@ export async function updateRequisition(
   if (input.hiringManagerStaffId)
     await activeStaff(db, input.hiringManagerStaffId, 'hiringManagerStaffId');
   return withTransaction(db, async (tx) => {
-    const before = await getRequisitionRow(tx, id, true);
+    const before = await rowById(tx, opsRequisitions, id, 'Requisition', true);
     if (!managesRequisition(cov, before.id)) deny('requisitions');
     if (before.status === 'filled' || before.status === 'cancelled')
       throw new ConflictError('A filled or cancelled requisition cannot be edited.');
-    const patch = Object.fromEntries(
-      Object.entries(input).filter(([, v]) => v !== undefined),
-    ) as Partial<typeof opsRequisitions.$inferInsert>;
+    const patch = defined(input) as Partial<typeof opsRequisitions.$inferInsert>;
     const [after] = await tx
       .update(opsRequisitions)
       .set(patch)
       .where(eq(opsRequisitions.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'requisition.updated',
-      entityType: 'requisition',
-      entityId: before.id,
+    await auditRequisition(tx, actor, before.id, 'requisition.updated', {
       before,
       after,
       requestId,
@@ -575,93 +514,68 @@ export async function transitionRequisition(
 ) {
   const { canDecide, canManage, cov } = await transitionAccess(db, actor);
   return withTransaction(db, async (tx) => {
-    const before = await getRequisitionRow(tx, id, true);
-    const check = checkRequisitionTransition(before.status as RequisitionStatus, input.to, {
+    const before = await rowById(tx, opsRequisitions, id, 'Requisition', true);
+    const check = checkRequisitionTransition(before.status, input.to, {
       canDecide,
       actorIsRequester: before.createdBy === actor.id,
       reason: input.reason,
     });
     authorise(check, canManage && managesRequisition(cov, before.id), 'requisitions');
     const now = new Date();
-    const patch: Partial<typeof opsRequisitions.$inferInsert> = {
-      status: input.to,
-      statusReason: input.reason?.trim() || null,
-      statusChangedAt: now,
-    };
-    if (before.status === 'draft' && input.to === 'open')
-      Object.assign(patch, { approvedBy: actor.id, approvedAt: now });
+    const approving = before.status === 'draft' && input.to === 'open';
+    const statusReason = clean(input.reason);
     const [after] = await tx
       .update(opsRequisitions)
-      .set(patch)
+      .set({
+        status: input.to,
+        statusReason,
+        statusChangedAt: now,
+        ...(approving ? { approvedBy: actor.id, approvedAt: now } : {}),
+      })
       .where(eq(opsRequisitions.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action:
-        before.status === 'draft' && input.to === 'open'
-          ? 'requisition.approved'
-          : 'requisition.status_changed',
-      entityType: 'requisition',
-      entityId: before.id,
-      before: { status: before.status },
-      after: { status: input.to, reason: patch.statusReason },
-      requestId,
-    });
-    const recipients = (await userIdsForStaff(tx, [before.recruiterStaffId]))
-      .concat(before.createdBy)
-      .filter((u, i, all) => u !== actor.id && all.indexOf(u) === i);
-    if (recipients.length)
-      await notify(tx, {
-        userIds: recipients,
-        module: 'ops',
+    await auditRequisition(
+      tx,
+      actor,
+      before.id,
+      approving ? 'requisition.approved' : 'requisition.status_changed',
+      {
+        before: { status: before.status },
+        after: { status: input.to, reason: statusReason },
+        requestId,
+      },
+    );
+    await notifyPeople(
+      tx,
+      actor,
+      [before.recruiterStaffId],
+      {
         kind: 'requisition.status_changed',
         title: `${before.code} ${before.title}: ${input.to.replace('_', ' ')}`,
         link: `/ops/hr/recruitment/requisitions/${before.id}`,
         entityType: 'requisition',
         entityId: before.id,
-      });
+      },
+      [before.createdBy],
+    );
     return after as RequisitionRow;
   });
 }
 
 // --- candidates --------------------------------------------------------------------------------
 
-async function getCandidateRow(db: Database, id: string, lock = false): Promise<CandidateRow> {
-  const q = db
-    .select()
-    .from(opsCandidates)
-    .where(eq(opsCandidates.id, id as CandidateRow['id']))
-    .limit(1);
-  const [row] = lock ? await q.for('update') : await q;
-  if (!row) notFound('Candidate');
-  return row;
-}
-
 /** Normalise contacts; invalid values → VALIDATION_FAILED with the field path. */
 function normaliseContacts(input: { email?: string | null; phone?: string | null }) {
   const out: { email?: string | null; phone?: string | null } = {};
   if (input.email !== undefined) {
-    if (input.email === null || input.email.trim() === '') out.email = null;
-    else {
-      const r = normaliseEmail(input.email);
-      if (!r.ok)
-        throw new ValidationError('Email is not a valid address.', {
-          details: [{ location: 'body', path: ['email'], message: 'Invalid email' }],
-        });
-      out.email = r.email;
-    }
+    const r = input.email?.trim() ? normaliseEmail(input.email) : null;
+    if (r && !r.ok) throw fieldError('email', 'Email is not a valid address.', 'Invalid email');
+    out.email = r?.ok ? r.email : null;
   }
   if (input.phone !== undefined) {
-    if (input.phone === null || input.phone.trim() === '') out.phone = null;
-    else {
-      const r = normalisePhone(input.phone);
-      if (!r.ok)
-        throw new ValidationError(PHONE_ERROR_MESSAGES[r.reason], {
-          details: [{ location: 'body', path: ['phone'], message: PHONE_ERROR_MESSAGES[r.reason] }],
-        });
-      out.phone = r.e164;
-    }
+    const r = input.phone?.trim() ? normalisePhone(input.phone) : null;
+    if (r && !r.ok) throw fieldError('phone', PHONE_ERROR_MESSAGES[r.reason]);
+    out.phone = r?.ok ? r.e164 : null;
   }
   return out;
 }
@@ -671,14 +585,16 @@ async function assertNoDuplicateCandidate(
   contacts: { email?: string | null; phone?: string | null },
   exceptId?: string,
 ) {
-  const conds: SQL[] = [];
-  if (contacts.email) conds.push(eq(opsCandidates.email, contacts.email));
-  if (contacts.phone) conds.push(eq(opsCandidates.phone, contacts.phone));
-  if (!conds.length) return;
+  if (!contacts.email && !contacts.phone) return;
   const rows = await db
     .select({ id: opsCandidates.id, code: opsCandidates.code })
     .from(opsCandidates)
-    .where(or(...conds));
+    .where(
+      or(
+        contacts.email ? eq(opsCandidates.email, contacts.email) : undefined,
+        contacts.phone ? eq(opsCandidates.phone, contacts.phone) : undefined,
+      ),
+    );
   const clash = rows.find((r) => r.id !== exceptId);
   if (clash)
     throw new ConflictError(
@@ -704,7 +620,7 @@ async function candidateFacts(db: Database, candidateIds: readonly string[]) {
   for (const a of apps) {
     const entry = out.get(a.candidateId);
     if (!entry) continue;
-    entry.stages.push(a.stage as ApplicationStage);
+    entry.stages.push(a.stage);
     if (a.closedAt) {
       const day = toIsoDate(a.closedAt, TIMEZONE);
       if (!entry.lastClosed || day > entry.lastClosed) entry.lastClosed = day;
@@ -713,30 +629,35 @@ async function candidateFacts(db: Database, candidateIds: readonly string[]) {
   return out;
 }
 
+/** True when any of the applications has a live (draft…accepted) offer. */
+async function hasLiveOffer(db: Database, applicationIds: readonly string[]) {
+  if (!applicationIds.length) return false;
+  const [live] = await db
+    .select({ id: opsJobOffers.id })
+    .from(opsJobOffers)
+    .where(
+      and(
+        inArray(opsJobOffers.applicationId, applicationIds as never),
+        inArray(opsJobOffers.status, LIVE_OFFER_STATUSES),
+      ),
+    )
+    .limit(1);
+  return Boolean(live);
+}
+
 export async function listCandidates(db: Database, actor: Actor, q: CandidateListQuery) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:read');
   const settings = await loadSettings(db);
-  const retainDays = settings['hr.candidate_retention'].value.retainUnsuccessfulDays;
-  const conds: SQL[] = [];
-  if (cov.scope === 'own') {
-    if (cov.candidateIds.size === 0)
-      return { rows: [], total: 0, page: q.page, pageSize: q.pageSize, retentionDays: retainDays };
-    conds.push(inArray(opsCandidates.id, [...cov.candidateIds] as never));
-  }
-  if (q.status) conds.push(eq(opsCandidates.status, q.status));
-  if (q.q)
-    conds.push(
-      or(ilike(opsCandidates.fullName, `%${q.q}%`), ilike(opsCandidates.code, `%${q.q}%`))!,
-    );
-  const where = conds.length ? and(...conds) : undefined;
-  const today = istToday(new Date());
+  const retentionDays = settings['hr.candidate_retention'].value.retainUnsuccessfulDays;
+  if (cov.scope === 'own' && cov.candidateIds.size === 0)
+    return { ...pageOf(q, []), retentionDays };
   const sortCol = {
     code: opsCandidates.code,
     name: opsCandidates.fullName,
     updated: opsCandidates.updatedAt,
   }[q.sort];
   // Retention filtering needs every in-scope candidate's application facts (bounded).
-  const all = await db
+  const found = await db
     .select({
       id: opsCandidates.id,
       code: opsCandidates.code,
@@ -747,45 +668,46 @@ export async function listCandidates(db: Database, actor: Actor, q: CandidateLis
       updatedAt: opsCandidates.updatedAt,
     })
     .from(opsCandidates)
-    .where(where)
-    .orderBy(q.dir === 'asc' ? asc(sortCol) : desc(sortCol), asc(opsCandidates.code))
+    .where(
+      and(
+        cov.scope === 'own' ? inArray(opsCandidates.id, [...cov.candidateIds] as never) : undefined,
+        q.status ? eq(opsCandidates.status, q.status) : undefined,
+        q.q ? search(q.q, opsCandidates.fullName, opsCandidates.code) : undefined,
+      ),
+    )
+    .orderBy(sortBy(q.dir, sortCol), asc(opsCandidates.code))
     .limit(5000);
   const facts = await candidateFacts(
     db,
-    all.map((c) => c.id),
+    found.map((c) => c.id),
   );
-  let rows = all.map((c) => {
-    const f = facts.get(c.id) ?? { stages: [], lastClosed: null };
-    const unsuccessful =
-      c.status === 'active' && f.stages.length > 0 && f.stages.every(isUnsuccessful);
-    return {
-      ...c,
-      applications: f.stages.length,
-      openApplications: f.stages.filter(isOpenApplication).length,
-      retention: unsuccessful ? retentionStatus(f.lastClosed, retainDays, today) : null,
-    };
-  });
-  if (q.retention === 'due') rows = rows.filter((r) => r.retention === 'due');
+  const today = istToday(new Date());
+  const rows = found
+    .map((c) => {
+      const f = facts.get(c.id)!;
+      const unsuccessful =
+        c.status === 'active' && f.stages.length > 0 && f.stages.every(isUnsuccessful);
+      return {
+        ...c,
+        applications: f.stages.length,
+        openApplications: f.stages.filter(isOpenApplication).length,
+        retention: unsuccessful ? retentionStatus(f.lastClosed, retentionDays, today) : null,
+      };
+    })
+    .filter((r) => q.retention !== 'due' || r.retention === 'due');
   const names = await staffNames(
     db,
     rows.map((r) => r.recruiterStaffId),
   );
-  const pageRows = rows.slice(offsetOf(q), offsetOf(q) + q.pageSize).map((r) => ({
-    ...r,
-    recruiterName: r.recruiterStaffId ? (names.get(r.recruiterStaffId) ?? null) : null,
-  }));
-  return {
-    rows: pageRows,
-    total: rows.length,
-    page: q.page,
-    pageSize: q.pageSize,
-    retentionDays: retainDays,
-  };
+  const pageRows = rows
+    .slice(offsetOf(q), offsetOf(q) + q.pageSize)
+    .map((r) => ({ ...r, recruiterName: nameOf(names, r.recruiterStaffId) }));
+  return { ...pageOf(q, pageRows, rows.length), retentionDays };
 }
 
 export async function getCandidate(db: Database, actor: Actor, id: string) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:read');
-  const c = await getCandidateRow(db, id);
+  const c = await rowById(db, opsCandidates, id, 'Candidate');
   if (!readsCandidate(cov, c.id)) deny('candidates');
   const showContacts = can(actor, 'ops:recruitment:manage') && managesCandidate(cov, c.id);
   const apps = await db
@@ -802,26 +724,15 @@ export async function getCandidate(db: Database, actor: Actor, id: string) {
     .innerJoin(opsRequisitions, eq(opsRequisitions.id, opsJobApplications.requisitionId))
     .where(eq(opsJobApplications.candidateId, c.id))
     .orderBy(desc(opsJobApplications.createdAt));
-  const liveOffers = apps.length
-    ? await db
-        .select({ id: opsJobOffers.id })
-        .from(opsJobOffers)
-        .where(
-          and(
-            inArray(
-              opsJobOffers.applicationId,
-              apps.map((a) => a.id),
-            ),
-            inArray(opsJobOffers.status, ['draft', 'approved', 'extended', 'accepted']),
-          ),
-        )
-    : [];
   const settings = await loadSettings(db);
-  const facts = (await candidateFacts(db, [c.id])).get(c.id) ?? { stages: [], lastClosed: null };
+  const facts = (await candidateFacts(db, [c.id])).get(c.id)!;
   const eligibility = anonymisationEligibility({
     status: c.status,
     stages: facts.stages,
-    hasLiveOffer: liveOffers.length > 0,
+    hasLiveOffer: await hasLiveOffer(
+      db,
+      apps.map((a) => a.id),
+    ),
   });
   const names = await staffNames(db, [c.recruiterStaffId]);
   return {
@@ -833,7 +744,7 @@ export async function getCandidate(db: Database, actor: Actor, id: string) {
       sourceDetail: showContacts ? c.sourceDetail : null,
       status: c.status,
       recruiterStaffId: c.recruiterStaffId,
-      recruiterName: c.recruiterStaffId ? (names.get(c.recruiterStaffId) ?? null) : null,
+      recruiterName: nameOf(names, c.recruiterStaffId),
       privacyNoticeAt: c.privacyNoticeAt,
       consentNote: showContacts ? c.consentNote : null,
       anonymisedAt: c.anonymisedAt,
@@ -865,13 +776,11 @@ export async function createCandidate(
   requestId?: string,
 ) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:manage');
-  let recruiter = input.recruiterStaffId ?? null;
-  if (cov.scope === 'own') {
-    if (!cov.staffId) throw new ForbiddenError('Your account is not linked to a staff record.');
-    if (recruiter && recruiter !== cov.staffId)
-      throw new ForbiddenError('You can only add candidates you recruit.');
-    recruiter = cov.staffId;
-  }
+  const recruiter = recruiterOnCreate(
+    cov,
+    input.recruiterStaffId,
+    'You can only add candidates you recruit.',
+  );
   if (recruiter) await activeStaff(db, recruiter, 'recruiterStaffId');
   const contacts = normaliseContacts({ email: input.email ?? null, phone: input.phone ?? null });
   return withTransaction(db, async (tx) => {
@@ -887,7 +796,7 @@ export async function createCandidate(
           phone: contacts.phone ?? null,
           source: input.source,
           sourceDetail: input.sourceDetail ?? null,
-          recruiterStaffId: recruiter as StaffMemberId | null,
+          recruiterStaffId: recruiter,
           privacyNoticeAt: input.privacyNoticeGiven ? new Date() : null,
           consentNote: input.consentNote ?? null,
           createdBy: actor.id,
@@ -895,12 +804,7 @@ export async function createCandidate(
         .returning()
     )[0]!;
     // No contact details or consent text in the audit payload.
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'candidate.created',
-      entityType: 'candidate',
-      entityId: row.id,
+    await auditCandidate(tx, actor, row.id, 'candidate.created', {
       after: {
         code,
         source: row.source,
@@ -928,7 +832,7 @@ export async function updateCandidate(
   if (input.recruiterStaffId) await activeStaff(db, input.recruiterStaffId, 'recruiterStaffId');
   const contacts = normaliseContacts({ email: input.email, phone: input.phone });
   return withTransaction(db, async (tx) => {
-    const before = await getCandidateRow(tx, id, true);
+    const before = await rowById(tx, opsCandidates, id, 'Candidate', true);
     if (!managesCandidate(cov, before.id)) deny('candidates');
     if (before.status === 'anonymised') throw new ConflictError('This candidate was anonymised.');
     await assertNoDuplicateCandidate(tx, contacts, before.id);
@@ -944,13 +848,8 @@ export async function updateCandidate(
     if (input.privacyNoticeGiven && !before.privacyNoticeAt) patch.privacyNoticeAt = new Date();
     if (Object.keys(patch).length === 0) return { id: before.id, code: before.code };
     await tx.update(opsCandidates).set(patch).where(eq(opsCandidates.id, before.id));
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'candidate.updated',
-      entityType: 'candidate',
-      entityId: before.id,
-      // Field names only: the values may be personal data.
+    // Field names only: the values may be personal data.
+    await auditCandidate(tx, actor, before.id, 'candidate.updated', {
       after: { fields: Object.keys(patch) },
       requestId,
     });
@@ -972,27 +871,16 @@ export async function anonymiseCandidate(
 ) {
   await recruitmentCoverage(db, actor, 'ops:recruitment:decide');
   return withTransaction(db, async (tx) => {
-    const c = await getCandidateRow(tx, id, true);
+    const c = await rowById(tx, opsCandidates, id, 'Candidate', true);
     const apps = await tx
       .select({ id: opsJobApplications.id, stage: opsJobApplications.stage })
       .from(opsJobApplications)
       .where(eq(opsJobApplications.candidateId, c.id));
     const appIds = apps.map((a) => a.id);
-    const live = appIds.length
-      ? await tx
-          .select({ id: opsJobOffers.id })
-          .from(opsJobOffers)
-          .where(
-            and(
-              inArray(opsJobOffers.applicationId, appIds),
-              inArray(opsJobOffers.status, LIVE_OFFER_STATUSES),
-            ),
-          )
-      : [];
     const eligibility = anonymisationEligibility({
       status: c.status,
-      stages: apps.map((a) => a.stage as ApplicationStage),
-      hasLiveOffer: live.length > 0,
+      stages: apps.map((a) => a.stage),
+      hasLiveOffer: await hasLiveOffer(tx, appIds),
     });
     if (!eligibility.ok) throw new ConflictError(eligibility.message);
     await tx
@@ -1028,12 +916,7 @@ export async function anonymiseCandidate(
         .set({ notes: null, compensationReference: null })
         .where(inArray(opsJobOffers.applicationId, appIds));
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'candidate.anonymised',
-      entityType: 'candidate',
-      entityId: c.id,
+    await auditCandidate(tx, actor, c.id, 'candidate.anonymised', {
       before: { status: c.status },
       after: { code: c.code, status: 'anonymised', applicationsKept: appIds.length },
       requestId,
@@ -1044,106 +927,94 @@ export async function anonymiseCandidate(
 
 // --- applications ------------------------------------------------------------------------------
 
-async function getApplicationRow(db: Database, id: string, lock = false): Promise<ApplicationRow> {
-  const q = db
-    .select()
-    .from(opsJobApplications)
-    .where(eq(opsJobApplications.id, id as ApplicationRow['id']))
-    .limit(1);
-  const [row] = lock ? await q.for('update') : await q;
-  if (!row) notFound('Application');
-  return row;
-}
-
-async function liveOffersOf(db: Database, applicationId: string) {
-  return db
-    .select()
-    .from(opsJobOffers)
-    .where(
-      and(
-        eq(opsJobOffers.applicationId, applicationId as ApplicationRow['id']),
-        inArray(opsJobOffers.status, LIVE_OFFER_STATUSES),
-      ),
-    );
-}
-
 export async function listApplications(db: Database, actor: Actor, q: ApplicationListQuery) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:read');
-  const conds: SQL[] = [];
-  if (q.view === 'interviewing_me') {
-    if (cov.interviewApplicationIds.size === 0)
-      return { rows: [], total: 0, page: q.page, pageSize: q.pageSize };
-    conds.push(inArray(opsJobApplications.id, [...cov.interviewApplicationIds] as never));
-  } else if (cov.scope === 'own') {
-    const ids = new Set([...cov.managedApplicationIds, ...cov.interviewApplicationIds]);
-    if (ids.size === 0) return { rows: [], total: 0, page: q.page, pageSize: q.pageSize };
-    conds.push(inArray(opsJobApplications.id, [...ids] as never));
-  }
-  if (q.stage) conds.push(eq(opsJobApplications.stage, q.stage));
-  if (q.requisitionId)
-    conds.push(eq(opsJobApplications.requisitionId, q.requisitionId as RequisitionRow['id']));
-  if (q.q)
-    conds.push(
-      or(
-        ilike(opsCandidates.fullName, `%${q.q}%`),
-        ilike(opsCandidates.code, `%${q.q}%`),
-        ilike(opsRequisitions.title, `%${q.q}%`),
-        ilike(opsRequisitions.code, `%${q.q}%`),
-      )!,
-    );
-  const where = conds.length ? and(...conds) : undefined;
+  const ids =
+    q.view === 'interviewing_me'
+      ? cov.interviewApplicationIds
+      : cov.scope === 'own'
+        ? new Set([...cov.managedApplicationIds, ...cov.interviewApplicationIds])
+        : null;
+  if (ids?.size === 0) return pageOf(q, []);
+  const where = and(
+    ids ? inArray(opsJobApplications.id, [...ids] as never) : undefined,
+    q.stage ? eq(opsJobApplications.stage, q.stage) : undefined,
+    q.requisitionId
+      ? eq(opsJobApplications.requisitionId, q.requisitionId as RequisitionRow['id'])
+      : undefined,
+    q.q
+      ? search(
+          q.q,
+          opsCandidates.fullName,
+          opsCandidates.code,
+          opsRequisitions.title,
+          opsRequisitions.code,
+        )
+      : undefined,
+  );
   const sortCol = {
     stage: opsJobApplications.stage,
     updated: opsJobApplications.stageChangedAt,
     candidate: opsCandidates.fullName,
   }[q.sort];
-  const base = () =>
-    db
-      .select({
-        id: opsJobApplications.id,
-        stage: opsJobApplications.stage,
-        stageChangedAt: opsJobApplications.stageChangedAt,
-        candidateId: opsCandidates.id,
-        candidateCode: opsCandidates.code,
-        candidateName: opsCandidates.fullName,
-        requisitionId: opsRequisitions.id,
-        requisitionCode: opsRequisitions.code,
-        requisitionTitle: opsRequisitions.title,
-      })
-      .from(opsJobApplications)
-      .innerJoin(opsCandidates, eq(opsCandidates.id, opsJobApplications.candidateId))
-      .innerJoin(opsRequisitions, eq(opsRequisitions.id, opsJobApplications.requisitionId))
-      .where(where);
   const [{ total } = { total: 0 }] = await db
     .select({ total: count() })
     .from(opsJobApplications)
     .innerJoin(opsCandidates, eq(opsCandidates.id, opsJobApplications.candidateId))
     .innerJoin(opsRequisitions, eq(opsRequisitions.id, opsJobApplications.requisitionId))
     .where(where);
-  const rows = await base()
-    .orderBy(q.dir === 'asc' ? asc(sortCol) : desc(sortCol), asc(opsJobApplications.id))
+  const rows = await db
+    .select({
+      id: opsJobApplications.id,
+      stage: opsJobApplications.stage,
+      stageChangedAt: opsJobApplications.stageChangedAt,
+      candidateId: opsCandidates.id,
+      candidateCode: opsCandidates.code,
+      candidateName: opsCandidates.fullName,
+      requisitionId: opsRequisitions.id,
+      requisitionCode: opsRequisitions.code,
+      requisitionTitle: opsRequisitions.title,
+    })
+    .from(opsJobApplications)
+    .innerJoin(opsCandidates, eq(opsCandidates.id, opsJobApplications.candidateId))
+    .innerJoin(opsRequisitions, eq(opsRequisitions.id, opsJobApplications.requisitionId))
+    .where(where)
+    .orderBy(sortBy(q.dir, sortCol), asc(opsJobApplications.id))
     .limit(q.pageSize)
     .offset(offsetOf(q));
-  return {
-    rows: rows.map((r) => ({
-      ...r,
-      stage: r.stage as ApplicationStage,
-      interviewer: cov.interviewApplicationIds.has(r.id),
-    })),
-    total: Number(total),
-    page: q.page,
-    pageSize: q.pageSize,
-  };
+  return pageOf(
+    q,
+    rows.map((r) => ({ ...r, interviewer: cov.interviewApplicationIds.has(r.id) })),
+    total,
+  );
+}
+
+/** The employee record and onboarding case a converted application produced. */
+async function conversionOf(db: Database, app: ApplicationRow) {
+  if (!app.employeeStaffId) return { employee: null, onboardingCase: null };
+  const [employee] = await db
+    .select({ staffId: opsEmployeeRecords.staffId, employeeCode: opsEmployeeRecords.employeeCode })
+    .from(opsEmployeeRecords)
+    .where(eq(opsEmployeeRecords.staffId, app.employeeStaffId));
+  const [onboardingCase] = await db
+    .select({
+      id: opsLifecycleCases.id,
+      code: opsLifecycleCases.code,
+      status: opsLifecycleCases.status,
+    })
+    .from(opsLifecycleCases)
+    .where(eq(opsLifecycleCases.applicationId, app.id));
+  return { employee: employee ?? null, onboardingCase: onboardingCase ?? null };
 }
 
 export async function getApplication(db: Database, actor: Actor, id: string) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:read');
-  const app = await getApplicationRow(db, id);
+  const app = await rowById(db, opsJobApplications, id, 'Application');
   if (!readsApplication(cov, app.id)) deny('applications');
-  const canManage = can(actor, 'ops:recruitment:manage') && managesApplication(cov, app.id);
-  const canDecide = can(actor, 'ops:recruitment:decide');
   /** Interviewer-only viewers see the application and their own feedback, nothing else. */
-  const fullView = cov.scope === 'all' || managesApplication(cov, app.id);
+  const fullView = managesApplication(cov, app.id);
+  const canManage = can(actor, 'ops:recruitment:manage') && fullView;
+  const canDecide = can(actor, 'ops:recruitment:decide');
   const [cand] = await db
     .select({
       id: opsCandidates.id,
@@ -1153,7 +1024,7 @@ export async function getApplication(db: Database, actor: Actor, id: string) {
     })
     .from(opsCandidates)
     .where(eq(opsCandidates.id, app.candidateId));
-  const req = await getRequisitionRow(db, app.requisitionId);
+  const req = await rowById(db, opsRequisitions, app.requisitionId, 'Requisition');
   const stages = await db
     .select({ s: opsJobApplicationStages, actorName: users.displayName })
     .from(opsJobApplicationStages)
@@ -1188,33 +1059,8 @@ export async function getApplication(db: Database, actor: Actor, id: string) {
     db,
     offers.flatMap((o) => [o.preparedBy, o.approvedBy, o.extendedBy]),
   );
-  const stage = app.stage as ApplicationStage;
-  const targets = permitted(
-    applicationTargets(stage, canDecide),
-    (to) => checkApplicationTransition(stage, to, { canDecide, reason: 'x' }),
-    canDecide,
-    canManage,
-  );
-  const acceptedOffer = offers.find((o) => o.status === 'accepted') ?? null;
-  const [onboarding] = app.employeeStaffId
-    ? await db
-        .select({
-          id: opsLifecycleCases.id,
-          code: opsLifecycleCases.code,
-          status: opsLifecycleCases.status,
-        })
-        .from(opsLifecycleCases)
-        .where(eq(opsLifecycleCases.applicationId, app.id))
-    : [];
-  const [employee] = app.employeeStaffId
-    ? await db
-        .select({
-          staffId: opsEmployeeRecords.staffId,
-          employeeCode: opsEmployeeRecords.employeeCode,
-        })
-        .from(opsEmployeeRecords)
-        .where(eq(opsEmployeeRecords.staffId, app.employeeStaffId))
-    : [];
+  const stage = app.stage;
+  const { employee, onboardingCase } = await conversionOf(db, app);
   return {
     application: app,
     candidate: cand ?? null,
@@ -1253,12 +1099,12 @@ export async function getApplication(db: Database, actor: Actor, id: string) {
       ...o,
       notes: canManage ? o.notes : null,
       compensationReference: canManage ? o.compensationReference : null,
-      preparedByName: offerUsers.get(o.preparedBy) ?? null,
-      approvedByName: o.approvedBy ? (offerUsers.get(o.approvedBy) ?? null) : null,
+      preparedByName: nameOf(offerUsers, o.preparedBy),
+      approvedByName: nameOf(offerUsers, o.approvedBy),
       targets: permitted(
         OFFER_STATUSES,
         (to) =>
-          checkOfferTransition(o.status as OfferStatus, to, {
+          checkOfferTransition(o.status, to, {
             canDecide,
             actorIsPreparer: o.preparedBy === actor.id,
             reason: 'x',
@@ -1267,13 +1113,21 @@ export async function getApplication(db: Database, actor: Actor, id: string) {
         canManage,
       ),
     })),
-    allowedTargets: targets,
-    canCreateOffer:
-      canManage && stage === 'offer' && !offers.some((o) => isLiveOffer(o.status as OfferStatus)),
+    allowedTargets: permitted(
+      applicationTargets(stage, canDecide),
+      (to) => checkApplicationTransition(stage, to, { canDecide, reason: 'x' }),
+      canDecide,
+      canManage,
+    ),
+    canCreateOffer: canManage && stage === 'offer' && !offers.some((o) => isLiveOffer(o.status)),
     canSchedule: canManage && stage === 'interview',
-    canConvert: canDecide && stage === 'offer' && Boolean(acceptedOffer) && !app.employeeStaffId,
-    employee: employee ?? null,
-    onboardingCase: onboarding ?? null,
+    canConvert:
+      canDecide &&
+      stage === 'offer' &&
+      offers.some((o) => o.status === 'accepted') &&
+      !app.employeeStaffId,
+    employee,
+    onboardingCase,
     history: fullView ? await entityHistory(db, 'job_application', app.id) : [],
   };
 }
@@ -1286,9 +1140,9 @@ export async function createApplication(
 ) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:manage');
   return withTransaction(db, async (tx) => {
-    const cand = await getCandidateRow(tx, input.candidateId);
-    const req = await getRequisitionRow(tx, input.requisitionId);
-    if (cov.scope === 'own' && !managesRequisition(cov, req.id) && !managesCandidate(cov, cand.id))
+    const cand = await rowById(tx, opsCandidates, input.candidateId, 'Candidate');
+    const req = await rowById(tx, opsRequisitions, input.requisitionId, 'Requisition');
+    if (!managesRequisition(cov, req.id) && !managesCandidate(cov, cand.id))
       deny('candidates and requisitions');
     if (cand.status !== 'active') throw new ConflictError('This candidate was anonymised.');
     if (req.status !== 'open')
@@ -1316,12 +1170,7 @@ export async function createApplication(
       reason: 'Application recorded',
       actorUserId: actor.id,
     });
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'job_application.created',
-      entityType: 'job_application',
-      entityId: row.id,
+    await auditApplication(tx, actor, row.id, 'job_application.created', {
       after: { candidateCode: cand.code, requisitionCode: req.code, stage: row.stage },
       requestId,
     });
@@ -1331,7 +1180,7 @@ export async function createApplication(
 
 /** Write a stage change + history row (shared by transitions and the conversion). */
 async function writeStage(
-  tx: Tx,
+  tx: Database,
   app: ApplicationRow,
   to: ApplicationStage,
   actorId: UserId,
@@ -1339,14 +1188,13 @@ async function writeStage(
   extra: Partial<typeof opsJobApplications.$inferInsert> = {},
 ) {
   const now = new Date();
-  const closing = to === 'hired' || to === 'rejected' || to === 'withdrawn';
   const [after] = await tx
     .update(opsJobApplications)
     .set({
       stage: to,
       stageReason: reason,
       stageChangedAt: now,
-      closedAt: closing ? now : null,
+      closedAt: isOpenApplication(to) ? null : now,
       ...extra,
     })
     .where(eq(opsJobApplications.id, app.id))
@@ -1370,41 +1218,33 @@ export async function transitionApplication(
 ) {
   const { canDecide, canManage, cov } = await transitionAccess(db, actor);
   return withTransaction(db, async (tx) => {
-    const before = await getApplicationRow(tx, id, true);
-    const from = before.stage as ApplicationStage;
+    const before = await rowById(tx, opsJobApplications, id, 'Application', true);
+    const from = before.stage;
     const check = checkApplicationTransition(from, input.to, { canDecide, reason: input.reason });
     authorise(check, canManage && managesApplication(cov, before.id), 'applications');
-    if (from === 'offer' && (await liveOffersOf(tx, before.id)).length > 0)
+    if (from === 'offer' && (await hasLiveOffer(tx, [before.id])))
       throw new ConflictError('Close the live offer first (declined, withdrawn or expired).');
-    const after = await writeStage(tx, before, input.to, actor.id, input.reason?.trim() || null);
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action:
-        input.to === 'rejected' || input.to === 'offer'
-          ? 'job_application.decided'
-          : 'job_application.stage_changed',
-      entityType: 'job_application',
-      entityId: before.id,
-      before: { stage: from },
-      after: { stage: input.to },
-      requestId,
-      metadata: { hasReason: Boolean(input.reason?.trim()) },
-    });
-    const req = await getRequisitionRow(tx, before.requisitionId);
-    const recipients = (await userIdsForStaff(tx, [req.recruiterStaffId])).filter(
-      (u) => u !== actor.id,
+    const after = await writeStage(tx, before, input.to, actor.id, clean(input.reason));
+    await auditApplication(
+      tx,
+      actor,
+      before.id,
+      input.to === 'rejected' || input.to === 'offer'
+        ? 'job_application.decided'
+        : 'job_application.stage_changed',
+      {
+        before: { stage: from },
+        after: { stage: input.to },
+        metadata: { hasReason: Boolean(input.reason?.trim()) },
+        requestId,
+      },
     );
-    if (recipients.length)
-      await notify(tx, {
-        userIds: recipients,
-        module: 'ops',
-        kind: 'job_application.stage_changed',
-        title: `Application for ${req.code}: ${input.to}`,
-        link: `/ops/hr/recruitment/applications/${before.id}`,
-        entityType: 'job_application',
-        entityId: before.id,
-      });
+    const req = await rowById(tx, opsRequisitions, before.requisitionId, 'Requisition');
+    await notifyPeople(tx, actor, [req.recruiterStaffId], {
+      kind: 'job_application.stage_changed',
+      title: `Application for ${req.code}: ${input.to}`,
+      ...applicationRef(before.id),
+    });
     return after;
   });
 }
@@ -1421,7 +1261,7 @@ export async function scheduleInterview(
   const panelIds = [...new Set(input.interviewerStaffIds)];
   for (const s of panelIds) await activeStaff(db, s, 'interviewerStaffIds');
   return withTransaction(db, async (tx) => {
-    const app = await getApplicationRow(tx, input.applicationId, true);
+    const app = await rowById(tx, opsJobApplications, input.applicationId, 'Application', true);
     if (!managesApplication(cov, app.id)) deny('applications');
     if (app.stage !== 'interview')
       throw new ConflictError('Move the application to "Interview" before scheduling one.');
@@ -1443,27 +1283,21 @@ export async function scheduleInterview(
       .values(
         panelIds.map((staffId) => ({ interviewId: row.id, staffId: staffId as StaffMemberId })),
       );
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'interview.scheduled',
-      entityType: 'job_application',
-      entityId: app.id,
-      after: { interviewId: row.id, scheduledAt: row.scheduledAt, mode: row.mode, panel: panelIds },
+    await auditApplication(tx, actor, app.id, 'interview.scheduled', {
+      after: {
+        interviewId: row.id,
+        scheduledAt: row.scheduledAt,
+        mode: row.mode,
+        panel: panelIds,
+      },
       requestId,
     });
-    const recipients = (await userIdsForStaff(tx, panelIds)).filter((u) => u !== actor.id);
-    if (recipients.length)
-      await notify(tx, {
-        userIds: recipients,
-        module: 'ops',
-        kind: 'interview.assigned',
-        title: 'You are on an interview panel',
-        body: `Scheduled ${row.scheduledAt.toISOString()} (${row.mode}). Give your feedback after the interview.`,
-        link: `/ops/hr/recruitment/applications/${app.id}`,
-        entityType: 'job_application',
-        entityId: app.id,
-      });
+    await notifyPeople(tx, actor, panelIds, {
+      kind: 'interview.assigned',
+      title: 'You are on an interview panel',
+      body: `Scheduled ${row.scheduledAt.toISOString()} (${row.mode}). Give your feedback after the interview.`,
+      ...applicationRef(app.id),
+    });
     return { ...row, panel: panelIds };
   });
 }
@@ -1477,14 +1311,9 @@ export async function updateInterview(
 ) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:manage');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsInterviews)
-      .where(eq(opsInterviews.id, id as (typeof opsInterviews.$inferSelect)['id']))
-      .for('update');
-    if (!before) notFound('Interview');
+    const before = await rowById(tx, opsInterviews, id, 'Interview', true);
     if (!managesApplication(cov, before.applicationId)) deny('applications');
-    const from = before.status as InterviewStatus;
+    const from = before.status;
     if (from !== 'scheduled') throw new ConflictError(`This interview is already ${from}.`);
     const patch: Partial<typeof opsInterviews.$inferInsert> = {};
     if (input.status && input.status !== from) {
@@ -1493,11 +1322,9 @@ export async function updateInterview(
           `An interview cannot move from ${from} to ${input.status}.`,
         );
       if ((input.status === 'cancelled' || input.status === 'no_show') && !input.reason?.trim())
-        throw new ValidationError('Give a reason.', {
-          details: [{ location: 'body', path: ['reason'], message: 'Reason required' }],
-        });
+        throw fieldError('reason', 'Give a reason.', 'Reason required');
       patch.status = input.status;
-      patch.statusReason = input.reason?.trim() || null;
+      patch.statusReason = clean(input.reason);
     }
     if (input.scheduledAt) patch.scheduledAt = new Date(input.scheduledAt);
     if (Object.keys(patch).length === 0) throw new ValidationError('Nothing to change.');
@@ -1506,12 +1333,7 @@ export async function updateInterview(
       .set(patch)
       .where(eq(opsInterviews.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'interview.updated',
-      entityType: 'job_application',
-      entityId: before.applicationId,
+    await auditApplication(tx, actor, before.applicationId, 'interview.updated', {
       before: { interviewId: before.id, status: before.status, scheduledAt: before.scheduledAt },
       after: { interviewId: before.id, status: after?.status, scheduledAt: after?.scheduledAt },
       requestId,
@@ -1533,12 +1355,8 @@ export async function submitFeedback(
 ) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:read');
   return withTransaction(db, async (tx) => {
-    const [interview] = await tx
-      .select()
-      .from(opsInterviews)
-      .where(eq(opsInterviews.id, interviewId as (typeof opsInterviews.$inferSelect)['id']));
-    if (!interview) notFound('Interview');
-    const app = await getApplicationRow(tx, interview.applicationId);
+    const interview = await rowById(tx, opsInterviews, interviewId, 'Interview');
+    const app = await rowById(tx, opsJobApplications, interview.applicationId, 'Application');
     const panel = await tx
       .select({ staffId: opsInterviewPanelists.staffId })
       .from(opsInterviewPanelists)
@@ -1546,8 +1364,8 @@ export async function submitFeedback(
     const allowed = feedbackAllowed({
       actorStaffId: cov.staffId,
       panelStaffIds: panel.map((p) => p.staffId),
-      interviewStatus: interview.status as InterviewStatus,
-      applicationStage: app.stage as ApplicationStage,
+      interviewStatus: interview.status,
+      applicationStage: app.stage,
     });
     if (!allowed.ok) {
       if (allowed.code === 'NOT_INTERVIEWER') throw new ForbiddenError(allowed.message);
@@ -1568,13 +1386,8 @@ export async function submitFeedback(
           eq(opsInterviewPanelists.staffId, cov.staffId!),
         ),
       );
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'interview.feedback_submitted',
-      entityType: 'job_application',
-      entityId: app.id,
-      // The recommendation only; feedback notes stay out of the audit log.
+    // The recommendation only; feedback notes stay out of the audit log.
+    await auditApplication(tx, actor, app.id, 'interview.feedback_submitted', {
       after: { interviewId: interview.id, recommendation: input.recommendation },
       requestId,
     });
@@ -1586,7 +1399,7 @@ export async function submitFeedback(
 export async function listMyInterviews(db: Database, actor: Actor) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:read');
   if (!cov.staffId) return [];
-  const rows = await db
+  return db
     .select({
       interviewId: opsInterviews.id,
       scheduledAt: opsInterviews.scheduledAt,
@@ -1606,7 +1419,6 @@ export async function listMyInterviews(db: Database, actor: Actor) {
     .where(eq(opsInterviewPanelists.staffId, cov.staffId))
     .orderBy(desc(opsInterviews.scheduledAt))
     .limit(100);
-  return rows;
 }
 
 // --- offers ------------------------------------------------------------------------------------
@@ -1619,17 +1431,19 @@ export async function createOffer(
 ) {
   const cov = await recruitmentCoverage(db, actor, 'ops:recruitment:manage');
   if (input.validUntil && input.proposedStartDate && input.validUntil > input.proposedStartDate)
-    throw new ValidationError('The offer must expire on or before the proposed start date.', {
-      details: [{ location: 'body', path: ['validUntil'], message: 'After the start date' }],
-    });
+    throw fieldError(
+      'validUntil',
+      'The offer must expire on or before the proposed start date.',
+      'After the start date',
+    );
   return withTransaction(db, async (tx) => {
-    const app = await getApplicationRow(tx, input.applicationId, true);
+    const app = await rowById(tx, opsJobApplications, input.applicationId, 'Application', true);
     if (!managesApplication(cov, app.id)) deny('applications');
     if (app.stage !== 'offer')
       throw new ConflictError(
         'A decider must select the candidate ("Offer") before an offer is prepared.',
       );
-    if ((await liveOffersOf(tx, app.id)).length > 0)
+    if (await hasLiveOffer(tx, [app.id]))
       throw new ConflictError('This application already has a live offer.');
     const row = (
       await tx
@@ -1645,12 +1459,7 @@ export async function createOffer(
         })
         .returning()
     )[0]!;
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'offer.prepared',
-      entityType: 'job_application',
-      entityId: app.id,
+    await auditApplication(tx, actor, app.id, 'offer.prepared', {
       after: {
         offerId: row.id,
         status: row.status,
@@ -1672,53 +1481,44 @@ export async function transitionOffer(
 ) {
   const { canDecide, canManage, cov } = await transitionAccess(db, actor);
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsJobOffers)
-      .where(eq(opsJobOffers.id, id as OfferRow['id']))
-      .for('update');
-    if (!before) notFound('Offer');
-    const check = checkOfferTransition(before.status as OfferStatus, input.to, {
+    const before = await rowById(tx, opsJobOffers, id, 'Offer', true);
+    const check = checkOfferTransition(before.status, input.to, {
       canDecide,
       actorIsPreparer: before.preparedBy === actor.id,
       reason: input.reason,
     });
     authorise(check, canManage && managesApplication(cov, before.applicationId), 'applications');
     const now = new Date();
-    const patch: Partial<typeof opsJobOffers.$inferInsert> = {
-      status: input.to,
-      statusReason: input.reason?.trim() || null,
-    };
-    if (input.to === 'approved') Object.assign(patch, { approvedBy: actor.id, approvedAt: now });
-    if (input.to === 'extended') Object.assign(patch, { extendedBy: actor.id, extendedAt: now });
-    if (input.to === 'accepted' || input.to === 'declined') patch.respondedAt = now;
     const [after] = await tx
       .update(opsJobOffers)
-      .set(patch)
+      .set({
+        status: input.to,
+        statusReason: clean(input.reason),
+        ...(input.to === 'approved' ? { approvedBy: actor.id, approvedAt: now } : {}),
+        ...(input.to === 'extended' ? { extendedBy: actor.id, extendedAt: now } : {}),
+        ...(input.to === 'accepted' || input.to === 'declined' ? { respondedAt: now } : {}),
+      })
       .where(eq(opsJobOffers.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: `offer.${input.to}`,
-      entityType: 'job_application',
-      entityId: before.applicationId,
+    await auditApplication(tx, actor, before.applicationId, `offer.${input.to}`, {
       before: { offerId: before.id, status: before.status },
       after: { offerId: before.id, status: input.to },
       requestId,
     });
-    if (input.to === 'approved' && before.preparedBy !== actor.id)
-      await notify(tx, {
-        userIds: [before.preparedBy],
-        module: 'ops',
-        kind: 'offer.approved',
-        title: `Offer approved: ${before.offeredTitle}`,
-        body: 'Mark it as extended once you have given it to the candidate. Elevate OS sends nothing.',
-        link: `/ops/hr/recruitment/applications/${before.applicationId}`,
-        entityType: 'job_application',
-        entityId: before.applicationId,
-      });
-    return after as OfferRow;
+    if (input.to === 'approved')
+      await notifyPeople(
+        tx,
+        actor,
+        [],
+        {
+          kind: 'offer.approved',
+          title: `Offer approved: ${before.offeredTitle}`,
+          body: 'Mark it as extended once you have given it to the candidate. Elevate OS sends nothing.',
+          ...applicationRef(before.applicationId),
+        },
+        [before.preparedBy],
+      );
+    return after as typeof opsJobOffers.$inferSelect;
   });
 }
 
@@ -1741,25 +1541,15 @@ export async function convertCandidate(
   await recruitmentCoverage(db, actor, 'ops:recruitment:decide');
   if (input.managerStaffId) await activeStaff(db, input.managerStaffId, 'managerStaffId');
   return withTransaction(db, async (tx) => {
-    const app = await getApplicationRow(tx, applicationId, true);
+    const app = await rowById(tx, opsJobApplications, applicationId, 'Application', true);
     if (app.employeeStaffId) {
-      const [employee] = await tx
-        .select({
-          staffId: opsEmployeeRecords.staffId,
-          employeeCode: opsEmployeeRecords.employeeCode,
-        })
-        .from(opsEmployeeRecords)
-        .where(eq(opsEmployeeRecords.staffId, app.employeeStaffId));
-      const [kase] = await tx
-        .select({ id: opsLifecycleCases.id, code: opsLifecycleCases.code })
-        .from(opsLifecycleCases)
-        .where(eq(opsLifecycleCases.applicationId, app.id));
+      const { employee, onboardingCase } = await conversionOf(tx, app);
       return {
         created: false,
         staffId: app.employeeStaffId,
         employeeCode: employee?.employeeCode ?? null,
-        onboardingCaseId: kase?.id ?? null,
-        onboardingCaseCode: kase?.code ?? null,
+        onboardingCaseId: onboardingCase?.id ?? null,
+        onboardingCaseCode: onboardingCase?.code ?? null,
       };
     }
     if (app.stage !== 'offer')
@@ -1770,9 +1560,9 @@ export async function convertCandidate(
       .where(and(eq(opsJobOffers.applicationId, app.id), eq(opsJobOffers.status, 'accepted')));
     if (!offer)
       throw new ConflictError('Record the accepted offer before converting the candidate.');
-    const cand = await getCandidateRow(tx, app.candidateId, true);
+    const cand = await rowById(tx, opsCandidates, app.candidateId, 'Candidate', true);
     if (cand.status !== 'active') throw new ConflictError('This candidate was anonymised.');
-    const req = await getRequisitionRow(tx, app.requisitionId, true);
+    const req = await rowById(tx, opsRequisitions, app.requisitionId, 'Requisition', true);
     const employee = await insertEmployee(
       tx,
       actor,
@@ -1812,23 +1602,13 @@ export async function convertCandidate(
         .update(opsRequisitions)
         .set({ status: 'filled', statusReason: 'All openings hired', statusChangedAt: new Date() })
         .where(eq(opsRequisitions.id, req.id));
-      await recordAudit(tx, {
-        actorUserId: actor.id,
-        module: 'ops',
-        action: 'requisition.status_changed',
-        entityType: 'requisition',
-        entityId: req.id,
+      await auditRequisition(tx, actor, req.id, 'requisition.status_changed', {
         before: { status: req.status },
         after: { status: 'filled', reason: 'All openings hired' },
         requestId,
       });
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'candidate.converted',
-      entityType: 'job_application',
-      entityId: app.id,
+    await auditApplication(tx, actor, app.id, 'candidate.converted', {
       after: {
         candidateCode: cand.code,
         employeeCode: employee.employeeCode,

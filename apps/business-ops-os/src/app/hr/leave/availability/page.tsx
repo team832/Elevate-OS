@@ -10,12 +10,11 @@ import {
   FilterSelect,
   isIso,
   TimeNav,
-  timeNavItems,
+  type Sp,
 } from '../../attendance/time-ui';
 
 export const dynamic = 'force-dynamic';
 
-type Sp = Record<string, string | undefined>;
 const PART = { full: '', first_half: ' (AM)', second_half: ' (PM)' } as const;
 
 export default async function AvailabilityPage({ searchParams }: { searchParams: Promise<Sp> }) {
@@ -30,7 +29,7 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
         title="Team availability"
         description="Who is on leave and who has a shift each day, for the people in your scope. Pending leave is shown so clashes are visible before approval. Up to 31 days."
       />
-      <TimeNav current="/ops/hr/leave/availability" items={timeNavItems(access.user)} />
+      <TimeNav current="/ops/hr/leave/availability" user={access.user} />
       <Section label="Loading availability…">
         <Grid user={access.user} from={from} to={to} departmentId={sp.departmentId} />
       </Section>

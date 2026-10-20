@@ -46,6 +46,20 @@ const post = (
   headers?: Record<string, string>,
 ) => authedRequest(user, path, { method: 'POST', json, headers });
 
+/** HTTP status of a route call. */
+const status = async (
+  route: Parameters<typeof callRoute>[0],
+  req: Request,
+  params?: Record<string, string>,
+) => (await callRoute(route, req, params)).status;
+const leadRow = async (id: string) =>
+  (
+    await ctx.db
+      .select()
+      .from(opsLeads)
+      .where(eq(opsLeads.id, id as never))
+  )[0];
+
 async function newLead(user: StaffUser, over: Record<string, unknown> = {}) {
   return callRoute<Created>(
     createLead,
@@ -61,13 +75,11 @@ async function newLead(user: StaffUser, over: Record<string, unknown> = {}) {
 
 describe('POST /ops/api/v1/leads', () => {
   it('401 without a session, 403 for auditor and teacher, 400 with field paths for bad input', async () => {
-    expect(
-      (await callRoute(createLead, buildRequest('/ops/api/v1/leads', { json: {} }))).status,
-    ).toBe(401);
-    const auditor = await createTestUser(ctx.db, { roles: ['auditor'] });
-    expect((await callRoute(createLead, post(auditor, '/ops/api/v1/leads', {}))).status).toBe(403);
-    const teacher = await createTestUser(ctx.db, { roles: ['teacher'] });
-    expect((await callRoute(createLead, post(teacher, '/ops/api/v1/leads', {}))).status).toBe(403);
+    expect(await status(createLead, buildRequest('/ops/api/v1/leads', { json: {} }))).toBe(401);
+    for (const role of ['auditor', 'teacher'] as const) {
+      const user = await createTestUser(ctx.db, { roles: [role] });
+      expect(await status(createLead, post(user, '/ops/api/v1/leads', {}))).toBe(403);
+    }
     const bad = await newLead(counsellor, { studentPhone: '12345' });
     expect(bad.status).toBe(400);
     expect(bad.error?.details).toEqual([expect.objectContaining({ path: ['studentPhone'] })]);
@@ -83,10 +95,7 @@ describe('POST /ops/api/v1/leads', () => {
     });
     expect(res.status).toBe(201);
     expect(res.data?.lead.studentPhone).toBe(e164(raw));
-    const [lead] = await ctx.db
-      .select()
-      .from(opsLeads)
-      .where(eq(opsLeads.id, res.data!.lead.id as never));
+    const lead = await leadRow(res.data!.lead.id);
     expect(lead).toMatchObject({
       studentEmail: 'riya.t@example.test',
       ownerStaffId: counsellor.staffId,
@@ -130,11 +139,7 @@ describe('POST /ops/api/v1/leads', () => {
         acknowledgement: 'Twin sibling, different student',
       }),
     ]);
-    const [orig] = await ctx.db
-      .select()
-      .from(opsLeads)
-      .where(eq(opsLeads.id, first.data!.lead.id as never));
-    expect(orig?.mergedIntoLeadId).toBeNull();
+    expect((await leadRow(first.data!.lead.id))?.mergedIntoLeadId).toBeNull();
   });
 
   it('a shared guardian phone only is a POSSIBLE duplicate: saved with a warning, not blocked', async () => {
@@ -178,41 +183,24 @@ describe('own scope, assignment and contact', () => {
     const ids = list.data!.map((l) => l.id);
     expect(ids).toContain(mine.data!.lead.id);
     expect(ids).not.toContain(theirs.data!.lead.id);
-    expect(
-      (await callRoute(getLead, authedRequest(counsellor, '/x'), { id: theirs.data!.lead.id }))
-        .status,
-    ).toBe(403);
-    expect(
-      (await callRoute(getLead, authedRequest(manager, '/x'), { id: theirs.data!.lead.id })).status,
-    ).toBe(200);
+    const id = { id: theirs.data!.lead.id };
+    expect(await status(getLead, authedRequest(counsellor, '/x'), id)).toBe(403);
+    expect(await status(getLead, authedRequest(manager, '/x'), id)).toBe(200);
   });
 
   it('assignment: counsellor 403; manager assigns → handoff pending → owner accepts', async () => {
     const lead = await newLead(manager, { ownerStaffId: null });
     const id = lead.data!.lead.id;
-    expect(
-      (
-        await callRoute(assign, post(counsellor, '/x', { ownerStaffId: counsellor.staffId }), {
-          id,
-        })
-      ).status,
-    ).toBe(403);
-    expect(
-      (await callRoute(assign, post(manager, '/x', { ownerStaffId: counsellor.staffId }), { id }))
-        .status,
-    ).toBe(200);
-    const detail = await callRoute<{ assignment: string }>(
-      getLead,
-      authedRequest(counsellor, '/x'),
-      { id },
-    );
-    expect(detail.data?.assignment).toBe('handoff_pending');
-    expect((await callRoute(accept, post(otherCounsellor, '/x', {}), { id })).status).toBe(403);
-    expect((await callRoute(accept, post(counsellor, '/x', {}), { id })).status).toBe(200);
-    expect(
+    const owner = { ownerStaffId: counsellor.staffId };
+    const assignment = async () =>
       (await callRoute<{ assignment: string }>(getLead, authedRequest(counsellor, '/x'), { id }))
-        .data?.assignment,
-    ).toBe('accepted');
+        .data?.assignment;
+    expect(await status(assign, post(counsellor, '/x', owner), { id })).toBe(403);
+    expect(await status(assign, post(manager, '/x', owner), { id })).toBe(200);
+    expect(await assignment()).toBe('handoff_pending');
+    expect(await status(accept, post(otherCounsellor, '/x', {}), { id })).toBe(403);
+    expect(await status(accept, post(counsellor, '/x', {}), { id })).toBe(200);
+    expect(await assignment()).toBe('accepted');
   });
 
   it('BR-OPS-4: an unanswered call changes nothing; a two-way contact moves new → contacted once', async () => {
@@ -267,15 +255,8 @@ describe('merge review (explicit, audited)', () => {
       acknowledgeDuplicates: { reason: 'Checking later' },
     });
     const sid = source.data!.lead.id;
-    expect(
-      (
-        await callRoute(
-          merge,
-          post(counsellor, '/x', { targetLeadId: target.data!.lead.id, note: 'same person' }),
-          { id: sid },
-        )
-      ).status,
-    ).toBe(403);
+    const asCounsellor = { targetLeadId: target.data!.lead.id, note: 'same person' };
+    expect(await status(merge, post(counsellor, '/x', asCounsellor), { id: sid })).toBe(403);
     const res = await callRoute(
       merge,
       post(manager, '/x', {
@@ -285,16 +266,9 @@ describe('merge review (explicit, audited)', () => {
       { id: sid },
     );
     expect(res.status).toBe(200);
-    const [src] = await ctx.db
-      .select()
-      .from(opsLeads)
-      .where(eq(opsLeads.id, sid as never));
+    const src = await leadRow(sid);
     expect(src?.mergedIntoLeadId).toBe(target.data!.lead.id);
-    const [tgt] = await ctx.db
-      .select()
-      .from(opsLeads)
-      .where(eq(opsLeads.id, target.data!.lead.id as never));
-    expect(tgt?.studentEmail).toBe(src?.studentEmail);
+    expect((await leadRow(target.data!.lead.id))?.studentEmail).toBe(src?.studentEmail);
     const detail = await callRoute<{ enquiries: unknown[] }>(
       getLead,
       authedRequest(manager, '/x'),

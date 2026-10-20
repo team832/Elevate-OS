@@ -1,4 +1,5 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
+import type { Metric } from '@elevate/shared-contracts';
 import { Card, DataTable, EmptyState, PageHeader, StatTile } from '@elevate/shared-ui';
 import { ADMISSION_STATUS_LABELS, PIPELINE_ORDER, type AdmissionStatus } from '../../../domain';
 import { admissionsReportQuery } from '../../../server/admissions-schemas';
@@ -35,26 +36,18 @@ export default async function AdmissionsReportPage({
         className="el-inline-form"
         aria-label="Report period"
       >
-        <div className="el-field">
-          <label htmlFor="report-from">From</label>
-          <input
-            id="report-from"
-            name="from"
-            type="date"
-            className="el-input"
-            defaultValue={sp.from ?? ''}
-          />
-        </div>
-        <div className="el-field">
-          <label htmlFor="report-to">To</label>
-          <input
-            id="report-to"
-            name="to"
-            type="date"
-            className="el-input"
-            defaultValue={sp.to ?? ''}
-          />
-        </div>
+        {(['from', 'to'] as const).map((name) => (
+          <div key={name} className="el-field">
+            <label htmlFor={`report-${name}`}>{name === 'from' ? 'From' : 'To'}</label>
+            <input
+              id={`report-${name}`}
+              name={name}
+              type="date"
+              className="el-input"
+              defaultValue={sp[name] ?? ''}
+            />
+          </div>
+        ))}
         <button type="submit" className="el-button el-button-secondary">
           Show this period
         </button>
@@ -71,6 +64,16 @@ export default async function AdmissionsReportPage({
         <Report user={access.user} query={query} />
       </Section>
     </Frame>
+  );
+}
+
+function Tiles({ tiles }: { tiles: [string, Metric][] }) {
+  return (
+    <div className="el-grid">
+      {tiles.map(([label, metric]) => (
+        <StatTile key={label} label={label} metric={metric} />
+      ))}
+    </div>
   );
 }
 
@@ -93,49 +96,39 @@ async function Report({
         {d.scope === 'own' ? ' · only your own leads and admissions' : ''}
       </p>
       <Card title="Enquiries and pipeline">
-        <div className="el-grid">
-          <StatTile label="New enquiries" metric={k.newEnquiries} />
-          <StatTile label="Counselling sessions coming up" metric={k.counselling.upcoming} />
-          <StatTile
-            label="Past sessions without an outcome"
-            metric={k.counselling.pastUnrecorded}
-          />
-          <StatTile label="Demos in the next 7 days" metric={k.upcomingDemos} />
-          <StatTile
-            label="Applications awaiting a decision"
-            metric={k.decisions.awaitingDecision}
-          />
-          <StatTile
-            label="Fee approvals waiting for an approver"
-            metric={k.decisions.awaitingApproval}
-          />
-          <StatTile
-            label="Offers awaiting the family"
-            metric={k.decisions.offersAwaitingResponse}
-          />
-          <StatTile label="Overdue follow-ups" metric={k.overdueFollowUps} />
-        </div>
+        <Tiles
+          tiles={[
+            ['New enquiries', k.newEnquiries],
+            ['Counselling sessions coming up', k.counselling.upcoming],
+            ['Past sessions without an outcome', k.counselling.pastUnrecorded],
+            ['Demos in the next 7 days', k.upcomingDemos],
+            ['Applications awaiting a decision', k.decisions.awaitingDecision],
+            ['Fee approvals waiting for an approver', k.decisions.awaitingApproval],
+            ['Offers awaiting the family', k.decisions.offersAwaitingResponse],
+            ['Overdue follow-ups', k.overdueFollowUps],
+          ]}
+        />
       </Card>
       <Card
         title="Conversion"
         description={`Cohort ${fmtDate(d.cohort.from)} – ${fmtDate(d.cohort.to)}, ${d.cohort.windowDays}-day window (setting ${d.cohort.setting.decisionState}).`}
       >
-        <div className="el-grid">
-          <StatTile label="Lead → admission conversion" metric={k.conversion} />
-        </div>
+        <Tiles tiles={[['Lead → admission conversion', k.conversion]]} />
       </Card>
       <Card
         title="Enrolment handoff to Academic OS"
         description="Requests published in the period and what happened to them."
       >
-        <div className="el-grid">
-          <StatTile label="Requests sent" metric={k.handoff.requested} />
-          <StatTile label="Confirmed by Academic OS" metric={k.handoff.confirmed} />
-          <StatTile label="Rejected by Academic OS" metric={k.handoff.rejected} />
-          <StatTile label="Failed after all retries" metric={k.handoff.failed} />
-          <StatTile label="Still waiting" metric={k.handoff.awaiting} />
-          <StatTile label="Handoff success rate" metric={k.handoff.successRate} />
-        </div>
+        <Tiles
+          tiles={[
+            ['Requests sent', k.handoff.requested],
+            ['Confirmed by Academic OS', k.handoff.confirmed],
+            ['Rejected by Academic OS', k.handoff.rejected],
+            ['Failed after all retries', k.handoff.failed],
+            ['Still waiting', k.handoff.awaiting],
+            ['Handoff success rate', k.handoff.successRate],
+          ]}
+        />
       </Card>
       <div className="el-grid">
         <Card

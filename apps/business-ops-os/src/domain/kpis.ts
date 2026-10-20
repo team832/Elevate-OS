@@ -22,15 +22,11 @@ const meta = (definition: string, w: KpiWindow, unit: Metric['unit'], label?: st
   window: { from: w.from, to: w.to, label: label ?? windowLabel(w.from, w.to) },
   unit,
 });
-
-export const KPI_IDS = [
-  'new_leads',
-  'lead_to_admission_conversion',
-  'followup_compliance',
-  'task_completion_rate',
-  'overdue_work',
-  'unresolved_blockers',
-] as const;
+/** Point-in-time metadata: the window is today (IST). */
+const asOfMeta = (definition: string, asOf: Date, unit: Metric['unit']) => {
+  const today = istToday(asOf);
+  return meta(definition, { from: today, to: today }, unit, `As of ${windowLabel(today, today)}`);
+};
 
 // --- K-01 new leads ------------------------------------------------------------------------------
 
@@ -188,14 +184,10 @@ export function overdueWork(
   ).length;
   const f = followUps.filter((r) => r.status === 'open' && r.dueDate < today).length;
   return {
-    metric: metric.ok(
+    metric: pointCount(
       t + f,
-      meta(
-        'Open tasks and open follow-ups whose due date (Asia/Kolkata) is before today. Point in time.',
-        { from: today, to: today },
-        'count',
-        `As of ${windowLabel(today, today)}`,
-      ),
+      'Open tasks and open follow-ups whose due date (Asia/Kolkata) is before today. Point in time.',
+      asOf,
     ),
     tasks: t,
     followUps: f,
@@ -214,7 +206,6 @@ export function unresolvedBlockers(
   tasks: readonly TaskKpiRow[],
   asOf: Date,
 ): { metric: Metric; registerItems: number; blockedTasks: number } {
-  const today = istToday(asOf);
   const registerItems = risks.filter(
     (r) =>
       (r.kind === 'blocker' || r.kind === 'issue') &&
@@ -222,14 +213,10 @@ export function unresolvedBlockers(
   ).length;
   const blockedTasks = tasks.filter((t) => t.status === 'blocked').length;
   return {
-    metric: metric.ok(
+    metric: pointCount(
       registerItems + blockedTasks,
-      meta(
-        'Open or mitigating issues/blockers in the risk register plus tasks with status Blocked. Point in time.',
-        { from: today, to: today },
-        'count',
-        `As of ${windowLabel(today, today)}`,
-      ),
+      'Open or mitigating issues/blockers in the risk register plus tasks with status Blocked. Point in time.',
+      asOf,
     ),
     registerItems,
     blockedTasks,
@@ -237,11 +224,6 @@ export function unresolvedBlockers(
 }
 
 // --- operations dashboard (OPS-069) ----------------------------------------------------------------
-
-const asOfMeta = (definition: string, asOf: Date, unit: Metric['unit']) => {
-  const today = istToday(asOf);
-  return meta(definition, { from: today, to: today }, unit, `As of ${windowLabel(today, today)}`);
-};
 
 /** A point-in-time count from Ops' own complete tables (a real 0 is 0). */
 export function pointCount(n: number, definition: string, asOf: Date): Metric {

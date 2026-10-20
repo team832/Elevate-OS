@@ -15,7 +15,7 @@ import { getLifecycleCase } from '../../../../server/hr/offboarding';
 import { ActionForm } from '../../../../ui/action-form';
 import { fmtDate, fmtDateTime, humanise, statusTone } from '../../../../ui/format';
 import { load, Section } from '../../../../ui/frame';
-import { HistoryPanel } from '../../recruitment/_components/lifecycle-ui';
+import { HistoryPanel, REASON_FIELD } from '../../recruitment/_components/lifecycle-ui';
 
 const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
   pending: 'To do',
@@ -45,7 +45,7 @@ export async function CaseDetail({ user, id }: { user: AuthenticatedUser; id: st
       />
       <p>
         <StatusBadge tone={statusTone(c.status === 'completed' ? 'completed' : c.status)}>
-          {labels[c.status as keyof typeof labels]}
+          {labels[c.status]}
         </StatusBadge>{' '}
         Opened by {c.openedByName ?? 'unknown'} on {fmtDateTime(c.createdAt)}
         {c.approvedByName
@@ -150,7 +150,7 @@ export async function CaseDetail({ user, id }: { user: AuthenticatedUser; id: st
             action={`/ops/api/v1/hr/lifecycle-cases/${c.id}/cancel`}
             submitLabel={`Cancel ${c.kind}`}
             variant="danger"
-            fields={[{ name: 'reason', label: 'Reason', required: true }]}
+            fields={[REASON_FIELD]}
           />
         </Card>
       ) : null}
@@ -163,7 +163,7 @@ export async function CaseDetail({ user, id }: { user: AuthenticatedUser; id: st
             action={`/ops/api/v1/hr/lifecycle-cases/${c.id}/cancel`}
             submitLabel="Retract separation"
             variant="danger"
-            fields={[{ name: 'reason', label: 'Reason', required: true }]}
+            fields={[REASON_FIELD]}
           />
         </Card>
       ) : null}

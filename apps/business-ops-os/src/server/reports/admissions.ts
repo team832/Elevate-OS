@@ -7,7 +7,7 @@
  * limited to the counsellor's leads and admissions and the page says so.
  * Missing is never zero: rates with no denominator are `missing`.
  */
-import { and, desc, eq, inArray, isNull, or, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or, type SQL, type SQLWrapper } from 'drizzle-orm';
 import {
   approvals,
   eventDeliveries,
@@ -49,6 +49,11 @@ import { feeArrangementPolicy } from '../approval-policies';
 import { accessScope, type Actor } from '../context';
 import { loadSettings } from '../settings';
 
+const REPLY_OUTCOME = new Map<string, 'confirmed' | 'rejected'>([
+  ['academic.enrolment.confirmed', 'confirmed'],
+  ['academic.enrolment.rejected', 'rejected'],
+]);
+
 export interface AdmissionsReportOptions {
   from?: string;
   to?: string;
@@ -85,19 +90,14 @@ export async function buildAdmissionsReport(
     from: (options.from ?? week.from) as IsoDate,
     to: (options.to ?? week.to) as IsoDate,
   };
-  const own = access.scope === 'own' ? await ownSets(db, access.staffId) : null;
-  const leadFilter = (col: typeof opsLeads.id | typeof opsEnquiries.leadId): SQL | undefined =>
-    own
-      ? own.leadIds.length
-        ? inArray(col, own.leadIds as never[])
-        : eq(col, null as never)
-      : undefined;
-  const admissionFilter = (col: typeof opsAdmissions.id): SQL | undefined =>
-    own
-      ? own.admissionIds.length
-        ? inArray(col, own.admissionIds as never[])
-        : eq(col, null as never)
-      : undefined;
+  const ownStaffId = access.scope === 'own' ? access.staffId : undefined;
+  const own = ownStaffId !== undefined ? await ownSets(db, ownStaffId) : null;
+  /** Own scope: only these ids (none = no rows); all scope: no filter. */
+  const within = (col: SQLWrapper, ids: string[] | undefined): SQL | undefined =>
+    ids ? (ids.length ? inArray(col, ids as never[]) : eq(col, null as never)) : undefined;
+  const leadFilter = (col: typeof opsLeads.id | typeof opsEnquiries.leadId) =>
+    within(col, own?.leadIds);
+  const admissionFilter = (col: typeof opsAdmissions.id) => within(col, own?.admissionIds);
 
   const settings = await loadSettings(db);
   const conversionDays = settings['kpi.conversion'].value.windowDays;
@@ -153,13 +153,7 @@ export async function buildAdmissionsReport(
       db
         .select({ status: opsFollowUps.status, dueDate: opsFollowUps.dueDate })
         .from(opsFollowUps)
-        .where(
-          own
-            ? access.scope === 'own' && access.staffId
-              ? eq(opsFollowUps.ownerStaffId, access.staffId)
-              : eq(opsFollowUps.ownerStaffId, null as never)
-            : undefined,
-        ),
+        .where(own ? eq(opsFollowUps.ownerStaffId, ownStaffId as never) : undefined),
     ]);
 
   // Latest fee-arrangement approval per admission.
@@ -270,19 +264,11 @@ export async function buildAdmissionsReport(
       upcomingDemos: upcomingDemos(demos, now, 7),
       decisions: pendingDecisions(admissionRows, now),
       handoff: handoffOutcomes(
-        scopedRequests.map((e) => {
-          const reply = replyOf.get(e.id);
-          return {
-            occurredAt: e.occurredAt,
-            reply:
-              reply === 'academic.enrolment.confirmed'
-                ? ('confirmed' as const)
-                : reply === 'academic.enrolment.rejected'
-                  ? ('rejected' as const)
-                  : null,
-            academicDelivery: deliveryOf.get(e.id) ?? null,
-          };
-        }),
+        scopedRequests.map((e) => ({
+          occurredAt: e.occurredAt,
+          reply: REPLY_OUTCOME.get(replyOf.get(e.id) ?? '') ?? null,
+          academicDelivery: deliveryOf.get(e.id) ?? null,
+        })),
         window,
       ),
       overdueFollowUps: overdueFollowUps(followUps, now),

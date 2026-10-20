@@ -17,11 +17,10 @@ import {
   type Database,
   type OpsDecisionId,
   type OpsMilestoneId,
-  type OpsProjectId,
   type OpsRiskId,
   type OpsRiskMitigationId,
 } from '@elevate/database';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ValidationError } from '@elevate/shared-contracts';
 import type { z } from 'zod';
 import {
@@ -36,6 +35,7 @@ import {
   type MitigationStatus,
 } from '../domain';
 import { accessScope, activeStaff, nextCode, notFound, type Actor } from './context';
+import { defined, opsAudit, rowById } from './ops-common';
 import type {
   decisionBody,
   milestoneBody,
@@ -48,8 +48,11 @@ import type {
 } from './schemas';
 import type { mitigationBody, mitigationUpdateBody } from './work-schemas';
 
-const defined = <T extends object>(o: T) =>
-  Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+const audit = {
+  decision: opsAudit('decision'),
+  risk: opsAudit('risk'),
+  project: opsAudit('project'),
+};
 
 async function staffNames(db: Database) {
   const rows = await db
@@ -98,15 +101,7 @@ export async function createDecision(
         createdBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'decision.created',
-      entityType: 'decision',
-      entityId: row?.id ?? null,
-      after: row,
-      requestId,
-    });
+    await audit.decision(tx, actor, row?.id, 'decision.created', { after: row }, requestId);
     return row;
   });
 }
@@ -120,12 +115,7 @@ export async function updateDecision(
 ) {
   await accessScope(db, actor, 'ops:decisions:write');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsDecisions)
-      .where(eq(opsDecisions.id, id as OpsDecisionId))
-      .for('update');
-    if (!before) notFound('Decision');
+    const before = await rowById(tx, opsDecisions, id, 'Decision', true);
     const state = input.state ?? before.state;
     const supersededBy = 'supersededById' in input ? input.supersededById : before.supersededById;
     if (state === 'superseded') {
@@ -145,19 +135,10 @@ export async function updateDecision(
       throw new ValidationError('A confirmed decision needs the date it was decided (PLT-007).');
     const [after] = await tx
       .update(opsDecisions)
-      .set(defined(input))
+      .set(defined(input) as Partial<typeof opsDecisions.$inferInsert>)
       .where(eq(opsDecisions.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'decision.updated',
-      entityType: 'decision',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    await audit.decision(tx, actor, before.id, 'decision.updated', { before, after }, requestId);
     return after;
   });
 }
@@ -197,15 +178,7 @@ export async function createRisk(
       .insert(opsRisks)
       .values({ ...(input as typeof opsRisks.$inferInsert), code, createdBy: actor.id })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'risk.created',
-      entityType: 'risk',
-      entityId: row?.id ?? null,
-      after: row,
-      requestId,
-    });
+    await audit.risk(tx, actor, row?.id, 'risk.created', { after: row }, requestId);
     return row;
   });
 }
@@ -220,27 +193,13 @@ export async function updateRisk(
   await accessScope(db, actor, 'ops:risks:write');
   if (input.ownerStaffId) await activeStaff(db, input.ownerStaffId, 'ownerStaffId');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsRisks)
-      .where(eq(opsRisks.id, id as OpsRiskId))
-      .for('update');
-    if (!before) notFound('Risk');
+    const before = await rowById(tx, opsRisks, id, 'Risk', true);
     const [after] = await tx
       .update(opsRisks)
       .set(defined(input) as Partial<typeof opsRisks.$inferInsert>)
       .where(eq(opsRisks.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'risk.updated',
-      entityType: 'risk',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    await audit.risk(tx, actor, before.id, 'risk.updated', { before, after }, requestId);
     return after;
   });
 }
@@ -303,15 +262,7 @@ export async function createProject(
       .insert(opsProjects)
       .values({ ...(input as typeof opsProjects.$inferInsert), code, createdBy: actor.id })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'project.created',
-      entityType: 'project',
-      entityId: row?.id ?? null,
-      after: row,
-      requestId,
-    });
+    await audit.project(tx, actor, row?.id, 'project.created', { after: row }, requestId);
     return row;
   });
 }
@@ -325,12 +276,7 @@ export async function updateProject(
 ) {
   await accessScope(db, actor, 'ops:risks:write');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsProjects)
-      .where(eq(opsProjects.id, id as OpsProjectId))
-      .for('update');
-    if (!before) notFound('Project');
+    const before = await rowById(tx, opsProjects, id, 'Project', true);
     const merged = { ...before, ...defined(input) };
     if (merged.startDate && merged.endDate && merged.endDate < merged.startDate)
       throw new ValidationError('The end date is before the start date.');
@@ -339,16 +285,7 @@ export async function updateProject(
       .set(defined(input) as Partial<typeof opsProjects.$inferInsert>)
       .where(eq(opsProjects.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'project.updated',
-      entityType: 'project',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    await audit.project(tx, actor, before.id, 'project.updated', { before, after }, requestId);
     return after;
   });
 }
@@ -388,12 +325,7 @@ export async function addMilestone(
 ) {
   await accessScope(db, actor, 'ops:risks:write');
   return withTransaction(db, async (tx) => {
-    const [project] = await tx
-      .select()
-      .from(opsProjects)
-      .where(eq(opsProjects.id, projectId as OpsProjectId))
-      .for('update');
-    if (!project) notFound('Project');
+    const project = await rowById(tx, opsProjects, projectId, 'Project', true);
     const [row] = await tx
       .insert(opsMilestones)
       .values({
@@ -405,15 +337,7 @@ export async function addMilestone(
       .returning();
     if (!row) throw new Error('milestone insert returned no row');
     for (const dep of input.dependsOnMilestoneIds) await addMilestoneEdge(tx, row.id, dep);
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'milestone.created',
-      entityType: 'project',
-      entityId: project.id,
-      after: row,
-      requestId,
-    });
+    await audit.project(tx, actor, project.id, 'milestone.created', { after: row }, requestId);
     return row;
   });
 }
@@ -427,12 +351,7 @@ export async function updateMilestone(
 ) {
   await accessScope(db, actor, 'ops:risks:write');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsMilestones)
-      .where(eq(opsMilestones.id, id as OpsMilestoneId))
-      .for('update');
-    if (!before) notFound('Milestone');
+    const before = await rowById(tx, opsMilestones, id, 'Milestone', true);
     if (input.addDependsOnMilestoneId)
       await addMilestoneEdge(tx, before.id, input.addDependsOnMilestoneId);
     if (input.status === 'done') {
@@ -459,16 +378,14 @@ export async function updateMilestone(
     const [after] = Object.keys(patch).length
       ? await tx.update(opsMilestones).set(patch).where(eq(opsMilestones.id, before.id)).returning()
       : [before];
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'milestone.updated',
-      entityType: 'project',
-      entityId: before.projectId,
-      before,
-      after,
+    await audit.project(
+      tx,
+      actor,
+      before.projectId,
+      'milestone.updated',
+      { before, after },
       requestId,
-    });
+    );
     return after;
   });
 }
@@ -511,12 +428,7 @@ export async function addMitigation(
   await accessScope(db, actor, 'ops:risks:write');
   if (input.ownerStaffId) await activeStaff(db, input.ownerStaffId, 'ownerStaffId');
   return withTransaction(db, async (tx) => {
-    const [risk] = await tx
-      .select()
-      .from(opsRisks)
-      .where(eq(opsRisks.id, riskId as OpsRiskId))
-      .for('update');
-    if (!risk) notFound('Risk');
+    const risk = await rowById(tx, opsRisks, riskId, 'Risk', true);
     if (risk.status === 'closed' || risk.status === 'resolved')
       throw new ConflictError('Reopen the risk before adding mitigation actions.');
     const [row] = await tx
@@ -529,15 +441,7 @@ export async function addMitigation(
         createdBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'risk.mitigation_added',
-      entityType: 'risk',
-      entityId: risk.id,
-      after: row,
-      requestId,
-    });
+    await audit.risk(tx, actor, risk.id, 'risk.mitigation_added', { after: row }, requestId);
     return row;
   });
 }
@@ -585,16 +489,14 @@ export async function updateMitigation(
       .set(patch)
       .where(eq(opsRiskMitigations.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'risk.mitigation_updated',
-      entityType: 'risk',
-      entityId: before.riskId,
-      before,
-      after,
+    await audit.risk(
+      tx,
+      actor,
+      before.riskId,
+      'risk.mitigation_updated',
+      { before, after },
       requestId,
-    });
+    );
     return after;
   });
 }

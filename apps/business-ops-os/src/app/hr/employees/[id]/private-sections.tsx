@@ -19,6 +19,20 @@ import { fmtDate, fmtDateTime, humanise } from '../../../../ui/format';
 import { load } from '../../../../ui/frame';
 import { hrTone, options } from '../../../../ui/hr-records';
 
+/** Personal-detail fields of the edit form, in display order. */
+const DETAIL_FIELDS = [
+  { name: 'personalEmail', label: 'Personal email', type: 'email' },
+  { name: 'personalPhone', label: 'Personal phone', type: 'tel' },
+  { name: 'addressLine1', label: 'Address line 1' },
+  { name: 'addressLine2', label: 'Address line 2' },
+  { name: 'city', label: 'City' },
+  { name: 'state', label: 'State' },
+  { name: 'postalCode', label: 'PIN code' },
+  { name: 'country', label: 'Country' },
+] as const;
+
+const REASON = [{ name: 'reason', label: 'Reason', required: true }];
+
 const mayManage = async (
   user: AuthenticatedUser,
   permission: Permission,
@@ -88,32 +102,7 @@ export async function PrivateSection({
                   label: 'Legal name (as on employment documents)',
                   defaultValue: p.legalName ?? '',
                 },
-                {
-                  name: 'personalEmail',
-                  label: 'Personal email',
-                  type: 'email',
-                  defaultValue: d?.personalEmail ?? '',
-                },
-                {
-                  name: 'personalPhone',
-                  label: 'Personal phone',
-                  type: 'tel',
-                  defaultValue: d?.personalPhone ?? '',
-                },
-                {
-                  name: 'addressLine1',
-                  label: 'Address line 1',
-                  defaultValue: d?.addressLine1 ?? '',
-                },
-                {
-                  name: 'addressLine2',
-                  label: 'Address line 2',
-                  defaultValue: d?.addressLine2 ?? '',
-                },
-                { name: 'city', label: 'City', defaultValue: d?.city ?? '' },
-                { name: 'state', label: 'State', defaultValue: d?.state ?? '' },
-                { name: 'postalCode', label: 'PIN code', defaultValue: d?.postalCode ?? '' },
-                { name: 'country', label: 'Country', defaultValue: d?.country ?? '' },
+                ...DETAIL_FIELDS.map((f) => ({ ...f, defaultValue: d?.[f.name] ?? '' })),
               ]}
             />
           </details>
@@ -391,7 +380,7 @@ function DocumentActions({
           submitLabel="Reject deletion"
           variant="secondary"
           extra={{ action: 'reject_deletion' }}
-          fields={[{ name: 'reason', label: 'Reason', required: true }]}
+          fields={REASON}
           compact
         />
       </div>
@@ -414,7 +403,7 @@ function DocumentActions({
         submitLabel="Place retention hold"
         variant="secondary"
         extra={{ action: 'hold' }}
-        fields={[{ name: 'reason', label: 'Reason', required: true }]}
+        fields={REASON}
         compact
       />
       <ActionForm
@@ -422,7 +411,7 @@ function DocumentActions({
         submitLabel="Request deletion"
         variant="danger"
         extra={{ action: 'request_deletion' }}
-        fields={[{ name: 'reason', label: 'Reason', required: true }]}
+        fields={REASON}
         compact
       />
     </div>

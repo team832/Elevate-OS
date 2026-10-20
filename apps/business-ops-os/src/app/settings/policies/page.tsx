@@ -6,7 +6,7 @@ import { formOptions } from '../../../server/options';
 import { listPolicies } from '../../../server/policies-register';
 import { policyListQuery } from '../../../server/work-schemas';
 import { ActionForm } from '../../../ui/action-form';
-import { fmtDate, humanise } from '../../../ui/format';
+import { decisionTone, fmtDate, humanise } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 
 export const dynamic = 'force-dynamic';
@@ -136,11 +136,7 @@ async function Register({ user, query }: { user: AuthenticatedUser; query: Query
             key: 'status',
             header: 'Status',
             render: (p) => (
-              <StatusBadge
-                tone={
-                  p.status === 'approved' ? 'success' : p.status === 'retired' ? 'neutral' : 'info'
-                }
-              >
+              <StatusBadge tone={decisionTone(p.status)}>
                 {POLICY_STATUS_LABELS[p.status as (typeof POLICY_STATUSES)[number]]}
               </StatusBadge>
             ),
@@ -215,11 +211,7 @@ async function NewPolicy() {
             type: 'select',
             options: r.data.staff,
           },
-          {
-            name: 'ownerDecisionRef',
-            label: 'Owner decision (optional)',
-            hint: 'e.g. OD-026',
-          },
+          { name: 'ownerDecisionRef', label: 'Owner decision (optional)', hint: 'e.g. OD-026' },
           {
             name: 'linkedSettingKeys',
             label: 'Linked setting keys (comma separated)',

@@ -27,6 +27,12 @@ const ROLES = [
   { value: 'backup', label: 'Backup' },
 ] as const;
 const PAGE_SIZE = 50;
+const JOBS = [
+  ['task-reminders', 'Send task reminders'],
+  ['task-escalations', 'Run escalations'],
+  ['follow-up-reminders', 'Send follow-up reminders'],
+  ['enrolment-replies', 'Process Academic OS replies'],
+] as const;
 
 function href(q: Partial<TaskSearchQuery>, page?: number) {
   const p = new URLSearchParams();
@@ -242,32 +248,19 @@ async function NewTask({ managerView }: { managerView: boolean }) {
             { name: 'title', label: 'Title', required: true },
             { name: 'description', label: 'Description', type: 'textarea' },
             ...(managerView
-              ? [
-                  {
-                    name: 'ownerStaffId',
-                    label: 'Owner',
-                    type: 'select' as const,
-                    options: r.data.staff,
-                  },
-                  {
-                    name: 'accountableStaffId',
-                    label: 'Accountable',
-                    type: 'select' as const,
-                    options: r.data.staff,
-                  },
-                  {
-                    name: 'backupStaffId',
-                    label: 'Backup',
-                    type: 'select' as const,
-                    options: r.data.staff,
-                  },
-                  {
-                    name: 'departmentId',
-                    label: 'Department',
-                    type: 'select' as const,
-                    options: r.data.departments,
-                  },
-                ]
+              ? (
+                  [
+                    ['ownerStaffId', 'Owner', r.data.staff],
+                    ['accountableStaffId', 'Accountable', r.data.staff],
+                    ['backupStaffId', 'Backup', r.data.staff],
+                    ['departmentId', 'Department', r.data.departments],
+                  ] as const
+                ).map(([name, label, options]) => ({
+                  name,
+                  label,
+                  type: 'select' as const,
+                  options,
+                }))
               : []),
             { name: 'dueDate', label: 'Due date', type: 'date' },
             {
@@ -286,26 +279,14 @@ async function NewTask({ managerView }: { managerView: boolean }) {
           title="Run jobs"
           description="No scheduler yet (wave 3): run these by hand. Each run is idempotent."
         >
-          <ActionForm
-            action="/ops/api/v1/jobs/task-reminders"
-            submitLabel="Send task reminders"
-            variant="secondary"
-          />
-          <ActionForm
-            action="/ops/api/v1/jobs/task-escalations"
-            submitLabel="Run escalations"
-            variant="secondary"
-          />
-          <ActionForm
-            action="/ops/api/v1/jobs/follow-up-reminders"
-            submitLabel="Send follow-up reminders"
-            variant="secondary"
-          />
-          <ActionForm
-            action="/ops/api/v1/jobs/enrolment-replies"
-            submitLabel="Process Academic OS replies"
-            variant="secondary"
-          />
+          {JOBS.map(([job, label]) => (
+            <ActionForm
+              key={job}
+              action={`/ops/api/v1/jobs/${job}`}
+              submitLabel={label}
+              variant="secondary"
+            />
+          ))}
         </Card>
       ) : null}
     </div>

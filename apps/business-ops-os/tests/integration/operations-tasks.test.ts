@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
-import { authedRequest, callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
+import { callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import {
   auditEvents,
   notifications,
@@ -29,7 +29,7 @@ import { PATCH as patchTask } from '../../src/app/api/v1/tasks/[id]/route';
 import { POST as runJob } from '../../src/app/api/v1/jobs/[job]/route';
 import { runTaskReminders } from '../../src/server/escalations';
 import { isoDaysFromNow, setupReference, type StaffUser } from './fixtures';
-import { department, post, staffIn } from './operations-fixtures';
+import { department, get, post, staffIn, statusOf } from './operations-fixtures';
 
 const ctx = setupTestDatabase();
 const runReminders = (req: Request) =>
@@ -71,108 +71,60 @@ const audits = (entityId: string, action: string) =>
     .select()
     .from(auditEvents)
     .where(and(eq(auditEvents.entityId, entityId), eq(auditEvents.action, action)));
+const notes = (userId: string, kind: string) =>
+  ctx.db
+    .select()
+    .from(notifications)
+    .where(and(eq(notifications.userId, userId as never), eq(notifications.kind, kind)));
 
 describe('task comments (append-only, hidden with a reason)', () => {
   it('401 / 403 / 400 / 201 and own scope', async () => {
-    const t = await task();
+    const { id } = await task();
     const anon = new Request('http://localhost/ops/api/v1/x', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ body: 'x' }),
     });
-    expect((await callRoute(addComment, anon, { id: t.id })).status).toBe(401);
+    expect(await statusOf(addComment, anon, { id })).toBe(401);
     const auditor = await createTestUser(ctx.db, { roles: ['auditor'] });
-    expect((await callRoute(addComment, post(auditor, { body: 'x' }), { id: t.id })).status).toBe(
-      403,
-    );
-    expect((await callRoute(addComment, post(counsellor, { body: '' }), { id: t.id })).status).toBe(
-      400,
-    );
-    expect(
-      (await callRoute(addComment, post(counsellor2, { body: 'Not mine' }), { id: t.id })).status,
-    ).toBe(403); // own scope: not owner/accountable/backup
-    const ok = await callRoute<{ id: string }>(
-      addComment,
-      post(counsellor, { body: 'Called the parent; waiting for the form.' }),
-      { id: t.id },
-    );
-    expect(ok.status).toBe(201);
-    expect(await audits(t.id, 'task.comment_added')).toHaveLength(1);
+    expect(await statusOf(addComment, post(auditor, { body: 'x' }), { id })).toBe(403);
+    expect(await statusOf(addComment, post(counsellor, { body: '' }), { id })).toBe(400);
+    // own scope: not owner/accountable/backup
+    expect(await statusOf(addComment, post(counsellor2, { body: 'Not mine' }), { id })).toBe(403);
+    const body = 'Called the parent; waiting for the form.';
+    expect(await statusOf(addComment, post(counsellor, { body }), { id })).toBe(201);
+    expect(await audits(id, 'task.comment_added')).toHaveLength(1);
   });
 
   it('only the author or a manager hides; the reason is kept; hidden body withheld from own-scope readers', async () => {
-    const t = await task({ backupStaffId: teacher.staffId });
-    const c = await callRoute<{ id: string }>(
-      addComment,
-      post(counsellor, { body: 'Wrong number recorded (fictional).' }),
-      { id: t.id },
-    );
-    const cid = c.data!.id;
-    expect(
-      (
-        await callRoute(hideComment, post(teacher, { reason: 'mine now' }), {
-          id: t.id,
-          commentId: cid,
-        })
-      ).status,
-    ).toBe(403);
-    expect(
-      (await callRoute(hideComment, post(counsellor, { reason: '' }), { id: t.id, commentId: cid }))
-        .status,
-    ).toBe(400);
-    expect(
-      (
-        await callRoute(hideComment, post(counsellor, { reason: 'Posted on the wrong task' }), {
-          id: t.id,
-          commentId: cid,
-        })
-      ).status,
-    ).toBe(200);
-    expect(
-      (
-        await callRoute(hideComment, post(manager, { reason: 'again' }), {
-          id: t.id,
-          commentId: cid,
-        })
-      ).status,
-    ).toBe(409);
+    const { id } = await task({ backupStaffId: teacher.staffId });
+    const body = 'Wrong number recorded (fictional).';
+    const hiddenReason = 'Posted on the wrong task';
+    const c = await callRoute<{ id: string }>(addComment, post(counsellor, { body }), { id });
+    const at = { id, commentId: c.data!.id };
+    expect(await statusOf(hideComment, post(teacher, { reason: 'mine now' }), at)).toBe(403);
+    expect(await statusOf(hideComment, post(counsellor, { reason: '' }), at)).toBe(400);
+    expect(await statusOf(hideComment, post(counsellor, { reason: hiddenReason }), at)).toBe(200);
+    expect(await statusOf(hideComment, post(manager, { reason: 'again' }), at)).toBe(409);
     const [row] = await ctx.db
       .select()
       .from(opsTaskComments)
-      .where(eq(opsTaskComments.id, cid as never));
-    expect(row).toMatchObject({
-      body: 'Wrong number recorded (fictional).',
-      hiddenReason: 'Posted on the wrong task',
-    });
+      .where(eq(opsTaskComments.id, at.commentId as never));
+    expect(row).toMatchObject({ body, hiddenReason });
     type C = { id: string; body: string | null; hidden: boolean; hiddenReason: string };
-    const asOwner = await callRoute<C[]>(listComments, authedRequest(counsellor, '/x'), {
-      id: t.id,
-    });
-    expect(asOwner.data?.[0]).toMatchObject({
-      hidden: true,
-      body: null,
-      hiddenReason: 'Posted on the wrong task',
-    });
-    const asManager = await callRoute<C[]>(listComments, authedRequest(manager, '/x'), {
-      id: t.id,
-    });
-    expect(asManager.data?.[0]?.body).toBe('Wrong number recorded (fictional).');
-    expect(await audits(t.id, 'task.comment_hidden')).toHaveLength(1);
+    const asOwner = await callRoute<C[]>(listComments, get(counsellor), { id });
+    expect(asOwner.data?.[0]).toMatchObject({ hidden: true, body: null, hiddenReason });
+    const asManager = await callRoute<C[]>(listComments, get(manager), { id });
+    expect(asManager.data?.[0]?.body).toBe(body);
+    expect(await audits(id, 'task.comment_hidden')).toHaveLength(1);
   });
 });
 
 describe('task document references', () => {
   it('stores label + location only; unsafe links are rejected; removal needs a reason', async () => {
-    const t = await task();
-    expect(
-      (
-        await callRoute(
-          addReference,
-          post(counsellor, { label: 'Form', location: 'javascript:alert(1)' }),
-          { id: t.id },
-        )
-      ).status,
-    ).toBe(400);
+    const { id } = await task();
+    const unsafe = { label: 'Form', location: 'javascript:alert(1)' };
+    expect(await statusOf(addReference, post(counsellor, unsafe), { id })).toBe(400);
     const ref = await callRoute<{ id: string }>(
       addReference,
       post(counsellor, {
@@ -180,45 +132,30 @@ describe('task document references', () => {
         location: 'Admissions drive › 2026 › forms',
         kind: 'evidence',
       }),
-      { id: t.id },
+      { id },
     );
     expect(ref.status).toBe(201);
+    const at = { id, referenceId: ref.data!.id };
+    expect(await statusOf(removeReference, post(counsellor2, { reason: 'x' }), at)).toBe(403);
     expect(
-      (
-        await callRoute(removeReference, post(counsellor2, { reason: 'x' }), {
-          id: t.id,
-          referenceId: ref.data!.id,
-        })
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await callRoute(removeReference, post(counsellor, { reason: 'Superseded by v2' }), {
-          id: t.id,
-          referenceId: ref.data!.id,
-        })
-      ).status,
+      await statusOf(removeReference, post(counsellor, { reason: 'Superseded by v2' }), at),
     ).toBe(200);
   });
 });
 
 describe('task ownership, completion with evidence and blockers', () => {
   it('completion needs evidence; only the owner (or manager) changes status', async () => {
-    const t = await task();
+    const { id } = await task();
+    expect(await statusOf(setStatus, post(counsellor, { to: 'completed' }), { id })).toBe(400);
     expect(
-      (await callRoute(setStatus, post(counsellor, { to: 'completed' }), { id: t.id })).status,
-    ).toBe(400);
-    expect(
-      (
-        await callRoute(setStatus, post(counsellor2, { to: 'completed', completionNote: 'x' }), {
-          id: t.id,
-        })
-      ).status,
+      await statusOf(setStatus, post(counsellor2, { to: 'completed', completionNote: 'x' }), {
+        id,
+      }),
     ).toBe(403);
     const done = await callRoute<{ status: string; awaitingReview: boolean }>(
       setStatus,
       post(counsellor, { to: 'completed', evidenceLink: 'https://example.test/evidence' }),
-      { id: t.id },
+      { id },
     );
     expect(done.data).toMatchObject({ status: 'completed', awaitingReview: false });
   });
@@ -226,102 +163,57 @@ describe('task ownership, completion with evidence and blockers', () => {
 
 describe('supervisor review (completed → awaiting review)', () => {
   it('manager-only requirement; completion opens a review; completer/owner cannot decide; accountable accepts', async () => {
-    const t = await task({ accountableStaffId: manager2.staffId });
-    expect((await callRoute(requireReview, post(counsellor, {}, 'PUT'), { id: t.id })).status).toBe(
-      403,
-    );
-    expect(
-      (
-        await callRoute(
-          requireReview,
-          post(manager, { reviewerStaffId: counsellor.staffId }, 'PUT'),
-          {
-            id: t.id,
-          },
-        )
-      ).status,
-    ).toBe(400); // reviewer = owner
-    expect((await callRoute(requireReview, post(manager, {}, 'PUT'), { id: t.id })).status).toBe(
-      200,
-    );
+    const { id } = await task({ accountableStaffId: manager2.staffId });
+    expect(await statusOf(requireReview, post(counsellor, {}, 'PUT'), { id })).toBe(403);
+    const ownerAsReviewer = post(manager, { reviewerStaffId: counsellor.staffId }, 'PUT');
+    expect(await statusOf(requireReview, ownerAsReviewer, { id })).toBe(400); // reviewer = owner
+    expect(await statusOf(requireReview, post(manager, {}, 'PUT'), { id })).toBe(200);
     const done = await callRoute<{ awaitingReview: boolean; status: string }>(
       setStatus,
       post(counsellor, { to: 'completed', completionNote: 'Forms filed (fictional).' }),
-      { id: t.id },
+      { id },
     );
     expect(done.data).toMatchObject({ status: 'completed', awaitingReview: true });
-    const reviewNotes = await ctx.db
-      .select()
-      .from(notifications)
-      .where(
-        and(eq(notifications.userId, manager2.id), eq(notifications.kind, 'task.review_requested')),
-      );
-    expect(reviewNotes).toHaveLength(1);
-    // Listed in the awaiting_review view
-    const view = await callRoute<Task[]>(
-      listTasks,
-      authedRequest(manager, '/x?view=awaiting_review'),
-    );
-    expect(view.data?.map((x) => x.id)).toContain(t.id);
+    expect(await notes(manager2.id, 'task.review_requested')).toHaveLength(1);
+    const view = await callRoute<Task[]>(listTasks, get(manager, '/x?view=awaiting_review'));
+    expect(view.data?.map((x) => x.id)).toContain(id);
     // The owner cannot reopen while a review is pending
-    expect(
-      (
-        await callRoute(setStatus, post(counsellor, { to: 'in_progress', reason: 'oops' }), {
-          id: t.id,
-        })
-      ).status,
-    ).toBe(409);
-    // The completer / owner cannot decide (counsellor has own-scope write)
-    expect(
-      (await callRoute(decideReview, post(counsellor, { decision: 'accept' }), { id: t.id }))
-        .status,
-    ).toBe(403);
-    // A counsellor who is not the reviewer cannot decide
-    expect(
-      (await callRoute(decideReview, post(counsellor2, { decision: 'accept' }), { id: t.id }))
-        .status,
-    ).toBe(403);
+    const reopen = post(counsellor, { to: 'in_progress', reason: 'oops' });
+    expect(await statusOf(setStatus, reopen, { id })).toBe(409);
+    // Neither the completer / owner nor a counsellor who is not the reviewer can decide
+    for (const u of [counsellor, counsellor2])
+      expect(await statusOf(decideReview, post(u, { decision: 'accept' }), { id })).toBe(403);
     const accepted = await callRoute<{ status: string }>(
       decideReview,
       post(manager2, { decision: 'accept' }),
-      { id: t.id },
+      { id },
     );
     expect(accepted.data?.status).toBe('accepted');
-    expect(await audits(t.id, 'task.review_accepted')).toHaveLength(1);
+    expect(await audits(id, 'task.review_accepted')).toHaveLength(1);
   });
 
   it('return needs a note and reopens the task; the next completion opens cycle 2', async () => {
-    const t = await task();
-    await callRoute(requireReview, post(manager, {}, 'PUT'), { id: t.id });
+    const { id } = await task();
+    await callRoute(requireReview, post(manager, {}, 'PUT'), { id });
     await callRoute(setStatus, post(counsellor, { to: 'completed', completionNote: 'Done' }), {
-      id: t.id,
+      id,
     });
-    expect(
-      (await callRoute(decideReview, post(manager, { decision: 'return' }), { id: t.id })).status,
-    ).toBe(400);
-    expect(
-      (await callRoute(removeRequirement, post(manager, undefined, 'DELETE'), { id: t.id })).status,
-    ).toBe(409); // review pending
-    const returned = await callRoute(
-      decideReview,
-      post(manager, { decision: 'return', note: 'Attach the receipt reference.' }),
-      { id: t.id },
+    expect(await statusOf(decideReview, post(manager, { decision: 'return' }), { id })).toBe(400);
+    // review pending
+    expect(await statusOf(removeRequirement, post(manager, undefined, 'DELETE'), { id })).toBe(409);
+    const note = 'Attach the receipt reference.';
+    expect(await statusOf(decideReview, post(manager, { decision: 'return', note }), { id })).toBe(
+      200,
     );
-    expect(returned.status).toBe(200);
     const [row] = await ctx.db
       .select()
       .from(opsTasks)
-      .where(eq(opsTasks.id, t.id as never));
+      .where(eq(opsTasks.id, id as never));
     expect(row).toMatchObject({ status: 'in_progress', completedAt: null });
-    await callRoute(
-      setStatus,
-      post(counsellor, { to: 'completed', completionNote: 'Receipt REF-1' }),
-      {
-        id: t.id,
-      },
-    );
+    const again = post(counsellor, { to: 'completed', completionNote: 'Receipt REF-1' });
+    await callRoute(setStatus, again, { id });
     type D = { review: { state: string; history: { cycle: number; status: string }[] } };
-    const d = await callRoute<D>(getTask, authedRequest(manager, '/x'), { id: t.id });
+    const d = await callRoute<D>(getTask, get(manager), { id });
     expect(d.data?.review.state).toBe('awaiting_review');
     expect(d.data?.review.history.map((h) => [h.cycle, h.status])).toEqual([
       [2, 'pending'],
@@ -332,30 +224,20 @@ describe('supervisor review (completed → awaiting review)', () => {
 
 describe('activity history', () => {
   it('shows reassignment, status change, comments and review steps from the audit log', async () => {
-    const t = await task();
+    const { id } = await task();
     await callRoute(patchTask, post(manager, { ownerStaffId: counsellor2.staffId }, 'PATCH'), {
-      id: t.id,
+      id,
     });
-    await callRoute(
-      setStatus,
-      post(counsellor2, { to: 'blocked', reason: 'Waiting for fee slip' }),
-      {
-        id: t.id,
-      },
-    );
-    await callRoute(addComment, post(counsellor2, { body: 'Chased accounts.' }), { id: t.id });
-    const a = await callRoute<{ kind: string; summary: string }[]>(
-      activity,
-      authedRequest(counsellor2, '/x'),
-      { id: t.id },
-    );
+    const block = post(counsellor2, { to: 'blocked', reason: 'Waiting for fee slip' });
+    await callRoute(setStatus, block, { id });
+    await callRoute(addComment, post(counsellor2, { body: 'Chased accounts.' }), { id });
+    const a = await callRoute<{ kind: string; summary: string }[]>(activity, get(counsellor2), {
+      id,
+    });
     expect(a.status).toBe(200);
-    const kinds = a.data!.map((x) => x.kind);
-    expect(kinds).toEqual(['comment', 'status', 'reassignment', 'created']);
+    expect(a.data!.map((x) => x.kind)).toEqual(['comment', 'status', 'reassignment', 'created']);
     expect(a.data![1]!.summary).toContain('Waiting for fee slip');
-    expect((await callRoute(activity, authedRequest(teacher, '/x'), { id: t.id })).status).toBe(
-      403,
-    );
+    expect(await statusOf(activity, get(teacher), { id })).toBe(403);
   });
 });
 
@@ -369,7 +251,7 @@ describe('views, filters and pagination', () => {
     await task({ departmentId: deptId, title: 'Filter B (fictional)' });
     const byDept = await callRoute<Task[]>(
       listTasks,
-      authedRequest(manager, `/x?view=open&departmentId=${deptId}&page=1&pageSize=1`),
+      get(manager, `/x?view=open&departmentId=${deptId}&page=1&pageSize=1`),
     );
     expect(byDept.data).toHaveLength(1);
     expect(byDept.ok && byDept.meta).toMatchObject({
@@ -380,21 +262,15 @@ describe('views, filters and pagination', () => {
     });
     const backup = await callRoute<(Task & { backupStaffId: string })[]>(
       listTasks,
-      authedRequest(manager, `/x?view=open&staffId=${teacher.staffId}&role=backup`),
+      get(manager, `/x?view=open&staffId=${teacher.staffId}&role=backup`),
     );
     expect(backup.data?.map((x) => x.id)).toContain(a.id);
     expect(backup.data?.every((x) => x.backupStaffId === teacher.staffId)).toBe(true);
-    const mineBackup = await callRoute<Task[]>(
-      listTasks,
-      authedRequest(teacher, '/x?view=mine&role=backup'),
-    );
+    const mineBackup = await callRoute<Task[]>(listTasks, get(teacher, '/x?view=mine&role=backup'));
     expect(mineBackup.data?.map((x) => x.id)).toContain(a.id);
-    const search = await callRoute<Task[]>(
-      listTasks,
-      authedRequest(manager, '/x?view=open&q=Filter%20B'),
-    );
+    const search = await callRoute<Task[]>(listTasks, get(manager, '/x?view=open&q=Filter%20B'));
     expect(search.data).toHaveLength(1);
-    expect((await callRoute(listTasks, authedRequest(manager, '/x?pageSize=0'))).status).toBe(400);
+    expect(await statusOf(listTasks, get(manager, '/x?pageSize=0'))).toBe(400);
   });
 });
 
@@ -402,7 +278,7 @@ describe('reminder job (due soon, overdue; idempotent)', () => {
   it('manager-only route; once per task and due date; backup told when overdue', async () => {
     const overdue = await task({ dueDate: isoDaysFromNow(-2), backupStaffId: teacher.staffId });
     const soon = await task({ dueDate: isoDaysFromNow(1) });
-    expect((await callRoute(runReminders, post(counsellor))).status).toBe(403);
+    expect(await statusOf(runReminders, post(counsellor))).toBe(403);
     const r1 = await callRoute<{ sent: { taskCode: string; kind: string }[] }>(
       runReminders,
       post(manager),
@@ -421,10 +297,6 @@ describe('reminder job (due soon, overdue; idempotent)', () => {
       .from(opsTaskReminders)
       .where(eq(opsTaskReminders.taskId, overdue.id as never));
     expect(rows).toHaveLength(1);
-    const backupNote = await ctx.db
-      .select()
-      .from(notifications)
-      .where(and(eq(notifications.userId, teacher.id), eq(notifications.kind, 'task.overdue')));
-    expect(backupNote.length).toBeGreaterThanOrEqual(1);
+    expect((await notes(teacher.id, 'task.overdue')).length).toBeGreaterThanOrEqual(1);
   });
 });

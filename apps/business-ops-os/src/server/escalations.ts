@@ -12,11 +12,12 @@ import {
   type Database,
 } from '@elevate/database';
 import { notify } from '@elevate/notifications';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ForbiddenError, ValidationError } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import {
   evaluateEscalation,
+  OPEN_TASK_STATUSES,
   resolveEscalationRecipient,
   taskRemindersDue,
   type EscalationLevel,
@@ -26,13 +27,15 @@ import {
 } from '../domain';
 import {
   accessScope,
-  notFound,
   staffIdForUser,
   userIdsForStaff,
   userIdsWithRole,
   type Actor,
 } from './context';
+import { opsAudit, rowById } from './ops-common';
 import { loadSettings } from './settings';
+
+const audit = opsAudit('task');
 
 export interface EscalationRunResult {
   evaluated: number;
@@ -51,9 +54,7 @@ export async function runTaskEscalations(
     const tasks = await tx
       .select()
       .from(opsTasks)
-      .where(
-        inArray(opsTasks.status, ['not_started', 'in_progress', 'waiting', 'at_risk', 'blocked']),
-      )
+      .where(inArray(opsTasks.status, [...OPEN_TASK_STATUSES]))
       .for('update');
     const staff = await tx
       .select({ id: staffMembers.id, managerId: staffMembers.managerId })
@@ -111,17 +112,15 @@ export async function runTaskEscalations(
             .update(opsTasks)
             .set({ escalationLevel: p.level })
             .where(eq(opsTasks.id, task.id));
-        await recordAudit(tx, {
-          actorType: options.actor ? 'user' : 'system',
-          actorUserId: options.actor?.id ?? null,
-          module: 'ops',
-          action: 'task.escalated',
-          entityType: 'task',
-          entityId: task.id,
-          after: row,
-          requestId: options.requestId,
-          metadata: { level: p.level, via: recipient.via },
-        });
+        const metadata = { level: p.level, via: recipient.via };
+        await audit(
+          tx,
+          options.actor,
+          task.id,
+          'task.escalated',
+          { after: row, metadata },
+          options.requestId,
+        );
         const recipients = recipient.recipientStaffId
           ? await userIdsForStaff(tx, [recipient.recipientStaffId])
           : opsManagers;
@@ -159,12 +158,7 @@ export async function handleEscalation(
   const access = await accessScope(db, actor, 'ops:tasks:write');
   const me = await staffIdForUser(db, actor.id);
   return withTransaction(db, async (tx) => {
-    const [esc] = await tx
-      .select()
-      .from(opsEscalations)
-      .where(eq(opsEscalations.id, id as typeof opsEscalations.$inferSelect.id))
-      .for('update');
-    if (!esc) notFound('Escalation');
+    const esc = await rowById(tx, opsEscalations, id, 'Escalation', true);
     if (access.scope !== 'all' && (!me || esc.recipientStaffId !== me))
       throw new ForbiddenError(
         'Only the escalation recipient or an operations manager can do this.',
@@ -190,18 +184,10 @@ export async function handleEscalation(
               ...(esc.acknowledgedAt ? {} : { acknowledgedAt: now, acknowledgedBy: actor.id }),
             },
       )
-      .where(and(eq(opsEscalations.id, esc.id)))
+      .where(eq(opsEscalations.id, esc.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: `escalation.${input.action === 'acknowledge' ? 'acknowledged' : 'resolved'}`,
-      entityType: 'task',
-      entityId: esc.taskId,
-      before: esc,
-      after,
-      requestId,
-    });
+    const action = `escalation.${input.action === 'acknowledge' ? 'acknowledged' : 'resolved'}`;
+    await audit(tx, actor, esc.taskId, action, { before: esc, after }, requestId);
     return after;
   });
 }
@@ -231,12 +217,7 @@ export async function runTaskReminders(
     const tasks = await tx
       .select()
       .from(opsTasks)
-      .where(
-        and(
-          inArray(opsTasks.status, ['not_started', 'in_progress', 'waiting', 'at_risk', 'blocked']),
-          isNotNull(opsTasks.dueDate),
-        ),
-      );
+      .where(and(inArray(opsTasks.status, [...OPEN_TASK_STATUSES]), isNotNull(opsTasks.dueDate)));
     const sent = tasks.length
       ? await tx
           .select({
@@ -282,32 +263,23 @@ export async function runTaskReminders(
           .onConflictDoNothing()
           .returning();
         if (!row) continue;
-        if (recipients.size)
-          await notify(tx, {
-            userIds: [...recipients],
-            module: 'ops',
-            kind: kind === 'overdue' ? 'task.overdue' : 'task.due_soon',
-            title:
-              kind === 'overdue'
-                ? `Overdue: ${task.title} (${task.code}), due ${task.dueDate}`
-                : `Due ${task.dueDate}: ${task.title} (${task.code})`,
-            body: task.ownerStaffId
-              ? undefined
-              : 'This task has no owner; assign one so it can be completed.',
-            link: `/ops/tasks/${task.id}`,
-            entityType: 'task',
-            entityId: task.id,
-          });
-        await recordAudit(tx, {
-          actorType: options.actor ? 'user' : 'system',
-          actorUserId: options.actor?.id ?? null,
+        await notify(tx, {
+          userIds: [...recipients],
           module: 'ops',
-          action: 'task.reminder_sent',
+          kind: kind === 'overdue' ? 'task.overdue' : 'task.due_soon',
+          title:
+            kind === 'overdue'
+              ? `Overdue: ${task.title} (${task.code}), due ${task.dueDate}`
+              : `Due ${task.dueDate}: ${task.title} (${task.code})`,
+          body: task.ownerStaffId
+            ? undefined
+            : 'This task has no owner; assign one so it can be completed.',
+          link: `/ops/tasks/${task.id}`,
           entityType: 'task',
           entityId: task.id,
-          after: { kind, dueDate: task.dueDate, recipients: recipients.size },
-          requestId: options.requestId,
         });
+        const after = { kind, dueDate: task.dueDate, recipients: recipients.size };
+        await audit(tx, options.actor, task.id, 'task.reminder_sent', { after }, options.requestId);
         result.sent.push({ taskCode: task.code, kind, recipients: recipients.size });
       }
     }

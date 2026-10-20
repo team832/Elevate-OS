@@ -56,10 +56,7 @@ export const taskReferenceBody = z.object({
 export const removeReferenceBody = z.object({ reason: text(1000).min(1) });
 export const referenceParams = z.object({ id: z.uuid(), referenceId: z.uuid() });
 
-export const reviewRequirementBody = z.object({
-  reviewerStaffId: optUuid,
-  note: optText(1000),
-});
+export const reviewRequirementBody = z.object({ reviewerStaffId: optUuid, note: optText(1000) });
 export const taskReviewBody = z.object({
   decision: z.enum(['accept', 'return']),
   note: optText(2000),

@@ -4,8 +4,10 @@ import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@el
 import { getDirectory } from '../../server/organisation';
 import { formOptions } from '../../server/options';
 import { ActionForm } from '../../ui/action-form';
+import { EMPLOYMENT_TYPES } from '../../domain/hr/employees';
 import { humanise, statusTone } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
+import { options } from '../../ui/hr-records';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +38,7 @@ async function Directory({ user }: { user: AuthenticatedUser }) {
     options: await formOptions(db),
   }));
   if (!r.ok) return r.view;
-  const { d, options } = r.data;
+  const { d, options: o } = r.data;
   const manage = can(user, 'ops:organisation:manage');
   return (
     <div className="el-stack">
@@ -161,18 +163,16 @@ async function Directory({ user }: { user: AuthenticatedUser }) {
                   name: 'departmentId',
                   label: 'Department',
                   type: 'select',
-                  options: options.departments,
+                  options: o.departments,
                 },
-                { name: 'managerId', label: 'Reports to', type: 'select', options: options.staff },
+                { name: 'managerId', label: 'Reports to', type: 'select', options: o.staff },
                 {
                   name: 'employmentType',
                   label: 'Employment type',
                   type: 'select',
                   required: true,
                   defaultValue: 'not_recorded',
-                  options: ['full_time', 'part_time', 'contract', 'visiting', 'not_recorded'].map(
-                    (v) => ({ value: v, label: humanise(v) }),
-                  ),
+                  options: options(EMPLOYMENT_TYPES),
                 },
                 { name: 'roleLabels', label: 'Role labels (comma separated)', type: 'list' },
               ]}
@@ -185,8 +185,8 @@ async function Directory({ user }: { user: AuthenticatedUser }) {
               fields={[
                 { name: 'title', label: 'Function / process', required: true },
                 { name: 'accountableRole', label: 'Accountable role' },
-                { name: 'holderStaffId', label: 'Holder', type: 'select', options: options.staff },
-                { name: 'backupStaffId', label: 'Backup', type: 'select', options: options.staff },
+                { name: 'holderStaffId', label: 'Holder', type: 'select', options: o.staff },
+                { name: 'backupStaffId', label: 'Backup', type: 'select', options: o.staff },
                 { name: 'handOverToRole', label: 'Hands over to (role)' },
                 { name: 'critical', label: 'Critical process', type: 'checkbox' },
               ]}

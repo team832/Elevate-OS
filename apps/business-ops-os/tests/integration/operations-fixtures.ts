@@ -62,6 +62,14 @@ export async function staffWithoutLogin(db: Database, departmentId: DepartmentId
 
 export const post = (user: { token: string }, json?: unknown, method = 'POST') =>
   authedRequest(user, '/ops/api/v1/x', { method, json });
+export const get = (user: { token: string }, path = '/x') => authedRequest(user, path);
+
+/** HTTP status of one route call. */
+export const statusOf = async (
+  route: Parameters<typeof callRoute>[0],
+  req: Request,
+  params: Record<string, string> = {},
+) => (await callRoute(route, req, params)).status;
 
 /** Create and fully approve an SOP: owner drafts and submits, reviewer recommends, approver approves. */
 export async function approvedSop(

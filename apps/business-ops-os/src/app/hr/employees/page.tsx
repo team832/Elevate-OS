@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
@@ -62,6 +63,10 @@ async function Directory({ user, sp }: { user: AuthenticatedUser; sp: SearchPara
   if (!r.ok) return r.view;
   const { list, filters } = r.data;
   const hr = list.recordTier;
+  type Rec = NonNullable<(typeof list.items)[number]['record']>;
+  const ofRecord = (render: (r: Rec) => ReactNode) => (e: (typeof list.items)[number]) =>
+    e.record ? render(e.record) : '—';
+  const filtered = Boolean(query.q || query.departmentId || query.status);
   const sortOptions = EMPLOYEE_SORTS.filter((s) => hr || (s !== 'start_date' && s !== 'status'));
   return (
     <Card
@@ -146,13 +151,9 @@ async function Directory({ user, sp }: { user: AuthenticatedUser; sp: SearchPara
           rowKey={(e) => e.staffId}
           empty={
             <EmptyState
-              title={
-                query.q || query.departmentId || query.status
-                  ? 'No employee matches these filters'
-                  : 'No employee records yet'
-              }
+              title={filtered ? 'No employee matches these filters' : 'No employee records yet'}
               description={
-                query.q || query.departmentId || query.status
+                filtered
                   ? 'Change or clear the filters.'
                   : 'HR creates employee records with "Add employee" below, or registers existing staff members.'
               }
@@ -179,26 +180,21 @@ async function Directory({ user, sp }: { user: AuthenticatedUser; sp: SearchPara
                   {
                     key: 'status',
                     header: 'Status',
-                    render: (e: (typeof list.items)[number]) =>
-                      e.record ? (
-                        <StatusBadge tone={hrTone(e.record.employmentStatus)}>
-                          {EMPLOYMENT_STATUS_LABELS[e.record.employmentStatus as EmploymentStatus]}
-                        </StatusBadge>
-                      ) : (
-                        '—'
-                      ),
+                    render: ofRecord((r) => (
+                      <StatusBadge tone={hrTone(r.employmentStatus)}>
+                        {EMPLOYMENT_STATUS_LABELS[r.employmentStatus as EmploymentStatus]}
+                      </StatusBadge>
+                    )),
                   },
                   {
                     key: 'type',
                     header: 'Type',
-                    render: (e: (typeof list.items)[number]) =>
-                      e.record ? humanise(e.record.employmentType) : '—',
+                    render: ofRecord((r) => humanise(r.employmentType)),
                   },
                   {
                     key: 'start',
                     header: 'Start date',
-                    render: (e: (typeof list.items)[number]) =>
-                      e.record ? fmtDate(e.record.employmentStartDate) : '—',
+                    render: ofRecord((r) => fmtDate(r.employmentStartDate)),
                   },
                 ]
               : []),

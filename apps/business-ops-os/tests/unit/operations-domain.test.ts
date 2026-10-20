@@ -104,35 +104,16 @@ describe('supervisor review decision', () => {
 
 describe('task reminders (IST: late UTC evening is the next IST day)', () => {
   const s = { leadDays: 1, notifyBackupWhenOverdue: true };
+  const soon21 = { kind: 'due_soon', dueDate: '2026-10-21' };
+  const overdue19 = { kind: 'overdue', dueDate: '2026-10-19' };
   it.each([
     ['due tomorrow (IST)', '2026-10-21', 'in_progress', s, [], ['due_soon']],
     ['due today', '2026-10-20', 'in_progress', s, [], ['due_soon']],
     ['due in two days', '2026-10-22', 'in_progress', s, [], []],
     ['overdue', '2026-10-19', 'blocked', s, [], ['overdue']],
-    [
-      'already reminded for this due date',
-      '2026-10-21',
-      'in_progress',
-      s,
-      [{ kind: 'due_soon', dueDate: '2026-10-21' }],
-      [],
-    ],
-    [
-      'due date changed since the reminder',
-      '2026-10-20',
-      'in_progress',
-      s,
-      [{ kind: 'due_soon', dueDate: '2026-10-21' }],
-      ['due_soon'],
-    ],
-    [
-      'overdue reminder sent once',
-      '2026-10-19',
-      'in_progress',
-      s,
-      [{ kind: 'overdue', dueDate: '2026-10-19' }],
-      [],
-    ],
+    ['already reminded for this due date', '2026-10-21', 'in_progress', s, [soon21], []],
+    ['due date changed since the reminder', '2026-10-20', 'in_progress', s, [soon21], ['due_soon']],
+    ['overdue reminder sent once', '2026-10-19', 'in_progress', s, [overdue19], []],
     ['closed task', '2026-10-19', 'completed', s, [], []],
     ['no due date', null, 'in_progress', s, [], []],
     ['lead 0 = due day only', '2026-10-21', 'in_progress', { ...s, leadDays: 0 }, [], []],
@@ -202,39 +183,22 @@ describe('task activity lines', () => {
 describe('SOP publication, review due and schedule', () => {
   const approved = { status: 'approved' as const, hasApprovedVersion: true, archived: false };
   it.each([
-    [
-      'approved, no effective date',
-      { ...approved, effectiveDate: null },
-      'approved_no_effective_date',
-    ],
-    [
-      'approved, effective tomorrow',
-      { ...approved, effectiveDate: '2026-10-21' },
-      'approved_not_yet_effective',
-    ],
-    ['approved, effective today', { ...approved, effectiveDate: '2026-10-20' }, 'published'],
+    ['approved, no effective date', { effectiveDate: null }, 'approved_no_effective_date'],
+    ['approved, effective tomorrow', { effectiveDate: '2026-10-21' }, 'approved_not_yet_effective'],
+    ['approved, effective today', { effectiveDate: '2026-10-20' }, 'published'],
     [
       'draft with a date (e.g. coordinator SOP) is never published',
-      {
-        status: 'draft' as const,
-        hasApprovedVersion: false,
-        effectiveDate: '2026-01-01',
-        archived: false,
-      },
+      { status: 'draft' as const, hasApprovedVersion: false, effectiveDate: '2026-01-01' },
       'not_approved',
     ],
-    [
-      'retired',
-      { ...approved, status: 'retired' as const, effectiveDate: '2026-01-01' },
-      'retired',
-    ],
+    ['retired', { status: 'retired' as const, effectiveDate: '2026-01-01' }, 'retired'],
     [
       'archived',
-      { ...approved, status: 'retired' as const, effectiveDate: '2026-01-01', archived: true },
+      { status: 'retired' as const, effectiveDate: '2026-01-01', archived: true },
       'archived',
     ],
-  ])('%s', (_, input, state) => {
-    expect(sopPublicationState(input, TODAY)).toBe(state);
+  ])('%s', (_, over, state) => {
+    expect(sopPublicationState({ ...approved, ...over }, TODAY)).toBe(state);
   });
   it.each([
     [null, 'not_set'],
@@ -306,74 +270,44 @@ describe('SOP acknowledgements', () => {
 
 describe('incident resolution targets (IST)', () => {
   const sla = { lowDays: 14, mediumDays: 7, highDays: 2 };
-  const at = (iso: string) => new Date(iso);
+  const inc = (status: string, severity: string, occurred: string, resolved: string | null) => ({
+    status,
+    severity,
+    occurredAt: new Date(occurred),
+    resolvedAt: resolved ? new Date(resolved) : null,
+  });
   it.each([
     [
       'high, target day',
-      {
-        status: 'open',
-        severity: 'high',
-        occurredAt: at('2026-10-17T10:00:00Z'),
-        resolvedAt: null,
-      },
-      at('2026-10-19T06:00:00Z'),
+      inc('open', 'high', '2026-10-17T10:00:00Z', null),
+      new Date('2026-10-19T06:00:00Z'),
       'due_today',
     ],
     [
       'high, past target (IST next day)',
-      {
-        status: 'open',
-        severity: 'high',
-        occurredAt: at('2026-10-17T10:00:00Z'),
-        resolvedAt: null,
-      },
+      inc('open', 'high', '2026-10-17T10:00:00Z', null),
       LATE_UTC,
       'breached',
     ],
     [
       'medium, resolved in time',
-      {
-        status: 'resolved',
-        severity: 'medium',
-        occurredAt: at('2026-10-01T05:00:00Z'),
-        resolvedAt: at('2026-10-05T05:00:00Z'),
-      },
+      inc('resolved', 'medium', '2026-10-01T05:00:00Z', '2026-10-05T05:00:00Z'),
       NOON_IST,
       'resolved_within',
     ],
     [
       'medium, resolved late',
-      {
-        status: 'closed',
-        severity: 'medium',
-        occurredAt: at('2026-10-01T05:00:00Z'),
-        resolvedAt: at('2026-10-12T05:00:00Z'),
-      },
+      inc('closed', 'medium', '2026-10-01T05:00:00Z', '2026-10-12T05:00:00Z'),
       NOON_IST,
       'resolved_late',
     ],
-    [
-      'unknown severity',
-      { status: 'open', severity: 'x', occurredAt: at('2026-10-01T05:00:00Z'), resolvedAt: null },
-      NOON_IST,
-      'unrated',
-    ],
+    ['unknown severity', inc('open', 'x', '2026-10-01T05:00:00Z', null), NOON_IST, 'unrated'],
   ])('%s', (_, incident, now, state) => {
     expect(incidentSla(incident, now, sla).state).toBe(state);
   });
   it('target date is the IST occurred date + N days', () => {
-    expect(
-      incidentSla(
-        {
-          status: 'open',
-          severity: 'high',
-          occurredAt: at('2026-10-17T20:00:00Z'),
-          resolvedAt: null,
-        },
-        NOON_IST,
-        sla,
-      ).targetDate,
-    ).toBe('2026-10-20');
+    const late = inc('open', 'high', '2026-10-17T20:00:00Z', null);
+    expect(incidentSla(late, NOON_IST, sla).targetDate).toBe('2026-10-20');
   });
 });
 

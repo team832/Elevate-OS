@@ -3,12 +3,16 @@ import type { IsoDate } from '@elevate/shared-types';
 import {
   anonymisationEligibility,
   APPLICATION_STAGES,
+  APPLICATION_TRANSITIONS,
   applicationTargets,
   checkApplicationTransition,
   checkOfferTransition,
   checkRequisitionTransition,
   feedbackAllowed,
+  needsReason,
+  OFFER_TRANSITIONS,
   pipelineByStage,
+  REQUISITION_TRANSITIONS,
   retentionStatus,
   type ApplicationStage,
 } from '../../src/domain/hr/recruitment';
@@ -64,6 +68,15 @@ describe('state machines (HL-A1)', () => {
     expect(result(checkApplicationTransition(from, to, ctx))).toBe(expected);
   });
 
+  it('screens ask for a reason exactly where the edge needs one', () => {
+    expect(needsReason(REQUISITION_TRANSITIONS, 'on_hold', 'open')).toBe(true);
+    expect(needsReason(REQUISITION_TRANSITIONS, 'draft', 'open')).toBe(false);
+    expect(needsReason(APPLICATION_TRANSITIONS, 'interview', 'screening')).toBe(true);
+    expect(needsReason(APPLICATION_TRANSITIONS, 'screening', 'interview')).toBe(false);
+    expect(needsReason(OFFER_TRANSITIONS, 'extended', 'declined')).toBe(true);
+    expect(needsReason(OFFER_TRANSITIONS, 'extended', 'accepted')).toBe(false);
+  });
+
   it('closed applications are final; hire is never offered as a button', () => {
     for (const from of ['hired', 'rejected', 'withdrawn'] as ApplicationStage[])
       for (const to of APPLICATION_STAGES)
@@ -89,54 +102,39 @@ describe('state machines (HL-A1)', () => {
 });
 
 describe('interview feedback rule (HL-A3)', () => {
-  it('only an assigned interviewer on a live interview of an open application', () => {
-    const base = {
-      panelStaffIds: ['a', 'b'],
-      interviewStatus: 'scheduled' as const,
-      applicationStage: 'interview' as const,
-    };
-    expect(feedbackAllowed({ ...base, actorStaffId: 'a' }).ok).toBe(true);
-    expect(feedbackAllowed({ ...base, actorStaffId: 'c' }).ok).toBe(false);
-    expect(feedbackAllowed({ ...base, actorStaffId: null }).ok).toBe(false);
-    expect(feedbackAllowed({ ...base, actorStaffId: 'a', interviewStatus: 'cancelled' }).ok).toBe(
-      false,
-    );
-    expect(feedbackAllowed({ ...base, actorStaffId: 'a', applicationStage: 'rejected' }).ok).toBe(
-      false,
-    );
-  });
+  const base = {
+    panelStaffIds: ['a', 'b'],
+    interviewStatus: 'scheduled' as const,
+    applicationStage: 'interview' as const,
+  };
+  it.each([
+    [{ actorStaffId: 'a' }, true],
+    [{ actorStaffId: 'c' }, false],
+    [{ actorStaffId: null }, false],
+    [{ actorStaffId: 'a', interviewStatus: 'cancelled' }, false],
+    [{ actorStaffId: 'a', applicationStage: 'rejected' }, false],
+  ] as const)(
+    'only an assigned interviewer on a live interview of an open application: %j',
+    (patch, ok) => {
+      expect(feedbackAllowed({ ...base, ...patch }).ok).toBe(ok);
+    },
+  );
 });
 
 describe('data minimisation (HL-A4)', () => {
-  it('eligible only when every application closed unsuccessfully and no live offer', () => {
-    expect(
-      anonymisationEligibility({
-        status: 'active',
-        stages: ['rejected', 'withdrawn'],
-        hasLiveOffer: false,
-      }).ok,
-    ).toBe(true);
-    expect(anonymisationEligibility({ status: 'active', stages: [], hasLiveOffer: false }).ok).toBe(
-      false,
-    );
-    expect(
-      anonymisationEligibility({
-        status: 'active',
-        stages: ['rejected', 'interview'],
-        hasLiveOffer: false,
-      }).ok,
-    ).toBe(false);
-    expect(
-      anonymisationEligibility({ status: 'active', stages: ['hired'], hasLiveOffer: false }).ok,
-    ).toBe(false);
-    expect(
-      anonymisationEligibility({ status: 'anonymised', stages: ['rejected'], hasLiveOffer: false })
-        .ok,
-    ).toBe(false);
-    expect(
-      anonymisationEligibility({ status: 'active', stages: ['rejected'], hasLiveOffer: true }).ok,
-    ).toBe(false);
-  });
+  it.each([
+    ['active', ['rejected', 'withdrawn'], false, true],
+    ['active', [], false, false],
+    ['active', ['rejected', 'interview'], false, false],
+    ['active', ['hired'], false, false],
+    ['anonymised', ['rejected'], false, false],
+    ['active', ['rejected'], true, false],
+  ] as const)(
+    'eligible only when every application closed unsuccessfully and no live offer: %s %j live=%s',
+    (status, stages, hasLiveOffer, ok) => {
+      expect(anonymisationEligibility({ status, stages, hasLiveOffer }).ok).toBe(ok);
+    },
+  );
   it('retention is never "due" while the owner has not decided a period', () => {
     expect(retentionStatus(d('2020-01-01'), null, d('2026-10-19'))).toBe('not_decided');
     expect(retentionStatus(d('2026-01-01'), 180, d('2026-10-19'))).toBe('due');
@@ -196,38 +194,21 @@ describe('checklists (HL-A5, HL-A6)', () => {
 });
 
 describe('item rules and gating (HL-A7, HL-A8)', () => {
-  it('system items cannot be marked done by hand; n/a and blocked need a note', () => {
-    expect(checkItemUpdate({ kind: 'asset_return', from: 'pending', to: 'done' }).ok).toBe(false);
-    expect(checkItemUpdate({ kind: 'access_revocation', from: 'pending', to: 'done' }).ok).toBe(
-      false,
-    );
-    expect(checkItemUpdate({ kind: 'ownership_transfer', from: 'pending', to: 'done' }).ok).toBe(
-      false,
-    );
-    expect(checkItemUpdate({ kind: 'document', from: 'pending', to: 'not_applicable' }).ok).toBe(
-      false,
-    );
-    expect(
-      checkItemUpdate({
-        kind: 'document',
-        from: 'pending',
-        to: 'not_applicable',
-        notes: 'Not needed',
-      }).ok,
-    ).toBe(true);
-    expect(checkItemUpdate({ kind: 'final_settlement', from: 'pending', to: 'done' }).ok).toBe(
-      false,
-    );
-    expect(
-      checkItemUpdate({
-        kind: 'final_settlement',
-        from: 'pending',
-        to: 'done',
-        evidence: 'FS-REF-1',
-      }).ok,
-    ).toBe(true);
-    expect(checkItemUpdate({ kind: 'induction', from: 'pending', to: 'done' }).ok).toBe(true);
-  });
+  it.each([
+    [{ kind: 'asset_return', to: 'done' }, false],
+    [{ kind: 'access_revocation', to: 'done' }, false],
+    [{ kind: 'ownership_transfer', to: 'done' }, false],
+    [{ kind: 'document', to: 'not_applicable' }, false],
+    [{ kind: 'document', to: 'not_applicable', notes: 'Not needed' }, true],
+    [{ kind: 'final_settlement', to: 'done' }, false],
+    [{ kind: 'final_settlement', to: 'done', evidence: 'FS-REF-1' }, true],
+    [{ kind: 'induction', to: 'done' }, true],
+  ] as const)(
+    'system items cannot be marked done by hand; n/a and blocked need a note: %j',
+    (input, ok) => {
+      expect(checkItemUpdate({ from: 'pending', ...input }).ok).toBe(ok);
+    },
+  );
   it('gaps list unresolved required items; offboarding ignores access revocation', () => {
     const items = [
       { title: 'Docs', kind: 'document' as const, required: true, status: 'done' as const },
@@ -251,13 +232,10 @@ describe('item rules and gating (HL-A7, HL-A8)', () => {
   it('separation is due the day after the last working day; overdue excludes resolved items', () => {
     expect(separationDue(d('2026-10-19'), d('2026-10-19'))).toBe(false);
     expect(separationDue(d('2026-10-19'), d('2026-10-20'))).toBe(true);
-    expect(isItemOverdue({ status: 'pending', dueDate: d('2026-10-18') }, d('2026-10-19'))).toBe(
-      true,
-    );
-    expect(isItemOverdue({ status: 'done', dueDate: d('2026-10-18') }, d('2026-10-19'))).toBe(
-      false,
-    );
-    expect(isItemOverdue({ status: 'pending', dueDate: null }, d('2026-10-19'))).toBe(false);
+    const today = d('2026-10-19');
+    expect(isItemOverdue({ status: 'pending', dueDate: d('2026-10-18') }, today)).toBe(true);
+    expect(isItemOverdue({ status: 'done', dueDate: d('2026-10-18') }, today)).toBe(false);
+    expect(isItemOverdue({ status: 'pending', dueDate: null }, today)).toBe(false);
     expect(checkSeparationDates(d('2026-10-20'), d('2026-10-19')).ok).toBe(false);
   });
 });

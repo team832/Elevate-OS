@@ -182,12 +182,8 @@ export function scheduleForRange(
   templates: ReadonlyMap<string, ShiftTemplateLike>,
   holidays: ReadonlyMap<string, HolidayEntry>,
 ): DaySchedule[] {
-  const active = assignments.filter((a) => a.status === 'active');
   return eachDate(from, to).map((date): DaySchedule => {
-    const covering = active
-      .filter((a) => a.fromDate <= date && (a.toDate === null || a.toDate >= date))
-      .map((a) => templates.get(a.shiftTemplateId))
-      .filter((t): t is ShiftTemplateLike => Boolean(t) && t!.status !== 'retired');
+    const covering = coveringTemplates(date, assignments, templates);
     if (covering.length === 0) return { date, status: 'not_scheduled', reason: 'no_assignment' };
     const holiday = holidays.get(date);
     if (holiday)
@@ -226,19 +222,26 @@ export function scheduledMinutesTotal(
   };
 }
 
+/** Non-retired templates of the active assignments covering `date`, in assignment order. */
+export function coveringTemplates(
+  date: IsoDate,
+  assignments: readonly ShiftAssignmentLike[],
+  templates: ReadonlyMap<string, ShiftTemplateLike>,
+): ShiftTemplateLike[] {
+  return assignments
+    .filter((a) => a.status === 'active' && a.fromDate <= date && (a.toDate ?? date) >= date)
+    .map((a) => templates.get(a.shiftTemplateId))
+    .filter((t): t is ShiftTemplateLike => t !== undefined && t.status !== 'retired');
+}
+
 /** The template that applies to `date` (first covering active assignment on a working weekday). */
 export function templateOn(
   date: IsoDate,
   assignments: readonly ShiftAssignmentLike[],
   templates: ReadonlyMap<string, ShiftTemplateLike>,
 ): ShiftTemplateLike | null {
-  for (const a of assignments) {
-    if (a.status !== 'active') continue;
-    if (a.fromDate > date || (a.toDate !== null && a.toDate < date)) continue;
-    const t = templates.get(a.shiftTemplateId);
-    if (t && t.status !== 'retired' && t.workingWeekdays.includes(weekday(date))) return t;
-  }
-  return null;
+  const covering = coveringTemplates(date, assignments, templates);
+  return covering.find((t) => t.workingWeekdays.includes(weekday(date))) ?? null;
 }
 
 export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;

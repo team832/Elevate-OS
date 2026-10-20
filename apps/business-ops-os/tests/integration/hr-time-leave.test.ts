@@ -26,7 +26,7 @@ import { GET as timesheets } from '../../src/app/api/v1/hr/timesheets/route';
 import { GET as exportCsv } from '../../src/app/api/v1/hr/timesheets/export/route';
 import { updateSetting } from '../../src/server/settings';
 import { hrTimeMetrics } from '../../src/server/reports/hr-time-metrics';
-import { auditFor, employee, get, post, type Employee } from './hr-time-fixtures';
+import { auditFor, employee, get, post, statusOf, type Employee } from './hr-time-fixtures';
 
 const ctx = setupTestDatabase();
 let hr: Employee;
@@ -95,8 +95,8 @@ beforeAll(async () => {
 
 describe('shift templates and assignments', () => {
   it('validation, permission and conflict detection', async () => {
-    expect((await callRoute(createShift, buildRequest('/x', { json: {} }))).status).toBe(401);
-    expect((await callRoute(createShift, post(emp, { code: 'X1' }))).status).toBe(403);
+    expect(await statusOf(createShift, buildRequest('/x', { json: {} }))).toBe(401);
+    expect(await statusOf(createShift, post(emp, { code: 'X1' }))).toBe(403);
     const bad = await callRoute(
       createShift,
       post(hr, {
@@ -109,12 +109,10 @@ describe('shift templates and assignments', () => {
     );
     expect(bad.status).toBe(400);
     expect(
-      (
-        await callRoute(
-          assignShift,
-          post(hr, { staffId: emp.staffId, shiftTemplateId: dayId, fromDate: '2026-09-01' }),
-        )
-      ).status,
+      await statusOf(
+        assignShift,
+        post(hr, { staffId: emp.staffId, shiftTemplateId: dayId, fromDate: '2026-09-01' }),
+      ),
     ).toBe(201);
     const clash = await callRoute(
       assignShift,
@@ -127,25 +125,21 @@ describe('shift templates and assignments', () => {
     );
     expect(clash.status).toBe(409);
     expect(
-      (
-        await callRoute(
-          assignShift,
-          post(hr, {
-            staffId: emp2.staffId,
-            shiftTemplateId: dayId,
-            fromDate: '2026-09-01',
-            toDate: '2026-09-30',
-          }),
-        )
-      ).status,
+      await statusOf(
+        assignShift,
+        post(hr, {
+          staffId: emp2.staffId,
+          shiftTemplateId: dayId,
+          fromDate: '2026-09-01',
+          toDate: '2026-09-30',
+        }),
+      ),
     ).toBe(201);
     expect(
-      (
-        await callRoute(
-          assignShift,
-          post(hr, { staffId: emp2.staffId, shiftTemplateId: dayId, fromDate: '2026-10-01' }),
-        )
-      ).status,
+      await statusOf(
+        assignShift,
+        post(hr, { staffId: emp2.staffId, shiftTemplateId: dayId, fromDate: '2026-10-01' }),
+      ),
     ).toBe(201);
   });
 
@@ -165,26 +159,22 @@ describe('shift templates and assignments', () => {
     );
     expect(ok.status).toBe(201);
     expect(
-      (
-        await callRoute(
-          assignShift,
-          post(hr, {
-            staffId: emp2.staffId,
-            shiftTemplateId: dayId,
-            fromDate: '2026-11-02',
-            toDate: '2026-11-03',
-          }),
-        )
-      ).status,
+      await statusOf(
+        assignShift,
+        post(hr, {
+          staffId: emp2.staffId,
+          shiftTemplateId: dayId,
+          fromDate: '2026-11-02',
+          toDate: '2026-11-03',
+        }),
+      ),
     ).toBe(409);
     expect(
-      (
-        await callRoute(
-          patchAssignment,
-          post(hr, { action: 'cancel', reason: 'Trial ended' }, 'PATCH'),
-          { id: ok.data!.id },
-        )
-      ).status,
+      await statusOf(
+        patchAssignment,
+        post(hr, { action: 'cancel', reason: 'Trial ended' }, 'PATCH'),
+        { id: ok.data!.id },
+      ),
     ).toBe(200);
     await updateSetting(ctx.db, opsManager, {
       key: 'shifts.rules',
@@ -195,9 +185,7 @@ describe('shift templates and assignments', () => {
   it('scoped reads: employees see only their own assignments', async () => {
     const mine = await callRoute<{ rows: { staffId: string }[] }>(listAssignments, get(emp));
     expect(mine.data!.rows.every((r) => r.staffId === emp.staffId)).toBe(true);
-    expect((await callRoute(listAssignments, get(emp, `/x?staffId=${emp2.staffId}`))).status).toBe(
-      403,
-    );
+    expect(await statusOf(listAssignments, get(emp, `/x?staffId=${emp2.staffId}`))).toBe(403);
   });
 
   it('approving a template; changing approved timings makes it proposed again', async () => {
@@ -230,26 +218,20 @@ describe('holidays', () => {
     expect(h.status).toBe(201);
     expect(h.data?.status).toBe('proposed');
     expect(
-      (
-        await callRoute(
-          createHoliday,
-          post(hr, { holidayDate: '2026-10-21', name: 'dup', location: 'sikar' }),
-        )
-      ).status,
+      await statusOf(
+        createHoliday,
+        post(hr, { holidayDate: '2026-10-21', name: 'dup', location: 'sikar' }),
+      ),
     ).toBe(409);
-    expect(
-      (await callRoute(createHoliday, post(emp, { holidayDate: '2026-10-22', name: 'x' }))).status,
-    ).toBe(403);
+    expect(await statusOf(createHoliday, post(emp, { holidayDate: '2026-10-22', name: 'x' }))).toBe(
+      403,
+    );
     const w = await callRoute<{ id: string }>(
       createHoliday,
       post(hr, { holidayDate: '2026-12-31', name: 'To withdraw (fictional)' }),
     );
     expect(
-      (
-        await callRoute(patchHoliday, post(hr, { status: 'withdrawn' }, 'PATCH'), {
-          id: w.data!.id,
-        })
-      ).status,
+      await statusOf(patchHoliday, post(hr, { status: 'withdrawn' }, 'PATCH'), { id: w.data!.id }),
     ).toBe(200);
     const list = await callRoute<{ id: string }[]>(listHolidays, get(emp));
     expect(list.data!.map((x) => x.id)).toEqual([h.data!.id]);
@@ -292,75 +274,63 @@ describe('leave requests', () => {
 
   it('overlap with own pending leave → 409; half-day rules and document rules → 400', async () => {
     expect(
-      (
-        await callRoute(
-          requestLeave,
-          post(emp, { leaveTypeId: casualId, startDate: '2026-10-22', endDate: '2026-10-22' }),
-        )
-      ).status,
+      await statusOf(
+        requestLeave,
+        post(emp, { leaveTypeId: casualId, startDate: '2026-10-22', endDate: '2026-10-22' }),
+      ),
     ).toBe(409);
     // the other half of Friday 23rd is free
     expect(
-      (
-        await callRoute(
-          requestLeave,
-          post(emp, {
-            leaveTypeId: casualId,
-            startDate: '2026-10-23',
-            endDate: '2026-10-23',
-            startPart: 'second_half',
-          }),
-        )
-      ).status,
+      await statusOf(
+        requestLeave,
+        post(emp, {
+          leaveTypeId: casualId,
+          startDate: '2026-10-23',
+          endDate: '2026-10-23',
+          startPart: 'second_half',
+        }),
+      ),
     ).toBe(201);
     expect(
-      (
-        await callRoute(
-          requestLeave,
-          post(emp, {
-            leaveTypeId: sickId,
-            startDate: '2026-11-02',
-            endDate: '2026-11-02',
-            startPart: 'first_half',
-          }),
-        )
-      ).status,
+      await statusOf(
+        requestLeave,
+        post(emp, {
+          leaveTypeId: sickId,
+          startDate: '2026-11-02',
+          endDate: '2026-11-02',
+          startPart: 'first_half',
+        }),
+      ),
     ).toBe(400);
     expect(
-      (
-        await callRoute(
-          requestLeave,
-          post(emp, { leaveTypeId: sickId, startDate: '2026-11-02', endDate: '2026-11-02' }),
-        )
-      ).status,
+      await statusOf(
+        requestLeave,
+        post(emp, { leaveTypeId: sickId, startDate: '2026-11-02', endDate: '2026-11-02' }),
+      ),
     ).toBe(400);
     expect(
-      (
-        await callRoute(
-          requestLeave,
-          post(emp, { leaveTypeId: casualId, startDate: '2026-10-25', endDate: '2026-10-25' }),
-        )
-      ).status,
+      await statusOf(
+        requestLeave,
+        post(emp, { leaveTypeId: casualId, startDate: '2026-10-25', endDate: '2026-10-25' }),
+      ),
     ).toBe(400); // Sunday only
     expect(
-      (
-        await callRoute(
-          requestLeave,
-          post(emp, {
-            staffId: emp2.staffId,
-            leaveTypeId: casualId,
-            startDate: '2026-11-09',
-            endDate: '2026-11-09',
-          }),
-        )
-      ).status,
+      await statusOf(
+        requestLeave,
+        post(emp, {
+          staffId: emp2.staffId,
+          leaveTypeId: casualId,
+          startDate: '2026-11-09',
+          endDate: '2026-11-09',
+        }),
+      ),
     ).toBe(403);
   });
 
   it('approval scope and self-approval refusal; approval writes a usage entry', async () => {
-    expect(
-      (await callRoute(decideLeave, post(emp, { decision: 'approve' }), { id: lv.id })).status,
-    ).toBe(403);
+    expect(await statusOf(decideLeave, post(emp, { decision: 'approve' }), { id: lv.id })).toBe(
+      403,
+    );
     expect(
       (await callRoute(decideLeave, post(otherManager, { decision: 'approve' }), { id: lv.id }))
         .status,
@@ -403,64 +373,56 @@ describe('leave requests', () => {
     const casual = before.data![0]!.balances.find((b) => b.code === 'CASUAL');
     expect(casual?.balance.status).toBe('not_configured');
     expect(
-      (
-        await callRoute(
-          ledgerEntry,
-          post(hr, {
-            staffId: hr.staffId,
-            leaveTypeId: casualId,
-            entryType: 'allocation',
-            days: 12,
-            effectiveDate: '2026-04-01',
-            note: 'Self allocation',
-          }),
-        )
-      ).status,
+      await statusOf(
+        ledgerEntry,
+        post(hr, {
+          staffId: hr.staffId,
+          leaveTypeId: casualId,
+          entryType: 'allocation',
+          days: 12,
+          effectiveDate: '2026-04-01',
+          note: 'Self allocation',
+        }),
+      ),
     ).toBe(403);
     expect(
-      (
-        await callRoute(
-          ledgerEntry,
-          post(emp, {
-            staffId: emp.staffId,
-            leaveTypeId: casualId,
-            entryType: 'allocation',
-            days: 12,
-            effectiveDate: '2026-04-01',
-            note: 'x',
-          }),
-        )
-      ).status,
+      await statusOf(
+        ledgerEntry,
+        post(emp, {
+          staffId: emp.staffId,
+          leaveTypeId: casualId,
+          entryType: 'allocation',
+          days: 12,
+          effectiveDate: '2026-04-01',
+          note: 'x',
+        }),
+      ),
     ).toBe(403);
     expect(
-      (
-        await callRoute(
-          ledgerEntry,
-          post(hr, {
-            staffId: emp.staffId,
-            leaveTypeId: casualId,
-            entryType: 'allocation',
-            days: 1.25,
-            effectiveDate: '2026-04-01',
-            note: 'Recorded by HR (fictional)',
-          }),
-        )
-      ).status,
+      await statusOf(
+        ledgerEntry,
+        post(hr, {
+          staffId: emp.staffId,
+          leaveTypeId: casualId,
+          entryType: 'allocation',
+          days: 1.25,
+          effectiveDate: '2026-04-01',
+          note: 'Recorded by HR (fictional)',
+        }),
+      ),
     ).toBe(400);
     expect(
-      (
-        await callRoute(
-          ledgerEntry,
-          post(hr, {
-            staffId: emp.staffId,
-            leaveTypeId: casualId,
-            entryType: 'allocation',
-            days: 4,
-            effectiveDate: '2026-04-01',
-            note: 'Recorded by HR (fictional)',
-          }),
-        )
-      ).status,
+      await statusOf(
+        ledgerEntry,
+        post(hr, {
+          staffId: emp.staffId,
+          leaveTypeId: casualId,
+          entryType: 'allocation',
+          days: 4,
+          effectiveDate: '2026-04-01',
+          note: 'Recorded by HR (fictional)',
+        }),
+      ),
     ).toBe(201);
     const after = await callRoute<
       { balances: { code: string; balance: { status: string; balance?: number } }[] }[]
@@ -469,7 +431,7 @@ describe('leave requests', () => {
       status: 'configured',
       balance: 0,
     });
-    expect((await callRoute(balances, get(emp, `/x?staffId=${emp2.staffId}`))).status).toBe(403);
+    expect(await statusOf(balances, get(emp, `/x?staffId=${emp2.staffId}`))).toBe(403);
   });
 
   it('cancellation: requester before start writes a reversal; after start only an approver with a reason', async () => {
@@ -478,7 +440,7 @@ describe('leave requests', () => {
     });
     // 17 Oct has passed (today ≥ 19 Oct 2026), so the employee cannot cancel it any more
     expect(r.status).toBe(403);
-    expect((await callRoute(cancelLeave, post(manager, {}), { id: lv.id })).status).toBe(400);
+    expect(await statusOf(cancelLeave, post(manager, {}), { id: lv.id })).toBe(400);
     const ok = await callRoute<Leave>(
       cancelLeave,
       post(manager, { reason: 'Returned to work early' }),
@@ -502,16 +464,16 @@ describe('leave requests', () => {
       requestLeave,
       post(emp, { leaveTypeId: casualId, startDate: '2026-12-07', endDate: '2026-12-08' }),
     );
-    expect((await callRoute(cancelLeave, post(emp2, {}), { id: f.data!.id })).status).toBe(403);
+    expect(await statusOf(cancelLeave, post(emp2, {}), { id: f.data!.id })).toBe(403);
     expect(
       (await callRoute<Leave>(cancelLeave, post(emp, {}), { id: f.data!.id })).data?.status,
     ).toBe('cancelled');
-    expect((await callRoute(cancelLeave, post(emp, {}), { id: f.data!.id })).status).toBe(409);
+    expect(await statusOf(cancelLeave, post(emp, {}), { id: f.data!.id })).toBe(409);
   });
 
   it('reads are scoped: a colleague’s leave is 403; the chain manager can see it', async () => {
-    expect((await callRoute(getLeave, get(emp2), { id: lv.id })).status).toBe(403);
-    expect((await callRoute(getLeave, get(outsider), { id: lv.id })).status).toBe(403);
+    expect(await statusOf(getLeave, get(emp2), { id: lv.id })).toBe(403);
+    expect(await statusOf(getLeave, get(outsider), { id: lv.id })).toBe(403);
     const m = await callRoute<{ perDate: { excluded: string | null }[] }>(getLeave, get(manager), {
       id: lv.id,
     });
@@ -533,9 +495,9 @@ describe('leave requests', () => {
     expect(ids).not.toContain(outsider.staffId);
     const e2 = r.data!.rows.find((x) => x.staffId === emp2.staffId)!;
     expect(e2.cells[0]?.state).toBe('on_leave'); // emp2's pending request covers Mon 19 Oct
-    expect(
-      (await callRoute(availability, get(manager, '/x?from=2026-10-01&to=2026-11-30'))).status,
-    ).toBe(400);
+    expect(await statusOf(availability, get(manager, '/x?from=2026-10-01&to=2026-11-30'))).toBe(
+      400,
+    );
   });
 });
 
@@ -571,19 +533,13 @@ describe('timesheets, export and metrics', () => {
     expect(m.summary.scheduledMinutes.status).toBe('missing');
     expect(m.summary.workedMinutes.status).toBe('missing');
     expect(r.data!.people.map((p) => p.staffId)).not.toContain(outsider.staffId);
-    expect((await callRoute(timesheets, get(emp, '/x?from=2026-10-12&to=2026-10-12'))).status).toBe(
-      403,
-    );
+    expect(await statusOf(timesheets, get(emp, '/x?from=2026-10-12&to=2026-10-12'))).toBe(403);
   });
 
   it('employee-level CSV export needs ops:hr_reports:export and is audited', async () => {
-    expect(
-      (await callRoute(exportCsv, get(manager, '/x?from=2026-10-12&to=2026-10-12'))).status,
-    ).toBe(403);
+    expect(await statusOf(exportCsv, get(manager, '/x?from=2026-10-12&to=2026-10-12'))).toBe(403);
     const finance = await createTestUser(ctx.db, { roles: ['finance_officer'] });
-    expect(
-      (await callRoute(exportCsv, get(finance, '/x?from=2026-10-12&to=2026-10-12'))).status,
-    ).toBe(403);
+    expect(await statusOf(exportCsv, get(finance, '/x?from=2026-10-12&to=2026-10-12'))).toBe(403);
     const res = await exportCsv(get(hr, '/x?from=2026-10-12&to=2026-10-12'), {
       params: Promise.resolve({}),
     });

@@ -8,8 +8,6 @@ import {
   REQUISITION_EMPLOYMENT_TYPES,
   REQUISITION_STATUS_LABELS,
   REQUISITION_STATUSES,
-  type ApplicationStage,
-  type RequisitionStatus,
 } from '../../../domain/hr/recruitment';
 import { formOptions } from '../../../server/options';
 import {
@@ -139,20 +137,13 @@ async function Requisitions({ user, sp }: { user: AuthenticatedUser; sp: SearchP
             header: 'Status',
             render: (x) => (
               <StatusBadge tone={statusTone(x.status)}>
-                {REQUISITION_STATUS_LABELS[x.status as RequisitionStatus]}
+                {REQUISITION_STATUS_LABELS[x.status]}
               </StatusBadge>
             ),
           },
         ]}
       />
-      <Pager
-        base={BASE}
-        params={sp}
-        page={r.data.page}
-        pageSize={r.data.pageSize}
-        total={r.data.total}
-        noun="requisitions"
-      />
+      <Pager base={BASE} params={sp} {...r.data} noun="requisitions" />
       {manage ? (
         <NewRequisition allScope={scopeFor(user, 'ops:recruitment:manage') === 'all'} />
       ) : null}
@@ -287,14 +278,7 @@ async function Candidates({ user, sp }: { user: AuthenticatedUser; sp: SearchPar
           },
         ]}
       />
-      <Pager
-        base={BASE}
-        params={sp}
-        page={r.data.page}
-        pageSize={r.data.pageSize}
-        total={r.data.total}
-        noun="candidates"
-      />
+      <Pager base={BASE} params={sp} {...r.data} noun="candidates" />
       {manage ? (
         <NewCandidate allScope={scopeFor(user, 'ops:recruitment:manage') === 'all'} />
       ) : null}
@@ -416,7 +400,7 @@ async function Applications({ user, sp }: { user: AuthenticatedUser; sp: SearchP
             header: 'Stage',
             render: (x) => (
               <StatusBadge tone={statusTone(x.stage)}>
-                {APPLICATION_STAGE_LABELS[x.stage as ApplicationStage]}
+                {APPLICATION_STAGE_LABELS[x.stage]}
               </StatusBadge>
             ),
           },
@@ -428,14 +412,7 @@ async function Applications({ user, sp }: { user: AuthenticatedUser; sp: SearchP
           },
         ]}
       />
-      <Pager
-        base={BASE}
-        params={sp}
-        page={r.data.page}
-        pageSize={r.data.pageSize}
-        total={r.data.total}
-        noun="applications"
-      />
+      <Pager base={BASE} params={sp} {...r.data} noun="applications" />
     </div>
   );
 }

@@ -51,11 +51,6 @@ export const DECISION_LOG_STATES = [
 ] as const;
 export type DecisionLogState = (typeof DECISION_LOG_STATES)[number];
 
-/** Decision-log states that still need a decision (K-18 "open decisions"). */
-export function isUndecided(state: DecisionLogState): boolean {
-  return state === 'open' || state === 'proposed';
-}
-
 export const RISK_KINDS = ['risk', 'issue', 'blocker'] as const;
 export const RISK_STATUSES = ['open', 'mitigating', 'resolved', 'closed', 'accepted'] as const;
 export const LEVELS = ['low', 'medium', 'high'] as const;
@@ -102,12 +97,7 @@ export type IncidentCategory = (typeof INCIDENT_CATEGORIES)[number];
 
 /** BR-OPS-15: refunds, waivers, special fees and extensions need authorised approval (limits: OD-013). */
 export function incidentNeedsAuthorisedApproval(category: IncidentCategory): boolean {
-  return (
-    category === 'refund_request' ||
-    category === 'fee_waiver' ||
-    category === 'special_fee' ||
-    category === 'deadline_extension'
-  );
+  return ['refund_request', 'fee_waiver', 'special_fee', 'deadline_extension'].includes(category);
 }
 
 export const INCIDENT_STATUSES = ['open', 'in_progress', 'resolved', 'closed'] as const;
@@ -154,13 +144,12 @@ export function incidentSla(
   settings: IncidentSlaSettings,
 ): { state: IncidentSlaState; targetDate: string | null; daysOpen: number } {
   const days =
-    incident.severity === 'high'
-      ? settings.highDays
-      : incident.severity === 'medium'
-        ? settings.mediumDays
-        : incident.severity === 'low'
-          ? settings.lowDays
-          : null;
+    (
+      { high: settings.highDays, medium: settings.mediumDays, low: settings.lowDays } as Record<
+        string,
+        number
+      >
+    )[incident.severity] ?? null;
   const opened = istToday(incident.occurredAt);
   const endDay = istToday(incident.resolvedAt ?? now);
   const daysOpen = Math.max(0, daysBetween(opened, endDay));
@@ -280,7 +269,6 @@ export const POLICY_AREAS = [
   'health_safety',
   'other',
 ] as const;
-export type PolicyArea = (typeof POLICY_AREAS)[number];
 
 export const POLICY_STATUSES = ['draft', 'proposed', 'approved', 'retired'] as const;
 export type PolicyStatus = (typeof POLICY_STATUSES)[number];

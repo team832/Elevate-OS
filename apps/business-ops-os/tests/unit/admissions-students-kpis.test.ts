@@ -64,14 +64,16 @@ describe('closure reason codes', () => {
 
 describe('student identity and directory', () => {
   it('a student is an admission that reached admitted (withdrawn only if admitted first)', () => {
-    expect(directoryState({ status: 'admitted', admittedAt: new Date() })).toBe('admitted');
-    expect(directoryState({ status: 'enrolment_requested', admittedAt: new Date() })).toBe(
-      'awaiting_enrolment',
-    );
-    expect(directoryState({ status: 'enrolled', admittedAt: new Date() })).toBe('enrolled');
-    expect(directoryState({ status: 'lost', admittedAt: new Date() })).toBe('withdrawn');
-    expect(directoryState({ status: 'lost', admittedAt: null })).toBeNull();
-    expect(directoryState({ status: 'admission_pending', admittedAt: null })).toBeNull();
+    const now = new Date();
+    for (const [status, admittedAt, state] of [
+      ['admitted', now, 'admitted'],
+      ['enrolment_requested', now, 'awaiting_enrolment'],
+      ['enrolled', now, 'enrolled'],
+      ['lost', now, 'withdrawn'],
+      ['lost', null, null],
+      ['admission_pending', null, null],
+    ] as const)
+      expect(directoryState({ status, admittedAt })).toBe(state);
   });
   it('links to the Academic record only when Academic returned an id', () => {
     expect(academicStudentPath('abc')).toBe('/academic/students/abc');
@@ -113,24 +115,14 @@ describe('handoff view and retry rule', () => {
   };
   it('never says enrolled before Academic confirmed', () => {
     expect(deriveHandoffView(base).view).toBe('awaiting_pickup');
-    expect(
-      deriveHandoffView({
-        ...base,
-        academicDelivery: { status: 'failed', attempts: 2, lastError: 'x' },
-      }).view,
-    ).toBe('academic_retrying');
-    expect(
-      deriveHandoffView({
-        ...base,
-        academicDelivery: { status: 'dead', attempts: 5, lastError: null },
-      }).view,
-    ).toBe('failed_needs_action');
-    expect(
-      deriveHandoffView({
-        ...base,
-        academicDelivery: { status: 'processed', attempts: 1, lastError: null },
-      }).view,
-    ).toBe('awaiting_reply');
+    for (const [status, attempts, lastError, view] of [
+      ['failed', 2, 'x', 'academic_retrying'],
+      ['dead', 5, null, 'failed_needs_action'],
+      ['processed', 1, null, 'awaiting_reply'],
+    ] as const)
+      expect(
+        deriveHandoffView({ ...base, academicDelivery: { status, attempts, lastError } }).view,
+      ).toBe(view);
     expect(
       deriveHandoffView({
         ...base,

@@ -8,26 +8,21 @@
  * chain) · export `ops:hr_reports:export`. Worked − scheduled is shown as an
  * "unapproved difference"; approved overtime is not built.
  */
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import type { Database } from '@elevate/database';
 import { ValidationError } from '@elevate/shared-contracts';
-import type { IsoDate } from '@elevate/shared-types';
 import { daysBetween } from '../../domain/dates';
 import { toCsv } from '../../domain/hr/csv';
 import { sumMeasured, type Measured, type PeriodSummary } from '../../domain/hr/timesheets';
 import type { Actor } from '../context';
 import { assertHrScope, hrScope, hrScopeIds } from '../hr-scope';
+import { opsAudit } from '../ops-common';
 import { employeePeriod } from './attendance';
 import { loadEmployees } from './shifts';
 import type { TimesheetQuery } from './time-schemas';
 
 const MAX_DAYS = 62;
-
-function checkRange(from: IsoDate, to: IsoDate) {
-  if (to < from) throw new ValidationError('"to" is before "from".');
-  if (daysBetween(from, to) + 1 > MAX_DAYS)
-    throw new ValidationError(`Choose at most ${MAX_DAYS} days.`);
-}
+const auditExport = opsAudit('timesheet_export');
 
 export async function buildTimesheets(
   db: Database,
@@ -36,7 +31,9 @@ export async function buildTimesheets(
   permission: 'ops:hr_reports:read' | 'ops:hr_reports:export' = 'ops:hr_reports:read',
 ) {
   const scope = await hrScope(db, actor, permission);
-  checkRange(query.from, query.to);
+  if (query.to < query.from) throw new ValidationError('"to" is before "from".');
+  if (daysBetween(query.from, query.to) + 1 > MAX_DAYS)
+    throw new ValidationError(`Choose at most ${MAX_DAYS} days.`);
   if (query.staffId) assertHrScope(scope, query.staffId);
   const ids = query.staffId ? [query.staffId] : hrScopeIds(scope);
   const employees = (await loadEmployees(db, ids, query.departmentId ?? null)).filter(
@@ -80,6 +77,28 @@ function totals(list: readonly PeriodSummary[]) {
 
 const hours = (m: Measured) => (m.status === 'ok' ? (m.value / 60).toFixed(2) : 'missing');
 
+type Sheets = Awaited<ReturnType<typeof buildTimesheets>>;
+type CsvValue = (p: Sheets['people'][number], s: PeriodSummary, d: Sheets) => string | number;
+
+/** Export columns: header and value per employee. */
+const CSV_COLUMNS: [string, CsvValue][] = [
+  ['employee_code', (p) => p.employeeCode ?? ''],
+  ['name', (p) => p.fullName],
+  ['department', (p) => p.departmentName ?? ''],
+  ['from', (_p, _s, d) => d.from],
+  ['to', (_p, _s, d) => d.to],
+  ['scheduled_hours', (_p, s) => hours(s.scheduledMinutes)],
+  ['worked_hours', (_p, s) => hours(s.workedMinutes)],
+  ['unapproved_difference_hours', (_p, s) => hours(s.unapprovedDifferenceMinutes)],
+  ['scheduled_days', (_p, s) => s.scheduledDays],
+  ['days_with_attendance', (_p, s) => s.daysWithAttendance],
+  ['late_count', (_p, s) => s.lateCount],
+  ['early_departure_count', (_p, s) => s.earlyCount],
+  ['missing_clock_outs', (_p, s) => s.missingClockOuts],
+  ['unresolved_exceptions', (_p, s) => s.unresolvedExceptions],
+  ['approved_leave_days', (_p, s) => s.approvedLeaveDays],
+];
+
 /** Employee-level CSV (one row per employee). Audited; needs `ops:hr_reports:export`. */
 export async function exportTimesheetsCsv(
   db: Database,
@@ -89,60 +108,22 @@ export async function exportTimesheetsCsv(
 ): Promise<{ filename: string; csv: string; rows: number }> {
   const data = await buildTimesheets(db, actor, query, 'ops:hr_reports:export');
   const rows = [
-    [
-      'employee_code',
-      'name',
-      'department',
-      'from',
-      'to',
-      'scheduled_hours',
-      'worked_hours',
-      'unapproved_difference_hours',
-      'scheduled_days',
-      'days_with_attendance',
-      'late_count',
-      'early_departure_count',
-      'missing_clock_outs',
-      'unresolved_exceptions',
-      'approved_leave_days',
-    ],
-    ...data.people.map((p) => [
-      p.employeeCode ?? '',
-      p.fullName,
-      p.departmentName ?? '',
-      data.from,
-      data.to,
-      hours(p.summary.scheduledMinutes),
-      hours(p.summary.workedMinutes),
-      hours(p.summary.unapprovedDifferenceMinutes),
-      p.summary.scheduledDays,
-      p.summary.daysWithAttendance,
-      p.summary.lateCount,
-      p.summary.earlyCount,
-      p.summary.missingClockOuts,
-      p.summary.unresolvedExceptions,
-      p.summary.approvedLeaveDays,
-    ]),
+    CSV_COLUMNS.map(([name]) => name),
+    ...data.people.map((p) => CSV_COLUMNS.map(([, value]) => value(p, p.summary, data))),
   ];
-  await withTransaction(db, async (tx) => {
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'timesheet.exported',
-      entityType: 'timesheet_export',
-      entityId: `${data.from}_${data.to}`,
-      after: {
-        from: data.from,
-        to: data.to,
-        staffId: query.staffId ?? null,
-        departmentId: query.departmentId ?? null,
-        employees: data.people.length,
-      },
-      requestId,
-    });
-  });
+  const { from, to } = data;
+  const after = {
+    from,
+    to,
+    staffId: query.staffId ?? null,
+    departmentId: query.departmentId ?? null,
+    employees: data.people.length,
+  };
+  await withTransaction(db, (tx) =>
+    auditExport(tx, actor, `${from}_${to}`, 'timesheet.exported', { after }, requestId),
+  );
   return {
-    filename: `timesheets_${data.from}_${data.to}.csv`,
+    filename: `timesheets_${from}_${to}.csv`,
     csv: toCsv(rows),
     rows: data.people.length,
   };

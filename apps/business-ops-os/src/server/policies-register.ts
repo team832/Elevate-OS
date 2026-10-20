@@ -9,24 +9,20 @@
  * Permissions: read `ops:settings:read`; draft / propose / withdraw / retire
  * `ops:settings:manage`; approve / reject `ops:policies:approve` (never the proposer).
  */
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
-  auditEvents,
   opsPolicies,
   opsPolicyVersions,
   staffMembers,
   users,
   type Database,
-  type OpsPolicyId,
   type OpsPolicyVersionId,
 } from '@elevate/database';
 import {
   decideApproval,
   defineApprovalPolicy,
   findPendingApproval,
-  listApprovalHistory,
-  recordAudit,
   requestApproval,
   withdrawApproval,
   withTransaction,
@@ -50,7 +46,8 @@ import {
   type PolicyStatus,
   type PolicyVersionStatus,
 } from '../domain';
-import { accessScope, activeStaff, nextCode, notFound, type Actor } from './context';
+import { accessScope, activeStaff, nextCode, type Actor } from './context';
+import { auditTrail, defined, opsAudit, rowById, versionApprovals } from './ops-common';
 import { loadSettings } from './settings';
 import type {
   createPolicyBody,
@@ -62,6 +59,8 @@ import type {
 
 type PolicyRow = typeof opsPolicies.$inferSelect;
 type PolicyVersionRow = typeof opsPolicyVersions.$inferSelect;
+
+const audit = opsAudit('policy');
 
 /** OPS-066: approval of one policy version. The proposer cannot decide their own request. */
 export const policyApprovalPolicy = defineApprovalPolicy({
@@ -76,36 +75,29 @@ export const policyApprovalPolicy = defineApprovalPolicy({
     'Approval of a version of a company policy or compliance obligation recorded by Elevate. The proposer cannot approve it.',
 });
 
-function assertSettingKeys(keys: readonly string[]) {
+/** Linked setting keys (deduplicated) must exist; the next review is not before the effective date. */
+function checkVersionInput(input: {
+  linkedSettingKeys: readonly string[];
+  effectiveDate?: string | null;
+  nextReviewDate?: string | null;
+}) {
+  const keys = [...new Set(input.linkedSettingKeys.map((k) => k.trim()))];
   const unknown = keys.filter((k) => !isSettingKey(k));
+  const message = `Unknown setting key(s): ${unknown.join(', ')}`;
   if (unknown.length)
-    throw new ValidationError(`Unknown setting key(s): ${unknown.join(', ')}.`, {
-      details: [
-        {
-          location: 'body',
-          path: ['linkedSettingKeys'],
-          message: `Unknown setting key(s): ${unknown.join(', ')}`,
-        },
-      ],
+    throw new ValidationError(`${message}.`, {
+      details: [{ location: 'body', path: ['linkedSettingKeys'], message }],
     });
-}
-
-function assertDates(effective: string | null | undefined, review: string | null | undefined) {
+  const { effectiveDate: effective, nextReviewDate: review } = input;
   if (effective && review && review < effective)
     throw new ValidationError('The next review date is before the effective date.', {
       details: [{ location: 'body', path: ['nextReviewDate'], message: 'Before effective date' }],
     });
+  return keys;
 }
 
-async function lockPolicy(tx: Database, id: string): Promise<PolicyRow> {
-  const [row] = await tx
-    .select()
-    .from(opsPolicies)
-    .where(eq(opsPolicies.id, id as OpsPolicyId))
-    .for('update');
-  if (!row) notFound('Policy');
-  return row;
-}
+const getPolicyRow = (db: Database, id: string, lock = false): Promise<PolicyRow> =>
+  rowById(db, opsPolicies, id, 'Policy', lock);
 
 async function versionOf(tx: Database, id: string | null): Promise<PolicyVersionRow | null> {
   if (!id) return null;
@@ -115,8 +107,6 @@ async function versionOf(tx: Database, id: string | null): Promise<PolicyVersion
     .where(eq(opsPolicyVersions.id, id as OpsPolicyVersionId));
   return row ?? null;
 }
-
-const dedupe = (keys: readonly string[]) => [...new Set(keys.map((k) => k.trim()))];
 
 // --- reads -------------------------------------------------------------------------------------------
 
@@ -160,11 +150,7 @@ export async function listPolicies(
 
 export async function getPolicy(db: Database, actor: Actor, id: string, now = new Date()) {
   await accessScope(db, actor, 'ops:settings:read');
-  const [policy] = await db
-    .select()
-    .from(opsPolicies)
-    .where(eq(opsPolicies.id, id as OpsPolicyId));
-  if (!policy) notFound('Policy');
+  const policy = await getPolicyRow(db, id);
   const versions = await db
     .select({ v: opsPolicyVersions, createdByName: users.displayName })
     .from(opsPolicyVersions)
@@ -182,14 +168,12 @@ export async function getPolicy(db: Database, actor: Actor, id: string, now = ne
   const settings = await loadSettings(db);
   const current = versions.find((x) => x.v.id === policy.currentVersionId)?.v ?? null;
   const approved = versions.find((x) => x.v.id === policy.approvedVersionId)?.v ?? null;
-  const approvals = [];
-  for (const { v } of versions)
-    for (const a of await listApprovalHistory(db, {
-      module: 'ops',
-      subjectType: 'policy_version',
-      subjectId: v.id,
-    }))
-      approvals.push({ ...a, versionNumber: v.versionNumber, decidedByName: who(a.decidedBy) });
+  const approvals = await versionApprovals(
+    db,
+    'policy_version',
+    versions.map((x) => x.v),
+    (a, v) => ({ versionNumber: v.versionNumber, decidedByName: who(a.decidedBy) }),
+  );
   const today = istToday(now);
   const manage = can(actor, 'ops:settings:manage');
   const approveBlockers =
@@ -244,19 +228,7 @@ export async function getPolicy(db: Database, actor: Actor, id: string, now = ne
 
 export async function getPolicyHistory(db: Database, actor: Actor, id: string) {
   await accessScope(db, actor, 'ops:settings:read');
-  const rows = await db
-    .select({ e: auditEvents, actorName: users.displayName })
-    .from(auditEvents)
-    .leftJoin(users, eq(users.id, auditEvents.actorUserId))
-    .where(
-      and(
-        eq(auditEvents.module, 'ops'),
-        eq(auditEvents.entityType, 'policy'),
-        eq(auditEvents.entityId, id),
-      ),
-    )
-    .orderBy(desc(auditEvents.at), desc(auditEvents.id))
-    .limit(500);
+  const rows = await auditTrail(db, 'policy', id, 500);
   return rows.map(({ e, actorName }) => ({ id: e.id, at: e.at, action: e.action, actorName }));
 }
 
@@ -271,9 +243,7 @@ export async function createPolicy(
   await accessScope(db, actor, 'ops:settings:manage');
   if (input.accountableStaffId)
     await activeStaff(db, input.accountableStaffId, 'accountableStaffId');
-  const keys = dedupe(input.linkedSettingKeys);
-  assertSettingKeys(keys);
-  assertDates(input.effectiveDate, input.nextReviewDate);
+  const keys = checkVersionInput(input);
   return withTransaction(db, async (tx) => {
     const code = await nextCode(tx, 'policy', 'ops.policies');
     const [policy] = await tx
@@ -309,15 +279,8 @@ export async function createPolicy(
       .set({ currentVersionId: version?.id ?? null })
       .where(eq(opsPolicies.id, policy.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'policy.created',
-      entityType: 'policy',
-      entityId: policy.id,
-      after: { policy: after, version },
-      requestId,
-    });
+    const data = { after: { policy: after, version } };
+    await audit(tx, actor, policy.id, 'policy.created', data, requestId);
     return after as PolicyRow;
   });
 }
@@ -334,25 +297,15 @@ export async function updatePolicy(
   if (input.accountableStaffId)
     await activeStaff(db, input.accountableStaffId, 'accountableStaffId');
   return withTransaction(db, async (tx) => {
-    const before = await lockPolicy(tx, id);
+    const before = await getPolicyRow(tx, id, true);
     if (before.status === 'retired')
       throw new ConflictError('A retired entry is read-only; record a new entry instead.');
-    const patch = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
     const [after] = await tx
       .update(opsPolicies)
-      .set(patch as Partial<typeof opsPolicies.$inferInsert>)
+      .set(defined(input) as Partial<typeof opsPolicies.$inferInsert>)
       .where(eq(opsPolicies.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'policy.updated',
-      entityType: 'policy',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    await audit(tx, actor, before.id, 'policy.updated', { before, after }, requestId);
     return after as PolicyRow;
   });
 }
@@ -370,11 +323,9 @@ export async function savePolicyDraft(
   requestId?: string,
 ) {
   await accessScope(db, actor, 'ops:settings:manage');
-  const keys = dedupe(input.linkedSettingKeys);
-  assertSettingKeys(keys);
-  assertDates(input.effectiveDate, input.nextReviewDate);
+  const keys = checkVersionInput(input);
   return withTransaction(db, async (tx) => {
-    const policy = await lockPolicy(tx, id);
+    const policy = await getPolicyRow(tx, id, true);
     const current = await versionOf(tx, policy.currentVersionId);
     if (current?.status === 'proposed')
       throw new InvalidStateTransitionError(
@@ -422,15 +373,8 @@ export async function savePolicyDraft(
       .update(opsPolicies)
       .set({ currentVersionId: version.id, status: next.status })
       .where(eq(opsPolicies.id, policy.id));
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'policy.draft_saved',
-      entityType: 'policy',
-      entityId: policy.id,
-      after: { versionId: version.id, versionNumber: version.versionNumber },
-      requestId,
-    });
+    const after = { versionId: version.id, versionNumber: version.versionNumber };
+    await audit(tx, actor, policy.id, 'policy.draft_saved', { after }, requestId);
     return version;
   });
 }
@@ -445,21 +389,24 @@ export async function policyWorkflow(
   const deciding = input.action === 'approve' || input.action === 'reject';
   await accessScope(db, actor, deciding ? 'ops:policies:approve' : 'ops:settings:manage');
   return withTransaction(db, async (tx) => {
-    const policy = await lockPolicy(tx, id);
+    const policy = await getPolicyRow(tx, id, true);
     const version = await versionOf(tx, policy.currentVersionId);
     if (!version) throw new InvalidStateTransitionError('This entry has no version yet.');
     const ctx = { hasApprovedVersion: Boolean(policy.approvedVersionId) };
-    const audit = (action: string, after: unknown) =>
-      recordAudit(tx, {
-        actorUserId: actor.id,
-        module: 'ops',
-        action,
-        entityType: 'policy',
-        entityId: policy.id,
-        after,
-        requestId,
-        metadata: { versionId: version.id, versionNumber: version.versionNumber },
-      });
+    const metadata = { versionId: version.id, versionNumber: version.versionNumber };
+    const log = (action: string, after: unknown) =>
+      audit(tx, actor, policy.id, action, { after, metadata }, requestId);
+    const setVersion = (
+      values: Partial<typeof opsPolicyVersions.$inferInsert>,
+      versionId = version.id,
+    ) => tx.update(opsPolicyVersions).set(values).where(eq(opsPolicyVersions.id, versionId));
+    const setPolicy = (values: Partial<typeof opsPolicies.$inferInsert>) =>
+      tx.update(opsPolicies).set(values).where(eq(opsPolicies.id, policy.id));
+    const pendingApproval = async (message: string) => {
+      const pending = await findPendingApproval(tx, policyApprovalPolicy, version.id);
+      if (!pending) throw new InvalidStateTransitionError(message);
+      return pending;
+    };
     const status = (action: Parameters<typeof nextPolicyStatus>[1]) => {
       const next = nextPolicyStatus(policy.status as PolicyStatus, action, ctx);
       if (!next.ok) throw new InvalidStateTransitionError(next.message);
@@ -489,24 +436,19 @@ export async function policyWorkflow(
           comment: input.comment ?? null,
           requestId,
         });
-        await tx
-          .update(opsPolicyVersions)
-          .set({
-            status: 'proposed',
-            proposedBy: actor.id,
-            proposedAt: new Date(),
-            approvalId: approval.id,
-          })
-          .where(eq(opsPolicyVersions.id, version.id));
-        await tx.update(opsPolicies).set({ status: s }).where(eq(opsPolicies.id, policy.id));
-        await audit('policy.proposed', { approvalId: approval.id });
+        await setVersion({
+          status: 'proposed',
+          proposedBy: actor.id,
+          proposedAt: new Date(),
+          approvalId: approval.id,
+        });
+        await setPolicy({ status: s });
+        await log('policy.proposed', { approvalId: approval.id });
         return { status: s, approvalId: approval.id };
       }
       case 'approve':
       case 'reject': {
-        const pending = await findPendingApproval(tx, policyApprovalPolicy, version.id);
-        if (!pending)
-          throw new InvalidStateTransitionError('This version has no pending approval request.');
+        const pending = await pendingApproval('This version has no pending approval request.');
         const problems = policyApprovalProblems({
           versionStatus: version.status as PolicyVersionStatus,
           proposedByUserId: version.proposedBy,
@@ -523,47 +465,24 @@ export async function policyWorkflow(
           comment: input.comment ?? null,
           requestId,
         });
-        const now = new Date();
+        const approve = input.action === 'approve';
         const s = status(input.action);
-        if (input.action === 'approve') {
-          if (policy.approvedVersionId)
-            await tx
-              .update(opsPolicyVersions)
-              .set({ status: 'superseded' })
-              .where(eq(opsPolicyVersions.id, policy.approvedVersionId));
-          await tx
-            .update(opsPolicyVersions)
-            .set({
-              status: 'approved',
-              decidedBy: actor.id,
-              decidedAt: now,
-              decisionNote: input.comment ?? null,
-            })
-            .where(eq(opsPolicyVersions.id, version.id));
-          await tx
-            .update(opsPolicies)
-            .set({ status: s, approvedVersionId: version.id })
-            .where(eq(opsPolicies.id, policy.id));
-        } else {
-          await tx
-            .update(opsPolicyVersions)
-            .set({
-              status: 'rejected',
-              decidedBy: actor.id,
-              decidedAt: now,
-              decisionNote: input.comment,
-            })
-            .where(eq(opsPolicyVersions.id, version.id));
-          await tx.update(opsPolicies).set({ status: s }).where(eq(opsPolicies.id, policy.id));
-        }
-        await audit(input.action === 'approve' ? 'policy.approved' : 'policy.rejected', {
+        if (approve && policy.approvedVersionId)
+          await setVersion({ status: 'superseded' }, policy.approvedVersionId);
+        await setVersion({
+          status: approve ? 'approved' : 'rejected',
+          decidedBy: actor.id,
+          decidedAt: new Date(),
+          decisionNote: input.comment ?? null,
+        });
+        await setPolicy(approve ? { status: s, approvedVersionId: version.id } : { status: s });
+        await log(input.action === 'approve' ? 'policy.approved' : 'policy.rejected', {
           status: s,
         });
         return { status: s };
       }
       case 'withdraw': {
-        const pending = await findPendingApproval(tx, policyApprovalPolicy, version.id);
-        if (!pending) throw new InvalidStateTransitionError('Nothing is waiting for approval.');
+        const pending = await pendingApproval('Nothing is waiting for approval.');
         await withdrawApproval(tx, {
           policy: policyApprovalPolicy,
           approvalId: pending.id,
@@ -571,28 +490,22 @@ export async function policyWorkflow(
           requestId,
         });
         const s = status('withdraw');
-        await tx
-          .update(opsPolicyVersions)
-          .set({ status: 'draft', proposedBy: null, proposedAt: null, approvalId: null })
-          .where(eq(opsPolicyVersions.id, version.id));
-        await tx.update(opsPolicies).set({ status: s }).where(eq(opsPolicies.id, policy.id));
-        await audit('policy.withdrawn', {});
+        await setVersion({ status: 'draft', proposedBy: null, proposedAt: null, approvalId: null });
+        await setPolicy({ status: s });
+        await log('policy.withdrawn', {});
         return { status: s };
       }
       case 'retire': {
         if (version.status === 'proposed')
           throw new InvalidStateTransitionError('Decide or withdraw the proposed version first.');
         status('retire');
-        await tx
-          .update(opsPolicies)
-          .set({
-            status: 'retired',
-            retiredAt: new Date(),
-            retiredBy: actor.id,
-            retiredReason: input.reason,
-          })
-          .where(eq(opsPolicies.id, policy.id));
-        await audit('policy.retired', { reason: input.reason });
+        await setPolicy({
+          status: 'retired',
+          retiredAt: new Date(),
+          retiredBy: actor.id,
+          retiredReason: input.reason,
+        });
+        await log('policy.retired', { reason: input.reason });
         return { status: 'retired' as const };
       }
     }

@@ -31,6 +31,7 @@ import {
   get,
   json,
   setupCast,
+  status,
   uniqueCandidateEmail,
   type Cast,
 } from './hr-lifecycle-fixtures';
@@ -44,8 +45,31 @@ beforeAll(async () => {
 });
 
 type Who = { token: string };
+type Body = Record<string, unknown>;
 
-async function openRequisition(requester: Who, extra: Record<string, unknown> = {}) {
+const reqTo = (who: Who, id: string, to: string) =>
+  status(reqTransition, json(who, { to }), { id });
+const offerTo = (who: Who, id: string, to: string) =>
+  status(offerTransition, json(who, { to }), { id });
+const move = (by: Who, id: string, to: string, reason?: string) =>
+  status(appTransition, json(by, { to, reason }), { id });
+const give = (who: Who, id: string, body: Body) => status(feedback, json(who, body), { id });
+const anon = (who: Who, id: string, body: Body = { confirm: true }) =>
+  status(anonymise, json(who, body), { id });
+const audits = (entityId: string, action: string) =>
+  ctx.db
+    .select()
+    .from(auditEvents)
+    .where(and(eq(auditEvents.entityId, entityId), eq(auditEvents.action, action)));
+const stagesOf = async (appId: string) =>
+  (
+    await ctx.db
+      .select()
+      .from(opsJobApplicationStages)
+      .where(eq(opsJobApplicationStages.applicationId, appId as never))
+  ).map((h) => h.toStage);
+
+async function openRequisition(requester: Who, extra: Body = {}) {
   const r = await call<{ id: string; status: string; recruiterStaffId: string | null }>(
     createReq,
     json(requester, {
@@ -56,14 +80,11 @@ async function openRequisition(requester: Who, extra: Record<string, unknown> = 
     }),
   );
   expect(r.status).toBe(201);
-  const approved = await call(reqTransition, json(cast.director, { to: 'open' }), {
-    id: r.data!.id,
-  });
-  expect(approved.status).toBe(200);
+  expect(await reqTo(cast.director, r.data!.id, 'open')).toBe(200);
   return r.data!;
 }
 
-async function candidate(by: Who, extra: Record<string, unknown> = {}) {
+async function candidate(by: Who, extra: Body = {}) {
   const r = await call<{ id: string; code: string }>(
     createCand,
     json(by, {
@@ -85,17 +106,13 @@ async function application(by: Who, candidateId: string, requisitionId: string) 
   return r.data!.id;
 }
 
-async function move(by: Who, id: string, to: string, reason?: string) {
-  return call<{ stage: string }>(appTransition, json(by, { to, reason }), { id });
-}
-
 /** A recruiter-owned application in the interview stage with an interview on `panel`. */
 async function interviewing(panel: string[]) {
   const req = await openRequisition(cast.recruiter);
   const cand = await candidate(cast.recruiter);
   const appId = await application(cast.recruiter, cand.id, req.id);
-  expect((await move(cast.recruiter, appId, 'screening')).status).toBe(200);
-  expect((await move(cast.recruiter, appId, 'interview')).status).toBe(200);
+  expect(await move(cast.recruiter, appId, 'screening')).toBe(200);
+  expect(await move(cast.recruiter, appId, 'interview')).toBe(200);
   const iv = await call<{ id: string }>(
     schedule,
     json(cast.recruiter, {
@@ -111,31 +128,14 @@ async function interviewing(panel: string[]) {
 
 describe('route protection', () => {
   it('401 without a session, 403 without recruitment access, 400 on invalid input', async () => {
-    expect((await call(listReqs, buildRequest('/ops/api/v1/hr/requisitions'))).status).toBe(401);
-    expect((await call(listReqs, get(cast.outsider, '/ops/api/v1/hr/requisitions'))).status).toBe(
-      403,
-    );
-    expect(
-      (await call(createReq, json(cast.auditor, { title: 'X role', employmentType: 'full_time' })))
-        .status,
-    ).toBe(403);
-    const bad = await call(
-      createReq,
-      json(cast.hrManager, { title: 'Role', employmentType: 'full_time', openings: 0 }),
-    );
-    expect(bad.status).toBe(400);
-    expect(
-      (
-        await call(
-          createCand,
-          json(cast.hrManager, {
-            fullName: 'Bad Phone (fictional)',
-            phone: '12',
-            source: 'referral',
-          }),
-        )
-      ).status,
-    ).toBe(400);
+    expect(await status(listReqs, buildRequest('/ops/api/v1/hr/requisitions'))).toBe(401);
+    expect(await status(listReqs, get(cast.outsider, '/ops/api/v1/hr/requisitions'))).toBe(403);
+    const role = (who: Who, extra: Body = {}) =>
+      status(createReq, json(who, { title: 'X role', employmentType: 'full_time', ...extra }));
+    expect(await role(cast.auditor)).toBe(403);
+    expect(await role(cast.hrManager, { openings: 0 })).toBe(400);
+    const badPhone = { fullName: 'Bad Phone (fictional)', phone: '12', source: 'referral' };
+    expect(await status(createCand, json(cast.hrManager, badPhone))).toBe(400);
   });
 });
 
@@ -147,37 +147,20 @@ describe('requisitions', () => {
     );
     expect(r.status).toBe(201);
     expect(r.data!.code).toMatch(/^REQ-\d{4}$/);
-    const self = await call(reqTransition, json(cast.hrManager, { to: 'open' }), {
-      id: r.data!.id,
-    });
-    expect(self.status).toBe(403);
-    const recruiter = await call(reqTransition, json(cast.recruiter, { to: 'open' }), {
-      id: r.data!.id,
-    });
-    expect(recruiter.status).toBe(403);
+    const id = r.data!.id;
+    expect(await reqTo(cast.hrManager, id, 'open')).toBe(403);
+    expect(await reqTo(cast.recruiter, id, 'open')).toBe(403);
     const ok = await call<{ status: string; approvedBy: string }>(
       reqTransition,
       json(cast.director, { to: 'open' }),
-      { id: r.data!.id },
+      { id },
     );
     expect(ok.status).toBe(200);
     expect(ok.data!.status).toBe('open');
     expect(ok.data!.approvedBy).toBe(cast.director.id);
-    const hold = await call(reqTransition, json(cast.hrManager, { to: 'on_hold' }), {
-      id: r.data!.id,
-    });
-    expect(hold.status).toBe(400);
-    const illegal = await call(reqTransition, json(cast.hrManager, { to: 'draft' }), {
-      id: r.data!.id,
-    });
-    expect(illegal.status).toBe(409);
-    const audits = await ctx.db
-      .select()
-      .from(auditEvents)
-      .where(
-        and(eq(auditEvents.entityId, r.data!.id), eq(auditEvents.action, 'requisition.approved')),
-      );
-    expect(audits).toHaveLength(1);
+    expect(await reqTo(cast.hrManager, id, 'on_hold')).toBe(400);
+    expect(await reqTo(cast.hrManager, id, 'draft')).toBe(409);
+    expect(await audits(id, 'requisition.approved')).toHaveLength(1);
   });
 
   it('a recruiter works only their own requisitions', async () => {
@@ -187,18 +170,14 @@ describe('requisitions', () => {
     );
     expect(r.status).toBe(201);
     expect(r.data!.recruiterStaffId).toBe(cast.recruiter.staffId);
-    expect((await call(getReq, get(cast.otherRecruiter), { id: r.data!.id })).status).toBe(403);
-    const list = await call<{ rows: { id: string }[] }>(
-      listReqs,
-      get(cast.otherRecruiter, '/ops/api/v1/hr/requisitions'),
-    );
-    expect(list.data!.rows.some((x) => x.id === r.data!.id)).toBe(false);
-    const mine = await call<{ rows: { id: string }[] }>(
-      listReqs,
-      get(cast.recruiter, '/ops/api/v1/hr/requisitions?status=draft'),
-    );
-    expect(mine.data!.rows.some((x) => x.id === r.data!.id)).toBe(true);
-    expect((await call(getReq, get(cast.hrManager), { id: r.data!.id })).status).toBe(200);
+    expect(await status(getReq, get(cast.otherRecruiter), { id: r.data!.id })).toBe(403);
+    const listed = async (who: Who, path: string) =>
+      (await call<{ rows: { id: string }[] }>(listReqs, get(who, path))).data!.rows.some(
+        (x) => x.id === r.data!.id,
+      );
+    expect(await listed(cast.otherRecruiter, '/ops/api/v1/hr/requisitions')).toBe(false);
+    expect(await listed(cast.recruiter, '/ops/api/v1/hr/requisitions?status=draft')).toBe(true);
+    expect(await status(getReq, get(cast.hrManager), { id: r.data!.id })).toBe(200);
   });
 });
 
@@ -214,16 +193,9 @@ describe('candidates', () => {
     expect(row!.email).toBe(email.toLowerCase());
     expect(row!.phone).toMatch(/^\+91\d{10}$/);
     expect(c.code).toMatch(/^CAND-\d{5}$/);
-    const dup = await call(
-      createCand,
-      json(cast.hrManager, { fullName: 'Dup (fictional)', phone: raw, source: 'website' }),
-    );
-    expect(dup.status).toBe(409);
-    const [audit] = await ctx.db
-      .select()
-      .from(auditEvents)
-      .where(and(eq(auditEvents.entityId, c.id), eq(auditEvents.action, 'candidate.created')));
-    const text = JSON.stringify(audit);
+    const dup = { fullName: 'Dup (fictional)', phone: raw, source: 'website' };
+    expect(await status(createCand, json(cast.hrManager, dup))).toBe(409);
+    const text = JSON.stringify((await audits(c.id, 'candidate.created'))[0]);
     expect(text).not.toContain(email.toLowerCase());
     expect(text).not.toContain(row!.phone!);
   });
@@ -259,29 +231,19 @@ describe('application stages', () => {
     const req = await openRequisition(cast.hrManager);
     const cand = await candidate(cast.hrManager);
     const appId = await application(cast.hrManager, cand.id, req.id);
-    expect(
-      (await call(createApp, json(cast.hrManager, { candidateId: cand.id, requisitionId: req.id })))
-        .status,
-    ).toBe(409);
-    expect((await move(cast.hrManager, appId, 'offer')).status).toBe(409);
-    expect((await move(cast.hrManager, appId, 'hired')).status).toBe(409);
-    expect((await move(cast.hrManager, appId, 'screening')).status).toBe(200);
-    expect((await move(cast.hrManager, appId, 'interview')).status).toBe(200);
-    expect((await move(cast.hrManager, appId, 'rejected')).status).toBe(400);
-    expect(
-      (await move(cast.hrManager, appId, 'rejected', 'Role needs CA Inter (fictional)')).status,
-    ).toBe(200);
-    expect((await move(cast.hrManager, appId, 'screening')).status).toBe(409);
-    const history = await ctx.db
-      .select()
-      .from(opsJobApplicationStages)
-      .where(eq(opsJobApplicationStages.applicationId, appId as never));
-    expect(history.map((h) => h.toStage)).toEqual([
-      'applied',
-      'screening',
-      'interview',
-      'rejected',
-    ]);
+    const again = { candidateId: cand.id, requisitionId: req.id };
+    expect(await status(createApp, json(cast.hrManager, again))).toBe(409);
+    for (const [to, code, reason] of [
+      ['offer', 409],
+      ['hired', 409],
+      ['screening', 200],
+      ['interview', 200],
+      ['rejected', 400],
+      ['rejected', 200, 'Role needs CA Inter (fictional)'],
+      ['screening', 409],
+    ] as const)
+      expect(await move(cast.hrManager, appId, to, reason), `${to} ${code}`).toBe(code);
+    expect(await stagesOf(appId)).toEqual(['applied', 'screening', 'interview', 'rejected']);
     const [app] = await ctx.db
       .select()
       .from(opsJobApplications)
@@ -291,9 +253,9 @@ describe('application stages', () => {
 
   it('a recruiter cannot select or reject; the decider can', async () => {
     const { appId } = await interviewing([cast.interviewer.staffId]);
-    expect((await move(cast.recruiter, appId, 'offer')).status).toBe(403);
-    expect((await move(cast.recruiter, appId, 'rejected', 'No')).status).toBe(403);
-    expect((await move(cast.director, appId, 'offer')).status).toBe(200);
+    expect(await move(cast.recruiter, appId, 'offer')).toBe(403);
+    expect(await move(cast.recruiter, appId, 'rejected', 'No')).toBe(403);
+    expect(await move(cast.director, appId, 'offer')).toBe(200);
   });
 });
 
@@ -310,8 +272,8 @@ describe('interviewer access', () => {
     const c = await call<{ contacts: unknown }>(getCand, get(cast.interviewer), { id: cand.id });
     expect(c.status).toBe(200);
     expect(c.data!.contacts).toBeNull();
-    expect((await move(cast.interviewer, appId, 'withdrawn', 'x')).status).toBe(403);
-    expect((await call(getApp, get(cast.otherRecruiter), { id: appId })).status).toBe(403);
+    expect(await move(cast.interviewer, appId, 'withdrawn', 'x')).toBe(403);
+    expect(await status(getApp, get(cast.otherRecruiter), { id: appId })).toBe(403);
     const mine = await call<{ rows: { id: string }[] }>(
       listApps,
       get(cast.interviewer, '/ops/api/v1/hr/applications?view=interviewing_me'),
@@ -319,59 +281,24 @@ describe('interviewer access', () => {
     expect(mine.data!.rows.map((r) => r.id)).toContain(appId);
 
     // Not on the panel: refused even with all-scope recruitment access.
-    expect(
-      (
-        await call(
-          feedback,
-          json(cast.hrManager, { recommendation: 'hire', notes: 'Looks fine' }),
-          { id: interviewId },
-        )
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await call(
-          feedback,
-          json(cast.otherRecruiter, { recommendation: 'hire', notes: 'Looks fine' }),
-          { id: interviewId },
-        )
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await call(feedback, json(cast.interviewer, { recommendation: 'maybe', notes: 'x' }), {
-          id: interviewId,
-        })
-      ).status,
-    ).toBe(400);
-    const ok = await call(
-      feedback,
-      json(cast.interviewer, {
-        recommendation: 'hire',
-        notes: 'Clear explanations of ledgers (fictional)',
-      }),
-      { id: interviewId },
+    const fine = { recommendation: 'hire', notes: 'Looks fine' };
+    expect(await give(cast.hrManager, interviewId, fine)).toBe(403);
+    expect(await give(cast.otherRecruiter, interviewId, fine)).toBe(403);
+    expect(await give(cast.interviewer, interviewId, { recommendation: 'maybe', notes: 'x' })).toBe(
+      400,
     );
-    expect(ok.status).toBe(200);
-    const [audit] = await ctx.db
-      .select()
-      .from(auditEvents)
-      .where(
-        and(
-          eq(auditEvents.entityId, appId),
-          eq(auditEvents.action, 'interview.feedback_submitted'),
-        ),
-      );
+    const notes = 'Clear explanations of ledgers (fictional)';
+    expect(await give(cast.interviewer, interviewId, { recommendation: 'hire', notes })).toBe(200);
+    const [audit] = await audits(appId, 'interview.feedback_submitted');
     expect(JSON.stringify(audit)).not.toContain('ledgers');
   });
 
   it('feedback notes are masked for auditor and director, shown to the managing recruiter and the author', async () => {
     const { appId, interviewId } = await interviewing([cast.interviewer.staffId]);
-    await call(
-      feedback,
-      json(cast.interviewer, { recommendation: 'strong_hire', notes: 'Private note (fictional)' }),
-      { id: interviewId },
-    );
+    await give(cast.interviewer, interviewId, {
+      recommendation: 'strong_hire',
+      notes: 'Private note (fictional)',
+    });
     type Panel = { recommendation: string | null; feedbackNotes: string | null }[];
     type Detail = { interviews: { panel: Panel }[] };
     const notesFor = async (who: Who) =>
@@ -381,16 +308,15 @@ describe('interviewer access', () => {
       expect(p.feedbackNotes).toBeNull();
       expect(p.recommendation).toBe('strong_hire');
     }
-    expect((await notesFor(cast.recruiter)).feedbackNotes).toBe('Private note (fictional)');
-    expect((await notesFor(cast.interviewer)).feedbackNotes).toBe('Private note (fictional)');
-    expect((await notesFor(cast.hrManager)).feedbackNotes).toBe('Private note (fictional)');
+    for (const reader of [cast.recruiter, cast.interviewer, cast.hrManager])
+      expect((await notesFor(reader)).feedbackNotes).toBe('Private note (fictional)');
   });
 });
 
 describe('offers and conversion', () => {
   async function acceptedOffer(preparer: Who, approver: Who) {
     const { appId, req } = await interviewing([cast.interviewer.staffId]);
-    expect((await move(cast.director, appId, 'offer')).status).toBe(200);
+    expect(await move(cast.director, appId, 'offer')).toBe(200);
     const offer = await call<{ id: string }>(
       createOffer,
       json(preparer, {
@@ -402,29 +328,13 @@ describe('offers and conversion', () => {
       }),
     );
     expect(offer.status).toBe(201);
-    expect(
-      (await call(createOffer, json(preparer, { applicationId: appId, offeredTitle: 'Again' })))
-        .status,
-    ).toBe(409);
-    expect(
-      (await call(offerTransition, json(approver, { to: 'approved' }), { id: offer.data!.id }))
-        .status,
-    ).toBe(200);
-    expect(
-      (
-        await call(offerTransition, json(cast.recruiter, { to: 'extended' }), {
-          id: offer.data!.id,
-        })
-      ).status,
-    ).toBe(200);
-    expect(
-      (
-        await call(offerTransition, json(cast.recruiter, { to: 'accepted' }), {
-          id: offer.data!.id,
-        })
-      ).status,
-    ).toBe(200);
-    return { appId, req, offerId: offer.data!.id };
+    const second = { applicationId: appId, offeredTitle: 'Again' };
+    expect(await status(createOffer, json(preparer, second))).toBe(409);
+    const id = offer.data!.id;
+    expect(await offerTo(approver, id, 'approved')).toBe(200);
+    expect(await offerTo(cast.recruiter, id, 'extended')).toBe(200);
+    expect(await offerTo(cast.recruiter, id, 'accepted')).toBe(200);
+    return { appId, req, offerId: id };
   }
 
   it('an offer is never approved by the person who prepared it', async () => {
@@ -434,50 +344,27 @@ describe('offers and conversion', () => {
       createOffer,
       json(cast.hrManager, { applicationId: appId, offeredTitle: 'Counsellor' }),
     );
-    expect(
-      (
-        await call(offerTransition, json(cast.hrManager, { to: 'approved' }), {
-          id: offer.data!.id,
-        })
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await call(offerTransition, json(cast.recruiter, { to: 'approved' }), {
-          id: offer.data!.id,
-        })
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await call(offerTransition, json(cast.recruiter, { to: 'extended' }), {
-          id: offer.data!.id,
-        })
-      ).status,
-    ).toBe(409);
-    expect(
-      (await call(offerTransition, json(cast.director, { to: 'approved' }), { id: offer.data!.id }))
-        .status,
-    ).toBe(200);
+    const id = offer.data!.id;
+    expect(await offerTo(cast.hrManager, id, 'approved')).toBe(403);
+    expect(await offerTo(cast.recruiter, id, 'approved')).toBe(403);
+    expect(await offerTo(cast.recruiter, id, 'extended')).toBe(409);
+    expect(await offerTo(cast.director, id, 'approved')).toBe(200);
   });
 
   it('conversion is idempotent: two calls → one employee, one onboarding case', async () => {
     const { appId, req } = await acceptedOffer(cast.recruiter, cast.director);
-    expect((await call(convert, json(cast.recruiter, {}), { id: appId })).status).toBe(403);
-    const first = await call<{
+    expect(await status(convert, json(cast.recruiter, {}), { id: appId })).toBe(403);
+    type Converted = {
       created: boolean;
       staffId: string;
       employeeCode: string;
       onboardingCaseId: string;
-    }>(convert, json(cast.hrManager, {}), { id: appId });
+    };
+    const first = await call<Converted>(convert, json(cast.hrManager, {}), { id: appId });
     expect(first.status).toBe(201);
     expect(first.data!.created).toBe(true);
     expect(first.data!.employeeCode).toMatch(/^EMP-\d{4}$/);
-    const second = await call<{ created: boolean; staffId: string; onboardingCaseId: string }>(
-      convert,
-      json(cast.director, {}),
-      { id: appId },
-    );
+    const second = await call<Converted>(convert, json(cast.director, {}), { id: appId });
     expect(second.status).toBe(200);
     expect(second.data!.created).toBe(false);
     expect(second.data!.staffId).toBe(first.data!.staffId);
@@ -515,30 +402,15 @@ describe('offers and conversion', () => {
 describe('unsuccessful-candidate anonymisation', () => {
   it('needs a decider, a confirmation and a closed unsuccessful candidate; keeps stage history', async () => {
     const { appId, interviewId, cand } = await interviewing([cast.interviewer.staffId]);
-    await call(
-      feedback,
-      json(cast.interviewer, {
-        recommendation: 'no_hire',
-        notes: 'Feedback about a person (fictional)',
-      }),
-      { id: interviewId },
-    );
-    expect(
-      (await call(anonymise, json(cast.hrManager, { confirm: true }), { id: cand.id })).status,
-    ).toBe(409);
-    expect(
-      (await move(cast.director, appId, 'rejected', 'Another candidate selected')).status,
-    ).toBe(200);
-    expect(
-      (await call(anonymise, json(cast.recruiter, { confirm: true }), { id: cand.id })).status,
-    ).toBe(403);
-    expect((await call(anonymise, json(cast.hrManager, {}), { id: cand.id })).status).toBe(400);
-    const done = await call<{ status: string }>(
-      anonymise,
-      json(cast.hrManager, { confirm: true }),
-      { id: cand.id },
-    );
-    expect(done.status).toBe(200);
+    await give(cast.interviewer, interviewId, {
+      recommendation: 'no_hire',
+      notes: 'Feedback about a person (fictional)',
+    });
+    expect(await anon(cast.hrManager, cand.id)).toBe(409);
+    expect(await move(cast.director, appId, 'rejected', 'Another candidate selected')).toBe(200);
+    expect(await anon(cast.recruiter, cand.id)).toBe(403);
+    expect(await anon(cast.hrManager, cand.id, {})).toBe(400);
+    expect(await anon(cast.hrManager, cand.id)).toBe(200);
     const [row] = await ctx.db
       .select()
       .from(opsCandidates)
@@ -547,31 +419,15 @@ describe('unsuccessful-candidate anonymisation', () => {
     expect(row!.email).toBeNull();
     expect(row!.phone).toBeNull();
     expect(row!.fullName).toBe(`Anonymised candidate (${cand.code})`);
-    const history = await ctx.db
-      .select()
-      .from(opsJobApplicationStages)
-      .where(eq(opsJobApplicationStages.applicationId, appId as never));
-    expect(history.map((h) => h.toStage)).toEqual([
-      'applied',
-      'screening',
-      'interview',
-      'rejected',
-    ]);
+    expect(await stagesOf(appId)).toEqual(['applied', 'screening', 'interview', 'rejected']);
     const [panel] = await ctx.db
       .select()
       .from(opsInterviewPanelists)
       .where(eq(opsInterviewPanelists.interviewId, interviewId as never));
     expect(panel!.feedbackNotes).toBeNull();
     expect(panel!.recommendation).toBe('no_hire');
-    expect(
-      (await call(anonymise, json(cast.hrManager, { confirm: true }), { id: cand.id })).status,
-    ).toBe(409);
-    const [audit] = await ctx.db
-      .select()
-      .from(auditEvents)
-      .where(
-        and(eq(auditEvents.entityId, cand.id), eq(auditEvents.action, 'candidate.anonymised')),
-      );
+    expect(await anon(cast.hrManager, cand.id)).toBe(409);
+    const [audit] = await audits(cand.id, 'candidate.anonymised');
     expect(audit).toBeDefined();
     expect(JSON.stringify(audit)).not.toContain('(fictional)');
   });

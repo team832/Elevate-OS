@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { authedRequest, callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
+import { callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import {
   eventDeliveries,
   integrationEvents,
@@ -31,7 +31,7 @@ import { POST as policyWorkflow } from '../../src/app/api/v1/settings/policies/[
 import { GET as policyHistory } from '../../src/app/api/v1/settings/policies/[id]/history/route';
 import { GET as report } from '../../src/app/api/v1/reports/operations/route';
 import { isoDaysFromNow, setupReference, type StaffUser } from './fixtures';
-import { post, staffIn } from './operations-fixtures';
+import { get, post, staffIn, statusOf } from './operations-fixtures';
 
 const ctx = setupTestDatabase();
 let manager: StaffUser;
@@ -59,9 +59,7 @@ describe('risk mitigations', () => {
       }),
     );
     const id = risk.data!.id;
-    expect((await callRoute(addMitigation, post(director, { action: 'x' }), { id })).status).toBe(
-      403,
-    );
+    expect(await statusOf(addMitigation, post(director, { action: 'x' }), { id })).toBe(403);
     const m = await callRoute<{ id: string; status: string }>(
       addMitigation,
       post(manager, {
@@ -72,40 +70,16 @@ describe('risk mitigations', () => {
       { id },
     );
     expect(m.status).toBe(201);
-    const list = await callRoute<{ overdue: boolean }[]>(
-      listMitigations,
-      authedRequest(director, '/x'),
-      { id },
-    );
+    const list = await callRoute<{ overdue: boolean }[]>(listMitigations, get(director), { id });
     expect(list.data?.[0]?.overdue).toBe(true);
-    const mid = m.data!.id;
-    expect(
-      (
-        await callRoute(patchMitigation, post(manager, { status: 'dropped' }, 'PATCH'), {
-          id,
-          mitigationId: mid,
-        })
-      ).status,
-    ).toBe(400);
-    expect(
-      (
-        await callRoute(patchMitigation, post(manager, { status: 'done' }, 'PATCH'), {
-          id,
-          mitigationId: mid,
-        })
-      ).status,
-    ).toBe(200);
-    expect(
-      (
-        await callRoute(patchMitigation, post(manager, { dueDate: isoDaysFromNow(3) }, 'PATCH'), {
-          id,
-          mitigationId: mid,
-        })
-      ).status,
-    ).toBe(409);
+    const at = { id, mitigationId: m.data!.id };
+    const patch = (json: unknown) => statusOf(patchMitigation, post(manager, json, 'PATCH'), at);
+    expect(await patch({ status: 'dropped' })).toBe(400);
+    expect(await patch({ status: 'done' })).toBe(200);
+    expect(await patch({ dueDate: isoDaysFromNow(3) })).toBe(409);
     const risks = await callRoute<{ id: string; mitigations: { status: string }[] }[]>(
       listRisks,
-      authedRequest(director, '/x'),
+      get(director),
     );
     expect(risks.data?.find((r) => r.id === id)?.mitigations.map((x) => x.status)).toEqual([
       'done',
@@ -115,37 +89,25 @@ describe('risk mitigations', () => {
 
 describe('blocked projects', () => {
   it('on-hold and blocked-task projects are listed with reasons; completed ones are not', async () => {
-    const p = await callRoute<{ id: string; code: string }>(
-      createProject,
-      post(manager, { name: 'Blocked project (fictional)', status: 'active' }),
-    );
+    const project = async (name: string, status: string) =>
+      (await callRoute<{ id: string }>(createProject, post(manager, { name, status }))).data!.id;
+    const p = await project('Blocked project (fictional)', 'active');
     await ctx.db.insert(opsTasks).values({
       code: 'TSK-90001',
       title: 'Blocked linked task (fictional)',
       status: 'blocked',
-      projectId: p.data!.id as never,
+      projectId: p as never,
       createdBy: manager.id,
     });
-    const done = await callRoute<{ id: string }>(
-      createProject,
-      post(manager, { name: 'Done project (fictional)', status: 'active' }),
-    );
-    await callRoute(patchProject, post(manager, { status: 'completed' }, 'PATCH'), {
-      id: done.data!.id,
-    });
-    const held = await callRoute<{ id: string }>(
-      createProject,
-      post(manager, { name: 'Held project (fictional)', status: 'on_hold' }),
-    );
-    const r = await callRoute<{ id: string; reasons: string[] }[]>(
-      blockedProjects,
-      authedRequest(director, '/x'),
-    );
-    expect(r.data?.find((x) => x.id === p.data!.id)?.reasons).toEqual(['blocked_tasks']);
-    expect(r.data?.find((x) => x.id === held.data!.id)?.reasons).toEqual(['on_hold']);
-    expect(r.data?.some((x) => x.id === done.data!.id)).toBe(false);
-    expect((await callRoute(blockedProjects, authedRequest(counsellor, '/x'))).status).toBe(403);
-    expect((await callRoute(listProjects, authedRequest(director, '/x'))).status).toBe(200);
+    const done = await project('Done project (fictional)', 'active');
+    await callRoute(patchProject, post(manager, { status: 'completed' }, 'PATCH'), { id: done });
+    const held = await project('Held project (fictional)', 'on_hold');
+    const r = await callRoute<{ id: string; reasons: string[] }[]>(blockedProjects, get(director));
+    expect(r.data?.find((x) => x.id === p)?.reasons).toEqual(['blocked_tasks']);
+    expect(r.data?.find((x) => x.id === held)?.reasons).toEqual(['on_hold']);
+    expect(r.data?.some((x) => x.id === done)).toBe(false);
+    expect(await statusOf(blockedProjects, get(counsellor))).toBe(403);
+    expect(await statusOf(listProjects, get(director))).toBe(200);
   });
 });
 
@@ -166,7 +128,7 @@ describe('incident resolution target flags', () => {
       .where(eq(opsIncidents.id, inc.data!.id as never));
     const list = await callRoute<{ id: string; sla: { state: string } }[]>(
       listIncidents,
-      authedRequest(director, '/x'),
+      get(director),
     );
     expect(list.data?.find((i) => i.id === inc.data!.id)?.sla.state).toBe('breached');
   });
@@ -184,29 +146,31 @@ describe('policies & compliance register (OPS-066)', () => {
     effectiveDate: isoDaysFromNow(0),
     nextReviewDate: isoDaysFromNow(10),
   };
+  const flow = (user: StaffUser, json: unknown, id: string) =>
+    statusOf(policyWorkflow, post(user, json), { id });
+  /** A proposed entry with an accountable person. */
+  const proposed = async () => {
+    const created = await callRoute<P>(
+      createPolicy,
+      post(manager, { ...base, accountableStaffId: manager.staffId }),
+    );
+    const id = created.data!.id;
+    await flow(manager, { action: 'propose' }, id);
+    return id;
+  };
 
   it('auditor and director are read-only; invalid setting keys and dates are rejected', async () => {
     const auditor = await createTestUser(ctx.db, { roles: ['auditor'] });
-    expect((await callRoute(listPolicies, authedRequest(auditor, '/x'))).status).toBe(200);
-    expect((await callRoute(createPolicy, post(auditor, base))).status).toBe(403);
-    expect((await callRoute(createPolicy, post(director, base))).status).toBe(403);
-    expect((await callRoute(listPolicies, authedRequest(counsellor, '/x'))).status).toBe(403);
-    const bad = await callRoute(
-      createPolicy,
-      post(manager, { ...base, linkedSettingKeys: ['no.such.key'] }),
-    );
-    expect(bad.status).toBe(400);
-    expect(
-      (
-        await callRoute(
-          createPolicy,
-          post(manager, { ...base, nextReviewDate: isoDaysFromNow(-5) }),
-        )
-      ).status,
-    ).toBe(400);
-    expect(
-      (await callRoute(createPolicy, post(manager, { ...base, area: 'astrology' }))).status,
-    ).toBe(400);
+    expect(await statusOf(listPolicies, get(auditor))).toBe(200);
+    expect(await statusOf(createPolicy, post(auditor, base))).toBe(403);
+    expect(await statusOf(createPolicy, post(director, base))).toBe(403);
+    expect(await statusOf(listPolicies, get(counsellor))).toBe(403);
+    for (const bad of [
+      { linkedSettingKeys: ['no.such.key'] },
+      { nextReviewDate: isoDaysFromNow(-5) },
+      { area: 'astrology' },
+    ])
+      expect(await statusOf(createPolicy, post(manager, { ...base, ...bad }))).toBe(400);
   });
 
   it('draft → proposed → approved by another person; changes create a new version; retired stays readable', async () => {
@@ -216,57 +180,38 @@ describe('policies & compliance register (OPS-066)', () => {
     expect(created.data?.code).toMatch(/^POL-\d{4}$/);
     const id = created.data!.id;
     // Proposal needs an accountable person.
-    expect(
-      (await callRoute(policyWorkflow, post(manager, { action: 'propose' }), { id })).status,
-    ).toBe(400);
+    expect(await flow(manager, { action: 'propose' }, id)).toBe(400);
     await callRoute(patchPolicy, post(manager, { accountableStaffId: manager2.staffId }, 'PATCH'), {
       id,
     });
-    expect(
-      (await callRoute(policyWorkflow, post(manager, { action: 'propose' }), { id })).status,
-    ).toBe(200);
+    expect(await flow(manager, { action: 'propose' }, id)).toBe(200);
     // Editing a proposed version is refused; the proposer cannot approve.
     expect(
-      (await callRoute(policyDraft, post(manager, { requirementText: 'changed' }, 'PUT'), { id }))
-        .status,
+      await statusOf(policyDraft, post(manager, { requirementText: 'changed' }, 'PUT'), { id }),
     ).toBe(409);
-    expect(
-      (await callRoute(policyWorkflow, post(manager, { action: 'approve' }), { id })).status,
-    ).toBe(403);
-    expect(
-      (
-        await callRoute(policyWorkflow, post(manager2, { action: 'approve', comment: 'Agreed' }), {
-          id,
-        })
-      ).status,
-    ).toBe(200);
+    expect(await flow(manager, { action: 'approve' }, id)).toBe(403);
+    expect(await flow(manager2, { action: 'approve', comment: 'Agreed' }, id)).toBe(200);
     type Detail = {
       policy: { status: string };
       versions: { versionNumber: number; status: string; requirementText: string }[];
       reviewFlag: string;
     };
-    let d = await callRoute<Detail>(getPolicy, authedRequest(director, '/x'), { id });
-    expect(d.data?.policy.status).toBe('approved');
-    expect(d.data?.reviewFlag).toBe('due_soon');
+    const detail = async () => (await callRoute<Detail>(getPolicy, get(director), { id })).data;
+    let d = await detail();
+    expect(d?.policy.status).toBe('approved');
+    expect(d?.reviewFlag).toBe('due_soon');
     // A change creates version 2; version 1 text is unchanged and stays approved.
-    expect(
-      (
-        await callRoute(
-          policyDraft,
-          post(manager2, { ...base, requirementText: 'Revised text (test).' }, 'PUT'),
-          { id },
-        )
-      ).status,
-    ).toBe(200);
-    d = await callRoute<Detail>(getPolicy, authedRequest(director, '/x'), { id });
-    expect(d.data?.versions.map((v) => [v.versionNumber, v.status])).toEqual([
+    const revised = { ...base, requirementText: 'Revised text (test).' };
+    expect(await statusOf(policyDraft, post(manager2, revised, 'PUT'), { id })).toBe(200);
+    d = await detail();
+    expect(d?.versions.map((v) => [v.versionNumber, v.status])).toEqual([
       [2, 'draft'],
       [1, 'approved'],
     ]);
-    expect(d.data?.versions[1]?.requirementText).toBe(base.requirementText);
-    expect(d.data?.policy.status).toBe('approved');
-    await callRoute(policyWorkflow, post(manager2, { action: 'propose' }), { id });
-    await callRoute(policyWorkflow, post(manager, { action: 'approve' }), { id });
+    expect(d?.versions[1]?.requirementText).toBe(base.requirementText);
+    expect(d?.policy.status).toBe('approved');
+    await flow(manager2, { action: 'propose' }, id);
+    await flow(manager, { action: 'approve' }, id);
     const versions = await ctx.db
       .select()
       .from(opsPolicyVersions)
@@ -276,23 +221,10 @@ describe('policies & compliance register (OPS-066)', () => {
       [2, 'approved'],
     ]);
     // Retire; it remains readable and read-only.
-    expect(
-      (
-        await callRoute(
-          policyWorkflow,
-          post(manager, { action: 'retire', reason: 'Replaced (test)' }),
-          { id },
-        )
-      ).status,
-    ).toBe(200);
-    d = await callRoute<Detail>(getPolicy, authedRequest(director, '/x'), { id });
-    expect(d.data?.policy.status).toBe('retired');
-    expect(
-      (await callRoute(patchPolicy, post(manager, { title: 'x' }, 'PATCH'), { id })).status,
-    ).toBe(409);
-    const h = await callRoute<{ action: string }[]>(policyHistory, authedRequest(director, '/x'), {
-      id,
-    });
+    expect(await flow(manager, { action: 'retire', reason: 'Replaced (test)' }, id)).toBe(200);
+    expect((await detail())?.policy.status).toBe('retired');
+    expect(await statusOf(patchPolicy, post(manager, { title: 'x' }, 'PATCH'), { id })).toBe(409);
+    const h = await callRoute<{ action: string }[]>(policyHistory, get(director), { id });
     expect(h.data?.map((x) => x.action)).toEqual(
       expect.arrayContaining([
         'policy.created',
@@ -303,7 +235,7 @@ describe('policies & compliance register (OPS-066)', () => {
     );
     const filtered = await callRoute<P[]>(
       listPolicies,
-      authedRequest(director, '/x?status=retired&area=leave'),
+      get(director, '/x?status=retired&area=leave'),
     );
     expect(filtered.data?.map((p) => p.id)).toContain(id);
   });
@@ -314,54 +246,25 @@ describe('policies & compliance register (OPS-066)', () => {
     ['hr_contributor', 403],
     ['auditor', 403],
   ] as const)('ops:policies:approve — %s deciding a proposed version → %i', async (role, code) => {
-    const created = await callRoute<P>(
-      createPolicy,
-      post(manager, { ...base, accountableStaffId: manager.staffId }),
-    );
-    const id = created.data!.id;
-    await callRoute(policyWorkflow, post(manager, { action: 'propose' }), { id });
+    const id = await proposed();
     const decider = await staffIn(ctx.db, [role]);
-    expect(
-      (await callRoute(policyWorkflow, post(decider, { action: 'approve' }), { id })).status,
-    ).toBe(code);
+    expect(await flow(decider, { action: 'approve' }, id)).toBe(code);
     // Deciding never lets them propose or retire.
-    expect(
-      (await callRoute(policyWorkflow, post(decider, { action: 'retire', reason: 'x' }), { id }))
-        .status,
-    ).toBe(403);
+    expect(await flow(decider, { action: 'retire', reason: 'x' }, id)).toBe(403);
   });
 
   it('rejection needs a comment and returns the entry to draft', async () => {
-    const created = await callRoute<P>(
-      createPolicy,
-      post(manager, { ...base, accountableStaffId: manager.staffId }),
-    );
-    const id = created.data!.id;
-    await callRoute(policyWorkflow, post(manager, { action: 'propose' }), { id });
-    expect(
-      (await callRoute(policyWorkflow, post(manager2, { action: 'reject' }), { id })).status,
-    ).toBe(400);
-    expect(
-      (
-        await callRoute(
-          policyWorkflow,
-          post(manager2, { action: 'reject', comment: 'Needs the source' }),
-          { id },
-        )
-      ).status,
-    ).toBe(200);
-    const d = await callRoute<{ policy: { status: string } }>(
-      getPolicy,
-      authedRequest(manager, '/x'),
-      { id },
-    );
+    const id = await proposed();
+    expect(await flow(manager2, { action: 'reject' }, id)).toBe(400);
+    expect(await flow(manager2, { action: 'reject', comment: 'Needs the source' }, id)).toBe(200);
+    const d = await callRoute<{ policy: { status: string } }>(getPolicy, get(manager), { id });
     expect(d.data?.policy.status).toBe('draft');
   });
 });
 
 describe('operations report', () => {
   it('403 for a counsellor; rates are missing (never 0 %) without data; integration errors counted', async () => {
-    expect((await callRoute(report, authedRequest(counsellor, '/x'))).status).toBe(403);
+    expect(await statusOf(report, get(counsellor))).toBe(403);
     const [ev] = await ctx.db
       .insert(integrationEvents)
       .values({
@@ -384,7 +287,7 @@ describe('operations report', () => {
       integrationErrors: { consumer: string }[];
       capacity: { byOwner: { label: string }[] };
     };
-    const r = await callRoute<R>(report, authedRequest(director, '/x'));
+    const r = await callRoute<R>(report, get(director));
     expect(r.status).toBe(200);
     expect(r.data?.kpis.sopAcknowledgementCoverage).toMatchObject({
       status: 'missing',
@@ -393,9 +296,9 @@ describe('operations report', () => {
     expect(r.data?.kpis.unresolvedIntegrationErrors).toMatchObject({ status: 'ok', value: 1 });
     expect(r.data?.integrationErrors[0]?.consumer).toBe('ops.enrolment-replies');
     expect(r.data?.kpis.blockedProjects?.value).toBeGreaterThanOrEqual(1);
-    const labels = r.data?.capacity.byOwner.map((x) => x.label) ?? [];
-    expect(labels.filter((l) => l !== 'No owner')).toEqual(
-      [...labels.filter((l) => l !== 'No owner')].sort((a, b) => a.localeCompare(b)),
+    const labels = (r.data?.capacity.byOwner.map((x) => x.label) ?? []).filter(
+      (l) => l !== 'No owner',
     );
+    expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)));
   });
 });

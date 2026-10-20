@@ -2,20 +2,23 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import {
   APPLICATION_STAGE_LABELS,
+  APPLICATION_TRANSITIONS,
   INTERVIEW_MODES,
   INTERVIEW_RECOMMENDATIONS,
+  isOpenApplication,
+  needsReason,
   OFFER_STATUS_LABELS,
+  OFFER_TRANSITIONS,
   RECOMMENDATION_LABELS,
   type ApplicationStage,
-  type InterviewRecommendation,
   type OfferStatus,
 } from '../../../../../domain/hr/recruitment';
 import { formOptions } from '../../../../../server/options';
 import { getApplication } from '../../../../../server/hr/recruitment';
 import { ActionForm } from '../../../../../ui/action-form';
 import { fmtDate, fmtDateTime, humanise, statusTone } from '../../../../../ui/format';
-import { Frame, gate, load, Section } from '../../../../../ui/frame';
-import { HistoryPanel } from '../../_components/lifecycle-ui';
+import { load, Section } from '../../../../../ui/frame';
+import { detailPage, HistoryPanel, REASON_FIELD } from '../../_components/lifecycle-ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,30 +40,22 @@ const OFFER_ACTIONS: Record<OfferStatus, string> = {
   withdrawn: 'Withdraw offer',
   expired: 'Mark expired',
 };
-const OFFER_REASON: OfferStatus[] = ['declined', 'withdrawn'];
 
 type Data = Awaited<ReturnType<typeof getApplication>>;
 
-export default async function ApplicationPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const access = await gate('ops:recruitment:read', `/ops/hr/recruitment/applications/${id}`);
-  return (
-    <Frame access={access} active="recruitment">
-      <p>
-        <a href="/ops/hr/recruitment?tab=applications">Back to applications</a>
-      </p>
-      <Section>
-        <Detail user={access.user} id={id} />
-      </Section>
-    </Frame>
-  );
-}
+export default detailPage(
+  'ops:recruitment:read',
+  'recruitment',
+  '/ops/hr/recruitment/applications',
+  { href: '/ops/hr/recruitment?tab=applications', label: 'Back to applications' },
+  Detail,
+);
 
 async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
   const r = await load((db) => getApplication(db, user, id));
   if (!r.ok) return r.view;
   const d = r.data;
-  const stage = d.application.stage as ApplicationStage;
+  const stage = d.application.stage;
   return (
     <div className="el-stack">
       <PageHeader
@@ -114,13 +109,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                 }
                 extra={{ to }}
                 variant={to === 'rejected' ? 'danger' : 'secondary'}
-                fields={
-                  ['rejected', 'withdrawn'].includes(to) ||
-                  (stage === 'interview' && to === 'screening') ||
-                  (stage === 'offer' && to === 'interview')
-                    ? [{ name: 'reason', label: 'Reason', required: true }]
-                    : []
-                }
+                fields={needsReason(APPLICATION_TRANSITIONS, stage, to) ? [REASON_FIELD] : []}
               />
             ))}
           </div>
@@ -148,13 +137,12 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
               {
                 key: 'from',
                 header: 'From',
-                render: (s) =>
-                  s.fromStage ? APPLICATION_STAGE_LABELS[s.fromStage as ApplicationStage] : 'New',
+                render: (s) => (s.fromStage ? APPLICATION_STAGE_LABELS[s.fromStage] : 'New'),
               },
               {
                 key: 'to',
                 header: 'To',
-                render: (s) => APPLICATION_STAGE_LABELS[s.toStage as ApplicationStage],
+                render: (s) => APPLICATION_STAGE_LABELS[s.toStage],
               },
               { key: 'reason', header: 'Reason', render: (s) => s.reason ?? '' },
               { key: 'actorName', header: 'By', render: (s) => s.actorName ?? 'Unknown' },
@@ -201,7 +189,7 @@ function Interviews({ d }: { d: Data }) {
                       header: 'Recommendation',
                       render: (p) =>
                         p.recommendation
-                          ? RECOMMENDATION_LABELS[p.recommendation as InterviewRecommendation]
+                          ? RECOMMENDATION_LABELS[p.recommendation]
                           : p.submitted
                             ? 'Given'
                             : 'Not given yet',
@@ -220,9 +208,7 @@ function Interviews({ d }: { d: Data }) {
                     },
                   ]}
                 />
-                {mine &&
-                live &&
-                ['applied', 'screening', 'interview', 'offer'].includes(d.application.stage) ? (
+                {mine && live && isOpenApplication(d.application.stage) ? (
                   <ActionForm
                     action={`/ops/api/v1/hr/interviews/${iv.id}/feedback`}
                     submitLabel={mine.submitted ? 'Update my feedback' : 'Submit my feedback'}
@@ -354,7 +340,7 @@ function Offers({ d }: { d: Data }) {
             <div key={o.id} className="el-stack">
               <p>
                 <StatusBadge tone={statusTone(o.status)}>
-                  {OFFER_STATUS_LABELS[o.status as OfferStatus]}
+                  {OFFER_STATUS_LABELS[o.status]}
                 </StatusBadge>{' '}
                 {o.offeredTitle} · start{' '}
                 {o.proposedStartDate ? fmtDate(o.proposedStartDate) : 'not set'} · valid until{' '}
@@ -387,11 +373,7 @@ function Offers({ d }: { d: Data }) {
                     variant={
                       to === 'withdrawn' ? 'danger' : to === 'approved' ? 'primary' : 'secondary'
                     }
-                    fields={
-                      OFFER_REASON.includes(to)
-                        ? [{ name: 'reason', label: 'Reason', required: true }]
-                        : []
-                    }
+                    fields={needsReason(OFFER_TRANSITIONS, o.status, to) ? [REASON_FIELD] : []}
                   />
                 ))}
               </div>

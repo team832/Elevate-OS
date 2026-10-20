@@ -8,23 +8,15 @@
  * A record is checked ("verified") only by a DIFFERENT person than the one who
  * recorded it. Rows are never deleted; mistakes are voided with a reason.
  */
-import { and, desc, eq, inArray, lt, or, type SQL } from 'drizzle-orm';
-import {
-  opsAdmissions,
-  opsDemos,
-  opsFeeRecords,
-  opsLeads,
-  users,
-  type Database,
-  type OpsFeeRecordId,
-} from '@elevate/database';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { and, desc, eq, lt } from 'drizzle-orm';
+import { opsAdmissions, opsDemos, opsFeeRecords, opsLeads, type Database } from '@elevate/database';
+import { withTransaction } from '@elevate/server-kit';
 import {
   ForbiddenError,
   InvalidStateTransitionError,
   ValidationError,
 } from '@elevate/shared-contracts';
-import type { AdmissionId, UserId } from '@elevate/shared-types';
+import type { AdmissionId } from '@elevate/shared-types';
 import { istToday } from '../domain';
 import {
   canVerifyFee,
@@ -33,35 +25,25 @@ import {
   parseRupeesToPaise,
   summariseFees,
   validateFeeRecord,
-  type FeeDirection,
-  type FeeRecordKind,
   type FeeRecordLike,
   type FeeRecordStatus,
 } from '../domain/fees';
-import { assertAdmissionAccess } from './admissions';
+import {
+  admissionRow,
+  assertAdmissionAccess,
+  lockAccessible,
+  namesOf,
+  ownAdmissionFilter,
+} from './admissions';
 import type { FeeActionInput, FeeRecordInput } from './admissions-schemas';
-import { accessScope, clean, nextCode, notFound, type AccessScope, type Actor } from './context';
-import { lockAdmission, type AdmissionRow } from './pipeline';
+import { accessScope, clean, nextCode, type Actor } from './context';
+import { opsAudit, rowById } from './ops-common';
 import { loadSettings } from './settings';
 
 export type FeeRecordRow = typeof opsFeeRecords.$inferSelect;
 
-const asLike = (r: FeeRecordRow): FeeRecordLike => ({
-  kind: r.kind as FeeRecordKind,
-  direction: (r.direction as FeeDirection | null) ?? null,
-  amountPaise: r.amountPaise,
-  status: r.status as FeeRecordStatus,
-});
-
-async function admissionRow(db: Database, id: string): Promise<AdmissionRow> {
-  const [row] = await db
-    .select()
-    .from(opsAdmissions)
-    .where(eq(opsAdmissions.id, id as AdmissionId))
-    .limit(1);
-  if (!row) notFound('Admission');
-  return row;
-}
+/** The domain rules read only kind, direction, amount and status of a row. */
+const asLike = (rows: FeeRecordRow[]) => rows as FeeRecordLike[];
 
 async function recordsOf(db: Database, admissionId: string) {
   return db
@@ -73,19 +55,10 @@ async function recordsOf(db: Database, admissionId: string) {
 
 /** Summary of an admission's fee records (no permission check — callers check `ops:fees:read`). */
 export async function feeSummaryFor(db: Database, admissionId: string) {
-  return summariseFees((await recordsOf(db, admissionId)).map(asLike));
+  return summariseFees(asLike(await recordsOf(db, admissionId)));
 }
 
-async function namesOf(db: Database, ids: readonly (string | null)[]) {
-  const unique = [...new Set(ids.filter((i): i is string => Boolean(i)))] as UserId[];
-  if (!unique.length) return new Map<string, string>();
-  const rows = await db
-    .select({ id: users.id, displayName: users.displayName })
-    .from(users)
-    .where(inArray(users.id, unique));
-  return new Map(rows.map((r) => [r.id as string, r.displayName]));
-}
-
+/** The record DTO: user names and the "manually recorded" marker. */
 function present(r: FeeRecordRow, names: Map<string, string>) {
   return {
     ...r,
@@ -110,7 +83,7 @@ export async function listAdmissionFees(db: Database, actor: Actor, admissionId:
   return {
     admission: { id: admission.id, code: admission.code, status: admission.status },
     records: rows.map((r) => present(r, names)),
-    summary: summariseFees(rows.map(asLike)),
+    summary: summariseFees(asLike(rows)),
     disclaimer: MANUAL_FEE_DISCLAIMER,
     settings: { recording: settings['fees.recording'], schedule: settings['fees.schedule'] },
   };
@@ -145,9 +118,7 @@ export async function recordFee(
       ]);
   }
   return withTransaction(db, async (tx) => {
-    const admission = await lockAdmission(tx, admissionId);
-    if (!admission) notFound('Admission');
-    await assertAdmissionAccess(tx, access, admission);
+    const admission = await lockAccessible(tx, access, admissionId);
     const existing = await recordsOf(tx, admission.id);
     const issues = validateFeeRecord(
       {
@@ -158,7 +129,7 @@ export async function recordFee(
         dueDate: input.dueDate ?? null,
         receiptReference: input.receiptReference ?? null,
       },
-      existing.map(asLike),
+      asLike(existing),
       istToday(now),
       settings['fees.recording'].value,
     );
@@ -211,16 +182,17 @@ export async function recordFee(
       })
       .returning();
     if (!row) throw new Error('fee record insert returned no row');
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'fee_record.created',
-      entityType: 'fee_record',
-      entityId: row.id,
-      after: row,
+    await opsAudit('fee_record')(
+      tx,
+      actor,
+      row.id,
+      'fee_record.created',
+      {
+        after: row,
+        metadata: { leadId: admission.leadId, admissionId: admission.id, manuallyRecorded: true },
+      },
       requestId,
-      metadata: { leadId: admission.leadId, admissionId: admission.id, manuallyRecorded: true },
-    });
+    );
     return { ...row, manuallyRecorded: true as const, disclaimer: MANUAL_FEE_DISCLAIMER };
   });
 }
@@ -235,14 +207,8 @@ export async function feeRecordAction(
 ) {
   const access = await accessScope(db, actor, 'ops:fees:record');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsFeeRecords)
-      .where(eq(opsFeeRecords.id, feeId as OpsFeeRecordId))
-      .for('update');
-    if (!before) notFound('Fee record');
-    const admission = await admissionRow(tx, before.admissionId);
-    await assertAdmissionAccess(tx, access, admission);
+    const before = await rowById(tx, opsFeeRecords, feeId, 'Fee record', true);
+    await assertAdmissionAccess(tx, access, await admissionRow(tx, before.admissionId));
     const now = new Date();
     let patch: Partial<typeof opsFeeRecords.$inferInsert>;
     if (input.action === 'verify') {
@@ -276,31 +242,23 @@ export async function feeRecordAction(
       .where(and(eq(opsFeeRecords.id, before.id), eq(opsFeeRecords.status, before.status)))
       .returning();
     if (!after) throw new InvalidStateTransitionError('The record changed meanwhile; reload.');
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: input.action === 'verify' ? 'fee_record.verified' : 'fee_record.voided',
-      entityType: 'fee_record',
-      entityId: before.id,
-      before: { status: before.status },
-      after: {
-        status: after.status,
-        ...(input.action === 'void' ? { voidReason: after.voidReason } : {}),
+    await opsAudit('fee_record')(
+      tx,
+      actor,
+      before.id,
+      input.action === 'verify' ? 'fee_record.verified' : 'fee_record.voided',
+      {
+        before: { status: before.status },
+        after: {
+          status: after.status,
+          ...(input.action === 'void' ? { voidReason: after.voidReason } : {}),
+        },
+        metadata: { leadId: before.leadId, admissionId: before.admissionId },
       },
       requestId,
-      metadata: { leadId: before.leadId, admissionId: before.admissionId },
-    });
+    );
     return { ...after, manuallyRecorded: true as const, disclaimer: MANUAL_FEE_DISCLAIMER };
   });
-}
-
-function ownAdmissionFilter(access: AccessScope): SQL | undefined {
-  if (access.scope === 'all') return undefined;
-  if (!access.staffId) return eq(opsAdmissions.id, '00000000-0000-0000-0000-000000000000' as never);
-  return or(
-    eq(opsAdmissions.counsellorStaffId, access.staffId),
-    eq(opsLeads.ownerStaffId, access.staffId),
-  ) as SQL;
 }
 
 /** GET /fees — fee records across admissions (finance view), newest code first, cursor = last code. */
@@ -310,9 +268,7 @@ export async function listFeeRecords(
   query: { status?: FeeRecordStatus; limit: number; cursor?: string },
 ) {
   const access = await accessScope(db, actor, 'ops:fees:read');
-  const conditions: SQL[] = [];
-  const own = ownAdmissionFilter(access);
-  if (own) conditions.push(own);
+  const conditions = [ownAdmissionFilter(access)];
   if (query.status) conditions.push(eq(opsFeeRecords.status, query.status));
   if (query.cursor) conditions.push(lt(opsFeeRecords.code, query.cursor));
   const rows = await db
@@ -324,7 +280,7 @@ export async function listFeeRecords(
     .from(opsFeeRecords)
     .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsFeeRecords.admissionId))
     .innerJoin(opsLeads, eq(opsLeads.id, opsFeeRecords.leadId))
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(desc(opsFeeRecords.code))
     .limit(query.limit + 1);
   const page = rows.slice(0, query.limit);

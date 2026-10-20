@@ -48,6 +48,7 @@ import {
   setupCast,
   uniqueCandidateEmail,
   type Cast,
+  status,
 } from './hr-lifecycle-fixtures';
 import { opsAssetAssignments } from '@elevate/database';
 
@@ -92,8 +93,7 @@ describe('employee journey', () => {
     );
     expect(req.status).toBe(201);
     expect(
-      (await call(reqTransition, json(cast.hrManager, { to: 'open' }), { id: req.data!.id }))
-        .status,
+      await status(reqTransition, json(cast.hrManager, { to: 'open' }), { id: req.data!.id }),
     ).toBe(200);
 
     // 2–3. Candidate and application.
@@ -112,9 +112,7 @@ describe('employee journey', () => {
     );
     const appId = app.data!.id;
     for (const to of ['screening', 'interview'])
-      expect((await call(appTransition, json(cast.recruiter, { to }), { id: appId })).status).toBe(
-        200,
-      );
+      expect(await status(appTransition, json(cast.recruiter, { to }), { id: appId })).toBe(200);
 
     // 4. Interview and feedback by the panel.
     const iv = await call<{ id: string }>(
@@ -129,19 +127,17 @@ describe('employee journey', () => {
     );
     expect(iv.status).toBe(201);
     expect(
-      (
-        await call(
-          feedback,
-          json(cast.interviewer, { recommendation: 'hire', notes: 'Good demo lesson (fictional)' }),
-          { id: iv.data!.id },
-        )
-      ).status,
+      await status(
+        feedback,
+        json(cast.interviewer, { recommendation: 'hire', notes: 'Good demo lesson (fictional)' }),
+        { id: iv.data!.id },
+      ),
     ).toBe(200);
 
     // 5. Selection, offer prepared by the recruiter, approved by the director, accepted.
-    expect(
-      (await call(appTransition, json(cast.hrManager, { to: 'offer' }), { id: appId })).status,
-    ).toBe(200);
+    expect(await status(appTransition, json(cast.hrManager, { to: 'offer' }), { id: appId })).toBe(
+      200,
+    );
     const start = addDays(istToday(new Date()), -7);
     const offer = await call<{ id: string }>(
       createOffer,
@@ -156,9 +152,7 @@ describe('employee journey', () => {
       [cast.recruiter, 'extended'],
       [cast.recruiter, 'accepted'],
     ] as const)
-      expect((await call(offerTransition, json(who, { to }), { id: offer.data!.id })).status).toBe(
-        200,
-      );
+      expect(await status(offerTransition, json(who, { to }), { id: offer.data!.id })).toBe(200);
 
     // 6. Conversion → employee + onboarding case.
     const conv = await call<{ staffId: string; onboardingCaseId: string }>(
@@ -187,11 +181,9 @@ describe('employee journey', () => {
     // 7. Onboarding complete and approved (by the HR manager, not the employee).
     await finishChecklist(conv.data!.onboardingCaseId, []);
     expect(
-      (
-        await call(approve, json(cast.hrManager, { confirm: true }), {
-          id: conv.data!.onboardingCaseId,
-        })
-      ).status,
+      await status(approve, json(cast.hrManager, { confirm: true }), {
+        id: conv.data!.onboardingCaseId,
+      }),
     ).toBe(200);
     const [active] = await ctx.db
       .select()
@@ -222,7 +214,7 @@ describe('employee journey', () => {
       .where(eq(opsAssetAssignments.id, assignment.id));
     await finishChecklist(off.data!.id, ['access_revocation', 'asset_return']);
     expect(
-      (await call(approve, json(cast.director, { confirm: true }), { id: off.data!.id })).status,
+      await status(approve, json(cast.director, { confirm: true }), { id: off.data!.id }),
     ).toBe(200);
 
     // 9. Separation applied the day after the last working day.

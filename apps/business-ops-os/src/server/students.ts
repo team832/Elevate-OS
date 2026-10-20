@@ -15,20 +15,17 @@ import {
   eventDeliveries,
   integrationEvents,
   opsAdmissions,
-  opsAdmissionTransitions,
   opsContactPreferences,
   opsCounsellingSessions,
   opsDemos,
   opsEnquiries,
-  opsEnrolmentAttempts,
   opsLeads,
   opsLeadSources,
   programmes,
   staffMembers,
-  users,
   type Database,
 } from '@elevate/database';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import { ForbiddenError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import type { AdmissionId, IntegrationEventId } from '@elevate/shared-types';
 import { ADMISSION_STATUS_LABELS, type AdmissionStatus } from '../domain';
@@ -42,34 +39,41 @@ import {
   type DirectoryState,
 } from '../domain/students';
 import type { ContactPreferencesInput, StudentListQuery } from './admissions-schemas';
-import { ACADEMIC_INTAKE_CONSUMER } from './admissions';
-import { accessScope, clean, staffIdForUser, type AccessScope, type Actor } from './context';
+import {
+  ACADEMIC_INTAKE_CONSUMER,
+  attemptsOf,
+  handoffInputOf,
+  ownAdmissionFilter,
+  programmeRef,
+  staffRef,
+  transitionsOf,
+} from './admissions';
+import {
+  accessScope,
+  assertScope,
+  clean,
+  scopeCovers,
+  staffIdForUser,
+  type Actor,
+} from './context';
+import { opsAudit } from './ops-common';
 import { feeSummaryFor } from './fees';
 import { ENROLMENT_REPLIES_CONSUMER } from './enrolment';
 import { loadSettings } from './settings';
 
-const NONE = '00000000-0000-0000-0000-000000000000';
+const withdrawn = and(eq(opsAdmissions.status, 'lost'), isNotNull(opsAdmissions.admittedAt)) as SQL;
 
 /** SQL: the admission is a student (admitted / awaiting / enrolled, or withdrawn after admission). */
 const isStudent = or(
   inArray(opsAdmissions.status, ['admitted', 'enrolment_requested', 'enrolled']),
-  and(eq(opsAdmissions.status, 'lost'), isNotNull(opsAdmissions.admittedAt)),
+  withdrawn,
 ) as SQL;
-
-function ownFilter(access: AccessScope): SQL | undefined {
-  if (access.scope === 'all') return undefined;
-  const staffId = access.staffId ?? (NONE as never);
-  return or(
-    eq(opsAdmissions.counsellorStaffId, staffId),
-    eq(opsLeads.ownerStaffId, staffId),
-  ) as SQL;
-}
 
 const STATE_FILTER: Record<DirectoryState, SQL> = {
   admitted: eq(opsAdmissions.status, 'admitted'),
   awaiting_enrolment: eq(opsAdmissions.status, 'enrolment_requested'),
   enrolled: eq(opsAdmissions.status, 'enrolled'),
-  withdrawn: and(eq(opsAdmissions.status, 'lost'), isNotNull(opsAdmissions.admittedAt)) as SQL,
+  withdrawn,
 };
 
 async function deliveriesFor(db: Database, eventIds: readonly (string | null)[]) {
@@ -96,9 +100,7 @@ async function deliveriesFor(db: Database, eventIds: readonly (string | null)[])
 /** GET /students — directory (search, state/programme/handoff filters, sort, offset cursor). */
 export async function listStudents(db: Database, actor: Actor, query: StudentListQuery) {
   const access = await accessScope(db, actor, 'ops:students:read');
-  const conditions: SQL[] = [isStudent];
-  const own = ownFilter(access);
-  if (own) conditions.push(own);
+  const conditions = [isStudent, ownAdmissionFilter(access)];
   if (query.state) conditions.push(STATE_FILTER[query.state]);
   if (query.handoff) conditions.push(eq(opsAdmissions.handoffStatus, query.handoff));
   if (query.programme) conditions.push(eq(programmes.code, query.programme));
@@ -141,18 +143,8 @@ export async function listStudents(db: Database, actor: Actor, query: StudentLis
     page.map((r) => r.a.lastRequestEventId),
   );
   return {
-    items: page.map((r) => {
-      const a = r.a;
-      const view = deriveHandoffView({
-        status: a.status as AdmissionStatus,
-        handoffStatus: a.handoffStatus,
-        enrolmentAttempt: a.enrolmentAttempt,
-        academicDelivery: a.lastRequestEventId
-          ? (deliveries.get(a.lastRequestEventId) ?? null)
-          : null,
-        rejectionCode: a.rejectionCode,
-        rejectionReason: a.rejectionReason,
-      });
+    items: page.map(({ a, ...r }) => {
+      const delivery = a.lastRequestEventId ? deliveries.get(a.lastRequestEventId) : null;
       const state = directoryState({
         status: a.status as AdmissionStatus,
         admittedAt: a.admittedAt,
@@ -171,7 +163,7 @@ export async function listStudents(db: Database, actor: Actor, query: StudentLis
         admissionDate: a.admissionDate,
         admittedAt: a.admittedAt,
         enrolledAt: a.enrolledAt,
-        handoff: view,
+        handoff: deriveHandoffView(handoffInputOf(a, delivery ?? null)),
         studentId: a.studentId,
         academicPath: academicStudentPath(a.studentId),
       };
@@ -188,7 +180,9 @@ async function canSeePrivate(db: Database, actor: Actor, owners: (string | null)
   return Boolean(staffId && owners.includes(staffId));
 }
 
-async function studentRow(db: Database, access: AccessScope, admissionId: string) {
+/** GET /students/{admissionId} — the student profile (reference, not a master record). */
+export async function getStudent(db: Database, actor: Actor, admissionId: string) {
+  const access = await accessScope(db, actor, 'ops:students:read');
   const [row] = await db
     .select({ a: opsAdmissions, lead: opsLeads })
     .from(opsAdmissions)
@@ -196,50 +190,20 @@ async function studentRow(db: Database, access: AccessScope, admissionId: string
     .where(eq(opsAdmissions.id, admissionId as AdmissionId))
     .limit(1);
   if (!row) throw new NotFoundError('Student not found.');
-  const state = directoryState({
-    status: row.a.status as AdmissionStatus,
-    admittedAt: row.a.admittedAt,
-  });
+  const { a, lead } = row;
+  const state = directoryState({ status: a.status as AdmissionStatus, admittedAt: a.admittedAt });
   if (!state)
     throw new NotFoundError(
       'This admission has not been admitted, so there is no student record yet.',
     );
-  if (
-    access.scope === 'own' &&
-    (!access.staffId ||
-      (row.a.counsellorStaffId !== access.staffId && row.lead.ownerStaffId !== access.staffId))
-  )
+  if (!scopeCovers(access, [a.counsellorStaffId, lead.ownerStaffId]))
     throw new ForbiddenError('You can only open students whose admission is assigned to you.');
-  return { ...row, state };
-}
-
-/** GET /students/{admissionId} — the student profile (reference, not a master record). */
-export async function getStudent(db: Database, actor: Actor, admissionId: string) {
-  const access = await accessScope(db, actor, 'ops:students:read');
-  const { a, lead, state } = await studentRow(db, access, admissionId);
   const settings = await loadSettings(db);
   const reasonLabels = new Map(
     settings['admissions.closure_reasons'].value.codes.map((c) => [c.code, c.label]),
   );
-  const [programme] = a.programmeId
-    ? await db
-        .select({ code: programmes.code, name: programmes.name })
-        .from(programmes)
-        .where(eq(programmes.id, a.programmeId))
-    : [];
-  const [counsellor] = a.counsellorStaffId
-    ? await db
-        .select({ id: staffMembers.id, fullName: staffMembers.fullName })
-        .from(staffMembers)
-        .where(eq(staffMembers.id, a.counsellorStaffId))
-    : [];
   const [transitions, enquiries, sessions, demos, attempts, otherAdmissions] = await Promise.all([
-    db
-      .select({ t: opsAdmissionTransitions, actorName: users.displayName })
-      .from(opsAdmissionTransitions)
-      .leftJoin(users, eq(users.id, opsAdmissionTransitions.actorUserId))
-      .where(eq(opsAdmissionTransitions.admissionId, a.id))
-      .orderBy(asc(opsAdmissionTransitions.at), asc(opsAdmissionTransitions.id)),
+    transitionsOf(db, a.id),
     db
       .select({
         receivedAt: opsEnquiries.receivedAt,
@@ -278,16 +242,11 @@ export async function getStudent(db: Database, actor: Actor, admissionId: string
       .from(opsDemos)
       .where(eq(opsDemos.admissionId, a.id))
       .orderBy(desc(opsDemos.createdAt)),
-    db
-      .select({ x: opsEnrolmentAttempts, requestedByName: users.displayName })
-      .from(opsEnrolmentAttempts)
-      .leftJoin(users, eq(users.id, opsEnrolmentAttempts.requestedBy))
-      .where(eq(opsEnrolmentAttempts.admissionId, a.id))
-      .orderBy(asc(opsEnrolmentAttempts.attempt)),
+    attemptsOf(db, a.id),
     db
       .select({ id: opsAdmissions.id, code: opsAdmissions.code, status: opsAdmissions.status })
       .from(opsAdmissions)
-      .where(and(eq(opsAdmissions.leadId, lead.id))),
+      .where(eq(opsAdmissions.leadId, lead.id)),
   ]);
   const academicDelivery = a.lastRequestEventId
     ? ((await deliveriesFor(db, [a.lastRequestEventId])).get(a.lastRequestEventId) ?? null)
@@ -320,14 +279,7 @@ export async function getStudent(db: Database, actor: Actor, admissionId: string
           ),
         )
     : [];
-  const handoffInput = {
-    status: a.status as AdmissionStatus,
-    handoffStatus: a.handoffStatus,
-    enrolmentAttempt: a.enrolmentAttempt,
-    academicDelivery,
-    rejectionCode: a.rejectionCode,
-    rejectionReason: a.rejectionReason,
-  };
+  const handoffInput = handoffInputOf(a, academicDelivery);
   const privateVisible = await canSeePrivate(db, actor, [a.counsellorStaffId, lead.ownerStaffId]);
   const [prefs] = privateVisible
     ? await db.select().from(opsContactPreferences).where(eq(opsContactPreferences.leadId, lead.id))
@@ -380,8 +332,8 @@ export async function getStudent(db: Database, actor: Actor, admissionId: string
       intendedCourseId: a.intendedCourseId,
       intendedBatchId: a.intendedBatchId,
     },
-    owner: counsellor ?? null,
-    programme: programme ?? null,
+    owner: await staffRef(db, a.counsellorStaffId),
+    programme: await programmeRef(db, a.programmeId),
     person,
     academic: {
       studentId: a.studentId,
@@ -402,12 +354,11 @@ export async function getStudent(db: Database, actor: Actor, admissionId: string
       rejection: a.rejectionCode
         ? { code: a.rejectionCode, reason: a.rejectionReason, at: a.rejectedAt }
         : null,
-      attempts: attempts.map((x) => ({ ...x.x, requestedByName: x.requestedByName })),
+      attempts,
     },
     history: transitions.map((t) => ({
-      ...t.t,
-      actorName: t.actorName,
-      reasonLabel: t.t.reasonCode ? (reasonLabels.get(t.t.reasonCode) ?? t.t.reasonCode) : null,
+      ...t,
+      reasonLabel: t.reasonCode ? (reasonLabels.get(t.reasonCode) ?? t.reasonCode) : null,
     })),
     enquiries,
     counselling: sessions,
@@ -447,8 +398,7 @@ export async function recordContactPreferences(
       .limit(1);
     if (!row) throw new NotFoundError('Admission not found.');
     const owners = [row.a.counsellorStaffId, row.ownerStaffId];
-    if (write.scope === 'own' && !(write.staffId && owners.includes(write.staffId)))
-      throw new ForbiddenError('You can only work on admissions assigned to you.');
+    assertScope(write, owners, 'admissions');
     if (!(await canSeePrivate(tx, actor, owners)))
       throw new ForbiddenError('You may not record private details for this student.');
     const [before] = await tx
@@ -470,20 +420,21 @@ export async function recordContactPreferences(
       .values(values)
       .onConflictDoUpdate({ target: opsContactPreferences.leadId, set: values })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'contact_preferences.recorded',
-      entityType: 'lead',
-      entityId: row.a.leadId,
-      // Consent facts only — never contact details.
-      before: before
-        ? { consentStatus: before.consentStatus, allowedChannels: before.allowedChannels }
-        : null,
-      after: { consentStatus: values.consentStatus, allowedChannels: values.allowedChannels },
+    // Consent facts only — never contact details.
+    await opsAudit('lead')(
+      tx,
+      actor,
+      row.a.leadId,
+      'contact_preferences.recorded',
+      {
+        before: before
+          ? { consentStatus: before.consentStatus, allowedChannels: before.allowedChannels }
+          : null,
+        after: { consentStatus: values.consentStatus, allowedChannels: values.allowedChannels },
+        metadata: { leadId: row.a.leadId, admissionId: row.a.id },
+      },
       requestId,
-      metadata: { leadId: row.a.leadId, admissionId: row.a.id },
-    });
+    );
     return after;
   });
 }

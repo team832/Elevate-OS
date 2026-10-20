@@ -4,18 +4,16 @@ import { getLeaveRequest } from '../../../../server/hr/leave';
 import { ActionForm } from '../../../../ui/action-form';
 import { fmtDate, fmtDateTime } from '../../../../ui/format';
 import { Frame, gate, load, Section } from '../../../../ui/frame';
-import { DecisionBadge, RequestStatus, TimeNav, timeNavItems } from '../../attendance/time-ui';
+import { DecisionBadge, DecisionCards, RequestStatus, TimeNav } from '../../attendance/time-ui';
 
 export const dynamic = 'force-dynamic';
-
-const PART = { full: 'Full day', first_half: 'First half', second_half: 'Second half' } as const;
 
 export default async function LeaveRequestPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const access = await gate('ops:leave:read', `/ops/hr/leave/${id}`);
   return (
     <Frame access={access} active="leave">
-      <TimeNav current="" items={timeNavItems(access.user)} />
+      <TimeNav user={access.user} />
       <Section label="Loading leave request…">
         <Detail user={access.user} id={id} />
       </Section>
@@ -76,7 +74,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                     : x.excluded === 'non_working_day'
                       ? 'Non-working day'
                       : x.fraction === 1
-                        ? PART.full
+                        ? 'Full day'
                         : `${x.fraction} day`,
               },
             ]}
@@ -99,25 +97,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         </Card>
       </div>
       {d.canDecide ? (
-        <div className="el-grid">
-          <Card title="Approve">
-            <ActionForm
-              action={`/ops/api/v1/hr/leave-requests/${q.id}/decision`}
-              submitLabel="Approve leave"
-              extra={{ decision: 'approve' }}
-              fields={[{ name: 'note', label: 'Note (optional)' }]}
-            />
-          </Card>
-          <Card title="Reject">
-            <ActionForm
-              action={`/ops/api/v1/hr/leave-requests/${q.id}/decision`}
-              submitLabel="Reject leave"
-              variant="danger"
-              extra={{ decision: 'reject' }}
-              fields={[{ name: 'note', label: 'Reason for rejecting', required: true }]}
-            />
-          </Card>
-        </div>
+        <DecisionCards action={`/ops/api/v1/hr/leave-requests/${q.id}/decision`} noun="leave" />
       ) : q.status === 'pending' ? (
         <p>
           <StatusBadge tone="info">Waiting</StatusBadge> A manager in the employee’s reporting line

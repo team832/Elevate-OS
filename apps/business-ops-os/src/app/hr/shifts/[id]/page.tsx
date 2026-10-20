@@ -6,7 +6,7 @@ import { getShiftTemplate, listShiftAssignments, toTemplate } from '../../../../
 import { ActionForm } from '../../../../ui/action-form';
 import { fmtDate, fmtDateTime } from '../../../../ui/format';
 import { Frame, gate, load, Section } from '../../../../ui/frame';
-import { DecisionBadge, minutes, TimeNav, timeNavItems, weekdays } from '../../attendance/time-ui';
+import { DecisionBadge, minutes, StatusButtons, TimeNav, weekdays } from '../../attendance/time-ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,7 @@ export default async function ShiftPage({ params }: { params: Promise<{ id: stri
   const access = await gate('ops:shifts:read', `/ops/hr/shifts/${id}`);
   return (
     <Frame access={access} active="shifts">
-      <TimeNav current="" items={timeNavItems(access.user)} />
+      <TimeNav user={access.user} />
       <Section label="Loading shift…">
         <Detail user={access.user} id={id} />
       </Section>
@@ -91,37 +91,28 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             />
           </Card>
           <Card title="Decision state" description="Record the owner’s decision on this timing.">
-            <div className="el-inline-form">
-              {t.status !== 'approved' ? (
-                <ActionForm
-                  action={`/ops/api/v1/hr/shifts/${t.id}`}
-                  method="PATCH"
-                  submitLabel="Mark timing approved"
-                  extra={{ status: 'approved' }}
-                  compact
-                />
-              ) : null}
-              {t.status === 'approved' ? (
-                <ActionForm
-                  action={`/ops/api/v1/hr/shifts/${t.id}`}
-                  method="PATCH"
-                  submitLabel="Set back to proposed"
-                  extra={{ status: 'proposed' }}
-                  variant="secondary"
-                  compact
-                />
-              ) : null}
-              {t.status !== 'retired' ? (
-                <ActionForm
-                  action={`/ops/api/v1/hr/shifts/${t.id}`}
-                  method="PATCH"
-                  submitLabel="Retire template"
-                  extra={{ status: 'retired' }}
-                  variant="danger"
-                  compact
-                />
-              ) : null}
-            </div>
+            <StatusButtons
+              action={`/ops/api/v1/hr/shifts/${t.id}`}
+              buttons={[
+                {
+                  label: 'Mark timing approved',
+                  status: 'approved',
+                  show: t.status !== 'approved',
+                },
+                {
+                  label: 'Set back to proposed',
+                  status: 'proposed',
+                  variant: 'secondary',
+                  show: t.status === 'approved',
+                },
+                {
+                  label: 'Retire template',
+                  status: 'retired',
+                  variant: 'danger',
+                  show: t.status !== 'retired',
+                },
+              ]}
+            />
           </Card>
         </div>
       ) : null}

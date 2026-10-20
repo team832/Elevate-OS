@@ -1,6 +1,14 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import {
+  Alert,
+  Card,
+  DataTable,
+  EmptyState,
+  PageHeader,
+  StatusBadge,
+  type Tone,
+} from '@elevate/shared-ui';
 import {
   ADMISSION_CHECK_ITEMS,
   ADMISSION_CHECK_LABELS,
@@ -26,6 +34,8 @@ import { Frame, gate, load, Section } from '../../../ui/frame';
 
 export const dynamic = 'force-dynamic';
 
+const FEE_STATUS_TONE: Record<string, Tone> = { verified: 'success', voided: 'neutral' };
+
 export default async function AdmissionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const access = await gate('ops:admissions:read', `/ops/admissions/${id}`);
@@ -50,6 +60,8 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
   const api = `/ops/api/v1/admissions/${a.id}`;
   const write = can(user, 'ops:admissions:write');
   const status = a.status as AdmissionStatus;
+  const { tone } = d.handoffView;
+  const handoffTone = tone === 'danger' || tone === 'warning' ? tone : 'info';
   return (
     <div className="el-stack">
       <PageHeader
@@ -72,16 +84,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         {a.statusReason ? ` — ${a.statusReason}` : ''}
       </p>
       {status === 'enrolment_requested' ? (
-        <Alert
-          tone={
-            d.handoffView.tone === 'danger'
-              ? 'danger'
-              : d.handoffView.tone === 'warning'
-                ? 'warning'
-                : 'info'
-          }
-          title={d.handoffView.label}
-        >
+        <Alert tone={handoffTone} title={d.handoffView.label}>
           Enrolment requested (attempt {a.enrolmentAttempt}) at{' '}
           {fmtDateTime(a.enrolmentRequestedAt)}. {d.handoffView.detail ?? ''} This is not an
           enrolment until Academic OS confirms.
@@ -336,15 +339,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                   header: 'Status',
                   render: (f) => (
                     <>
-                      <StatusBadge
-                        tone={
-                          f.status === 'verified'
-                            ? 'success'
-                            : f.status === 'voided'
-                              ? 'neutral'
-                              : 'info'
-                        }
-                      >
+                      <StatusBadge tone={FEE_STATUS_TONE[f.status] ?? 'info'}>
                         {FEE_STATUS_LABELS[f.status as FeeRecordStatus]}
                       </StatusBadge>
                       <br />

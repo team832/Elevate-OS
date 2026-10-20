@@ -16,6 +16,17 @@ import { Frame, gate, load, Section } from '../../../ui/frame';
 
 export const dynamic = 'force-dynamic';
 
+const DECISION_TEXT: Record<string, string> = { approved: 'Approved', retired: 'Retired' };
+const PEOPLE = [
+  ['ownerStaffId', 'Owner'],
+  ['reviewerStaffId', 'Reviewer'],
+  ['backupStaffId', 'Backup'],
+] as const;
+const ROLES = ROLE_KEYS.filter((r) => r !== 'auditor').map((r) => ({
+  value: r,
+  label: humanise(r),
+}));
+
 export default async function SopPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const access = await gate('ops:sops:read', `/ops/sops/${id}`);
@@ -42,6 +53,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
   const write = can(user, 'ops:sops:write');
   const api = `/ops/api/v1/sops/${s.id}`;
   const v = d.current;
+  const flow = (action: string) => ({ action: `${api}/workflow`, extra: { action } });
   return (
     <div className="el-stack">
       <PageHeader
@@ -50,11 +62,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
       />
       <p>
         <StatusBadge tone={decisionTone(d.decisionState)}>
-          {d.decisionState === 'approved'
-            ? 'Approved'
-            : d.decisionState === 'retired'
-              ? 'Retired'
-              : 'Proposed — not policy'}
+          {DECISION_TEXT[d.decisionState] ?? 'Proposed — not policy'}
         </StatusBadge>{' '}
         {SOP_STATUS_LABELS[s.status as SopStatus]}{' '}
         <StatusBadge
@@ -107,27 +115,13 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             submitLabel="Save"
             variant="secondary"
             fields={[
-              {
-                name: 'ownerStaffId',
-                label: 'Owner',
-                type: 'select',
+              ...PEOPLE.map(([name, label]) => ({
+                name,
+                label,
+                type: 'select' as const,
                 options: options.staff,
-                defaultValue: s.ownerStaffId ?? '',
-              },
-              {
-                name: 'reviewerStaffId',
-                label: 'Reviewer',
-                type: 'select',
-                options: options.staff,
-                defaultValue: s.reviewerStaffId ?? '',
-              },
-              {
-                name: 'backupStaffId',
-                label: 'Backup',
-                type: 'select',
-                options: options.staff,
-                defaultValue: s.backupStaffId ?? '',
-              },
+                defaultValue: s[name] ?? '',
+              })),
               {
                 name: 'nextReviewDate',
                 label: 'Next review date',
@@ -165,17 +159,12 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         ) : null}
         <div className="el-grid">
           {write && v?.status === 'draft' ? (
-            <ActionForm
-              action={`${api}/workflow`}
-              submitLabel="Submit for approval"
-              extra={{ action: 'submit' }}
-            />
+            <ActionForm {...flow('submit')} submitLabel="Submit for approval" />
           ) : null}
           {d.youAreReviewer && v?.status === 'in_review' ? (
             <ActionForm
-              action={`${api}/workflow`}
+              {...flow('review')}
               submitLabel="Record review"
-              extra={{ action: 'review' }}
               fields={[
                 {
                   name: 'outcome',
@@ -194,15 +183,13 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           {can(user, 'ops:sops:approve') && v?.status === 'in_review' ? (
             <>
               <ActionForm
-                action={`${api}/workflow`}
+                {...flow('approve')}
                 submitLabel="Approve"
-                extra={{ action: 'approve' }}
                 fields={[{ name: 'comment', label: 'Comment' }]}
               />
               <ActionForm
-                action={`${api}/workflow`}
+                {...flow('reject')}
                 submitLabel="Reject"
-                extra={{ action: 'reject' }}
                 fields={[{ name: 'comment', label: 'Reason', required: true }]}
                 variant="danger"
               />
@@ -210,9 +197,8 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           ) : null}
           {write && v?.status === 'in_review' ? (
             <ActionForm
-              action={`${api}/workflow`}
+              {...flow('withdraw')}
               submitLabel="Withdraw (requester)"
-              extra={{ action: 'withdraw' }}
               variant="secondary"
             />
           ) : null}
@@ -308,11 +294,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                   render: (x) =>
                     `${x.audienceType === 'role' ? 'Role' : 'Department'}: ${humanise(x.audienceLabel)}`,
                 },
-                {
-                  key: 'dueDate',
-                  header: 'Acknowledge by',
-                  render: (x) => (x.dueDate ? fmtDate(x.dueDate) : '—'),
-                },
+                { key: 'dueDate', header: 'Acknowledge by', render: (x) => fmtDate(x.dueDate) },
                 {
                   key: 'counts',
                   header: 'Acknowledged',
@@ -357,41 +339,24 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         )}
         {write && s.approvedVersionId && s.status !== 'retired' ? (
           <div className="el-grid">
-            <ActionForm
-              action={`${api}/acknowledgement-requirements`}
-              submitLabel="Require from a department"
-              variant="secondary"
-              extra={{ audienceType: 'department' }}
-              fields={[
-                {
-                  name: 'departmentId',
-                  label: 'Department',
-                  type: 'select',
-                  required: true,
-                  options: options.departments,
-                },
-                { name: 'dueDate', label: 'Acknowledge by', type: 'date' },
-              ]}
-            />
-            <ActionForm
-              action={`${api}/acknowledgement-requirements`}
-              submitLabel="Require from a role"
-              variant="secondary"
-              extra={{ audienceType: 'role' }}
-              fields={[
-                {
-                  name: 'role',
-                  label: 'Role',
-                  type: 'select',
-                  required: true,
-                  options: ROLE_KEYS.filter((r) => r !== 'auditor').map((r) => ({
-                    value: r,
-                    label: humanise(r),
-                  })),
-                },
-                { name: 'dueDate', label: 'Acknowledge by', type: 'date' },
-              ]}
-            />
+            {(
+              [
+                ['department', 'departmentId', 'Department', options.departments],
+                ['role', 'role', 'Role', ROLES],
+              ] as const
+            ).map(([audienceType, name, label, choices]) => (
+              <ActionForm
+                key={audienceType}
+                action={`${api}/acknowledgement-requirements`}
+                submitLabel={`Require from a ${audienceType}`}
+                variant="secondary"
+                extra={{ audienceType }}
+                fields={[
+                  { name, label, type: 'select', required: true, options: choices },
+                  { name: 'dueDate', label: 'Acknowledge by', type: 'date' },
+                ]}
+              />
+            ))}
           </div>
         ) : null}
       </Card>
@@ -461,19 +426,8 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
               {
                 key: 'status',
                 header: 'Status',
-                render: (x) => (
-                  <StatusBadge
-                    tone={decisionTone(
-                      x.status === 'approved'
-                        ? 'approved'
-                        : x.status === 'superseded'
-                          ? 'superseded'
-                          : 'proposed',
-                    )}
-                  >
-                    {x.status}
-                  </StatusBadge>
-                ),
+                // approved → success, superseded → neutral, every other version status → info.
+                render: (x) => <StatusBadge tone={decisionTone(x.status)}>{x.status}</StatusBadge>,
               },
               { key: 'createdAt', header: 'Created', render: (x) => fmtDateTime(x.createdAt) },
               { key: 'approvedAt', header: 'Approved', render: (x) => fmtDateTime(x.approvedAt) },
@@ -504,9 +458,8 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
       </div>
       {write && s.status !== 'retired' ? (
         <ActionForm
-          action={`${api}/workflow`}
+          {...flow('retire')}
           submitLabel="Retire SOP"
-          extra={{ action: 'retire' }}
           fields={[{ name: 'reason', label: 'Reason', required: true }]}
           variant="danger"
         />

@@ -14,19 +14,20 @@ import {
   type Database,
 } from '@elevate/database';
 import { notify } from '@elevate/notifications';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
   InvalidStateTransitionError,
   ValidationError,
 } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
-import { addDays, daysBetween, istToday, istWeekContaining, type IsoDate } from '../domain';
-import { assertAdmissionAccess } from './admissions';
-import { accessScope, activeStaff, notFound, programmeByCode, type Actor } from './context';
-import { createRuleFollowUp } from './follow-ups';
-import { applyTransition, lockAdmission, type AdmissionRow } from './pipeline';
 import type { z } from 'zod';
+import { addDays, daysBetween, istToday, istWeekContaining, type IsoDate } from '../domain';
+import { lockAccessible } from './admissions';
+import { accessScope, activeStaff, programmeByCode, type Actor } from './context';
+import { opsAudit, rowById } from './ops-common';
+import { createRuleFollowUp } from './follow-ups';
+import { applyTransition, type AdmissionRow } from './pipeline';
 import type { counsellingBody, counsellingUpdateBody, demoBody, demoUpdateBody } from './schemas';
 import { loadSettings } from './settings';
 
@@ -39,12 +40,11 @@ const COUNSELLING_ALLOWED = [
   'admission_pending',
 ];
 
+const SESSION_STATUS = { complete: 'completed', no_show: 'no_show', cancel: 'cancelled' } as const;
+
 async function lockForWork(tx: Database, actor: Actor, admissionId: string) {
   const access = await accessScope(tx, actor, 'ops:leads:write');
-  const admission = await lockAdmission(tx, admissionId);
-  if (!admission) notFound('Admission');
-  await assertAdmissionAccess(tx, access, admission);
-  return { admission, access };
+  return { admission: await lockAccessible(tx, access, admissionId), access };
 }
 
 export async function scheduleCounselling(
@@ -83,28 +83,23 @@ export async function scheduleCounselling(
         createdBy: actor.id,
       })
       .returning();
-    if (admission.status === 'contacted') {
+    if (admission.status === 'contacted')
       await applyTransition(tx, {
         admission,
         to: 'counselling_scheduled',
-        actorType: 'user',
         actorUserId: actor.id,
         reason: 'Counselling booked',
-        context: {},
         requestId,
         settings,
       });
-    }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'counselling.scheduled',
-      entityType: 'counselling_session',
-      entityId: session?.id ?? null,
-      after: session,
+    await opsAudit('counselling_session')(
+      tx,
+      actor,
+      session?.id ?? null,
+      'counselling.scheduled',
+      { after: session, metadata: { leadId: admission.leadId } },
       requestId,
-      metadata: { leadId: admission.leadId },
-    });
+    );
     return session;
   });
 }
@@ -121,20 +116,16 @@ export async function updateCounselling(
     ? await programmeByCode(db, input.recommendedProgrammeCode)
     : null;
   return withTransaction(db, async (tx) => {
-    const [session] = await tx
-      .select()
-      .from(opsCounsellingSessions)
-      .where(eq(opsCounsellingSessions.id, id as typeof opsCounsellingSessions.$inferSelect.id))
-      .for('update');
-    if (!session) notFound('Counselling session');
+    const session = await rowById(tx, opsCounsellingSessions, id, 'Counselling session', true);
     const { admission } = await lockForWork(tx, actor, session.admissionId);
     if (session.status !== 'scheduled')
       throw new InvalidStateTransitionError(`This session is already ${session.status}.`);
-    if (input.action === 'complete' && !input.outcome?.trim())
+    const complete = input.action === 'complete';
+    if (complete && !input.outcome?.trim())
       throw new ValidationError('Record the counselling outcome.', {
         details: [{ location: 'body', path: ['outcome'], message: 'Required' }],
       });
-    if (input.action !== 'complete' && !input.reason?.trim())
+    if (!complete && !input.reason?.trim())
       throw new ValidationError('Give a reason.', {
         details: [{ location: 'body', path: ['reason'], message: 'Required' }],
       });
@@ -142,35 +133,26 @@ export async function updateCounselling(
     const [after] = await tx
       .update(opsCounsellingSessions)
       .set({
-        status:
-          input.action === 'complete'
-            ? 'completed'
-            : input.action === 'no_show'
-              ? 'no_show'
-              : 'cancelled',
+        status: SESSION_STATUS[input.action],
         outcome: input.outcome?.trim() || input.reason?.trim() || null,
         objections: input.objections ?? session.objections,
         nextStep: input.nextStep ?? session.nextStep,
         attendees: input.attendees ?? session.attendees,
         recommendedProgrammeId: recommended?.id ?? session.recommendedProgrammeId,
-        completedAt: input.action === 'complete' ? now : null,
+        completedAt: complete ? now : null,
       })
       .where(eq(opsCounsellingSessions.id, session.id))
       .returning();
+    const transition = { actorUserId: actor.id, requestId, settings };
     let current: AdmissionRow = admission;
-    if (input.action === 'complete') {
-      if (current.status === 'counselling_scheduled') {
+    if (complete) {
+      if (current.status === 'counselling_scheduled')
         current = await applyTransition(tx, {
+          ...transition,
           admission: current,
           to: 'counselled',
-          actorType: 'user',
-          actorUserId: actor.id,
           reason: 'Counselling completed',
-          context: {},
-          requestId,
-          settings,
         });
-      }
       if (recommended && !current.programmeId)
         await tx
           .update(opsAdmissions)
@@ -196,30 +178,22 @@ export async function updateCounselling(
             ne(opsCounsellingSessions.id, session.id),
           ),
         );
-      if (others.length === 0) {
+      if (others.length === 0)
         await applyTransition(tx, {
+          ...transition,
           admission: current,
           to: 'contacted',
-          actorType: 'user',
-          actorUserId: actor.id,
           reason: `Counselling ${input.action === 'no_show' ? 'missed' : 'cancelled'}: ${input.reason}`,
-          context: {},
-          requestId,
-          settings,
         });
-      }
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: `counselling.${input.action}`,
-      entityType: 'counselling_session',
-      entityId: session.id,
-      before: session,
-      after,
+    await opsAudit('counselling_session')(
+      tx,
+      actor,
+      session.id,
+      `counselling.${input.action}`,
+      { before: session, after, metadata: { leadId: session.leadId } },
       requestId,
-      metadata: { leadId: session.leadId },
-    });
+    );
     return after;
   });
 }
@@ -228,7 +202,7 @@ export async function updateCounselling(
  * Validate demo days against the demo terms (days = configured count, distinct)
  * and the OPEN limits (enforced only when the owner has set them, OD-012).
  */
-export function validateDemoPlan(
+function validateDemoPlan(
   dayDates: readonly string[],
   subjects: readonly string[],
   terms: { days: number },
@@ -299,15 +273,14 @@ export async function bookDemo(
       .returning();
     if (!demo) throw new Error('demo insert returned no row');
     const now = new Date();
-    for (const t of teachers) {
+    for (const t of teachers)
       await tx
         .insert(opsDemoTeachers)
         .values({ demoId: demo.id, staffId: t.id, notifiedAt: t.userId ? now : null });
-    }
     const teacherUsers = teachers
       .map((t) => t.userId)
       .filter((u): u is NonNullable<typeof u> => Boolean(u));
-    if (teacherUsers.length) {
+    if (teacherUsers.length)
       await notify(tx, {
         userIds: teacherUsers,
         module: 'ops',
@@ -318,33 +291,30 @@ export async function bookDemo(
         entityType: 'demo',
         entityId: demo.id,
       });
-    }
-    if (admission.status === 'counselled') {
+    if (admission.status === 'counselled')
       await applyTransition(tx, {
         admission,
         to: 'demo_scheduled',
-        actorType: 'user',
         actorUserId: actor.id,
         reason: 'Demo booked',
-        context: {},
         requestId,
         settings,
       });
-    }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'demo.booked',
-      entityType: 'demo',
-      entityId: demo.id,
-      after: demo,
-      requestId,
-      metadata: {
-        leadId: admission.leadId,
-        termsState: terms.decisionState,
-        feeState: fee.decisionState,
+    await opsAudit('demo')(
+      tx,
+      actor,
+      demo.id,
+      'demo.booked',
+      {
+        after: demo,
+        metadata: {
+          leadId: admission.leadId,
+          termsState: terms.decisionState,
+          feeState: fee.decisionState,
+        },
       },
-    });
+      requestId,
+    );
     return demo;
   });
 }
@@ -358,13 +328,9 @@ export async function updateDemo(
 ) {
   const settings = await loadSettings(db);
   return withTransaction(db, async (tx) => {
-    const [demo] = await tx
-      .select()
-      .from(opsDemos)
-      .where(eq(opsDemos.id, id as typeof opsDemos.$inferSelect.id))
-      .for('update');
-    if (!demo) notFound('Demo');
+    const demo = await rowById(tx, opsDemos, id, 'Demo', true);
     const { admission } = await lockForWork(tx, actor, demo.admissionId);
+    const transition = { admission, actorUserId: actor.id, requestId, settings };
     let patch: Partial<typeof opsDemos.$inferInsert>;
     if (input.action === 'record_fee') {
       if (!['not_paid', 'paid_verified'].includes(demo.feeStatus))
@@ -385,18 +351,12 @@ export async function updateDemo(
             `The demo runs until ${last}; mark it attended after the last day.`,
           );
         patch = { status: 'attended', completedAt: now, notes: input.notes?.trim() || demo.notes };
-        if (admission.status === 'demo_scheduled') {
+        if (admission.status === 'demo_scheduled')
           await applyTransition(tx, {
-            admission,
+            ...transition,
             to: 'demo_attended',
-            actorType: 'user',
-            actorUserId: actor.id,
             reason: 'Demo attended',
-            context: {},
-            requestId,
-            settings,
           });
-        }
         await createRuleFollowUp(tx, {
           trigger: 'demo_attended',
           eventAt: now,
@@ -407,19 +367,14 @@ export async function updateDemo(
           createdBy: actor.id,
         });
       } else {
-        patch = { status: input.action === 'missed' ? 'missed' : 'cancelled', notes: input.reason };
-        if (admission.status === 'demo_scheduled') {
+        const missed = input.action === 'missed';
+        patch = { status: missed ? 'missed' : 'cancelled', notes: input.reason };
+        if (admission.status === 'demo_scheduled')
           await applyTransition(tx, {
-            admission,
+            ...transition,
             to: 'counselled',
-            actorType: 'user',
-            actorUserId: actor.id,
-            reason: `Demo ${input.action === 'missed' ? 'missed' : 'cancelled'}: ${input.reason}`,
-            context: {},
-            requestId,
-            settings,
+            reason: `Demo ${missed ? 'missed' : 'cancelled'}: ${input.reason}`,
           });
-        }
       }
     }
     const [after] = await tx
@@ -427,17 +382,14 @@ export async function updateDemo(
       .set(patch)
       .where(eq(opsDemos.id, demo.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: `demo.${input.action}`,
-      entityType: 'demo',
-      entityId: demo.id,
-      before: demo,
-      after,
+    await opsAudit('demo')(
+      tx,
+      actor,
+      demo.id,
+      `demo.${input.action}`,
+      { before: demo, after, metadata: { leadId: demo.leadId } },
       requestId,
-      metadata: { leadId: demo.leadId },
-    });
+    );
     return after;
   });
 }
@@ -456,11 +408,9 @@ export async function listSchedule(
   if (from > to) throw new ValidationError('"from" must not be after "to".');
   const own = access.scope === 'own' ? access.staffId : undefined;
   if (own === null) return { from, to, counselling: [], demos: [] };
-  const start = new Date(`${from}T00:00:00+05:30`);
-  const end = new Date(`${addDays(to, 1)}T00:00:00+05:30`);
   const cWhere: SQL[] = [
-    gte(opsCounsellingSessions.scheduledAt, start),
-    lt(opsCounsellingSessions.scheduledAt, end),
+    gte(opsCounsellingSessions.scheduledAt, new Date(`${from}T00:00:00+05:30`)),
+    lt(opsCounsellingSessions.scheduledAt, new Date(`${addDays(to, 1)}T00:00:00+05:30`)),
   ];
   if (own) cWhere.push(eq(opsCounsellingSessions.counsellorStaffId, own));
   const counselling = await db
@@ -486,9 +436,9 @@ export async function listSchedule(
     .innerJoin(opsLeads, eq(opsLeads.id, opsDemos.leadId))
     .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsDemos.admissionId))
     .orderBy(asc(opsDemos.createdAt));
-  const demos = demoRows
-    .filter((r) => r.d.dayDates.some((d) => d >= from && d <= to))
-    .filter((r) => !own || r.counsellor === own);
+  const demos = demoRows.filter(
+    (r) => r.d.dayDates.some((d) => d >= from && d <= to) && (!own || r.counsellor === own),
+  );
   const teachers = demos.length
     ? await db
         .select({ demoId: opsDemoTeachers.demoId, fullName: staffMembers.fullName })
@@ -504,17 +454,11 @@ export async function listSchedule(
   return {
     from,
     to,
-    counselling: counselling.map((c) => ({
-      ...c.s,
-      leadCode: c.leadCode,
-      studentName: c.studentName,
-      counsellorName: c.counsellorName,
-    })),
-    demos: demos.map((r) => ({
-      ...r.d,
-      leadCode: r.leadCode,
-      studentName: r.studentName,
-      teachers: teachers.filter((t) => t.demoId === r.d.id).map((t) => t.fullName),
+    counselling: counselling.map(({ s, ...c }) => ({ ...s, ...c })),
+    demos: demos.map(({ d, counsellor: _counsellor, ...r }) => ({
+      ...d,
+      ...r,
+      teachers: teachers.filter((t) => t.demoId === d.id).map((t) => t.fullName),
     })),
   };
 }

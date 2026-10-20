@@ -6,19 +6,22 @@ import { employeesInScope } from '../../../server/hr/shifts';
 import { fmtDate } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import {
+  EmployeeFilter,
   FilterDate,
   FilterForm,
   FilterSelect,
   isIso,
+  oneOf,
+  pageOf,
   Pager,
   RequestStatus,
+  SubNav,
   TimeNav,
-  timeNavItems,
+  type Sp,
 } from '../attendance/time-ui';
 
 export const dynamic = 'force-dynamic';
 
-type Sp = Record<string, string | undefined>;
 const STATUSES = [
   { value: 'pending', label: 'Pending decision' },
   { value: 'approved', label: 'Approved' },
@@ -37,9 +40,9 @@ export default async function LeavePage({ searchParams }: { searchParams: Promis
         ? 'to_decide'
         : 'mine';
   const views = [
-    { key: 'mine', label: 'My requests', show: true },
-    { key: 'to_decide', label: 'Waiting for my decision', show: approver },
-    { key: 'all', label: 'All in my scope', show: true },
+    { href: '/ops/hr/leave?view=mine', label: 'My requests' },
+    { href: '/ops/hr/leave?view=to_decide', label: 'Waiting for my decision', show: approver },
+    { href: '/ops/hr/leave?view=all', label: 'All in my scope' },
   ];
   return (
     <Frame access={access} active="leave">
@@ -52,20 +55,8 @@ export default async function LeavePage({ searchParams }: { searchParams: Promis
           ) : undefined
         }
       />
-      <TimeNav current="/ops/hr/leave" items={timeNavItems(access.user)} />
-      <nav className="el-subnav" aria-label="Leave views">
-        {views
-          .filter((v) => v.show)
-          .map((v) => (
-            <a
-              key={v.key}
-              href={`/ops/hr/leave?view=${v.key}`}
-              aria-current={v.key === view ? 'page' : undefined}
-            >
-              {v.label}
-            </a>
-          ))}
-      </nav>
+      <TimeNav current="/ops/hr/leave" user={access.user} />
+      <SubNav label="Leave views" current={`/ops/hr/leave?view=${view}`} items={views} />
       {can(access.user, 'ops:leave:request') ? (
         <p>
           To request leave, use <a href="/ops/hr/attendance/me">My attendance &amp; leave</a>.
@@ -79,17 +70,15 @@ export default async function LeavePage({ searchParams }: { searchParams: Promis
 }
 
 async function List({ user, sp }: { user: AuthenticatedUser; sp: Sp }) {
-  const page = Math.max(1, Number(sp.page) || 1);
-  const status = STATUSES.some((s) => s.value === sp.status) ? (sp.status as never) : undefined;
   const r = await load(async (db) => ({
     people: await employeesInScope(db, user, 'ops:leave:read'),
     list: await listLeaveRequests(db, user, {
       view: sp.view as 'mine' | 'to_decide' | 'all',
-      status,
+      status: oneOf<never>(STATUSES, sp.status),
       staffId: sp.staffId || undefined,
       from: isIso(sp.from) ? (sp.from as never) : undefined,
       to: isIso(sp.to) ? (sp.to as never) : undefined,
-      page,
+      page: pageOf(sp),
     }),
   }));
   if (!r.ok) return r.view;
@@ -98,13 +87,7 @@ async function List({ user, sp }: { user: AuthenticatedUser; sp: Sp }) {
     <div className="el-stack">
       <FilterForm action="/ops/hr/leave">
         <input type="hidden" name="view" value={sp.view} />
-        <FilterSelect
-          name="staffId"
-          label="Employee"
-          value={sp.staffId}
-          anyLabel="Everyone in scope"
-          options={people.map((p) => ({ value: p.staffId, label: p.fullName }))}
-        />
+        <EmployeeFilter people={people} value={sp.staffId} />
         <FilterSelect name="status" label="Status" value={sp.status} options={STATUSES} />
         <FilterDate name="from" label="Overlapping from" value={sp.from} />
         <FilterDate name="to" label="to" value={sp.to} />
@@ -145,13 +128,7 @@ async function List({ user, sp }: { user: AuthenticatedUser; sp: Sp }) {
           },
         ]}
       />
-      <Pager
-        base="/ops/hr/leave"
-        params={sp}
-        page={list.page}
-        pageSize={list.pageSize}
-        total={list.total}
-      />
+      <Pager base="/ops/hr/leave" params={sp} list={list} />
     </div>
   );
 }

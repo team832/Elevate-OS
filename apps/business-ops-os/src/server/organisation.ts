@@ -14,7 +14,7 @@ import {
   users,
   type Database,
 } from '@elevate/database';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ValidationError } from '@elevate/shared-contracts';
 import type { DepartmentId, StaffMemberId, UserId } from '@elevate/shared-types';
 import type { z } from 'zod';
@@ -26,9 +26,10 @@ import {
 } from '../domain';
 import { istToday } from '../domain/dates';
 import { historyChanges } from '../domain/hr/employees';
-import { accessScope, activeStaff, nextCode, notFound, type Actor } from './context';
+import { accessScope, activeStaff, nextCode, type Actor } from './context';
 import { runDeactivationHook, writeHistory } from './hr/employee-core';
 import './hr/wiring';
+import { defined, opsAudit, rowById } from './ops-common';
 import type {
   createDepartmentBody,
   createStaffBody,
@@ -38,6 +39,10 @@ import type {
   updateResponsibilityBody,
   updateStaffBody,
 } from './schemas';
+
+const auditStaff = opsAudit('staff_member');
+const auditDepartment = opsAudit('department');
+const auditResponsibility = opsAudit('responsibility');
 
 export async function getDirectory(db: Database, actor: Actor) {
   await accessScope(db, actor, 'ops:organisation:read');
@@ -51,10 +56,8 @@ export async function getDirectory(db: Database, actor: Actor) {
   const deptName = new Map(depts.map((d) => [d.id as string, d.name]));
   const profile = new Map(profiles.map((p) => [p.staffId as string, p]));
   const name = (id: string | null) => (id ? (byId.get(id)?.fullName ?? null) : null);
-  const gaps = responsibilityGaps(
-    responsibilities.map((r) => ({ ...r, status: r.status })),
-    (id) => byId.get(id)?.status === 'active',
-  );
+  const dept = (id: string | null) => (id ? (deptName.get(id) ?? null) : null);
+  const gaps = responsibilityGaps(responsibilities, (id) => byId.get(id)?.status === 'active');
   return {
     departments: depts.map((d) => ({
       ...d,
@@ -62,7 +65,7 @@ export async function getDirectory(db: Database, actor: Actor) {
     })),
     staff: staff.map((s) => ({
       ...s,
-      departmentName: s.departmentId ? (deptName.get(s.departmentId) ?? null) : null,
+      departmentName: dept(s.departmentId),
       managerName: name(s.managerId),
       hasLogin: Boolean(s.userId),
       employmentType: profile.get(s.id)?.employmentType ?? 'not_recorded',
@@ -70,7 +73,7 @@ export async function getDirectory(db: Database, actor: Actor) {
     })),
     responsibilities: responsibilities.map((r) => ({
       ...r,
-      departmentName: r.departmentId ? (deptName.get(r.departmentId) ?? null) : null,
+      departmentName: dept(r.departmentId),
       holderName: name(r.holderStaffId),
       backupName: name(r.backupStaffId),
     })),
@@ -78,15 +81,7 @@ export async function getDirectory(db: Database, actor: Actor) {
   };
 }
 
-async function staffRow(db: Database, id: string) {
-  const [row] = await db
-    .select()
-    .from(staffMembers)
-    .where(eq(staffMembers.id, id as StaffMemberId))
-    .limit(1);
-  if (!row) notFound('Staff member');
-  return row;
-}
+const staffRow = (db: Database, id: string) => rowById(db, staffMembers, id, 'Staff member');
 
 /** Manager must be active and the change must not create a reporting loop (A-10). */
 export async function assertManager(
@@ -140,21 +135,12 @@ export async function createStaff(
       })
       .returning();
     if (!row) throw new Error('staff insert returned no row');
-    await tx.insert(opsStaffProfiles).values({
-      staffId: row.id,
-      employmentType: input.employmentType,
-      roleLabels: input.roleLabels,
-      updatedBy: actor.id,
-    });
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'staff.created',
-      entityType: 'staff_member',
-      entityId: row.id,
-      after: { ...row, employmentType: input.employmentType, roleLabels: input.roleLabels },
-      requestId,
-    });
+    const { employmentType, roleLabels } = input;
+    await tx
+      .insert(opsStaffProfiles)
+      .values({ staffId: row.id, employmentType, roleLabels, updatedBy: actor.id });
+    const after = { ...row, employmentType, roleLabels };
+    await auditStaff(tx, actor, row.id, 'staff.created', { after }, requestId);
     return row;
   });
 }
@@ -227,16 +213,8 @@ export async function updateStaff(
         effectiveOn: istToday(new Date()),
         requestId,
       });
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'staff.updated',
-      entityType: 'staff_member',
-      entityId: before.id,
-      before,
-      after: { ...after, ...input },
-      requestId,
-    });
+    const audited = { before, after: { ...after, ...input } };
+    await auditStaff(tx, actor, before.id, 'staff.updated', audited, requestId);
     return after;
   });
 }
@@ -258,15 +236,14 @@ export async function createDepartment(
         status: 'provisional',
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'department.created',
-      entityType: 'department',
-      entityId: row?.id ?? null,
-      after: row,
+    await auditDepartment(
+      tx,
+      actor,
+      row?.id ?? null,
+      'department.created',
+      { after: row },
       requestId,
-    });
+    );
     return row;
   });
 }
@@ -281,11 +258,7 @@ export async function updateDepartment(
 ) {
   await accessScope(db, actor, 'ops:organisation:manage');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(departments)
-      .where(eq(departments.id, id as DepartmentId));
-    if (!before) notFound('Department');
+    const before = await rowById(tx, departments, id, 'Department');
     if (input.status === 'archived') {
       const [member] = await tx
         .select({ id: staffMembers.id })
@@ -294,24 +267,23 @@ export async function updateDepartment(
         .limit(1);
       if (member) throw new ConflictError('Move the department’s staff before archiving it.');
     }
-    const patch = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
     const [after] = await tx
       .update(departments)
-      .set(patch)
+      .set(defined(input))
       .where(eq(departments.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'department.updated',
-      entityType: 'department',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    await auditDepartment(tx, actor, before.id, 'department.updated', { before, after }, requestId);
     return after;
   });
+}
+
+/** Holder and backup must be active staff and two different people. */
+async function assertHolders(
+  db: Database,
+  input: { holderStaffId?: string | null; backupStaffId?: string | null },
+) {
+  for (const f of ['holderStaffId', 'backupStaffId'] as const)
+    if (input[f]) await activeStaff(db, input[f], f);
 }
 
 function assertHolderBackup(holder: string | null | undefined, backup: string | null | undefined) {
@@ -329,8 +301,7 @@ export async function createResponsibility(
 ) {
   await accessScope(db, actor, 'ops:organisation:manage');
   assertHolderBackup(input.holderStaffId, input.backupStaffId);
-  for (const f of ['holderStaffId', 'backupStaffId'] as const)
-    if (input[f]) await activeStaff(db, input[f] as string, f);
+  await assertHolders(db, input);
   return withTransaction(db, async (tx) => {
     const code = await nextCode(tx, 'responsibility', 'ops.responsibilities');
     const [row] = await tx
@@ -348,15 +319,8 @@ export async function createResponsibility(
         source: 'Elevate OS',
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'responsibility.created',
-      entityType: 'responsibility',
-      entityId: row?.id ?? null,
-      after: row,
-      requestId,
-    });
+    const id = row?.id ?? null;
+    await auditResponsibility(tx, actor, id, 'responsibility.created', { after: row }, requestId);
     return row;
   });
 }
@@ -369,38 +333,30 @@ export async function updateResponsibility(
   requestId?: string,
 ) {
   await accessScope(db, actor, 'ops:organisation:manage');
-  for (const f of ['holderStaffId', 'backupStaffId'] as const)
-    if (input[f]) await activeStaff(db, input[f] as string, f);
+  await assertHolders(db, input);
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsResponsibilities)
-      .where(eq(opsResponsibilities.id, id as typeof opsResponsibilities.$inferSelect.id))
-      .for('update');
-    if (!before) notFound('Responsibility');
+    const before = await rowById(tx, opsResponsibilities, id, 'Responsibility', true);
     assertHolderBackup(
       'holderStaffId' in input ? input.holderStaffId : before.holderStaffId,
       'backupStaffId' in input ? input.backupStaffId : before.backupStaffId,
     );
-    const patch = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
     const [after] = await tx
       .update(opsResponsibilities)
-      .set(patch)
+      .set(defined(input) as Partial<typeof opsResponsibilities.$inferInsert>)
       .where(eq(opsResponsibilities.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'responsibility.updated',
-      entityType: 'responsibility',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    const audited = { before, after };
+    await auditResponsibility(tx, actor, before.id, 'responsibility.updated', audited, requestId);
     return after;
   });
 }
+
+const onboardingItems = (db: Database, staffId: StaffMemberId) =>
+  db
+    .select()
+    .from(opsOnboardingItems)
+    .where(eq(opsOnboardingItems.staffId, staffId))
+    .orderBy(asc(opsOnboardingItems.seq));
 
 export async function getStaffDetail(db: Database, actor: Actor, id: string) {
   await accessScope(db, actor, 'ops:organisation:read');
@@ -409,11 +365,7 @@ export async function getStaffDetail(db: Database, actor: Actor, id: string) {
     .select()
     .from(opsStaffProfiles)
     .where(eq(opsStaffProfiles.staffId, staff.id));
-  const onboarding = await db
-    .select()
-    .from(opsOnboardingItems)
-    .where(eq(opsOnboardingItems.staffId, staff.id))
-    .orderBy(asc(opsOnboardingItems.seq));
+  const onboarding = await onboardingItems(db, staff.id);
   const reports = await db
     .select({ id: staffMembers.id, fullName: staffMembers.fullName })
     .from(staffMembers)
@@ -448,27 +400,13 @@ export async function startOnboarding(
   await accessScope(db, actor, 'ops:organisation:manage');
   return withTransaction(db, async (tx) => {
     const staff = await staffRow(tx, staffId);
-    let seq = 0;
-    for (const title of DEFAULT_ONBOARDING_ITEMS) {
-      seq += 1;
+    for (const [i, title] of DEFAULT_ONBOARDING_ITEMS.entries())
       await tx
         .insert(opsOnboardingItems)
-        .values({ staffId: staff.id, seq, title })
+        .values({ staffId: staff.id, seq: i + 1, title })
         .onConflictDoNothing();
-    }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'staff.onboarding_started',
-      entityType: 'staff_member',
-      entityId: staff.id,
-      requestId,
-    });
-    return tx
-      .select()
-      .from(opsOnboardingItems)
-      .where(eq(opsOnboardingItems.staffId, staff.id))
-      .orderBy(asc(opsOnboardingItems.seq));
+    await auditStaff(tx, actor, staff.id, 'staff.onboarding_started', {}, requestId);
+    return onboardingItems(tx, staff.id);
   });
 }
 
@@ -481,12 +419,7 @@ export async function updateOnboardingItem(
 ) {
   await accessScope(db, actor, 'ops:organisation:manage');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsOnboardingItems)
-      .where(eq(opsOnboardingItems.id, itemId as typeof opsOnboardingItems.$inferSelect.id))
-      .for('update');
-    if (!before) notFound('Onboarding item');
+    const before = await rowById(tx, opsOnboardingItems, itemId, 'Onboarding item', true);
     const done = input.status === 'done';
     const [after] = await tx
       .update(opsOnboardingItems)
@@ -498,29 +431,15 @@ export async function updateOnboardingItem(
       })
       .where(eq(opsOnboardingItems.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'staff.onboarding_item_updated',
-      entityType: 'staff_member',
-      entityId: before.staffId,
-      before,
-      after,
+    const audited = { before, after };
+    await auditStaff(
+      tx,
+      actor,
+      before.staffId,
+      'staff.onboarding_item_updated',
+      audited,
       requestId,
-    });
+    );
     return after;
   });
-}
-
-/** Active staff for pickers. */
-export async function staffOptions(db: Database) {
-  return db
-    .select({
-      id: staffMembers.id,
-      fullName: staffMembers.fullName,
-      departmentId: staffMembers.departmentId,
-    })
-    .from(staffMembers)
-    .where(eq(staffMembers.status, 'active'))
-    .orderBy(asc(staffMembers.fullName));
 }

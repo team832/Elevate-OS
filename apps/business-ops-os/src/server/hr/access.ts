@@ -12,10 +12,21 @@ import type { StaffMemberId } from '@elevate/shared-types';
 import { employeeFieldTiers } from '../../domain/hr/employees';
 import { staffIdForUser, type Actor } from '../context';
 import { hrCovers, hrScope, type HrScope } from '../hr-scope';
+import { opsAudit as auditWriter, type AuditData } from '../ops-common';
 
 /** 400 with a field path, as the route validators produce. */
 export const invalidField = (path: string, message: string) =>
   new ValidationError(message, { details: [{ location: 'body', path: [path], message }] });
+
+/** One `ops` audit row by the actor (`ops-common` writer, call form used by the lifecycle services). */
+export const opsAudit = (
+  tx: Database,
+  actor: Actor,
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  { requestId, ...data }: AuditData & { requestId?: string } = {},
+) => auditWriter(entityType)(tx, actor, entityId, action, data, requestId);
 
 /** `%q%` for ILIKE with the wildcard characters escaped. */
 export const likePattern = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;

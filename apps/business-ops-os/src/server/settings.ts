@@ -4,7 +4,7 @@
  */
 import { eq } from 'drizzle-orm';
 import { opsSettings, type Database } from '@elevate/database';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import { ValidationError } from '@elevate/shared-contracts';
 import {
   resolveSettings,
@@ -13,6 +13,9 @@ import {
   type ResolvedSettings,
 } from '../domain';
 import { accessScope, type Actor } from './context';
+import { opsAudit } from './ops-common';
+
+const audit = opsAudit('setting');
 
 /** All settings (no permission check: internal use by other services). */
 export async function loadSettings(db: Database): Promise<ResolvedSettings> {
@@ -22,8 +25,7 @@ export async function loadSettings(db: Database): Promise<ResolvedSettings> {
 
 export async function listSettings(db: Database, actor: Actor) {
   await accessScope(db, actor, 'ops:settings:read');
-  const resolved = await loadSettings(db);
-  return Object.values(resolved);
+  return Object.values(await loadSettings(db));
 }
 
 export async function updateSetting(
@@ -34,11 +36,10 @@ export async function updateSetting(
 ) {
   await accessScope(db, actor, 'ops:settings:manage');
   const check = validateSettingChange(input.key, input.value);
-  if (!check.ok) {
+  if (!check.ok)
     throw new ValidationError(check.message, {
       details: [{ location: 'body', path: ['value'], message: check.message }],
     });
-  }
   const def = SETTING_DEFINITIONS[check.key];
   return withTransaction(db, async (tx) => {
     const [before] = await tx.select().from(opsSettings).where(eq(opsSettings.key, check.key));
@@ -54,16 +55,7 @@ export async function updateSetting(
     const [after] = before
       ? await tx.update(opsSettings).set(values).where(eq(opsSettings.id, before.id)).returning()
       : await tx.insert(opsSettings).values(values).returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'setting.changed',
-      entityType: 'setting',
-      entityId: check.key,
-      before: before ?? null,
-      after,
-      requestId,
-    });
+    await audit(tx, actor, check.key, 'setting.changed', { before, after }, requestId);
     return resolveSettings(after ? [after] : [])[check.key];
   });
 }

@@ -1,12 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import {
-  authedRequest,
-  callRoute,
-  createTestUser,
-  setupTestDatabase,
-  type TestUser,
-} from '@elevate/testing';
+import { callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import { approvals, opsSops, opsSopVersions } from '@elevate/database';
 import { GET as listSops, POST as createSop } from '../../src/app/api/v1/sops/route';
 import { GET as getSop, PATCH as patchSop } from '../../src/app/api/v1/sops/[id]/route';
@@ -14,6 +8,7 @@ import { PUT as saveDraft } from '../../src/app/api/v1/sops/[id]/draft/route';
 import { POST as workflow } from '../../src/app/api/v1/sops/[id]/workflow/route';
 import { importLegacySops } from '../../seed/legacy';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
+import { get, post as req, statusOf } from './operations-fixtures';
 
 const ctx = setupTestDatabase();
 let owner: StaffUser; // operations manager who owns the SOP
@@ -21,8 +16,9 @@ let reviewer: StaffUser;
 let director: StaffUser;
 let counsellor: StaffUser;
 
-const req = (user: { token: string }, json: unknown, method = 'POST') =>
-  authedRequest(user, '/ops/api/v1/x', { method, json });
+const flow = (user: { token: string }, json: unknown, id: string) =>
+  statusOf(workflow, req(user, json), { id });
+const recommend = { action: 'review', outcome: 'recommend_approval' };
 
 beforeAll(async () => {
   await setupReference(ctx.db);
@@ -34,8 +30,8 @@ beforeAll(async () => {
 
 describe('SOP register and approval rules', () => {
   it('counsellor can read but not administer SOPs', async () => {
-    expect((await callRoute(listSops, authedRequest(counsellor, '/x'))).status).toBe(200);
-    expect((await callRoute(createSop, req(counsellor, { title: 'x' }))).status).toBe(403);
+    expect(await statusOf(listSops, get(counsellor))).toBe(200);
+    expect(await statusOf(createSop, req(counsellor, { title: 'x' }))).toBe(403);
   });
 
   it('full lifecycle: reviewer required, owner cannot approve, reviewer must recommend, director approves', async () => {
@@ -51,53 +47,23 @@ describe('SOP register and approval rules', () => {
     expect(created.data).toMatchObject({ status: 'draft' });
     expect(created.data?.code).toMatch(/^SOP-\d{4}$/);
     const id = created.data!.id;
-    expect((await callRoute(workflow, req(owner, { action: 'submit' }), { id })).status).toBe(400); // no reviewer
-    expect(
-      (await callRoute(patchSop, req(owner, { reviewerStaffId: owner.staffId }, 'PATCH'), { id }))
-        .status,
-    ).toBe(400); // reviewer = owner
-    expect(
-      (
-        await callRoute(patchSop, req(owner, { reviewerStaffId: reviewer.staffId }, 'PATCH'), {
-          id,
-        })
-      ).status,
-    ).toBe(200);
-    expect((await callRoute(workflow, req(owner, { action: 'submit' }), { id })).status).toBe(200);
-    expect((await callRoute(workflow, req(director, { action: 'approve' }), { id })).status).toBe(
-      409,
-    ); // review missing
-    expect(
-      (
-        await callRoute(
-          workflow,
-          req(director, { action: 'review', outcome: 'recommend_approval' }),
-          { id },
-        )
-      ).status,
-    ).toBe(403); // not the reviewer
-    expect(
-      (
-        await callRoute(
-          workflow,
-          req(reviewer, { action: 'review', outcome: 'recommend_approval', note: 'Good' }),
-          { id },
-        )
-      ).status,
-    ).toBe(200);
-    expect((await callRoute(workflow, req(owner, { action: 'approve' }), { id })).status).toBe(403); // owner (and requester) cannot approve
-    expect((await callRoute(workflow, req(counsellor, { action: 'approve' }), { id })).status).toBe(
-      403,
-    );
-    expect(
-      (await callRoute(workflow, req(director, { action: 'approve', comment: 'OK' }), { id }))
-        .status,
-    ).toBe(200);
+    const setReviewer = (reviewerStaffId: string) =>
+      statusOf(patchSop, req(owner, { reviewerStaffId }, 'PATCH'), { id });
+    expect(await flow(owner, { action: 'submit' }, id)).toBe(400); // no reviewer
+    expect(await setReviewer(owner.staffId)).toBe(400); // reviewer = owner
+    expect(await setReviewer(reviewer.staffId)).toBe(200);
+    expect(await flow(owner, { action: 'submit' }, id)).toBe(200);
+    expect(await flow(director, { action: 'approve' }, id)).toBe(409); // review missing
+    expect(await flow(director, recommend, id)).toBe(403); // not the reviewer
+    expect(await flow(reviewer, { ...recommend, note: 'Good' }, id)).toBe(200);
+    expect(await flow(owner, { action: 'approve' }, id)).toBe(403); // owner (and requester) cannot approve
+    expect(await flow(counsellor, { action: 'approve' }, id)).toBe(403);
+    expect(await flow(director, { action: 'approve', comment: 'OK' }, id)).toBe(200);
     const detail = await callRoute<{
       sop: { status: string; approvedVersionId: string };
       decisionState: string;
       approvals: { status: string }[];
-    }>(getSop, authedRequest(owner, '/x'), { id });
+    }>(getSop, get(owner), { id });
     expect(detail.data).toMatchObject({ decisionState: 'approved', sop: { status: 'approved' } });
     expect(detail.data?.approvals.map((a) => a.status)).toEqual(['approved']);
   });
@@ -113,11 +79,9 @@ describe('SOP register and approval rules', () => {
       }),
     );
     const id = created.data!.id;
-    await callRoute(workflow, req(owner, { action: 'submit' }), { id });
-    await callRoute(workflow, req(reviewer, { action: 'review', outcome: 'recommend_approval' }), {
-      id,
-    });
-    await callRoute(workflow, req(director, { action: 'approve' }), { id });
+    await flow(owner, { action: 'submit' }, id);
+    await flow(reviewer, recommend, id);
+    await flow(director, { action: 'approve' }, id);
     const draft = await callRoute<{ versionLabel: string; status: string }>(
       saveDraft,
       req(owner, { content: 'v2 with changes', changeNote: 'Add steps' }, 'PUT'),
@@ -135,19 +99,11 @@ describe('SOP register and approval rules', () => {
       .where(eq(opsSopVersions.sopId, id as never));
     expect(versions.map((v) => v.status).sort()).toEqual(['approved', 'draft']);
     // Reviewer requests changes → requester withdraws → resubmits.
-    await callRoute(workflow, req(owner, { action: 'submit' }), { id });
-    await callRoute(workflow, req(reviewer, { action: 'review', outcome: 'changes_requested' }), {
-      id,
-    });
-    expect((await callRoute(workflow, req(director, { action: 'approve' }), { id })).status).toBe(
-      409,
-    );
-    expect((await callRoute(workflow, req(reviewer, { action: 'withdraw' }), { id })).status).toBe(
-      403,
-    );
-    expect((await callRoute(workflow, req(owner, { action: 'withdraw' }), { id })).status).toBe(
-      200,
-    );
+    await flow(owner, { action: 'submit' }, id);
+    await flow(reviewer, { action: 'review', outcome: 'changes_requested' }, id);
+    expect(await flow(director, { action: 'approve' }, id)).toBe(409);
+    expect(await flow(reviewer, { action: 'withdraw' }, id)).toBe(403);
+    expect(await flow(owner, { action: 'withdraw' }, id)).toBe(200);
     const all = await ctx.db
       .select()
       .from(approvals)
@@ -156,11 +112,9 @@ describe('SOP register and approval rules', () => {
   });
 
   it('auditor cannot submit (403)', async () => {
-    const auditor: TestUser = await createTestUser(ctx.db, { roles: ['auditor'] });
+    const auditor = await createTestUser(ctx.db, { roles: ['auditor'] });
     const [any] = await ctx.db.select().from(opsSops).limit(1);
-    expect(
-      (await callRoute(workflow, req(auditor, { action: 'submit' }), { id: any!.id })).status,
-    ).toBe(403);
+    expect(await flow(auditor, { action: 'submit' }, any!.id)).toBe(403);
   });
 
   it('legacy import: coordinator SOP enters as a draft; nothing imported is approved; re-import is idempotent', async () => {
@@ -177,7 +131,7 @@ describe('SOP register and approval rules', () => {
       current: { versionLabel: string; sourceDate: string };
       checklist: unknown[];
       decisionState: string;
-    }>(getSop, authedRequest(counsellor, '/x'), { id: coord!.id });
+    }>(getSop, get(counsellor), { id: coord!.id });
     expect(detail.data).toMatchObject({
       decisionState: 'proposed',
       current: { versionLabel: '0.1', sourceDate: '2026-09-18' },

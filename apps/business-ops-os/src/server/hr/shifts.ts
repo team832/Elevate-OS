@@ -9,6 +9,7 @@
  * `ops:leave:read`, write `ops:leave:manage`.
  */
 import { and, asc, desc, eq, gte, inArray, lte, ne, or, isNull, sql, type SQL } from 'drizzle-orm';
+import type { AnyPgTable } from 'drizzle-orm/pg-core';
 import { can, type Permission } from '@elevate/authorization';
 import {
   departments,
@@ -18,11 +19,9 @@ import {
   opsShiftTemplates,
   staffMembers,
   type Database,
-  type OpsHolidayId,
-  type OpsShiftAssignmentId,
   type OpsShiftTemplateId,
 } from '@elevate/database';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
   ForbiddenError,
@@ -30,8 +29,7 @@ import {
   ValidationError,
 } from '@elevate/shared-contracts';
 import type { DepartmentId, IsoDate, StaffMemberId, UserId } from '@elevate/shared-types';
-import type { DecisionCheck } from '../../domain/hr/attendance';
-import type { AttendanceRules } from '../../domain/hr/attendance';
+import { checkDecision, type DecisionCheck } from '../../domain/hr/attendance';
 import { DEFAULT_TIMEZONE, holidaysFor, type HolidayEntry } from '../../domain/hr/calendar';
 import {
   findAssignmentConflicts,
@@ -41,30 +39,28 @@ import {
   type ShiftAssignmentLike,
   type ShiftTemplateLike,
 } from '../../domain/hr/shifts';
-import { notFound, userIdsForStaff, userIdsWithRole, type Actor } from '../context';
-import { assertHrScope, hrCovers, hrScope, hrScopeIds } from '../hr-scope';
+import { userIdsForStaff, userIdsWithRole, type Actor } from '../context';
+import { assertHrScope, hrCovers, hrScope, hrScopeIds, type HrScope } from '../hr-scope';
 import { loadSettings } from '../settings';
+import { defined, opsAudit, rowById } from '../ops-common';
 import type {
   CreateAssignmentInput,
   CreateHolidayInput,
   CreateShiftInput,
+  DecisionInput,
   UpdateAssignmentInput,
   UpdateShiftInput,
 } from './time-schemas';
 
 export const PAGE_SIZE = 50;
 
+const auditTemplate = opsAudit('shift_template');
+const auditAssignment = opsAudit('shift_assignment');
+const auditHoliday = opsAudit('holiday');
+
 // --- shared lookups ---------------------------------------------------------------------------
 
-export interface TimeSettings {
-  attendance: AttendanceRules;
-  allowSplitShifts: boolean;
-  defaultWorkingWeekdays: number[];
-  countProposedHolidays: boolean;
-  states: Record<'attendance' | 'shifts' | 'leave' | 'entitlements', string>;
-}
-
-export async function timeSettings(db: Database): Promise<TimeSettings> {
+export async function timeSettings(db: Database) {
   const s = await loadSettings(db);
   return {
     attendance: s['attendance.rules'].value,
@@ -94,36 +90,6 @@ export interface TimeEmployee {
   employmentStatus: string | null;
 }
 
-const employeeColumns = {
-  staffId: staffMembers.id,
-  fullName: staffMembers.fullName,
-  employeeCode: opsEmployeeRecords.employeeCode,
-  timezone: opsEmployeeRecords.timezone,
-  workLocation: opsEmployeeRecords.workLocation,
-  departmentId: staffMembers.departmentId,
-  departmentName: departments.name,
-  managerId: staffMembers.managerId,
-  userId: staffMembers.userId,
-  staffStatus: staffMembers.status,
-  employmentStatus: opsEmployeeRecords.employmentStatus,
-};
-
-function toEmployee(r: {
-  staffId: StaffMemberId;
-  fullName: string;
-  employeeCode: string | null;
-  timezone: string | null;
-  workLocation: string | null;
-  departmentId: DepartmentId | null;
-  departmentName: string | null;
-  managerId: StaffMemberId | null;
-  userId: string | null;
-  staffStatus: string;
-  employmentStatus: string | null;
-}): TimeEmployee {
-  return { ...r, timezone: r.timezone ?? DEFAULT_TIMEZONE };
-}
-
 /** Staff members (with their HR record when one exists); null ids = everyone. */
 export async function loadEmployees(
   db: Database,
@@ -131,17 +97,31 @@ export async function loadEmployees(
   departmentId?: string | null,
 ): Promise<TimeEmployee[]> {
   if (staffIds && staffIds.length === 0) return [];
-  const conds: SQL[] = [];
-  if (staffIds) conds.push(inArray(staffMembers.id, staffIds as StaffMemberId[]));
-  if (departmentId) conds.push(eq(staffMembers.departmentId, departmentId as DepartmentId));
   const rows = await db
-    .select(employeeColumns)
+    .select({
+      staffId: staffMembers.id,
+      fullName: staffMembers.fullName,
+      employeeCode: opsEmployeeRecords.employeeCode,
+      timezone: opsEmployeeRecords.timezone,
+      workLocation: opsEmployeeRecords.workLocation,
+      departmentId: staffMembers.departmentId,
+      departmentName: departments.name,
+      managerId: staffMembers.managerId,
+      userId: staffMembers.userId,
+      staffStatus: staffMembers.status,
+      employmentStatus: opsEmployeeRecords.employmentStatus,
+    })
     .from(staffMembers)
     .leftJoin(opsEmployeeRecords, eq(opsEmployeeRecords.staffId, staffMembers.id))
     .leftJoin(departments, eq(departments.id, staffMembers.departmentId))
-    .where(conds.length ? and(...conds) : undefined)
+    .where(
+      and(
+        staffIds ? inArray(staffMembers.id, staffIds as StaffMemberId[]) : undefined,
+        departmentId ? eq(staffMembers.departmentId, departmentId as DepartmentId) : undefined,
+      ),
+    )
     .orderBy(asc(staffMembers.fullName));
-  return rows.map(toEmployee);
+  return rows.map((r) => ({ ...r, timezone: r.timezone ?? DEFAULT_TIMEZONE }));
 }
 
 export async function loadEmployee(db: Database, staffId: string, field = 'staffId') {
@@ -154,16 +134,16 @@ export async function loadEmployee(db: Database, staffId: string, field = 'staff
 }
 
 /** Employees in the actor's scope for a permission (for pickers and reports). */
-export async function employeesInScope(
-  db: Database,
-  actor: Actor,
-  permission: Parameters<typeof hrScope>[2],
-) {
-  const scope = await hrScope(db, actor, permission);
-  return loadEmployees(db, hrScopeIds(scope));
+export async function employeesInScope(db: Database, actor: Actor, permission: Permission) {
+  return loadEmployees(db, hrScopeIds(await hrScope(db, actor, permission)));
 }
 
 // --- schedule loading --------------------------------------------------------------------------
+
+export async function loadTemplates(db: Database) {
+  const rows = await db.select().from(opsShiftTemplates);
+  return new Map(rows.map((t) => [t.id as string, toTemplate(t)]));
+}
 
 export interface ScheduleContext {
   templates: Map<string, ShiftTemplateLike>;
@@ -177,8 +157,7 @@ export async function loadScheduleContext(
   from: IsoDate,
   to: IsoDate,
 ): Promise<ScheduleContext> {
-  const templates = new Map<string, ShiftTemplateLike>();
-  for (const t of await db.select().from(opsShiftTemplates)) templates.set(t.id, toTemplate(t));
+  const templates = await loadTemplates(db);
   const assignments = staffIds.length
     ? await db
         .select()
@@ -194,11 +173,8 @@ export async function loadScheduleContext(
         .orderBy(asc(opsShiftAssignments.fromDate))
     : [];
   const assignmentsByStaff = new Map<string, ShiftAssignmentLike[]>();
-  for (const a of assignments) {
-    const list = assignmentsByStaff.get(a.staffId) ?? [];
-    list.push(a);
-    assignmentsByStaff.set(a.staffId, list);
-  }
+  for (const a of assignments)
+    assignmentsByStaff.set(a.staffId, [...(assignmentsByStaff.get(a.staffId) ?? []), a]);
   const holidays = await db
     .select()
     .from(opsHolidays)
@@ -274,13 +250,10 @@ export async function listShiftTemplates(db: Database, actor: Actor) {
 
 export async function getShiftTemplate(db: Database, actor: Actor, id: string) {
   await hrScope(db, actor, 'ops:shifts:read');
-  const [t] = await db
-    .select()
-    .from(opsShiftTemplates)
-    .where(eq(opsShiftTemplates.id, id as OpsShiftTemplateId));
-  if (!t) notFound('Shift template');
-  return t;
+  return rowById(db, opsShiftTemplates, id, 'Shift template');
 }
+
+const sortedWeekdays = (days: readonly number[]) => [...new Set(days)].sort();
 
 export async function createShiftTemplate(
   db: Database,
@@ -289,8 +262,7 @@ export async function createShiftTemplate(
   requestId?: string,
 ) {
   await hrScope(db, actor, 'ops:shifts:manage');
-  const issues = validateShiftTemplate(input);
-  issuesError(issues);
+  issuesError(validateShiftTemplate(input));
   return withTransaction(db, async (tx) => {
     const [clash] = await tx
       .select({ id: opsShiftTemplates.id })
@@ -300,13 +272,8 @@ export async function createShiftTemplate(
     const [row] = await tx
       .insert(opsShiftTemplates)
       .values({
-        code: input.code,
-        name: input.name,
-        startTime: input.startTime,
-        endTime: input.endTime,
-        crossesMidnight: input.crossesMidnight,
-        unpaidBreakMinutes: input.unpaidBreakMinutes,
-        workingWeekdays: [...new Set(input.workingWeekdays)].sort(),
+        ...input,
+        workingWeekdays: sortedWeekdays(input.workingWeekdays),
         location: input.location ?? null,
         departmentId: (input.departmentId as DepartmentId | null) ?? null,
         notes: input.notes ?? null,
@@ -314,15 +281,7 @@ export async function createShiftTemplate(
         createdBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'shift_template.created',
-      entityType: 'shift_template',
-      entityId: row!.id,
-      after: row,
-      requestId,
-    });
+    await auditTemplate(tx, actor, row!.id, 'shift_template.created', { after: row }, requestId);
     return row!;
   });
 }
@@ -336,24 +295,17 @@ export async function updateShiftTemplate(
 ) {
   await hrScope(db, actor, 'ops:shifts:manage');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsShiftTemplates)
-      .where(eq(opsShiftTemplates.id, id as OpsShiftTemplateId))
-      .for('update');
-    if (!before) notFound('Shift template');
+    const before = await rowById(tx, opsShiftTemplates, id, 'Shift template', true);
     if (before.status === 'retired' && input.status !== 'proposed')
       throw new ConflictError(
         'A retired template cannot be edited; set it back to proposed first.',
       );
-    const merged = { ...before, ...stripUndefined(input) };
-    const issues = validateShiftTemplate(merged);
-    issuesError(issues);
+    const merged = { ...before, ...defined(input) };
+    issuesError(validateShiftTemplate(merged));
     const timingChanged =
-      merged.startTime !== before.startTime ||
-      merged.endTime !== before.endTime ||
-      merged.crossesMidnight !== before.crossesMidnight ||
-      merged.unpaidBreakMinutes !== before.unpaidBreakMinutes ||
+      (['startTime', 'endTime', 'crossesMidnight', 'unpaidBreakMinutes'] as const).some(
+        (k) => merged[k] !== before[k],
+      ) ||
       JSON.stringify([...merged.workingWeekdays].sort()) !==
         JSON.stringify([...before.workingWeekdays].sort());
     // Changing approved timings makes them a proposal again unless the change approves them.
@@ -376,29 +328,17 @@ export async function updateShiftTemplate(
     const [after] = await tx
       .update(opsShiftTemplates)
       .set({
-        ...stripUndefined(input),
-        workingWeekdays: [...new Set(merged.workingWeekdays)].sort(),
+        ...defined(input),
+        workingWeekdays: sortedWeekdays(merged.workingWeekdays),
         departmentId: (merged.departmentId as DepartmentId | null) ?? null,
         status,
       })
       .where(eq(opsShiftTemplates.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: status !== before.status ? `shift_template.${status}` : 'shift_template.updated',
-      entityType: 'shift_template',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    const action = status !== before.status ? `shift_template.${status}` : 'shift_template.updated';
+    await auditTemplate(tx, actor, before.id, action, { before, after }, requestId);
     return after!;
   });
-}
-
-export function stripUndefined<T extends object>(o: T): Partial<T> {
-  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
 
 // --- assignments ------------------------------------------------------------------------------
@@ -411,50 +351,34 @@ export async function listShiftAssignments(
   const scope = await hrScope(db, actor, 'ops:shifts:read');
   if (query.staffId) assertHrScope(scope, query.staffId);
   const ids = hrScopeIds(scope);
-  const conds: SQL[] = [];
-  if (ids) {
-    if (ids.length === 0) return { rows: [], page: 1, pageSize: PAGE_SIZE, total: 0 };
-    conds.push(inArray(opsShiftAssignments.staffId, ids));
-  }
-  if (query.staffId) conds.push(eq(opsShiftAssignments.staffId, query.staffId as StaffMemberId));
-  if (query.shiftTemplateId)
-    conds.push(
-      eq(opsShiftAssignments.shiftTemplateId, query.shiftTemplateId as OpsShiftTemplateId),
-    );
-  if (query.includeCancelled !== 'true') conds.push(eq(opsShiftAssignments.status, 'active'));
-  const where = conds.length ? and(...conds) : undefined;
-  const page = query.page ?? 1;
-  const [{ total } = { total: 0 }] = await db
-    .select({ total: sql<number>`count(*)::int` })
-    .from(opsShiftAssignments)
-    .where(where);
-  const rows = await db
-    .select({
-      a: opsShiftAssignments,
-      fullName: staffMembers.fullName,
-      templateCode: opsShiftTemplates.code,
-      templateName: opsShiftTemplates.name,
-      templateStatus: opsShiftTemplates.status,
-    })
-    .from(opsShiftAssignments)
-    .innerJoin(staffMembers, eq(staffMembers.id, opsShiftAssignments.staffId))
-    .innerJoin(opsShiftTemplates, eq(opsShiftTemplates.id, opsShiftAssignments.shiftTemplateId))
-    .where(where)
-    .orderBy(asc(staffMembers.fullName), desc(opsShiftAssignments.fromDate))
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
-  return {
-    rows: rows.map((r) => ({
-      ...r.a,
-      fullName: r.fullName,
-      templateCode: r.templateCode,
-      templateName: r.templateName,
-      templateStatus: r.templateStatus,
-    })),
-    page,
-    pageSize: PAGE_SIZE,
-    total,
-  };
+  if (ids?.length === 0) return emptyPage(1);
+  const a = opsShiftAssignments;
+  const where = and(
+    ids ? inArray(a.staffId, ids) : undefined,
+    query.staffId ? eq(a.staffId, query.staffId as StaffMemberId) : undefined,
+    query.shiftTemplateId
+      ? eq(a.shiftTemplateId, query.shiftTemplateId as OpsShiftTemplateId)
+      : undefined,
+    query.includeCancelled !== 'true' ? eq(a.status, 'active') : undefined,
+  );
+  return paginate(db, a, where, query.page, async (limit, offset) => {
+    const rows = await db
+      .select({
+        a,
+        fullName: staffMembers.fullName,
+        templateCode: opsShiftTemplates.code,
+        templateName: opsShiftTemplates.name,
+        templateStatus: opsShiftTemplates.status,
+      })
+      .from(a)
+      .innerJoin(staffMembers, eq(staffMembers.id, a.staffId))
+      .innerJoin(opsShiftTemplates, eq(opsShiftTemplates.id, a.shiftTemplateId))
+      .where(where)
+      .orderBy(asc(staffMembers.fullName), desc(a.fromDate))
+      .limit(limit)
+      .offset(offset);
+    return rows.map(({ a: row, ...rest }) => ({ ...row, ...rest }));
+  });
 }
 
 async function assertNoConflict(
@@ -462,9 +386,8 @@ async function assertNoConflict(
   candidate: { id?: string; staffId: string; fromDate: string; toDate: string | null },
   templateId: string,
 ) {
-  const settings = await timeSettings(tx);
-  const templates = new Map<string, ShiftTemplateLike>();
-  for (const t of await tx.select().from(opsShiftTemplates)) templates.set(t.id, toTemplate(t));
+  const { allowSplitShifts } = await timeSettings(tx);
+  const templates = await loadTemplates(tx);
   const template = templates.get(templateId);
   if (!template) throw new ValidationError('Unknown shift template.');
   const existing = await tx
@@ -481,23 +404,22 @@ async function assertNoConflict(
     template,
     existing,
     templates,
-    settings.allowSplitShifts,
+    allowSplitShifts,
   );
   if (conflicts.length) {
     const byId = new Map(existing.map((e) => [e.id as string, e]));
     throw new ConflictError(
-      settings.allowSplitShifts
+      allowSplitShifts
         ? 'This shift overlaps in time with another assignment of this employee.'
         : 'This employee already has a shift assignment for some of these dates (split shifts are not allowed by the proposed policy).',
       {
         details: {
           conflicts: conflicts.map((c) => {
             const e = byId.get(c.assignmentId);
-            const t = e ? templates.get(e.shiftTemplateId) : undefined;
             return {
               assignmentId: c.assignmentId,
               reason: c.reason,
-              template: t?.code ?? null,
+              template: (e && templates.get(e.shiftTemplateId)?.code) ?? null,
               fromDate: e?.fromDate ?? null,
               toDate: e?.toDate ?? null,
             };
@@ -509,6 +431,11 @@ async function assertNoConflict(
   return template;
 }
 
+const endBeforeStart = () =>
+  new ValidationError('The end date must be on or after the start date.', {
+    details: [{ location: 'body', path: ['toDate'], message: 'Before the start date' }],
+  });
+
 export async function createShiftAssignment(
   db: Database,
   actor: Actor,
@@ -517,18 +444,16 @@ export async function createShiftAssignment(
 ) {
   const scope = await hrScope(db, actor, 'ops:shifts:manage');
   assertHrScope(scope, input.staffId);
-  if (input.toDate && input.toDate < input.fromDate)
-    throw new ValidationError('The end date must be on or after the start date.', {
-      details: [{ location: 'body', path: ['toDate'], message: 'Before the start date' }],
-    });
+  if (input.toDate && input.toDate < input.fromDate) throw endBeforeStart();
   const employee = await loadEmployee(db, input.staffId);
   if (employee.staffStatus !== 'active')
     throw new ValidationError(`${employee.fullName} is not active.`);
   return withTransaction(db, async (tx) => {
     await lockStaff(tx, 'shifts', input.staffId);
+    const toDate = input.toDate ?? null;
     const template = await assertNoConflict(
       tx,
-      { staffId: input.staffId, fromDate: input.fromDate, toDate: input.toDate ?? null },
+      { staffId: input.staffId, fromDate: input.fromDate, toDate },
       input.shiftTemplateId,
     );
     if (template.status === 'retired') throw new ConflictError('This shift template is retired.');
@@ -538,20 +463,13 @@ export async function createShiftAssignment(
         staffId: input.staffId as StaffMemberId,
         shiftTemplateId: input.shiftTemplateId as OpsShiftTemplateId,
         fromDate: input.fromDate,
-        toDate: input.toDate ?? null,
+        toDate,
         note: input.note ?? null,
         createdBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'shift_assignment.created',
-      entityType: 'shift_assignment',
-      entityId: row!.id,
-      after: { ...row, template: template.code },
-      requestId,
-    });
+    const change = { after: { ...row, template: template.code } };
+    await auditAssignment(tx, actor, row!.id, 'shift_assignment.created', change, requestId);
     return row!;
   });
 }
@@ -565,70 +483,49 @@ export async function updateShiftAssignment(
 ) {
   const scope = await hrScope(db, actor, 'ops:shifts:manage');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsShiftAssignments)
-      .where(eq(opsShiftAssignments.id, id as OpsShiftAssignmentId))
-      .for('update');
-    if (!before) notFound('Shift assignment');
+    const before = await rowById(tx, opsShiftAssignments, id, 'Shift assignment', true);
     assertHrScope(scope, before.staffId);
     if (before.status !== 'active') throw new ConflictError('This assignment is cancelled.');
     await lockStaff(tx, 'shifts', before.staffId);
-    let patch: Partial<typeof opsShiftAssignments.$inferInsert>;
     if (input.action === 'end') {
-      if (input.toDate < before.fromDate)
-        throw new ValidationError('The end date must be on or after the start date.', {
-          details: [{ location: 'body', path: ['toDate'], message: 'Before the start date' }],
-        });
-      await assertNoConflict(
-        tx,
-        { id: before.id, staffId: before.staffId, fromDate: before.fromDate, toDate: input.toDate },
-        before.shiftTemplateId,
-      );
-      patch = { toDate: input.toDate };
-    } else {
-      patch = { status: 'cancelled', cancelReason: input.reason };
+      if (input.toDate < before.fromDate) throw endBeforeStart();
+      await assertNoConflict(tx, { ...before, toDate: input.toDate }, before.shiftTemplateId);
     }
     const [after] = await tx
       .update(opsShiftAssignments)
-      .set(patch)
+      .set(
+        input.action === 'end'
+          ? { toDate: input.toDate }
+          : { status: 'cancelled', cancelReason: input.reason },
+      )
       .where(eq(opsShiftAssignments.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: input.action === 'end' ? 'shift_assignment.ended' : 'shift_assignment.cancelled',
-      entityType: 'shift_assignment',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    const action = input.action === 'end' ? 'ended' : 'cancelled';
+    const change = { before, after };
+    await auditAssignment(tx, actor, before.id, `shift_assignment.${action}`, change, requestId);
     return after!;
   });
 }
 
 // --- holidays ---------------------------------------------------------------------------------
 
-function assertHolidayRead(actor: Actor) {
-  if (!can(actor, 'ops:shifts:read') && !can(actor, 'ops:leave:read'))
-    throw new ForbiddenError('You do not have permission to see the holiday calendar.');
-}
-
 export async function listHolidays(
   db: Database,
   actor: Actor,
   query: { from?: string; to?: string; includeWithdrawn?: string } = {},
 ) {
-  assertHolidayRead(actor);
-  const conds: SQL[] = [];
-  if (query.from) conds.push(gte(opsHolidays.holidayDate, query.from));
-  if (query.to) conds.push(lte(opsHolidays.holidayDate, query.to));
-  if (query.includeWithdrawn !== 'true') conds.push(ne(opsHolidays.status, 'withdrawn'));
+  if (!can(actor, 'ops:shifts:read') && !can(actor, 'ops:leave:read'))
+    throw new ForbiddenError('You do not have permission to see the holiday calendar.');
   return db
     .select()
     .from(opsHolidays)
-    .where(conds.length ? and(...conds) : undefined)
+    .where(
+      and(
+        query.from ? gte(opsHolidays.holidayDate, query.from) : undefined,
+        query.to ? lte(opsHolidays.holidayDate, query.to) : undefined,
+        query.includeWithdrawn !== 'true' ? ne(opsHolidays.status, 'withdrawn') : undefined,
+      ),
+    )
     .orderBy(asc(opsHolidays.holidayDate))
     .limit(1000);
 }
@@ -665,15 +562,7 @@ export async function createHoliday(
         createdBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'holiday.created',
-      entityType: 'holiday',
-      entityId: row!.id,
-      after: row,
-      requestId,
-    });
+    await auditHoliday(tx, actor, row!.id, 'holiday.created', { after: row }, requestId);
     return row!;
   });
 }
@@ -687,12 +576,7 @@ export async function updateHoliday(
 ) {
   await hrScope(db, actor, 'ops:leave:manage');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsHolidays)
-      .where(eq(opsHolidays.id, id as OpsHolidayId))
-      .for('update');
-    if (!before) notFound('Holiday');
+    const before = await rowById(tx, opsHolidays, id, 'Holiday', true);
     if (before.status === 'withdrawn')
       throw new ConflictError('A withdrawn holiday stays withdrawn; record a new one instead.');
     if (before.status === input.status) throw new ConflictError(`Already ${input.status}.`);
@@ -701,21 +585,31 @@ export async function updateHoliday(
       .set({ status: input.status, note: input.note ?? before.note })
       .where(eq(opsHolidays.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: `holiday.${input.status}`,
-      entityType: 'holiday',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    const change = { before, after };
+    await auditHoliday(tx, actor, before.id, `holiday.${input.status}`, change, requestId);
     return after!;
   });
 }
 
 // --- shared helpers for the time services -------------------------------------------------------
+
+export const emptyPage = (page: number) => ({ rows: [], page, pageSize: PAGE_SIZE, total: 0 });
+
+/** One page of `rows` plus the count of `table` rows matching `where`. */
+export async function paginate<R>(
+  db: Database,
+  table: AnyPgTable,
+  where: SQL | undefined,
+  page: number | undefined,
+  rows: (limit: number, offset: number) => Promise<R[]>,
+) {
+  const p = page ?? 1;
+  const [{ total } = { total: 0 }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(table)
+    .where(where);
+  return { rows: await rows(PAGE_SIZE, (p - 1) * PAGE_SIZE), page: p, pageSize: PAGE_SIZE, total };
+}
 
 /** Throw a 400 listing every issue. */
 export function issuesError(issues: { path: string; message: string }[]): void {
@@ -748,6 +642,28 @@ export function throwCheck(check: DecisionCheck, notePath = 'note'): void {
     });
   if (check.code === 'ILLEGAL') throw new InvalidStateTransitionError(check.message);
   throw new ForbiddenError(check.message);
+}
+
+/** Check a pending request's decision (never by the requester or the employee); returns the new status. */
+export function checkedDecision(
+  actor: Actor,
+  scope: HrScope,
+  r: { status: string; requestedBy: string; staffId: string },
+  input: DecisionInput,
+) {
+  const to = input.decision === 'approve' ? ('approved' as const) : ('rejected' as const);
+  throwCheck(
+    checkDecision({
+      from: r.status,
+      to,
+      actorUserId: actor.id,
+      requestedByUserId: r.requestedBy,
+      actorStaffId: scope.staffId,
+      subjectStaffId: r.staffId,
+      note: input.note,
+    }),
+  );
+  return to;
 }
 
 /** `(staffId, requestedBy) => boolean`: may the actor decide a pending request (in scope, not self)? */

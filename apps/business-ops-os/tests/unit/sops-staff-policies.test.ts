@@ -62,48 +62,42 @@ describe('SOP approval requirement rules (A-11)', () => {
     ]);
   });
   it('submission rules', () => {
-    expect(
-      sopSubmissionProblems({ ownerStaffId: 'a', reviewerStaffId: 'b', contentLength: 10 }),
-    ).toEqual([]);
-    expect(
-      sopSubmissionProblems({ ownerStaffId: null, reviewerStaffId: null, contentLength: 0 }),
-    ).toEqual(['owner_missing', 'reviewer_missing', 'content_empty']);
-    expect(
-      sopSubmissionProblems({ ownerStaffId: 'a', reviewerStaffId: 'a', contentLength: 1 }),
-    ).toEqual(['reviewer_is_owner']);
+    const problems = (ownerStaffId: string | null, reviewerStaffId: string | null, n: number) =>
+      sopSubmissionProblems({ ownerStaffId, reviewerStaffId, contentLength: n });
+    expect(problems('a', 'b', 10)).toEqual([]);
+    expect(problems(null, null, 0)).toEqual(['owner_missing', 'reviewer_missing', 'content_empty']);
+    expect(problems('a', 'a', 1)).toEqual(['reviewer_is_owner']);
   });
-  it('status machine keeps an approved SOP in force while a new draft is reviewed', () => {
-    expect(nextSopStatus('draft', 'submit', { hasApprovedVersion: false })).toEqual({
-      ok: true,
-      status: 'in_review',
-    });
-    expect(nextSopStatus('approved', 'start_draft', { hasApprovedVersion: true })).toEqual({
-      ok: true,
-      status: 'approved',
-    });
-    expect(nextSopStatus('approved', 'submit', { hasApprovedVersion: true })).toEqual({
-      ok: true,
-      status: 'approved',
-    });
-    expect(nextSopStatus('in_review', 'reject', { hasApprovedVersion: false })).toEqual({
-      ok: true,
-      status: 'draft',
-    });
-    expect(nextSopStatus('not_drafted', 'submit', { hasApprovedVersion: false }).ok).toBe(false);
-    expect(nextSopStatus('retired', 'start_draft', { hasApprovedVersion: true }).ok).toBe(false);
-    expect(nextSopStatus('retired', 'retire', { hasApprovedVersion: true }).ok).toBe(false);
+  it.each([
+    ['draft', 'submit', false, 'in_review'],
+    ['approved', 'start_draft', true, 'approved'],
+    ['approved', 'submit', true, 'approved'],
+    ['in_review', 'reject', false, 'draft'],
+    ['not_drafted', 'submit', false, null],
+    ['retired', 'start_draft', true, null],
+    ['retired', 'retire', true, null],
+  ] as const)(
+    'status machine (approved stays in force): %s + %s (approved version: %s) → %s',
+    (from, action, hasApprovedVersion, to) => {
+      const r = nextSopStatus(from, action, { hasApprovedVersion });
+      expect(r.ok ? r.status : null).toBe(to);
+    },
+  );
+  it.each([
+    ['draft', 'proposed'],
+    ['not_drafted', 'proposed'],
+    ['in_review', 'proposed'],
+    ['approved', 'approved'],
+  ] as const)('proposed vs approved is explicit: %s → %s', (status, state) => {
+    expect(sopDecisionState(status)).toBe(state);
   });
-  it('proposed vs approved is explicit', () => {
-    expect(sopDecisionState('draft')).toBe('proposed');
-    expect(sopDecisionState('not_drafted')).toBe('proposed');
-    expect(sopDecisionState('in_review')).toBe('proposed');
-    expect(sopDecisionState('approved')).toBe('approved');
-  });
-  it('version labels', () => {
-    expect(nextVersionLabel([], false)).toBe('0.1');
-    expect(nextVersionLabel(['0.1', '0.2'], false)).toBe('0.3');
-    expect(nextVersionLabel(['0.1', '0.2'], true)).toBe('1.0');
-    expect(nextVersionLabel(['0.1', '1.0'], true)).toBe('2.0');
+  it.each([
+    [[], false, '0.1'],
+    [['0.1', '0.2'], false, '0.3'],
+    [['0.1', '0.2'], true, '1.0'],
+    [['0.1', '1.0'], true, '2.0'],
+  ])('version label after %o (approved before: %s) → %s', (labels, approved, label) => {
+    expect(nextVersionLabel(labels, approved)).toBe(label);
   });
 });
 

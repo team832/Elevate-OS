@@ -30,8 +30,7 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import { notify } from '@elevate/notifications';
-import { publishEvent, recordAudit, withTransaction } from '@elevate/server-kit';
+import { publishEvent, withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
   ForbiddenError,
@@ -49,38 +48,41 @@ import {
   isResolved,
   ITEM_KIND_LABELS,
   separationDue,
-  type ItemKind,
-  type ItemStatus,
-  type LifecycleKind,
+  SYSTEM_COMPLETED_KINDS,
   type OwnedWork,
-  type SeparationType,
   type TransferEntityType,
 } from '../../domain/hr/lifecycle';
-import { activeStaff, nextCode, staffIdForUser, userIdsForStaff, type Actor } from '../context';
+import { OPEN_TASK_STATUSES } from '../../domain/tasks';
+import { activeStaff, clean, nextCode, staffIdForUser, type Actor } from '../context';
 import { assertHrScope, hrScope } from '../hr-scope';
 import { loadSettings } from '../settings';
 import { changeEmploymentStatus } from './employee-core';
 import type { CreateCaseInput } from './lifecycle-schemas';
 import {
   approveOnboarding,
+  auditCase,
+  auditOf,
   assertCanApprove,
-  CASE_LINK,
+  assertNoGaps,
+  assertNoLiveCase,
   canSeeSeparationReason,
   caseItems,
+  caseRef,
   createOnboardingCase,
   employeeOf,
+  fieldError,
   getCaseRow,
   insertItems,
   lifecycleManager,
   lockCase,
   notifyAssignees,
+  notifyPeople,
   type CaseRow,
   type ItemRow,
 } from './onboarding';
-import { entityHistory, staffNames, userNames } from './recruitment';
+import { entityHistory, nameOf, staffNames, userNames } from './recruitment';
 import './wiring';
 
-const OPEN_TASK = ['not_started', 'in_progress', 'waiting', 'at_risk', 'blocked'];
 const CLOSED_ADMISSION = ['enrolled', 'lost'];
 
 // --- separation event --------------------------------------------------------------------------
@@ -130,23 +132,14 @@ export async function publishSeparation(
 
 // --- checklist sources --------------------------------------------------------------------------
 
-async function openAssignmentsOf(db: Database, staffId: StaffMemberId) {
-  return db
-    .select({ id: opsAssetAssignments.id, assetCode: opsAssets.code, assetName: opsAssets.name })
-    .from(opsAssetAssignments)
-    .innerJoin(opsAssets, eq(opsAssets.id, opsAssetAssignments.assetId))
-    .where(and(eq(opsAssetAssignments.staffId, staffId), isNull(opsAssetAssignments.returnedAt)))
-    .orderBy(asc(opsAssets.code));
-}
-
 /** Open tasks, leads with an open admission, open admissions and active responsibilities held by the employee. */
-export async function ownedWorkOf(db: Database, staffId: StaffMemberId): Promise<OwnedWork[]> {
+async function ownedWorkOf(db: Database, staffId: StaffMemberId): Promise<OwnedWork[]> {
   const tasks = await db
     .select({ id: opsTasks.id, code: opsTasks.code, title: opsTasks.title })
     .from(opsTasks)
     .where(
       and(
-        inArray(opsTasks.status, OPEN_TASK),
+        inArray(opsTasks.status, [...OPEN_TASK_STATUSES]),
         or(
           eq(opsTasks.ownerStaffId, staffId),
           eq(opsTasks.accountableStaffId, staffId),
@@ -198,16 +191,12 @@ export async function ownedWorkOf(db: Database, staffId: StaffMemberId): Promise
       ),
     );
   return [
-    ...tasks.map((t) => ({
-      type: 'task' as const,
-      id: t.id as string,
-      label: `${t.code} ${t.title}`,
-    })),
-    ...leads.map((l) => ({ type: 'lead' as const, id: l.id as string, label: l.code })),
-    ...admissions.map((a) => ({ type: 'admission' as const, id: a.id as string, label: a.code })),
+    ...tasks.map((t) => ({ type: 'task' as const, id: t.id, label: `${t.code} ${t.title}` })),
+    ...leads.map((l) => ({ type: 'lead' as const, id: l.id, label: l.code })),
+    ...admissions.map((a) => ({ type: 'admission' as const, id: a.id, label: a.code })),
     ...responsibilities.map((r) => ({
       type: 'responsibility' as const,
-      id: r.id as string,
+      id: r.id,
       label: `${r.code} ${r.title}`,
     })),
   ];
@@ -216,9 +205,15 @@ export async function ownedWorkOf(db: Database, staffId: StaffMemberId): Promise
 async function generateOffboarding(tx: Database, actor: Actor, c: CaseRow) {
   const employee = await employeeOf(tx, c.staffId);
   const settings = await loadSettings(tx);
+  const openAssignments = await tx
+    .select({ id: opsAssetAssignments.id, assetCode: opsAssets.code, assetName: opsAssets.name })
+    .from(opsAssetAssignments)
+    .innerJoin(opsAssets, eq(opsAssets.id, opsAssetAssignments.assetId))
+    .where(and(eq(opsAssetAssignments.staffId, c.staffId), isNull(opsAssetAssignments.returnedAt)))
+    .orderBy(asc(opsAssets.code));
   const items = generateOffboardingItems({
     lastWorkingDay: c.lastWorkingDay as IsoDate,
-    openAssignments: await openAssignmentsOf(tx, c.staffId),
+    openAssignments,
     ownedWork: await ownedWorkOf(tx, c.staffId),
     config: settings['hr.offboarding_checklist'].value,
   });
@@ -239,37 +234,18 @@ async function openOffboardingCase(
 ) {
   await lifecycleManager(db, actor);
   const dates = checkSeparationDates(input.noticeDate ?? null, input.lastWorkingDay);
-  if (!dates.ok)
-    throw new ValidationError(dates.message, {
-      details: [{ location: 'body', path: ['noticeDate'], message: dates.message }],
-    });
+  if (!dates.ok) throw fieldError('noticeDate', dates.message);
   return withTransaction(db, async (tx) => {
     const employee = await employeeOf(tx, input.staffId);
     if (employee.employmentStatus === 'separated')
       throw new ConflictError(`${employee.employeeCode} is already separated.`);
     if (employee.employmentStartDate && input.lastWorkingDay < employee.employmentStartDate)
-      throw new ValidationError(
+      throw fieldError(
+        'lastWorkingDay',
         'The last working day cannot be before the employment start date.',
-        {
-          details: [
-            { location: 'body', path: ['lastWorkingDay'], message: 'Before the start date' },
-          ],
-        },
+        'Before the start date',
       );
-    const [live] = await tx
-      .select({ code: opsLifecycleCases.code })
-      .from(opsLifecycleCases)
-      .where(
-        and(
-          eq(opsLifecycleCases.staffId, employee.staffId),
-          eq(opsLifecycleCases.kind, 'offboarding'),
-          inArray(opsLifecycleCases.status, ['open', 'approved']),
-        ),
-      );
-    if (live)
-      throw new ConflictError(
-        `${employee.employeeCode} already has an offboarding case (${live.code}).`,
-      );
+    await assertNoLiveCase(tx, employee, 'offboarding');
     const code = await nextCode(tx, 'lifecycleCase', 'ops.lifecycle_cases');
     const row = (
       await tx
@@ -281,19 +257,14 @@ async function openOffboardingCase(
           separationType: input.separationType,
           noticeDate: input.noticeDate ?? null,
           lastWorkingDay: input.lastWorkingDay,
-          separationReason: input.reason?.trim() || null,
+          separationReason: clean(input.reason),
           openedBy: actor.id,
         })
         .returning()
     )[0]!;
     const items = await generateOffboarding(tx, actor, row);
     // The separation reason never goes into the audit payload.
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'lifecycle_case.opened',
-      entityType: 'lifecycle_case',
-      entityId: row.id,
+    await auditCase(tx, actor, row.id, 'lifecycle_case.opened', {
       after: {
         code,
         kind: 'offboarding',
@@ -306,7 +277,7 @@ async function openOffboardingCase(
       },
       requestId,
     });
-    await notifyAssignees(tx, row, items, actor.id);
+    await notifyAssignees(tx, row, items, actor);
     return row;
   });
 }
@@ -327,12 +298,7 @@ export async function refreshOffboardingChecklist(
       throw new ConflictError(`${c.code} is ${c.status}.`);
     const added = await generateOffboarding(tx, actor, c);
     if (added.length)
-      await recordAudit(tx, {
-        actorUserId: actor.id,
-        module: 'ops',
-        action: 'lifecycle_case.checklist_refreshed',
-        entityType: 'lifecycle_case',
-        entityId: c.id,
+      await auditCase(tx, actor, c.id, 'lifecycle_case.checklist_refreshed', {
         after: { added: added.map((i) => i.itemKey) },
         requestId,
       });
@@ -391,9 +357,8 @@ export async function transferOwnership(
       .for('update');
     if (!item?.transferEntityType || !item.transferEntityId)
       throw new ValidationError('This item is not an ownership transfer.');
-    if (isResolved(item.status as ItemStatus))
-      throw new ConflictError('This hand-over is already resolved.');
-    const type = item.transferEntityType as TransferEntityType;
+    if (isResolved(item.status)) throw new ConflictError('This hand-over is already resolved.');
+    const type = item.transferEntityType;
     const spec: {
       table: typeof opsTasks;
       fields: readonly string[];
@@ -415,17 +380,11 @@ export async function transferOwnership(
       .update(spec.table)
       .set(after)
       .where(eq(spec.table.id, row.id as never));
-    const meta = { reason: 'offboarding', caseId: c.id };
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: `${type}.reassigned`,
-      entityType: type,
-      entityId: item.transferEntityId,
+    await auditOf(type)(tx, actor, item.transferEntityId, `${type}.reassigned`, {
       before,
       after,
       requestId,
-      metadata: meta,
+      metadata: { reason: 'offboarding', caseId: c.id },
     });
     const [done] = await tx
       .update(opsLifecycleItems)
@@ -438,12 +397,7 @@ export async function transferOwnership(
       })
       .where(eq(opsLifecycleItems.id, item.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'lifecycle_item.transferred',
-      entityType: 'lifecycle_case',
-      entityId: c.id,
+    await auditCase(tx, actor, c.id, 'lifecycle_item.transferred', {
       after: {
         itemId: item.id,
         entityType: type,
@@ -452,17 +406,11 @@ export async function transferOwnership(
       },
       requestId,
     });
-    const recipients = (await userIdsForStaff(tx, [target.id])).filter((u) => u !== actor.id);
-    if (recipients.length)
-      await notify(tx, {
-        userIds: recipients,
-        module: 'ops',
-        kind: 'lifecycle.ownership_transferred',
-        title: `Handed over to you: ${item.title.replace(/^Hand over /, '')}`,
-        link: CASE_LINK(c),
-        entityType: 'lifecycle_case',
-        entityId: c.id,
-      });
+    await notifyPeople(tx, actor, [target.id], {
+      kind: 'lifecycle.ownership_transferred',
+      title: `Handed over to you: ${item.title.replace(/^Hand over /, '')}`,
+      ...caseRef(c),
+    });
     return done as ItemRow;
   });
 }
@@ -478,9 +426,11 @@ export async function transferOwnership(
 export async function syncCaseSystemItems(tx: Database, c: CaseRow): Promise<number> {
   if (c.kind !== 'offboarding') return 0;
   const items = await caseItems(tx, c.id);
+  const autoCompleted = (after: Record<string, unknown>) =>
+    auditCase(tx, null, c.id, 'lifecycle_item.auto_completed', { after });
   let changed = 0;
   const assetItems = items.filter(
-    (i) => i.kind === 'asset_return' && i.assetAssignmentId && !isResolved(i.status as ItemStatus),
+    (i) => i.kind === 'asset_return' && i.assetAssignmentId && !isResolved(i.status),
   );
   if (assetItems.length) {
     const assignments = await tx
@@ -504,78 +454,63 @@ export async function syncCaseSystemItems(tx: Database, c: CaseRow): Promise<num
           evidence: `Returned ${a.returnedAt.toISOString().slice(0, 10)} (asset register)${a.conditionOnReturn ? `; condition: ${a.conditionOnReturn}` : ''}`,
         })
         .where(eq(opsLifecycleItems.id, i.id));
-      await recordAudit(tx, {
-        actorType: 'system',
-        module: 'ops',
-        action: 'lifecycle_item.auto_completed',
-        entityType: 'lifecycle_case',
-        entityId: c.id,
-        after: { itemId: i.id, kind: 'asset_return', assignmentId: a.id },
-      });
+      await autoCompleted({ itemId: i.id, kind: 'asset_return', assignmentId: a.id });
       changed += 1;
     }
   }
-  const access = items.find(
-    (i) => i.kind === 'access_revocation' && i.status !== 'done' && i.status !== 'not_applicable',
-  );
-  if (access && c.separationEventId) {
-    const [delivery] = await tx
-      .select()
-      .from(eventDeliveries)
-      .where(
-        and(
-          eq(eventDeliveries.eventId, c.separationEventId),
-          eq(eventDeliveries.consumer, PLATFORM_ACCESS_REVOCATION_CONSUMER),
+  const access = items.find((i) => i.kind === 'access_revocation' && !isResolved(i.status));
+  if (!access || !c.separationEventId) return changed;
+  const [delivery] = await tx
+    .select()
+    .from(eventDeliveries)
+    .where(
+      and(
+        eq(eventDeliveries.eventId, c.separationEventId),
+        eq(eventDeliveries.consumer, PLATFORM_ACCESS_REVOCATION_CONSUMER),
+      ),
+    );
+  if (delivery?.status === 'processed') {
+    const [result] = await tx
+      .select({ metadata: auditEvents.metadata, at: auditEvents.at })
+      .from(auditEvents)
+      .where(and(eq(auditEvents.module, 'platform'), eq(auditEvents.action, 'user.access_revoked')))
+      .orderBy(asc(auditEvents.at))
+      .then((rows) =>
+        rows.filter(
+          (r) => (r.metadata as { eventId?: string } | null)?.eventId === c.separationEventId,
         ),
       );
-    if (delivery?.status === 'processed') {
-      const [result] = await tx
-        .select({ metadata: auditEvents.metadata, at: auditEvents.at })
-        .from(auditEvents)
-        .where(
-          and(eq(auditEvents.module, 'platform'), eq(auditEvents.action, 'user.access_revoked')),
-        )
-        .orderBy(asc(auditEvents.at))
-        .then((rows) =>
-          rows.filter(
-            (r) => (r.metadata as { eventId?: string } | null)?.eventId === c.separationEventId,
-          ),
-        );
-      const meta = (result?.metadata ?? {}) as {
-        sessionsDeleted?: number;
-        alreadyDisabled?: boolean;
-      };
-      const evidence = result
-        ? `Platform disabled the login${meta.alreadyDisabled ? ' (it was already disabled)' : ''} and deleted ${meta.sessionsDeleted ?? 0} session(s) on ${(result.at ?? delivery.processedAt)?.toISOString()}.`
-        : `Platform processed the separation event on ${delivery.processedAt?.toISOString() ?? 'an unknown time'}.`;
-      await tx
-        .update(opsLifecycleItems)
-        .set({
-          status: 'done',
-          completedAt: delivery.processedAt ?? new Date(),
-          completedBy: null,
-          evidence,
-        })
-        .where(eq(opsLifecycleItems.id, access.id));
-      await recordAudit(tx, {
-        actorType: 'system',
-        module: 'ops',
-        action: 'lifecycle_item.auto_completed',
-        entityType: 'lifecycle_case',
-        entityId: c.id,
-        after: { itemId: access.id, kind: 'access_revocation', eventId: c.separationEventId },
-      });
-      changed += 1;
-    } else if (delivery?.status === 'dead' && access.status !== 'blocked') {
-      await tx
-        .update(opsLifecycleItems)
-        .set({
-          status: 'blocked',
-          notes: `Platform could not revoke access: ${delivery.lastError ?? 'unknown error'}`,
-        })
-        .where(eq(opsLifecycleItems.id, access.id));
-      changed += 1;
-    }
+    const meta = (result?.metadata ?? {}) as {
+      sessionsDeleted?: number;
+      alreadyDisabled?: boolean;
+    };
+    const evidence = result
+      ? `Platform disabled the login${meta.alreadyDisabled ? ' (it was already disabled)' : ''} and deleted ${meta.sessionsDeleted ?? 0} session(s) on ${(result.at ?? delivery.processedAt)?.toISOString()}.`
+      : `Platform processed the separation event on ${delivery.processedAt?.toISOString() ?? 'an unknown time'}.`;
+    await tx
+      .update(opsLifecycleItems)
+      .set({
+        status: 'done',
+        completedAt: delivery.processedAt ?? new Date(),
+        completedBy: null,
+        evidence,
+      })
+      .where(eq(opsLifecycleItems.id, access.id));
+    await autoCompleted({
+      itemId: access.id,
+      kind: 'access_revocation',
+      eventId: c.separationEventId,
+    });
+    changed += 1;
+  } else if (delivery?.status === 'dead' && access.status !== 'blocked') {
+    await tx
+      .update(opsLifecycleItems)
+      .set({
+        status: 'blocked',
+        notes: `Platform could not revoke access: ${delivery.lastError ?? 'unknown error'}`,
+      })
+      .where(eq(opsLifecycleItems.id, access.id));
+    changed += 1;
   }
   return changed;
 }
@@ -602,12 +537,7 @@ async function applySeparation(tx: Database, c: CaseRow, now: Date, requestId?: 
     );
   if (employee.staffStatus !== 'inactive') {
     await tx.update(staffMembers).set({ status: 'inactive' }).where(eq(staffMembers.id, c.staffId));
-    await recordAudit(tx, {
-      actorType: 'system',
-      module: 'ops',
-      action: 'staff.deactivated',
-      entityType: 'staff_member',
-      entityId: c.staffId,
+    await auditOf('staff_member')(tx, null, c.staffId, 'staff.deactivated', {
       before: { status: employee.staffStatus },
       after: { status: 'inactive' },
       requestId,
@@ -641,12 +571,7 @@ async function applySeparation(tx: Database, c: CaseRow, now: Date, requestId?: 
       .where(
         and(eq(opsLifecycleItems.caseId, c.id), eq(opsLifecycleItems.kind, 'access_revocation')),
       );
-  await recordAudit(tx, {
-    actorType: 'system',
-    module: 'ops',
-    action: 'lifecycle_case.separation_applied',
-    entityType: 'lifecycle_case',
-    entityId: c.id,
+  await auditCase(tx, null, c.id, 'lifecycle_case.separation_applied', {
     after: {
       status: 'completed',
       lastWorkingDay: lwd,
@@ -665,15 +590,7 @@ async function approveOffboarding(
   comment: string | null,
   requestId?: string,
 ) {
-  const items = await caseItems(tx, c.id);
-  const gaps = completionGaps(
-    'offboarding',
-    items.map((i) => ({ ...i, kind: i.kind as ItemKind, status: i.status as ItemStatus })),
-  );
-  if (gaps.length)
-    throw new ConflictError('Required checklist items are still open.', {
-      details: { missing: gaps },
-    });
+  await assertNoGaps(tx, c);
   const now = new Date();
   const [approved] = await tx
     .update(opsLifecycleCases)
@@ -690,20 +607,14 @@ async function approveOffboarding(
       { reason: `Separation ${c.code} approved` },
       requestId,
     );
-  await recordAudit(tx, {
-    actorUserId: actor.id,
-    module: 'ops',
-    action: 'lifecycle_case.approved',
-    entityType: 'lifecycle_case',
-    entityId: c.id,
+  await auditCase(tx, actor, c.id, 'lifecycle_case.approved', {
     before: { status: c.status },
     after: { status: 'approved', lastWorkingDay: c.lastWorkingDay },
     requestId,
   });
-  const today = istToday(now);
-  if (separationDue(c.lastWorkingDay as IsoDate, today))
-    return applySeparation(tx, approved as CaseRow, now, requestId);
-  return approved as CaseRow;
+  return separationDue(c.lastWorkingDay as IsoDate, istToday(now))
+    ? applySeparation(tx, approved as CaseRow, now, requestId)
+    : (approved as CaseRow);
 }
 
 /** POST …/lifecycle-cases/{id}/approve — final approval of either kind. */
@@ -714,18 +625,25 @@ export async function approveLifecycleCase(
   comment: string | null | undefined,
   requestId?: string,
 ) {
-  const pre = await getCaseRow(db, id);
-  await assertCanApprove(db, actor, pre);
+  await assertCanApprove(db, actor, await getCaseRow(db, id));
   return withTransaction(db, async (tx) => {
     const c = await lockCase(tx, id);
     if (c.status !== 'open')
       throw new ConflictError(`${c.code} is ${c.status}; only open cases can be approved.`);
     await syncCaseSystemItems(tx, c);
-    return c.kind === 'onboarding'
-      ? approveOnboarding(tx, actor, c, comment?.trim() || null, requestId)
-      : approveOffboarding(tx, actor, c, comment?.trim() || null, requestId);
+    return (c.kind === 'onboarding' ? approveOnboarding : approveOffboarding)(
+      tx,
+      actor,
+      c,
+      clean(comment),
+      requestId,
+    );
   });
 }
+
+/** syncCaseSystemItems on a locked case, in its own transaction. */
+const syncLocked = (db: Database, id: string) =>
+  withTransaction(db, async (tx) => syncCaseSystemItems(tx, await lockCase(tx, id)));
 
 /**
  * Job `separations`: apply every approved offboarding case whose last working
@@ -767,10 +685,7 @@ export async function runSeparations(db: Database, today: IsoDate = istToday(new
       ),
     );
   let synced = 0;
-  for (const { caseId } of pending)
-    synced += await withTransaction(db, async (tx) =>
-      syncCaseSystemItems(tx, await lockCase(tx, caseId)),
-    );
+  for (const { caseId } of pending) synced += await syncLocked(db, caseId);
   return { today, applied, accessItemsCompleted: synced };
 }
 
@@ -822,12 +737,7 @@ export async function cancelLifecycleCase(
       .set({ status: 'cancelled', statusReason: reason })
       .where(eq(opsLifecycleCases.id, c.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'lifecycle_case.cancelled',
-      entityType: 'lifecycle_case',
-      entityId: c.id,
+    await auditCase(tx, actor, c.id, 'lifecycle_case.cancelled', {
       before: { status: c.status },
       after: { status: 'cancelled' },
       requestId,
@@ -842,76 +752,58 @@ export async function getLifecycleCase(db: Database, actor: Actor, id: string) {
   const scope = await hrScope(db, actor, 'ops:lifecycle:read');
   let c = await getCaseRow(db, id);
   assertHrScope(scope, c.staffId, 'this case');
-  if (c.kind === 'offboarding' && c.status !== 'cancelled') {
-    const changed = await withTransaction(db, async (tx) =>
-      syncCaseSystemItems(tx, await lockCase(tx, id)),
-    );
-    if (changed) c = await getCaseRow(db, id);
-  }
+  if (c.kind === 'offboarding' && c.status !== 'cancelled' && (await syncLocked(db, id)))
+    c = await getCaseRow(db, id);
   const employee = await employeeOf(db, c.staffId);
   const items = await caseItems(db, c.id);
-  const staffIds = [
-    ...items.map((i) => i.assigneeStaffId),
-    ...items.map((i) => i.transferTargetStaffId),
+  const names = await staffNames(db, [
+    ...items.flatMap((i) => [i.assigneeStaffId, i.transferTargetStaffId]),
     employee.managerId,
-  ];
-  const names = await staffNames(db, staffIds);
+  ]);
   const uNames = await userNames(db, [
     c.openedBy,
     c.approvedBy,
     ...items.map((i) => i.completedBy),
   ]);
-  let delivery: {
-    status: string;
-    attempts: number;
-    lastError: string | null;
-    processedAt: Date | null;
-  } | null = null;
-  if (c.separationEventId) {
-    const [d] = await db
-      .select({
-        status: eventDeliveries.status,
-        attempts: eventDeliveries.attempts,
-        lastError: eventDeliveries.lastError,
-        processedAt: eventDeliveries.processedAt,
-      })
-      .from(eventDeliveries)
-      .where(
-        and(
-          eq(eventDeliveries.eventId, c.separationEventId),
-          eq(eventDeliveries.consumer, PLATFORM_ACCESS_REVOCATION_CONSUMER),
-        ),
-      );
-    delivery = d ?? null;
-  }
+  const [delivery] = c.separationEventId
+    ? await db
+        .select({
+          status: eventDeliveries.status,
+          attempts: eventDeliveries.attempts,
+          lastError: eventDeliveries.lastError,
+          processedAt: eventDeliveries.processedAt,
+        })
+        .from(eventDeliveries)
+        .where(
+          and(
+            eq(eventDeliveries.eventId, c.separationEventId),
+            eq(eventDeliveries.consumer, PLATFORM_ACCESS_REVOCATION_CONSUMER),
+          ),
+        )
+    : [];
   const today = istToday(new Date());
-  const typed = items.map((i) => ({
-    ...i,
-    kind: i.kind as ItemKind,
-    status: i.status as ItemStatus,
-  }));
-  const kind = c.kind as LifecycleKind;
-  const myStaff = scope.staffId;
+  const live = c.status === 'open' || c.status === 'approved';
   const canManage = scopeFor(actor, 'ops:lifecycle:manage') === 'all';
-  const isSelf = Boolean(myStaff) && myStaff === c.staffId;
+  const isSelf = Boolean(scope.staffId) && scope.staffId === c.staffId;
+  const seeReason = canSeeSeparationReason(actor);
   return {
     case: {
       id: c.id,
       code: c.code,
-      kind,
+      kind: c.kind,
       status: c.status,
       statusReason: c.statusReason,
       staffId: c.staffId,
       applicationId: c.applicationId,
-      separationType: c.separationType as SeparationType | null,
+      separationType: c.separationType,
       noticeDate: c.noticeDate,
       lastWorkingDay: c.lastWorkingDay,
       /** null when hidden from this user; `reasonHidden` says which. */
-      separationReason: canSeeSeparationReason(actor) ? c.separationReason : null,
-      reasonHidden: !canSeeSeparationReason(actor) && Boolean(c.separationReason),
+      separationReason: seeReason ? c.separationReason : null,
+      reasonHidden: !seeReason && Boolean(c.separationReason),
       settlementReference: canManage ? c.settlementReference : null,
-      openedByName: uNames.get(c.openedBy) ?? null,
-      approvedByName: c.approvedBy ? (uNames.get(c.approvedBy) ?? null) : null,
+      openedByName: nameOf(uNames, c.openedBy),
+      approvedByName: nameOf(uNames, c.approvedBy),
       approvedAt: c.approvedAt,
       approvalComment: c.approvalComment,
       separatedAt: c.separatedAt,
@@ -924,10 +816,10 @@ export async function getLifecycleCase(db: Database, actor: Actor, id: string) {
       fullName: employee.fullName,
       employmentStatus: employee.employmentStatus,
       employmentStartDate: employee.employmentStartDate,
-      managerName: employee.managerId ? (names.get(employee.managerId) ?? null) : null,
+      managerName: nameOf(names, employee.managerId),
       hasLogin: Boolean(employee.userId),
     },
-    items: typed.map((i) => ({
+    items: items.map((i) => ({
       id: i.id,
       itemKey: i.itemKey,
       kind: i.kind,
@@ -936,34 +828,30 @@ export async function getLifecycleCase(db: Database, actor: Actor, id: string) {
       required: i.required,
       status: i.status,
       assigneeStaffId: i.assigneeStaffId,
-      assigneeName: i.assigneeStaffId ? (names.get(i.assigneeStaffId) ?? null) : null,
+      assigneeName: nameOf(names, i.assigneeStaffId),
       dueDate: i.dueDate,
       overdue:
-        c.status === 'open' || c.status === 'approved'
-          ? isItemOverdue({ status: i.status, dueDate: i.dueDate as IsoDate | null }, today)
-          : false,
+        live && isItemOverdue({ status: i.status, dueDate: i.dueDate as IsoDate | null }, today),
       evidence: i.evidence,
       notes: i.notes,
       transferEntityType: i.transferEntityType,
-      transferTargetName: i.transferTargetStaffId
-        ? (names.get(i.transferTargetStaffId) ?? null)
-        : null,
+      transferTargetName: nameOf(names, i.transferTargetStaffId),
       completedByName: i.completedBy
-        ? (uNames.get(i.completedBy) ?? null)
+        ? nameOf(uNames, i.completedBy)
         : i.completedAt
           ? 'System'
           : null,
       completedAt: i.completedAt,
-      systemCompleted: i.kind === 'asset_return' || i.kind === 'access_revocation',
+      systemCompleted: SYSTEM_COMPLETED_KINDS.includes(i.kind),
     })),
-    gaps: completionGaps(kind, typed),
-    accessRevocation: c.separationEventId ? { eventId: c.separationEventId, delivery } : null,
-    canManage: canManage && (c.status === 'open' || c.status === 'approved'),
+    gaps: completionGaps(c.kind, items),
+    accessRevocation: c.separationEventId
+      ? { eventId: c.separationEventId, delivery: delivery ?? null }
+      : null,
+    canManage: canManage && live,
     canApprove: can(actor, 'ops:lifecycle:approve') && !isSelf && c.status === 'open',
     isSelf,
     canRetract: can(actor, 'ops:lifecycle:approve') && canManage && c.status === 'approved',
     history: await entityHistory(db, 'lifecycle_case', c.id),
   };
 }
-
-export { CASE_LINK };

@@ -6,7 +6,7 @@ import { addDays, istToday } from '../../src/domain/dates';
 import { hrLifecycleMetrics } from '../../src/server/reports/hr-lifecycle-metrics';
 import { POST as createCase } from '../../src/app/api/v1/hr/lifecycle-cases/route';
 import { seedHrLifecycleSamples } from '../../seed/hr-lifecycle';
-import { call, employeeWithLogin, json, setupCast, type Cast } from './hr-lifecycle-fixtures';
+import { employeeWithLogin, json, setupCast, type Cast, status } from './hr-lifecycle-fixtures';
 
 const ctx = setupTestDatabase();
 let cast: Cast;
@@ -31,8 +31,7 @@ describe('HR lifecycle metrics', () => {
   it('reports onboarding completion once a case is open', async () => {
     const emp = await employeeWithLogin(ctx.db, { status: 'onboarding' });
     expect(
-      (await call(createCase, json(cast.hrManager, { kind: 'onboarding', staffId: emp.staffId })))
-        .status,
+      await status(createCase, json(cast.hrManager, { kind: 'onboarding', staffId: emp.staffId })),
     ).toBe(201);
     const m = await hrLifecycleMetrics(ctx.db, cast.auditor);
     expect(m.onboardingCompletionRate.status).toBe('ok');
@@ -44,26 +43,18 @@ describe('HR lifecycle metrics', () => {
 describe('offboarding dates', () => {
   it('refuses a last working day before the employment start date', async () => {
     const emp = await employeeWithLogin(ctx.db, { status: 'active' });
-    const r = await call(
-      createCase,
-      json(cast.hrManager, {
-        kind: 'offboarding',
-        staffId: emp.staffId,
-        separationType: 'resignation',
-        lastWorkingDay: '2024-01-01',
-      }),
-    );
-    expect(r.status).toBe(400);
-    const ok = await call(
-      createCase,
-      json(cast.hrManager, {
-        kind: 'offboarding',
-        staffId: emp.staffId,
-        separationType: 'resignation',
-        lastWorkingDay: addDays(istToday(new Date()), 20),
-      }),
-    );
-    expect(ok.status).toBe(201);
+    const offboard = (lastWorkingDay: string) =>
+      status(
+        createCase,
+        json(cast.hrManager, {
+          kind: 'offboarding',
+          staffId: emp.staffId,
+          separationType: 'resignation',
+          lastWorkingDay,
+        }),
+      );
+    expect(await offboard('2024-01-01')).toBe(400);
+    expect(await offboard(addDays(istToday(new Date()), 20))).toBe(201);
   });
 });
 

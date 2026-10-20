@@ -18,7 +18,6 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import { recordAudit } from '@elevate/server-kit';
 import {
   ConflictError,
   InvalidStateTransitionError,
@@ -32,13 +31,17 @@ import {
   historyChanges,
   isValidTimeZone,
   normaliseWorkPhone,
+  type EMPLOYMENT_TYPES,
   type EmploymentStatus,
   type HistoryField,
 } from '../../domain/hr/employees';
 import { activeStaff, nextCode, type Actor } from '../context';
+import { opsAudit } from '../ops-common';
 import { invalidField } from './access';
 
-export type EmploymentType = 'full_time' | 'part_time' | 'contract' | 'visiting' | 'not_recorded';
+const audit = opsAudit('employee');
+
+export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
 
 export interface NewEmployeeInput {
   /** Display name (core.staff_members.full_name). */
@@ -62,7 +65,7 @@ export interface NewEmployeeInput {
 
 /** Lower-case and validate a work email; null stays null. Throws VALIDATION_ERROR when invalid. */
 export function normaliseWorkEmail(raw: string | null | undefined): string | null {
-  if (raw === null || raw === undefined || raw.trim() === '') return null;
+  if (!raw?.trim()) return null;
   const result = normaliseEmail(raw);
   if (!result.ok) throw invalidField('workEmail', 'Work email is not a valid address.');
   return result.email;
@@ -179,19 +182,20 @@ export async function runDeactivationHook(
   let handled = 0;
   for (const handler of deactivationHandlers)
     if ((await handler(tx, actor, event)) !== false) handled += 1;
-  await recordAudit(tx, {
-    actorUserId: actor.id,
-    module: 'ops',
-    action: 'employee.deactivated',
-    entityType: 'employee',
-    entityId: event.staffId,
-    metadata: {
-      source: event.source,
-      effectiveOn: event.effectiveOn,
-      accessRevocation: handled ? 'handled' : 'not_wired',
+  await audit(
+    tx,
+    actor,
+    event.staffId,
+    'employee.deactivated',
+    {
+      metadata: {
+        source: event.source,
+        effectiveOn: event.effectiveOn,
+        accessRevocation: handled ? 'handled' : 'not_wired',
+      },
     },
-    requestId: event.requestId,
-  });
+    event.requestId,
+  );
   return { handlers: handled };
 }
 
@@ -203,10 +207,7 @@ export async function insertEmployee(
 ): Promise<{ staffId: StaffMemberId; employeeCode: string }> {
   const fullName = input.fullName.trim();
   if (!fullName) throw invalidField('fullName', 'Name is required.');
-  const workEmail = normaliseWorkEmail(input.workEmail);
-  const workPhone = normaliseWorkPhoneOrThrow(input.workPhone);
-  const timezone = assertTimeZone(input.timezone);
-  await assertWorkEmailFree(tx, workEmail);
+  const contacts = await workContacts(tx, input);
   await assertDepartmentUsable(tx, input.departmentId);
   if (input.managerId) await activeStaff(tx, input.managerId, 'managerId');
 
@@ -223,25 +224,12 @@ export async function insertEmployee(
   if (!staff) throw new Error('staff insert returned no row');
 
   const employmentType = input.employmentType ?? 'not_recorded';
-  await tx.insert(opsStaffProfiles).values({
-    staffId: staff.id,
-    employmentType,
-    updatedBy: actor.id,
-  });
-
-  return createRecordRow(tx, actor, {
-    staff,
-    employmentType,
-    legalName: input.legalName,
-    workEmail,
-    workPhone,
-    workLocation: input.workLocation,
-    timezone,
-    employmentStatus: input.employmentStatus ?? 'onboarding',
-    employmentStartDate: input.employmentStartDate ?? null,
-    action: 'employee.created',
-    requestId,
-  });
+  await tx
+    .insert(opsStaffProfiles)
+    .values({ staffId: staff.id, employmentType, updatedBy: actor.id });
+  const employmentStatus = input.employmentStatus ?? 'onboarding';
+  const record = { ...input, ...contacts, employmentType, employmentStatus };
+  return createRecordRow(tx, actor, staff, record, 'employee.created', requestId);
 }
 
 /**
@@ -266,10 +254,7 @@ export async function registerExistingStaff(
     .from(opsEmployeeRecords)
     .where(eq(opsEmployeeRecords.staffId, staffId));
   if (existing) throw new ConflictError(`This staff member already is employee ${existing.code}.`);
-  const workEmail = normaliseWorkEmail(input.workEmail);
-  const workPhone = normaliseWorkPhoneOrThrow(input.workPhone);
-  const timezone = assertTimeZone(input.timezone);
-  await assertWorkEmailFree(tx, workEmail);
+  const contacts = await workContacts(tx, input);
   const [profile] = await tx
     .select({ employmentType: opsStaffProfiles.employmentType })
     .from(opsStaffProfiles)
@@ -282,39 +267,35 @@ export async function registerExistingStaff(
       target: opsStaffProfiles.staffId,
       set: { employmentType, updatedBy: actor.id },
     });
-  return createRecordRow(tx, actor, {
-    staff,
-    employmentType,
-    legalName: input.legalName,
-    workEmail,
-    workPhone,
-    workLocation: input.workLocation,
-    timezone,
-    employmentStatus: input.employmentStatus ?? 'active',
-    employmentStartDate: input.employmentStartDate ?? null,
-    action: 'employee.registered',
-    requestId,
-  });
+  const employmentStatus = input.employmentStatus ?? 'active';
+  const record = { ...input, ...contacts, employmentType, employmentStatus };
+  return createRecordRow(tx, actor, staff, record, 'employee.registered', requestId);
+}
+
+/** Validated work contacts (the email unique among employee records). */
+async function workContacts(
+  tx: Database,
+  input: Pick<NewEmployeeInput, 'workEmail' | 'workPhone' | 'timezone'>,
+) {
+  const workEmail = normaliseWorkEmail(input.workEmail);
+  const workPhone = normaliseWorkPhoneOrThrow(input.workPhone);
+  const timezone = assertTimeZone(input.timezone);
+  await assertWorkEmailFree(tx, workEmail);
+  return { workEmail, workPhone, timezone };
 }
 
 async function createRecordRow(
   tx: Database,
   actor: Actor,
-  input: {
-    staff: typeof staffMembers.$inferSelect;
-    employmentType: EmploymentType;
-    legalName?: string | null;
-    workEmail: string | null;
-    workPhone: string | null;
-    workLocation?: string | null;
-    timezone: string;
-    employmentStatus: 'onboarding' | 'active';
-    employmentStartDate: string | null;
-    action: string;
-    requestId?: string;
-  },
+  staff: typeof staffMembers.$inferSelect,
+  input: Pick<NewEmployeeInput, 'legalName' | 'workLocation' | 'employmentStartDate'> &
+    Awaited<ReturnType<typeof workContacts>> & {
+      employmentType: EmploymentType;
+      employmentStatus: 'onboarding' | 'active';
+    },
+  action: 'employee.created' | 'employee.registered',
+  requestId?: string,
 ): Promise<{ staffId: StaffMemberId; employeeCode: string }> {
-  const { staff } = input;
   const employeeCode = await nextCode(tx, 'employee', 'ops.employee_records', 'employee_code');
   const [record] = await tx
     .insert(opsEmployeeRecords)
@@ -327,7 +308,7 @@ async function createRecordRow(
       workLocation: input.workLocation?.trim() || null,
       timezone: input.timezone,
       employmentStatus: input.employmentStatus,
-      employmentStartDate: input.employmentStartDate,
+      employmentStartDate: input.employmentStartDate ?? null,
       createdBy: actor.id,
     })
     .returning();
@@ -344,31 +325,30 @@ async function createRecordRow(
     }),
     effectiveOn: record.employmentStartDate ?? istToday(new Date()),
     reason:
-      input.action === 'employee.created'
-        ? 'Employee record created'
-        : 'Employee record registered',
+      action === 'employee.created' ? 'Employee record created' : 'Employee record registered',
     actorId: actor.id,
   });
 
-  await recordAudit(tx, {
-    actorUserId: actor.id,
-    module: 'ops',
-    action: input.action,
-    entityType: 'employee',
-    entityId: staff.id,
-    // No private fields here; legal name and contacts stay out of the audit payload.
-    after: {
-      employeeCode,
-      fullName: staff.fullName,
-      departmentId: staff.departmentId,
-      title: staff.title,
-      managerId: staff.managerId,
-      employmentType: input.employmentType,
-      employmentStatus: record.employmentStatus,
-      employmentStartDate: record.employmentStartDate,
+  await audit(
+    tx,
+    actor,
+    staff.id,
+    action,
+    {
+      // No private fields here; legal name and contacts stay out of the audit payload.
+      after: {
+        employeeCode,
+        fullName: staff.fullName,
+        departmentId: staff.departmentId,
+        title: staff.title,
+        managerId: staff.managerId,
+        employmentType: input.employmentType,
+        employmentStatus: record.employmentStatus,
+        employmentStartDate: record.employmentStartDate,
+      },
     },
-    requestId: input.requestId,
-  });
+    requestId,
+  );
   return { staffId: staff.id, employeeCode };
 }
 
@@ -392,10 +372,7 @@ export async function changeEmploymentStatus(
     .where(eq(opsEmployeeRecords.staffId, staffId))
     .for('update');
   if (!before) throw new NotFoundError('Employee record not found.');
-  const check = checkEmploymentStatusChange(before.employmentStatus, to, {
-    reason: context.reason,
-    endDate: context.endDate,
-  });
+  const check = checkEmploymentStatusChange(before.employmentStatus, to, context);
   if (!check.ok) {
     if (check.code === 'ILLEGAL' || check.code === 'NO_CHANGE')
       throw new InvalidStateTransitionError(check.message);
@@ -424,20 +401,17 @@ export async function changeEmploymentStatus(
     reason: context.reason,
     actorId: actor.id,
   });
-  await recordAudit(tx, {
-    actorUserId: actor.id,
-    module: 'ops',
-    action: 'employee.status_changed',
-    entityType: 'employee',
-    entityId: staffId,
-    before: { employmentStatus: before.employmentStatus },
-    after: {
-      employmentStatus: to,
-      employmentEndDate: after.employmentEndDate,
-      effectiveOn,
+  await audit(
+    tx,
+    actor,
+    staffId,
+    'employee.status_changed',
+    {
+      before: { employmentStatus: before.employmentStatus },
+      after: { employmentStatus: to, employmentEndDate: after.employmentEndDate, effectiveOn },
     },
     requestId,
-  });
+  );
   if (to === 'separated')
     await runDeactivationHook(tx, actor, {
       staffId,

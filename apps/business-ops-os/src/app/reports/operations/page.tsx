@@ -14,6 +14,21 @@ const DEADLINE_KINDS: Record<string, string> = {
   policy_review: 'Policy review',
 };
 
+const TILES = [
+  ['Open tasks', 'openTasks'],
+  ['Overdue tasks', 'overdueTasks'],
+  ['Share of dated open tasks overdue', 'overdueTaskShare'],
+  ['Tasks awaiting supervisor review', 'tasksAwaitingReview'],
+  ['SOP versions awaiting approval', 'sopsAwaitingApproval'],
+  ['Outstanding SOP acknowledgements', 'outstandingSopAcknowledgements'],
+  ['SOP acknowledgement coverage', 'sopAcknowledgementCoverage'],
+  ['Unresolved incidents', 'unresolvedIncidents'],
+  ['Incidents past resolution target', 'incidentsBreachingTarget'],
+  ['Blocked projects', 'blockedProjects'],
+  ['Approvals waiting for you', 'pendingApprovalsForYou'],
+  ['Unresolved integration errors', 'unresolvedIntegrationErrors'],
+] as const;
+
 /** /ops/reports/operations — operations dashboard (OPS-069). */
 export default async function OperationsReportPage() {
   const access = await gate('ops:dashboard:read', '/ops/reports/operations');
@@ -51,27 +66,9 @@ async function Report({ user }: { user: AuthenticatedUser }) {
         As of {fmtDateTime(d.asOf)} (today in IST: {fmtDate(d.today)}).
       </p>
       <div className="el-grid">
-        <StatTile label="Open tasks" metric={d.kpis.openTasks} />
-        <StatTile label="Overdue tasks" metric={d.kpis.overdueTasks} />
-        <StatTile label="Share of dated open tasks overdue" metric={d.kpis.overdueTaskShare} />
-        <StatTile label="Tasks awaiting supervisor review" metric={d.kpis.tasksAwaitingReview} />
-        <StatTile label="SOP versions awaiting approval" metric={d.kpis.sopsAwaitingApproval} />
-        <StatTile
-          label="Outstanding SOP acknowledgements"
-          metric={d.kpis.outstandingSopAcknowledgements}
-        />
-        <StatTile label="SOP acknowledgement coverage" metric={d.kpis.sopAcknowledgementCoverage} />
-        <StatTile label="Unresolved incidents" metric={d.kpis.unresolvedIncidents} />
-        <StatTile
-          label="Incidents past resolution target"
-          metric={d.kpis.incidentsBreachingTarget}
-        />
-        <StatTile label="Blocked projects" metric={d.kpis.blockedProjects} />
-        <StatTile label="Approvals waiting for you" metric={d.kpis.pendingApprovalsForYou} />
-        <StatTile
-          label="Unresolved integration errors"
-          metric={d.kpis.unresolvedIntegrationErrors}
-        />
+        {TILES.map(([label, key]) => (
+          <StatTile key={key} label={label} metric={d.kpis[key]} />
+        ))}
       </div>
       <div className="el-grid">
         <Card title="Open tasks by department" description="Capacity view, sorted by name.">

@@ -8,9 +8,9 @@
  * comments and references = owner/accountable/backup is me.
  */
 import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
+import type { PgColumn } from 'drizzle-orm/pg-core';
 import { scopeFor } from '@elevate/authorization';
 import {
-  auditEvents,
   departments,
   opsEscalations,
   opsTaskComments,
@@ -23,15 +23,14 @@ import {
   users,
   type Database,
 } from '@elevate/database';
-import { notify } from '@elevate/notifications';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
   ForbiddenError,
   InvalidStateTransitionError,
   ValidationError,
 } from '@elevate/shared-contracts';
-import type { DepartmentId, StaffMemberId, TaskId } from '@elevate/shared-types';
+import type { DepartmentId, StaffMemberId, TaskId, UserId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import {
   checkCommentHide,
@@ -39,6 +38,7 @@ import {
   checkTaskTransition,
   describeTaskActivity,
   isOpenTask,
+  OPEN_TASK_STATUSES,
   taskFlags,
   taskReviewState,
   wouldCreateCycle,
@@ -49,6 +49,7 @@ import {
 import {
   accessScope,
   activeStaff,
+  clean,
   nextCode,
   notFound,
   scopeCovers,
@@ -58,6 +59,14 @@ import {
   type AccessScope,
   type Actor,
 } from './context';
+import {
+  auditTrail,
+  defined,
+  notifyOthers,
+  opsAudit,
+  rowById,
+  staffUserLookup,
+} from './ops-common';
 import type { CreateTaskInput, UpdateTaskInput } from './schemas';
 import type {
   reviewRequirementBody,
@@ -66,22 +75,16 @@ import type {
   TaskSearchQuery,
 } from './work-schemas';
 
-export type TaskRow = typeof opsTasks.$inferSelect;
+type TaskRow = typeof opsTasks.$inferSelect;
 type ReviewRow = typeof opsTaskReviews.$inferSelect;
 
-/** All-scope task writer (operations manager). */
-export const isTaskManager = (actor: Actor) => scopeFor(actor, 'ops:tasks:write') === 'all';
+const audit = opsAudit('task');
 
-async function getTask(db: Database, id: string, lock = false): Promise<TaskRow> {
-  const q = db
-    .select()
-    .from(opsTasks)
-    .where(eq(opsTasks.id, id as TaskId))
-    .limit(1);
-  const [row] = lock ? await q.for('update') : await q;
-  if (!row) notFound('Task');
-  return row;
-}
+/** All-scope task writer (operations manager). */
+const isTaskManager = (actor: Actor) => scopeFor(actor, 'ops:tasks:write') === 'all';
+
+const getTask = (db: Database, id: string, lock = false): Promise<TaskRow> =>
+  rowById(db, opsTasks, id, 'Task', lock);
 
 const participants = (t: TaskRow) => [t.ownerStaffId, t.accountableStaffId, t.backupStaffId];
 
@@ -90,8 +93,39 @@ function assertParticipant(access: AccessScope, task: TaskRow, what: string) {
     throw new ForbiddenError(`You can only ${what} tasks you own, are accountable for or back up.`);
 }
 
-const userOfStaff = async (db: Database, staffId: string | null) =>
-  (await userIdsForStaff(db, [staffId]))[0] ?? null;
+function assertOwnerScope(access: AccessScope, task: TaskRow, what = 'update') {
+  if (!scopeCovers(access, [task.ownerStaffId]))
+    throw new ForbiddenError(`You can only ${what} tasks you own.`);
+}
+
+/** Notify task people (never the actor) with a link to the task. */
+const notifyTask = (
+  tx: Database,
+  actor: Actor,
+  userIds: readonly UserId[],
+  task: TaskRow,
+  kind: string,
+  title: string,
+  body?: string | null,
+) =>
+  notifyOthers(tx, actor, userIds, {
+    kind,
+    title,
+    body,
+    link: `/ops/tasks/${task.id}`,
+    entityType: 'task',
+    entityId: task.id,
+  });
+
+const notifyAssigned = async (tx: Database, actor: Actor, task: TaskRow) =>
+  notifyTask(
+    tx,
+    actor,
+    await userIdsForStaff(tx, [task.ownerStaffId]),
+    task,
+    'task.assigned',
+    `Task assigned: ${task.title} (${task.code})`,
+  );
 
 async function validatePeople(db: Database, input: Partial<CreateTaskInput>) {
   for (const field of ['ownerStaffId', 'accountableStaffId', 'backupStaffId'] as const) {
@@ -122,47 +156,11 @@ export async function createTask(
     const code = await nextCode(tx, 'task', 'ops.tasks');
     const [task] = await tx
       .insert(opsTasks)
-      .values({
-        code,
-        title: input.title,
-        description: input.description ?? null,
-        departmentId: (input.departmentId as DepartmentId | null) ?? null,
-        ownerStaffId: (input.ownerStaffId as StaffMemberId | null) ?? null,
-        accountableStaffId: (input.accountableStaffId as StaffMemberId | null) ?? null,
-        backupStaffId: (input.backupStaffId as StaffMemberId | null) ?? null,
-        dueDate: input.dueDate ?? null,
-        priority: input.priority,
-        leadId: (input.leadId as never) ?? null,
-        admissionId: (input.admissionId as never) ?? null,
-        sopId: (input.sopId as never) ?? null,
-        decisionId: (input.decisionId as never) ?? null,
-        projectId: (input.projectId as never) ?? null,
-        createdBy: actor.id,
-      })
+      .values({ ...(input as typeof opsTasks.$inferInsert), code, createdBy: actor.id })
       .returning();
     if (!task) throw new Error('task insert returned no row');
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'task.created',
-      entityType: 'task',
-      entityId: task.id,
-      after: task,
-      requestId,
-    });
-    const recipients = (await userIdsForStaff(tx, [task.ownerStaffId])).filter(
-      (u) => u !== actor.id,
-    );
-    if (recipients.length)
-      await notify(tx, {
-        userIds: recipients,
-        module: 'ops',
-        kind: 'task.assigned',
-        title: `Task assigned: ${task.title} (${task.code})`,
-        link: `/ops/tasks/${task.id}`,
-        entityType: 'task',
-        entityId: task.id,
-      });
+    await audit(tx, actor, task.id, 'task.created', { after: task }, requestId);
+    await notifyAssigned(tx, actor, task);
     return task;
   });
 }
@@ -183,47 +181,20 @@ export async function updateTask(
   await validatePeople(db, input);
   return withTransaction(db, async (tx) => {
     const before = await getTask(tx, id, true);
-    if (!scopeCovers(access, [before.ownerStaffId]))
-      throw new ForbiddenError('You can only update tasks you own.');
+    assertOwnerScope(access, before);
     if (!isOpenTask(before.status as TaskStatus))
       throw new ConflictError('Reopen the task before editing it.');
     const owner = 'ownerStaffId' in input ? input.ownerStaffId : before.ownerStaffId;
     const backup = 'backupStaffId' in input ? input.backupStaffId : before.backupStaffId;
     if (owner && backup && owner === backup)
       throw new ValidationError('The backup must be a different person from the owner.');
-    const patch = Object.fromEntries(
-      Object.entries(input).filter(([, v]) => v !== undefined),
-    ) as Partial<typeof opsTasks.$inferInsert>;
     const [after] = await tx
       .update(opsTasks)
-      .set(patch)
+      .set(defined(input) as Partial<typeof opsTasks.$inferInsert>)
       .where(eq(opsTasks.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'task.updated',
-      entityType: 'task',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
-    if (after && after.ownerStaffId !== before.ownerStaffId) {
-      const recipients = (await userIdsForStaff(tx, [after.ownerStaffId])).filter(
-        (u) => u !== actor.id,
-      );
-      if (recipients.length)
-        await notify(tx, {
-          userIds: recipients,
-          module: 'ops',
-          kind: 'task.assigned',
-          title: `Task assigned: ${after.title} (${after.code})`,
-          link: `/ops/tasks/${after.id}`,
-          entityType: 'task',
-          entityId: after.id,
-        });
-    }
+    await audit(tx, actor, before.id, 'task.updated', { before, after }, requestId);
+    if (after && after.ownerStaffId !== before.ownerStaffId) await notifyAssigned(tx, actor, after);
     return after as TaskRow;
   });
 }
@@ -246,6 +217,14 @@ async function pendingReview(tx: Database, taskId: string, lock = false) {
   const [row] = lock ? await q.for('update') : await q;
   return row ?? null;
 }
+
+const reviewRequirement = async (db: Database, taskId: TaskId) =>
+  (
+    await db
+      .select()
+      .from(opsTaskReviewRequirements)
+      .where(eq(opsTaskReviewRequirements.taskId, taskId))
+  )[0];
 
 /** Who is told that a review is waiting: named reviewer, else accountable owner, else ops managers. */
 async function reviewRecipients(tx: Database, task: TaskRow, reviewerStaffId: string | null) {
@@ -280,29 +259,16 @@ async function submitForReview(
     })
     .returning();
   if (!review) throw new Error('review insert returned no row');
-  await recordAudit(tx, {
-    actorUserId: actor.id,
-    module: 'ops',
-    action: 'task.review_submitted',
-    entityType: 'task',
-    entityId: task.id,
-    after: review,
-    requestId,
-  });
-  const recipients = (await reviewRecipients(tx, task, reviewerStaffId)).filter(
-    (u) => u !== actor.id,
+  await audit(tx, actor, task.id, 'task.review_submitted', { after: review }, requestId);
+  await notifyTask(
+    tx,
+    actor,
+    await reviewRecipients(tx, task, reviewerStaffId),
+    task,
+    'task.review_requested',
+    `Review needed: ${task.title} (${task.code})`,
+    'The task was completed and needs a supervisor review.',
   );
-  if (recipients.length)
-    await notify(tx, {
-      userIds: recipients,
-      module: 'ops',
-      kind: 'task.review_requested',
-      title: `Review needed: ${task.title} (${task.code})`,
-      body: 'The task was completed and needs a supervisor review.',
-      link: `/ops/tasks/${task.id}`,
-      entityType: 'task',
-      entityId: task.id,
-    });
   return review;
 }
 
@@ -322,26 +288,18 @@ export async function changeTaskStatus(
   const access = await accessScope(db, actor, 'ops:tasks:write');
   return withTransaction(db, async (tx) => {
     const before = await getTask(tx, id, true);
-    if (!scopeCovers(access, [before.ownerStaffId]))
-      throw new ForbiddenError('You can only update tasks you own.');
-    const blockers = await openBlockers(tx, before.id);
+    assertOwnerScope(access, before);
+    const blockers = (await openBlockers(tx, before.id)).map((b) => b.code);
     const check = checkTaskTransition({
+      ...input,
       from: before.status as TaskStatus,
-      to: input.to,
-      reason: input.reason,
-      completionNote: input.completionNote,
-      evidenceLink: input.evidenceLink,
       hasOwner: Boolean(before.ownerStaffId),
-      openBlockers: blockers.map((b) => b.code),
-      blockerOverrideReason: input.blockerOverrideReason,
+      openBlockers: blockers,
     });
     if (!check.ok) {
-      const Err =
-        check.code === 'BLOCKED_BY_OPEN_TASKS' ||
-        check.code === 'ILLEGAL' ||
-        check.code === 'NO_CHANGE'
-          ? ConflictError
-          : ValidationError;
+      const Err = ['BLOCKED_BY_OPEN_TASKS', 'ILLEGAL', 'NO_CHANGE'].includes(check.code)
+        ? ConflictError
+        : ValidationError;
       throw new Err(check.message, {
         details: { code: check.code, blockers: check.blockers ?? [] },
       });
@@ -354,7 +312,7 @@ export async function changeTaskStatus(
     const now = new Date();
     const patch: Partial<typeof opsTasks.$inferInsert> = {
       status: input.to,
-      statusReason: input.reason?.trim() || null,
+      statusReason: clean(input.reason),
       statusChangedAt: now,
       blockedSince: input.to === 'blocked' ? now : null,
     };
@@ -362,8 +320,8 @@ export async function changeTaskStatus(
       Object.assign(patch, {
         completedAt: now,
         completedBy: actor.id,
-        completionNote: input.completionNote?.trim() || null,
-        evidenceLink: input.evidenceLink?.trim() || null,
+        completionNote: clean(input.completionNote),
+        evidenceLink: clean(input.evidenceLink),
         blockerOverrideReason: check.overrideUsed ? input.blockerOverrideReason?.trim() : null,
       });
     }
@@ -391,27 +349,25 @@ export async function changeTaskStatus(
           ),
         );
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: check.overrideUsed ? 'task.completed_with_override' : 'task.status_changed',
-      entityType: 'task',
-      entityId: before.id,
-      before: { status: before.status },
-      after: {
-        status: input.to,
-        reason: input.reason ?? null,
-        blockers: blockers.map((b) => b.code),
-        override: check.overrideUsed ? input.blockerOverrideReason : null,
+    await audit(
+      tx,
+      actor,
+      before.id,
+      check.overrideUsed ? 'task.completed_with_override' : 'task.status_changed',
+      {
+        before: { status: before.status },
+        after: {
+          status: input.to,
+          reason: input.reason ?? null,
+          blockers,
+          override: check.overrideUsed ? input.blockerOverrideReason : null,
+        },
       },
       requestId,
-    });
+    );
     let review: ReviewRow | null = null;
     if (input.to === 'completed' && after) {
-      const [requirement] = await tx
-        .select()
-        .from(opsTaskReviewRequirements)
-        .where(eq(opsTaskReviewRequirements.taskId, before.id));
+      const requirement = await reviewRequirement(tx, before.id);
       if (requirement)
         review = await submitForReview(tx, actor, after, requirement.reviewerStaffId, requestId);
     }
@@ -430,9 +386,7 @@ export async function addDependency(
   if (taskId === blockedByTaskId) throw new ValidationError('A task cannot block itself.');
   return withTransaction(db, async (tx) => {
     const task = await getTask(tx, taskId, true);
-    const access = await accessScope(tx, actor, 'ops:tasks:write');
-    if (!scopeCovers(access, [task.ownerStaffId]))
-      throw new ForbiddenError('You can only change tasks you own.');
+    assertOwnerScope(await accessScope(tx, actor, 'ops:tasks:write'), task, 'change');
     const blocker = await getTask(tx, blockedByTaskId);
     // Serialise graph changes so two concurrent edges cannot form a cycle together.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('ops.task_dependencies'))`);
@@ -448,9 +402,7 @@ export async function addDependency(
       const byId = new Map(codes.map((c) => [c.id as string, c.code]));
       throw new ConflictError(
         `That dependency would create a cycle: ${cycle.path.map((p) => byId.get(p) ?? p).join(' → ')}.`,
-        {
-          details: { cycle: cycle.path },
-        },
+        { details: { cycle: cycle.path } },
       );
     }
     const [row] = await tx
@@ -458,15 +410,8 @@ export async function addDependency(
       .values({ taskId: task.id, blockedByTaskId: blocker.id, createdBy: actor.id })
       .onConflictDoNothing()
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'task.dependency_added',
-      entityType: 'task',
-      entityId: task.id,
-      after: { blockedBy: blocker.code },
-      requestId,
-    });
+    const after = { blockedBy: blocker.code };
+    await audit(tx, actor, task.id, 'task.dependency_added', { after }, requestId);
     return row ?? { taskId: task.id, blockedByTaskId: blocker.id };
   });
 }
@@ -481,8 +426,7 @@ export async function removeDependency(
   const access = await accessScope(db, actor, 'ops:tasks:write');
   return withTransaction(db, async (tx) => {
     const task = await getTask(tx, taskId, true);
-    if (!scopeCovers(access, [task.ownerStaffId]))
-      throw new ForbiddenError('You can only change tasks you own.');
+    assertOwnerScope(access, task, 'change');
     const removed = await tx
       .delete(opsTaskDependencies)
       .where(
@@ -493,25 +437,16 @@ export async function removeDependency(
       )
       .returning();
     if (!removed.length) notFound('Dependency');
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'task.dependency_removed',
-      entityType: 'task',
-      entityId: task.id,
-      before: removed[0],
-      requestId,
-    });
+    await audit(tx, actor, task.id, 'task.dependency_removed', { before: removed[0] }, requestId);
     return { removed: true };
   });
 }
 
 // --- lists ---------------------------------------------------------------------------------------
 
-export type TaskView =
-  'mine' | 'overdue' | 'escalated' | 'blocked' | 'awaiting_review' | 'open' | 'all';
+export type TaskView = TaskSearchQuery['view'];
 
-export interface TaskFilters {
+interface TaskFilters {
   departmentId?: string;
   /** A staff member; `role` says which role they hold on the task. */
   staffId?: string;
@@ -531,8 +466,6 @@ function personCondition(staffId: string, role: TaskFilters['role'] = 'any'): SQ
     eq(opsTasks.backupStaffId, id),
   ) as SQL;
 }
-
-const OPEN = ['not_started', 'in_progress', 'waiting', 'at_risk', 'blocked'];
 
 /** Escape LIKE wildcards in user input. */
 const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => '\\' + c);
@@ -559,7 +492,7 @@ export async function listTasks(
     conditions.push(or(ilike(opsTasks.title, like), ilike(opsTasks.code, like)) as SQL);
   }
   if (view === 'awaiting_review') conditions.push(eq(opsTasks.status, 'completed'));
-  else if (view !== 'all') conditions.push(inArray(opsTasks.status, OPEN));
+  else if (view !== 'all') conditions.push(inArray(opsTasks.status, [...OPEN_TASK_STATUSES]));
   if (view === 'blocked') conditions.push(eq(opsTasks.status, 'blocked'));
   const rows = await db
     .select({ task: opsTasks, ownerName: staffMembers.fullName, departmentName: departments.name })
@@ -572,11 +505,7 @@ export async function listTasks(
   const ids = rows.map((r) => r.task.id);
   const escalations = ids.length
     ? await db
-        .select({
-          taskId: opsEscalations.taskId,
-          level: opsEscalations.level,
-          status: opsEscalations.status,
-        })
+        .select({ taskId: opsEscalations.taskId, level: opsEscalations.level })
         .from(opsEscalations)
         .where(
           and(
@@ -602,22 +531,13 @@ export async function listTasks(
         .where(inArray(staffMembers.id, backupIds))
     : [];
   const out = rows.map((r) => {
-    const { flags, daysOverdue } = taskFlags(
-      {
-        status: r.task.status as TaskStatus,
-        ownerStaffId: r.task.ownerStaffId,
-        dueDate: r.task.dueDate as IsoDate | null,
-      },
-      now,
-    );
     const open = escalations.filter((e) => e.taskId === r.task.id);
     return {
       ...r.task,
       ownerName: r.ownerName,
       backupName: backups.find((b) => b.id === r.task.backupStaffId)?.fullName ?? null,
       departmentName: r.departmentName,
-      flags,
-      daysOverdue,
+      ...flagsOf(r.task, now),
       openEscalationLevel: open.length ? Math.max(...open.map((e) => e.level)) : null,
       awaitingReview: pending.has(r.task.id),
     };
@@ -627,6 +547,16 @@ export async function listTasks(
   if (view === 'awaiting_review') return out.filter((t) => t.awaitingReview);
   return out;
 }
+
+const flagsOf = (t: TaskRow, now: Date) =>
+  taskFlags(
+    {
+      status: t.status as TaskStatus,
+      ownerStaffId: t.ownerStaffId,
+      dueDate: t.dueDate as IsoDate | null,
+    },
+    now,
+  );
 
 /**
  * Task list with page-based pagination. Without `page` / `pageSize` every
@@ -662,11 +592,24 @@ async function readableTask(db: Database, actor: Actor, id: string) {
   return { access, task };
 }
 
+/** The people checked by `checkTaskReviewDecision`. */
+const reviewPeople = (
+  actor: Actor,
+  task: TaskRow,
+  review: ReviewRow,
+  reviewerStaffId: string | null,
+  userOf: (sid: string | null) => UserId | null,
+) => ({
+  deciderUserId: actor.id,
+  submitterUserId: review.submittedBy,
+  ownerUserId: userOf(task.ownerStaffId),
+  reviewerUserId: userOf(reviewerStaffId),
+  accountableUserId: userOf(task.accountableStaffId),
+  deciderIsManager: isTaskManager(actor),
+});
+
 async function reviewSummary(db: Database, actor: Actor, task: TaskRow) {
-  const [requirement] = await db
-    .select()
-    .from(opsTaskReviewRequirements)
-    .where(eq(opsTaskReviewRequirements.taskId, task.id));
+  const requirement = await reviewRequirement(db, task.id);
   const history = await db
     .select()
     .from(opsTaskReviews)
@@ -677,16 +620,8 @@ async function reviewSummary(db: Database, actor: Actor, task: TaskRow) {
   let canDecide = false;
   let decideBlocker: string | null = null;
   if (latest?.status === 'pending' && scopeFor(actor, 'ops:tasks:write')) {
-    const check = checkTaskReviewDecision({
-      status: 'pending',
-      decision: 'accept',
-      deciderUserId: actor.id,
-      submitterUserId: latest.submittedBy,
-      ownerUserId: await userOfStaff(db, task.ownerStaffId),
-      reviewerUserId: await userOfStaff(db, reviewerStaffId),
-      accountableUserId: await userOfStaff(db, task.accountableStaffId),
-      deciderIsManager: isTaskManager(actor),
-    });
+    const people = reviewPeople(actor, task, latest, reviewerStaffId, await staffUserLookup(db));
+    const check = checkTaskReviewDecision({ status: 'pending', decision: 'accept', ...people });
     canDecide = check.ok;
     decideBlocker = check.ok ? null : check.message;
   }
@@ -725,26 +660,6 @@ export async function getTaskDetail(db: Database, actor: Actor, id: string, now 
       ),
     );
   const name = (sid: string | null) => people.find((p) => p.id === sid)?.fullName ?? null;
-  const blockedBy = await db
-    .select({
-      id: opsTasks.id,
-      code: opsTasks.code,
-      title: opsTasks.title,
-      status: opsTasks.status,
-    })
-    .from(opsTaskDependencies)
-    .innerJoin(opsTasks, eq(opsTasks.id, opsTaskDependencies.blockedByTaskId))
-    .where(eq(opsTaskDependencies.taskId, task.id));
-  const blocks = await db
-    .select({
-      id: opsTasks.id,
-      code: opsTasks.code,
-      title: opsTasks.title,
-      status: opsTasks.status,
-    })
-    .from(opsTaskDependencies)
-    .innerJoin(opsTasks, eq(opsTasks.id, opsTaskDependencies.taskId))
-    .where(eq(opsTaskDependencies.blockedByTaskId, task.id));
   const escalations = await db
     .select({ e: opsEscalations, recipientName: staffMembers.fullName })
     .from(opsEscalations)
@@ -757,30 +672,31 @@ export async function getTaskDetail(db: Database, actor: Actor, id: string, now 
     .innerJoin(users, eq(users.id, opsTaskReferences.addedBy))
     .where(eq(opsTaskReferences.taskId, task.id))
     .orderBy(asc(opsTaskReferences.createdAt));
+  const linked = (join: PgColumn, where: PgColumn) =>
+    db
+      .select({
+        id: opsTasks.id,
+        code: opsTasks.code,
+        title: opsTasks.title,
+        status: opsTasks.status,
+      })
+      .from(opsTaskDependencies)
+      .innerJoin(opsTasks, eq(opsTasks.id, join))
+      .where(eq(where, task.id));
   const writeScope = scopeFor(actor, 'ops:tasks:write');
+  const ownWrite = writeScope === 'own' && access.scope === 'own';
   return {
     task,
     ownerName: name(task.ownerStaffId),
     accountableName: name(task.accountableStaffId),
     backupName: name(task.backupStaffId),
-    ...taskFlags(
-      {
-        status: task.status as TaskStatus,
-        ownerStaffId: task.ownerStaffId,
-        dueDate: task.dueDate as IsoDate | null,
-      },
-      now,
-    ),
-    blockedBy,
-    blocks,
+    ...flagsOf(task, now),
+    blockedBy: await linked(opsTaskDependencies.blockedByTaskId, opsTaskDependencies.taskId),
+    blocks: await linked(opsTaskDependencies.taskId, opsTaskDependencies.blockedByTaskId),
     escalations: escalations.map((e) => ({ ...e.e, recipientName: e.recipientName })),
-    canWrite:
-      writeScope === 'all' ||
-      (writeScope === 'own' && access.scope === 'own' && access.staffId === task.ownerStaffId),
+    canWrite: writeScope === 'all' || (ownWrite && access.staffId === task.ownerStaffId),
     /** May comment and add references (owner / accountable / backup, or a manager). */
-    canContribute:
-      writeScope === 'all' ||
-      (writeScope === 'own' && access.scope === 'own' && scopeCovers(access, participants(task))),
+    canContribute: writeScope === 'all' || (ownWrite && scopeCovers(access, participants(task))),
     canManage: writeScope === 'all',
     comments: await listTaskComments(db, actor, task),
     references: references.map((r) => ({
@@ -842,28 +758,16 @@ export async function addTaskComment(
       .values({ taskId: task.id, authorUserId: actor.id, body })
       .returning();
     if (!comment) throw new Error('comment insert returned no row');
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'task.comment_added',
-      entityType: 'task',
-      entityId: task.id,
-      after: { commentId: comment.id, length: body.length },
-      requestId,
-    });
-    const recipients = (await userIdsForStaff(tx, participants(task))).filter(
-      (u) => u !== actor.id,
+    const after = { commentId: comment.id, length: body.length };
+    await audit(tx, actor, task.id, 'task.comment_added', { after }, requestId);
+    await notifyTask(
+      tx,
+      actor,
+      await userIdsForStaff(tx, participants(task)),
+      task,
+      'task.comment',
+      `New comment on ${task.code}: ${task.title}`,
     );
-    if (recipients.length)
-      await notify(tx, {
-        userIds: [...new Set(recipients)],
-        module: 'ops',
-        kind: 'task.comment',
-        title: `New comment on ${task.code}: ${task.title}`,
-        link: `/ops/tasks/${task.id}`,
-        entityType: 'task',
-        entityId: task.id,
-      });
     return comment;
   });
 }
@@ -898,12 +802,11 @@ export async function hideTaskComment(
       reason: input.reason,
     });
     if (!check.ok) {
-      const Err =
-        check.code === 'NOT_ALLOWED'
-          ? ForbiddenError
-          : check.code === 'ALREADY_HIDDEN'
-            ? ConflictError
-            : ValidationError;
+      const Err = {
+        NOT_ALLOWED: ForbiddenError,
+        ALREADY_HIDDEN: ConflictError,
+        REASON_REQUIRED: ValidationError,
+      }[check.code];
       throw new Err(check.message);
     }
     const reason = input.reason.trim();
@@ -912,16 +815,14 @@ export async function hideTaskComment(
       .set({ hiddenAt: new Date(), hiddenBy: actor.id, hiddenReason: reason })
       .where(eq(opsTaskComments.id, comment.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'task.comment_hidden',
-      entityType: 'task',
-      entityId: comment.taskId,
-      before: { commentId: comment.id },
-      after: { commentId: comment.id, hiddenReason: reason },
+    await audit(
+      tx,
+      actor,
+      comment.taskId,
+      'task.comment_hidden',
+      { before: { commentId: comment.id }, after: { commentId: comment.id, hiddenReason: reason } },
       requestId,
-    });
+    );
     return after;
   });
 }
@@ -929,7 +830,7 @@ export async function hideTaskComment(
 // --- document references -------------------------------------------------------------------------
 
 /** A location is free text; anything that looks like a URL must be http(s). */
-export function checkReferenceLocation(location: string): string | null {
+function checkReferenceLocation(location: string): string | null {
   const v = location.trim();
   if (!v) return 'Say where the document is.';
   if (/^[a-z][a-z0-9+.-]*:/i.test(v) && !/^https?:\/\//i.test(v) && !/^[a-z]:[\\/]/i.test(v))
@@ -955,23 +856,9 @@ export async function addTaskReference(
     assertParticipant(access, task, 'add references to');
     const [ref] = await tx
       .insert(opsTaskReferences)
-      .values({
-        taskId: task.id,
-        kind: input.kind,
-        label: input.label,
-        location: input.location.trim(),
-        addedBy: actor.id,
-      })
+      .values({ ...input, taskId: task.id, location: input.location.trim(), addedBy: actor.id })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'task.reference_added',
-      entityType: 'task',
-      entityId: task.id,
-      after: ref,
-      requestId,
-    });
+    await audit(tx, actor, task.id, 'task.reference_added', { after: ref }, requestId);
     return ref;
   });
 }
@@ -1007,21 +894,16 @@ export async function removeTaskReference(
       .set({ removedAt: new Date(), removedBy: actor.id, removedReason: input.reason.trim() })
       .where(eq(opsTaskReferences.id, ref.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'task.reference_removed',
-      entityType: 'task',
-      entityId: ref.taskId,
-      before: ref,
-      after,
-      requestId,
-    });
+    await audit(tx, actor, ref.taskId, 'task.reference_removed', { before: ref, after }, requestId);
     return after;
   });
 }
 
 // --- supervisor review ---------------------------------------------------------------------------
+
+function assertTaskManager(actor: Actor, message: string) {
+  if (!isTaskManager(actor)) throw new ForbiddenError(message);
+}
 
 /** An operations manager requires (or changes) a supervisor review for a task. */
 export async function setTaskReviewRequirement(
@@ -1032,8 +914,7 @@ export async function setTaskReviewRequirement(
   requestId?: string,
 ) {
   await accessScope(db, actor, 'ops:tasks:write');
-  if (!isTaskManager(actor))
-    throw new ForbiddenError('Only an operations manager can require a supervisor review.');
+  assertTaskManager(actor, 'Only an operations manager can require a supervisor review.');
   if (input.reviewerStaffId) {
     const reviewer = await activeStaff(db, input.reviewerStaffId, 'reviewerStaffId');
     if (!reviewer.userId)
@@ -1047,10 +928,7 @@ export async function setTaskReviewRequirement(
       throw new ValidationError('The reviewer cannot be the task owner.', {
         details: [{ location: 'body', path: ['reviewerStaffId'], message: 'Same as owner' }],
       });
-    const [before] = await tx
-      .select()
-      .from(opsTaskReviewRequirements)
-      .where(eq(opsTaskReviewRequirements.taskId, task.id));
+    const before = await reviewRequirement(tx, task.id);
     const values = {
       taskId: task.id,
       reviewerStaffId: (input.reviewerStaffId as StaffMemberId | null) ?? null,
@@ -1064,16 +942,7 @@ export async function setTaskReviewRequirement(
           .where(eq(opsTaskReviewRequirements.taskId, task.id))
           .returning()
       : await tx.insert(opsTaskReviewRequirements).values(values).returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'task.review_required',
-      entityType: 'task',
-      entityId: task.id,
-      before: before ?? null,
-      after,
-      requestId,
-    });
+    await audit(tx, actor, task.id, 'task.review_required', { before, after }, requestId);
     return after;
   });
 }
@@ -1085,8 +954,7 @@ export async function removeTaskReviewRequirement(
   requestId?: string,
 ) {
   await accessScope(db, actor, 'ops:tasks:write');
-  if (!isTaskManager(actor))
-    throw new ForbiddenError('Only an operations manager can remove a review requirement.');
+  assertTaskManager(actor, 'Only an operations manager can remove a review requirement.');
   return withTransaction(db, async (tx) => {
     const task = await getTask(tx, taskId, true);
     if (await pendingReview(tx, task.id))
@@ -1096,15 +964,8 @@ export async function removeTaskReviewRequirement(
       .where(eq(opsTaskReviewRequirements.taskId, task.id))
       .returning();
     if (!removed.length) notFound('Review requirement');
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'task.review_requirement_removed',
-      entityType: 'task',
-      entityId: task.id,
-      before: removed[0],
-      requestId,
-    });
+    const data = { before: removed[0] };
+    await audit(tx, actor, task.id, 'task.review_requirement_removed', data, requestId);
     return { removed: true };
   });
 }
@@ -1122,23 +983,13 @@ export async function decideTaskReview(
     const task = await getTask(tx, taskId, true);
     const review = await pendingReview(tx, task.id, true);
     if (!review) throw new InvalidStateTransitionError('No review is pending for this task.');
-    const [requirement] = await tx
-      .select()
-      .from(opsTaskReviewRequirements)
-      .where(eq(opsTaskReviewRequirements.taskId, task.id));
+    const reviewerStaffId =
+      review.reviewerStaffId ?? (await reviewRequirement(tx, task.id))?.reviewerStaffId ?? null;
     const check = checkTaskReviewDecision({
       status: review.status as TaskReviewStatus,
       decision: input.decision,
       note: input.note,
-      deciderUserId: actor.id,
-      submitterUserId: review.submittedBy,
-      ownerUserId: await userOfStaff(tx, task.ownerStaffId),
-      reviewerUserId: await userOfStaff(
-        tx,
-        review.reviewerStaffId ?? requirement?.reviewerStaffId ?? null,
-      ),
-      accountableUserId: await userOfStaff(tx, task.accountableStaffId),
-      deciderIsManager: isTaskManager(actor),
+      ...reviewPeople(actor, task, review, reviewerStaffId, await staffUserLookup(tx)),
     });
     if (!check.ok) {
       const Err =
@@ -1149,68 +1000,54 @@ export async function decideTaskReview(
             : ForbiddenError;
       throw new Err(check.message, { details: { code: check.code } });
     }
+    const accept = input.decision === 'accept';
     const now = new Date();
-    const note = input.note?.trim() || null;
+    const note = clean(input.note);
     const [after] = await tx
       .update(opsTaskReviews)
       .set({
-        status: input.decision === 'accept' ? 'accepted' : 'returned',
+        status: accept ? 'accepted' : 'returned',
         decidedBy: actor.id,
         decidedAt: now,
         decisionNote: note,
       })
       .where(eq(opsTaskReviews.id, review.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: input.decision === 'accept' ? 'task.review_accepted' : 'task.review_returned',
-      entityType: 'task',
-      entityId: task.id,
-      before: review,
-      after,
-      requestId,
-    });
-    if (input.decision === 'return') {
+    const action = accept ? 'task.review_accepted' : 'task.review_returned';
+    await audit(tx, actor, task.id, action, { before: review, after }, requestId);
+    if (!accept) {
+      const statusReason = `Returned by the reviewer: ${note}`;
       await tx
         .update(opsTasks)
         .set({
           status: 'in_progress',
-          statusReason: `Returned by the reviewer: ${note}`,
+          statusReason,
           statusChangedAt: now,
           blockedSince: null,
           completedAt: null,
           completedBy: null,
         })
         .where(eq(opsTasks.id, task.id));
-      await recordAudit(tx, {
-        actorUserId: actor.id,
-        module: 'ops',
-        action: 'task.status_changed',
-        entityType: 'task',
-        entityId: task.id,
-        before: { status: task.status },
-        after: { status: 'in_progress', reason: `Returned by the reviewer: ${note}` },
+      await audit(
+        tx,
+        actor,
+        task.id,
+        'task.status_changed',
+        { before: { status: task.status }, after: { status: 'in_progress', reason: statusReason } },
         requestId,
-      });
+      );
     }
-    const recipients = (await userIdsForStaff(tx, [task.ownerStaffId])).filter(
-      (u) => u !== actor.id,
+    await notifyTask(
+      tx,
+      actor,
+      await userIdsForStaff(tx, [task.ownerStaffId]),
+      task,
+      action,
+      accept
+        ? `Review accepted: ${task.title} (${task.code})`
+        : `Task returned by the reviewer: ${task.title} (${task.code})`,
+      note,
     );
-    if (recipients.length)
-      await notify(tx, {
-        userIds: recipients,
-        module: 'ops',
-        kind: input.decision === 'accept' ? 'task.review_accepted' : 'task.review_returned',
-        title:
-          input.decision === 'accept'
-            ? `Review accepted: ${task.title} (${task.code})`
-            : `Task returned by the reviewer: ${task.title} (${task.code})`,
-        body: note ?? undefined,
-        link: `/ops/tasks/${task.id}`,
-        entityType: 'task',
-        entityId: task.id,
-      });
     return after;
   });
 }
@@ -1224,19 +1061,7 @@ export async function decideTaskReview(
  */
 export async function getTaskActivity(db: Database, actor: Actor, taskId: string, limit = 300) {
   const { task } = await readableTask(db, actor, taskId);
-  const rows = await db
-    .select({ e: auditEvents, actorName: users.displayName })
-    .from(auditEvents)
-    .leftJoin(users, eq(users.id, auditEvents.actorUserId))
-    .where(
-      and(
-        eq(auditEvents.module, 'ops'),
-        eq(auditEvents.entityType, 'task'),
-        eq(auditEvents.entityId, task.id),
-      ),
-    )
-    .orderBy(desc(auditEvents.at), desc(auditEvents.id))
-    .limit(Math.min(Math.max(limit, 1), 1000));
+  const rows = await auditTrail(db, 'task', task.id, Math.min(Math.max(limit, 1), 1000));
   const staff = await db
     .select({ id: staffMembers.id, fullName: staffMembers.fullName })
     .from(staffMembers);
@@ -1264,10 +1089,7 @@ export async function listTaskReviewsForDecider(db: Database, actor: Actor) {
     .where(eq(opsTaskReviews.status, 'pending'))
     .orderBy(asc(opsTaskReviews.submittedAt));
   if (!rows.length) return [];
-  const staff = await db
-    .select({ id: staffMembers.id, userId: staffMembers.userId })
-    .from(staffMembers);
-  const userOf = (sid: string | null) => staff.find((s) => s.id === sid)?.userId ?? null;
+  const userOf = await staffUserLookup(db);
   const requirements = await db
     .select()
     .from(opsTaskReviewRequirements)
@@ -1277,7 +1099,6 @@ export async function listTaskReviewsForDecider(db: Database, actor: Actor) {
         rows.map((r) => r.task.id),
       ),
     );
-  const manager = isTaskManager(actor);
   return rows.filter(({ review, task }) => {
     const reviewerStaffId =
       review.reviewerStaffId ??
@@ -1286,12 +1107,7 @@ export async function listTaskReviewsForDecider(db: Database, actor: Actor) {
     return checkTaskReviewDecision({
       status: 'pending',
       decision: 'accept',
-      deciderUserId: actor.id,
-      submitterUserId: review.submittedBy,
-      ownerUserId: userOf(task.ownerStaffId),
-      reviewerUserId: userOf(reviewerStaffId),
-      accountableUserId: userOf(task.accountableStaffId),
-      deciderIsManager: manager,
+      ...reviewPeople(actor, task, review, reviewerStaffId, userOf),
     }).ok;
   });
 }

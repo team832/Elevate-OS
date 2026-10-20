@@ -14,13 +14,14 @@ import {
   opsEmployeeRecords,
   type Database,
 } from '@elevate/database';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, NotFoundError } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { normaliseEmail, normalisePhone } from '../../domain/contacts';
 import type { Actor } from '../context';
 import { assertHrScope } from '../hr-scope';
+import { opsAudit } from '../ops-common';
 import { invalidField, selfOrAllScope } from './access';
 import type {
   emergencyContactBody,
@@ -29,8 +30,11 @@ import type {
   updateEmergencyContactBody,
 } from './schemas';
 
+const auditPrivate = opsAudit('employee_private');
+
 type EmergencyContactId = typeof opsEmergencyContacts.$inferSelect.id;
 type IdentityReferenceId = typeof opsEmployeeIdentityReferences.$inferSelect.id;
+type DocumentId = typeof opsEmployeeDocuments.$inferSelect.id;
 
 async function employeeRecord(db: Database, staffId: string) {
   const [r] = await db
@@ -41,19 +45,13 @@ async function employeeRecord(db: Database, staffId: string) {
   return r;
 }
 
-async function readScope(db: Database, actor: Actor, staffId: string) {
-  const scope = await selfOrAllScope(db, actor, 'ops:employee_private:read');
+async function assertAccess(db: Database, actor: Actor, staffId: string, mode: 'read' | 'manage') {
+  const scope = await selfOrAllScope(db, actor, `ops:employee_private:${mode}`);
   assertHrScope(scope, staffId, 'this employee’s private HR record');
-  return scope;
 }
 
-async function manageScope(db: Database, actor: Actor, staffId: string) {
-  const scope = await selfOrAllScope(db, actor, 'ops:employee_private:manage');
-  assertHrScope(scope, staffId, 'this employee’s private HR record');
-  return scope;
-}
-
-function audit(
+/** Field NAMES only — never values (OPS-037). */
+const audit = (
   tx: Database,
   actor: Actor,
   staffId: string,
@@ -61,76 +59,17 @@ function audit(
   fieldsChanged: string[],
   requestId?: string,
   extra: Record<string, unknown> = {},
-) {
-  return recordAudit(tx, {
-    actorUserId: actor.id,
-    module: 'ops',
-    action,
-    entityType: 'employee_private',
-    entityId: staffId,
-    // Field NAMES only — never values (OPS-037).
-    metadata: { fieldsChanged, ...extra },
-    requestId,
-  });
-}
-
-/** Private HR panel for one employee. */
-export async function getPrivateRecord(db: Database, actor: Actor, staffId: string) {
-  await readScope(db, actor, staffId);
-  const record = await employeeRecord(db, staffId);
-  const sid = staffId as StaffMemberId;
-  const [details, contacts, identity] = await Promise.all([
-    db.select().from(opsEmployeePrivateDetails).where(eq(opsEmployeePrivateDetails.staffId, sid)),
-    db
-      .select()
-      .from(opsEmergencyContacts)
-      .where(eq(opsEmergencyContacts.staffId, sid))
-      .orderBy(desc(opsEmergencyContacts.isPrimary), asc(opsEmergencyContacts.name)),
-    db
-      .select({
-        id: opsEmployeeIdentityReferences.id,
-        kind: opsEmployeeIdentityReferences.kind,
-        last4: opsEmployeeIdentityReferences.last4,
-        documentId: opsEmployeeIdentityReferences.documentId,
-        notes: opsEmployeeIdentityReferences.notes,
-        status: opsEmployeeIdentityReferences.status,
-        createdAt: opsEmployeeIdentityReferences.createdAt,
-      })
-      .from(opsEmployeeIdentityReferences)
-      .where(eq(opsEmployeeIdentityReferences.staffId, sid))
-      .orderBy(asc(opsEmployeeIdentityReferences.kind)),
-  ]);
-  const d = details[0] ?? null;
-  return {
+) =>
+  auditPrivate(
+    tx,
+    actor,
     staffId,
-    legalName: record.legalName,
-    details: d
-      ? {
-          personalEmail: d.personalEmail,
-          personalPhone: d.personalPhone,
-          addressLine1: d.addressLine1,
-          addressLine2: d.addressLine2,
-          city: d.city,
-          state: d.state,
-          postalCode: d.postalCode,
-          country: d.country,
-          updatedAt: d.updatedAt,
-        }
-      : null,
-    emergencyContacts: contacts.map((c) => ({
-      id: c.id,
-      name: c.name,
-      relationship: c.relationship,
-      phone: c.phone,
-      isPrimary: c.isPrimary,
-    })),
-    identityReferences: identity.map((i) => ({
-      ...i,
-      /** Display form: never more than the last four characters. */
-      masked: i.last4 ? `•••• ${i.last4}` : 'Reference only (no digits recorded)',
-    })),
-  };
-}
+    `employee_private.${action}`,
+    {
+      metadata: { fieldsChanged, ...extra },
+    },
+    requestId,
+  );
 
 const DETAIL_FIELDS = [
   'personalEmail',
@@ -143,6 +82,66 @@ const DETAIL_FIELDS = [
   'country',
 ] as const;
 
+/** Private HR panel for one employee. */
+export async function getPrivateRecord(db: Database, actor: Actor, staffId: string) {
+  await assertAccess(db, actor, staffId, 'read');
+  const record = await employeeRecord(db, staffId);
+  const sid = staffId as StaffMemberId;
+  const ref = opsEmployeeIdentityReferences;
+  const [[d], contacts, identity] = await Promise.all([
+    db.select().from(opsEmployeePrivateDetails).where(eq(opsEmployeePrivateDetails.staffId, sid)),
+    db
+      .select()
+      .from(opsEmergencyContacts)
+      .where(eq(opsEmergencyContacts.staffId, sid))
+      .orderBy(desc(opsEmergencyContacts.isPrimary), asc(opsEmergencyContacts.name)),
+    db
+      .select({
+        id: ref.id,
+        kind: ref.kind,
+        last4: ref.last4,
+        documentId: ref.documentId,
+        notes: ref.notes,
+        status: ref.status,
+        createdAt: ref.createdAt,
+      })
+      .from(ref)
+      .where(eq(ref.staffId, sid))
+      .orderBy(asc(ref.kind)),
+  ]);
+  return {
+    staffId,
+    legalName: record.legalName,
+    details: d
+      ? {
+          ...(Object.fromEntries(DETAIL_FIELDS.map((f) => [f, d[f]])) as Pick<
+            typeof d,
+            (typeof DETAIL_FIELDS)[number]
+          >),
+          updatedAt: d.updatedAt,
+        }
+      : null,
+    emergencyContacts: contacts.map(({ id, name, relationship, phone, isPrimary }) => ({
+      id,
+      name,
+      relationship,
+      phone,
+      isPrimary,
+    })),
+    identityReferences: identity.map((i) => ({
+      ...i,
+      /** Display form: never more than the last four characters. */
+      masked: i.last4 ? `•••• ${i.last4}` : 'Reference only (no digits recorded)',
+    })),
+  };
+}
+
+function phoneOrThrow(raw: string, path: string, label: string): string {
+  const r = normalisePhone(raw);
+  if (!r.ok) throw invalidField(path, `${label} is not a valid phone number.`);
+  return r.e164;
+}
+
 /** Update legal name and personal details (upsert). */
 export async function updatePrivateDetails(
   db: Database,
@@ -151,7 +150,7 @@ export async function updatePrivateDetails(
   input: PrivateDetailsInput,
   requestId?: string,
 ) {
-  await manageScope(db, actor, staffId);
+  await assertAccess(db, actor, staffId, 'manage');
   await employeeRecord(db, staffId);
   const patch: Record<string, string | null> = {};
   for (const f of DETAIL_FIELDS) if (f in input) patch[f] = input[f]?.trim() || null;
@@ -160,11 +159,8 @@ export async function updatePrivateDetails(
     if (!r.ok) throw invalidField('personalEmail', 'Personal email is not a valid address.');
     patch.personalEmail = r.email;
   }
-  if (patch.personalPhone) {
-    const r = normalisePhone(patch.personalPhone);
-    if (!r.ok) throw invalidField('personalPhone', 'Personal phone is not a valid phone number.');
-    patch.personalPhone = r.e164;
-  }
+  if (patch.personalPhone)
+    patch.personalPhone = phoneOrThrow(patch.personalPhone, 'personalPhone', 'Personal phone');
   await withTransaction(db, async (tx) => {
     const sid = staffId as StaffMemberId;
     if ('legalName' in input)
@@ -180,23 +176,17 @@ export async function updatePrivateDetails(
           target: opsEmployeePrivateDetails.staffId,
           set: { ...patch, updatedBy: actor.id },
         });
-    await audit(
-      tx,
-      actor,
-      staffId,
-      'employee_private.updated',
-      [...('legalName' in input ? ['legalName'] : []), ...Object.keys(patch)],
-      requestId,
-    );
+    const fields = [...('legalName' in input ? ['legalName'] : []), ...Object.keys(patch)];
+    await audit(tx, actor, staffId, 'updated', fields, requestId);
   });
   return getPrivateRecord(db, actor, staffId);
 }
 
-function phoneOrThrow(raw: string): string {
-  const r = normalisePhone(raw);
-  if (!r.ok) throw invalidField('phone', 'Phone is not a valid phone number.');
-  return r.e164;
-}
+const clearPrimary = (tx: Database, staffId: StaffMemberId) =>
+  tx
+    .update(opsEmergencyContacts)
+    .set({ isPrimary: false })
+    .where(eq(opsEmergencyContacts.staffId, staffId));
 
 export async function addEmergencyContact(
   db: Database,
@@ -205,9 +195,9 @@ export async function addEmergencyContact(
   input: z.output<typeof emergencyContactBody>,
   requestId?: string,
 ) {
-  await manageScope(db, actor, staffId);
+  await assertAccess(db, actor, staffId, 'manage');
   await employeeRecord(db, staffId);
-  const phone = phoneOrThrow(input.phone);
+  const phone = phoneOrThrow(input.phone, 'phone', 'Phone');
   return withTransaction(db, async (tx) => {
     const sid = staffId as StaffMemberId;
     const existing = await tx
@@ -216,11 +206,7 @@ export async function addEmergencyContact(
       .where(eq(opsEmergencyContacts.staffId, sid));
     if (existing.length >= 5) throw new ConflictError('At most five emergency contacts.');
     const isPrimary = input.isPrimary || existing.length === 0;
-    if (isPrimary)
-      await tx
-        .update(opsEmergencyContacts)
-        .set({ isPrimary: false })
-        .where(eq(opsEmergencyContacts.staffId, sid));
+    if (isPrimary) await clearPrimary(tx, sid);
     const [row] = await tx
       .insert(opsEmergencyContacts)
       .values({
@@ -236,7 +222,7 @@ export async function addEmergencyContact(
       tx,
       actor,
       staffId,
-      'employee_private.emergency_contact_added',
+      'emergency_contact_added',
       ['name', 'relationship', 'phone'],
       requestId,
       { contactId: row?.id },
@@ -268,30 +254,21 @@ export async function updateEmergencyContact(
   input: z.output<typeof updateEmergencyContactBody>,
   requestId?: string,
 ) {
-  await manageScope(db, actor, staffId);
+  await assertAccess(db, actor, staffId, 'manage');
   return withTransaction(db, async (tx) => {
     const c = await contactRow(tx, staffId, contactId);
     const patch: Partial<typeof opsEmergencyContacts.$inferInsert> = { updatedBy: actor.id };
     if (input.name) patch.name = input.name;
     if (input.relationship) patch.relationship = input.relationship;
-    if (input.phone) patch.phone = phoneOrThrow(input.phone);
+    if (input.phone) patch.phone = phoneOrThrow(input.phone, 'phone', 'Phone');
     if (input.isPrimary === true) {
-      await tx
-        .update(opsEmergencyContacts)
-        .set({ isPrimary: false })
-        .where(eq(opsEmergencyContacts.staffId, c.staffId));
+      await clearPrimary(tx, c.staffId);
       patch.isPrimary = true;
     }
     await tx.update(opsEmergencyContacts).set(patch).where(eq(opsEmergencyContacts.id, c.id));
-    await audit(
-      tx,
-      actor,
-      staffId,
-      'employee_private.emergency_contact_updated',
-      Object.keys(input),
-      requestId,
-      { contactId: c.id },
-    );
+    await audit(tx, actor, staffId, 'emergency_contact_updated', Object.keys(input), requestId, {
+      contactId: c.id,
+    });
     return { id: c.id };
   });
 }
@@ -304,7 +281,7 @@ export async function removeEmergencyContact(
   contactId: string,
   requestId?: string,
 ) {
-  await manageScope(db, actor, staffId);
+  await assertAccess(db, actor, staffId, 'manage');
   return withTransaction(db, async (tx) => {
     const c = await contactRow(tx, staffId, contactId);
     await tx.delete(opsEmergencyContacts).where(eq(opsEmergencyContacts.id, c.id));
@@ -321,7 +298,7 @@ export async function removeEmergencyContact(
           .set({ isPrimary: true })
           .where(eq(opsEmergencyContacts.id, next.id));
     }
-    await audit(tx, actor, staffId, 'employee_private.emergency_contact_removed', [], requestId, {
+    await audit(tx, actor, staffId, 'emergency_contact_removed', [], requestId, {
       contactId: c.id,
     });
     return { id: c.id, removed: true };
@@ -334,8 +311,7 @@ export async function removeEmergencyContact(
  * full identity number someone pasted).
  */
 export function normaliseLast4(raw: string | null | undefined): string | null {
-  if (raw === null || raw === undefined) return null;
-  const v = raw.replace(/[\s-]/g, '').toUpperCase();
+  const v = (raw ?? '').replace(/[\s-]/g, '').toUpperCase();
   if (v === '') return null;
   if (!/^[A-Z0-9]+$/.test(v)) throw invalidField('last4', 'Use letters and digits only.');
   if (v.length > 4)
@@ -353,7 +329,7 @@ export async function addIdentityReference(
   input: z.output<typeof identityReferenceBody>,
   requestId?: string,
 ) {
-  await manageScope(db, actor, staffId);
+  await assertAccess(db, actor, staffId, 'manage');
   await employeeRecord(db, staffId);
   const last4 = normaliseLast4(input.last4);
   return withTransaction(db, async (tx) => {
@@ -361,12 +337,7 @@ export async function addIdentityReference(
       const [doc] = await tx
         .select({ staffId: opsEmployeeDocuments.staffId, kind: opsEmployeeDocuments.kind })
         .from(opsEmployeeDocuments)
-        .where(
-          eq(
-            opsEmployeeDocuments.id,
-            input.documentId as typeof opsEmployeeDocuments.$inferSelect.id,
-          ),
-        );
+        .where(eq(opsEmployeeDocuments.id, input.documentId as DocumentId));
       if (!doc || doc.staffId !== staffId)
         throw invalidField('documentId', 'Unknown document for this employee.');
       if (doc.kind !== 'identification_reference')
@@ -378,24 +349,15 @@ export async function addIdentityReference(
         staffId: staffId as StaffMemberId,
         kind: input.kind,
         last4,
-        documentId:
-          (input.documentId as typeof opsEmployeeDocuments.$inferSelect.id | null) ?? null,
+        documentId: (input.documentId as DocumentId | null) ?? null,
         notes: input.notes ?? null,
         recordedBy: actor.id,
       })
       .returning({ id: opsEmployeeIdentityReferences.id });
-    await audit(
-      tx,
-      actor,
-      staffId,
-      'employee_private.identity_reference_added',
-      ['kind', 'last4'],
-      requestId,
-      {
-        referenceId: row?.id,
-        kind: input.kind,
-      },
-    );
+    await audit(tx, actor, staffId, 'identity_reference_added', ['kind', 'last4'], requestId, {
+      referenceId: row?.id,
+      kind: input.kind,
+    });
     return { id: row!.id };
   });
 }
@@ -407,35 +369,22 @@ export async function retireIdentityReference(
   refId: string,
   requestId?: string,
 ) {
-  await manageScope(db, actor, staffId);
+  await assertAccess(db, actor, staffId, 'manage');
+  const ref = opsEmployeeIdentityReferences;
   return withTransaction(db, async (tx) => {
-    const [ref] = await tx
+    const [row] = await tx
       .select()
-      .from(opsEmployeeIdentityReferences)
+      .from(ref)
       .where(
-        and(
-          eq(opsEmployeeIdentityReferences.id, refId as IdentityReferenceId),
-          eq(opsEmployeeIdentityReferences.staffId, staffId as StaffMemberId),
-        ),
+        and(eq(ref.id, refId as IdentityReferenceId), eq(ref.staffId, staffId as StaffMemberId)),
       )
       .for('update');
-    if (!ref) throw new NotFoundError('Identity reference not found.');
-    if (ref.status === 'retired') throw new ConflictError('Already retired.');
-    await tx
-      .update(opsEmployeeIdentityReferences)
-      .set({ status: 'retired' })
-      .where(eq(opsEmployeeIdentityReferences.id, ref.id));
-    await audit(
-      tx,
-      actor,
-      staffId,
-      'employee_private.identity_reference_retired',
-      ['status'],
-      requestId,
-      {
-        referenceId: ref.id,
-      },
-    );
-    return { id: ref.id, status: 'retired' as const };
+    if (!row) throw new NotFoundError('Identity reference not found.');
+    if (row.status === 'retired') throw new ConflictError('Already retired.');
+    await tx.update(ref).set({ status: 'retired' }).where(eq(ref.id, row.id));
+    await audit(tx, actor, staffId, 'identity_reference_retired', ['status'], requestId, {
+      referenceId: row.id,
+    });
+    return { id: row.id, status: 'retired' as const };
   });
 }

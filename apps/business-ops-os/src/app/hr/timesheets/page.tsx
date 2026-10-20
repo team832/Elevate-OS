@@ -9,19 +9,18 @@ import { formOptions } from '../../../server/options';
 import { fmtDate } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import {
+  EmployeeFilter,
   FilterDate,
   FilterForm,
   FilterSelect,
   isIso,
-  MeasuredHours,
+  measuredColumns,
   minutes,
   TimeNav,
-  timeNavItems,
+  type Sp,
 } from '../attendance/time-ui';
 
 export const dynamic = 'force-dynamic';
-
-type Sp = Record<string, string | undefined>;
 
 export default async function TimesheetsPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const access = await gate('ops:hr_reports:read', '/ops/hr/timesheets');
@@ -48,7 +47,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
           ) : undefined
         }
       />
-      <TimeNav current="/ops/hr/timesheets" items={timeNavItems(access.user)} />
+      <TimeNav current="/ops/hr/timesheets" user={access.user} />
       <Section label="Loading timesheets…">
         <Sheets
           user={access.user}
@@ -100,13 +99,7 @@ async function Sheets({
           anyLabel="All departments"
           options={departments}
         />
-        <FilterSelect
-          name="staffId"
-          label="Employee"
-          value={staffId}
-          anyLabel="Everyone in scope"
-          options={people.map((p) => ({ value: p.staffId, label: p.fullName }))}
-        />
+        <EmployeeFilter people={people} value={staffId} />
       </FilterForm>
       <Card title={`Totals, ${fmtDate(from)} – ${fmtDate(to)}`}>
         <DataTable
@@ -114,21 +107,7 @@ async function Sheets({
           rowKey={() => 'totals'}
           columns={[
             { key: 'n', header: 'Employees', numeric: true, render: (t) => t.employees },
-            {
-              key: 's',
-              header: 'Scheduled',
-              render: (t) => <MeasuredHours value={t.scheduledMinutes} />,
-            },
-            {
-              key: 'w',
-              header: 'Worked',
-              render: (t) => <MeasuredHours value={t.workedMinutes} />,
-            },
-            {
-              key: 'd',
-              header: 'Unapproved difference',
-              render: (t) => <MeasuredHours value={t.unapprovedDifferenceMinutes} />,
-            },
+            ...measuredColumns((t: typeof data.totals) => t),
             { key: 'l', header: 'Late', numeric: true, render: (t) => t.lateCount },
             { key: 'e', header: 'Early', numeric: true, render: (t) => t.earlyCount },
             {
@@ -163,21 +142,7 @@ async function Sheets({
             ),
           },
           { key: 'dept', header: 'Department', render: (p) => p.departmentName ?? '—' },
-          {
-            key: 's',
-            header: 'Scheduled',
-            render: (p) => <MeasuredHours value={p.summary.scheduledMinutes} />,
-          },
-          {
-            key: 'w',
-            header: 'Worked',
-            render: (p) => <MeasuredHours value={p.summary.workedMinutes} />,
-          },
-          {
-            key: 'd',
-            header: 'Unapproved difference',
-            render: (p) => <MeasuredHours value={p.summary.unapprovedDifferenceMinutes} />,
-          },
+          ...measuredColumns((p: (typeof data.people)[number]) => p.summary),
           { key: 'l', header: 'Late', numeric: true, render: (p) => p.summary.lateCount },
           { key: 'e', header: 'Early', numeric: true, render: (p) => p.summary.earlyCount },
           {

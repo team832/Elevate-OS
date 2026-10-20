@@ -37,6 +37,13 @@ type Student = {
   fees: unknown;
 };
 
+/** HTTP status of a route call. */
+const status = async (
+  route: Parameters<typeof callRoute>[0],
+  req: Request,
+  params?: Record<string, string>,
+) => (await callRoute(route, req, params)).status;
+
 beforeAll(async () => {
   await setupReference(ctx.db);
   manager = await staffUser(ctx.db, ['operations_manager']);
@@ -63,7 +70,7 @@ describe('student directory and profile (ops:students:read)', () => {
     expect(mine.data?.map((s) => s.id)).not.toContain(pending.admissionId);
     expect(JSON.stringify(mine.data)).not.toMatch(/studentPhone|guardianPhone|\+91/);
     expect((await callRoute<unknown[]>(listStudents, get(colleague))).data).toHaveLength(0);
-    expect((await callRoute(listStudents, get(coordinator))).status).toBe(200);
+    expect(await status(listStudents, get(coordinator))).toBe(200);
     const searched = await callRoute<{ id: string }[]>(
       listStudents,
       get(manager, '/ops/api/v1/students?q=Directory&state=admitted&limit=1'),
@@ -72,12 +79,8 @@ describe('student directory and profile (ops:students:read)', () => {
   });
 
   it('profile: 404 before admission; 403 out of own scope; private fields only with ops:student_private:read', async () => {
-    expect((await callRoute(getStudent, get(manager), { id: pending.admissionId })).status).toBe(
-      404,
-    );
-    expect((await callRoute(getStudent, get(colleague), { id: admitted.admissionId })).status).toBe(
-      403,
-    );
+    expect(await status(getStudent, get(manager), { id: pending.admissionId })).toBe(404);
+    expect(await status(getStudent, get(colleague), { id: admitted.admissionId })).toBe(403);
     const own = await callRoute<Student>(getStudent, get(counsellor), { id: admitted.admissionId });
     expect(own.data?.person.privateFields).toBe('visible');
     expect(own.data?.person.studentPhone).toMatch(/^\+91/);
@@ -121,51 +124,26 @@ describe('lead contact masking (D-028, audit finding)', () => {
       expect(r.data?.privateVisible).toBe(true);
       expect(r.data?.lead.studentPhone).toMatch(/^\+91/);
     }
-    expect((await callRoute(getLead, get(colleague), { id: admitted.leadId })).status).toBe(403);
+    expect(await status(getLead, get(colleague), { id: admitted.leadId })).toBe(403);
   });
 });
 
 describe('contact consent and preferences (private)', () => {
   it('records consent for own students; no channels without consent; auditor/colleague 403; audit has no contacts', async () => {
     const id = admitted.admissionId;
-    expect(
-      (
-        await callRoute(
-          prefs,
-          put(counsellor, {
-            consentStatus: 'refused',
-            consentBy: 'guardian',
-            allowedChannels: ['sms'],
-          }),
-          { id },
-        )
-      ).status,
-    ).toBe(400);
-    expect(
-      (
-        await callRoute(
-          prefs,
-          put(counsellor, {
-            consentStatus: 'given',
-            consentBy: 'guardian',
-            allowedChannels: ['call', 'whatsapp'],
-            preferredContact: 'guardian',
-          }),
-          { id },
-        )
-      ).status,
-    ).toBe(200);
-    expect(
-      (await callRoute(prefs, put(auditor, { consentStatus: 'given', consentBy: 'both' }), { id }))
-        .status,
-    ).toBe(403);
-    expect(
-      (
-        await callRoute(prefs, put(colleague, { consentStatus: 'given', consentBy: 'both' }), {
-          id,
-        })
-      ).status,
-    ).toBe(403);
+    const refused = { consentStatus: 'refused', consentBy: 'guardian', allowedChannels: ['sms'] };
+    expect(await status(prefs, put(counsellor, refused), { id })).toBe(400);
+    const given = {
+      consentStatus: 'given',
+      consentBy: 'guardian',
+      allowedChannels: ['call', 'whatsapp'],
+      preferredContact: 'guardian',
+    };
+    expect(await status(prefs, put(counsellor, given), { id })).toBe(200);
+    for (const other of [auditor, colleague])
+      expect(
+        await status(prefs, put(other, { consentStatus: 'given', consentBy: 'both' }), { id }),
+      ).toBe(403);
     const own = await callRoute<Student>(getStudent, get(counsellor), { id });
     expect(own.data?.person.consent).toMatchObject({
       status: 'given',
@@ -184,25 +162,13 @@ describe('reason-coded closure (withdrawal)', () => {
     const p = await pendingCase(counsellor);
     const close = (id: string, body: unknown) =>
       callRoute<{ status: string }>(transition, post(counsellor, body), { id });
-    expect(
-      (await close(p.admissionId, { to: 'lost', reason: 'x', reasonCode: 'nonsense' })).status,
-    ).toBe(400);
-    expect(
-      (await close(p.admissionId, { to: 'lost', reason: 'x', reasonCode: 'duplicate_merged' }))
-        .status,
-    ).toBe(400);
-    expect(
-      (
-        await close(p.admissionId, {
-          to: 'lost',
-          reason: 'x',
-          reasonCode: 'withdrawn_after_admission',
-        })
-      ).status,
-    ).toBe(400);
-    expect(
-      (await close(p.admissionId, { to: 'on_hold', reason: 'x', reasonCode: 'other' })).status,
-    ).toBe(400);
+    for (const [to, reasonCode] of [
+      ['lost', 'nonsense'],
+      ['lost', 'duplicate_merged'],
+      ['lost', 'withdrawn_after_admission'],
+      ['on_hold', 'other'],
+    ])
+      expect((await close(p.admissionId, { to, reason: 'x', reasonCode })).status).toBe(400);
     const ok = await close(p.admissionId, {
       to: 'lost',
       reason: 'Joined a school-integrated programme (test)',
@@ -256,30 +222,20 @@ describe('handoff retry after a failure that needs a person', () => {
       id: a.admissionId,
     });
     expect(first.status).toBe(201);
-    const noPickup = await callRoute(retry, post(counsellor, { reason: 'Still waiting (test)' }), {
-      id: a.admissionId,
-    });
-    expect(noPickup.status).toBe(409);
+    const id = { id: a.admissionId };
+    expect(await status(retry, post(counsellor, { reason: 'Still waiting (test)' }), id)).toBe(409);
     await failAcademic(5); // failed, will retry automatically
     const whileFailed = await callRoute<Student>(getStudent, get(counsellor), {
       id: a.admissionId,
     });
     expect(whileFailed.data?.handoff.view.view).toBe('academic_retrying');
-    expect(
-      (
-        await callRoute(retry, post(counsellor, { reason: 'Impatient (test)' }), {
-          id: a.admissionId,
-        })
-      ).status,
-    ).toBe(409);
+    expect(await status(retry, post(counsellor, { reason: 'Impatient (test)' }), id)).toBe(409);
     await failAcademic(2); // second failure → dead
     const dead = await callRoute<Student>(getStudent, get(counsellor), { id: a.admissionId });
     expect(dead.data?.handoff.view.view).toBe('failed_needs_action');
     expect(dead.data?.handoff.retry.allowed).toBe(true);
-    expect((await callRoute(retry, post(counsellor, {}), { id: a.admissionId })).status).toBe(400);
-    expect(
-      (await callRoute(retry, post(colleague, { reason: 'x' }), { id: a.admissionId })).status,
-    ).toBe(403);
+    expect(await status(retry, post(counsellor, {}), id)).toBe(400);
+    expect(await status(retry, post(colleague, { reason: 'x' }), id)).toBe(403);
     const second = await callRoute<{ attempt: number; eventId: string }>(
       retry,
       post(counsellor, { reason: 'Academic outage resolved (test)' }),

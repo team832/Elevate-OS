@@ -5,14 +5,8 @@
  * hard-coded yet.
  */
 import { desc, eq } from 'drizzle-orm';
-import {
-  opsIncidents,
-  opsSops,
-  staffMembers,
-  type Database,
-  type OpsIncidentId,
-} from '@elevate/database';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { opsIncidents, opsSops, staffMembers, type Database } from '@elevate/database';
+import { withTransaction } from '@elevate/server-kit';
 import { ValidationError } from '@elevate/shared-contracts';
 import type { DepartmentId, StaffMemberId } from '@elevate/shared-types';
 import type { z } from 'zod';
@@ -22,9 +16,12 @@ import {
   incidentSla,
   type IncidentStatus,
 } from '../domain';
-import { accessScope, activeStaff, nextCode, notFound, type Actor } from './context';
+import { accessScope, activeStaff, nextCode, type Actor } from './context';
+import { opsAudit, rowById } from './ops-common';
 import type { incidentBody, incidentUpdateBody } from './schemas';
 import { loadSettings } from './settings';
+
+const audit = opsAudit('incident');
 
 export async function listIncidents(db: Database, actor: Actor) {
   await accessScope(db, actor, 'ops:incidents:read');
@@ -80,15 +77,7 @@ export async function createIncident(
         createdBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'incident.created',
-      entityType: 'incident',
-      entityId: row?.id ?? null,
-      after: row,
-      requestId,
-    });
+    await audit(tx, actor, row?.id, 'incident.created', { after: row }, requestId);
     return row;
   });
 }
@@ -103,12 +92,7 @@ export async function updateIncident(
   await accessScope(db, actor, 'ops:incidents:write');
   if (input.ownerStaffId) await activeStaff(db, input.ownerStaffId, 'ownerStaffId');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsIncidents)
-      .where(eq(opsIncidents.id, id as OpsIncidentId))
-      .for('update');
-    if (!before) notFound('Incident');
+    const before = await rowById(tx, opsIncidents, id, 'Incident', true);
     const patch: Partial<typeof opsIncidents.$inferInsert> = {};
     if (input.status && input.status !== before.status) {
       const check = checkIncidentTransition(
@@ -130,16 +114,7 @@ export async function updateIncident(
       .set(patch)
       .where(eq(opsIncidents.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'incident.updated',
-      entityType: 'incident',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    await audit(tx, actor, before.id, 'incident.updated', { before, after }, requestId);
     return after;
   });
 }

@@ -15,15 +15,16 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import type { TaskStatus } from '../domain';
 import {
   followUpCompliance,
   isOpenStatus,
+  isOpenTask,
   istToday,
   istWeekContaining,
   latestElapsedCohortWeek,
   leadToAdmissionConversion,
   newLeads,
+  OPEN_TASK_STATUSES,
   overdueWork,
   taskCompletionRate,
   unresolvedBlockers,
@@ -31,6 +32,7 @@ import {
   type AdmissionStatus,
   type IsoDate,
   type KpiWindow,
+  type TaskStatus,
 } from '../domain';
 import { accessScope, type Actor } from './context';
 import { loadSettings } from './settings';
@@ -139,9 +141,7 @@ export async function buildDashboard(db: Database, actor: Actor, options: Dashbo
   const blockers = unresolvedBlockers(rows.risks, rows.tasks, now);
   const workload = workloadPerStaff({
     staff: rows.staff,
-    openTaskOwners: rows.tasks
-      .filter((t) => !['completed', 'cancelled'].includes(t.status))
-      .map((t) => t.ownerStaffId),
+    openTaskOwners: rows.tasks.filter((t) => isOpenTask(t.status)).map((t) => t.ownerStaffId),
     openFollowUpOwners: rows.followUps
       .filter((f) => f.status === 'open')
       .map((f) => f.ownerStaffId),
@@ -176,8 +176,7 @@ export async function buildDashboard(db: Database, actor: Actor, options: Dashbo
 
 /** The signed-in user's own work (home page for roles without the dashboard). */
 export async function myWork(db: Database, actor: Actor, now = new Date()) {
-  const access = await accessScope(db, actor, 'ops:module:access');
-  void access;
+  await accessScope(db, actor, 'ops:module:access');
   const today = istToday(now);
   const [me] = await db
     .select({ id: staffMembers.id })
@@ -199,10 +198,7 @@ export async function myWork(db: Database, actor: Actor, now = new Date()) {
     .select({ id: opsTasks.id })
     .from(opsTasks)
     .where(
-      and(
-        eq(opsTasks.ownerStaffId, me.id),
-        inArray(opsTasks.status, ['not_started', 'in_progress', 'waiting', 'at_risk', 'blocked']),
-      ),
+      and(eq(opsTasks.ownerStaffId, me.id), inArray(opsTasks.status, [...OPEN_TASK_STATUSES])),
     );
   const admissions = await db
     .select({ status: opsAdmissions.status })

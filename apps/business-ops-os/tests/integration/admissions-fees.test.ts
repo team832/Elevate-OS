@@ -54,25 +54,31 @@ const record = (user: { token: string }, body: unknown) =>
     post(user, body),
     { id: admissionId },
   );
+const recorded = async (user: { token: string }, body: unknown) =>
+  (await record(user, body)).status;
+const refund = (amountPaise: number, receiptReference: string) => ({
+  kind: 'refund',
+  amountPaise,
+  paymentDate: today(),
+  receiptReference,
+});
+/** HTTP status of a fee action (verify / void) by `user`. */
+const acted = async (user: { token: string }, body: unknown, id: string) =>
+  (await callRoute(feeAction, post(user, body), { id })).status;
 
 describe('fee records: permissions (ops:fees:read / ops:fees:record)', () => {
   it('401 without a session; record needs ops:fees:record; reads follow own scope', async () => {
-    expect(
-      (
-        await callRoute(
-          recordFee,
-          buildRequest('/x', { method: 'POST', json: { kind: 'due', amountPaise: 100 } }),
-          { id: admissionId },
-        )
-      ).status,
-    ).toBe(401);
-    expect((await record(counsellor, { kind: 'due', amountPaise: 100 })).status).toBe(403);
-    expect((await record(auditor, { kind: 'due', amountPaise: 100 })).status).toBe(403);
-    expect((await record(director, { kind: 'due', amountPaise: 100 })).status).toBe(403);
-    expect((await callRoute(listFees, get(counsellor), { id: admissionId })).status).toBe(200);
-    expect((await callRoute(listFees, get(colleague), { id: admissionId })).status).toBe(403);
-    expect((await callRoute(listFees, get(auditor), { id: admissionId })).status).toBe(200);
-    expect((await callRoute(listFees, get(coordinator), { id: admissionId })).status).toBe(403);
+    const due = { kind: 'due', amountPaise: 100 };
+    const anonymous = buildRequest('/x', { method: 'POST', json: due });
+    expect((await callRoute(recordFee, anonymous, { id: admissionId })).status).toBe(401);
+    for (const user of [counsellor, auditor, director]) expect(await recorded(user, due)).toBe(403);
+    for (const [user, code] of [
+      [counsellor, 200],
+      [colleague, 403],
+      [auditor, 200],
+      [coordinator, 403],
+    ] as const)
+      expect((await callRoute(listFees, get(user), { id: admissionId })).status).toBe(code);
   });
 });
 
@@ -105,16 +111,7 @@ describe('fee records: validation (integer paise, INR)', () => {
   });
 
   it('a refund cannot exceed what was recorded as received (less earlier refunds)', async () => {
-    expect(
-      (
-        await record(manager, {
-          kind: 'refund',
-          amountPaise: 1,
-          paymentDate: today(),
-          receiptReference: 'RF-0',
-        })
-      ).status,
-    ).toBe(400);
+    expect(await recorded(manager, refund(1, 'RF-0'))).toBe(400);
   });
 });
 
@@ -136,30 +133,10 @@ describe('fee records: summary, second-person check, void', () => {
       method: 'upi',
     });
     expect(paid.status).toBe(201);
-    expect(
-      (
-        await record(manager, {
-          kind: 'refund',
-          amountPaise: 2_000_001,
-          paymentDate: today(),
-          receiptReference: 'RF-1',
-        })
-      ).status,
-    ).toBe(400);
-    expect(
-      (
-        await record(manager, {
-          kind: 'refund',
-          amountPaise: 50_000,
-          paymentDate: today(),
-          receiptReference: 'RF-1',
-        })
-      ).status,
-    ).toBe(201);
-    expect(
-      (await record(manager, { kind: 'adjustment', direction: 'credit', amountPaise: 100_000 }))
-        .status,
-    ).toBe(201);
+    expect(await recorded(manager, refund(2_000_001, 'RF-1'))).toBe(400);
+    expect(await recorded(manager, refund(50_000, 'RF-1'))).toBe(201);
+    const credit = { kind: 'adjustment', direction: 'credit', amountPaise: 100_000 };
+    expect(await recorded(manager, credit)).toBe(201);
     const list = await callRoute<FeeList>(listFees, get(counsellor), { id: admissionId });
     expect(list.data?.disclaimer).toBe(MANUAL_FEE_DISCLAIMER);
     expect(list.data?.summary).toMatchObject({
@@ -181,39 +158,21 @@ describe('fee records: summary, second-person check, void', () => {
     expect(audits).toHaveLength(1);
 
     // Second-person check: the recorder cannot check their own entry (no self-approval).
-    const self = await callRoute(feeAction, post(finance, { action: 'verify' }), {
-      id: paid.data!.id,
-    });
-    expect(self.status).toBe(403);
-    expect(
-      (await callRoute(feeAction, post(counsellor, { action: 'verify' }), { id: paid.data!.id }))
-        .status,
-    ).toBe(403);
+    const verify = { action: 'verify' };
+    expect(await acted(finance, verify, paid.data!.id)).toBe(403);
+    expect(await acted(counsellor, verify, paid.data!.id)).toBe(403);
     const ok = await callRoute<{ status: string }>(
       feeAction,
       post(manager, { action: 'verify', note: 'Matches bank statement (test)' }),
       { id: paid.data!.id },
     );
     expect(ok.data?.status).toBe('verified');
-    expect(
-      (await callRoute(feeAction, post(manager, { action: 'verify' }), { id: paid.data!.id }))
-        .status,
-    ).toBe(409);
+    expect(await acted(manager, verify, paid.data!.id)).toBe(409);
 
     // Void: reason required; the voided record stays but no longer counts.
+    expect(await acted(manager, { action: 'void' }, due.data!.id)).toBe(400);
     expect(
-      (await callRoute(feeAction, post(manager, { action: 'void' }), { id: due.data!.id })).status,
-    ).toBe(400);
-    expect(
-      (
-        await callRoute(
-          feeAction,
-          post(manager, { action: 'void', reason: 'Wrong amount (test)' }),
-          {
-            id: due.data!.id,
-          },
-        )
-      ).status,
+      await acted(manager, { action: 'void', reason: 'Wrong amount (test)' }, due.data!.id),
     ).toBe(200);
     const after = await callRoute<FeeList>(listFees, get(manager), { id: admissionId });
     expect(after.data?.records.find((r) => r.id === due.data!.id)?.status).toBe('voided');

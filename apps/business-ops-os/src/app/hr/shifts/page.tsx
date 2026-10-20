@@ -13,18 +13,20 @@ import { fmtDate } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import {
   DecisionBadge,
+  EmployeeFilter,
   FilterForm,
   FilterSelect,
   minutes,
+  pageOf,
   Pager,
+  personOptions,
+  StatusButtons,
   TimeNav,
-  timeNavItems,
   weekdays,
+  type Sp,
 } from '../attendance/time-ui';
 
 export const dynamic = 'force-dynamic';
-
-type Sp = Record<string, string | undefined>;
 
 export default async function ShiftsPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const access = await gate('ops:shifts:read', '/ops/hr/shifts');
@@ -36,7 +38,7 @@ export default async function ShiftsPage({ searchParams }: { searchParams: Promi
         title="Shifts, assignments and holidays"
         description="Each team gets its own shift templates. Timings and the holiday calendar are owner decisions (OD-026), so new entries start as proposed."
       />
-      <TimeNav current="/ops/hr/shifts" items={timeNavItems(access.user)} />
+      <TimeNav current="/ops/hr/shifts" user={access.user} />
       <Section label="Loading shift templates…">
         <Templates user={access.user} manage={manage} />
       </Section>
@@ -152,19 +154,18 @@ async function Assignments({
   sp: Sp;
   manage: boolean;
 }) {
-  const page = Math.max(1, Number(sp.page) || 1);
   const r = await load(async (db) => ({
     people: await employeesInScope(db, user, 'ops:shifts:read'),
     templates: await listShiftTemplates(db, user),
     list: await listShiftAssignments(db, user, {
       staffId: sp.staffId || undefined,
       includeCancelled: sp.includeCancelled === 'true' ? 'true' : undefined,
-      page,
+      page: pageOf(sp),
     }),
   }));
   if (!r.ok) return r.view;
   const { people, templates, list } = r.data;
-  const peopleOptions = people.map((p) => ({ value: p.staffId, label: p.fullName }));
+  const active = templates.filter((t) => t.status !== 'retired');
   return (
     <div className="el-grid">
       <Card
@@ -172,13 +173,7 @@ async function Assignments({
         description="Overlapping assignments for one person are refused unless the split-shift setting allows them."
       >
         <FilterForm action="/ops/hr/shifts">
-          <FilterSelect
-            name="staffId"
-            label="Employee"
-            value={sp.staffId}
-            anyLabel="Everyone in scope"
-            options={peopleOptions}
-          />
+          <EmployeeFilter people={people} value={sp.staffId} />
           <FilterSelect
             name="includeCancelled"
             label="Cancelled"
@@ -213,20 +208,14 @@ async function Assignments({
             },
           ]}
         />
-        <Pager
-          base="/ops/hr/shifts"
-          params={sp}
-          page={list.page}
-          pageSize={list.pageSize}
-          total={list.total}
-        />
+        <Pager base="/ops/hr/shifts" params={sp} list={list} />
       </Card>
       {manage ? (
         <Card
           title="Assign a shift"
           description="End or cancel an assignment from its shift template page."
         >
-          {templates.filter((t) => t.status !== 'retired').length === 0 ? (
+          {active.length === 0 ? (
             <EmptyState title="Create a shift template first" />
           ) : (
             <ActionForm
@@ -238,16 +227,17 @@ async function Assignments({
                   label: 'Employee',
                   type: 'select',
                   required: true,
-                  options: peopleOptions,
+                  options: personOptions(people),
                 },
                 {
                   name: 'shiftTemplateId',
                   label: 'Shift',
                   type: 'select',
                   required: true,
-                  options: templates
-                    .filter((t) => t.status !== 'retired')
-                    .map((t) => ({ value: t.id, label: `${t.code} ${t.startTime}–${t.endTime}` })),
+                  options: active.map((t) => ({
+                    value: t.id,
+                    label: `${t.code} ${t.startTime}–${t.endTime}`,
+                  })),
                 },
                 { name: 'fromDate', label: 'From', type: 'date', required: true },
                 { name: 'toDate', label: 'To (leave empty for open-ended)', type: 'date' },
@@ -290,26 +280,18 @@ async function Holidays({ user }: { user: AuthenticatedUser }) {
               header: '',
               render: (h) =>
                 manage ? (
-                  <div className="el-inline-form">
-                    {h.status === 'proposed' ? (
-                      <ActionForm
-                        action={`/ops/api/v1/hr/holidays/${h.id}`}
-                        method="PATCH"
-                        submitLabel="Mark approved"
-                        extra={{ status: 'approved' }}
-                        variant="secondary"
-                        compact
-                      />
-                    ) : null}
-                    <ActionForm
-                      action={`/ops/api/v1/hr/holidays/${h.id}`}
-                      method="PATCH"
-                      submitLabel="Withdraw"
-                      extra={{ status: 'withdrawn' }}
-                      variant="danger"
-                      compact
-                    />
-                  </div>
+                  <StatusButtons
+                    action={`/ops/api/v1/hr/holidays/${h.id}`}
+                    buttons={[
+                      {
+                        label: 'Mark approved',
+                        status: 'approved',
+                        variant: 'secondary',
+                        show: h.status === 'proposed',
+                      },
+                      { label: 'Withdraw', status: 'withdrawn', variant: 'danger' },
+                    ]}
+                  />
                 ) : null,
             },
           ]}

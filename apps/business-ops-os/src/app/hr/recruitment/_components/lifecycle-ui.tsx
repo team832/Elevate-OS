@@ -1,13 +1,45 @@
 /**
  * Screen helpers shared by the recruitment, onboarding and offboarding pages:
  * list controls (search / filter / sort as a plain GET form), a pager that
- * only renders links that lead somewhere, and the history panel. Built only
- * from shared-ui components and the existing `el-*` classes.
+ * only renders links that lead somewhere, the history panel and the detail
+ * page frame. Built only from shared-ui components and the existing `el-*` classes.
  */
-import { Card, DataTable, EmptyState } from '@elevate/shared-ui';
-import { fmtDateTime, humanise } from '../../../../ui/format';
+import type { ReactNode } from 'react';
+import type { AuthenticatedUser } from '@elevate/authentication';
+import type { Permission } from '@elevate/authorization';
+import { Card, DataTable, EmptyState, StatusBadge } from '@elevate/shared-ui';
+import { APPLICATION_STAGE_LABELS, type ApplicationStage } from '../../../../domain/hr/recruitment';
+import { fmtDateTime, humanise, statusTone } from '../../../../ui/format';
+import { Frame, gate, Section } from '../../../../ui/frame';
 
 export type SearchParams = Record<string, string | undefined>;
+
+/** The required "Reason" field of a transition form. */
+export const REASON_FIELD = { name: 'reason', label: 'Reason', required: true } as const;
+
+/** A `[id]` page: gate on `permission`, a back link, then `Detail` for the id. */
+export function detailPage(
+  permission: Permission,
+  active: string,
+  base: string,
+  back: { href: string; label: string },
+  Detail: (props: { user: AuthenticatedUser; id: string }) => Promise<ReactNode>,
+) {
+  return async function DetailRoute({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+    const access = await gate(permission, `${base}/${id}`);
+    return (
+      <Frame access={access} active={active}>
+        <p>
+          <a href={back.href}>{back.label}</a>
+        </p>
+        <Section>
+          <Detail user={access.user} id={id} />
+        </Section>
+      </Frame>
+    );
+  };
+}
 
 export function hrefWith(base: string, params: SearchParams, patch: SearchParams): string {
   const merged = { ...params, ...patch };
@@ -159,5 +191,44 @@ export function HistoryPanel({
         ]}
       />
     </Card>
+  );
+}
+
+/** Applications of a requisition or a candidate: a link to each, its stage and since when. */
+export function ApplicationsTable<
+  T extends { id: string; stage: ApplicationStage; stageChangedAt: Date | string },
+>({
+  rows,
+  link,
+  empty,
+}: {
+  rows: readonly T[];
+  /** First column: key, header and link text. */
+  link: { key: string; header: string; text: (a: T) => string };
+  empty: ReactNode;
+}) {
+  return (
+    <DataTable
+      rows={rows}
+      rowKey={(a) => a.id}
+      empty={empty}
+      columns={[
+        {
+          key: link.key,
+          header: link.header,
+          render: (a) => <a href={`/ops/hr/recruitment/applications/${a.id}`}>{link.text(a)}</a>,
+        },
+        {
+          key: 'stage',
+          header: 'Stage',
+          render: (a) => (
+            <StatusBadge tone={statusTone(a.stage)}>
+              {APPLICATION_STAGE_LABELS[a.stage]}
+            </StatusBadge>
+          ),
+        },
+        { key: 'stageChangedAt', header: 'Since', render: (a) => fmtDateTime(a.stageChangedAt) },
+      ]}
+    />
   );
 }

@@ -1,18 +1,19 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { Alert, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
 import { getAttendanceSession } from '../../../../server/hr/attendance';
 import { ActionForm } from '../../../../ui/action-form';
 import { fmtDate, fmtDateTime } from '../../../../ui/format';
 import { Frame, gate, load, Section } from '../../../../ui/frame';
 import {
   HM_HINT,
+  LateEarly,
   localTime,
   minutes,
   RequestStatus,
-  SessionStatus,
+  sessionColumns,
+  sessionTailFields,
   SOURCE_LABELS,
   TimeNav,
-  timeNavItems,
 } from '../time-ui';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const access = await gate('ops:attendance:read', `/ops/hr/attendance/${id}`);
   return (
     <Frame access={access} active="attendance">
-      <TimeNav current="" items={timeNavItems(access.user)} />
+      <TimeNav user={access.user} />
       <Section label="Loading session…">
         <SessionDetail user={access.user} id={id} />
       </Section>
@@ -92,25 +93,12 @@ async function SessionDetail({ user, id }: { user: AuthenticatedUser; id: string
                   'Not measured'
                 ) : (
                   <>
-                    {x.flags.late ? (
-                      <StatusBadge tone="warning">Late {minutes(x.lateMinutes)}</StatusBadge>
-                    ) : null}
-                    {x.flags.early ? (
-                      <StatusBadge tone="warning">
-                        Left {minutes(x.earlyDepartureMinutes)} early
-                      </StatusBadge>
-                    ) : null}
+                    <LateEarly s={x} />
                     {!x.flags.late && !x.flags.early ? 'Within grace' : null}
                   </>
                 ),
             },
-            {
-              key: 'status',
-              header: 'Status',
-              render: (x) => (
-                <SessionStatus status={x.status} missingClockOut={x.flags.missingClockOut} />
-              ),
-            },
+            sessionColumns<typeof s>(() => tz).status,
           ]}
         />
         {s.reason ? <p>Note: {s.reason}</p> : null}
@@ -196,17 +184,7 @@ async function SessionDetail({ user, id }: { user: AuthenticatedUser; id: string
             fields={[
               { name: 'clockIn', label: 'Correct clock-in', required: true, hint: HM_HINT },
               { name: 'clockOut', label: 'Correct clock-out', required: true, hint: HM_HINT },
-              {
-                name: 'clockOutDate',
-                label: 'Clock-out date (only if after midnight)',
-                type: 'date',
-              },
-              {
-                name: 'breakMinutes',
-                label: 'Unpaid break (minutes)',
-                type: 'number',
-                defaultValue: String(s.breakMinutes),
-              },
+              ...sessionTailFields(String(s.breakMinutes)),
               { name: 'reason', label: 'What is wrong and why', type: 'textarea', required: true },
             ]}
           />

@@ -4,7 +4,7 @@
  * the real `insertEmployee`. Everyone is fictional (@example.test).
  */
 import { eq } from 'drizzle-orm';
-import { authedRequest, createTestUser, type TestUser } from '@elevate/testing';
+import { authedRequest, callRoute, createTestUser, type TestUser } from '@elevate/testing';
 import { auditEvents, type Database } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
 import type { RoleKey, StaffMemberId } from '@elevate/shared-types';
@@ -54,3 +54,10 @@ export async function auditFor(db: Database, entityId: string) {
     .orderBy(auditEvents.at);
   return rows.map((r) => r.action);
 }
+
+/** HTTP status of one route call. */
+export const statusOf = async (
+  route: Parameters<typeof callRoute>[0],
+  req: Request,
+  params: Record<string, string> = {},
+) => (await callRoute(route, req, params)).status;

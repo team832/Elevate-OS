@@ -67,38 +67,23 @@ describe('domain lists match the schema constants', () => {
 });
 
 describe('employment status transitions (A-HR-02)', () => {
-  it('allows the documented moves with a reason', () => {
-    expect(checkEmploymentStatusChange('onboarding', 'active', { reason: 'Joined' }).ok).toBe(true);
-    expect(checkEmploymentStatusChange('active', 'on_notice', { reason: 'Resigned' }).ok).toBe(
-      true,
-    );
-    expect(checkEmploymentStatusChange('on_notice', 'active', { reason: 'Withdrawn' }).ok).toBe(
-      true,
-    );
-    expect(
-      checkEmploymentStatusChange('on_notice', 'separated', {
-        reason: 'Left',
-        endDate: '2026-12-31',
-      }).ok,
-    ).toBe(true);
-  });
-  it('rejects no-change, illegal, missing reason and missing end date', () => {
-    expect(checkEmploymentStatusChange('active', 'active', { reason: 'x' })).toMatchObject({
-      code: 'NO_CHANGE',
-    });
-    expect(checkEmploymentStatusChange('separated', 'active', { reason: 'x' })).toMatchObject({
-      code: 'ILLEGAL',
-    });
-    expect(checkEmploymentStatusChange('onboarding', 'on_notice', { reason: 'x' })).toMatchObject({
-      code: 'ILLEGAL',
-    });
-    expect(checkEmploymentStatusChange('active', 'on_notice', { reason: '  ' })).toMatchObject({
-      code: 'REASON_REQUIRED',
-    });
-    expect(checkEmploymentStatusChange('active', 'separated', { reason: 'x' })).toMatchObject({
-      code: 'END_DATE_REQUIRED',
-    });
-  });
+  it.each([
+    ['onboarding', 'active', 'Joined', undefined],
+    ['active', 'on_notice', 'Resigned', undefined],
+    ['on_notice', 'active', 'Withdrawn', undefined],
+    ['on_notice', 'separated', 'Left', '2026-12-31'],
+  ] as const)('allows %s → %s with a reason', (from, to, reason, endDate) =>
+    expect(checkEmploymentStatusChange(from, to, { reason, endDate }).ok).toBe(true),
+  );
+  it.each([
+    ['active', 'active', 'x', 'NO_CHANGE'],
+    ['separated', 'active', 'x', 'ILLEGAL'],
+    ['onboarding', 'on_notice', 'x', 'ILLEGAL'],
+    ['active', 'on_notice', '  ', 'REASON_REQUIRED'],
+    ['active', 'separated', 'x', 'END_DATE_REQUIRED'],
+  ] as const)('rejects %s → %s (reason %j) with %s', (from, to, reason, code) =>
+    expect(checkEmploymentStatusChange(from, to, { reason })).toMatchObject({ code }),
+  );
 });
 
 describe('employment history diff (A-HR-03)', () => {
@@ -212,32 +197,19 @@ describe('org tree and head succession', () => {
     expect(rows.filter((r) => r.node.detached).map((r) => r.node.id)).toEqual(['x', 'y', 'z']);
   });
   it('ends the current head the day before; refuses same person and earlier dates', () => {
-    expect(planHeadSuccession(null, { staffId: 's', startsOn: '2026-01-01' })).toEqual({
+    const head = (staffId: string, startsOn: string) => ({ staffId, startsOn, endsOn: null });
+    const next = (staffId: string, startsOn: string) => ({ staffId, startsOn });
+    expect(planHeadSuccession(null, next('s', '2026-01-01'))).toEqual({
       ok: true,
       endCurrentOn: null,
     });
-    expect(
-      planHeadSuccession(
-        { staffId: 'a', startsOn: '2026-01-01', endsOn: null },
-        { staffId: 'b', startsOn: '2026-03-01' },
-      ),
-    ).toEqual({
+    expect(planHeadSuccession(head('a', '2026-01-01'), next('b', '2026-03-01'))).toEqual({
       ok: true,
       endCurrentOn: '2026-02-28',
     });
-    expect(
-      planHeadSuccession(
-        { staffId: 'a', startsOn: '2026-01-01', endsOn: null },
-        { staffId: 'a', startsOn: '2026-03-01' },
-      ).ok,
-    ).toBe(false);
-    expect(
-      planHeadSuccession(
-        { staffId: 'a', startsOn: '2026-03-01', endsOn: null },
-        { staffId: 'b', startsOn: '2026-03-01' },
-      ).ok,
-    ).toBe(false);
-    expect(planHeadSuccession(null, { staffId: 'b', startsOn: '2026-02-30' }).ok).toBe(false);
+    expect(planHeadSuccession(head('a', '2026-01-01'), next('a', '2026-03-01')).ok).toBe(false);
+    expect(planHeadSuccession(head('a', '2026-03-01'), next('b', '2026-03-01')).ok).toBe(false);
+    expect(planHeadSuccession(null, next('b', '2026-02-30')).ok).toBe(false);
   });
 });
 
@@ -283,71 +255,45 @@ describe('compensation (A-HR-06, A-HR-07)', () => {
     ...o,
   });
   it('validates amounts, components and refuses statutory labels', () => {
-    expect(
+    const valid = (o: Partial<Parameters<typeof validateCompensation>[0]>) =>
       validateCompensation({
         basis: 'monthly',
         amountPaise: 0,
         components: [],
         effectiveFrom: '2026-04-01',
-      }).ok,
-    ).toBe(true);
-    expect(
-      validateCompensation({
-        basis: 'monthly',
-        amountPaise: -1,
-        components: [],
-        effectiveFrom: '2026-04-01',
-      }).ok,
-    ).toBe(false);
-    expect(
-      validateCompensation({
-        basis: 'monthly',
-        amountPaise: 100,
-        components: [],
-        effectiveFrom: '2026-02-30',
-      }).ok,
-    ).toBe(false);
+        ...o,
+      }).ok;
+    expect(valid({})).toBe(true);
+    expect(valid({ amountPaise: -1 })).toBe(false);
+    expect(valid({ amountPaise: 100, effectiveFrom: '2026-02-30' })).toBe(false);
     for (const label of ['PF', 'Professional tax', 'ESI', 'Loan deduction'])
       expect(
-        validateCompensation({
-          basis: 'monthly',
-          amountPaise: 1,
-          components: [{ kind: 'earning', label, amountPaise: 1 }],
-          effectiveFrom: '2026-04-01',
-        }).ok,
+        valid({ amountPaise: 1, components: [{ kind: 'earning', label, amountPaise: 1 }] }),
       ).toBe(false);
-    expect(
-      validateCompensation({
-        basis: 'monthly',
-        amountPaise: 3,
-        components: [
-          { kind: 'earning', label: 'Basic', amountPaise: 1 },
-          { kind: 'allowance', label: 'basic', amountPaise: 2 },
-        ],
-        effectiveFrom: '2026-04-01',
-      }).ok,
-    ).toBe(false);
+    const duplicate = [
+      { kind: 'earning', label: 'Basic', amountPaise: 1 },
+      { kind: 'allowance', label: 'basic', amountPaise: 2 },
+    ] as const;
+    expect(valid({ amountPaise: 3, components: duplicate })).toBe(false);
   });
   it('approval: no self, forward in time, supersedes the current record', () => {
+    const u2 = { userId: 'u2', staffId: null };
     expect(planCompensationApproval(rec({}), [], { userId: 'u1', staffId: null })).toMatchObject({
       code: 'SELF_APPROVAL',
     });
     expect(planCompensationApproval(rec({}), [], { userId: 'u2', staffId: 's' })).toMatchObject({
       code: 'SELF_APPROVAL',
     });
-    expect(
-      planCompensationApproval(rec({ status: 'approved' }), [], { userId: 'u2', staffId: null }),
-    ).toMatchObject({ code: 'ILLEGAL' });
+    expect(planCompensationApproval(rec({ status: 'approved' }), [], u2)).toMatchObject({
+      code: 'ILLEGAL',
+    });
     const current = rec({ id: 'c', status: 'approved', effectiveFrom: '2026-01-01' });
-    expect(planCompensationApproval(rec({}), [current], { userId: 'u2', staffId: null })).toEqual({
+    expect(planCompensationApproval(rec({}), [current], u2)).toEqual({
       ok: true,
       supersede: { id: 'c', effectiveTo: '2026-03-31' },
     });
     expect(
-      planCompensationApproval(rec({ effectiveFrom: '2026-01-01' }), [current], {
-        userId: 'u2',
-        staffId: null,
-      }),
+      planCompensationApproval(rec({ effectiveFrom: '2026-01-01' }), [current], u2),
     ).toMatchObject({ code: 'CONFLICT' });
   });
   it('effective record: exactly one, none, or a reported conflict', () => {

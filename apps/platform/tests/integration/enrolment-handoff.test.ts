@@ -12,7 +12,7 @@
  * apps/platform (workspace links).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   academicEnrolments,
   academicStudents,
@@ -118,6 +118,23 @@ const enrolmentsFor = (admissionId: string) =>
     .from(academicEnrolments)
     .where(eq(academicEnrolments.sourceAdmissionId, admissionId));
 
+const attemptsFor = (admissionId: string) =>
+  ctx.db
+    .select()
+    .from(opsEnrolmentAttempts)
+    .where(eq(opsEnrolmentAttempts.admissionId, admissionId as never));
+/** Run Academic's intake with a handler that always throws. */
+const failAcademic = (maxAttempts: number, message: string) =>
+  processEvents(ctx.db, {
+    consumer: ACADEMIC_CONSUMERS.enrolmentIntake,
+    maxAttempts,
+    handlers: {
+      'ops.admission.enrolment_requested': async () => {
+        throw new Error(message);
+      },
+    },
+  });
+
 /** Run both consumers until nothing is left (what a scheduler would do). */
 async function settle() {
   await runEnrolmentIntake(ctx.db);
@@ -141,10 +158,7 @@ describe('admission → enrolment handoff across Business Ops and Academic OS', 
       enrolmentId: enrolment!.id,
       academicExistingStudent: false,
     });
-    const [attempt] = await ctx.db
-      .select()
-      .from(opsEnrolmentAttempts)
-      .where(eq(opsEnrolmentAttempts.admissionId, admissionId as never));
+    const [attempt] = await attemptsFor(admissionId);
     expect(attempt).toMatchObject({ attempt: 1, kind: 'initial', outcome: 'confirmed' });
   });
 
@@ -190,10 +204,7 @@ describe('admission → enrolment handoff across Business Ops and Academic OS', 
     expect((await admissionRow(admissionId)).status).toBe('enrolled');
     expect(await enrolmentsFor(admissionId)).toHaveLength(1);
     expect(await studentsFor(admissionId)).toHaveLength(1);
-    const attempts = await ctx.db
-      .select()
-      .from(opsEnrolmentAttempts)
-      .where(eq(opsEnrolmentAttempts.admissionId, admissionId as never));
+    const attempts = await attemptsFor(admissionId);
     expect(attempts.map((a) => [a.attempt, a.kind, a.outcome]).sort()).toEqual([
       [1, 'initial', 'rejected'],
       [2, 'after_rejection', 'confirmed'],
@@ -203,15 +214,7 @@ describe('admission → enrolment handoff across Business Ops and Academic OS', 
   it('recoverable failure: the Academic handler throws once, the automatic retry succeeds', async () => {
     const { admissionId } = await admitted();
     await requestEnrolment(ctx.db, counsellor, admissionId);
-    const failed = await processEvents(ctx.db, {
-      consumer: ACADEMIC_CONSUMERS.enrolmentIntake,
-      maxAttempts: 5,
-      handlers: {
-        'ops.admission.enrolment_requested': async () => {
-          throw new Error('Transient Academic failure (test)');
-        },
-      },
-    });
+    const failed = await failAcademic(5, 'Transient Academic failure (test)');
     expect(failed.failed).toBeGreaterThanOrEqual(1);
     expect(await enrolmentsFor(admissionId)).toHaveLength(0); // rolled back
     await settle();
@@ -222,15 +225,7 @@ describe('admission → enrolment handoff across Business Ops and Academic OS', 
   it('failure that needs a person: dead delivery → audited retry (attempt 2) → one enrolment', async () => {
     const { admissionId } = await admitted();
     await requestEnrolment(ctx.db, counsellor, admissionId);
-    await processEvents(ctx.db, {
-      consumer: ACADEMIC_CONSUMERS.enrolmentIntake,
-      maxAttempts: 1,
-      handlers: {
-        'ops.admission.enrolment_requested': async () => {
-          throw new Error('Academic outage (test)');
-        },
-      },
-    });
+    await failAcademic(1, 'Academic outage (test)');
     await settle(); // the dead delivery is never picked up again
     expect((await admissionRow(admissionId)).status).toBe('enrolment_requested');
     const retried = await retryEnrolmentHandoff(ctx.db, counsellor, admissionId, {
@@ -254,7 +249,7 @@ describe('admission → enrolment handoff across Business Ops and Academic OS', 
     const [event] = await ctx.db
       .select()
       .from(integrationEvents)
-      .where(and(eq(integrationEvents.id, req.eventId)));
+      .where(eq(integrationEvents.id, req.eventId));
     expect(event?.payload).toMatchObject({ existingStudentId: knownStudentId });
   });
 

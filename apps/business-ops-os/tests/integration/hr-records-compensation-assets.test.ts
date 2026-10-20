@@ -20,7 +20,7 @@ import { POST as returnAsset } from '../../src/app/api/v1/hr/assets/[id]/return/
 import { GET as employeeAssets } from '../../src/app/api/v1/hr/employees/[id]/assets/route';
 import { PATCH as patchEmployee } from '../../src/app/api/v1/hr/employees/[id]/route';
 import { setupReference } from './fixtures';
-import { employeeUser, lastAudit, type EmployeeUser } from './hr-records-fixtures';
+import { employeeUser, lastAudit, type EmployeeUser, statusOf } from './hr-records-fixtures';
 
 const ctx = setupTestDatabase();
 const NO_ID = '00000000-0000-4000-8000-000000000000';
@@ -68,13 +68,13 @@ beforeAll(async () => {
 describe('compensation records (OPS-036) — records only, not payroll', () => {
   it('is never visible to managers, employees, auditor, director, teacher, counsellor or ops manager', async () => {
     for (const u of [deptManager, report, colleague, opsManager, hrContributor, ...others]) {
-      expect((await callRoute(listComp, req(u))).status).toBe(403);
-      expect((await callRoute(exportComp, req(u))).status).toBe(403);
+      expect(await statusOf(listComp, req(u))).toBe(403);
+      expect(await statusOf(exportComp, req(u))).toBe(403);
       const approve = req(u, { confirm: true });
-      expect((await callRoute(approveComp, approve, { id: NO_ID })).status).toBe(403);
+      expect(await statusOf(approveComp, approve, { id: NO_ID })).toBe(403);
     }
-    expect((await callRoute(listComp, req(hrManager))).status).toBe(200);
-    expect((await callRoute(listComp, req(finance))).status).toBe(200);
+    expect(await statusOf(listComp, req(hrManager))).toBe(200);
+    expect(await statusOf(listComp, req(finance))).toBe(200);
   });
 
   it('refuses deductions/statutory components, mismatched totals and one’s own compensation', async () => {
@@ -130,15 +130,14 @@ describe('compensation records (OPS-036) — records only, not payroll', () => {
       }),
     );
     expect(d1.status).toBe(201);
-    expect(
-      (await callRoute(approveComp, req(finance, { confirm: true }), { id: d1.data!.id })).status,
-    ).toBe(403);
-    expect((await callRoute(approveComp, req(finance2, {}), { id: d1.data!.id })).status).toBe(400);
+    expect(await statusOf(approveComp, req(finance, { confirm: true }), { id: d1.data!.id })).toBe(
+      403,
+    );
+    expect(await statusOf(approveComp, req(finance2, {}), { id: d1.data!.id })).toBe(400);
     const ok = await callRoute(approveComp, req(finance2, { confirm: true }), { id: d1.data!.id });
     expect(ok.status).toBe(200);
     expect(
-      (await callRoute(patchComp, req(finance, { amountPaise: 1 }, 'PATCH'), { id: d1.data!.id }))
-        .status,
+      await statusOf(patchComp, req(finance, { amountPaise: 1 }, 'PATCH'), { id: d1.data!.id }),
     ).toBe(409);
     const audit = await lastAudit(ctx.db, d1.data!.id, 'compensation.approved');
     expect(JSON.stringify(audit)).not.toMatch(/4500000|4000000|Basic/);
@@ -153,15 +152,12 @@ describe('compensation records (OPS-036) — records only, not payroll', () => {
       }),
     );
     expect(
-      (await callRoute(approveComp, req(finance2, { confirm: true }), { id: earlier.data!.id }))
-        .status,
+      await statusOf(approveComp, req(finance2, { confirm: true }), { id: earlier.data!.id }),
     ).toBe(409);
     expect(
-      (
-        await callRoute(cancelComp, req(finance, { reason: 'Wrong date' }), {
-          id: earlier.data!.id,
-        })
-      ).status,
+      await statusOf(cancelComp, req(finance, { reason: 'Wrong date' }), {
+        id: earlier.data!.id,
+      }),
     ).toBe(200);
 
     const d2 = await callRoute<{ id: string }>(
@@ -175,33 +171,29 @@ describe('compensation records (OPS-036) — records only, not payroll', () => {
     );
     expect(d2.status).toBe(201);
     expect(
-      (
-        await callRoute(
-          draftComp,
-          req(hrManager, {
-            staffId: report.staffId,
-            basis: 'monthly',
-            amountInr: '1.234',
-            effectiveFrom: '2026-10-01',
-          }),
-        )
-      ).status,
+      await statusOf(
+        draftComp,
+        req(hrManager, {
+          staffId: report.staffId,
+          basis: 'monthly',
+          amountInr: '1.234',
+          effectiveFrom: '2026-10-01',
+        }),
+      ),
     ).toBe(400);
     expect(
-      (
-        await callRoute(
-          draftComp,
-          req(hrManager, {
-            staffId: report.staffId,
-            basis: 'monthly',
-            effectiveFrom: '2026-10-01',
-          }),
-        )
-      ).status,
+      await statusOf(
+        draftComp,
+        req(hrManager, {
+          staffId: report.staffId,
+          basis: 'monthly',
+          effectiveFrom: '2026-10-01',
+        }),
+      ),
     ).toBe(400);
-    expect(
-      (await callRoute(approveComp, req(finance, { confirm: true }), { id: d2.data!.id })).status,
-    ).toBe(200);
+    expect(await statusOf(approveComp, req(finance, { confirm: true }), { id: d2.data!.id })).toBe(
+      200,
+    );
     const approved = await ctx.db
       .select()
       .from(opsCompensationRecords)
@@ -229,13 +221,13 @@ describe('compensation records (OPS-036) — records only, not payroll', () => {
         effectiveFrom: '2026-04-01',
       }),
     );
-    expect(
-      (await callRoute(approveComp, req(hrManager, { confirm: true }), { id: d.data!.id })).status,
-    ).toBe(403);
+    expect(await statusOf(approveComp, req(hrManager, { confirm: true }), { id: d.data!.id })).toBe(
+      403,
+    );
   });
 
   it('export: finance officer only (HR manager lacks export); CSV of the terms effective on the date; audited reference', async () => {
-    expect((await callRoute(exportComp, req(hrManager))).status).toBe(403);
+    expect(await statusOf(exportComp, req(hrManager))).toBe(403);
     const res = await exportComp(
       req(finance, undefined, 'GET', '/ops/api/v1/hr/compensation/export?asOf=2026-05-15'),
       {
@@ -271,9 +263,9 @@ describe('assets (OPS-038)', () => {
   let assetId: string;
 
   it('registers, assigns once, refuses a second open assignment and separated employees', async () => {
-    expect(
-      (await callRoute(createAsset, req(report, { name: 'Laptop', category: 'Laptop' }))).status,
-    ).toBe(403);
+    expect(await statusOf(createAsset, req(report, { name: 'Laptop', category: 'Laptop' }))).toBe(
+      403,
+    );
     const a = await callRoute<{ id: string; code: string }>(
       createAsset,
       req(hrContributor, {
@@ -286,17 +278,15 @@ describe('assets (OPS-038)', () => {
     expect(a.data!.code).toMatch(/^AST-\d{5}$/);
     assetId = a.data!.id;
     expect(
-      (
-        await callRoute(
-          assignAsset,
-          req(hrContributor, {
-            staffId: report.staffId,
-            assignedOn: '2026-10-01',
-            expectedReturnOn: '2026-09-01',
-          }),
-          { id: assetId },
-        )
-      ).status,
+      await statusOf(
+        assignAsset,
+        req(hrContributor, {
+          staffId: report.staffId,
+          assignedOn: '2026-10-01',
+          expectedReturnOn: '2026-09-01',
+        }),
+        { id: assetId },
+      ),
     ).toBe(409);
     const ok = await callRoute(
       assignAsset,
@@ -305,18 +295,14 @@ describe('assets (OPS-038)', () => {
     );
     expect(ok.status).toBe(201);
     expect(
-      (
-        await callRoute(assignAsset, req(hrContributor, { staffId: colleague.staffId }), {
-          id: assetId,
-        })
-      ).status,
+      await statusOf(assignAsset, req(hrContributor, { staffId: colleague.staffId }), {
+        id: assetId,
+      }),
     ).toBe(409);
     expect(
-      (
-        await callRoute(patchAsset, req(hrContributor, { status: 'retired' }, 'PATCH'), {
-          id: assetId,
-        })
-      ).status,
+      await statusOf(patchAsset, req(hrContributor, { status: 'retired' }, 'PATCH'), {
+        id: assetId,
+      }),
     ).toBe(409);
 
     const b = await callRoute<{ id: string }>(
@@ -339,11 +325,9 @@ describe('assets (OPS-038)', () => {
       },
     );
     expect(
-      (
-        await callRoute(assignAsset, req(hrContributor, { staffId: colleague.staffId }), {
-          id: b.data!.id,
-        })
-      ).status,
+      await statusOf(assignAsset, req(hrContributor, { staffId: colleague.staffId }), {
+        id: b.data!.id,
+      }),
     ).toBe(409);
   });
 
@@ -355,8 +339,7 @@ describe('assets (OPS-038)', () => {
     );
     expect(r.status).toBe(200);
     expect(
-      (await callRoute(returnAsset, req(hrContributor, { condition: 'good' }), { id: assetId }))
-        .status,
+      await statusOf(returnAsset, req(hrContributor, { condition: 'good' }), { id: assetId }),
     ).toBe(409);
     const detail = await callRoute<{
       asset: { status: string };
@@ -368,14 +351,10 @@ describe('assets (OPS-038)', () => {
       id: report.staffId,
     });
     expect(mine.data!.map((m) => m.assetId)).toContain(assetId);
-    expect((await callRoute(employeeAssets, req(colleague), { id: report.staffId })).status).toBe(
-      403,
-    );
-    expect((await callRoute(employeeAssets, req(deptManager), { id: report.staffId })).status).toBe(
-      200,
-    );
+    expect(await statusOf(employeeAssets, req(colleague), { id: report.staffId })).toBe(403);
+    expect(await statusOf(employeeAssets, req(deptManager), { id: report.staffId })).toBe(200);
     const theirs = await callRoute<{ items: { id: string }[] }>(listAssets, req(colleague));
     expect(theirs.data!.items.map((i) => i.id)).not.toContain(assetId);
-    expect((await callRoute(getAsset, req(colleague), { id: assetId })).status).toBe(403);
+    expect(await statusOf(getAsset, req(colleague), { id: assetId })).toBe(403);
   });
 });

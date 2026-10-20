@@ -24,6 +24,7 @@ import { PUT as putSetting } from '../../src/app/api/v1/settings/[key]/route';
 import { GET as workInventory } from '../../src/app/api/v1/work-inventory/route';
 import { importLegacyDecisions, importWorkInventory } from '../../seed/legacy';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
+import { statusOf } from './operations-fixtures';
 
 const ctx = setupTestDatabase();
 let manager: StaffUser;
@@ -126,57 +127,33 @@ describe('planning registers', () => {
       state: 'open',
       legacyStatus: 'Open',
     });
-    expect(
-      (await callRoute(createDecision, req(counsellor, { area: 'x', statement: 'y' }))).status,
-    ).toBe(403);
-    expect(
-      (
-        await callRoute(
-          createDecision,
-          req(director, { area: 'Demo', statement: 'z', state: 'confirmed' }),
-        )
-      ).status,
-    ).toBe(400);
-    const d1 = await callRoute<{ id: string; code: string }>(
-      createDecision,
-      req(director, {
-        area: 'Demo limits',
-        statement: 'Proposal A (test)',
-        ownerDecisionRef: 'OD-012',
-      }),
-    );
-    const d2 = await callRoute<{ id: string }>(
-      createDecision,
-      req(director, {
-        area: 'Demo limits',
-        statement: 'Proposal B (test)',
-        state: 'confirmed',
-        decidedOn: '2026-10-18',
-      }),
-    );
+    const decide = (user: { token: string }, json: object) =>
+      callRoute<{ id: string; code: string }>(createDecision, req(user, json));
+    expect((await decide(counsellor, { area: 'x', statement: 'y' })).status).toBe(403);
+    const undated = { area: 'Demo', statement: 'z', state: 'confirmed' };
+    expect((await decide(director, undated)).status).toBe(400);
+    const d1 = await decide(director, {
+      area: 'Demo limits',
+      statement: 'Proposal A (test)',
+      ownerDecisionRef: 'OD-012',
+    });
+    const d2 = await decide(director, {
+      area: 'Demo limits',
+      statement: 'Proposal B (test)',
+      state: 'confirmed',
+      decidedOn: '2026-10-18',
+    });
     expect(d1.data?.code).toMatch(/^DEC-\d{4}$/);
-    expect(
-      (
-        await callRoute(patchDecision, req(director, { state: 'superseded' }, 'PATCH'), {
-          id: d1.data!.id,
-        })
-      ).status,
-    ).toBe(400);
-    expect(
-      (
-        await callRoute(
-          patchDecision,
-          req(director, { state: 'superseded', supersededById: d2.data!.id }, 'PATCH'),
-          { id: d1.data!.id },
-        )
-      ).status,
-    ).toBe(200);
+    const supersede = (json: object) =>
+      statusOf(patchDecision, req(director, { state: 'superseded', ...json }, 'PATCH'), {
+        id: d1.data!.id,
+      });
+    expect(await supersede({})).toBe(400);
+    expect(await supersede({ supersededById: d2.data!.id })).toBe(200);
   });
 
   it('risks are flagged (high severity, no owner); director cannot write risks', async () => {
-    expect((await callRoute(createRisk, req(director, { kind: 'risk', title: 'x' }))).status).toBe(
-      403,
-    );
+    expect(await statusOf(createRisk, req(director, { kind: 'risk', title: 'x' }))).toBe(403);
     await callRoute(
       createRisk,
       req(manager, {
@@ -197,50 +174,19 @@ describe('planning registers', () => {
   });
 
   it('milestone dependencies reject cycles and block completion of dependants', async () => {
-    const p = await callRoute<{ id: string }>(
-      createProject,
-      req(manager, {
-        name: 'Test project (fictional)',
-        startDate: '2026-11-01',
-        endDate: '2026-10-01',
-      }),
-    );
-    expect(p.status).toBe(400);
-    const project = await callRoute<{ id: string }>(
-      createProject,
-      req(manager, { name: 'Test project (fictional)' }),
-    );
-    const m1 = await callRoute<{ id: string }>(addMilestone, req(manager, { title: 'M1' }), {
-      id: project.data!.id,
-    });
-    const m2 = await callRoute<{ id: string }>(
-      addMilestone,
-      req(manager, { title: 'M2', dependsOnMilestoneIds: [m1.data!.id] }),
-      { id: project.data!.id },
-    );
-    expect(
-      (
-        await callRoute(
-          patchMilestone,
-          req(manager, { addDependsOnMilestoneId: m2.data!.id }, 'PATCH'),
-          { id: m1.data!.id },
-        )
-      ).status,
-    ).toBe(409);
-    expect(
-      (
-        await callRoute(patchMilestone, req(manager, { status: 'done' }, 'PATCH'), {
-          id: m2.data!.id,
-        })
-      ).status,
-    ).toBe(409);
-    expect(
-      (
-        await callRoute(patchMilestone, req(manager, { status: 'done' }, 'PATCH'), {
-          id: m1.data!.id,
-        })
-      ).status,
-    ).toBe(200);
+    const name = 'Test project (fictional)';
+    const backwards = { name, startDate: '2026-11-01', endDate: '2026-10-01' };
+    expect(await statusOf(createProject, req(manager, backwards))).toBe(400);
+    const project = await callRoute<{ id: string }>(createProject, req(manager, { name }));
+    const milestone = (json: object) =>
+      callRoute<{ id: string }>(addMilestone, req(manager, json), { id: project.data!.id });
+    const m1 = (await milestone({ title: 'M1' })).data!.id;
+    const m2 = (await milestone({ title: 'M2', dependsOnMilestoneIds: [m1] })).data!.id;
+    const patch = (id: string, json: object) =>
+      statusOf(patchMilestone, req(manager, json, 'PATCH'), { id });
+    expect(await patch(m1, { addDependsOnMilestoneId: m2 })).toBe(409);
+    expect(await patch(m2, { status: 'done' })).toBe(409);
+    expect(await patch(m1, { status: 'done' })).toBe(200);
   });
 
   it('work inventory import (25 rows) is readable by the auditor', async () => {
@@ -255,22 +201,12 @@ describe('planning registers', () => {
       req(manager, { kind: 'exception', category: 'fee_waiver', title: 'Waiver request (test)' }),
     );
     expect(inc.data?.needsAuthorisedApproval).toBe(true);
-    expect(
-      (
-        await callRoute(patchIncident, req(manager, { status: 'resolved' }, 'PATCH'), {
-          id: inc.data!.id,
-        })
-      ).status,
-    ).toBe(400);
-    expect(
-      (
-        await callRoute(
-          patchIncident,
-          req(manager, { status: 'resolved', resolution: 'Referred to director' }, 'PATCH'),
-          { id: inc.data!.id },
-        )
-      ).status,
-    ).toBe(200);
+    const resolve = (json: object) =>
+      statusOf(patchIncident, req(manager, { status: 'resolved', ...json }, 'PATCH'), {
+        id: inc.data!.id,
+      });
+    expect(await resolve({})).toBe(400);
+    expect(await resolve({ resolution: 'Referred to director' })).toBe(200);
   });
 });
 
@@ -283,25 +219,15 @@ describe('settings (policy register)', () => {
     expect(before.data?.find((s) => s.key === 'demo.fee')?.decisionState).toBe(
       'pending_verification',
     );
-    expect(
-      (
-        await callRoute(putSetting, req(auditor, { value: { amountInr: 1 } }, 'PUT'), {
-          key: 'demo.fee',
-        })
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await callRoute(putSetting, req(manager, { value: { days: 3 } }, 'PUT'), {
-          key: 'demo.terms',
-        })
-      ).status,
-    ).toBe(400);
-    const res = await callRoute<{ decisionState: string; value: unknown }>(
-      putSetting,
-      req(manager, { value: { allowed: false } }, 'PUT'),
-      { key: 'pipeline.demo_skip' },
-    );
+    const put = (user: { token: string }, key: string, value: unknown) =>
+      callRoute<{ decisionState: string; value: unknown }>(
+        putSetting,
+        req(user, { value }, 'PUT'),
+        { key },
+      );
+    expect((await put(auditor, 'demo.fee', { amountInr: 1 })).status).toBe(403);
+    expect((await put(manager, 'demo.terms', { days: 3 })).status).toBe(400);
+    const res = await put(manager, 'pipeline.demo_skip', { allowed: false });
     expect(res.data).toMatchObject({ decisionState: 'proposed', value: { allowed: false } });
   });
 });

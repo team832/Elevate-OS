@@ -23,6 +23,15 @@ const pointInTime = (asOf: Date): KpiWindow => {
   const d = istToday(asOf);
   return { from: d, to: d };
 };
+/** A point-in-time count ("As of today" / "As of now"). */
+const pointCount = (asOf: Date, label: string) => (n: number, definition: string) =>
+  metric.ok(n, meta(definition, pointInTime(asOf), 'count', label));
+/** [key, count] pairs, most frequent first, then by key. */
+const ranked = (keys: Iterable<string>) => {
+  const counts = new Map<string, number>();
+  for (const k of keys) counts.set(k, (counts.get(k) ?? 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+};
 
 // --- enquiries and sources ---------------------------------------------------------------------
 
@@ -59,13 +68,11 @@ export function leadsBySource(
     const prev = first.get(r.leadId);
     if (!prev || r.receivedAt < prev.receivedAt) first.set(r.leadId, r);
   }
-  const counts = new Map<string, number>();
-  for (const r of first.values())
-    if (inWindow(istToday(r.receivedAt), window))
-      counts.set(r.sourceCode, (counts.get(r.sourceCode) ?? 0) + 1);
-  return [...counts.entries()]
-    .map(([sourceCode, count]) => ({ sourceCode, count }))
-    .sort((a, b) => b.count - a.count || a.sourceCode.localeCompare(b.sourceCode));
+  return ranked(
+    [...first.values()]
+      .filter((r) => inWindow(istToday(r.receivedAt), window))
+      .map((r) => r.sourceCode),
+  ).map(([sourceCode, count]) => ({ sourceCode, count }));
 }
 
 // --- pipeline snapshot ---------------------------------------------------------------------------
@@ -98,34 +105,19 @@ export function pendingDecisions(
   asOf: Date,
 ): { awaitingDecision: Metric; awaitingApproval: Metric; offersAwaitingResponse: Metric } {
   const pending = rows.filter((r) => r.status === 'admission_pending');
-  const w = pointInTime(asOf);
+  const count = pointCount(asOf, 'As of today');
   return {
-    awaitingDecision: metric.ok(
+    awaitingDecision: count(
       pending.filter((r) => r.feeApproval !== 'approved').length,
-      meta(
-        'Cases at "admission pending" without an approved fee arrangement (application under review).',
-        w,
-        'count',
-        'As of today',
-      ),
+      'Cases at "admission pending" without an approved fee arrangement (application under review).',
     ),
-    awaitingApproval: metric.ok(
+    awaitingApproval: count(
       pending.filter((r) => r.feeApproval === 'pending').length,
-      meta(
-        'Of those, cases whose fee-arrangement approval request is waiting for an approver.',
-        w,
-        'count',
-        'As of today',
-      ),
+      'Of those, cases whose fee-arrangement approval request is waiting for an approver.',
     ),
-    offersAwaitingResponse: metric.ok(
+    offersAwaitingResponse: count(
       pending.filter((r) => r.feeApproval === 'approved').length,
-      meta(
-        'Cases at "admission pending" whose fee arrangement is approved (offer made) but not yet admitted.',
-        w,
-        'count',
-        'As of today',
-      ),
+      'Cases at "admission pending" whose fee arrangement is approved (offer made) but not yet admitted.',
     ),
   };
 }
@@ -143,20 +135,15 @@ export function pendingCounselling(
   asOf: Date,
 ): { upcoming: Metric; pastUnrecorded: Metric } {
   const scheduled = rows.filter((r) => r.status === 'scheduled');
-  const w = pointInTime(asOf);
+  const count = pointCount(asOf, 'As of now');
   return {
-    upcoming: metric.ok(
+    upcoming: count(
       scheduled.filter((r) => r.scheduledAt >= asOf).length,
-      meta('Counselling sessions scheduled from now on.', w, 'count', 'As of now'),
+      'Counselling sessions scheduled from now on.',
     ),
-    pastUnrecorded: metric.ok(
+    pastUnrecorded: count(
       scheduled.filter((r) => r.scheduledAt < asOf).length,
-      meta(
-        'Sessions whose time has passed but whose outcome (completed / no-show / cancelled) is not recorded.',
-        w,
-        'count',
-        'As of now',
-      ),
+      'Sessions whose time has passed but whose outcome (completed / no-show / cancelled) is not recorded.',
     ),
   };
 }
@@ -232,14 +219,9 @@ export interface FollowUpKpiLite {
 /** K-ADM-10: open lead follow-ups whose due date (IST) is before today. */
 export function overdueFollowUps(rows: readonly FollowUpKpiLite[], asOf: Date): Metric {
   const today = istToday(asOf);
-  return metric.ok(
+  return pointCount(asOf, 'As of today')(
     rows.filter((r) => r.status === 'open' && r.dueDate < today).length,
-    meta(
-      'Open follow-ups with a due date before today (Asia/Kolkata).',
-      pointInTime(asOf),
-      'count',
-      'As of today',
-    ),
+    'Open follow-ups with a due date before today (Asia/Kolkata).',
   );
 }
 
@@ -253,13 +235,7 @@ export function closuresByReason(
   rows: readonly ClosureKpiRow[],
   window: KpiWindow,
 ): { reasonCode: string; count: number }[] {
-  const counts = new Map<string, number>();
-  for (const r of rows)
-    if (inWindow(istToday(r.at), window)) {
-      const k = r.reasonCode ?? 'not_coded';
-      counts.set(k, (counts.get(k) ?? 0) + 1);
-    }
-  return [...counts.entries()]
-    .map(([reasonCode, count]) => ({ reasonCode, count }))
-    .sort((a, b) => b.count - a.count || a.reasonCode.localeCompare(b.reasonCode));
+  return ranked(
+    rows.filter((r) => inWindow(istToday(r.at), window)).map((r) => r.reasonCode ?? 'not_coded'),
+  ).map(([reasonCode, count]) => ({ reasonCode, count }));
 }

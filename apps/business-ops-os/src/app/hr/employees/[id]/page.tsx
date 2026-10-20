@@ -77,14 +77,8 @@ async function Profile({ user, id }: { user: AuthenticatedUser; id: string }) {
           <Card title="Employment">
             <dl className="el-stack">
               <Item label="Employment type" value={humanise(rec.employmentType)} />
-              <Item
-                label="Start date"
-                value={rec.employmentStartDate ? fmtDate(rec.employmentStartDate) : null}
-              />
-              <Item
-                label="End date"
-                value={rec.employmentEndDate ? fmtDate(rec.employmentEndDate) : null}
-              />
+              <Item label="Start date" value={date(rec.employmentStartDate)} />
+              <Item label="End date" value={date(rec.employmentEndDate)} />
               <Item
                 label="Sign-in"
                 value={rec.hasLogin ? 'Linked to a user account' : 'No user account'}
@@ -251,6 +245,8 @@ async function Profile({ user, id }: { user: AuthenticatedUser; id: string }) {
   );
 }
 
+const date = (d: string | null) => (d ? fmtDate(d) : null);
+
 function Item({ label, value }: { label: string; value: string | null }) {
   return (
     <div>
@@ -304,6 +300,8 @@ async function Assets({ user, staffId }: { user: AuthenticatedUser; staffId: str
 async function History({ user, staffId }: { user: AuthenticatedUser; staffId: string }) {
   const r = await load((db) => listEmploymentHistory(db, user, staffId));
   if (!r.ok) return r.view;
+  const value = (field: string, v: string | null) =>
+    field === 'employment_status' || field === 'employment_type' ? humanise(v) : (v ?? '—');
   return (
     <Card
       title="Employment history"
@@ -316,22 +314,8 @@ async function History({ user, staffId }: { user: AuthenticatedUser; staffId: st
         columns={[
           { key: 'effectiveOn', header: 'Effective', render: (h) => fmtDate(h.effectiveOn) },
           { key: 'fieldLabel', header: 'Changed' },
-          {
-            key: 'from',
-            header: 'From',
-            render: (h) =>
-              h.field === 'employment_status' || h.field === 'employment_type'
-                ? humanise(h.from)
-                : (h.from ?? '—'),
-          },
-          {
-            key: 'to',
-            header: 'To',
-            render: (h) =>
-              h.field === 'employment_status' || h.field === 'employment_type'
-                ? humanise(h.to)
-                : (h.to ?? '—'),
-          },
+          { key: 'from', header: 'From', render: (h) => value(h.field, h.from) },
+          { key: 'to', header: 'To', render: (h) => value(h.field, h.to) },
           { key: 'reason', header: 'Reason', render: (h) => h.reason ?? '—' },
           { key: 'changedAt', header: 'Recorded', render: (h) => fmtDateTime(h.changedAt) },
         ]}

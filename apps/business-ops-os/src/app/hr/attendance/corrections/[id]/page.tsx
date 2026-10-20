@@ -4,7 +4,7 @@ import { getCorrection } from '../../../../../server/hr/attendance';
 import { ActionForm } from '../../../../../ui/action-form';
 import { fmtDate, fmtDateTime } from '../../../../../ui/format';
 import { Frame, gate, load, Section } from '../../../../../ui/frame';
-import { localTime, minutes, RequestStatus, TimeNav, timeNavItems } from '../../time-ui';
+import { DecisionCards, localTime, minutes, RequestStatus, TimeNav } from '../../time-ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ export default async function CorrectionPage({ params }: { params: Promise<{ id:
   const access = await gate('ops:attendance:read', `/ops/hr/attendance/corrections/${id}`);
   return (
     <Frame access={access} active="attendance">
-      <TimeNav current="" items={timeNavItems(access.user)} />
+      <TimeNav user={access.user} />
       <Section label="Loading correction…">
         <Detail user={access.user} id={id} />
       </Section>
@@ -77,28 +77,12 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         ) : null}
       </Card>
       {r.data.canDecide ? (
-        <div className="el-grid">
-          <Card
-            title="Approve"
-            description="The recorded session is kept as superseded; the proposed times become a new session."
-          >
-            <ActionForm
-              action={`/ops/api/v1/hr/attendance-corrections/${c.id}/decision`}
-              submitLabel="Approve correction"
-              extra={{ decision: 'approve' }}
-              fields={[{ name: 'note', label: 'Note (optional)' }]}
-            />
-          </Card>
-          <Card title="Reject" description="The recorded session stays as it is.">
-            <ActionForm
-              action={`/ops/api/v1/hr/attendance-corrections/${c.id}/decision`}
-              submitLabel="Reject correction"
-              variant="danger"
-              extra={{ decision: 'reject' }}
-              fields={[{ name: 'note', label: 'Reason for rejecting', required: true }]}
-            />
-          </Card>
-        </div>
+        <DecisionCards
+          action={`/ops/api/v1/hr/attendance-corrections/${c.id}/decision`}
+          noun="correction"
+          approveDescription="The recorded session is kept as superseded; the proposed times become a new session."
+          rejectDescription="The recorded session stays as it is."
+        />
       ) : c.status === 'pending' ? (
         <Alert tone="info" title="Waiting for a decision">
           A manager in {e.fullName}’s reporting line or HR decides. The requester cannot decide

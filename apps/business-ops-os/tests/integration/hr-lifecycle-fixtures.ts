@@ -108,3 +108,6 @@ export function call<T = Record<string, unknown>>(
 export function uniqueCandidateEmail() {
   return `candidate-${Date.now().toString(36)}-${next()}@example.test`;
 }
+
+/** HTTP status of a route call. */
+export const status = async (...args: Parameters<typeof call>) => (await call(...args)).status;

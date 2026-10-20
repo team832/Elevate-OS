@@ -1,7 +1,7 @@
-/** Case list + "open a case" form + job buttons, for /ops/hr/onboarding and /ops/hr/offboarding. */
+/** Case list page + "open a case" form + job buttons, for /ops/hr/onboarding and /ops/hr/offboarding. */
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { scopeFor } from '@elevate/authorization';
-import { Card, DataTable, EmptyState, StatusBadge } from '@elevate/shared-ui';
+import { Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import {
   LIFECYCLE_STATUS_LABELS,
   LIFECYCLE_STATUSES,
@@ -11,7 +11,7 @@ import {
 import { lifecycleCandidates, listCases } from '../../../../server/hr/onboarding';
 import { ActionForm } from '../../../../ui/action-form';
 import { fmtDate, fmtDateTime, humanise, statusTone } from '../../../../ui/format';
-import { load, Section } from '../../../../ui/frame';
+import { Frame, gate, load, Section } from '../../../../ui/frame';
 import {
   ListControls,
   listParams,
@@ -19,7 +19,23 @@ import {
   type SearchParams,
 } from '../../recruitment/_components/lifecycle-ui';
 
-export async function CaseList({
+/** The /ops/hr/{kind} page. */
+export function caseListPage(kind: LifecycleKind, title: string, description: string) {
+  return async function CaseListPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+    const access = await gate('ops:lifecycle:read', `/ops/hr/${kind}`);
+    const sp = await searchParams;
+    return (
+      <Frame access={access} active={kind}>
+        <PageHeader title={title} description={description} />
+        <Section>
+          <CaseList user={access.user} kind={kind} sp={sp} />
+        </Section>
+      </Frame>
+    );
+  };
+}
+
+async function CaseList({
   user,
   kind,
   sp,
@@ -110,14 +126,7 @@ export async function CaseList({
           { key: 'updatedAt', header: 'Last change', render: (c) => fmtDateTime(c.updatedAt) },
         ]}
       />
-      <Pager
-        base={base}
-        params={sp}
-        page={r.data.page}
-        pageSize={r.data.pageSize}
-        total={r.data.total}
-        noun="cases"
-      />
+      <Pager base={base} params={sp} {...r.data} noun="cases" />
       <div className="el-grid">
         {manager ? (
           <Section label="Loading employees…">

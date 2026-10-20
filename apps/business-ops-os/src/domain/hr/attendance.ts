@@ -12,7 +12,14 @@
  * This is STAFF attendance only; it is never a performance measure on its own.
  */
 import { isIsoDate, type IsoDate } from '@elevate/shared-types';
-import { isValidTimeZone, minutesBetween, zonedDate, zonedToInstant, type Issue } from './calendar';
+import {
+  isHm,
+  isValidTimeZone,
+  minutesBetween,
+  zonedDate,
+  zonedToInstant,
+  type Issue,
+} from './calendar';
 import { parseCsv, recordsToObjects } from './csv';
 
 export interface AttendanceRules {
@@ -260,8 +267,9 @@ export function validateAttendanceImport(
     maxRows?: number;
   },
 ): ImportValidation {
-  const parsed = parseCsvForImport(csvText);
-  if (!parsed.ok) return { ok: false, fileError: parsed.error };
+  if (csvText.length > 2_000_000) return { ok: false, fileError: 'The file is larger than 2 MB.' };
+  const parsed = parseCsv(csvText);
+  if (!parsed.ok) return { ok: false, fileError: `Line ${parsed.line}: ${parsed.error}` };
   const mapped = recordsToObjects(parsed.records, ATTENDANCE_CSV_COLUMNS);
   if (!mapped.ok) return { ok: false, fileError: mapped.error };
   const maxRows = ctx.maxRows ?? 5000;
@@ -286,12 +294,11 @@ export function validateAttendanceImport(
     const date = v.date ?? '';
     if (!isIsoDate(date)) errors.push(`date "${date}" is not a valid YYYY-MM-DD date.`);
     const clockIn = v.clock_in ?? '';
-    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(clockIn))
-      errors.push(`clock_in "${clockIn}" is not HH:MM.`);
+    if (!isHm(clockIn)) errors.push(`clock_in "${clockIn}" is not HH:MM.`);
     const clockOutRaw = v.clock_out ?? '';
     let outDate: string | null = null;
     let outTime: string | null = null;
-    if (/^([01]\d|2[0-3]):([0-5]\d)$/.test(clockOutRaw)) {
+    if (isHm(clockOutRaw)) {
       outDate = date;
       outTime = clockOutRaw;
     } else {
@@ -365,12 +372,4 @@ export function validateAttendanceImport(
     validRows,
     invalidRows: results.length - validRows,
   };
-}
-
-function parseCsvForImport(text: string) {
-  if (text.length > 2_000_000)
-    return { ok: false as const, error: 'The file is larger than 2 MB.', line: 0 };
-  const r = parseCsv(text);
-  if (!r.ok) return { ok: false as const, error: `Line ${r.line}: ${r.error}`, line: r.line };
-  return r;
 }

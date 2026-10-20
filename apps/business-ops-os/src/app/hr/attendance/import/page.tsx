@@ -3,7 +3,7 @@ import { Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
 import { listAttendanceImports } from '../../../../server/hr/attendance-import';
 import { fmtDateTime } from '../../../../ui/format';
 import { Frame, gate, load, Section } from '../../../../ui/frame';
-import { TimeNav, timeNavItems } from '../time-ui';
+import { TimeNav } from '../time-ui';
 import { ImportForm } from './import-form';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ export default async function ImportPage() {
         title="Import attendance from CSV"
         description="Check the file first: every row is validated and errors are listed by line. Importing adds only the valid rows, in one step. Employees outside your scope are refused."
       />
-      <TimeNav current="/ops/hr/attendance/import" items={timeNavItems(access.user)} />
+      <TimeNav current="/ops/hr/attendance/import" user={access.user} />
       <Card title="File">
         <ImportForm />
       </Card>

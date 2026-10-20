@@ -22,17 +22,17 @@ import {
   opsPolicyVersions,
   opsSops,
   opsSopVersions,
-  staffMembers,
   users,
   type Database,
 } from '@elevate/database';
 import type { UserId } from '@elevate/shared-types';
-import { SOP_APPROVAL_PROBLEM_LABELS, sopApprovalProblems } from '../domain';
+import { SOP_APPROVAL_PROBLEM_LABELS } from '../domain';
 import { feeArrangementPolicy, sopApprovalPolicy } from './approval-policies';
 import { accessScope, staffIdForUser, type Actor } from './context';
 import { HR_APPROVAL_SOURCES } from './hr/approval-sources';
+import { staffUserLookup } from './ops-common';
 import { policyApprovalPolicy } from './policies-register';
-import { hashContent } from './sops';
+import { sopApprovalCheck } from './sops';
 import { listTaskReviewsForDecider } from './tasks';
 
 export interface ApprovalInboxItem {
@@ -62,7 +62,16 @@ export interface ApprovalSource {
 const holdsSourcePermission = (actor: Actor, p: ApprovalSource['permission']) =>
   (Array.isArray(p) ? p : [p]).some((x: Permission) => can(actor, x));
 
-const iso = (d: Date) => d.toISOString();
+/** An inbox item; ready with no blockers unless the source says otherwise. */
+const inboxItem = (
+  i: Omit<ApprovalInboxItem, 'requestedAt' | 'ready' | 'blockers'> &
+    Partial<Pick<ApprovalInboxItem, 'ready' | 'blockers'>> & { requestedAt: Date },
+): ApprovalInboxItem => ({
+  ...i,
+  requestedAt: i.requestedAt.toISOString(),
+  ready: i.ready ?? true,
+  blockers: i.blockers ?? [],
+});
 
 // --- core sources --------------------------------------------------------------------------------
 
@@ -79,40 +88,26 @@ export const sopVersionApprovalSource: ApprovalSource = {
       .innerJoin(users, eq(users.id, approvals.requestedBy))
       .where(and(eq(approvals.policy, sopApprovalPolicy.key), eq(approvals.status, 'pending')))
       .orderBy(asc(approvals.requestedAt));
-    const staff = await db
-      .select({ id: staffMembers.id, userId: staffMembers.userId })
-      .from(staffMembers);
-    const userOf = (sid: string | null) => staff.find((s) => s.id === sid)?.userId ?? null;
+    const userOf = await staffUserLookup(db);
     const out: ApprovalInboxItem[] = [];
     for (const { a, v, sop, requester } of rows) {
       if (a.requestedBy === actor.id) continue;
-      const problems = sopApprovalProblems({
-        versionStatus: v.status as 'in_review',
-        ownerStaffId: sop.ownerStaffId,
-        ownerUserId: userOf(sop.ownerStaffId),
-        reviewerStaffId: sop.reviewerStaffId,
-        reviewerUserId: userOf(sop.reviewerStaffId),
-        review:
-          v.reviewedBy && v.reviewOutcome
-            ? { byUserId: v.reviewedBy, outcome: v.reviewOutcome }
-            : null,
-        deciderUserId: actor.id,
-        submittedHash: v.contentHash,
-        currentHash: hashContent(v.content),
-      });
+      const problems = sopApprovalCheck(sop, v, userOf, actor.id);
       // The owner can never approve their own SOP: not their item to decide.
       if (problems.includes('approver_is_owner')) continue;
-      out.push({
-        id: a.id,
-        title: `${sop.code} ${sop.title} — version ${v.versionLabel}`,
-        detail: a.requestComment,
-        requestedByUserId: a.requestedBy,
-        requestedByName: requester,
-        requestedAt: iso(a.requestedAt),
-        link: `/ops/sops/${sop.id}`,
-        ready: problems.length === 0,
-        blockers: problems.map((p) => SOP_APPROVAL_PROBLEM_LABELS[p]),
-      });
+      out.push(
+        inboxItem({
+          id: a.id,
+          title: `${sop.code} ${sop.title} — version ${v.versionLabel}`,
+          detail: a.requestComment,
+          requestedByUserId: a.requestedBy,
+          requestedByName: requester,
+          requestedAt: a.requestedAt,
+          link: `/ops/sops/${sop.id}`,
+          ready: problems.length === 0,
+          blockers: problems.map((p) => SOP_APPROVAL_PROBLEM_LABELS[p]),
+        }),
+      );
     }
     return out;
   },
@@ -142,17 +137,17 @@ export const sopReviewSource: ApprovalSource = {
       .orderBy(asc(approvals.requestedAt));
     return rows
       .filter(({ a }) => a.requestedBy !== actor.id)
-      .map(({ v, sop, a, requester }) => ({
-        id: v.id,
-        title: `${sop.code} ${sop.title} — version ${v.versionLabel}`,
-        detail: 'Record a review: recommend approval or request changes.',
-        requestedByUserId: a.requestedBy,
-        requestedByName: requester,
-        requestedAt: iso(a.requestedAt),
-        link: `/ops/sops/${sop.id}`,
-        ready: true,
-        blockers: [],
-      }));
+      .map(({ v, sop, a, requester }) =>
+        inboxItem({
+          id: v.id,
+          title: `${sop.code} ${sop.title} — version ${v.versionLabel}`,
+          detail: 'Record a review: recommend approval or request changes.',
+          requestedByUserId: a.requestedBy,
+          requestedByName: requester,
+          requestedAt: a.requestedAt,
+          link: `/ops/sops/${sop.id}`,
+        }),
+      );
   },
 };
 
@@ -178,17 +173,17 @@ export const feeArrangementSource: ApprovalSource = {
       .orderBy(asc(approvals.requestedAt));
     return rows
       .filter(({ a }) => a.requestedBy !== actor.id)
-      .map(({ a, code, admissionId, student, requester }) => ({
-        id: a.id,
-        title: `${code} — ${student}`,
-        detail: a.requestComment,
-        requestedByUserId: a.requestedBy,
-        requestedByName: requester,
-        requestedAt: iso(a.requestedAt),
-        link: `/ops/admissions/${admissionId}`,
-        ready: true,
-        blockers: [],
-      }));
+      .map(({ a, code, admissionId, student, requester }) =>
+        inboxItem({
+          id: a.id,
+          title: `${code} — ${student}`,
+          detail: a.requestComment,
+          requestedByUserId: a.requestedBy,
+          requestedByName: requester,
+          requestedAt: a.requestedAt,
+          link: `/ops/admissions/${admissionId}`,
+        }),
+      );
   },
 };
 
@@ -198,17 +193,18 @@ export const taskReviewSource: ApprovalSource = {
   permission: 'ops:tasks:write',
   async list(db, actor) {
     const rows = await listTaskReviewsForDecider(db, actor);
-    return rows.map(({ review, task, submitterName }) => ({
-      id: review.id,
-      title: `${task.code} ${task.title}`,
-      detail: task.completionNote ?? (task.evidenceLink ? `Evidence: ${task.evidenceLink}` : null),
-      requestedByUserId: review.submittedBy,
-      requestedByName: submitterName,
-      requestedAt: iso(review.submittedAt),
-      link: `/ops/tasks/${task.id}`,
-      ready: true,
-      blockers: [],
-    }));
+    return rows.map(({ review, task, submitterName }) =>
+      inboxItem({
+        id: review.id,
+        title: `${task.code} ${task.title}`,
+        detail:
+          task.completionNote ?? (task.evidenceLink ? `Evidence: ${task.evidenceLink}` : null),
+        requestedByUserId: review.submittedBy,
+        requestedByName: submitterName,
+        requestedAt: review.submittedAt,
+        link: `/ops/tasks/${task.id}`,
+      }),
+    );
   },
 };
 
@@ -227,17 +223,17 @@ export const policyVersionApprovalSource: ApprovalSource = {
       .orderBy(asc(approvals.requestedAt));
     return rows
       .filter(({ a, v }) => a.requestedBy !== actor.id && v.proposedBy !== actor.id)
-      .map(({ a, v, p, requester }) => ({
-        id: a.id,
-        title: `${p.code} ${p.title} — version ${v.versionNumber}`,
-        detail: a.requestComment,
-        requestedByUserId: a.requestedBy,
-        requestedByName: requester,
-        requestedAt: iso(a.requestedAt),
-        link: `/ops/settings/policies/${p.id}`,
-        ready: true,
-        blockers: [],
-      }));
+      .map(({ a, v, p, requester }) =>
+        inboxItem({
+          id: a.id,
+          title: `${p.code} ${p.title} — version ${v.versionNumber}`,
+          detail: a.requestComment,
+          requestedByUserId: a.requestedBy,
+          requestedByName: requester,
+          requestedAt: a.requestedAt,
+          link: `/ops/settings/policies/${p.id}`,
+        }),
+      );
   },
 };
 
@@ -276,20 +272,15 @@ export async function listApprovalInbox(
   const results: InboxSourceResult[] = [];
   for (const source of sources) {
     if (!holdsSourcePermission(actor, source.permission)) continue;
+    const { key, label } = source;
     try {
       const items = (await source.list(db, actor)).filter((i) => i.requestedByUserId !== actor.id);
-      results.push({
-        key: source.key,
-        label: source.label,
-        status: 'ok',
-        count: items.length,
-        items,
-      });
+      results.push({ key, label, status: 'ok', count: items.length, items });
     } catch (error) {
-      console.error('approval source failed', source.key, error);
+      console.error('approval source failed', key, error);
       results.push({
-        key: source.key,
-        label: source.label,
+        key,
+        label,
         status: 'unavailable',
         count: null,
         items: [],

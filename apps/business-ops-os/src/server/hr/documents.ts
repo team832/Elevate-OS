@@ -8,10 +8,10 @@
  * (metadata kept; retention periods are an open owner decision).
  */
 import { createHash } from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { opsEmployeeDocuments, opsEmployeeRecords, type Database } from '@elevate/database';
 import { notify } from '@elevate/notifications';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
   ForbiddenError,
@@ -31,8 +31,11 @@ import {
 import { getDocumentStorage } from '../adapters/document-storage';
 import { userIdsWithRole, type Actor } from '../context';
 import { assertHrScope, assertNotSelf, hrCovers } from '../hr-scope';
+import { opsAudit, rowById } from '../ops-common';
 import { invalidField, optionalScope, selfOrAllScope } from './access';
 import type { AddDocumentInput, documentActionBody } from './schemas';
+
+const audit = opsAudit('employee_document');
 
 type DocumentId = typeof opsEmployeeDocuments.$inferSelect.id;
 type DocumentRow = typeof opsEmployeeDocuments.$inferSelect;
@@ -122,8 +125,9 @@ export async function addDocument(
     .where(eq(opsEmployeeRecords.staffId, staffId as StaffMemberId));
   if (!emp) throw new NotFoundError('Employee not found.');
 
+  const stored = input.storageKind === 'stored';
   let storageKey: string | null = null;
-  if (input.storageKind === 'reference') {
+  if (!stored) {
     if (!input.externalReference?.trim())
       throw invalidField(
         'externalReference',
@@ -134,11 +138,7 @@ export async function addDocument(
     if (!input.sha256) throw invalidField('sha256', 'sha256 is required.');
     if (!input.contentBase64) throw invalidField('contentBase64', 'File content is required.');
     const bytes = Buffer.from(input.contentBase64, 'base64');
-    if (
-      input.sizeBytes !== undefined &&
-      input.sizeBytes !== null &&
-      bytes.length !== input.sizeBytes
-    )
+    if ((input.sizeBytes ?? bytes.length) !== bytes.length)
       throw invalidField('sizeBytes', 'Size does not match the content.');
     const digest = createHash('sha256').update(bytes).digest('hex');
     if (digest !== input.sha256) throw invalidField('sha256', 'sha256 does not match the content.');
@@ -172,11 +172,10 @@ export async function addDocument(
         title: input.title,
         storageKind: input.storageKind,
         storageKey,
-        externalReference:
-          input.storageKind === 'reference' ? input.externalReference!.trim() : null,
-        contentType: input.storageKind === 'stored' ? (input.contentType ?? null) : null,
-        sizeBytes: input.storageKind === 'stored' ? (input.sizeBytes ?? null) : null,
-        sha256: input.storageKind === 'stored' ? (input.sha256 ?? null) : null,
+        externalReference: stored ? null : input.externalReference!.trim(),
+        contentType: stored ? (input.contentType ?? null) : null,
+        sizeBytes: stored ? (input.sizeBytes ?? null) : null,
+        sha256: stored ? (input.sha256 ?? null) : null,
         retentionClass: input.retentionClass ?? DEFAULT_RETENTION_CLASS[input.kind],
         expiresOn: input.expiresOn ?? null,
         uploadedBy: actor.id,
@@ -188,34 +187,28 @@ export async function addDocument(
         .update(opsEmployeeDocuments)
         .set({ status: 'superseded', supersededById: row.id })
         .where(eq(opsEmployeeDocuments.id, supersedes.id));
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'employee_document.added',
-      entityType: 'employee_document',
-      entityId: row.id,
-      after: {
-        staffId,
-        kind: row.kind,
-        storageKind: row.storageKind,
-        retentionClass: row.retentionClass,
-        supersedesId: supersedes?.id ?? null,
+    await audit(
+      tx,
+      actor,
+      row.id,
+      'employee_document.added',
+      {
+        after: {
+          staffId,
+          kind: row.kind,
+          storageKind: row.storageKind,
+          retentionClass: row.retentionClass,
+          supersedesId: supersedes?.id ?? null,
+        },
       },
       requestId,
-    });
+    );
     return { stored: true as const, id: row.id, document: toDto(row, istToday(new Date())) };
   });
 }
 
-async function documentRow(db: Database, id: string, lock = false) {
-  const q = db
-    .select()
-    .from(opsEmployeeDocuments)
-    .where(eq(opsEmployeeDocuments.id, id as DocumentId));
-  const [row] = lock ? await q.for('update') : await q;
-  if (!row) throw new NotFoundError('Document not found.');
-  return row;
-}
+const documentRow = (db: Database, id: string, lock = false) =>
+  rowById(db, opsEmployeeDocuments, id, 'Document', lock);
 
 /**
  * Permission-checked download: asks the adapter for a SHORT-LIVED URL. Mock →
@@ -255,15 +248,16 @@ export async function requestDocumentDownload(
       : { available: false, reason: 'storage_not_configured', detail: url.detail };
   }
   await withTransaction(db, (tx) =>
-    recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'employee_document.download_requested',
-      entityType: 'employee_document',
-      entityId: doc.id,
-      metadata: { outcome: result.available ? 'url_issued' : result.reason },
+    audit(
+      tx,
+      actor,
+      doc.id,
+      'employee_document.download_requested',
+      {
+        metadata: { outcome: result.available ? 'url_issued' : result.reason },
+      },
       requestId,
-    }),
+    ),
   );
   return result;
 }
@@ -291,39 +285,38 @@ export async function changeDocumentStatus(
       if (check.code === 'REASON_REQUIRED') throw invalidField('reason', check.message);
       throw new InvalidStateTransitionError(check.message);
     }
-    if (input.action === 'approve_deletion' || input.action === 'reject_deletion')
-      assertNotSelf(scope.staffId, doc.staffId, 'the deletion of your own document');
+    const deciding = input.action === 'approve_deletion' || input.action === 'reject_deletion';
+    if (deciding) assertNotSelf(scope.staffId, doc.staffId, 'the deletion of your own document');
     if (input.action === 'approve_deletion' && input.confirm !== true)
       throw invalidField('confirm', 'Tick the box to confirm the deletion.');
     const now = new Date();
-    const patch: Partial<typeof opsEmployeeDocuments.$inferInsert> = { status: check.to };
-    if (input.action === 'request_deletion') {
-      patch.deletionRequestedBy = actor.id;
-      patch.deletionRequestedAt = now;
-      patch.deletionReason = input.reason ?? null;
-      patch.deletionDecidedBy = null;
-      patch.deletionDecidedAt = null;
-    }
-    if (input.action === 'approve_deletion' || input.action === 'reject_deletion') {
-      patch.deletionDecidedBy = actor.id;
-      patch.deletionDecidedAt = now;
-    }
     const [after] = await tx
       .update(opsEmployeeDocuments)
-      .set(patch)
-      .where(and(eq(opsEmployeeDocuments.id, doc.id)))
+      .set({
+        status: check.to,
+        ...(input.action === 'request_deletion' && {
+          deletionRequestedBy: actor.id,
+          deletionRequestedAt: now,
+          deletionReason: input.reason ?? null,
+          deletionDecidedBy: null,
+          deletionDecidedAt: null,
+        }),
+        ...(deciding && { deletionDecidedBy: actor.id, deletionDecidedAt: now }),
+      })
+      .where(eq(opsEmployeeDocuments.id, doc.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: `employee_document.${input.action}`,
-      entityType: 'employee_document',
-      entityId: doc.id,
-      before: { status: doc.status },
-      after: { status: check.to },
-      metadata: { reason: input.reason ?? null },
+    await audit(
+      tx,
+      actor,
+      doc.id,
+      `employee_document.${input.action}`,
+      {
+        before: { status: doc.status },
+        after: { status: check.to },
+        metadata: { reason: input.reason ?? null },
+      },
       requestId,
-    });
+    );
     if (input.action === 'request_deletion') {
       const deciders = (await userIdsWithRole(tx, 'hr_manager')).filter((u) => u !== actor.id);
       await notify(tx, {

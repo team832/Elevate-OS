@@ -202,6 +202,35 @@ export type TransitionCheck =
       missing?: readonly string[];
     };
 
+/** Each guard's failure message in this context, or null when the guard passes. */
+const GUARD_FAILURES: Record<
+  TransitionGuard,
+  (ctx: TransitionContext, to: AdmissionStatus) => string | null
+> = {
+  successful_contact: (ctx) =>
+    ctx.hasSuccessfulContact
+      ? null
+      : 'Log a successful two-way contact first; unanswered calls do not count as contacted (BR-OPS-4).',
+  demo_skip_policy: (ctx) =>
+    ctx.demoSkipAllowed === false
+      ? 'Skipping the demo is switched off in the pipeline settings.'
+      : null,
+  admission_readiness: (ctx) =>
+    ctx.readinessMissing === undefined || ctx.readinessMissing.length > 0
+      ? 'The admission cannot be confirmed yet.'
+      : null,
+  enrolment_handoff: (ctx) =>
+    ctx.viaEnrolmentHandoff
+      ? null
+      : 'Use "Request enrolment" so the request to Academic OS is published with the change.',
+  enrolment_reply: (ctx) =>
+    ctx.viaEnrolmentReply ? null : 'Only Academic OS replies can make this change.',
+  resume_to_held_status: (ctx, to) =>
+    ctx.heldFromStatus === to
+      ? null
+      : `Resume to the status held before the pause (${ctx.heldFromStatus ?? 'unknown'}).`,
+};
+
 /** Decide whether `from → to` is allowed in this context. Pure; no side effects. */
 export function checkTransition(
   from: AdmissionStatus,
@@ -231,61 +260,16 @@ export function checkTransition(
   if (found.requiresReason && !ctx.reason?.trim()) {
     return { ok: false, code: 'REASON_REQUIRED', message: 'Give a reason for this change.' };
   }
-  switch (found.guard) {
-    case 'successful_contact':
-      if (!ctx.hasSuccessfulContact)
-        return {
-          ok: false,
-          code: 'GUARD_FAILED',
-          message:
-            'Log a successful two-way contact first; unanswered calls do not count as contacted (BR-OPS-4).',
-        };
-      break;
-    case 'demo_skip_policy':
-      if (ctx.demoSkipAllowed === false)
-        return {
-          ok: false,
-          code: 'GUARD_FAILED',
-          message: 'Skipping the demo is switched off in the pipeline settings.',
-        };
-      break;
-    case 'admission_readiness':
-      if (ctx.readinessMissing === undefined || ctx.readinessMissing.length > 0)
-        return {
-          ok: false,
-          code: 'GUARD_FAILED',
-          message: 'The admission cannot be confirmed yet.',
-          missing: ctx.readinessMissing ?? ['readiness not evaluated'],
-        };
-      break;
-    case 'enrolment_handoff':
-      if (!ctx.viaEnrolmentHandoff)
-        return {
-          ok: false,
-          code: 'GUARD_FAILED',
-          message:
-            'Use "Request enrolment" so the request to Academic OS is published with the change.',
-        };
-      break;
-    case 'enrolment_reply':
-      if (!ctx.viaEnrolmentReply)
-        return {
-          ok: false,
-          code: 'GUARD_FAILED',
-          message: 'Only Academic OS replies can make this change.',
-        };
-      break;
-    case 'resume_to_held_status':
-      if (ctx.heldFromStatus !== to)
-        return {
-          ok: false,
-          code: 'GUARD_FAILED',
-          message: `Resume to the status held before the pause (${ctx.heldFromStatus ?? 'unknown'}).`,
-        };
-      break;
-    default:
-      break;
-  }
+  const failure = found.guard ? GUARD_FAILURES[found.guard](ctx, to) : null;
+  if (failure)
+    return {
+      ok: false,
+      code: 'GUARD_FAILED',
+      message: failure,
+      ...(found.guard === 'admission_readiness' && {
+        missing: ctx.readinessMissing ?? ['readiness not evaluated'],
+      }),
+    };
   return { ok: true, rule: found };
 }
 

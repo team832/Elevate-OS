@@ -17,7 +17,7 @@ import {
 } from '@elevate/database';
 import type { UserId } from '@elevate/shared-types';
 import { isPrivateDocumentKind } from '../../domain/hr/documents';
-import { completionGaps, type ItemKind, type ItemStatus } from '../../domain/hr/lifecycle';
+import { completionGaps } from '../../domain/hr/lifecycle';
 import type { ApprovalInboxItem, ApprovalSource } from '../approvals';
 import { accessScope, staffIdForUser } from '../context';
 import { hrCovers, hrScope } from '../hr-scope';
@@ -179,12 +179,7 @@ const lifecycleCases: ApprovalSource = {
     const items: PendingItem[] = [];
     for (const { c, name } of rows) {
       if (!hrCovers(scope, c.staffId) || c.staffId === scope.staffId) continue;
-      const checklist = (await caseItems(db, c.id)).map((i) => ({
-        ...i,
-        kind: i.kind as ItemKind,
-        status: i.status as ItemStatus,
-      }));
-      const gaps = completionGaps(c.kind, checklist);
+      const gaps = completionGaps(c.kind, await caseItems(db, c.id));
       items.push({
         id: c.id,
         title: `${c.code} ${name} — ${c.kind === 'onboarding' ? 'onboarding' : 'separation'}`,

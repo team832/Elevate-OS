@@ -110,10 +110,6 @@ export function checkDocumentAction(
   return { ok: true, to: rule.to };
 }
 
-export function isSha256Hex(value: string | null | undefined): boolean {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
-}
-
 /** Allowed content types for stored documents (when storage is configured). */
 export const DOCUMENT_CONTENT_TYPES = [
   'application/pdf',

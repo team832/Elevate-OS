@@ -25,7 +25,7 @@ import {
 import { POST as createShift } from '../../src/app/api/v1/hr/shifts/route';
 import { POST as assignShift } from '../../src/app/api/v1/hr/shift-assignments/route';
 import { runMissingClockOutCheck } from '../../src/server/hr/attendance';
-import { auditFor, employee, get, post, type Employee } from './hr-time-fixtures';
+import { auditFor, employee, get, post, statusOf, type Employee } from './hr-time-fixtures';
 
 const ctx = setupTestDatabase();
 let hr: Employee; // hr_manager
@@ -69,12 +69,10 @@ beforeAll(async () => {
   dayShiftId = shift.data!.id;
   for (const e of [emp, emp2])
     expect(
-      (
-        await callRoute(
-          assignShift,
-          post(hr, { staffId: e.staffId, shiftTemplateId: dayShiftId, fromDate: '2026-09-01' }),
-        )
-      ).status,
+      await statusOf(
+        assignShift,
+        post(hr, { staffId: e.staffId, shiftTemplateId: dayShiftId, fromDate: '2026-09-01' }),
+      ),
     ).toBe(201);
 });
 
@@ -94,10 +92,10 @@ const manual = (as: Employee, over: Record<string, unknown> = {}) =>
 
 describe('attendance routes: authentication, permissions, validation', () => {
   it('401 without a session, 403 without the permission, 400 on bad input', async () => {
-    expect((await callRoute(listAttendance, buildRequest('/x'))).status).toBe(401);
+    expect(await statusOf(listAttendance, buildRequest('/x'))).toBe(401);
     const teacher = await createTestUser(ctx.db, { roles: ['teacher'] });
-    expect((await callRoute(listAttendance, get(teacher))).status).toBe(403);
-    expect((await callRoute(manualEntry, post(emp, { staffId: emp.staffId }))).status).toBe(403);
+    expect(await statusOf(listAttendance, get(teacher))).toBe(403);
+    expect(await statusOf(manualEntry, post(emp, { staffId: emp.staffId }))).toBe(403);
     const bad = await callRoute(
       manualEntry,
       post(hr, { staffId: emp.staffId, workDate: '2026-10-12', clockIn: '9am' }),
@@ -144,13 +142,13 @@ describe('self service and own scope', () => {
     const inRes = await callRoute<Session>(clockInRoute, post(emp2));
     expect(inRes.status).toBe(201);
     expect(inRes.data?.status).toBe('open');
-    expect((await callRoute(clockInRoute, post(emp2))).status).toBe(409);
-    expect((await callRoute(breakRoute, post(emp2, { action: 'start' }))).status).toBe(200);
-    expect((await callRoute(breakRoute, post(emp2, { action: 'start' }))).status).toBe(409);
+    expect(await statusOf(clockInRoute, post(emp2))).toBe(409);
+    expect(await statusOf(breakRoute, post(emp2, { action: 'start' }))).toBe(200);
+    expect(await statusOf(breakRoute, post(emp2, { action: 'start' }))).toBe(409);
     const out = await callRoute<Session>(clockOutRoute, post(emp2));
     expect(out.status).toBe(200);
     expect(out.data?.status).toBe('closed');
-    expect((await callRoute(clockOutRoute, post(emp2))).status).toBe(409);
+    expect(await statusOf(clockOutRoute, post(emp2))).toBe(409);
     expect(await auditFor(ctx.db, inRes.data!.id)).toEqual(
       expect.arrayContaining([
         'attendance.clocked_in',
@@ -170,11 +168,11 @@ describe('self service and own scope', () => {
       .select()
       .from(opsAttendanceSessions)
       .where(eq(opsAttendanceSessions.staffId, emp2.staffId));
-    expect((await callRoute(getSession, get(emp), { id: s!.id })).status).toBe(403);
-    expect((await callRoute(getSession, get(emp2), { id: s!.id })).status).toBe(200);
+    expect(await statusOf(getSession, get(emp), { id: s!.id })).toBe(403);
+    expect(await statusOf(getSession, get(emp2), { id: s!.id })).toBe(200);
     // the department manager sees the chain, the other manager does not
-    expect((await callRoute(getSession, get(deptManager), { id: s!.id })).status).toBe(200);
-    expect((await callRoute(getSession, get(otherManager), { id: s!.id })).status).toBe(403);
+    expect(await statusOf(getSession, get(deptManager), { id: s!.id })).toBe(200);
+    expect(await statusOf(getSession, get(otherManager), { id: s!.id })).toBe(403);
   });
 
   it('monthly summary: worked vs scheduled for self; colleague summary forbidden', async () => {
@@ -189,9 +187,7 @@ describe('self service and own scope', () => {
     expect(r.data!.summary.workedMinutes).toEqual({ status: 'ok', value: 425 });
     expect(r.data!.summary.lateCount).toBe(1);
     expect(r.data!.summary.scheduledMinutes.status).toBe('ok');
-    expect((await callRoute(summaryRoute, get(emp, `/x?staffId=${emp2.staffId}`))).status).toBe(
-      403,
-    );
+    expect(await statusOf(summaryRoute, get(emp, `/x?staffId=${emp2.staffId}`))).toBe(403);
     const none = await callRoute<{ summary: { scheduledMinutes: { status: string } } }>(
       summaryRoute,
       get(outsider, '/x?month=2026-10'),
@@ -266,33 +262,29 @@ describe('corrections never overwrite', () => {
     expect(req.data?.code).toMatch(/^ATC-\d{6}$/);
     // a second pending correction on the same session → 409
     expect(
-      (
-        await callRoute(
-          createCorrection,
-          post(emp, {
-            sessionId: s!.id,
-            workDate: '2026-10-12',
-            clockIn: '09:00',
-            clockOut: '17:30',
-            reason: 'again please',
-          }),
-        )
-      ).status,
+      await statusOf(
+        createCorrection,
+        post(emp, {
+          sessionId: s!.id,
+          workDate: '2026-10-12',
+          clockIn: '09:00',
+          clockOut: '17:30',
+          reason: 'again please',
+        }),
+      ),
     ).toBe(409);
     // colleague cannot request for someone else
     expect(
-      (
-        await callRoute(
-          createCorrection,
-          post(emp2, {
-            sessionId: s!.id,
-            workDate: '2026-10-12',
-            clockIn: '09:00',
-            clockOut: '17:30',
-            reason: 'not mine',
-          }),
-        )
-      ).status,
+      await statusOf(
+        createCorrection,
+        post(emp2, {
+          sessionId: s!.id,
+          workDate: '2026-10-12',
+          clockIn: '09:00',
+          clockOut: '17:30',
+          reason: 'not mine',
+        }),
+      ),
     ).toBe(403);
     // employees cannot decide at all; manager of another chain is out of scope
     expect(
@@ -300,19 +292,15 @@ describe('corrections never overwrite', () => {
         .status,
     ).toBe(403);
     expect(
-      (
-        await callRoute(decideCorrection, post(otherManager, { decision: 'approve' }), {
-          id: req.data!.id,
-        })
-      ).status,
+      await statusOf(decideCorrection, post(otherManager, { decision: 'approve' }), {
+        id: req.data!.id,
+      }),
     ).toBe(403);
     // rejection without a note → 400
     expect(
-      (
-        await callRoute(decideCorrection, post(deptManager, { decision: 'reject' }), {
-          id: req.data!.id,
-        })
-      ).status,
+      await statusOf(decideCorrection, post(deptManager, { decision: 'reject' }), {
+        id: req.data!.id,
+      }),
     ).toBe(400);
     const ok = await callRoute<{ status: string; resultingSessionId: string }>(
       decideCorrection,
@@ -348,11 +336,9 @@ describe('corrections never overwrite', () => {
     ]);
     // deciding again → invalid state transition
     expect(
-      (
-        await callRoute(decideCorrection, post(deptManager, { decision: 'reject', note: 'x' }), {
-          id: req.data!.id,
-        })
-      ).status,
+      await statusOf(decideCorrection, post(deptManager, { decision: 'reject', note: 'x' }), {
+        id: req.data!.id,
+      }),
     ).toBe(409);
   });
 
@@ -404,12 +390,8 @@ describe('corrections never overwrite', () => {
       }),
     );
     expect(req.status).toBe(201);
-    expect(
-      (await callRoute(withdrawCorrection, post(deptManager), { id: req.data!.id })).status,
-    ).toBe(403);
-    expect((await callRoute(withdrawCorrection, post(emp2), { id: req.data!.id })).status).toBe(
-      200,
-    );
+    expect(await statusOf(withdrawCorrection, post(deptManager), { id: req.data!.id })).toBe(403);
+    expect(await statusOf(withdrawCorrection, post(emp2), { id: req.data!.id })).toBe(200);
     const list = await callRoute<{ rows: { staffId: string }[] }>(listCorrections, get(emp2));
     expect(list.data!.rows.every((r) => r.staffId === emp2.staffId)).toBe(true);
     void original;
@@ -428,7 +410,7 @@ describe('CSV import', () => {
     ].join('\r\n');
 
   it('preview reports per-row errors and creates nothing; 403 for employees', async () => {
-    expect((await callRoute(importRoute, post(emp, { csv: csv() }))).status).toBe(403);
+    expect(await statusOf(importRoute, post(emp, { csv: csv() }))).toBe(403);
     const before = (await ctx.db.select().from(opsAttendanceSessions)).length;
     const p = await callRoute<{
       mode: string;
@@ -440,7 +422,7 @@ describe('CSV import', () => {
     expect(p.data).toMatchObject({ mode: 'preview', validRows: 2, invalidRows: 2 });
     expect(p.data!.rows[2]?.errors[0]).toMatch(/Unknown employee code/);
     expect((await ctx.db.select().from(opsAttendanceSessions)).length).toBe(before);
-    expect((await callRoute(importRoute, post(hr, { csv: 'colour\nred' }))).status).toBe(400);
+    expect(await statusOf(importRoute, post(hr, { csv: 'colour\nred' }))).toBe(400);
   });
 
   it('commit imports only valid rows in one batch; re-importing the same file creates nothing', async () => {
@@ -475,6 +457,6 @@ describe('CSV import', () => {
 
   it('department managers cannot import (no ops:attendance:manage)', async () => {
     const [mgr] = [deptManager];
-    expect((await callRoute(importRoute, post(mgr, { csv: csv() }))).status).toBe(403);
+    expect(await statusOf(importRoute, post(mgr, { csv: csv() }))).toBe(403);
   });
 });

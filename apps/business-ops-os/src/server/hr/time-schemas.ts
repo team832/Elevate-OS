@@ -13,6 +13,17 @@ const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, { error: 'Use YYYY-MM.
 const page = z.coerce.number().int().min(1).max(10_000).default(1);
 const breakMinutes = z.int().min(0).max(1440);
 const weekdays = z.array(z.int().min(0).max(6)).min(1).max(7);
+const decisionStatus = z.enum(['proposed', 'approved', 'retired']);
+const range = { from: isoDateSchema, to: isoDateSchema };
+const optionalRange = { from: isoDateSchema.optional(), to: isoDateSchema.optional() };
+/** Local date + times in the employee's timezone. */
+const sessionTimes = {
+  workDate: isoDateSchema,
+  clockIn: hm,
+  /** Date of the clock-out when it is not `workDate` (overnight). */
+  clockOutDate: isoDateSchema.nullish(),
+  breakMinutes: breakMinutes.default(0),
+};
 
 export const timeIdParams = z.object({ id: z.uuid() });
 
@@ -20,8 +31,7 @@ export const timeIdParams = z.object({ id: z.uuid() });
 
 export const attendanceListQuery = z.object({
   staffId: z.uuid().optional(),
-  from: isoDateSchema.optional(),
-  to: isoDateSchema.optional(),
+  ...optionalRange,
   status: z.enum(['open', 'closed', 'superseded', 'missing_clock_out']).optional(),
   source: z.enum(['self', 'manual', 'csv_import', 'provider', 'correction']).optional(),
   page,
@@ -32,15 +42,11 @@ export const clockBody = z.object({ note: optText(500) });
 
 export const breakBody = z.object({ action: z.enum(['start', 'end']) });
 
-/** Manual entry: local date + times in the employee's timezone; a reason is mandatory. */
+/** Manual entry: a reason is mandatory. */
 export const manualSessionBody = z.object({
   staffId: z.uuid(),
-  workDate: isoDateSchema,
-  clockIn: hm,
+  ...sessionTimes,
   clockOut: hm.nullish(),
-  /** Date of the clock-out when it is not `workDate` (overnight). */
-  clockOutDate: isoDateSchema.nullish(),
-  breakMinutes: breakMinutes.default(0),
   reason: text(1000).min(3, { error: 'A reason is required for a manual entry.' }),
 });
 export type ManualSessionInput = z.output<typeof manualSessionBody>;
@@ -58,11 +64,8 @@ export const correctionListQuery = z.object({
 export const createCorrectionBody = z.object({
   /** The session to correct; omit for a day with no session at all. */
   sessionId: z.uuid().nullish(),
-  workDate: isoDateSchema,
-  clockIn: hm,
+  ...sessionTimes,
   clockOut: hm,
-  clockOutDate: isoDateSchema.nullish(),
-  breakMinutes: breakMinutes.default(0),
   reason: text(1000).min(3, { error: 'Explain what is wrong and why.' }),
 });
 export type CreateCorrectionInput = z.output<typeof createCorrectionBody>;
@@ -103,18 +106,12 @@ export const createShiftBody = z.object({
 });
 export type CreateShiftInput = z.output<typeof createShiftBody>;
 
-export const updateShiftBody = z
-  .object({
-    name: text(120).min(1),
-    startTime: hm,
-    endTime: hm,
+export const updateShiftBody = createShiftBody
+  .omit({ code: true })
+  .extend({
     crossesMidnight: z.boolean(),
     unpaidBreakMinutes: z.int().min(0).max(600),
-    workingWeekdays: weekdays,
-    location: optText(120),
-    departmentId: z.uuid().nullish(),
-    notes: optText(1000),
-    status: z.enum(['proposed', 'approved', 'retired']),
+    status: decisionStatus,
   })
   .partial();
 export type UpdateShiftInput = z.output<typeof updateShiftBody>;
@@ -142,8 +139,7 @@ export const updateAssignmentBody = z.union([
 export type UpdateAssignmentInput = z.output<typeof updateAssignmentBody>;
 
 export const holidayListQuery = z.object({
-  from: isoDateSchema.optional(),
-  to: isoDateSchema.optional(),
+  ...optionalRange,
   includeWithdrawn: z.enum(['true', 'false']).optional(),
 });
 
@@ -176,15 +172,9 @@ export const createLeaveTypeBody = z.object({
 });
 export type CreateLeaveTypeInput = z.output<typeof createLeaveTypeBody>;
 
-export const updateLeaveTypeBody = z
-  .object({
-    name: text(120).min(1),
-    paid: z.boolean(),
-    halfDayAllowed: z.boolean(),
-    requiresDocument: z.boolean(),
-    description: optText(1000),
-    status: z.enum(['proposed', 'approved', 'retired']),
-  })
+export const updateLeaveTypeBody = createLeaveTypeBody
+  .omit({ code: true })
+  .extend({ halfDayAllowed: z.boolean(), requiresDocument: z.boolean(), status: decisionStatus })
   .partial();
 export type UpdateLeaveTypeInput = z.output<typeof updateLeaveTypeBody>;
 
@@ -193,8 +183,7 @@ const part = z.enum(['full', 'first_half', 'second_half']);
 export const leaveListQuery = z.object({
   status: z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional(),
   staffId: z.uuid().optional(),
-  from: isoDateSchema.optional(),
-  to: isoDateSchema.optional(),
+  ...optionalRange,
   view: z.enum(['mine', 'to_decide', 'all']).optional(),
   page,
 });
@@ -216,8 +205,7 @@ export type CreateLeaveInput = z.output<typeof createLeaveBody>;
 export const cancelLeaveBody = z.object({ reason: optText(1000) });
 
 export const availabilityQuery = z.object({
-  from: isoDateSchema,
-  to: isoDateSchema,
+  ...range,
   departmentId: z.uuid().optional(),
 });
 
@@ -241,8 +229,7 @@ export type LedgerEntryInput = z.output<typeof ledgerEntryBody>;
 // --- timesheets -------------------------------------------------------------------------------
 
 export const timesheetQuery = z.object({
-  from: isoDateSchema,
-  to: isoDateSchema,
+  ...range,
   staffId: z.uuid().optional(),
   departmentId: z.uuid().optional(),
 });

@@ -4,6 +4,7 @@
  */
 import { auditEvents, type Database } from '@elevate/database';
 import { and, desc, eq } from 'drizzle-orm';
+import { callRoute } from '@elevate/testing';
 import type { RoleKey, StaffMemberId } from '@elevate/shared-types';
 import { registerExistingStaff } from '../../src/server/hr/employee-core';
 import { staffUser, type StaffUser } from './fixtures';
@@ -32,6 +33,10 @@ export async function employeeUser(
   );
   return { ...user, employeeCode };
 }
+
+/** HTTP status of one route call. */
+export const statusOf = async (...args: Parameters<typeof callRoute>) =>
+  (await callRoute(...args)).status;
 
 export function uniqueWorkEmail(prefix = 'employee'): string {
   n += 1;

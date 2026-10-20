@@ -1,6 +1,7 @@
 /**
- * Lifecycle cases — shared case helpers and onboarding (OPS-045, OPS-046, D-028).
- * Offboarding, separation and the case detail view live in ./offboarding.ts.
+ * Lifecycle cases — shared HR lifecycle helpers, case helpers and onboarding
+ * (OPS-045, OPS-046, D-028). Offboarding, separation and the case detail view
+ * live in ./offboarding.ts.
  *
  * Access: `ops:lifecycle:read` with HR scope (hr-scope.ts: `all`, or own =
  * self + reporting chain for department managers); checklist work needs
@@ -12,20 +13,7 @@
  * working unchanged. HRC onboarding cases are the HR process with assignees,
  * due dates, gating and approval; they do not read or write onboarding_items.
  */
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  ilike,
-  inArray,
-  isNull,
-  lt,
-  ne,
-  or,
-  type SQL,
-} from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNull, lt, ne, or } from 'drizzle-orm';
 import { can, scopeFor } from '@elevate/authorization';
 import {
   opsEmployeeRecords,
@@ -34,8 +22,8 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import { notify } from '@elevate/notifications';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { notify, type NotifyInput } from '@elevate/notifications';
+import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ForbiddenError, ValidationError } from '@elevate/shared-contracts';
 import type { StaffMemberId, UserId } from '@elevate/shared-types';
 import { istToday, type IsoDate } from '../../domain/dates';
@@ -46,10 +34,7 @@ import {
   isItemOverdue,
   isResolved,
   type GeneratedItem,
-  type ItemKind,
-  type ItemStatus,
   type LifecycleKind,
-  type LifecycleStatus,
 } from '../../domain/hr/lifecycle';
 import {
   activeStaff,
@@ -62,35 +47,73 @@ import {
 } from '../context';
 import { assertHrScope, assertNotSelf, hrScope, hrScopeIds, type HrScope } from '../hr-scope';
 import { loadSettings } from '../settings';
+import { notifyOthers, opsAudit, rowById, type AuditData } from '../ops-common';
 import { changeEmploymentStatus } from './employee-core';
 import type { AddItemInput, CaseListQuery, UpdateItemInput } from './lifecycle-schemas';
 
 export type CaseRow = typeof opsLifecycleCases.$inferSelect;
 export type ItemRow = typeof opsLifecycleItems.$inferSelect;
 
+// --- shared helpers (recruitment, onboarding, offboarding) -------------------------------------
+
+/** 400 with a field path; `detail` is the per-field message. */
+export const fieldError = (path: string, message: string, detail = message) =>
+  new ValidationError(message, { details: [{ location: 'body', path: [path], message: detail }] });
+
+/** Case-insensitive `%q%` match on any of the columns. */
+export const search = (q: string, ...cols: Parameters<typeof ilike>[0][]) =>
+  or(...cols.map((c) => ilike(c, `%${q}%`)));
+
+export const sortBy = (dir: 'asc' | 'desc', col: Parameters<typeof asc>[0]) =>
+  dir === 'asc' ? asc(col) : desc(col);
+
+/** A list response page (`pageOf(q, [])` is the empty page). */
+export const pageOf = <T>(q: { page: number; pageSize: number }, rows: T[], total = 0) => ({
+  rows,
+  total: Number(total),
+  page: q.page,
+  pageSize: q.pageSize,
+});
+
+/** notifyOthers to the logins of `staffIds` and to `userIds`. */
+export const notifyPeople = async (
+  tx: Database,
+  actor: Actor,
+  staffIds: readonly (string | null | undefined)[],
+  message: Omit<NotifyInput, 'userIds' | 'module'>,
+  userIds: readonly UserId[] = [],
+) => notifyOthers(tx, actor, [...(await userIdsForStaff(tx, staffIds)), ...userIds], message);
+
+/** opsAudit with `requestId` inside the data object; a null actor is the system. */
+export const auditOf = (entityType: string) => {
+  const write = opsAudit(entityType);
+  return (
+    tx: Database,
+    actor: Actor | null,
+    entityId: string | null,
+    action: string,
+    { requestId, ...data }: AuditData & { requestId?: string } = {},
+  ) => write(tx, actor, entityId, action, data, requestId);
+};
+
+// --- case helpers ------------------------------------------------------------------------------
+
+export const auditCase = auditOf('lifecycle_case');
+
 export const CASE_LINK = (c: { id: string; kind: string }) =>
   `/ops/hr/${c.kind === 'offboarding' ? 'offboarding' : 'onboarding'}/${c.id}`;
 
-export async function lockCase(tx: Database, id: string): Promise<CaseRow> {
-  const [row] = await tx
-    .select()
-    .from(opsLifecycleCases)
-    .where(eq(opsLifecycleCases.id, id as CaseRow['id']))
-    .for('update')
-    .limit(1);
-  if (!row) notFound('Case');
-  return row;
-}
+/** Notification link + entity for a case. */
+export const caseRef = (c: { id: string; kind: string }) => ({
+  link: CASE_LINK(c),
+  entityType: 'lifecycle_case',
+  entityId: c.id,
+});
 
-export async function getCaseRow(db: Database, id: string): Promise<CaseRow> {
-  const [row] = await db
-    .select()
-    .from(opsLifecycleCases)
-    .where(eq(opsLifecycleCases.id, id as CaseRow['id']))
-    .limit(1);
-  if (!row) notFound('Case');
-  return row;
-}
+export const getCaseRow = (db: Database, id: string, lock = false) =>
+  rowById(db, opsLifecycleCases, id, 'Case', lock);
+
+export const lockCase = (tx: Database, id: string) => getCaseRow(tx, id, true);
 
 export async function caseItems(db: Database, caseId: string): Promise<ItemRow[]> {
   return db
@@ -98,6 +121,15 @@ export async function caseItems(db: Database, caseId: string): Promise<ItemRow[]
     .from(opsLifecycleItems)
     .where(eq(opsLifecycleItems.caseId, caseId as CaseRow['id']))
     .orderBy(asc(opsLifecycleItems.seq));
+}
+
+/** HL-A8 gaps of a case, read in the caller's transaction; throws when any remain. */
+export async function assertNoGaps(tx: Database, c: CaseRow) {
+  const gaps = completionGaps(c.kind, await caseItems(tx, c.id));
+  if (gaps.length)
+    throw new ConflictError('Required checklist items are still open.', {
+      details: { missing: gaps },
+    });
 }
 
 /** HR scope for lifecycle work: manage at scope `all` only (HR / operations). */
@@ -129,10 +161,32 @@ export async function employeeOf(db: Database, staffId: string) {
     .where(eq(opsEmployeeRecords.staffId, staffId as StaffMemberId))
     .limit(1);
   if (!row)
-    throw new ValidationError('This staff member has no employee record.', {
-      details: [{ location: 'body', path: ['staffId'], message: 'No employee record' }],
-    });
+    throw fieldError('staffId', 'This staff member has no employee record.', 'No employee record');
   return row;
+}
+
+/** A second live (open or approved) case of the same kind is refused. */
+export async function assertNoLiveCase(
+  tx: Database,
+  employee: { staffId: StaffMemberId; employeeCode: string },
+  kind: LifecycleKind,
+) {
+  const [live] = await tx
+    .select({ code: opsLifecycleCases.code })
+    .from(opsLifecycleCases)
+    .where(
+      and(
+        eq(opsLifecycleCases.staffId, employee.staffId),
+        eq(opsLifecycleCases.kind, kind),
+        inArray(opsLifecycleCases.status, ['open', 'approved']),
+      ),
+    );
+  if (live)
+    throw new ConflictError(
+      kind === 'onboarding'
+        ? `${employee.employeeCode} already has an open onboarding case (${live.code}).`
+        : `${employee.employeeCode} already has an offboarding case (${live.code}).`,
+    );
 }
 
 /** Insert generated items (idempotent per itemKey), resolving assignees. Returns inserted rows. */
@@ -147,7 +201,7 @@ export async function insertItems(
   let seq = existing.reduce((m, i) => Math.max(m, i.seq), 0);
   const fresh = items.filter((i) => !have.has(i.itemKey));
   if (fresh.length === 0) return [];
-  const rows = await tx
+  return tx
     .insert(opsLifecycleItems)
     .values(
       fresh.map((i) => ({
@@ -166,31 +220,24 @@ export async function insertItems(
     )
     .onConflictDoNothing()
     .returning();
-  return rows;
 }
 
 export async function notifyAssignees(
   tx: Database,
   caseRow: CaseRow,
   items: readonly ItemRow[],
-  actorId: UserId,
+  actor: Actor,
 ) {
-  const users = (
-    await userIdsForStaff(
-      tx,
-      items.map((i) => i.assigneeStaffId),
-    )
-  ).filter((u) => u !== actorId);
-  if (users.length)
-    await notify(tx, {
-      userIds: users,
-      module: 'ops',
+  await notifyPeople(
+    tx,
+    actor,
+    items.map((i) => i.assigneeStaffId),
+    {
       kind: 'lifecycle.items_assigned',
       title: `${caseRow.code}: checklist items assigned to you`,
-      link: CASE_LINK(caseRow),
-      entityType: 'lifecycle_case',
-      entityId: caseRow.id,
-    });
+      ...caseRef(caseRow),
+    },
+  );
 }
 
 // --- onboarding --------------------------------------------------------------------------------
@@ -215,20 +262,7 @@ export async function openOnboardingCase(
     throw new ConflictError(
       `${employee.employeeCode} is ${employee.employmentStatus}; onboarding is not possible.`,
     );
-  const [live] = await tx
-    .select({ code: opsLifecycleCases.code })
-    .from(opsLifecycleCases)
-    .where(
-      and(
-        eq(opsLifecycleCases.staffId, input.staffId),
-        eq(opsLifecycleCases.kind, 'onboarding'),
-        inArray(opsLifecycleCases.status, ['open', 'approved']),
-      ),
-    );
-  if (live)
-    throw new ConflictError(
-      `${employee.employeeCode} already has an open onboarding case (${live.code}).`,
-    );
+  await assertNoLiveCase(tx, employee, 'onboarding');
   const settings = await loadSettings(tx);
   const code = await nextCode(tx, 'lifecycleCase', 'ops.lifecycle_cases');
   const row = (
@@ -254,12 +288,7 @@ export async function openOnboardingCase(
       employee: input.staffId,
     },
   );
-  await recordAudit(tx, {
-    actorUserId: actor.id,
-    module: 'ops',
-    action: 'lifecycle_case.opened',
-    entityType: 'lifecycle_case',
-    entityId: row.id,
+  await auditCase(tx, actor, row.id, 'lifecycle_case.opened', {
     after: {
       code,
       kind: 'onboarding',
@@ -270,7 +299,7 @@ export async function openOnboardingCase(
     requestId: input.requestId,
     metadata: { templateState: settings['hr.onboarding_template'].decisionState },
   });
-  await notifyAssignees(tx, row, items, actor.id);
+  await notifyAssignees(tx, row, items, actor);
   return row;
 }
 
@@ -299,18 +328,7 @@ export async function approveOnboarding(
   comment: string | null,
   requestId?: string,
 ) {
-  const gaps = completionGaps(
-    'onboarding',
-    (await caseItems(tx, caseRow.id)).map((i) => ({
-      ...i,
-      kind: i.kind as ItemKind,
-      status: i.status as ItemStatus,
-    })),
-  );
-  if (gaps.length)
-    throw new ConflictError('Required checklist items are still open.', {
-      details: { missing: gaps },
-    });
+  await assertNoGaps(tx, caseRow);
   const now = new Date();
   const [after] = await tx
     .update(opsLifecycleCases)
@@ -333,29 +351,16 @@ export async function approveOnboarding(
       { reason: `Onboarding ${caseRow.code} approved` },
       requestId,
     );
-  await recordAudit(tx, {
-    actorUserId: actor.id,
-    module: 'ops',
-    action: 'lifecycle_case.approved',
-    entityType: 'lifecycle_case',
-    entityId: caseRow.id,
+  await auditCase(tx, actor, caseRow.id, 'lifecycle_case.approved', {
     before: { status: caseRow.status },
     after: { status: 'completed' },
     requestId,
   });
-  const users = (await userIdsForStaff(tx, [caseRow.staffId, employee.managerId])).filter(
-    (u) => u !== actor.id,
-  );
-  if (users.length)
-    await notify(tx, {
-      userIds: users,
-      module: 'ops',
-      kind: 'lifecycle.onboarding_completed',
-      title: `${caseRow.code}: onboarding completed`,
-      link: CASE_LINK(caseRow),
-      entityType: 'lifecycle_case',
-      entityId: caseRow.id,
-    });
+  await notifyPeople(tx, actor, [caseRow.staffId, employee.managerId], {
+    kind: 'lifecycle.onboarding_completed',
+    title: `${caseRow.code}: onboarding completed`,
+    ...caseRef(caseRow),
+  });
   return after as CaseRow;
 }
 
@@ -369,24 +374,16 @@ export async function assertCanApprove(db: Database, actor: Actor, caseRow: Case
 // --- lists -------------------------------------------------------------------------------------
 
 export async function listCases(db: Database, actor: Actor, q: CaseListQuery) {
-  const scope = await hrScope(db, actor, 'ops:lifecycle:read');
-  const ids = hrScopeIds(scope);
-  const conds: SQL[] = [];
-  if (ids) {
-    if (ids.length === 0) return { rows: [], total: 0, page: q.page, pageSize: q.pageSize };
-    conds.push(inArray(opsLifecycleCases.staffId, ids));
-  }
-  if (q.kind) conds.push(eq(opsLifecycleCases.kind, q.kind));
-  if (q.status) conds.push(eq(opsLifecycleCases.status, q.status));
-  if (q.q)
-    conds.push(
-      or(
-        ilike(opsLifecycleCases.code, `%${q.q}%`),
-        ilike(staffMembers.fullName, `%${q.q}%`),
-        ilike(opsEmployeeRecords.employeeCode, `%${q.q}%`),
-      )!,
-    );
-  const where = conds.length ? and(...conds) : undefined;
+  const ids = hrScopeIds(await hrScope(db, actor, 'ops:lifecycle:read'));
+  if (ids?.length === 0) return pageOf(q, []);
+  const where = and(
+    ids ? inArray(opsLifecycleCases.staffId, ids) : undefined,
+    q.kind ? eq(opsLifecycleCases.kind, q.kind) : undefined,
+    q.status ? eq(opsLifecycleCases.status, q.status) : undefined,
+    q.q
+      ? search(q.q, opsLifecycleCases.code, staffMembers.fullName, opsEmployeeRecords.employeeCode)
+      : undefined,
+  );
   const sortCol = {
     code: opsLifecycleCases.code,
     updated: opsLifecycleCases.updatedAt,
@@ -409,7 +406,7 @@ export async function listCases(db: Database, actor: Actor, q: CaseListQuery) {
     .innerJoin(staffMembers, eq(staffMembers.id, opsLifecycleCases.staffId))
     .innerJoin(opsEmployeeRecords, eq(opsEmployeeRecords.staffId, opsLifecycleCases.staffId))
     .where(where)
-    .orderBy(q.dir === 'asc' ? asc(sortCol) : desc(sortCol), asc(opsLifecycleCases.code))
+    .orderBy(sortBy(q.dir, sortCol), asc(opsLifecycleCases.code))
     .limit(q.pageSize)
     .offset((q.page - 1) * q.pageSize);
   const caseIds = rows.map((r) => r.c.id);
@@ -425,36 +422,29 @@ export async function listCases(db: Database, actor: Actor, q: CaseListQuery) {
         .where(inArray(opsLifecycleItems.caseId, caseIds))
     : [];
   const today = istToday(new Date());
-  return {
-    rows: rows.map((r) => {
-      const mine = items.filter((i) => i.caseId === r.c.id);
-      const required = mine.filter((i) => i.required);
-      return {
-        id: r.c.id,
-        code: r.c.code,
-        kind: r.c.kind as LifecycleKind,
-        status: r.c.status as LifecycleStatus,
-        staffId: r.c.staffId,
-        fullName: r.fullName,
-        employeeCode: r.employeeCode,
-        employmentStatus: r.employmentStatus,
-        // No separation type or reason in lists.
-        lastWorkingDay: r.c.lastWorkingDay,
-        requiredDone: required.filter((i) => isResolved(i.status as ItemStatus)).length,
-        requiredTotal: required.length,
-        overdue: mine.filter((i) =>
-          isItemOverdue(
-            { status: i.status as ItemStatus, dueDate: i.dueDate as IsoDate | null },
-            today,
-          ),
-        ).length,
-        updatedAt: r.c.updatedAt,
-      };
-    }),
-    total: Number(total),
-    page: q.page,
-    pageSize: q.pageSize,
-  };
+  const mapped = rows.map((r) => {
+    const mine = items.filter((i) => i.caseId === r.c.id);
+    const required = mine.filter((i) => i.required);
+    return {
+      id: r.c.id,
+      code: r.c.code,
+      kind: r.c.kind,
+      status: r.c.status,
+      staffId: r.c.staffId,
+      fullName: r.fullName,
+      employeeCode: r.employeeCode,
+      employmentStatus: r.employmentStatus,
+      // No separation type or reason in lists.
+      lastWorkingDay: r.c.lastWorkingDay,
+      requiredDone: required.filter((i) => isResolved(i.status)).length,
+      requiredTotal: required.length,
+      overdue: mine.filter((i) =>
+        isItemOverdue({ status: i.status, dueDate: i.dueDate as IsoDate | null }, today),
+      ).length,
+      updatedAt: r.c.updatedAt,
+    };
+  });
+  return pageOf(q, mapped, total);
 }
 
 /** Employees a new case can be opened for (manage holders only). */
@@ -482,24 +472,12 @@ export async function lifecycleCandidates(db: Database, actor: Actor, kind: Life
 
 // --- checklist items ---------------------------------------------------------------------------
 
-async function lockItem(tx: Database, caseId: string, itemId: string): Promise<ItemRow> {
-  const [row] = await tx
-    .select()
-    .from(opsLifecycleItems)
-    .where(
-      and(
-        eq(opsLifecycleItems.id, itemId as ItemRow['id']),
-        eq(opsLifecycleItems.caseId, caseId as CaseRow['id']),
-      ),
-    )
-    .for('update');
-  if (!row) notFound('Checklist item');
-  return row;
-}
-
-function assertWorkable(c: CaseRow) {
+/** Lock the case for checklist work; completed and cancelled cases are closed. */
+async function workableCase(tx: Database, id: string) {
+  const c = await lockCase(tx, id);
   if (c.status === 'completed' || c.status === 'cancelled')
     throw new ConflictError(`${c.code} is ${c.status}; its checklist is closed.`);
+  return c;
 }
 
 /** HL-A7: update one checklist item (status, evidence, notes, assignee, due date). */
@@ -514,35 +492,34 @@ export async function updateCaseItem(
   await lifecycleManager(db, actor);
   if (input.assigneeStaffId) await activeStaff(db, input.assigneeStaffId, 'assigneeStaffId');
   return withTransaction(db, async (tx) => {
-    const c = await lockCase(tx, caseId);
-    assertWorkable(c);
-    const before = await lockItem(tx, c.id, itemId);
+    const c = await workableCase(tx, caseId);
+    const [before] = await tx
+      .select()
+      .from(opsLifecycleItems)
+      .where(
+        and(eq(opsLifecycleItems.id, itemId as ItemRow['id']), eq(opsLifecycleItems.caseId, c.id)),
+      )
+      .for('update');
+    if (!before) notFound('Checklist item');
     const patch: Partial<typeof opsLifecycleItems.$inferInsert> = {};
     if (input.status && input.status !== before.status) {
       const check = checkItemUpdate({
-        kind: before.kind as ItemKind,
-        from: before.status as ItemStatus,
+        kind: before.kind,
+        from: before.status,
         to: input.status,
         notes: input.notes ?? before.notes,
         evidence: input.evidence ?? before.evidence,
       });
       if (!check.ok) {
         if (check.code === 'SYSTEM_ONLY') throw new ConflictError(check.message);
-        throw new ValidationError(check.message, {
-          details: [
-            {
-              location: 'body',
-              path: [check.code === 'EVIDENCE_REQUIRED' ? 'evidence' : 'notes'],
-              message: check.message,
-            },
-          ],
-        });
+        throw fieldError(check.code === 'EVIDENCE_REQUIRED' ? 'evidence' : 'notes', check.message);
       }
-      patch.status = input.status;
-      patch.completedAt =
-        input.status === 'done' || input.status === 'not_applicable' ? new Date() : null;
-      patch.completedBy =
-        input.status === 'done' || input.status === 'not_applicable' ? actor.id : null;
+      const resolved = isResolved(input.status);
+      Object.assign(patch, {
+        status: input.status,
+        completedAt: resolved ? new Date() : null,
+        completedBy: resolved ? actor.id : null,
+      });
     }
     if (input.evidence !== undefined) patch.evidence = input.evidence;
     if (input.notes !== undefined) patch.notes = input.notes;
@@ -559,28 +536,19 @@ export async function updateCaseItem(
         .update(opsLifecycleCases)
         .set({ settlementReference: after?.evidence ?? null })
         .where(eq(opsLifecycleCases.id, c.id));
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'lifecycle_item.updated',
-      entityType: 'lifecycle_case',
-      entityId: c.id,
-      before: {
-        itemId: before.id,
-        status: before.status,
-        assigneeStaffId: before.assigneeStaffId,
-        dueDate: before.dueDate,
-      },
-      after: {
-        itemId: before.id,
-        status: after?.status,
-        assigneeStaffId: after?.assigneeStaffId,
-        dueDate: after?.dueDate,
-      },
+    const view = (i?: ItemRow) => ({
+      itemId: before.id,
+      status: i?.status,
+      assigneeStaffId: i?.assigneeStaffId,
+      dueDate: i?.dueDate,
+    });
+    await auditCase(tx, actor, c.id, 'lifecycle_item.updated', {
+      before: view(before),
+      after: view(after),
       requestId,
     });
-    if (after && after.assigneeStaffId && after.assigneeStaffId !== before.assigneeStaffId)
-      await notifyAssignees(tx, c, [after], actor.id);
+    if (after?.assigneeStaffId && after.assigneeStaffId !== before.assigneeStaffId)
+      await notifyAssignees(tx, c, [after], actor);
     return after as ItemRow;
   });
 }
@@ -595,8 +563,7 @@ export async function addCaseItem(
   await lifecycleManager(db, actor);
   if (input.assigneeStaffId) await activeStaff(db, input.assigneeStaffId, 'assigneeStaffId');
   return withTransaction(db, async (tx) => {
-    const c = await lockCase(tx, caseId);
-    assertWorkable(c);
+    const c = await workableCase(tx, caseId);
     const existing = await caseItems(tx, c.id);
     const n = existing.filter((i) => i.itemKey.startsWith('custom:')).length + 1;
     const [row] = await tx
@@ -612,16 +579,11 @@ export async function addCaseItem(
         dueDate: input.dueDate ?? null,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'lifecycle_item.added',
-      entityType: 'lifecycle_case',
-      entityId: c.id,
+    await auditCase(tx, actor, c.id, 'lifecycle_item.added', {
       after: { itemId: row?.id, title: input.title, required: input.required },
       requestId,
     });
-    if (row) await notifyAssignees(tx, c, [row], actor.id);
+    if (row) await notifyAssignees(tx, c, [row], actor);
     return row as ItemRow;
   });
 }
@@ -669,9 +631,7 @@ export async function runLifecycleReminders(db: Database, now: Date = new Date()
           kind: 'lifecycle.item_overdue',
           title: `${d.caseCode}: overdue — ${d.item.title}`,
           body: `Due ${d.item.dueDate}.`,
-          link: CASE_LINK({ id: d.caseId, kind: d.kind }),
-          entityType: 'lifecycle_case',
-          entityId: d.caseId,
+          ...caseRef({ id: d.caseId, kind: d.kind }),
         });
         reminded += 1;
       }
@@ -681,12 +641,7 @@ export async function runLifecycleReminders(db: Database, now: Date = new Date()
         .where(eq(opsLifecycleItems.id, d.item.id));
     }
     if (due.length)
-      await recordAudit(tx, {
-        actorType: 'system',
-        module: 'ops',
-        action: 'lifecycle.reminders_sent',
-        entityType: 'job',
-        entityId: 'lifecycle-reminders',
+      await auditOf('job')(tx, null, 'lifecycle-reminders', 'lifecycle.reminders_sent', {
         after: { today, overdueItems: due.length, reminded },
       });
     return { today, overdueItems: due.length, reminded };

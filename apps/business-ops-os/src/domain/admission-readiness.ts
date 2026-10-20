@@ -37,15 +37,6 @@ export const ADMISSION_CHECK_LABELS: Record<AdmissionCheckItem, string> = {
   hostel_coordination: 'Hostel coordination (if needed)',
 };
 
-/** Items that are onboarding steps after confirmation (OPS-011), never part of the gate. */
-export const ONBOARDING_CHECK_ITEMS: readonly AdmissionCheckItem[] = [
-  'kit_issued',
-  'communication_group_added',
-  'timetable_communicated',
-  'school_coordination',
-  'hostel_coordination',
-];
-
 export interface CheckState {
   itemKey: AdmissionCheckItem;
   status: 'done' | 'not_done' | 'not_applicable';

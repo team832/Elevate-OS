@@ -4,7 +4,7 @@ import { Alert, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-
 import { listLeaveTypes } from '../../../../server/hr/leave';
 import { ActionForm } from '../../../../ui/action-form';
 import { Frame, gate, load, Section } from '../../../../ui/frame';
-import { DecisionBadge, TimeNav, timeNavItems } from '../../attendance/time-ui';
+import { DecisionBadge, StatusButtons, TimeNav } from '../../attendance/time-ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,7 @@ export default async function LeaveTypesPage() {
         title="Leave types"
         description="The company’s actual leave types are an owner decision (OD-026). Every type starts as proposed; mark it approved once the owner confirms it."
       />
-      <TimeNav current="" items={timeNavItems(access.user)} />
+      <TimeNav user={access.user} />
       <Section label="Loading leave types…">
         <Types user={access.user} />
       </Section>
@@ -64,37 +64,24 @@ async function Types({ user }: { user: AuthenticatedUser }) {
               header: '',
               render: (t) =>
                 manage ? (
-                  <div className="el-inline-form">
-                    {t.status !== 'approved' ? (
-                      <ActionForm
-                        action={`/ops/api/v1/hr/leave-types/${t.id}`}
-                        method="PATCH"
-                        submitLabel="Mark approved"
-                        extra={{ status: 'approved' }}
-                        variant="secondary"
-                        compact
-                      />
-                    ) : null}
-                    {t.status !== 'retired' ? (
-                      <ActionForm
-                        action={`/ops/api/v1/hr/leave-types/${t.id}`}
-                        method="PATCH"
-                        submitLabel="Retire"
-                        extra={{ status: 'retired' }}
-                        variant="danger"
-                        compact
-                      />
-                    ) : (
-                      <ActionForm
-                        action={`/ops/api/v1/hr/leave-types/${t.id}`}
-                        method="PATCH"
-                        submitLabel="Restore as proposed"
-                        extra={{ status: 'proposed' }}
-                        variant="secondary"
-                        compact
-                      />
-                    )}
-                  </div>
+                  <StatusButtons
+                    action={`/ops/api/v1/hr/leave-types/${t.id}`}
+                    buttons={[
+                      {
+                        label: 'Mark approved',
+                        status: 'approved',
+                        variant: 'secondary',
+                        show: t.status !== 'approved',
+                      },
+                      t.status !== 'retired'
+                        ? { label: 'Retire', status: 'retired', variant: 'danger' }
+                        : {
+                            label: 'Restore as proposed',
+                            status: 'proposed',
+                            variant: 'secondary',
+                          },
+                    ]}
+                  />
                 ) : null,
             },
           ]}

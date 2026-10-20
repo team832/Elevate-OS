@@ -9,7 +9,7 @@
  * `ops:compensation:export`, audited with an export reference.
  */
 import { randomBytes } from 'node:crypto';
-import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, type SQL } from 'drizzle-orm';
 import {
   opsCompensationRecords,
   opsEmployeeRecords,
@@ -17,12 +17,11 @@ import {
   type Database,
 } from '@elevate/database';
 import { notify } from '@elevate/notifications';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
   ForbiddenError,
   InvalidStateTransitionError,
-  NotFoundError,
   ValidationError,
 } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
@@ -36,11 +35,16 @@ import {
 } from '../../domain/hr/compensation';
 import { staffIdForUser, type Actor } from '../context';
 import { assertNotSelf, hrScope } from '../hr-scope';
+import { opsAudit, rowById } from '../ops-common';
+
 import type {
   compensationListQuery,
   CreateCompensationInput,
   updateCompensationBody,
 } from './schemas';
+
+const audit = opsAudit('compensation_record');
+const auditExport = opsAudit('compensation_export');
 
 type CompensationId = typeof opsCompensationRecords.$inferSelect.id;
 type CompensationRow = typeof opsCompensationRecords.$inferSelect;
@@ -98,13 +102,20 @@ function dto(r: CompensationRow & { employeeCode: string; fullName: string }) {
 const withEmployee = (db: Database) =>
   db
     .select({
-      record: opsCompensationRecords,
+      ...getTableColumns(opsCompensationRecords),
       employeeCode: opsEmployeeRecords.employeeCode,
       fullName: staffMembers.fullName,
     })
     .from(opsCompensationRecords)
     .innerJoin(opsEmployeeRecords, eq(opsEmployeeRecords.staffId, opsCompensationRecords.staffId))
     .innerJoin(staffMembers, eq(staffMembers.id, opsCompensationRecords.staffId));
+
+/** Rows grouped per employee. */
+function byStaff<T extends { staffId: string }>(rows: readonly T[]): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const r of rows) groups.set(r.staffId, [...(groups.get(r.staffId) ?? []), r]);
+  return [...groups.values()];
+}
 
 /** Records (newest first) with the record effective today per employee. */
 export async function listCompensation(
@@ -120,12 +131,8 @@ export async function listCompensation(
     .where(where.length ? and(...where) : undefined)
     .orderBy(asc(opsEmployeeRecords.employeeCode), desc(opsCompensationRecords.effectiveFrom));
   const today = istToday(new Date());
-  const records = rows.map((r) =>
-    dto({ ...r.record, employeeCode: r.employeeCode, fullName: r.fullName }),
-  );
-  const byStaff = new Map<string, typeof records>();
-  for (const r of records) byStaff.set(r.staffId, [...(byStaff.get(r.staffId) ?? []), r]);
-  const effectiveToday = [...byStaff.values()].map((list) => {
+  const records = rows.map(dto);
+  const effectiveToday = byStaff(records).map((list) => {
     const { record, conflict } = effectiveRecordAt(list, today);
     return {
       staffId: list[0]!.staffId,
@@ -176,29 +183,23 @@ export async function createCompensationDraft(
       })
       .returning();
     if (!row) throw new Error('compensation insert returned no row');
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'compensation.drafted',
-      entityType: 'compensation_record',
-      entityId: row.id,
-      after: auditView(row),
-      metadata: { fieldsSet: ['basis', 'amountPaise', 'components', 'effectiveFrom'] },
+    await audit(
+      tx,
+      actor,
+      row.id,
+      'compensation.drafted',
+      {
+        after: auditView(row),
+        metadata: { fieldsSet: ['basis', 'amountPaise', 'components', 'effectiveFrom'] },
+      },
       requestId,
-    });
+    );
     return { id: row.id, status: row.status };
   });
 }
 
-async function lockRecord(tx: Database, id: string) {
-  const [row] = await tx
-    .select()
-    .from(opsCompensationRecords)
-    .where(eq(opsCompensationRecords.id, id as CompensationId))
-    .for('update');
-  if (!row) throw new NotFoundError('Compensation record not found.');
-  return row;
-}
+const lockRecord = (tx: Database, id: string) =>
+  rowById(tx, opsCompensationRecords, id, 'Compensation record', true);
 
 export async function updateCompensationDraft(
   db: Database,
@@ -228,17 +229,18 @@ export async function updateCompensationDraft(
       .set({ ...merged, ...('note' in input ? { note: input.note ?? null } : {}) })
       .where(eq(opsCompensationRecords.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'compensation.draft_updated',
-      entityType: 'compensation_record',
-      entityId: before.id,
-      before: auditView(before),
-      after: auditView(after!),
-      metadata: { fieldsChanged: Object.keys(input) },
+    await audit(
+      tx,
+      actor,
+      before.id,
+      'compensation.draft_updated',
+      {
+        before: auditView(before),
+        after: auditView(after!),
+        metadata: { fieldsChanged: Object.keys(input) },
+      },
       requestId,
-    });
+    );
     return { id: before.id, status: after!.status };
   });
 }
@@ -282,20 +284,21 @@ export async function approveCompensation(
       .set({ status: 'approved', approvedBy: actor.id, approvedAt: new Date() })
       .where(eq(opsCompensationRecords.id, record.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'compensation.approved',
-      entityType: 'compensation_record',
-      entityId: record.id,
-      before: auditView(record),
-      after: auditView(after!),
-      metadata: {
-        supersededRecordId: plan.supersede?.id ?? null,
-        supersededEffectiveTo: plan.supersede?.effectiveTo ?? null,
+    await audit(
+      tx,
+      actor,
+      record.id,
+      'compensation.approved',
+      {
+        before: auditView(record),
+        after: auditView(after!),
+        metadata: {
+          supersededRecordId: plan.supersede?.id ?? null,
+          supersededEffectiveTo: plan.supersede?.effectiveTo ?? null,
+        },
       },
       requestId,
-    });
+    );
     await notify(tx, {
       userIds: [record.createdBy],
       module: 'ops',
@@ -325,17 +328,18 @@ export async function cancelCompensation(
       .update(opsCompensationRecords)
       .set({ status: 'cancelled' })
       .where(eq(opsCompensationRecords.id, record.id));
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'compensation.cancelled',
-      entityType: 'compensation_record',
-      entityId: record.id,
-      before: auditView(record),
-      after: { ...auditView(record), status: 'cancelled' },
-      metadata: { reason },
+    await audit(
+      tx,
+      actor,
+      record.id,
+      'compensation.cancelled',
+      {
+        before: auditView(record),
+        after: { ...auditView(record), status: 'cancelled' },
+        metadata: { reason },
+      },
       requestId,
-    });
+    );
     return { id: record.id, status: 'cancelled' as const };
   });
 }
@@ -352,28 +356,12 @@ export async function exportCompensation(
   const rows = await withEmployee(db).where(
     inArray(opsCompensationRecords.status, ['approved', 'superseded']),
   );
-  const byStaff = new Map<string, typeof rows>();
-  for (const r of rows)
-    byStaff.set(r.record.staffId, [...(byStaff.get(r.record.staffId) ?? []), r]);
   const exportRows = [];
   let conflicts = 0;
-  for (const list of byStaff.values()) {
-    const { record, conflict } = effectiveRecordAt(
-      list.map((l) => ({ ...l.record, employeeCode: l.employeeCode, fullName: l.fullName })),
-      asOf,
-    );
+  for (const list of byStaff(rows)) {
+    const { record, conflict } = effectiveRecordAt(list, asOf);
     if (conflict) conflicts += 1;
-    if (record)
-      exportRows.push({
-        employeeCode: record.employeeCode,
-        fullName: record.fullName,
-        basis: record.basis,
-        amountPaise: record.amountPaise,
-        effectiveFrom: record.effectiveFrom,
-        effectiveTo: record.effectiveTo,
-        components: record.components,
-        recordId: record.id,
-      });
+    if (record) exportRows.push({ ...record, recordId: record.id });
   }
   if (conflicts > 0)
     throw new ConflictError(
@@ -382,16 +370,17 @@ export async function exportCompensation(
   const exportReference = `CMPX-${asOf.replace(/-/g, '')}-${randomBytes(3).toString('hex').toUpperCase()}`;
   const csv = compensationCsv(exportRows, { exportReference, asOf });
   await withTransaction(db, (tx) =>
-    recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'compensation.exported',
-      entityType: 'compensation_export',
-      entityId: null,
-      // Reference and row count only — never amounts.
-      metadata: { exportReference, asOf, rowCount: exportRows.length },
+    auditExport(
+      tx,
+      actor,
+      null,
+      'compensation.exported',
+      {
+        // Reference and row count only — never amounts.
+        metadata: { exportReference, asOf, rowCount: exportRows.length },
+      },
       requestId,
-    }),
+    ),
   );
   return { csv, exportReference, rowCount: exportRows.length, asOf };
 }

@@ -18,10 +18,12 @@ import { hrTone, FilterForm, options } from '../../../ui/hr-records';
 
 export const dynamic = 'force-dynamic';
 
+type SearchParams = Record<string, string | undefined>;
+
 export default async function CompensationPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | undefined>>;
+  searchParams: Promise<SearchParams>;
 }) {
   const access = await gate('ops:compensation:read', '/ops/hr/compensation');
   const sp = await searchParams;
@@ -42,13 +44,7 @@ export default async function CompensationPage({
   );
 }
 
-async function Records({
-  user,
-  sp,
-}: {
-  user: AuthenticatedUser;
-  sp: Record<string, string | undefined>;
-}) {
+async function Records({ user, sp }: { user: AuthenticatedUser; sp: SearchParams }) {
   const parsed = compensationListQuery.safeParse(
     Object.fromEntries(Object.entries(sp).filter(([, v]) => v)),
   );
@@ -159,44 +155,33 @@ async function Records({
                 header: '',
                 render: (x) =>
                   manage && x.status === 'draft' ? (
-                    x.createdBy === user.id ? (
-                      <div className="el-stack">
+                    <div className="el-stack">
+                      {x.createdBy === user.id ? (
                         <span className="el-field-hint">
                           You drafted this; another person approves it.
                         </span>
+                      ) : approver ? (
                         <ActionForm
-                          action={`/ops/api/v1/hr/compensation/${x.id}/cancel`}
-                          submitLabel="Cancel draft"
-                          variant="secondary"
-                          fields={[{ name: 'reason', label: 'Reason', required: true }]}
+                          action={`/ops/api/v1/hr/compensation/${x.id}/approve`}
+                          submitLabel="Approve these terms"
+                          fields={[
+                            {
+                              name: 'confirm',
+                              label: 'I have checked the amount and the effective date',
+                              type: 'checkbox',
+                            },
+                          ]}
                           compact
                         />
-                      </div>
-                    ) : (
-                      <div className="el-stack">
-                        {approver ? (
-                          <ActionForm
-                            action={`/ops/api/v1/hr/compensation/${x.id}/approve`}
-                            submitLabel="Approve these terms"
-                            fields={[
-                              {
-                                name: 'confirm',
-                                label: 'I have checked the amount and the effective date',
-                                type: 'checkbox',
-                              },
-                            ]}
-                            compact
-                          />
-                        ) : null}
-                        <ActionForm
-                          action={`/ops/api/v1/hr/compensation/${x.id}/cancel`}
-                          submitLabel="Cancel draft"
-                          variant="secondary"
-                          fields={[{ name: 'reason', label: 'Reason', required: true }]}
-                          compact
-                        />
-                      </div>
-                    )
+                      ) : null}
+                      <ActionForm
+                        action={`/ops/api/v1/hr/compensation/${x.id}/cancel`}
+                        submitLabel="Cancel draft"
+                        variant="secondary"
+                        fields={[{ name: 'reason', label: 'Reason', required: true }]}
+                        compact
+                      />
+                    </div>
                   ) : null,
               },
             ]}

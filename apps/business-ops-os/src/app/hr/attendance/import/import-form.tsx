@@ -7,6 +7,7 @@
  */
 import { useRouter } from 'next/navigation';
 import { useState, useTransition, type ChangeEvent } from 'react';
+import { Alert } from '@elevate/shared-ui';
 
 type Row = { row: number; employeeCode: string; ok: boolean; errors: string[] };
 type Result = {
@@ -118,25 +119,15 @@ export function ImportForm() {
             : 'Import valid rows'}
         </button>
       </div>
-      {error ? (
-        <div className="el-alert el-tone-danger" role="alert">
-          <p className="el-alert-title">{error}</p>
-        </div>
-      ) : null}
+      {error ? <Alert tone="danger" title={error} /> : null}
       {result?.alreadyImported ? (
-        <div className="el-alert el-tone-info" role="status">
-          <p className="el-alert-title">
-            This exact file was already imported. Nothing new was created.
-          </p>
-        </div>
+        <Alert tone="info" title="This exact file was already imported. Nothing new was created." />
       ) : null}
       {result && result.mode === 'commit' && !result.alreadyImported ? (
-        <div className="el-alert el-tone-success" role="status">
-          <p className="el-alert-title">
-            Imported {result.batch?.createdSessions ?? 0} session(s). {result.invalidRows} row(s)
-            were skipped.
-          </p>
-        </div>
+        <Alert
+          tone="success"
+          title={`Imported ${result.batch?.createdSessions ?? 0} session(s). ${result.invalidRows} row(s) were skipped.`}
+        />
       ) : null}
       {result && result.rows.length ? (
         <div className="el-table-wrap">

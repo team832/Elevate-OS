@@ -5,11 +5,9 @@ import { listLeaveBalances, listLeaveTypes, listLedger } from '../../../../serve
 import { ActionForm } from '../../../../ui/action-form';
 import { fmtDate, fmtDateTime } from '../../../../ui/format';
 import { Frame, gate, load, Section } from '../../../../ui/frame';
-import { FilterForm, FilterSelect, TimeNav, timeNavItems } from '../../attendance/time-ui';
+import { EmployeeFilter, FilterForm, TimeNav, type Sp } from '../../attendance/time-ui';
 
 export const dynamic = 'force-dynamic';
-
-type Sp = Record<string, string | undefined>;
 
 export default async function BalancesPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const access = await gate('ops:leave:read', '/ops/hr/leave/balances');
@@ -20,7 +18,7 @@ export default async function BalancesPage({ searchParams }: { searchParams: Pro
         title="Leave balances"
         description="Balances are a ledger of allocations, adjustments, usage and reversals. Without an allocation the balance is “not configured”, not zero."
       />
-      <TimeNav current="/ops/hr/leave/balances" items={timeNavItems(access.user)} />
+      <TimeNav current="/ops/hr/leave/balances" user={access.user} />
       <Alert tone="warning" title="Entitlements are not decided">
         Accrual, carry-forward, encashment and yearly entitlements are an open owner decision
         (OD-026). Nothing is accrued automatically and requests are not blocked by balance.
@@ -50,13 +48,7 @@ async function Balances({ user, sp }: { user: AuthenticatedUser; sp: Sp }) {
   return (
     <div className="el-stack">
       <FilterForm action="/ops/hr/leave/balances" submitLabel="Show employee">
-        <FilterSelect
-          name="staffId"
-          label="Employee"
-          value={sp.staffId}
-          anyLabel="Everyone in scope"
-          options={all.map((p) => ({ value: p.staffId, label: p.fullName }))}
-        />
+        <EmployeeFilter people={all} value={sp.staffId} />
       </FilterForm>
       <DataTable
         rows={shown}

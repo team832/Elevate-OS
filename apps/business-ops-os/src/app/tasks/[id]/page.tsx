@@ -30,6 +30,16 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
 }
 
 const isUrl = (v: string) => /^https?:\/\//i.test(v);
+const choices = (values: readonly string[]) =>
+  values.map((v) => ({ value: v, label: humanise(v) }));
+const TASK_COLUMNS = [
+  {
+    key: 'code',
+    header: 'Task',
+    render: (b: { id: string; code: string }) => <a href={`/ops/tasks/${b.id}`}>{b.code}</a>,
+  },
+  { key: 'title', header: 'Title' },
+];
 
 async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
   const r = await load(async (db) => ({
@@ -42,6 +52,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
   const status = t.status as TaskStatus;
   const openBlockers = d.blockedBy.filter((b) => !['completed', 'cancelled'].includes(b.status));
   const review = d.review;
+  const api = `/ops/api/v1/tasks/${t.id}`;
   return (
     <div className="el-stack">
       <PageHeader title={`${t.code} — ${t.title}`} description={t.description ?? undefined} />
@@ -81,7 +92,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             </Alert>
           ) : null}
           <ActionForm
-            action={`/ops/api/v1/tasks/${t.id}/status`}
+            action={`${api}/status`}
             submitLabel="Change status"
             fields={[
               {
@@ -104,7 +115,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             ]}
           />
           <ActionForm
-            action={`/ops/api/v1/tasks/${t.id}/dependencies`}
+            action={`${api}/dependencies`}
             submitLabel="Add blocker"
             fields={[{ name: 'blockedByTaskId', label: 'Blocked by (task id)', required: true }]}
             variant="secondary"
@@ -130,13 +141,13 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           review.canDecide ? (
             <div className="el-grid">
               <ActionForm
-                action={`/ops/api/v1/tasks/${t.id}/review`}
+                action={`${api}/review`}
                 submitLabel="Accept completion"
                 extra={{ decision: 'accept' }}
                 fields={[{ name: 'note', label: 'Note (optional)' }]}
               />
               <ActionForm
-                action={`/ops/api/v1/tasks/${t.id}/review`}
+                action={`${api}/review`}
                 submitLabel="Return to owner"
                 variant="danger"
                 extra={{ decision: 'return' }}
@@ -152,7 +163,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         {d.canManage ? (
           <div className="el-grid">
             <ActionForm
-              action={`/ops/api/v1/tasks/${t.id}/review-requirement`}
+              action={`${api}/review-requirement`}
               method="PUT"
               submitLabel={review.required ? 'Update review requirement' : 'Require a review'}
               variant="secondary"
@@ -168,7 +179,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             />
             {review.required && review.latest?.status !== 'pending' ? (
               <ActionForm
-                action={`/ops/api/v1/tasks/${t.id}/review-requirement`}
+                action={`${api}/review-requirement`}
                 method="DELETE"
                 submitLabel="Remove review requirement"
                 variant="secondary"
@@ -208,12 +219,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             rowKey={(b) => b.id}
             empty={<EmptyState title="No dependencies" />}
             columns={[
-              {
-                key: 'code',
-                header: 'Task',
-                render: (b) => <a href={`/ops/tasks/${b.id}`}>{b.code}</a>,
-              },
-              { key: 'title', header: 'Title' },
+              ...TASK_COLUMNS,
               {
                 key: 'status',
                 header: 'Status',
@@ -227,14 +233,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             rows={d.blocks}
             rowKey={(b) => b.id}
             empty={<EmptyState title="Blocks nothing" />}
-            columns={[
-              {
-                key: 'code',
-                header: 'Task',
-                render: (b) => <a href={`/ops/tasks/${b.id}`}>{b.code}</a>,
-              },
-              { key: 'title', header: 'Title' },
-            ]}
+            columns={TASK_COLUMNS}
           />
         </Card>
       </div>
@@ -260,7 +259,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                 )}
                 {c.canHide ? (
                   <ActionForm
-                    action={`/ops/api/v1/tasks/${t.id}/comments/${c.id}/hide`}
+                    action={`${api}/comments/${c.id}/hide`}
                     submitLabel="Hide comment"
                     variant="secondary"
                     compact
@@ -275,7 +274,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         )}
         {d.canContribute ? (
           <ActionForm
-            action={`/ops/api/v1/tasks/${t.id}/comments`}
+            action={`${api}/comments`}
             submitLabel="Add comment"
             fields={[{ name: 'body', label: 'Comment', type: 'textarea', required: true }]}
           />
@@ -319,7 +318,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                   `Removed: ${x.removedReason ?? ''}`
                 ) : x.canRemove ? (
                   <ActionForm
-                    action={`/ops/api/v1/tasks/${t.id}/references/${x.id}/remove`}
+                    action={`${api}/references/${x.id}/remove`}
                     submitLabel="Remove reference"
                     variant="secondary"
                     compact
@@ -331,7 +330,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         />
         {d.canContribute ? (
           <ActionForm
-            action={`/ops/api/v1/tasks/${t.id}/references`}
+            action={`${api}/references`}
             submitLabel="Add reference"
             compact
             fields={[
@@ -341,11 +340,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                 type: 'select',
                 required: true,
                 defaultValue: 'document',
-                options: [
-                  { value: 'document', label: 'Document' },
-                  { value: 'evidence', label: 'Evidence' },
-                  { value: 'other', label: 'Other' },
-                ],
+                options: choices(['document', 'evidence', 'other']),
               },
               { name: 'label', label: 'Label', required: true },
               {
@@ -396,10 +391,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                         label: 'Action',
                         type: 'select',
                         required: true,
-                        options: [
-                          { value: 'acknowledge', label: 'Acknowledge' },
-                          { value: 'resolve', label: 'Resolve' },
-                        ],
+                        options: choices(['acknowledge', 'resolve']),
                       },
                       { name: 'note', label: 'Note' },
                     ]}

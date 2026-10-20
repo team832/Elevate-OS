@@ -5,7 +5,7 @@ import { SOP_PUBLICATION_LABELS, SOP_STATUS_LABELS, type SopStatus } from '../..
 import { formOptions } from '../../server/options';
 import { listOutstandingAcknowledgements, listSops } from '../../server/sops';
 import { ActionForm } from '../../ui/action-form';
-import { decisionTone } from '../../ui/format';
+import { decisionTone, humanise } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
 
 export const dynamic = 'force-dynamic';
@@ -58,11 +58,7 @@ async function Register({ user }: { user: AuthenticatedUser }) {
           header: 'Policy state',
           render: (s) => (
             <StatusBadge tone={decisionTone(s.decisionState)}>
-              {s.decisionState === 'approved'
-                ? 'Approved'
-                : s.decisionState === 'retired'
-                  ? 'Retired'
-                  : 'Proposed'}
+              {humanise(s.decisionState)}
             </StatusBadge>
           ),
         },
@@ -111,11 +107,7 @@ async function Acknowledgements({ user }: { user: AuthenticatedUser }) {
         rowKey={(x) => x.id}
         empty={<EmptyState title="No SOP currently requires acknowledgement" />}
         columns={[
-          {
-            key: 'code',
-            header: 'SOP',
-            render: (x) => <a href={`/ops/sops/${x.id}`}>{x.code}</a>,
-          },
+          { key: 'code', header: 'SOP', render: (x) => <a href={`/ops/sops/${x.id}`}>{x.code}</a> },
           { key: 'title', header: 'Title' },
           { key: 'required', header: 'Required', numeric: true },
           { key: 'acknowledged', header: 'Acknowledged', numeric: true },

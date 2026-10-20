@@ -11,20 +11,7 @@
  *   `ops:attendance:record` · manual entries `ops:attendance:manage` ·
  *   correction decisions `ops:attendance:approve` (never one's own).
  */
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lte,
-  ne,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
   opsAttendanceBreaks,
@@ -33,16 +20,14 @@ import {
   opsShiftTemplates,
   staffMembers,
   type Database,
-  type OpsAttendanceCorrectionId,
   type OpsAttendanceSessionId,
   type OpsShiftTemplateId,
 } from '@elevate/database';
 import { notify } from '@elevate/notifications';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ForbiddenError, ValidationError } from '@elevate/shared-contracts';
 import type { IsoDate, StaffMemberId, UserId } from '@elevate/shared-types';
 import {
-  checkDecision,
   checkWithdraw,
   isMissingClockOut,
   lateEarly,
@@ -56,19 +41,23 @@ import { addDays } from '../../domain/dates';
 import { minutesBetween, monthRange, zonedDate, zonedToInstant } from '../../domain/hr/calendar';
 import { shiftWindow, templateOn, type ShiftTemplateLike } from '../../domain/hr/shifts';
 import { dailyTimesheet, periodSummary } from '../../domain/hr/timesheets';
-import { accessScope, nextCode, notFound, type Actor } from '../context';
+import { accessScope, nextCode, type Actor } from '../context';
 import { assertHrScope, hrCovers, hrScope, hrScopeIds, type HrScope } from '../hr-scope';
+import { notifyOthers, opsAudit, rowById } from '../ops-common';
 import { approvedLeaveByDate } from './leave';
 import {
   approverUserIds,
+  checkedDecision,
   decider,
+  emptyPage,
   employeeSchedule,
   issuesError,
   loadEmployee,
-  lockStaff,
-  throwCheck,
   loadScheduleContext,
-  PAGE_SIZE,
+  loadTemplates,
+  lockStaff,
+  paginate,
+  throwCheck,
   timeSettings,
   toTemplate,
   type TimeEmployee,
@@ -80,8 +69,12 @@ import type {
   ManualSessionInput,
 } from './time-schemas';
 
-export type SessionRow = typeof opsAttendanceSessions.$inferSelect;
-export type CorrectionRow = typeof opsAttendanceCorrections.$inferSelect;
+const auditSession = opsAudit('attendance_session');
+const auditCorrection = opsAudit('attendance_correction');
+
+type SessionRow = typeof opsAttendanceSessions.$inferSelect;
+type Shift = { template: ShiftTemplateLike; window: { start: Date; end: Date } };
+type Times = { clockInAt: Date; clockOutAt: Date | null };
 
 // --- helpers ----------------------------------------------------------------------------------
 
@@ -90,7 +83,7 @@ export async function shiftFor(
   db: Database,
   e: TimeEmployee,
   workDate: IsoDate,
-): Promise<{ template: ShiftTemplateLike; window: { start: Date; end: Date } } | null> {
+): Promise<Shift | null> {
   const ctx = await loadScheduleContext(db, [e.staffId], workDate, workDate);
   const settings = await timeSettings(db);
   const [day] = employeeSchedule(e, ctx, workDate, workDate, settings.countProposedHolidays);
@@ -100,17 +93,42 @@ export async function shiftFor(
   return { template, window: shiftWindow(template, workDate, e.timezone) };
 }
 
+/** Session columns measured against the shift: template, late and early minutes. */
+export function shiftMeasures(shift: Shift | null, times: Times, rules: AttendanceRules) {
+  const le = lateEarly(times, shift?.window ?? null, rules);
+  return {
+    shiftTemplateId: (shift?.template.id as OpsShiftTemplateId | undefined) ?? null,
+    lateMinutes: le.lateMinutes,
+    earlyDepartureMinutes: le.earlyDepartureMinutes,
+  };
+}
+
 async function templateById(db: Database, id: string | null) {
-  if (!id) return null;
-  const [t] = await db
-    .select()
-    .from(opsShiftTemplates)
-    .where(eq(opsShiftTemplates.id, id as OpsShiftTemplateId));
+  const [t] = id
+    ? await db
+        .select()
+        .from(opsShiftTemplates)
+        .where(eq(opsShiftTemplates.id, id as OpsShiftTemplateId))
+    : [];
   return t ? toTemplate(t) : null;
 }
 
-/** Non-superseded sessions of one employee that touch a time span (± 1 day of work dates). */
-async function liveSessions(tx: Database, staffId: string, from: IsoDate, to: IsoDate) {
+const openSession = (tx: Database, staffId: StaffMemberId) =>
+  tx
+    .select()
+    .from(opsAttendanceSessions)
+    .where(
+      and(eq(opsAttendanceSessions.staffId, staffId), eq(opsAttendanceSessions.status, 'open')),
+    );
+
+const runningBreak = (tx: Database, sessionId: OpsAttendanceSessionId) =>
+  tx
+    .select()
+    .from(opsAttendanceBreaks)
+    .where(and(eq(opsAttendanceBreaks.sessionId, sessionId), isNull(opsAttendanceBreaks.endAt)));
+
+/** Non-superseded sessions of one employee within ± 1 day of a work date. */
+async function liveSessions(tx: Database, staffId: string, workDate: IsoDate) {
   return tx
     .select()
     .from(opsAttendanceSessions)
@@ -118,8 +136,8 @@ async function liveSessions(tx: Database, staffId: string, from: IsoDate, to: Is
       and(
         eq(opsAttendanceSessions.staffId, staffId as StaffMemberId),
         ne(opsAttendanceSessions.status, 'superseded'),
-        gte(opsAttendanceSessions.workDate, addDays(from, -1)),
-        lte(opsAttendanceSessions.workDate, addDays(to, 1)),
+        gte(opsAttendanceSessions.workDate, addDays(workDate, -1)),
+        lte(opsAttendanceSessions.workDate, addDays(workDate, 1)),
       ),
     );
 }
@@ -127,7 +145,7 @@ async function liveSessions(tx: Database, staffId: string, from: IsoDate, to: Is
 /** Refuse overlaps and (unless allowed) a second session on the same work date. */
 function assertNoClash(
   existing: readonly SessionRow[],
-  candidate: { clockInAt: Date; clockOutAt: Date | null; workDate: string },
+  candidate: Times & { workDate: string },
   rules: AttendanceRules,
   now: Date,
   ignoreId?: string,
@@ -159,7 +177,7 @@ function selfStaff(scope: HrScope): StaffMemberId {
   return scope.staffId;
 }
 
-export function sessionView(s: SessionRow, now: Date) {
+function sessionView(s: SessionRow, now: Date) {
   return {
     ...s,
     workedMinutes: sessionWorkedMinutes(s),
@@ -191,16 +209,10 @@ export async function clockIn(
   const shift = await shiftFor(db, e, workDate);
   return withTransaction(db, async (tx) => {
     await lockStaff(tx, 'attendance', staffId);
-    const [open] = await tx
-      .select({ id: opsAttendanceSessions.id })
-      .from(opsAttendanceSessions)
-      .where(
-        and(eq(opsAttendanceSessions.staffId, staffId), eq(opsAttendanceSessions.status, 'open')),
-      );
+    const [open] = await openSession(tx, staffId);
     if (open) throw new ConflictError('You are already clocked in. Clock out first.');
-    const existing = await liveSessions(tx, staffId, workDate, workDate);
-    assertNoClash(existing, { clockInAt: now, clockOutAt: null, workDate }, rules, now);
-    const le = lateEarly({ clockInAt: now, clockOutAt: null }, shift?.window ?? null, rules);
+    const times = { clockInAt: now, clockOutAt: null };
+    assertNoClash(await liveSessions(tx, staffId, workDate), { ...times, workDate }, rules, now);
     const [row] = await tx
       .insert(opsAttendanceSessions)
       .values({
@@ -210,21 +222,12 @@ export async function clockIn(
         timezone: e.timezone,
         source: 'self',
         status: 'open',
-        shiftTemplateId: (shift?.template.id as OpsShiftTemplateId | undefined) ?? null,
-        lateMinutes: le.lateMinutes,
+        ...shiftMeasures(shift, times, rules),
         reason: input.note ?? null,
         createdBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'attendance.clocked_in',
-      entityType: 'attendance_session',
-      entityId: row!.id,
-      after: row,
-      requestId,
-    });
+    await auditSession(tx, actor, row!.id, 'attendance.clocked_in', { after: row }, requestId);
     return sessionView(row!, now);
   });
 }
@@ -241,13 +244,7 @@ export async function clockOut(
   const { attendance: rules } = await timeSettings(db);
   return withTransaction(db, async (tx) => {
     await lockStaff(tx, 'attendance', staffId);
-    const [before] = await tx
-      .select()
-      .from(opsAttendanceSessions)
-      .where(
-        and(eq(opsAttendanceSessions.staffId, staffId), eq(opsAttendanceSessions.status, 'open')),
-      )
-      .for('update');
+    const [before] = await openSession(tx, staffId).for('update');
     if (!before) throw new ConflictError('You are not clocked in.');
     if (now.getTime() <= before.clockInAt.getTime())
       throw new ValidationError('Clock-out must be after clock-in.');
@@ -278,16 +275,11 @@ export async function clockOut(
       })
       .where(eq(opsAttendanceSessions.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'attendance.clocked_out',
-      entityType: 'attendance_session',
-      entityId: before.id,
+    const change = {
       before: { clockOutAt: null, status: before.status },
       after: { clockOutAt: now, breakMinutes: after!.breakMinutes, early: le.early },
-      requestId,
-    });
+    };
+    await auditSession(tx, actor, before.id, 'attendance.clocked_out', change, requestId);
     return sessionView(after!, now);
   });
 }
@@ -303,17 +295,9 @@ export async function recordBreak(
   const staffId = selfStaff(scope);
   return withTransaction(db, async (tx) => {
     await lockStaff(tx, 'attendance', staffId);
-    const [session] = await tx
-      .select()
-      .from(opsAttendanceSessions)
-      .where(
-        and(eq(opsAttendanceSessions.staffId, staffId), eq(opsAttendanceSessions.status, 'open')),
-      );
+    const [session] = await openSession(tx, staffId);
     if (!session) throw new ConflictError('Clock in before recording a break.');
-    const [openBreak] = await tx
-      .select()
-      .from(opsAttendanceBreaks)
-      .where(and(eq(opsAttendanceBreaks.sessionId, session.id), isNull(opsAttendanceBreaks.endAt)));
+    const [openBreak] = await runningBreak(tx, session.id);
     let row;
     if (action === 'start') {
       if (openBreak) throw new ConflictError('A break is already running.');
@@ -335,15 +319,9 @@ export async function recordBreak(
         .set({ breakMinutes: await breakTotal(tx, session.id) })
         .where(eq(opsAttendanceSessions.id, session.id));
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: action === 'start' ? 'attendance.break_started' : 'attendance.break_ended',
-      entityType: 'attendance_session',
-      entityId: session.id,
-      after: row,
-      requestId,
-    });
+    const verb = action === 'start' ? 'started' : 'ended';
+    const change = { after: row };
+    await auditSession(tx, actor, session.id, `attendance.break_${verb}`, change, requestId);
     return row!;
   });
 }
@@ -367,19 +345,14 @@ export async function myAttendanceStatus(db: Database, actor: Actor, now = new D
     )
     .orderBy(asc(opsAttendanceSessions.clockInAt));
   const open = sessions.find((s) => s.status === 'open') ?? null;
-  const [runningBreak] = open
-    ? await db
-        .select()
-        .from(opsAttendanceBreaks)
-        .where(and(eq(opsAttendanceBreaks.sessionId, open.id), isNull(opsAttendanceBreaks.endAt)))
-    : [];
+  const [breakNow] = open ? await runningBreak(db, open.id) : [];
   const shift = await shiftFor(db, e, today);
   return {
     linked: true as const,
     employee: e,
     today,
     open: open ? sessionView(open, now) : null,
-    runningBreak: runningBreak ?? null,
+    runningBreak: breakNow ?? null,
     todaySessions: sessions.filter((s) => s.workDate === today).map((s) => sessionView(s, now)),
     shift: shift
       ? {
@@ -418,11 +391,10 @@ export async function createManualSession(
   const shift = await shiftFor(db, e, input.workDate);
   return withTransaction(db, async (tx) => {
     await lockStaff(tx, 'attendance', input.staffId);
-    const existing = await liveSessions(tx, input.staffId, input.workDate, input.workDate);
+    const existing = await liveSessions(tx, input.staffId, input.workDate);
     if (!clockOutAt && existing.some((s) => s.status === 'open'))
       throw new ConflictError('This employee already has an open session.');
     assertNoClash(existing, { clockInAt, clockOutAt, workDate: input.workDate }, rules, now);
-    const le = lateEarly({ clockInAt, clockOutAt }, shift?.window ?? null, rules);
     const [row] = await tx
       .insert(opsAttendanceSessions)
       .values({
@@ -434,33 +406,20 @@ export async function createManualSession(
         breakMinutes: input.breakMinutes,
         source: 'manual',
         status: clockOutAt ? 'closed' : 'open',
-        shiftTemplateId: (shift?.template.id as OpsShiftTemplateId | undefined) ?? null,
-        lateMinutes: le.lateMinutes,
-        earlyDepartureMinutes: le.earlyDepartureMinutes,
+        ...shiftMeasures(shift, { clockInAt, clockOutAt }, rules),
         reason: input.reason,
         createdBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'attendance.manual_entry',
+    await auditSession(tx, actor, row!.id, 'attendance.manual_entry', { after: row }, requestId);
+    await notifyOthers(tx, actor, e.userId ? [e.userId as UserId] : [], {
+      kind: 'attendance.manual_entry',
+      title: `Attendance recorded for you on ${input.workDate}`,
+      body: `Recorded manually: ${input.reason}`,
+      link: `/ops/hr/attendance/${row!.id}`,
       entityType: 'attendance_session',
       entityId: row!.id,
-      after: row,
-      requestId,
     });
-    if (e.userId && e.userId !== actor.id)
-      await notify(tx, {
-        userIds: [e.userId as UserId],
-        module: 'ops',
-        kind: 'attendance.manual_entry',
-        title: `Attendance recorded for you on ${input.workDate}`,
-        body: `Recorded manually: ${input.reason}`,
-        link: `/ops/hr/attendance/${row!.id}`,
-        entityType: 'attendance_session',
-        entityId: row!.id,
-      });
     return sessionView(row!, now);
   });
 }
@@ -476,50 +435,36 @@ export async function listAttendance(
   const scope = await hrScope(db, actor, 'ops:attendance:read');
   if (query.staffId) assertHrScope(scope, query.staffId);
   const ids = hrScopeIds(scope);
-  const page = query.page ?? 1;
-  if (ids && ids.length === 0) return { rows: [], page, pageSize: PAGE_SIZE, total: 0 };
-  const conds: SQL[] = [];
-  if (ids) conds.push(inArray(opsAttendanceSessions.staffId, ids));
-  if (query.staffId) conds.push(eq(opsAttendanceSessions.staffId, query.staffId as StaffMemberId));
-  if (query.from) conds.push(gte(opsAttendanceSessions.workDate, query.from));
-  if (query.to) conds.push(lte(opsAttendanceSessions.workDate, query.to));
-  if (query.source) conds.push(eq(opsAttendanceSessions.source, query.source));
-  if (query.status === 'missing_clock_out')
-    conds.push(
-      and(
-        eq(opsAttendanceSessions.status, 'open'),
-        isNotNull(opsAttendanceSessions.missingClockOutFlaggedAt),
-      ) as SQL,
-    );
-  else if (query.status) conds.push(eq(opsAttendanceSessions.status, query.status));
-  const where = conds.length ? and(...conds) : undefined;
-  const [{ total } = { total: 0 }] = await db
-    .select({ total: sql<number>`count(*)::int` })
-    .from(opsAttendanceSessions)
-    .where(where);
-  const rows = await db
-    .select({
-      s: opsAttendanceSessions,
-      fullName: staffMembers.fullName,
-      shiftCode: opsShiftTemplates.code,
-    })
-    .from(opsAttendanceSessions)
-    .innerJoin(staffMembers, eq(staffMembers.id, opsAttendanceSessions.staffId))
-    .leftJoin(opsShiftTemplates, eq(opsShiftTemplates.id, opsAttendanceSessions.shiftTemplateId))
-    .where(where)
-    .orderBy(desc(opsAttendanceSessions.workDate), desc(opsAttendanceSessions.clockInAt))
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
-  return {
-    rows: rows.map((r) => ({
+  if (ids?.length === 0) return emptyPage(query.page ?? 1);
+  const s = opsAttendanceSessions;
+  const where = and(
+    ids ? inArray(s.staffId, ids) : undefined,
+    query.staffId ? eq(s.staffId, query.staffId as StaffMemberId) : undefined,
+    query.from ? gte(s.workDate, query.from) : undefined,
+    query.to ? lte(s.workDate, query.to) : undefined,
+    query.source ? eq(s.source, query.source) : undefined,
+    query.status === 'missing_clock_out'
+      ? and(eq(s.status, 'open'), isNotNull(s.missingClockOutFlaggedAt))
+      : query.status
+        ? eq(s.status, query.status)
+        : undefined,
+  );
+  return paginate(db, s, where, query.page, async (limit, offset) => {
+    const rows = await db
+      .select({ s, fullName: staffMembers.fullName, shiftCode: opsShiftTemplates.code })
+      .from(s)
+      .innerJoin(staffMembers, eq(staffMembers.id, s.staffId))
+      .leftJoin(opsShiftTemplates, eq(opsShiftTemplates.id, s.shiftTemplateId))
+      .where(where)
+      .orderBy(desc(s.workDate), desc(s.clockInAt))
+      .limit(limit)
+      .offset(offset);
+    return rows.map((r) => ({
       ...sessionView(r.s, now),
       fullName: r.fullName,
       shiftCode: r.shiftCode,
-    })),
-    page,
-    pageSize: PAGE_SIZE,
-    total,
-  };
+    }));
+  });
 }
 
 export async function getAttendanceSession(
@@ -529,11 +474,7 @@ export async function getAttendanceSession(
   now = new Date(),
 ) {
   const scope = await hrScope(db, actor, 'ops:attendance:read');
-  const [s] = await db
-    .select()
-    .from(opsAttendanceSessions)
-    .where(eq(opsAttendanceSessions.id, id as OpsAttendanceSessionId));
-  if (!s) notFound('Attendance session');
+  const s = await rowById(db, opsAttendanceSessions, id, 'Attendance session');
   assertHrScope(scope, s.staffId, 'this attendance record');
   const e = await loadEmployee(db, s.staffId);
   const breaks = await db
@@ -548,14 +489,12 @@ export async function getAttendanceSession(
       sql`${opsAttendanceCorrections.sessionId} = ${s.id} OR ${opsAttendanceCorrections.resultingSessionId} = ${s.id}`,
     )
     .orderBy(desc(opsAttendanceCorrections.createdAt));
-  const replacedBy = s.supersededById
-    ? ((
-        await db
-          .select()
-          .from(opsAttendanceSessions)
-          .where(eq(opsAttendanceSessions.id, s.supersededById))
-      )[0] ?? null)
-    : null;
+  const [replacedBy] = s.supersededById
+    ? await db
+        .select()
+        .from(opsAttendanceSessions)
+        .where(eq(opsAttendanceSessions.id, s.supersededById))
+    : [];
   const replaces = await db
     .select()
     .from(opsAttendanceSessions)
@@ -586,12 +525,10 @@ export async function monthlyAttendanceSummary(
   now = new Date(),
 ) {
   const scope = await hrScope(db, actor, 'ops:attendance:read');
-  const staffId = query.staffId ?? scope.staffId;
-  if (!staffId) throw new ForbiddenError('Your account is not linked to a staff record.');
+  const staffId = query.staffId ?? selfStaff(scope);
   assertHrScope(scope, staffId);
   const e = await loadEmployee(db, staffId);
-  const month = query.month ?? zonedDate(now, e.timezone).slice(0, 7);
-  const { from, to } = monthRange(month);
+  const { from, to } = monthRange(query.month ?? zonedDate(now, e.timezone).slice(0, 7));
   return employeePeriod(db, e, from, to);
 }
 
@@ -643,21 +580,14 @@ export async function runMissingClockOutCheck(
   if (options.actor) await accessScope(db, options.actor, 'ops:jobs:run');
   const { attendance: rules } = await timeSettings(db);
   return withTransaction(db, async (tx) => {
+    const unflagged = isNull(opsAttendanceSessions.missingClockOutFlaggedAt);
     const open = await tx
       .select({ s: opsAttendanceSessions, userId: staffMembers.userId })
       .from(opsAttendanceSessions)
       .innerJoin(staffMembers, eq(staffMembers.id, opsAttendanceSessions.staffId))
-      .where(
-        and(
-          eq(opsAttendanceSessions.status, 'open'),
-          isNull(opsAttendanceSessions.missingClockOutFlaggedAt),
-        ),
-      );
-    let flagged = 0;
-    let notified = 0;
-    let unreachable = 0;
-    const templates = new Map<string, ShiftTemplateLike>();
-    for (const t of await tx.select().from(opsShiftTemplates)) templates.set(t.id, toTemplate(t));
+      .where(and(eq(opsAttendanceSessions.status, 'open'), unflagged));
+    const counts = { checked: open.length, flagged: 0, notified: 0, unreachable: 0 };
+    const templates = await loadTemplates(tx);
     for (const { s, userId } of open) {
       const t = s.shiftTemplateId ? templates.get(s.shiftTemplateId) : undefined;
       const end = t ? shiftWindow(t, s.workDate as IsoDate, s.timezone).end : null;
@@ -665,39 +595,30 @@ export async function runMissingClockOutCheck(
       const claimed = await tx
         .update(opsAttendanceSessions)
         .set({ missingClockOutFlaggedAt: now })
-        .where(
-          and(
-            eq(opsAttendanceSessions.id, s.id),
-            isNull(opsAttendanceSessions.missingClockOutFlaggedAt),
-          ),
-        )
+        .where(and(eq(opsAttendanceSessions.id, s.id), unflagged))
         .returning({ id: opsAttendanceSessions.id });
       if (!claimed.length) continue;
-      flagged += 1;
-      await recordAudit(tx, {
-        actorUserId: options.actor?.id ?? null,
+      counts.flagged += 1;
+      const change = { after: { workDate: s.workDate, shiftEnd: end, flaggedAt: now } };
+      const event = 'attendance.missing_clock_out_flagged';
+      await auditSession(tx, options.actor, s.id, event, change, options.requestId);
+      if (!userId) {
+        counts.unreachable += 1;
+        continue;
+      }
+      await notify(tx, {
+        userIds: [userId],
         module: 'ops',
-        action: 'attendance.missing_clock_out_flagged',
+        kind: 'attendance.missing_clock_out',
+        title: `Missing clock-out on ${s.workDate}`,
+        body: 'Your attendance session is still open. Clock out now or request a correction with the right time.',
+        link: `/ops/hr/attendance/${s.id}`,
         entityType: 'attendance_session',
         entityId: s.id,
-        after: { workDate: s.workDate, shiftEnd: end, flaggedAt: now },
-        requestId: options.requestId,
       });
-      if (userId) {
-        await notify(tx, {
-          userIds: [userId],
-          module: 'ops',
-          kind: 'attendance.missing_clock_out',
-          title: `Missing clock-out on ${s.workDate}`,
-          body: 'Your attendance session is still open. Clock out now or request a correction with the right time.',
-          link: `/ops/hr/attendance/${s.id}`,
-          entityType: 'attendance_session',
-          entityId: s.id,
-        });
-        notified += 1;
-      } else unreachable += 1;
+      counts.notified += 1;
     }
-    return { checked: open.length, flagged, notified, unreachable };
+    return counts;
   });
 }
 
@@ -711,28 +632,18 @@ export async function createCorrection(
   now = new Date(),
 ) {
   const scope = await hrScope(db, actor, 'ops:attendance:record');
-  let staffId: string;
-  let original: SessionRow | null = null;
-  if (input.sessionId) {
-    const [s] = await db
-      .select()
-      .from(opsAttendanceSessions)
-      .where(eq(opsAttendanceSessions.id, input.sessionId as OpsAttendanceSessionId));
-    if (!s) notFound('Attendance session');
-    original = s;
-    staffId = s.staffId;
-  } else staffId = selfStaff(scope);
+  const original = input.sessionId
+    ? await rowById(db, opsAttendanceSessions, input.sessionId, 'Attendance session')
+    : null;
+  const staffId = original?.staffId ?? selfStaff(scope);
   assertHrScope(scope, staffId, 'this attendance record');
   if (original?.status === 'superseded')
     throw new ConflictError('This session was already replaced; correct the current one.');
   const e = await loadEmployee(db, staffId);
   const { attendance: rules } = await timeSettings(db);
   const clockInAt = zonedToInstant(input.workDate, input.clockIn, e.timezone);
-  const clockOutAt = zonedToInstant(
-    input.clockOutDate ?? input.workDate,
-    input.clockOut,
-    e.timezone,
-  );
+  const clockOutDate = input.clockOutDate ?? input.workDate;
+  const clockOutAt = zonedToInstant(clockOutDate, input.clockOut, e.timezone);
   issuesError(
     validateSessionTimes({ clockInAt, clockOutAt, breakMinutes: input.breakMinutes }, rules),
   );
@@ -741,14 +652,12 @@ export async function createCorrection(
   return withTransaction(db, async (tx) => {
     await lockStaff(tx, 'attendance', staffId);
     if (!original) {
-      const existing = await liveSessions(tx, staffId, input.workDate, input.workDate);
+      const existing = await liveSessions(tx, staffId, input.workDate);
       const sameDay = existing.find((s) => s.workDate === input.workDate);
       if (sameDay && !rules.multipleSessionsPerDay)
         throw new ConflictError(
           'A session exists on this day: request a correction of that session.',
-          {
-            details: { sessionId: sameDay.id },
-          },
+          { details: { sessionId: sameDay.id } },
         );
     }
     const [pendingDup] = original
@@ -778,27 +687,17 @@ export async function createCorrection(
         requestedBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'attendance_correction.requested',
+    const change = { after: row };
+    await auditCorrection(tx, actor, row!.id, 'attendance_correction.requested', change, requestId);
+    const approvers = await approverUserIds(tx, e, actor.id);
+    await notifyOthers(tx, actor, approvers, {
+      kind: 'attendance.correction_requested',
+      title: `Attendance correction ${code} for ${e.fullName}`,
+      body: input.reason,
+      link: `/ops/hr/attendance/corrections/${row!.id}`,
       entityType: 'attendance_correction',
       entityId: row!.id,
-      after: row,
-      requestId,
     });
-    const approvers = await approverUserIds(tx, e, actor.id);
-    if (approvers.length)
-      await notify(tx, {
-        userIds: approvers,
-        module: 'ops',
-        kind: 'attendance.correction_requested',
-        title: `Attendance correction ${code} for ${e.fullName}`,
-        body: input.reason,
-        link: `/ops/hr/attendance/corrections/${row!.id}`,
-        entityType: 'attendance_correction',
-        entityId: row!.id,
-      });
     return row!;
   });
 }
@@ -814,25 +713,9 @@ export async function decideCorrection(
   const scope = await hrScope(db, actor, 'ops:attendance:approve');
   const { attendance: rules } = await timeSettings(db);
   return withTransaction(db, async (tx) => {
-    const [c] = await tx
-      .select()
-      .from(opsAttendanceCorrections)
-      .where(eq(opsAttendanceCorrections.id, id as OpsAttendanceCorrectionId))
-      .for('update');
-    if (!c) notFound('Correction');
+    const c = await rowById(tx, opsAttendanceCorrections, id, 'Correction', true);
     assertHrScope(scope, c.staffId, 'this correction');
-    const to = input.decision === 'approve' ? 'approved' : 'rejected';
-    throwCheck(
-      checkDecision({
-        from: c.status,
-        to,
-        actorUserId: actor.id,
-        requestedByUserId: c.requestedBy,
-        actorStaffId: scope.staffId,
-        subjectStaffId: c.staffId,
-        note: input.note,
-      }),
-    );
+    const to = checkedDecision(actor, scope, c, input);
     await lockStaff(tx, 'attendance', c.staffId);
     let resultingSessionId: OpsAttendanceSessionId | null = null;
     let original: SessionRow | undefined;
@@ -847,39 +730,22 @@ export async function decideCorrection(
           throw new ConflictError('The session was already replaced; this correction is stale.');
       }
       const e = await loadEmployee(tx, c.staffId);
-      const existing = await liveSessions(
-        tx,
-        c.staffId,
-        c.workDate as IsoDate,
-        c.workDate as IsoDate,
-      );
-      assertNoClash(
-        existing,
-        { clockInAt: c.proposedClockInAt, clockOutAt: c.proposedClockOutAt, workDate: c.workDate },
-        rules,
-        now,
-        original?.id,
-      );
-      const shift = await shiftFor(tx, e, c.workDate as IsoDate);
-      const le = lateEarly(
-        { clockInAt: c.proposedClockInAt, clockOutAt: c.proposedClockOutAt },
-        shift?.window ?? null,
-        rules,
-      );
+      const workDate = c.workDate as IsoDate;
+      const times = { clockInAt: c.proposedClockInAt, clockOutAt: c.proposedClockOutAt };
+      const existing = await liveSessions(tx, c.staffId, workDate);
+      assertNoClash(existing, { ...times, workDate }, rules, now, original?.id);
+      const shift = await shiftFor(tx, e, workDate);
       const [created] = await tx
         .insert(opsAttendanceSessions)
         .values({
           staffId: c.staffId,
-          workDate: c.workDate,
-          clockInAt: c.proposedClockInAt,
-          clockOutAt: c.proposedClockOutAt,
+          workDate,
+          ...times,
           timezone: e.timezone,
           breakMinutes: c.proposedBreakMinutes,
           source: 'correction',
           status: 'closed',
-          shiftTemplateId: (shift?.template.id as OpsShiftTemplateId | undefined) ?? null,
-          lateMinutes: le.lateMinutes,
-          earlyDepartureMinutes: le.earlyDepartureMinutes,
+          ...shiftMeasures(shift, times, rules),
           reason: `${c.code}: ${c.reason}`,
           correctionId: c.id,
           createdBy: actor.id,
@@ -892,43 +758,31 @@ export async function decideCorrection(
           .set({ status: 'superseded', supersededAt: now, supersededById: created!.id })
           .where(eq(opsAttendanceSessions.id, original.id));
     }
+    const note = input.note ?? null;
     const [after] = await tx
       .update(opsAttendanceCorrections)
       .set({
         status: to,
         decidedBy: actor.id,
         decidedAt: now,
-        decisionNote: input.note ?? null,
+        decisionNote: note,
         resultingSessionId,
       })
       .where(eq(opsAttendanceCorrections.id, c.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: `attendance_correction.${to}`,
+    const change = {
+      before: { status: c.status, originalSessionId: c.sessionId },
+      after: { status: to, note, resultingSessionId, supersededSessionId: original?.id ?? null },
+    };
+    await auditCorrection(tx, actor, c.id, `attendance_correction.${to}`, change, requestId);
+    await notifyOthers(tx, actor, [c.requestedBy], {
+      kind: `attendance.correction_${to}`,
+      title: `Correction ${c.code} ${to}`,
+      body: input.note ?? undefined,
+      link: `/ops/hr/attendance/corrections/${c.id}`,
       entityType: 'attendance_correction',
       entityId: c.id,
-      before: { status: c.status, originalSessionId: c.sessionId },
-      after: {
-        status: to,
-        note: input.note ?? null,
-        resultingSessionId,
-        supersededSessionId: original?.id ?? null,
-      },
-      requestId,
     });
-    if (c.requestedBy !== actor.id)
-      await notify(tx, {
-        userIds: [c.requestedBy],
-        module: 'ops',
-        kind: `attendance.correction_${to}`,
-        title: `Correction ${c.code} ${to}`,
-        body: input.note ?? undefined,
-        link: `/ops/hr/attendance/corrections/${c.id}`,
-        entityType: 'attendance_correction',
-        entityId: c.id,
-      });
     return after!;
   });
 }
@@ -941,12 +795,7 @@ export async function withdrawCorrection(
 ) {
   await hrScope(db, actor, 'ops:attendance:record');
   return withTransaction(db, async (tx) => {
-    const [c] = await tx
-      .select()
-      .from(opsAttendanceCorrections)
-      .where(eq(opsAttendanceCorrections.id, id as OpsAttendanceCorrectionId))
-      .for('update');
-    if (!c) notFound('Correction');
+    const c = await rowById(tx, opsAttendanceCorrections, id, 'Correction', true);
     throwCheck(
       checkWithdraw({ from: c.status, actorUserId: actor.id, requestedByUserId: c.requestedBy }),
     );
@@ -955,16 +804,8 @@ export async function withdrawCorrection(
       .set({ status: 'withdrawn' })
       .where(eq(opsAttendanceCorrections.id, c.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'attendance_correction.withdrawn',
-      entityType: 'attendance_correction',
-      entityId: c.id,
-      before: { status: c.status },
-      after: { status: 'withdrawn' },
-      requestId,
-    });
+    const change = { before: { status: c.status }, after: { status: 'withdrawn' } };
+    await auditCorrection(tx, actor, c.id, 'attendance_correction.withdrawn', change, requestId);
     return after!;
   });
 }
@@ -977,47 +818,34 @@ export async function listCorrections(
   const scope = await hrScope(db, actor, 'ops:attendance:read');
   if (query.staffId) assertHrScope(scope, query.staffId);
   const ids = hrScopeIds(scope);
-  const page = query.page ?? 1;
-  if (ids && ids.length === 0) return { rows: [], page, pageSize: PAGE_SIZE, total: 0 };
-  const conds: SQL[] = [];
-  if (ids) conds.push(inArray(opsAttendanceCorrections.staffId, ids));
-  if (query.staffId)
-    conds.push(eq(opsAttendanceCorrections.staffId, query.staffId as StaffMemberId));
-  if (query.status)
-    conds.push(eq(opsAttendanceCorrections.status, query.status as CorrectionRow['status']));
-  const where = conds.length ? and(...conds) : undefined;
-  const [{ total } = { total: 0 }] = await db
-    .select({ total: sql<number>`count(*)::int` })
-    .from(opsAttendanceCorrections)
-    .where(where);
-  const rows = await db
-    .select({ c: opsAttendanceCorrections, fullName: staffMembers.fullName })
-    .from(opsAttendanceCorrections)
-    .innerJoin(staffMembers, eq(staffMembers.id, opsAttendanceCorrections.staffId))
-    .where(where)
-    .orderBy(desc(opsAttendanceCorrections.createdAt))
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
-  const canDecide = await decider(db, actor, 'ops:attendance:approve');
-  return {
-    rows: rows.map((r) => ({
+  if (ids?.length === 0) return emptyPage(query.page ?? 1);
+  const c = opsAttendanceCorrections;
+  const where = and(
+    ids ? inArray(c.staffId, ids) : undefined,
+    query.staffId ? eq(c.staffId, query.staffId as StaffMemberId) : undefined,
+    query.status ? eq(c.status, query.status as (typeof c.$inferSelect)['status']) : undefined,
+  );
+  return paginate(db, c, where, query.page, async (limit, offset) => {
+    const rows = await db
+      .select({ c, fullName: staffMembers.fullName })
+      .from(c)
+      .innerJoin(staffMembers, eq(staffMembers.id, c.staffId))
+      .where(where)
+      .orderBy(desc(c.createdAt))
+      .limit(limit)
+      .offset(offset);
+    const canDecide = await decider(db, actor, 'ops:attendance:approve');
+    return rows.map((r) => ({
       ...r.c,
       fullName: r.fullName,
       canDecide: r.c.status === 'pending' && canDecide(r.c.staffId, r.c.requestedBy),
-    })),
-    page,
-    pageSize: PAGE_SIZE,
-    total,
-  };
+    }));
+  });
 }
 
 export async function getCorrection(db: Database, actor: Actor, id: string) {
   const scope = await hrScope(db, actor, 'ops:attendance:read');
-  const [c] = await db
-    .select()
-    .from(opsAttendanceCorrections)
-    .where(eq(opsAttendanceCorrections.id, id as OpsAttendanceCorrectionId));
-  if (!c) notFound('Correction');
+  const c = await rowById(db, opsAttendanceCorrections, id, 'Correction');
   assertHrScope(scope, c.staffId, 'this correction');
   const e = await loadEmployee(db, c.staffId);
   const [original] = c.sessionId

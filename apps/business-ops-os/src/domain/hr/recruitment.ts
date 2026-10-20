@@ -114,6 +114,13 @@ function checkEdge<S extends string>(
   return { ok: true, edge: found as RecruitmentEdge<string> };
 }
 
+/** The `from` → `to` edge of `table` needs a reason (screens show a reason field). */
+export const needsReason = <S extends string>(
+  table: readonly RecruitmentEdge<S>[],
+  from: S,
+  to: S,
+): boolean => table.some((e) => e.from === from && e.to === to && e.requiresReason);
+
 export function checkRequisitionTransition(
   from: RequisitionStatus,
   to: RequisitionStatus,

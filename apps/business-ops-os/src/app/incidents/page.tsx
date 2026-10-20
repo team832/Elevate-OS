@@ -1,7 +1,7 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { INCIDENT_CATEGORIES } from '../../domain';
+import { INCIDENT_CATEGORIES, INCIDENT_KINDS, INCIDENT_STATUSES } from '../../domain';
 import { incidentSlaSetting, listIncidents } from '../../server/incidents';
 import { formOptions } from '../../server/options';
 import { ActionForm } from '../../ui/action-form';
@@ -98,10 +98,7 @@ async function List({ user, canWrite }: { user: AuthenticatedUser; canWrite: boo
                       label: 'Status',
                       type: 'select',
                       required: true,
-                      options: ['open', 'in_progress', 'resolved', 'closed'].map((v) => ({
-                        value: v,
-                        label: v,
-                      })),
+                      options: INCIDENT_STATUSES.map((v) => ({ value: v, label: v })),
                     },
                     { name: 'resolution', label: 'Resolution' },
                   ]}
@@ -123,10 +120,7 @@ async function List({ user, canWrite }: { user: AuthenticatedUser; canWrite: boo
                 label: 'Kind',
                 type: 'select',
                 required: true,
-                options: [
-                  { value: 'exception', label: 'Exception' },
-                  { value: 'incident', label: 'Incident' },
-                ],
+                options: INCIDENT_KINDS.map((v) => ({ value: v, label: humanise(v) })),
               },
               {
                 name: 'category',

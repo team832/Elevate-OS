@@ -1,16 +1,12 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
-import {
-  APPLICATION_STAGE_LABELS,
-  CANDIDATE_SOURCES,
-  type ApplicationStage,
-} from '../../../../../domain/hr/recruitment';
+import { Alert, Card, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { CANDIDATE_SOURCES } from '../../../../../domain/hr/recruitment';
 import { DECISION_STATE_LABELS } from '../../../../../domain/policies';
 import { getCandidate } from '../../../../../server/hr/recruitment';
 import { ActionForm } from '../../../../../ui/action-form';
-import { fmtDateTime, humanise, statusTone } from '../../../../../ui/format';
-import { Frame, gate, load, Section } from '../../../../../ui/frame';
-import { HistoryPanel } from '../../_components/lifecycle-ui';
+import { fmtDateTime, humanise } from '../../../../../ui/format';
+import { load } from '../../../../../ui/frame';
+import { ApplicationsTable, detailPage, HistoryPanel } from '../../_components/lifecycle-ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,21 +17,6 @@ const RETENTION_TEXT = {
   due: 'The retention period has passed: anonymise this candidate.',
   not_due: 'Still within the retention period.',
 } as const;
-
-export default async function CandidatePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const access = await gate('ops:recruitment:read', `/ops/hr/recruitment/candidates/${id}`);
-  return (
-    <Frame access={access} active="recruitment">
-      <p>
-        <a href="/ops/hr/recruitment?tab=candidates">Back to candidates</a>
-      </p>
-      <Section>
-        <Detail user={access.user} id={id} />
-      </Section>
-    </Frame>
-  );
-}
 
 async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
   const r = await load((db) => getCandidate(db, user, id));
@@ -86,40 +67,19 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         )}
       </Card>
       <Card title="Applications">
-        <DataTable
+        <ApplicationsTable
           rows={d.applications}
-          rowKey={(a) => a.id}
+          link={{
+            key: 'requisitionCode',
+            header: 'Requisition',
+            text: (a) => `${a.requisitionCode} ${a.requisitionTitle}`,
+          }}
           empty={
             <EmptyState
               title="No applications you can see"
               description="Add an application from an open requisition’s page."
             />
           }
-          columns={[
-            {
-              key: 'requisitionCode',
-              header: 'Requisition',
-              render: (a) => (
-                <a href={`/ops/hr/recruitment/applications/${a.id}`}>
-                  {a.requisitionCode} {a.requisitionTitle}
-                </a>
-              ),
-            },
-            {
-              key: 'stage',
-              header: 'Stage',
-              render: (a) => (
-                <StatusBadge tone={statusTone(a.stage)}>
-                  {APPLICATION_STAGE_LABELS[a.stage as ApplicationStage]}
-                </StatusBadge>
-              ),
-            },
-            {
-              key: 'stageChangedAt',
-              header: 'Since',
-              render: (a) => fmtDateTime(a.stageChangedAt),
-            },
-          ]}
         />
       </Card>
       {d.canManage ? (
@@ -187,3 +147,11 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
     </div>
   );
 }
+
+export default detailPage(
+  'ops:recruitment:read',
+  'recruitment',
+  '/ops/hr/recruitment/candidates',
+  { href: '/ops/hr/recruitment?tab=candidates', label: 'Back to candidates' },
+  Detail,
+);

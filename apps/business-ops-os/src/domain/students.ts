@@ -25,14 +25,6 @@ export const DIRECTORY_STATE_LABELS: Record<DirectoryState, string> = {
   withdrawn: 'Withdrawn after admission',
 };
 
-/** The admission statuses that appear in the student directory. */
-export const DIRECTORY_STATUSES: readonly AdmissionStatus[] = [
-  'admitted',
-  'enrolment_requested',
-  'enrolled',
-  'lost',
-];
-
 /**
  * Directory state of an admission, or null when it is not (yet) a student:
  * admitted / enrolment_requested / enrolled, or lost AFTER having been
@@ -51,8 +43,6 @@ export function directoryState(input: {
       return 'enrolled';
     case 'lost':
       return input.admittedAt ? 'withdrawn' : null;
-    case 'on_hold':
-      return null;
     default:
       return null;
   }

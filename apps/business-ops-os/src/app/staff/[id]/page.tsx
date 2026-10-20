@@ -6,6 +6,7 @@ import { formOptions } from '../../../server/options';
 import { ActionForm } from '../../../ui/action-form';
 import { fmtDateTime, humanise } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
+import { options } from '../../../ui/hr-records';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
     options: await formOptions(db),
   }));
   if (!r.ok) return r.view;
-  const { d, options } = r.data;
+  const { d, options: o } = r.data;
   const manage = can(user, 'ops:organisation:manage');
   return (
     <div className="el-stack">
@@ -67,14 +68,14 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                 name: 'managerId',
                 label: 'Reports to',
                 type: 'select',
-                options: options.staff.filter((s) => s.value !== d.staff.id),
+                options: o.staff.filter((s) => s.value !== d.staff.id),
                 defaultValue: d.staff.managerId ?? '',
               },
               {
                 name: 'departmentId',
                 label: 'Department',
                 type: 'select',
-                options: options.departments,
+                options: o.departments,
                 defaultValue: d.staff.departmentId ?? '',
               },
               {
@@ -83,10 +84,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                 type: 'select',
                 required: true,
                 defaultValue: d.staff.status,
-                options: ['active', 'on_leave', 'inactive'].map((v) => ({
-                  value: v,
-                  label: humanise(v),
-                })),
+                options: options(['active', 'on_leave', 'inactive']),
               },
             ]}
           />
@@ -145,10 +143,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                         label: 'Status',
                         type: 'select',
                         required: true,
-                        options: ['pending', 'done', 'not_applicable'].map((v) => ({
-                          value: v,
-                          label: humanise(v),
-                        })),
+                        options: options(['pending', 'done', 'not_applicable']),
                       },
                       { name: 'documentRef', label: 'Reference' },
                     ]}

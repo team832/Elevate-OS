@@ -14,12 +14,9 @@ export interface StorageStatus {
   verifiedAt: string | null;
 }
 
-export type PutResult =
-  { ok: true; storageKey: string } | { ok: false; connection: ConnectionStatus; detail: string };
-
-export type UrlResult =
-  | { ok: true; url: string; expiresAt: string }
-  | { ok: false; connection: ConnectionStatus; detail: string };
+type Refused = { ok: false; connection: ConnectionStatus; detail: string };
+export type PutResult = { ok: true; storageKey: string } | Refused;
+export type UrlResult = { ok: true; url: string; expiresAt: string } | Refused;
 
 export interface DocumentStorage {
   readonly name: string;
@@ -33,26 +30,18 @@ export interface DocumentStorage {
 const NOT_CONFIGURED =
   'Document storage is not configured (D-014). Record a reference-only document (where the paper or file is kept) instead.';
 
-export class MockDocumentStorage implements DocumentStorage {
-  readonly name = 'Document storage (mock — not configured)';
-
-  async status(): Promise<StorageStatus> {
-    return { connection: 'not_configured', detail: NOT_CONFIGURED, verifiedAt: null };
-  }
-
-  async put(): Promise<PutResult> {
-    return { ok: false, connection: 'not_configured', detail: NOT_CONFIGURED };
-  }
-
-  async downloadUrl(): Promise<UrlResult> {
-    return { ok: false, connection: 'not_configured', detail: NOT_CONFIGURED };
-  }
-}
+const refused: Refused = { ok: false, connection: 'not_configured', detail: NOT_CONFIGURED };
+const mockStorage: DocumentStorage = {
+  name: 'Document storage (mock — not configured)',
+  status: async () => ({ connection: 'not_configured', detail: NOT_CONFIGURED, verifiedAt: null }),
+  put: async () => refused,
+  downloadUrl: async () => refused,
+};
 
 let override: DocumentStorage | undefined;
 
 export function getDocumentStorage(): DocumentStorage {
-  return override ?? new MockDocumentStorage();
+  return override ?? mockStorage;
 }
 
 /** Tests only: install a fake adapter (undefined restores the mock). */

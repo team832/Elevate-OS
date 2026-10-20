@@ -62,11 +62,7 @@ async function Inbox({ user }: { user: AuthenticatedUser }) {
                 rowKey={(i) => i.id}
                 empty={<p>Nothing waiting.</p>}
                 columns={[
-                  {
-                    key: 'title',
-                    header: 'Item',
-                    render: (i) => <a href={i.link}>{i.title}</a>,
-                  },
+                  { key: 'title', header: 'Item', render: (i) => <a href={i.link}>{i.title}</a> },
                   {
                     key: 'requestedByName',
                     header: 'Requested by',

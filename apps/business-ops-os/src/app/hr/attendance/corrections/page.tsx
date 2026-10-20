@@ -3,11 +3,19 @@ import { DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
 import { listCorrections } from '../../../../server/hr/attendance';
 import { fmtDate, fmtDateTime } from '../../../../ui/format';
 import { Frame, gate, load, Section } from '../../../../ui/frame';
-import { FilterForm, FilterSelect, Pager, RequestStatus, TimeNav, timeNavItems } from '../time-ui';
+import {
+  FilterForm,
+  FilterSelect,
+  oneOf,
+  pageOf,
+  Pager,
+  RequestStatus,
+  TimeNav,
+  type Sp,
+} from '../time-ui';
 
 export const dynamic = 'force-dynamic';
 
-type Sp = Record<string, string | undefined>;
 const STATUSES = [
   { value: 'pending', label: 'Pending decision' },
   { value: 'approved', label: 'Approved' },
@@ -24,7 +32,7 @@ export default async function CorrectionsPage({ searchParams }: { searchParams: 
         title="Attendance corrections"
         description="Requests to fix a recorded time or add a missed day. Approval keeps the original session as superseded and records the corrected times as a new session."
       />
-      <TimeNav current="/ops/hr/attendance/corrections" items={timeNavItems(access.user)} />
+      <TimeNav current="/ops/hr/attendance/corrections" user={access.user} />
       <Section label="Loading corrections…">
         <List user={access.user} sp={sp} />
       </Section>
@@ -33,9 +41,8 @@ export default async function CorrectionsPage({ searchParams }: { searchParams: 
 }
 
 async function List({ user, sp }: { user: AuthenticatedUser; sp: Sp }) {
-  const status = STATUSES.some((s) => s.value === sp.status) ? sp.status : undefined;
-  const page = Math.max(1, Number(sp.page) || 1);
-  const r = await load((db) => listCorrections(db, user, { status, page }));
+  const status = oneOf(STATUSES, sp.status);
+  const r = await load((db) => listCorrections(db, user, { status, page: pageOf(sp) }));
   if (!r.ok) return r.view;
   return (
     <div className="el-stack">
@@ -71,13 +78,7 @@ async function List({ user, sp }: { user: AuthenticatedUser; sp: Sp }) {
           },
         ]}
       />
-      <Pager
-        base="/ops/hr/attendance/corrections"
-        params={sp}
-        page={r.data.page}
-        pageSize={r.data.pageSize}
-        total={r.data.total}
-      />
+      <Pager base="/ops/hr/attendance/corrections" params={sp} list={r.data} />
     </div>
   );
 }

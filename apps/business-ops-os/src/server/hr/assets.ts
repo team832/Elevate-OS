@@ -13,7 +13,8 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { notify } from '@elevate/notifications';
+import { withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
   ForbiddenError,
@@ -31,9 +32,9 @@ import {
 } from '../../domain/hr/assets';
 import { pageWindow } from '../../domain/hr/employees';
 import { nextCode, userIdsForStaff, type Actor } from '../context';
-import { likePattern } from './access';
 import { assertHrScope, hrCovers, hrScope, hrScopeIds } from '../hr-scope';
-import { notify } from '@elevate/notifications';
+import { opsAudit, rowById } from '../ops-common';
+import { likePattern } from './access';
 import type {
   assetListQuery,
   assignAssetBody,
@@ -42,7 +43,12 @@ import type {
   updateAssetBody,
 } from './schemas';
 
+const audit = opsAudit('asset');
+
 type AssetId = typeof opsAssets.$inferSelect.id;
+
+const openAssignmentOf = (assetId: AssetId | typeof opsAssets.id) =>
+  and(eq(opsAssetAssignments.assetId, assetId), isNull(opsAssetAssignments.returnedAt));
 
 async function manageAll(db: Database, actor: Actor) {
   const scope = await hrScope(db, actor, 'ops:assets:manage');
@@ -93,10 +99,7 @@ export async function listAssets(
         expectedReturnOn: opsAssetAssignments.expectedReturnOn,
       })
       .from(opsAssets)
-      .leftJoin(
-        opsAssetAssignments,
-        and(eq(opsAssetAssignments.assetId, opsAssets.id), isNull(opsAssetAssignments.returnedAt)),
-      )
+      .leftJoin(opsAssetAssignments, openAssignmentOf(opsAssets.id))
       .leftJoin(staffMembers, eq(staffMembers.id, opsAssetAssignments.staffId))
       .where(cond)
       .orderBy(asc(opsAssets.code))
@@ -130,15 +133,8 @@ export async function listAssets(
   };
 }
 
-async function assetRow(db: Database, id: string, lock = false) {
-  const q = db
-    .select()
-    .from(opsAssets)
-    .where(eq(opsAssets.id, id as AssetId));
-  const [row] = lock ? await q.for('update') : await q;
-  if (!row) throw new NotFoundError('Asset not found.');
-  return row;
-}
+const assetRow = (db: Database, id: string, lock = false) =>
+  rowById(db, opsAssets, id, 'Asset', lock);
 
 async function assignmentHistory(db: Database, where: SQL) {
   return db
@@ -204,15 +200,7 @@ export async function createAsset(
         notes: input.notes ?? null,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'asset.registered',
-      entityType: 'asset',
-      entityId: row!.id,
-      after: row,
-      requestId,
-    });
+    await audit(tx, actor, row!.id, 'asset.registered', { after: row }, requestId);
     return row!;
   });
 }
@@ -242,16 +230,7 @@ export async function updateAsset(
       .set(patch)
       .where(eq(opsAssets.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'asset.updated',
-      entityType: 'asset',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    await audit(tx, actor, before.id, 'asset.updated', { before, after }, requestId);
     return after!;
   });
 }
@@ -270,9 +249,7 @@ export async function assignAsset(
     const [open] = await tx
       .select({ id: opsAssetAssignments.id })
       .from(opsAssetAssignments)
-      .where(
-        and(eq(opsAssetAssignments.assetId, asset.id), isNull(opsAssetAssignments.returnedAt)),
-      );
+      .where(openAssignmentOf(asset.id));
     const [emp] = await tx
       .select({ status: opsEmployeeRecords.employmentStatus, staffStatus: staffMembers.status })
       .from(staffMembers)
@@ -300,16 +277,17 @@ export async function assignAsset(
       })
       .returning();
     await tx.update(opsAssets).set({ status: 'assigned' }).where(eq(opsAssets.id, asset.id));
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'asset.assigned',
-      entityType: 'asset',
-      entityId: asset.id,
-      before: { status: asset.status },
-      after: { status: 'assigned', staffId: input.staffId, assignedOn },
+    await audit(
+      tx,
+      actor,
+      asset.id,
+      'asset.assigned',
+      {
+        before: { status: asset.status },
+        after: { status: 'assigned', staffId: input.staffId, assignedOn },
+      },
       requestId,
-    });
+    );
     await notify(tx, {
       userIds: await userIdsForStaff(tx, [input.staffId]),
       module: 'ops',
@@ -334,7 +312,7 @@ export async function returnAsset(
     const [open] = await tx
       .select()
       .from(opsAssetAssignments)
-      .where(and(eq(opsAssetAssignments.assetId, asset.id), isNull(opsAssetAssignments.returnedAt)))
+      .where(openAssignmentOf(asset.id))
       .for('update');
     if (!open) throw new InvalidStateTransitionError('The asset is not assigned to anyone.');
     const status: AssetStatus = statusAfterReturn(input.condition);
@@ -351,16 +329,17 @@ export async function returnAsset(
       .where(eq(opsAssetAssignments.id, open.id))
       .returning();
     await tx.update(opsAssets).set({ status }).where(eq(opsAssets.id, asset.id));
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'asset.returned',
-      entityType: 'asset',
-      entityId: asset.id,
-      before: { status: asset.status, staffId: open.staffId },
-      after: { status, condition: input.condition },
+    await audit(
+      tx,
+      actor,
+      asset.id,
+      'asset.returned',
+      {
+        before: { status: asset.status, staffId: open.staffId },
+        after: { status, condition: input.condition },
+      },
       requestId,
-    });
+    );
     return row!;
   });
 }

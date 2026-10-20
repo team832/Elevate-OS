@@ -4,7 +4,7 @@ import { callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import { opsShiftTemplates } from '@elevate/database';
 import { POST as runJob } from '../../src/app/api/v1/jobs/[job]/route';
 import { SEED_SHIFT, seedHrTime } from '../../seed/hr-time';
-import { employee, post } from './hr-time-fixtures';
+import { employee, post, statusOf } from './hr-time-fixtures';
 
 const ctx = setupTestDatabase();
 const runCheck = (req: Request) =>
@@ -13,7 +13,7 @@ const runCheck = (req: Request) =>
 describe('missing clock-out job route', () => {
   it('needs ops:jobs:run; returns counts', async () => {
     const emp = await employee(ctx.db, ['employee']);
-    expect((await callRoute(runCheck, post(emp))).status).toBe(403);
+    expect(await statusOf(runCheck, post(emp))).toBe(403);
     const ops = await createTestUser(ctx.db, { roles: ['operations_manager'] });
     const r = await callRoute<{ checked: number; flagged: number }>(runCheck, post(ops));
     expect(r.status).toBe(200);

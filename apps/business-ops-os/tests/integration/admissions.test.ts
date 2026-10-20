@@ -39,6 +39,20 @@ let director: TestUser;
 
 const post = (user: { token: string }, json: unknown, headers?: Record<string, string>) =>
   authedRequest(user, '/ops/api/v1/x', { method: 'POST', json, headers });
+/** HTTP status of a POST by `user`. */
+const status = async (
+  route: Parameters<typeof callRoute>[0],
+  user: { token: string },
+  json: unknown,
+  params: Record<string, string>,
+) => (await callRoute(route, post(user, json), params)).status;
+const admissionRow = async (id: string) =>
+  (
+    await ctx.db
+      .select()
+      .from(opsAdmissions)
+      .where(eq(opsAdmissions.id, id as never))
+  )[0];
 
 beforeAll(async () => {
   await setupReference(ctx.db);
@@ -75,15 +89,8 @@ async function pendingAdmission() {
     }),
   );
   expect(s.status).toBe(201);
-  expect(
-    (
-      await callRoute(
-        counsellingUpdate,
-        post(counsellor, { action: 'complete', outcome: 'Wants a demo' }),
-        { id: s.data!.id },
-      )
-    ).status,
-  ).toBe(200);
+  const done = { action: 'complete', outcome: 'Wants a demo' };
+  expect(await status(counsellingUpdate, counsellor, done, { id: s.data!.id })).toBe(200);
   const bad = await callRoute(
     demo,
     post(counsellor, { admissionId, subjects: ['Quant'], dayDates: [isoDaysFromNow(-3)] }),
@@ -99,23 +106,11 @@ async function pendingAdmission() {
   );
   expect(d.status).toBe(201);
   expect(d.data).toMatchObject({ feeAmountInr: '1000.00', feeTermsState: 'pending_verification' });
-  expect(
-    (
-      await callRoute(
-        demoUpdate,
-        post(counsellor, {
-          action: 'record_fee',
-          feeStatus: 'paid_verified',
-          feeReference: 'RCPT-TEST-1',
-        }),
-        { id: d.data!.id },
-      )
-    ).status,
-  ).toBe(200);
-  expect(
-    (await callRoute(demoUpdate, post(counsellor, { action: 'attended' }), { id: d.data!.id }))
-      .status,
-  ).toBe(200);
+  const fee = { action: 'record_fee', feeStatus: 'paid_verified', feeReference: 'RCPT-TEST-1' };
+  expect(await status(demoUpdate, counsellor, fee, { id: d.data!.id })).toBe(200);
+  expect(await status(demoUpdate, counsellor, { action: 'attended' }, { id: d.data!.id })).toBe(
+    200,
+  );
   const t = await callRoute<{ status: string }>(
     transition,
     post(counsellor, { to: 'admission_pending' }),
@@ -133,41 +128,26 @@ async function completeChecks(admissionId: string) {
     'down_payment_verified',
   ])
     expect(
-      (
-        await callRoute(
-          check,
-          post(counsellor, { itemKey, status: 'done', reference: 'ref (test)' }),
-          { id: admissionId },
-        )
-      ).status,
+      await status(
+        check,
+        counsellor,
+        { itemKey, status: 'done', reference: 'ref (test)' },
+        {
+          id: admissionId,
+        },
+      ),
     ).toBe(200);
-  expect(
-    (
-      await callRoute(check, post(colleague, { itemKey: 'fee_verification_2', status: 'done' }), {
-        id: admissionId,
-      })
-    ).status,
-  ).toBe(403); // not their admission
-  expect(
-    (
-      await callRoute(check, post(manager, { itemKey: 'fee_verification_2', status: 'done' }), {
-        id: admissionId,
-      })
-    ).status,
-  ).toBe(200);
+  const second = { itemKey: 'fee_verification_2', status: 'done' };
+  expect(await status(check, colleague, second, { id: admissionId })).toBe(403); // not their admission
+  expect(await status(check, manager, second, { id: admissionId })).toBe(200);
 }
 
 async function admitted() {
   const ids = await pendingAdmission();
   await completeChecks(ids.admissionId);
-  expect(
-    (await callRoute(feeApproval, post(counsellor, { action: 'request' }), { id: ids.admissionId }))
-      .status,
-  ).toBe(200);
-  expect(
-    (await callRoute(feeApproval, post(director, { action: 'approve' }), { id: ids.admissionId }))
-      .status,
-  ).toBe(200);
+  const id = { id: ids.admissionId };
+  expect(await status(feeApproval, counsellor, { action: 'request' }, id)).toBe(200);
+  expect(await status(feeApproval, director, { action: 'approve' }, id)).toBe(200);
   const res = await callRoute<{ status: string }>(
     transition,
     post(counsellor, { to: 'admitted' }),
@@ -215,22 +195,13 @@ describe('admission confirmation gate (BR-OPS-6/7)', () => {
   it('fee approval: counsellor cannot approve (403); requester cannot self-approve; director can', async () => {
     const { admissionId } = await pendingAdmission();
     await completeChecks(admissionId);
-    expect(
-      (await callRoute(feeApproval, post(manager, { action: 'request' }), { id: admissionId }))
-        .status,
-    ).toBe(200);
-    expect(
-      (await callRoute(feeApproval, post(counsellor, { action: 'approve' }), { id: admissionId }))
-        .status,
-    ).toBe(403);
-    expect(
-      (await callRoute(feeApproval, post(manager, { action: 'approve' }), { id: admissionId }))
-        .status,
-    ).toBe(403);
-    expect(
-      (await callRoute(feeApproval, post(director, { action: 'approve' }), { id: admissionId }))
-        .status,
-    ).toBe(200);
+    for (const [user, action, code] of [
+      [manager, 'request', 200],
+      [counsellor, 'approve', 403],
+      [manager, 'approve', 403], // the requester cannot self-approve
+      [director, 'approve', 200],
+    ] as const)
+      expect(await status(feeApproval, user, { action }, { id: admissionId })).toBe(code);
     const res = await callRoute<{ status: string }>(
       transition,
       post(counsellor, { to: 'admitted' }),
@@ -246,15 +217,10 @@ describe('admission confirmation gate (BR-OPS-6/7)', () => {
 
   it('enrolled cannot be set by a person; illegal jumps are 409', async () => {
     const { admissionId } = await pendingAdmission();
-    expect(
-      (await callRoute(transition, post(manager, { to: 'enrolled' }), { id: admissionId })).status,
-    ).toBe(409);
-    expect(
-      (await callRoute(transition, post(manager, { to: 'new' }), { id: admissionId })).status,
-    ).toBe(409);
-    expect(
-      (await callRoute(transition, post(manager, { to: 'lost' }), { id: admissionId })).status,
-    ).toBe(400); // reason required
+    const id = { id: admissionId };
+    expect(await status(transition, manager, { to: 'enrolled' }, id)).toBe(409);
+    expect(await status(transition, manager, { to: 'new' }, id)).toBe(409);
+    expect(await status(transition, manager, { to: 'lost' }, id)).toBe(400); // reason required
   });
 });
 
@@ -320,15 +286,21 @@ describe('enrolment handoff (outbox)', () => {
       .update(opsAdmissions)
       .set({ programmeId: null })
       .where(eq(opsAdmissions.id, admissionId as never));
-    expect(
-      (await callRoute(requestEnrolment, post(counsellor, {}), { id: admissionId })).status,
-    ).toBe(400);
+    expect(await status(requestEnrolment, counsellor, {}, { id: admissionId })).toBe(400);
     expect(await eventsFor(admissionId)).toHaveLength(0);
-    const [row] = await ctx.db
-      .select()
-      .from(opsAdmissions)
-      .where(eq(opsAdmissions.id, admissionId as never));
-    expect(row?.status).toBe('admitted');
+    expect((await admissionRow(admissionId))?.status).toBe('admitted');
+  });
+
+  const confirmedPayload = (requestEventId: string, admissionId: string, leadId: string) => ({
+    requestEventId: requestEventId as never,
+    admissionId: admissionId as never,
+    leadId: leadId as never,
+    enrolmentId: crypto.randomUUID() as never,
+    studentId: crypto.randomUUID() as never,
+    existingStudent: false,
+    programmeCode: 'IPMAT',
+    confirmedAt: new Date().toISOString() as never,
+    confirmedByUserId: null,
   });
 
   async function reply(
@@ -344,17 +316,7 @@ describe('enrolment handoff (outbox)', () => {
             version: 1,
             idempotencyKey: enrolmentKeys.reply(requestEventId),
             correlationId: requestEventId,
-            payload: {
-              requestEventId: requestEventId as never,
-              admissionId: admissionId as never,
-              leadId: leadId as never,
-              enrolmentId: crypto.randomUUID() as never,
-              studentId: crypto.randomUUID() as never,
-              existingStudent: false,
-              programmeCode: 'IPMAT',
-              confirmedAt: new Date().toISOString() as never,
-              confirmedByUserId: null,
-            },
+            payload: confirmedPayload(requestEventId, admissionId, leadId),
           })
         : publishEvent(tx, {
             type: 'academic.enrolment.rejected',
@@ -397,10 +359,7 @@ describe('enrolment handoff (outbox)', () => {
       );
     expect(transitions).toHaveLength(1);
     expect(transitions[0]).toMatchObject({ actorType: 'system', actorUserId: null });
-    const [row] = await ctx.db
-      .select()
-      .from(opsAdmissions)
-      .where(eq(opsAdmissions.id, admissionId as never));
+    const row = await admissionRow(admissionId);
     expect(row).toMatchObject({ status: 'enrolled', handoffStatus: 'enrolled' });
     expect(row?.studentId).not.toBeNull();
     const notes = await ctx.db
@@ -410,9 +369,7 @@ describe('enrolment handoff (outbox)', () => {
         and(eq(notifications.userId, counsellor.id), eq(notifications.kind, 'enrolment.confirmed')),
       );
     expect(notes.length).toBeGreaterThanOrEqual(1);
-    expect(
-      (await callRoute(runJob, post(counsellor, {}), { job: 'enrolment-replies' })).status,
-    ).toBe(403);
+    expect(await status(runJob, counsellor, {}, { job: 'enrolment-replies' })).toBe(403);
   });
 
   it('rejected reply → back to admitted with the reason; re-request is attempt 2 with a new key; stale replies are ignored', async () => {
@@ -422,11 +379,7 @@ describe('enrolment handoff (outbox)', () => {
     });
     await reply('rejected', admissionId, leadId, req1.data!.eventId);
     await processEnrolmentReplies(ctx.db);
-    const [row] = await ctx.db
-      .select()
-      .from(opsAdmissions)
-      .where(eq(opsAdmissions.id, admissionId as never));
-    expect(row).toMatchObject({
+    expect(await admissionRow(admissionId)).toMatchObject({
       status: 'admitted',
       handoffStatus: 'rejected',
       rejectionCode: 'BATCH_FULL',
@@ -447,24 +400,10 @@ describe('enrolment handoff (outbox)', () => {
         type: 'academic.enrolment.confirmed',
         version: 1,
         idempotencyKey: `test-only-late-${req1.data!.eventId}`,
-        payload: {
-          requestEventId: req1.data!.eventId as never,
-          admissionId: admissionId as never,
-          leadId: leadId as never,
-          enrolmentId: crypto.randomUUID() as never,
-          studentId: crypto.randomUUID() as never,
-          existingStudent: false,
-          programmeCode: 'IPMAT',
-          confirmedAt: new Date().toISOString() as never,
-          confirmedByUserId: null,
-        },
+        payload: confirmedPayload(req1.data!.eventId, admissionId, leadId),
       }),
     );
     await processEnrolmentReplies(ctx.db);
-    const [after] = await ctx.db
-      .select()
-      .from(opsAdmissions)
-      .where(eq(opsAdmissions.id, admissionId as never));
-    expect(after?.status).toBe('enrolment_requested');
+    expect((await admissionRow(admissionId))?.status).toBe('enrolment_requested');
   });
 });

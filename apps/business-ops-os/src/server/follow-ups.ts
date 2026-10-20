@@ -2,7 +2,7 @@
  * Follow-ups (OPS-007, BR-OPS-9) and the reminder job (PLT-010).
  * Due rules, overdue and reminder selection are pure (domain/follow-ups.ts).
  */
-import { and, asc, eq, inArray, isNull, lte, ne, or, type SQL } from 'drizzle-orm';
+import { and, asc, eq, isNull, lte, ne, or, type SQL } from 'drizzle-orm';
 import {
   opsAdmissions,
   opsFollowUps,
@@ -26,14 +26,8 @@ import {
   type IsoDate,
   type ResolvedSettings,
 } from '../domain';
-import {
-  accessScope,
-  activeStaff,
-  assertScope,
-  notFound,
-  staffIdForUser,
-  type Actor,
-} from './context';
+import { accessScope, activeStaff, assertScope, staffIdForUser, type Actor } from './context';
+import { opsAudit, rowById } from './ops-common';
 import { loadSettings } from './settings';
 
 export type FollowUpRow = typeof opsFollowUps.$inferSelect;
@@ -73,16 +67,6 @@ export async function createRuleFollowUp(
   return row ?? null;
 }
 
-async function leadOwnership(db: Database, leadId: string) {
-  const [lead] = await db
-    .select({ id: opsLeads.id, ownerStaffId: opsLeads.ownerStaffId })
-    .from(opsLeads)
-    .where(eq(opsLeads.id, leadId as LeadId))
-    .limit(1);
-  if (!lead) notFound('Lead');
-  return lead;
-}
-
 export async function createFollowUp(
   db: Database,
   actor: Actor,
@@ -98,7 +82,7 @@ export async function createFollowUp(
 ): Promise<FollowUpRow> {
   const access = await accessScope(db, actor, 'ops:leads:write');
   if (!isIsoDate(input.dueDate)) throw new ValidationError('dueDate must be YYYY-MM-DD.');
-  const lead = await leadOwnership(db, input.leadId);
+  const lead = await rowById(db, opsLeads, input.leadId, 'Lead');
   let admissionCounsellor: string | null = null;
   if (input.admissionId) {
     const [adm] = await db
@@ -134,16 +118,14 @@ export async function createFollowUp(
       })
       .returning();
     if (!row) throw new Error('follow-up insert returned no row');
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'followup.created',
-      entityType: 'follow_up',
-      entityId: row.id,
-      after: row,
+    await opsAudit('follow_up')(
+      tx,
+      actor,
+      row.id,
+      'followup.created',
+      { after: row, metadata: { leadId: lead.id } },
       requestId,
-      metadata: { leadId: lead.id },
-    });
+    );
     return row;
   });
 }
@@ -157,16 +139,12 @@ export async function closeFollowUp(
 ): Promise<FollowUpRow> {
   const access = await accessScope(db, actor, 'ops:leads:write');
   return withTransaction(db, async (tx) => {
-    const [current] = await tx
-      .select()
-      .from(opsFollowUps)
-      .where(eq(opsFollowUps.id, id as FollowUpRow['id']))
-      .for('update');
-    if (!current) notFound('Follow-up');
+    const current = await rowById(tx, opsFollowUps, id, 'Follow-up', true);
     assertScope(access, [current.ownerStaffId], 'follow-ups');
     if (current.status !== 'open')
       throw new InvalidStateTransitionError(`This follow-up is already ${current.status}.`);
-    if (!input.outcome?.trim())
+    const outcome = input.outcome?.trim();
+    if (!outcome)
       throw new ValidationError('Record the outcome (completion needs evidence, BR-OPS-11).', {
         details: [{ location: 'body', path: ['outcome'], message: 'Required' }],
       });
@@ -174,27 +152,19 @@ export async function closeFollowUp(
       .update(opsFollowUps)
       .set(
         input.action === 'complete'
-          ? {
-              status: 'done',
-              outcome: input.outcome.trim(),
-              completedAt: new Date(),
-              completedBy: actor.id,
-            }
-          : { status: 'cancelled', outcome: input.outcome.trim() },
+          ? { status: 'done', outcome, completedAt: new Date(), completedBy: actor.id }
+          : { status: 'cancelled', outcome },
       )
       .where(eq(opsFollowUps.id, current.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: input.action === 'complete' ? 'followup.completed' : 'followup.cancelled',
-      entityType: 'follow_up',
-      entityId: current.id,
-      before: current,
-      after: row,
+    await opsAudit('follow_up')(
+      tx,
+      actor,
+      current.id,
+      input.action === 'complete' ? 'followup.completed' : 'followup.cancelled',
+      { before: current, after: row, metadata: { leadId: current.leadId } },
       requestId,
-      metadata: { leadId: current.leadId },
-    });
+    );
     return row as FollowUpRow;
   });
 }
@@ -346,17 +316,4 @@ export async function runFollowUpReminders(
       dueToday: decisions.filter((d) => d.kind === 'followup.due_today').length,
     };
   });
-}
-
-/** Open follow-ups per lead (for list flags). */
-export async function openFollowUpsForLeads(db: Database, leadIds: readonly LeadId[]) {
-  if (leadIds.length === 0) return [];
-  return db
-    .select({
-      leadId: opsFollowUps.leadId,
-      status: opsFollowUps.status,
-      dueDate: opsFollowUps.dueDate,
-    })
-    .from(opsFollowUps)
-    .where(and(inArray(opsFollowUps.leadId, [...leadIds]), or(eq(opsFollowUps.status, 'open'))));
 }

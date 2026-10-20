@@ -9,8 +9,8 @@
  * Permissions: read `ops:leave:read` · request/cancel own `ops:leave:request`
  * · decide `ops:leave:approve` · types, holidays, ledger `ops:leave:manage`.
  */
-import { and, asc, desc, eq, gte, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
-import { can } from '@elevate/authorization';
+import { and, asc, desc, eq, gte, inArray, lte, ne, type SQL } from 'drizzle-orm';
+import { can, type Permission } from '@elevate/authorization';
 import {
   opsLeaveLedgerEntries,
   opsLeaveRequests,
@@ -20,12 +20,10 @@ import {
   type OpsLeaveRequestId,
   type OpsLeaveTypeId,
 } from '@elevate/database';
-import { notify } from '@elevate/notifications';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ForbiddenError, ValidationError } from '@elevate/shared-contracts';
-import type { IsoDate, StaffMemberId } from '@elevate/shared-types';
+import type { IsoDate, StaffMemberId, UserId } from '@elevate/shared-types';
 import { daysBetween } from '../../domain/dates';
-import { checkDecision } from '../../domain/hr/attendance';
 import { eachDate, holidaysFor, weekday, zonedDate } from '../../domain/hr/calendar';
 import {
   availabilityGrid,
@@ -37,32 +35,44 @@ import {
   type LeavePart,
   type LeaveSpan,
 } from '../../domain/hr/leave';
+import { coveringTemplates } from '../../domain/hr/shifts';
 import { nextCode, notFound, userIdsForStaff, type Actor } from '../context';
 import { assertHrScope, assertNotSelf, hrCovers, hrScope, hrScopeIds } from '../hr-scope';
+import { defined, notifyOthers, opsAudit, rowById } from '../ops-common';
 import {
   approverUserIds,
+  checkedDecision,
   decider,
+  emptyPage,
   employeeSchedule,
   issuesError,
   loadEmployee,
-  lockStaff,
-  stripUndefined,
-  throwCheck,
   loadEmployees,
   loadScheduleContext,
-  PAGE_SIZE,
+  lockStaff,
+  paginate,
+  throwCheck,
   timeSettings,
   type TimeEmployee,
 } from './shifts';
 import type {
   CreateLeaveInput,
   CreateLeaveTypeInput,
+  DecisionInput,
   LeaveListQuery,
   LedgerEntryInput,
   UpdateLeaveTypeInput,
 } from './time-schemas';
 
-export type LeaveRequestRow = typeof opsLeaveRequests.$inferSelect;
+const auditLeaveType = opsAudit('leave_type');
+const auditRequest = opsAudit('leave_request');
+const auditLedger = opsAudit('leave_ledger_entry');
+
+type LeaveRequestRow = typeof opsLeaveRequests.$inferSelect;
+
+/** Scope for a permission the actor holds, else null. */
+const scopeIfHeld = (db: Database, actor: Actor, permission: Permission) =>
+  can(actor, permission) ? hrScope(db, actor, permission) : null;
 
 // --- leave types ------------------------------------------------------------------------------
 
@@ -97,15 +107,7 @@ export async function createLeaveType(
         createdBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'leave_type.created',
-      entityType: 'leave_type',
-      entityId: row!.id,
-      after: row,
-      requestId,
-    });
+    await auditLeaveType(tx, actor, row!.id, 'leave_type.created', { after: row }, requestId);
     return row!;
   });
 }
@@ -119,32 +121,19 @@ export async function updateLeaveType(
 ) {
   await hrScope(db, actor, 'ops:leave:manage');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(opsLeaveTypes)
-      .where(eq(opsLeaveTypes.id, id as OpsLeaveTypeId))
-      .for('update');
-    if (!before) notFound('Leave type');
-    const patch = stripUndefined(input);
+    const before = await rowById(tx, opsLeaveTypes, id, 'Leave type', true);
+    const patch = defined(input);
     if (Object.keys(patch).length === 0) throw new ValidationError('Nothing to change.');
     const [after] = await tx
       .update(opsLeaveTypes)
       .set(patch)
       .where(eq(opsLeaveTypes.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action:
-        input.status && input.status !== before.status
-          ? `leave_type.${input.status}`
-          : 'leave_type.updated',
-      entityType: 'leave_type',
-      entityId: before.id,
-      before,
-      after,
-      requestId,
-    });
+    const action =
+      input.status && input.status !== before.status
+        ? `leave_type.${input.status}`
+        : 'leave_type.updated';
+    await auditLeaveType(tx, actor, before.id, action, { before, after }, requestId);
     return after!;
   });
 }
@@ -152,31 +141,32 @@ export async function updateLeaveType(
 // --- working days -----------------------------------------------------------------------------
 
 /** Working-day test and holidays for one employee over a range. */
-export async function workingDayContext(db: Database, e: TimeEmployee, from: IsoDate, to: IsoDate) {
+async function workingDayContext(db: Database, e: TimeEmployee, from: IsoDate, to: IsoDate) {
   const settings = await timeSettings(db);
   const ctx = await loadScheduleContext(db, [e.staffId], from, to);
   const assignments = ctx.assignmentsByStaff.get(e.staffId) ?? [];
-  const holidays = holidaysFor(ctx.holidays, e.workLocation, settings.countProposedHolidays);
   let usedDefault = false;
   const isWorkingDay = (date: IsoDate) => {
-    const covering = assignments
-      .filter((a) => a.fromDate <= date && (a.toDate === null || a.toDate >= date))
-      .map((a) => ctx.templates.get(a.shiftTemplateId))
-      .filter((t) => t && t.status !== 'retired');
+    const covering = coveringTemplates(date, assignments, ctx.templates);
     if (covering.length === 0) {
       usedDefault = true;
       return settings.defaultWorkingWeekdays.includes(weekday(date));
     }
-    return covering.some((t) => t!.workingWeekdays.includes(weekday(date)));
+    return covering.some((t) => t.workingWeekdays.includes(weekday(date)));
   };
   return {
     isWorkingDay,
-    holidays,
+    holidays: holidaysFor(ctx.holidays, e.workLocation, settings.countProposedHolidays),
     /** Call after counting: whether any day fell back to the proposed default work week. */
-    usedDefault: () => usedDefault,
-    ctx,
-    settings,
+    countBasis: () => (usedDefault ? ('default_work_week' as const) : ('shift' as const)),
   };
+}
+
+/** Working days of one span for an employee, and what the count was based on. */
+async function countSpan(db: Database, e: TimeEmployee, span: LeaveSpan) {
+  const wd = await workingDayContext(db, e, span.startDate as IsoDate, span.endDate as IsoDate);
+  const count = countLeaveDays(span, wd.isWorkingDay, wd.holidays);
+  return { ...count, countBasis: wd.countBasis() };
 }
 
 function spanOf(
@@ -253,8 +243,7 @@ export async function createLeaveRequest(
   issuesError(issues);
   if (daysBetween(span.startDate as IsoDate, span.endDate as IsoDate) > 365)
     throw new ValidationError('Leave longer than a year is not accepted here.');
-  const wd = await workingDayContext(db, e, span.startDate as IsoDate, span.endDate as IsoDate);
-  const count = countLeaveDays(span, wd.isWorkingDay, wd.holidays);
+  const count = await countSpan(db, e, span);
   if (count.days === 0)
     throw new ValidationError('These dates contain no working days for this employee.', {
       details: [{ location: 'body', path: ['startDate'], message: 'No working days' }],
@@ -287,121 +276,96 @@ export async function createLeaveRequest(
         code,
         staffId: staffId as StaffMemberId,
         leaveTypeId: type.id,
-        startDate: span.startDate,
-        endDate: span.endDate,
-        startPart: span.startPart,
-        endPart: span.endPart,
+        ...span,
         workingDays: String(count.days),
         reason: input.reason ?? null,
         documentRef: input.documentRef ?? null,
         requestedBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'leave_request.created',
+    const change = { after: { ...row, basis: count.countBasis } };
+    await auditRequest(tx, actor, row!.id, 'leave_request.created', change, requestId);
+    await notifyOthers(tx, actor, await approverUserIds(tx, e, actor.id), {
+      kind: 'leave.requested',
+      title: `Leave request ${code}: ${e.fullName}, ${span.startDate} – ${span.endDate}`,
+      body: `${type.name}, ${count.days} working day(s).`,
+      link: `/ops/hr/leave/${row!.id}`,
       entityType: 'leave_request',
       entityId: row!.id,
-      after: { ...row, basis: wd.usedDefault() ? 'default_work_week' : 'shift' },
-      requestId,
     });
-    const approvers = await approverUserIds(tx, e, actor.id);
-    if (approvers.length)
-      await notify(tx, {
-        userIds: approvers,
-        module: 'ops',
-        kind: 'leave.requested',
-        title: `Leave request ${code}: ${e.fullName}, ${span.startDate} – ${span.endDate}`,
-        body: `${type.name}, ${count.days} working day(s).`,
-        link: `/ops/hr/leave/${row!.id}`,
-        entityType: 'leave_request',
-        entityId: row!.id,
-      });
-    return {
-      ...row!,
-      perDate: count.perDate,
-      countBasis: wd.usedDefault() ? 'default_work_week' : 'shift',
-    };
+    return { ...row!, perDate: count.perDate, countBasis: count.countBasis };
   });
 }
+
+/** Tell the requester, the employee and `also` about a decided or cancelled request (never the actor). */
+async function notifyLeave(
+  tx: Database,
+  actor: Actor,
+  r: LeaveRequestRow,
+  to: string,
+  body: string | null | undefined,
+  also: UserId[] = [],
+) {
+  const userIds = [r.requestedBy, ...(await userIdsForStaff(tx, [r.staffId])), ...also];
+  await notifyOthers(tx, actor, userIds, {
+    kind: `leave.${to}`,
+    title: `Leave ${r.code} ${to}`,
+    body: body ?? undefined,
+    link: `/ops/hr/leave/${r.id}`,
+    entityType: 'leave_request',
+    entityId: r.id,
+  });
+}
+
+/** A usage or reversal row of the leave ledger for a request (idempotent per request + type). */
+const ledgerFor = (
+  r: LeaveRequestRow,
+  actor: Actor,
+  entryType: 'usage' | 'reversal',
+  days: number,
+  effectiveDate: string,
+  note: string,
+) => ({
+  staffId: r.staffId,
+  leaveTypeId: r.leaveTypeId,
+  entryType,
+  days: String(days),
+  effectiveDate,
+  leaveRequestId: r.id,
+  note,
+  createdBy: actor.id,
+});
 
 export async function decideLeaveRequest(
   db: Database,
   actor: Actor,
   id: string,
-  input: { decision: 'approve' | 'reject'; note?: string | null },
+  input: DecisionInput,
   requestId?: string,
   now = new Date(),
 ) {
   const scope = await hrScope(db, actor, 'ops:leave:approve');
   return withTransaction(db, async (tx) => {
-    const [r] = await tx
-      .select()
-      .from(opsLeaveRequests)
-      .where(eq(opsLeaveRequests.id, id as OpsLeaveRequestId))
-      .for('update');
-    if (!r) notFound('Leave request');
+    const r = await rowById(tx, opsLeaveRequests, id, 'Leave request', true);
     assertHrScope(scope, r.staffId, 'this leave request');
-    const to = input.decision === 'approve' ? 'approved' : 'rejected';
-    throwCheck(
-      checkDecision({
-        from: r.status,
-        to,
-        actorUserId: actor.id,
-        requestedByUserId: r.requestedBy,
-        actorStaffId: scope.staffId,
-        subjectStaffId: r.staffId,
-        note: input.note,
-      }),
-    );
+    const to = checkedDecision(actor, scope, r, input);
     const [after] = await tx
       .update(opsLeaveRequests)
       .set({ status: to, decidedBy: actor.id, decidedAt: now, decisionNote: input.note ?? null })
       .where(eq(opsLeaveRequests.id, r.id))
       .returning();
-    if (to === 'approved')
+    const usageDays = to === 'approved' ? -Number(r.workingDays) : null;
+    if (usageDays !== null)
       await tx
         .insert(opsLeaveLedgerEntries)
-        .values({
-          staffId: r.staffId,
-          leaveTypeId: r.leaveTypeId,
-          entryType: 'usage',
-          days: String(-Number(r.workingDays)),
-          effectiveDate: r.startDate,
-          leaveRequestId: r.id,
-          note: `Approved ${r.code}`,
-          createdBy: actor.id,
-        })
+        .values(ledgerFor(r, actor, 'usage', usageDays, r.startDate, `Approved ${r.code}`))
         .onConflictDoNothing();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: `leave_request.${to}`,
-      entityType: 'leave_request',
-      entityId: r.id,
+    const change = {
       before: { status: r.status },
-      after: {
-        status: to,
-        note: input.note ?? null,
-        usageDays: to === 'approved' ? -Number(r.workingDays) : null,
-      },
-      requestId,
-    });
-    const recipients = [
-      ...new Set([r.requestedBy, ...(await userIdsForStaff(tx, [r.staffId]))]),
-    ].filter((u) => u !== actor.id);
-    if (recipients.length)
-      await notify(tx, {
-        userIds: recipients,
-        module: 'ops',
-        kind: `leave.${to}`,
-        title: `Leave ${r.code} ${to}`,
-        body: input.note ?? undefined,
-        link: `/ops/hr/leave/${r.id}`,
-        entityType: 'leave_request',
-        entityId: r.id,
-      });
+      after: { status: to, note: input.note ?? null, usageDays },
+    };
+    await auditRequest(tx, actor, r.id, `leave_request.${to}`, change, requestId);
+    await notifyLeave(tx, actor, r, to, input.note);
     return after!;
   });
 }
@@ -416,30 +380,22 @@ export async function cancelLeaveRequest(
 ) {
   if (!can(actor, 'ops:leave:request') && !can(actor, 'ops:leave:approve'))
     throw new ForbiddenError('You cannot cancel leave.');
-  const requestScope = can(actor, 'ops:leave:request')
-    ? await hrScope(db, actor, 'ops:leave:request')
-    : null;
-  const approveScope = can(actor, 'ops:leave:approve')
-    ? await hrScope(db, actor, 'ops:leave:approve')
-    : null;
+  const requestScope = await scopeIfHeld(db, actor, 'ops:leave:request');
+  const approveScope = await scopeIfHeld(db, actor, 'ops:leave:approve');
   const actorStaffId = requestScope?.staffId ?? approveScope?.staffId ?? null;
   return withTransaction(db, async (tx) => {
-    const [r] = await tx
-      .select()
-      .from(opsLeaveRequests)
-      .where(eq(opsLeaveRequests.id, id as OpsLeaveRequestId))
-      .for('update');
-    if (!r) notFound('Leave request');
+    const r = await rowById(tx, opsLeaveRequests, id, 'Leave request', true);
     const isSubject = actorStaffId !== null && actorStaffId === r.staffId;
     const isRequester = r.requestedBy === actor.id;
     const canApprove = approveScope !== null && hrCovers(approveScope, r.staffId) && !isSubject;
     if (!isSubject && !isRequester && !canApprove)
       throw new ForbiddenError('You cannot cancel this leave request.');
     const e = await loadEmployee(tx, r.staffId);
+    const today = zonedDate(now, e.timezone);
     const check = checkLeaveCancel({
       status: r.status,
       startDate: r.startDate,
-      today: zonedDate(now, e.timezone),
+      today,
       actorIsRequesterOrSubject: isSubject || isRequester,
       actorCanApprove: canApprove,
       actorIsSubject: isSubject,
@@ -469,49 +425,20 @@ export async function cancelLeaveRequest(
         );
       if (usage) {
         reversal = -Number(usage.days);
+        const note = `Cancelled ${r.code}${input.reason ? `: ${input.reason}` : ''}`;
         await tx
           .insert(opsLeaveLedgerEntries)
-          .values({
-            staffId: r.staffId,
-            leaveTypeId: r.leaveTypeId,
-            entryType: 'reversal',
-            days: String(reversal),
-            effectiveDate: zonedDate(now, e.timezone),
-            leaveRequestId: r.id,
-            note: `Cancelled ${r.code}${input.reason ? `: ${input.reason}` : ''}`,
-            createdBy: actor.id,
-          })
+          .values(ledgerFor(r, actor, 'reversal', reversal, today, note))
           .onConflictDoNothing();
       }
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: 'leave_request.cancelled',
-      entityType: 'leave_request',
-      entityId: r.id,
+    const change = {
       before: { status: r.status },
       after: { status: 'cancelled', reason: input.reason ?? null, reversalDays: reversal },
-      requestId,
-    });
-    const recipients = [
-      ...new Set([
-        r.requestedBy,
-        ...(await userIdsForStaff(tx, [r.staffId])),
-        ...(r.decidedBy ? [r.decidedBy] : []),
-      ]),
-    ].filter((u) => u !== actor.id);
-    if (recipients.length)
-      await notify(tx, {
-        userIds: recipients,
-        module: 'ops',
-        kind: 'leave.cancelled',
-        title: `Leave ${r.code} cancelled`,
-        body: input.reason ?? undefined,
-        link: `/ops/hr/leave/${r.id}`,
-        entityType: 'leave_request',
-        entityId: r.id,
-      });
+    };
+    await auditRequest(tx, actor, r.id, 'leave_request.cancelled', change, requestId);
+    const deciderIds = r.decidedBy ? [r.decidedBy] : [];
+    await notifyLeave(tx, actor, r, 'cancelled', input.reason, deciderIds);
     return after!;
   });
 }
@@ -525,115 +452,99 @@ export async function listLeaveRequests(
   if (query.staffId) assertHrScope(scope, query.staffId);
   const ids = hrScopeIds(scope);
   const page = query.page ?? 1;
-  const empty = { rows: [], page, pageSize: PAGE_SIZE, total: 0 };
-  if (ids && ids.length === 0) return empty;
-  const conds: SQL[] = [];
-  if (ids) conds.push(inArray(opsLeaveRequests.staffId, ids));
+  if (ids?.length === 0) return emptyPage(page);
+  const lr = opsLeaveRequests;
+  const conds: (SQL | undefined)[] = [ids ? inArray(lr.staffId, ids) : undefined];
   if (query.view === 'mine') {
-    if (!scope.staffId) return empty;
-    conds.push(eq(opsLeaveRequests.staffId, scope.staffId));
+    if (!scope.staffId) return emptyPage(page);
+    conds.push(eq(lr.staffId, scope.staffId));
   }
-  const approve = can(actor, 'ops:leave:approve')
-    ? await hrScope(db, actor, 'ops:leave:approve')
-    : null;
+  const approve = await scopeIfHeld(db, actor, 'ops:leave:approve');
   const canDecide = await decider(db, actor, 'ops:leave:approve');
   if (query.view === 'to_decide') {
-    if (!approve) return empty;
-    conds.push(eq(opsLeaveRequests.status, 'pending'));
-    conds.push(ne(opsLeaveRequests.requestedBy, actor.id));
+    if (!approve) return emptyPage(page);
     const approveIds = hrScopeIds(approve);
-    if (approveIds)
-      conds.push(
-        inArray(
-          opsLeaveRequests.staffId,
-          approveIds.length
-            ? approveIds
-            : ['00000000-0000-0000-0000-000000000000' as StaffMemberId],
-        ),
-      );
-    if (approve.staffId) conds.push(ne(opsLeaveRequests.staffId, approve.staffId));
+    const noOne = '00000000-0000-0000-0000-000000000000' as StaffMemberId;
+    conds.push(
+      eq(lr.status, 'pending'),
+      ne(lr.requestedBy, actor.id),
+      approveIds ? inArray(lr.staffId, approveIds.length ? approveIds : [noOne]) : undefined,
+      approve.staffId ? ne(lr.staffId, approve.staffId) : undefined,
+    );
   }
-  if (query.staffId) conds.push(eq(opsLeaveRequests.staffId, query.staffId as StaffMemberId));
-  if (query.status) conds.push(eq(opsLeaveRequests.status, query.status));
-  if (query.from) conds.push(gte(opsLeaveRequests.endDate, query.from));
-  if (query.to) conds.push(lte(opsLeaveRequests.startDate, query.to));
-  const where = conds.length ? and(...conds) : undefined;
-  const [{ total } = { total: 0 }] = await db
-    .select({ total: sql<number>`count(*)::int` })
-    .from(opsLeaveRequests)
-    .where(where);
-  const rows = await db
-    .select({
-      r: opsLeaveRequests,
-      fullName: staffMembers.fullName,
-      typeCode: opsLeaveTypes.code,
-      typeName: opsLeaveTypes.name,
-    })
-    .from(opsLeaveRequests)
-    .innerJoin(staffMembers, eq(staffMembers.id, opsLeaveRequests.staffId))
-    .innerJoin(opsLeaveTypes, eq(opsLeaveTypes.id, opsLeaveRequests.leaveTypeId))
-    .where(where)
-    .orderBy(desc(opsLeaveRequests.startDate), desc(opsLeaveRequests.code))
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
-  return {
-    rows: rows.map((x) => ({
-      ...x.r,
-      workingDays: Number(x.r.workingDays),
-      fullName: x.fullName,
-      typeCode: x.typeCode,
-      typeName: x.typeName,
-      canDecide: x.r.status === 'pending' && canDecide(x.r.staffId, x.r.requestedBy),
-    })),
-    page,
-    pageSize: PAGE_SIZE,
-    total,
-  };
+  const where = and(
+    ...conds,
+    query.staffId ? eq(lr.staffId, query.staffId as StaffMemberId) : undefined,
+    query.status ? eq(lr.status, query.status) : undefined,
+    query.from ? gte(lr.endDate, query.from) : undefined,
+    query.to ? lte(lr.startDate, query.to) : undefined,
+  );
+  return paginate(db, lr, where, page, async (limit, offset) => {
+    const rows = await db
+      .select({
+        r: lr,
+        fullName: staffMembers.fullName,
+        typeCode: opsLeaveTypes.code,
+        typeName: opsLeaveTypes.name,
+      })
+      .from(lr)
+      .innerJoin(staffMembers, eq(staffMembers.id, lr.staffId))
+      .innerJoin(opsLeaveTypes, eq(opsLeaveTypes.id, lr.leaveTypeId))
+      .where(where)
+      .orderBy(desc(lr.startDate), desc(lr.code))
+      .limit(limit)
+      .offset(offset);
+    return rows.map(({ r, ...rest }) => ({
+      ...r,
+      workingDays: Number(r.workingDays),
+      ...rest,
+      canDecide: r.status === 'pending' && canDecide(r.staffId, r.requestedBy),
+    }));
+  });
 }
 
 export async function getLeaveRequest(db: Database, actor: Actor, id: string, now = new Date()) {
   const scope = await hrScope(db, actor, 'ops:leave:read');
-  const [r] = await db
+  const [row] = await db
     .select({ r: opsLeaveRequests, type: opsLeaveTypes })
     .from(opsLeaveRequests)
     .innerJoin(opsLeaveTypes, eq(opsLeaveTypes.id, opsLeaveRequests.leaveTypeId))
     .where(eq(opsLeaveRequests.id, id as OpsLeaveRequestId));
-  if (!r) notFound('Leave request');
-  assertHrScope(scope, r.r.staffId, 'this leave request');
-  const e = await loadEmployee(db, r.r.staffId);
-  const wd = await workingDayContext(db, e, r.r.startDate as IsoDate, r.r.endDate as IsoDate);
-  const count = countLeaveDays(spanOf(r.r), wd.isWorkingDay, wd.holidays);
+  if (!row) notFound('Leave request');
+  const { r, type } = row;
+  assertHrScope(scope, r.staffId, 'this leave request');
+  const e = await loadEmployee(db, r.staffId);
+  const count = await countSpan(db, e, spanOf(r));
   const ledger = await db
     .select()
     .from(opsLeaveLedgerEntries)
-    .where(eq(opsLeaveLedgerEntries.leaveRequestId, r.r.id))
+    .where(eq(opsLeaveLedgerEntries.leaveRequestId, r.id))
     .orderBy(asc(opsLeaveLedgerEntries.createdAt));
-  const approve = can(actor, 'ops:leave:approve')
-    ? await hrScope(db, actor, 'ops:leave:approve')
-    : null;
-  const isSubject = scope.staffId === r.r.staffId;
+  const approve = await scopeIfHeld(db, actor, 'ops:leave:approve');
+  const isSubject = scope.staffId === r.staffId;
   const canApprove =
-    approve !== null && hrCovers(approve, r.r.staffId) && approve.staffId !== r.r.staffId;
+    approve !== null && hrCovers(approve, r.staffId) && approve.staffId !== r.staffId;
+  const today = zonedDate(now, e.timezone);
   const cancel = checkLeaveCancel({
-    status: r.r.status,
-    startDate: r.r.startDate,
-    today: zonedDate(now, e.timezone),
+    status: r.status,
+    startDate: r.startDate,
+    today,
     actorIsRequesterOrSubject:
-      (isSubject && can(actor, 'ops:leave:request')) || r.r.requestedBy === actor.id,
+      (isSubject && can(actor, 'ops:leave:request')) || r.requestedBy === actor.id,
     actorCanApprove: canApprove,
     actorIsSubject: isSubject,
     reason: 'check',
   });
   return {
-    request: { ...r.r, workingDays: Number(r.r.workingDays) },
-    type: r.type,
+    request: { ...r, workingDays: Number(r.workingDays) },
+    type,
     employee: e,
     perDate: count.perDate,
-    countBasis: wd.usedDefault() ? 'default_work_week' : 'shift',
+    countBasis: count.countBasis,
     ledger: ledger.map((l) => ({ ...l, days: Number(l.days) })),
-    canDecide: r.r.status === 'pending' && canApprove && r.r.requestedBy !== actor.id,
+    canDecide: r.status === 'pending' && canApprove && r.requestedBy !== actor.id,
     canCancel: cancel.ok,
-    cancelNeedsReason: r.r.status === 'approved' && r.r.startDate <= zonedDate(now, e.timezone),
+    cancelNeedsReason: r.status === 'approved' && r.startDate <= today,
   };
 }
 
@@ -646,8 +557,7 @@ export async function listLeaveBalances(
 ) {
   const scope = await hrScope(db, actor, 'ops:leave:read');
   if (query.staffId) assertHrScope(scope, query.staffId);
-  const ids = query.staffId ? [query.staffId] : hrScopeIds(scope);
-  const employees = await loadEmployees(db, ids);
+  const employees = await loadEmployees(db, query.staffId ? [query.staffId] : hrScopeIds(scope));
   const types = await db.select().from(opsLeaveTypes).orderBy(asc(opsLeaveTypes.code));
   const entries = employees.length
     ? await db
@@ -666,19 +576,17 @@ export async function listLeaveBalances(
     fullName: e.fullName,
     employeeCode: e.employeeCode,
     balances: types
-      .filter(
-        (t) =>
-          t.status !== 'retired' ||
-          entries.some((x) => x.staffId === e.staffId && x.leaveTypeId === t.id),
-      )
       .map((t) => ({
+        t,
+        own: entries.filter((x) => x.staffId === e.staffId && x.leaveTypeId === t.id),
+      }))
+      .filter(({ t, own }) => t.status !== 'retired' || own.length > 0)
+      .map(({ t, own }) => ({
         leaveTypeId: t.id,
         code: t.code,
         name: t.name,
         typeStatus: t.status,
-        balance: balanceFromLedger(
-          entries.filter((x) => x.staffId === e.staffId && x.leaveTypeId === t.id),
-        ),
+        balance: balanceFromLedger(own),
       })),
   }));
 }
@@ -697,12 +605,7 @@ export async function listLedger(db: Database, actor: Actor, staffId: string) {
     .leftJoin(opsLeaveRequests, eq(opsLeaveRequests.id, opsLeaveLedgerEntries.leaveRequestId))
     .where(eq(opsLeaveLedgerEntries.staffId, staffId as StaffMemberId))
     .orderBy(desc(opsLeaveLedgerEntries.effectiveDate), desc(opsLeaveLedgerEntries.createdAt));
-  return rows.map((r) => ({
-    ...r.l,
-    days: Number(r.l.days),
-    typeCode: r.typeCode,
-    requestCode: r.requestCode,
-  }));
+  return rows.map(({ l, ...rest }) => ({ ...l, days: Number(l.days), ...rest }));
 }
 
 export async function addLedgerEntry(
@@ -729,25 +632,16 @@ export async function addLedgerEntry(
     const [row] = await tx
       .insert(opsLeaveLedgerEntries)
       .values({
+        ...input,
         staffId: input.staffId as StaffMemberId,
         leaveTypeId: type.id,
-        entryType: input.entryType,
         days: String(input.days),
-        effectiveDate: input.effectiveDate,
         periodLabel: input.periodLabel ?? null,
-        note: input.note,
         createdBy: actor.id,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'ops',
-      action: `leave_ledger.${input.entryType}`,
-      entityType: 'leave_ledger_entry',
-      entityId: row!.id,
-      after: row,
-      requestId,
-    });
+    const action = `leave_ledger.${input.entryType}`;
+    await auditLedger(tx, actor, row!.id, action, { after: row }, requestId);
     return { ...row!, days: Number(row!.days) };
   });
 }
@@ -766,23 +660,16 @@ export async function teamAvailability(
   const employees = (await loadEmployees(db, hrScopeIds(scope), query.departmentId ?? null)).filter(
     (e) => e.staffStatus === 'active',
   );
+  const staffIds = employees.map((e) => e.staffId);
   const settings = await timeSettings(db);
-  const ctx = await loadScheduleContext(
-    db,
-    employees.map((e) => e.staffId),
-    query.from,
-    query.to,
-  );
+  const ctx = await loadScheduleContext(db, staffIds, query.from, query.to);
   const leave = employees.length
     ? await db
         .select()
         .from(opsLeaveRequests)
         .where(
           and(
-            inArray(
-              opsLeaveRequests.staffId,
-              employees.map((e) => e.staffId),
-            ),
+            inArray(opsLeaveRequests.staffId, staffIds),
             inArray(opsLeaveRequests.status, ['pending', 'approved']),
             lte(opsLeaveRequests.startDate, query.to),
             gte(opsLeaveRequests.endDate, query.from),
@@ -798,10 +685,11 @@ export async function teamAvailability(
     ),
   }));
   const grid = availabilityGrid(dates, people, leave);
+  const byId = new Map(employees.map((e) => [e.staffId as string, e]));
   return {
     dates,
     rows: grid.map((g) => {
-      const e = employees.find((x) => x.staffId === g.staffId)!;
+      const e = byId.get(g.staffId)!;
       return {
         staffId: e.staffId,
         fullName: e.fullName,

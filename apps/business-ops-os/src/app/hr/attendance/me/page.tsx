@@ -1,7 +1,6 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { getAttendanceProvider } from '../../../../server/adapters/attendance-provider';
+import { Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import {
   listAttendance,
   monthlyAttendanceSummary,
@@ -15,35 +14,30 @@ import { Frame, gate, load, Section } from '../../../../ui/frame';
 import {
   HM_HINT,
   localTime,
-  MeasuredHours,
+  measuredColumns,
   minutes,
+  ProviderNotice,
   RequestStatus,
+  sessionColumns,
+  sessionTailFields,
   SessionStatus,
-  SOURCE_LABELS,
   TimeNav,
-  timeNavItems,
 } from '../time-ui';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MyTimePage() {
   const access = await gate('ops:attendance:record', '/ops/hr/attendance/me');
-  const provider = await getAttendanceProvider().status();
   return (
     <Frame access={access} active="my-time">
       <PageHeader
         title="My attendance & leave"
         description="Clock in and out, see this month’s hours against your shift, request a correction or leave. Times are shown in your timezone."
       />
-      <TimeNav current="/ops/hr/attendance/me" items={timeNavItems(access.user)} />
-      {provider.connection !== 'connected' ? (
-        <Alert
-          tone="info"
-          title="No attendance device or provider is connected; manual and CSV only."
-        >
-          Record your time here. HR can enter a missed day manually or import a CSV.
-        </Alert>
-      ) : null}
+      <TimeNav current="/ops/hr/attendance/me" user={access.user} />
+      <ProviderNotice>
+        Record your time here. HR can enter a missed day manually or import a CSV.
+      </ProviderNotice>
       <Section label="Loading today…">
         <Today user={access.user} />
       </Section>
@@ -73,6 +67,7 @@ async function Today({ user }: { user: AuthenticatedUser }) {
       />
     );
   const tz = s.employee.timezone;
+  const col = sessionColumns<(typeof s.todaySessions)[number]>(() => tz);
   return (
     <div className="el-grid">
       <Card
@@ -103,23 +98,13 @@ async function Today({ user }: { user: AuthenticatedUser }) {
               <p>Break running since {localTime(s.runningBreak.startAt, tz)}.</p>
             ) : null}
             <div className="el-inline-form">
-              {s.runningBreak ? (
-                <ActionForm
-                  action="/ops/api/v1/hr/attendance/breaks"
-                  submitLabel="End break"
-                  extra={{ action: 'end' }}
-                  variant="secondary"
-                  compact
-                />
-              ) : (
-                <ActionForm
-                  action="/ops/api/v1/hr/attendance/breaks"
-                  submitLabel="Start break"
-                  extra={{ action: 'start' }}
-                  variant="secondary"
-                  compact
-                />
-              )}
+              <ActionForm
+                action="/ops/api/v1/hr/attendance/breaks"
+                submitLabel={s.runningBreak ? 'End break' : 'Start break'}
+                extra={{ action: s.runningBreak ? 'end' : 'start' }}
+                variant="secondary"
+                compact
+              />
               <ActionForm
                 action="/ops/api/v1/hr/attendance/clock-out"
                 submitLabel="Clock out"
@@ -149,16 +134,10 @@ async function Today({ user }: { user: AuthenticatedUser }) {
                 <a href={`/ops/hr/attendance/${x.id}`}>{localTime(x.clockInAt, tz, x.workDate)}</a>
               ),
             },
-            { key: 'out', header: 'Out', render: (x) => localTime(x.clockOutAt, tz, x.workDate) },
-            { key: 'break', header: 'Break', render: (x) => minutes(x.breakMinutes) },
-            { key: 'worked', header: 'Worked', render: (x) => minutes(x.workedMinutes) },
-            {
-              key: 'status',
-              header: 'Status',
-              render: (x) => (
-                <SessionStatus status={x.status} missingClockOut={x.flags.missingClockOut} />
-              ),
-            },
+            col.out,
+            col.break,
+            col.worked,
+            col.status,
           ]}
         />
       </Card>
@@ -180,6 +159,7 @@ async function ThisMonth({ user }: { user: AuthenticatedUser }) {
   const { summary, recent } = r.data;
   const sm = summary.summary;
   const tz = summary.employee.timezone;
+  const col = sessionColumns<(typeof recent.rows)[number]>(() => tz);
   return (
     <div className="el-stack">
       <Card
@@ -190,21 +170,7 @@ async function ThisMonth({ user }: { user: AuthenticatedUser }) {
           rows={[sm]}
           rowKey={() => 'month'}
           columns={[
-            {
-              key: 'scheduled',
-              header: 'Scheduled',
-              render: (x) => <MeasuredHours value={x.scheduledMinutes} />,
-            },
-            {
-              key: 'worked',
-              header: 'Worked',
-              render: (x) => <MeasuredHours value={x.workedMinutes} />,
-            },
-            {
-              key: 'diff',
-              header: 'Unapproved difference',
-              render: (x) => <MeasuredHours value={x.unapprovedDifferenceMinutes} />,
-            },
+            ...measuredColumns((x: typeof sm) => x),
             { key: 'late', header: 'Late days', numeric: true, render: (x) => x.lateCount },
             {
               key: 'early',
@@ -241,17 +207,11 @@ async function ThisMonth({ user }: { user: AuthenticatedUser }) {
               header: 'Date',
               render: (x) => <a href={`/ops/hr/attendance/${x.id}`}>{fmtDate(x.workDate)}</a>,
             },
-            { key: 'in', header: 'In', render: (x) => localTime(x.clockInAt, tz, x.workDate) },
-            { key: 'out', header: 'Out', render: (x) => localTime(x.clockOutAt, tz, x.workDate) },
-            { key: 'worked', header: 'Worked', render: (x) => minutes(x.workedMinutes) },
-            { key: 'source', header: 'Source', render: (x) => SOURCE_LABELS[x.source] ?? x.source },
-            {
-              key: 'status',
-              header: 'Status',
-              render: (x) => (
-                <SessionStatus status={x.status} missingClockOut={x.flags.missingClockOut} />
-              ),
-            },
+            col.in,
+            col.out,
+            col.worked,
+            col.source,
+            col.status,
           ]}
         />
       </Card>
@@ -266,17 +226,7 @@ async function ThisMonth({ user }: { user: AuthenticatedUser }) {
             { name: 'workDate', label: 'Date', type: 'date', required: true },
             { name: 'clockIn', label: 'Clock-in', required: true, hint: HM_HINT },
             { name: 'clockOut', label: 'Clock-out', required: true, hint: HM_HINT },
-            {
-              name: 'clockOutDate',
-              label: 'Clock-out date (only if after midnight)',
-              type: 'date',
-            },
-            {
-              name: 'breakMinutes',
-              label: 'Unpaid break (minutes)',
-              type: 'number',
-              defaultValue: '0',
-            },
+            ...sessionTailFields(),
             { name: 'reason', label: 'What happened', type: 'textarea', required: true },
           ]}
         />

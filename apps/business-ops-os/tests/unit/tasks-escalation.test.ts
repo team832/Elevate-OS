@@ -64,22 +64,31 @@ describe('task status rules (A-08)', () => {
       }),
     ).toEqual({ ok: true, overrideUsed: false });
   });
-  it('completion needs evidence and an owner (BR-OPS-11)', () => {
-    expect(checkTaskTransition({ ...base, from: 'in_progress', to: 'completed' })).toMatchObject({
-      code: 'EVIDENCE_REQUIRED',
-    });
-    expect(
-      checkTaskTransition({ ...base, from: 'in_progress', to: 'completed', completionNote: '   ' }),
-    ).toMatchObject({ code: 'EVIDENCE_REQUIRED' });
-    expect(
-      checkTaskTransition({
-        ...base,
-        hasOwner: false,
-        from: 'in_progress',
-        to: 'completed',
-        evidenceLink: 'https://x',
-      }),
-    ).toMatchObject({ code: 'OWNER_REQUIRED' });
+  it.each([
+    [
+      'completion needs evidence (BR-OPS-11)',
+      { from: 'in_progress', to: 'completed' },
+      'EVIDENCE_REQUIRED',
+    ],
+    [
+      'a blank note is no evidence',
+      { from: 'in_progress', to: 'completed', completionNote: '   ' },
+      'EVIDENCE_REQUIRED',
+    ],
+    [
+      'completion needs an owner (BR-OPS-11)',
+      { hasOwner: false, from: 'in_progress', to: 'completed', evidenceLink: 'https://x' },
+      'OWNER_REQUIRED',
+    ],
+    ['cancel needs a reason', { from: 'in_progress', to: 'cancelled' }, 'REASON_REQUIRED'],
+    ['block needs a reason', { from: 'in_progress', to: 'blocked' }, 'REASON_REQUIRED'],
+    ['reopen only to in_progress', { from: 'completed', to: 'waiting', reason: 'x' }, 'ILLEGAL'],
+    ['reopen needs a reason', { from: 'completed', to: 'in_progress' }, 'REASON_REQUIRED'],
+    ['reopen with a reason', { from: 'cancelled', to: 'in_progress', reason: 'Back on' }, null],
+    ['no change', { from: 'waiting', to: 'waiting' }, 'NO_CHANGE'],
+  ] as const)('%s', (_, over, code) => {
+    const r = checkTaskTransition({ ...base, ...over });
+    expect(r.ok ? null : r.code).toBe(code);
   });
   it('cannot complete while blockers are open, unless overridden with a reason', () => {
     const blocked = {
@@ -97,26 +106,6 @@ describe('task status rules (A-08)', () => {
     expect(
       checkTaskTransition({ ...blocked, blockerOverrideReason: 'Director accepted the risk' }),
     ).toEqual({ ok: true, overrideUsed: true });
-  });
-  it('cancel and block need a reason; reopen only to in_progress with a reason', () => {
-    expect(checkTaskTransition({ ...base, from: 'in_progress', to: 'cancelled' })).toMatchObject({
-      code: 'REASON_REQUIRED',
-    });
-    expect(checkTaskTransition({ ...base, from: 'in_progress', to: 'blocked' })).toMatchObject({
-      code: 'REASON_REQUIRED',
-    });
-    expect(
-      checkTaskTransition({ ...base, from: 'completed', to: 'waiting', reason: 'x' }),
-    ).toMatchObject({ code: 'ILLEGAL' });
-    expect(checkTaskTransition({ ...base, from: 'completed', to: 'in_progress' })).toMatchObject({
-      code: 'REASON_REQUIRED',
-    });
-    expect(
-      checkTaskTransition({ ...base, from: 'cancelled', to: 'in_progress', reason: 'Back on' }).ok,
-    ).toBe(true);
-    expect(checkTaskTransition({ ...base, from: 'waiting', to: 'waiting' })).toMatchObject({
-      code: 'NO_CHANGE',
-    });
   });
   it('flags use IST dates', () => {
     const t = { status: 'in_progress' as const, ownerStaffId: null, dueDate: d('2026-10-17') };
@@ -151,20 +140,14 @@ describe('escalation rules (A-09)', () => {
     raisedLevels: [] as number[],
   };
   it('boundary: overdue by exactly the threshold escalates; one day less does not', () => {
-    expect(
+    const levels = (due: string) =>
       evaluateEscalation(
-        { ...task, dueDate: d('2026-10-16') },
+        { ...task, dueDate: d(due) },
         new Date('2026-10-18T06:00:00Z'),
         thresholds,
-      ).map((p) => p.level),
-    ).toEqual([2]);
-    expect(
-      evaluateEscalation(
-        { ...task, dueDate: d('2026-10-17') },
-        new Date('2026-10-18T06:00:00Z'),
-        thresholds,
-      ),
-    ).toEqual([]);
+      ).map((p) => p.level);
+    expect(levels('2026-10-16')).toEqual([2]);
+    expect(levels('2026-10-17')).toEqual([]);
   });
   it('a late first evaluation raises every missing level in order, once', () => {
     const now = new Date('2026-10-22T06:00:00Z'); // 12 days overdue
@@ -189,36 +172,25 @@ describe('escalation rules (A-09)', () => {
     expect(p).toMatchObject([{ level: 2, trigger: 'blocked' }]);
   });
   it('closed tasks and missing due dates never escalate on overdue', () => {
-    expect(
-      evaluateEscalation({ ...task, status: 'completed' }, new Date('2027-01-01'), thresholds),
-    ).toEqual([]);
-    expect(
-      evaluateEscalation({ ...task, dueDate: null }, new Date('2027-01-01'), thresholds),
-    ).toEqual([]);
+    for (const over of [{ status: 'completed' as const }, { dueDate: null }])
+      expect(evaluateEscalation({ ...task, ...over }, new Date('2027-01-01'), thresholds)).toEqual(
+        [],
+      );
   });
-  it('recipients follow the reporting line', () => {
-    const manager: Record<string, string | null> = { s1: 'm1', m1: 'd1', d1: null };
-    const of = (id: string) => manager[id];
-    expect(resolveEscalationRecipient('s1', 2, of)).toEqual({
-      recipientStaffId: 'm1',
-      via: 'reporting_line',
+  const manager: Record<string, string | null> = { s1: 'm1', m1: 'd1', d1: null };
+  it.each([
+    ['s1', 2, 'm1', 'reporting_line'],
+    ['s1', 3, 'd1', 'reporting_line'],
+    ['s1', 4, 'd1', 'top_of_chain'],
+    ['d1', 2, null, 'no_manager_on_record'],
+    [null, 2, null, 'no_owner'],
+  ] as const)('recipient of %s at L%i → %s (%s)', (owner, level, recipientStaffId, via) => {
+    expect(resolveEscalationRecipient(owner, level, (id) => manager[id])).toEqual({
+      recipientStaffId,
+      via,
     });
-    expect(resolveEscalationRecipient('s1', 3, of)).toEqual({
-      recipientStaffId: 'd1',
-      via: 'reporting_line',
-    });
-    expect(resolveEscalationRecipient('s1', 4, of)).toEqual({
-      recipientStaffId: 'd1',
-      via: 'top_of_chain',
-    });
-    expect(resolveEscalationRecipient('d1', 2, of)).toEqual({
-      recipientStaffId: null,
-      via: 'no_manager_on_record',
-    });
-    expect(resolveEscalationRecipient(null, 2, of)).toEqual({
-      recipientStaffId: null,
-      via: 'no_owner',
-    });
+  });
+  it('a looping reporting line has no recipient', () => {
     expect(resolveEscalationRecipient('a', 2, (id) => ({ a: 'b', b: 'a' })[id])).toEqual({
       recipientStaffId: null,
       via: 'reporting_loop',

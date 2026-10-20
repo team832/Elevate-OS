@@ -1,6 +1,7 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { RISK_STATUSES } from '../../domain';
 import { formOptions } from '../../server/options';
 import { listRisks } from '../../server/planning';
 import { ActionForm } from '../../ui/action-form';
@@ -95,9 +96,7 @@ async function Register({ user, canWrite }: { user: AuthenticatedUser; canWrite:
                       label: 'Status',
                       type: 'select',
                       required: true,
-                      options: ['open', 'mitigating', 'resolved', 'closed', 'accepted'].map(
-                        (v) => ({ value: v, label: v }),
-                      ),
+                      options: RISK_STATUSES.map((v) => ({ value: v, label: v })),
                     },
                   ]}
                 />

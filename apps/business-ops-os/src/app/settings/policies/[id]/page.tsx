@@ -43,6 +43,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
   const { d, options } = r.data;
   const p = d.policy;
   const api = `/ops/api/v1/settings/policies/${p.id}`;
+  const flow = (action: string) => ({ action: `${api}/workflow`, extra: { action } });
   const shown = d.approved ?? d.current;
   const editable = d.canManage && d.current?.status !== 'proposed';
   const draftSource = d.current?.status === 'draft' ? d.current : shown;
@@ -53,9 +54,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         description={`${humanise(p.area)} · accountable ${d.accountableName ?? 'not named'}${p.ownerDecisionRef ? ` · owner decision ${p.ownerDecisionRef}` : ''}`}
       />
       <p>
-        <StatusBadge
-          tone={p.status === 'approved' ? 'success' : p.status === 'retired' ? 'neutral' : 'info'}
-        >
+        <StatusBadge tone={decisionTone(p.status)}>
           {POLICY_STATUS_LABELS[p.status as PolicyStatus]}
         </StatusBadge>{' '}
         {d.reviewFlag === 'overdue' ? (
@@ -142,9 +141,8 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           <div className="el-grid">
             {d.canManage && d.current?.status === 'draft' ? (
               <ActionForm
-                action={`${api}/workflow`}
+                {...flow('propose')}
                 submitLabel="Propose for approval"
-                extra={{ action: 'propose' }}
                 fields={[{ name: 'comment', label: 'Note for the approver' }]}
               />
             ) : null}
@@ -152,16 +150,14 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
               d.canApprove ? (
                 <>
                   <ActionForm
-                    action={`${api}/workflow`}
+                    {...flow('approve')}
                     submitLabel="Approve this version"
-                    extra={{ action: 'approve' }}
                     fields={[{ name: 'comment', label: 'Comment' }]}
                   />
                   <ActionForm
-                    action={`${api}/workflow`}
+                    {...flow('reject')}
                     submitLabel="Reject this version"
                     variant="danger"
-                    extra={{ action: 'reject' }}
                     fields={[{ name: 'comment', label: 'Reason', required: true }]}
                   />
                 </>
@@ -170,10 +166,9 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                   <p className="el-field-hint">{d.approveBlocker ?? 'Waiting for an approver.'}</p>
                   {d.canManage ? (
                     <ActionForm
-                      action={`${api}/workflow`}
+                      {...flow('withdraw')}
                       submitLabel="Withdraw my proposal"
                       variant="secondary"
-                      extra={{ action: 'withdraw' }}
                     />
                   ) : null}
                 </>
@@ -266,10 +261,9 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           />
           {d.current?.status !== 'proposed' ? (
             <ActionForm
-              action={`${api}/workflow`}
+              {...flow('retire')}
               submitLabel="Retire this entry"
               variant="danger"
-              extra={{ action: 'retire' }}
               fields={[{ name: 'reason', label: 'Reason', required: true }]}
             />
           ) : null}

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
-import { authedRequest, callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
+import { callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import { notifications, opsEscalations, opsTasks } from '@elevate/database';
 import { GET as listTasks, POST as createTask } from '../../src/app/api/v1/tasks/route';
 import { GET as getTask } from '../../src/app/api/v1/tasks/[id]/route';
@@ -9,6 +9,7 @@ import { POST as addDep } from '../../src/app/api/v1/tasks/[id]/dependencies/rou
 import { POST as escalationAction } from '../../src/app/api/v1/escalations/[id]/route';
 import { runTaskEscalations } from '../../src/server/escalations';
 import { isoDaysFromNow, setupReference, staffUser, type StaffUser } from './fixtures';
+import { get, post, statusOf } from './operations-fixtures';
 
 const ctx = setupTestDatabase();
 let director: StaffUser;
@@ -16,8 +17,6 @@ let manager: StaffUser;
 let counsellor: StaffUser;
 let teacher: StaffUser;
 
-const post = (user: { token: string }, json: unknown) =>
-  authedRequest(user, '/ops/api/v1/x', { method: 'POST', json });
 type Task = { id: string; code: string; status: string };
 
 beforeAll(async () => {
@@ -44,28 +43,21 @@ const task = async (over: Record<string, unknown> = {}, as: StaffUser = manager)
 describe('tasks: permissions and own scope', () => {
   it('auditor can read but not write; teacher sees only own tasks', async () => {
     const auditor = await createTestUser(ctx.db, { roles: ['auditor'] });
-    expect((await callRoute(createTask, post(auditor, { title: 'x' }))).status).toBe(403);
-    expect((await callRoute(listTasks, authedRequest(auditor, '/x'))).status).toBe(200);
+    expect(await statusOf(createTask, post(auditor, { title: 'x' }))).toBe(403);
+    expect(await statusOf(listTasks, get(auditor))).toBe(200);
     const mine = await task({ ownerStaffId: teacher.staffId });
     const other = await task();
-    const list = await callRoute<Task[]>(listTasks, authedRequest(teacher, '/x?view=open'));
+    const list = await callRoute<Task[]>(listTasks, get(teacher, '/x?view=open'));
     expect(list.data?.map((t) => t.id)).toEqual([mine.id]);
-    expect((await callRoute(getTask, authedRequest(teacher, '/x'), { id: other.id })).status).toBe(
-      403,
-    );
-    expect(
-      (await callRoute(setStatus, post(teacher, { to: 'in_progress' }), { id: mine.id })).status,
-    ).toBe(200);
-    expect(
-      (await callRoute(setStatus, post(teacher, { to: 'in_progress' }), { id: other.id })).status,
-    ).toBe(403);
+    expect(await statusOf(getTask, get(teacher), { id: other.id })).toBe(403);
+    const start = () => post(teacher, { to: 'in_progress' });
+    expect(await statusOf(setStatus, start(), { id: mine.id })).toBe(200);
+    expect(await statusOf(setStatus, start(), { id: other.id })).toBe(403);
   });
 
   it('a counsellor can only create tasks for themselves', async () => {
-    expect(
-      (await callRoute(createTask, post(counsellor, { title: 'x', ownerStaffId: teacher.staffId })))
-        .status,
-    ).toBe(403);
+    const forOther = post(counsellor, { title: 'x', ownerStaffId: teacher.staffId });
+    expect(await statusOf(createTask, forOther)).toBe(403);
     const own = await callRoute<Task & { ownerStaffId: string }>(
       createTask,
       post(counsellor, { title: 'Call back (fictional)' }),
@@ -74,78 +66,53 @@ describe('tasks: permissions and own scope', () => {
   });
 
   it('owner and backup must differ', async () => {
-    expect(
-      (
-        await callRoute(
-          createTask,
-          post(manager, {
-            title: 'x',
-            ownerStaffId: teacher.staffId,
-            backupStaffId: teacher.staffId,
-          }),
-        )
-      ).status,
-    ).toBe(400);
+    const same = { title: 'x', ownerStaffId: teacher.staffId, backupStaffId: teacher.staffId };
+    expect(await statusOf(createTask, post(manager, same))).toBe(400);
   });
 });
 
 describe('dependencies and completion rules', () => {
+  const dep = (id: string, blockedByTaskId: string) =>
+    callRoute(addDep, post(manager, { blockedByTaskId }), { id });
+
   it('rejects a dependency cycle with 409 and the path', async () => {
     const a = await task();
     const b = await task();
     const c = await task();
-    expect(
-      (await callRoute(addDep, post(manager, { blockedByTaskId: b.id }), { id: a.id })).status,
-    ).toBe(201);
-    expect(
-      (await callRoute(addDep, post(manager, { blockedByTaskId: c.id }), { id: b.id })).status,
-    ).toBe(201);
-    const cyc = await callRoute(addDep, post(manager, { blockedByTaskId: a.id }), { id: c.id });
+    expect((await dep(a.id, b.id)).status).toBe(201);
+    expect((await dep(b.id, c.id)).status).toBe(201);
+    const cyc = await dep(c.id, a.id);
     expect(cyc.status).toBe(409);
     expect(cyc.error?.message).toContain(`${c.code} → ${a.code} → ${b.code} → ${c.code}`);
-    expect(
-      (await callRoute(addDep, post(manager, { blockedByTaskId: a.id }), { id: a.id })).status,
-    ).toBe(400);
+    expect((await dep(a.id, a.id)).status).toBe(400);
   });
 
   it('cannot complete while a blocker is open; evidence required; override is audited', async () => {
     const blocker = await task();
     const t = await task();
-    await callRoute(addDep, post(manager, { blockedByTaskId: blocker.id }), { id: t.id });
-    expect(
-      (await callRoute(setStatus, post(counsellor, { to: 'completed' }), { id: t.id })).status,
-    ).toBe(400);
-    const blocked = await callRoute(
-      setStatus,
-      post(counsellor, { to: 'completed', completionNote: 'Done' }),
-      { id: t.id },
-    );
-    expect(blocked.status).toBe(409);
-    const ok = await callRoute<Task & { blockerOverrideReason: string }>(
-      setStatus,
-      post(counsellor, {
-        to: 'completed',
-        completionNote: 'Done',
-        blockerOverrideReason: 'Manager accepted',
-      }),
-      { id: t.id },
-    );
+    await dep(t.id, blocker.id);
+    const complete = (json: object, id = t.id) =>
+      callRoute<Task & { blockerOverrideReason: string }>(
+        setStatus,
+        post(counsellor, { to: 'completed', ...json }),
+        { id },
+      );
+    expect((await complete({})).status).toBe(400);
+    expect((await complete({ completionNote: 'Done' })).status).toBe(409);
+    const ok = await complete({
+      completionNote: 'Done',
+      blockerOverrideReason: 'Manager accepted',
+    });
     expect(ok.data).toMatchObject({
       status: 'completed',
       blockerOverrideReason: 'Manager accepted',
     });
-    expect(
-      (
-        await callRoute(
-          setStatus,
-          post(counsellor, { to: 'completed', evidenceLink: 'https://example.test/evidence' }),
-          { id: blocker.id },
-        )
-      ).status,
-    ).toBe(200);
-    expect(
-      (await callRoute(setStatus, post(counsellor, { to: 'in_progress' }), { id: t.id })).status,
-    ).toBe(400); // reopen needs a reason
+    const evidence = { evidenceLink: 'https://example.test/evidence' };
+    expect((await complete(evidence, blocker.id)).status).toBe(200);
+    // reopen needs a reason
+    expect(await statusOf(setStatus, post(counsellor, { to: 'in_progress' }), { id: t.id })).toBe(
+      400,
+    );
   });
 });
 
@@ -175,31 +142,13 @@ describe('escalation (OPS-017)', () => {
       .select()
       .from(opsEscalations)
       .where(and(eq(opsEscalations.taskId, t.id as never), eq(opsEscalations.level, 2)));
-    expect(
-      (await callRoute(escalationAction, post(teacher, { action: 'acknowledge' }), { id: esc!.id }))
-        .status,
-    ).toBe(403);
-    expect(
-      (await callRoute(escalationAction, post(manager, { action: 'acknowledge' }), { id: esc!.id }))
-        .status,
-    ).toBe(200);
-    expect(
-      (await callRoute(escalationAction, post(manager, { action: 'resolve' }), { id: esc!.id }))
-        .status,
-    ).toBe(400);
-    expect(
-      (
-        await callRoute(
-          escalationAction,
-          post(manager, { action: 'resolve', note: 'Extended with owner' }),
-          { id: esc!.id },
-        )
-      ).status,
-    ).toBe(200);
-    const escalated = await callRoute<Task[]>(
-      listTasks,
-      authedRequest(manager, '/x?view=escalated'),
-    );
+    const handle = (user: StaffUser, json: object) =>
+      statusOf(escalationAction, post(user, json), { id: esc!.id });
+    expect(await handle(teacher, { action: 'acknowledge' })).toBe(403);
+    expect(await handle(manager, { action: 'acknowledge' })).toBe(200);
+    expect(await handle(manager, { action: 'resolve' })).toBe(400);
+    expect(await handle(manager, { action: 'resolve', note: 'Extended with owner' })).toBe(200);
+    const escalated = await callRoute<Task[]>(listTasks, get(manager, '/x?view=escalated'));
     expect(escalated.data?.map((x) => x.id)).toContain(t.id); // L3 still open
   });
 

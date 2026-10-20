@@ -20,6 +20,9 @@ import { ITEM_STATUSES, LIFECYCLE_STATUSES, SEPARATION_TYPES } from '../../domai
 const text = (max = 500) => z.string().trim().max(max);
 const optText = (max = 500) => text(max).nullish();
 const reason = optText(1000);
+/** POST …/transitions: the target status and an optional reason. */
+const transitionBody = <T extends readonly [string, ...string[]]>(statuses: T) =>
+  z.object({ to: z.enum(statuses), reason });
 
 export { idParams } from '../schemas';
 export const caseItemParams = z.object({ id: z.uuid(), itemId: z.uuid() });
@@ -58,10 +61,7 @@ export const updateRequisitionBody = createRequisitionBody
   .refine((v) => Object.values(v).some((x) => x !== undefined), { error: 'Nothing to change.' });
 export type UpdateRequisitionInput = z.output<typeof updateRequisitionBody>;
 
-export const requisitionTransitionBody = z.object({
-  to: z.enum(REQUISITION_STATUSES),
-  reason,
-});
+export const requisitionTransitionBody = transitionBody(REQUISITION_STATUSES);
 
 // --- candidates ---------------------------------------------------------------------------------
 
@@ -112,10 +112,7 @@ export const createApplicationBody = z.object({
   requisitionId: z.uuid(),
 });
 
-export const applicationTransitionBody = z.object({
-  to: z.enum(APPLICATION_STAGES),
-  reason,
-});
+export const applicationTransitionBody = transitionBody(APPLICATION_STAGES);
 
 export const convertBody = z.object({
   /** Reporting manager; defaults to the requisition's hiring manager. */
@@ -182,10 +179,7 @@ export const createOfferBody = z.object({
 });
 export type CreateOfferInput = z.output<typeof createOfferBody>;
 
-export const offerTransitionBody = z.object({
-  to: z.enum(OFFER_STATUSES),
-  reason,
-});
+export const offerTransitionBody = transitionBody(OFFER_STATUSES);
 
 // --- lifecycle cases ----------------------------------------------------------------------------
 

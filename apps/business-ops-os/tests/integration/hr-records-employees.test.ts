@@ -27,7 +27,13 @@ import { GET as chartRoute } from '../../src/app/api/v1/organisation/chart/route
 import { createEmployee } from '../../src/server/hr/employees';
 import { registerDeactivationHandler } from '../../src/server/hr/employee-core';
 import { setupReference } from './fixtures';
-import { employeeUser, lastAudit, uniqueWorkEmail, type EmployeeUser } from './hr-records-fixtures';
+import {
+  employeeUser,
+  lastAudit,
+  uniqueWorkEmail,
+  type EmployeeUser,
+  statusOf,
+} from './hr-records-fixtures';
 
 const ctx = setupTestDatabase();
 let hrManager: EmployeeUser;
@@ -66,16 +72,10 @@ beforeAll(async () => {
 
 describe('employee creation (OPS-030)', () => {
   it('401 signed out, 403 without permission, 400 invalid, 201 created with an EMP code', async () => {
-    expect((await callRoute(createRoute, buildRequest('/x', { json: {} }))).status).toBe(401);
-    expect(
-      (await callRoute(createRoute, post(teacher, { fullName: 'X (fictional)' }))).status,
-    ).toBe(403);
-    expect(
-      (await callRoute(createRoute, post(auditor, { fullName: 'X (fictional)' }))).status,
-    ).toBe(403);
-    expect(
-      (await callRoute(createRoute, post(colleague, { fullName: 'X (fictional)' }))).status,
-    ).toBe(403);
+    expect(await statusOf(createRoute, buildRequest('/x', { json: {} }))).toBe(401);
+    expect(await statusOf(createRoute, post(teacher, { fullName: 'X (fictional)' }))).toBe(403);
+    expect(await statusOf(createRoute, post(auditor, { fullName: 'X (fictional)' }))).toBe(403);
+    expect(await statusOf(createRoute, post(colleague, { fullName: 'X (fictional)' }))).toBe(403);
     const invalid = await callRoute(
       createRoute,
       post(hrManager, { fullName: 'X', workEmail: 'not-an-email' }),
@@ -346,13 +346,11 @@ describe('reporting lines and employment history (OPS-032, OPS-033)', () => {
     );
     expect(end.status).toBe(400);
     expect(
-      (
-        await callRoute(
-          assignHead,
-          authedRequest(colleague, '/x', { json: { staffId: colleague.staffId } }),
-          { id: deptId },
-        )
-      ).status,
+      await statusOf(
+        assignHead,
+        authedRequest(colleague, '/x', { json: { staffId: colleague.staffId } }),
+        { id: deptId },
+      ),
     ).toBe(403);
   });
 
@@ -437,13 +435,9 @@ describe('field-level protection on employee records (OPS-037)', () => {
     const f = await view(financeOfficer, report.staffId);
     expect(f.data!.employee.record).toBeNull();
     expect('legalName' in f.data!.employee).toBe(false);
-    expect(
-      (await callRoute(historyRoute, get(financeOfficer), { id: report.staffId })).status,
-    ).toBe(403);
-    expect((await callRoute(historyRoute, get(colleague), { id: report.staffId })).status).toBe(
-      403,
-    );
-    expect((await callRoute(listRoute, get(teacher))).status).toBe(403);
+    expect(await statusOf(historyRoute, get(financeOfficer), { id: report.staffId })).toBe(403);
+    expect(await statusOf(historyRoute, get(colleague), { id: report.staffId })).toBe(403);
+    expect(await statusOf(listRoute, get(teacher))).toBe(403);
   });
 
   it('directory search, filter, sort and pagination run on the server', async () => {

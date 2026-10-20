@@ -26,7 +26,6 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 export const TASK_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
-export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
 export const OPEN_TASK_STATUSES: readonly TaskStatus[] = [
   'not_started',
@@ -306,11 +305,6 @@ export interface TaskReminderSettings {
   /** Also notify the backup owner when a task becomes overdue. */
   notifyBackupWhenOverdue: boolean;
 }
-
-export const DEFAULT_TASK_REMINDER_SETTINGS: TaskReminderSettings = {
-  leadDays: 1,
-  notifyBackupWhenOverdue: true,
-};
 
 export type TaskReminderKind = 'due_soon' | 'overdue';
 

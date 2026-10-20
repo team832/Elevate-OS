@@ -23,7 +23,7 @@ import { POST as docStatus } from '../../src/app/api/v1/hr/documents/[id]/status
 import { GET as download } from '../../src/app/api/v1/hr/documents/[id]/download/route';
 import { setDocumentStorageForTesting } from '../../src/server/adapters/document-storage';
 import { setupReference } from './fixtures';
-import { employeeUser, lastAudit, type EmployeeUser } from './hr-records-fixtures';
+import { employeeUser, lastAudit, type EmployeeUser, statusOf } from './hr-records-fixtures';
 
 const ctx = setupTestDatabase();
 let hrManager: EmployeeUser;
@@ -81,20 +81,17 @@ describe('private HR fields (OPS-034)', () => {
     expect(raw).not.toContain('9876543210');
     expect(raw).not.toContain('Ritu Sharma');
     expect(
-      (
-        await callRoute(putPrivate, req(report, { personalPhone: '12' }, 'PUT'), {
-          id: report.staffId,
-        })
-      ).status,
+      await statusOf(putPrivate, req(report, { personalPhone: '12' }, 'PUT'), {
+        id: report.staffId,
+      }),
     ).toBe(400);
   });
 
   it('colleagues, department managers, HR contributors, director, auditor and ops manager are refused', async () => {
     for (const u of [colleague, deptManager, hrContributor, director, auditor, opsManager])
-      expect((await callRoute(getPrivate, req(u), { id: report.staffId })).status).toBe(403);
+      expect(await statusOf(getPrivate, req(u), { id: report.staffId })).toBe(403);
     expect(
-      (await callRoute(putPrivate, req(deptManager, { city: 'X' }, 'PUT'), { id: report.staffId }))
-        .status,
+      await statusOf(putPrivate, req(deptManager, { city: 'X' }, 'PUT'), { id: report.staffId }),
     ).toBe(403);
     const hr = await callRoute<{ legalName: string }>(getPrivate, req(hrManager), {
       id: report.staffId,
@@ -113,13 +110,11 @@ describe('private HR fields (OPS-034)', () => {
     );
     expect(a.status).toBe(201);
     expect(
-      (
-        await callRoute(
-          addContact,
-          req(colleague, { name: 'X', relationship: 'Y', phone: '9123456780' }),
-          { id: report.staffId },
-        )
-      ).status,
+      await statusOf(
+        addContact,
+        req(colleague, { name: 'X', relationship: 'Y', phone: '9123456780' }),
+        { id: report.staffId },
+      ),
     ).toBe(403);
     const rec = await callRoute<{ emergencyContacts: { isPrimary: boolean; phone: string }[] }>(
       getPrivate,
@@ -179,11 +174,9 @@ describe('employee documents (OPS-035)', () => {
     expect(res.status).toBe(201);
     refDocId = res.data!.id;
     expect(
-      (
-        await callRoute(addDoc, req(hrContributor, { kind: 'agreement', title: 'No location' }), {
-          id: report.staffId,
-        })
-      ).status,
+      await statusOf(addDoc, req(hrContributor, { kind: 'agreement', title: 'No location' }), {
+        id: report.staffId,
+      }),
     ).toBe(400);
     const content = Buffer.from('fictional test document').toString('base64');
     const { createHash } = await import('node:crypto');
@@ -275,10 +268,10 @@ describe('employee documents (OPS-035)', () => {
   });
 
   it('scope: the employee sees own documents only; managers and the auditor have no access', async () => {
-    expect((await callRoute(listDocs, req(report), { id: report.staffId })).status).toBe(200);
+    expect(await statusOf(listDocs, req(report), { id: report.staffId })).toBe(200);
     for (const u of [colleague, deptManager, auditor, director, opsManager])
-      expect((await callRoute(listDocs, req(u), { id: report.staffId })).status).toBe(403);
-    expect((await callRoute(download, req(colleague), { id: refDocId })).status).toBe(403);
+      expect(await statusOf(listDocs, req(u), { id: report.staffId })).toBe(403);
+    expect(await statusOf(download, req(colleague), { id: refDocId })).toBe(403);
   });
 
   it('identity documents need private access: hidden from the HR contributor', async () => {
@@ -326,51 +319,39 @@ describe('employee documents (OPS-035)', () => {
     });
     expect(noReason.status).toBe(400);
     expect(
-      (
-        await callRoute(docStatus, req(hrManager, { action: 'hold', reason: 'Dispute open' }), {
-          id: refDocId,
-        })
-      ).status,
+      await statusOf(docStatus, req(hrManager, { action: 'hold', reason: 'Dispute open' }), {
+        id: refDocId,
+      }),
     ).toBe(200);
     expect(
-      (
-        await callRoute(
-          docStatus,
-          req(hrManager, { action: 'request_deletion', reason: 'Duplicate' }),
-          { id: refDocId },
-        )
-      ).status,
+      await statusOf(
+        docStatus,
+        req(hrManager, { action: 'request_deletion', reason: 'Duplicate' }),
+        { id: refDocId },
+      ),
     ).toBe(409);
     expect(
-      (await callRoute(docStatus, req(hrManager, { action: 'release_hold' }), { id: refDocId }))
-        .status,
+      await statusOf(docStatus, req(hrManager, { action: 'release_hold' }), { id: refDocId }),
     ).toBe(200);
     expect(
-      (
-        await callRoute(
-          docStatus,
-          req(hrManager, { action: 'request_deletion', reason: 'Duplicate' }),
-          { id: refDocId },
-        )
-      ).status,
+      await statusOf(
+        docStatus,
+        req(hrManager, { action: 'request_deletion', reason: 'Duplicate' }),
+        { id: refDocId },
+      ),
     ).toBe(200);
     expect(
-      (
-        await callRoute(docStatus, req(hrManager, { action: 'approve_deletion', confirm: true }), {
-          id: refDocId,
-        })
-      ).status,
+      await statusOf(docStatus, req(hrManager, { action: 'approve_deletion', confirm: true }), {
+        id: refDocId,
+      }),
     ).toBe(403);
     expect(
-      (await callRoute(docStatus, req(report, { action: 'approve_deletion' }), { id: refDocId }))
-        .status,
+      await statusOf(docStatus, req(report, { action: 'approve_deletion' }), { id: refDocId }),
     ).toBe(403);
     expect(
-      (
-        await callRoute(docStatus, req(hrManager2, { action: 'approve_deletion' }), {
-          id: refDocId,
-        })
-      ).status,
+      await statusOf(docStatus, req(hrManager2, { action: 'approve_deletion' }), {
+        id: refDocId,
+      }),
     ).toBe(400);
     const ok = await callRoute<{ status: string }>(
       docStatus,
@@ -384,6 +365,6 @@ describe('employee documents (OPS-035)', () => {
       .from(opsEmployeeDocuments)
       .where(eq(opsEmployeeDocuments.id, refDocId as never));
     expect(row!.title).toBe('Appointment letter');
-    expect((await callRoute(download, req(hrManager), { id: refDocId })).status).toBe(409);
+    expect(await statusOf(download, req(hrManager), { id: refDocId })).toBe(409);
   });
 });

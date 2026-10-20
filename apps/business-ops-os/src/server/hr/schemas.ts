@@ -5,7 +5,11 @@
 import { z } from 'zod';
 import { isoDateSchema } from '@elevate/shared-contracts';
 import { ASSET_STATUSES, RETURN_CONDITIONS } from '../../domain/hr/assets';
-import { COMPENSATION_BASES, COMPONENT_KINDS } from '../../domain/hr/compensation';
+import {
+  COMPENSATION_BASES,
+  COMPENSATION_STATUSES,
+  COMPONENT_KINDS,
+} from '../../domain/hr/compensation';
 import {
   DOCUMENT_ACTIONS,
   DOCUMENT_CONTENT_TYPES,
@@ -21,6 +25,10 @@ const optText = (max = 500) => text(max).nullish();
 const optUuid = z.uuid().nullish();
 /** Explicit confirmation for sensitive actions (the UI shows a tick box). */
 const confirm = z.literal(true, { error: 'Tick the box to confirm.' });
+const paging = {
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+};
 
 export const staffIdParams = z.object({ id: z.uuid() });
 export const contactParams = z.object({ id: z.uuid(), contactId: z.uuid() });
@@ -36,8 +44,7 @@ export const employeeListQuery = z.object({
   location: text(200).optional(),
   sort: z.enum(EMPLOYEE_SORTS).default('name'),
   dir: z.enum(['asc', 'desc']).default('asc'),
-  page: z.coerce.number().int().min(1).max(10_000).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  ...paging,
   /** Include separated employees (record-tier callers only). */
   includeSeparated: z.enum(['true', 'false']).optional(),
 });
@@ -158,7 +165,7 @@ const component = z.object({
 
 export const compensationListQuery = z.object({
   staffId: z.uuid().optional(),
-  status: z.enum(['draft', 'approved', 'superseded', 'cancelled']).optional(),
+  status: z.enum(COMPENSATION_STATUSES).optional(),
 });
 
 /** Rupees as typed in a form, e.g. "45000" or "45000.50" (converted exactly to paise). */
@@ -205,8 +212,7 @@ export const assetListQuery = z.object({
   q: text(200).optional(),
   status: z.enum(ASSET_STATUSES).optional(),
   category: text(100).optional(),
-  page: z.coerce.number().int().min(1).max(10_000).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  ...paging,
 });
 
 export const createAssetBody = z.object({
@@ -216,15 +222,7 @@ export const createAssetBody = z.object({
   notes: optText(1000),
 });
 
-export const updateAssetBody = z
-  .object({
-    name: text(200).min(1),
-    category: text(100).min(1),
-    serialNumber: optText(200),
-    notes: optText(1000),
-    status: z.enum(ASSET_STATUSES),
-  })
-  .partial();
+export const updateAssetBody = createAssetBody.extend({ status: z.enum(ASSET_STATUSES) }).partial();
 
 export const assignAssetBody = z.object({
   staffId: z.uuid(),

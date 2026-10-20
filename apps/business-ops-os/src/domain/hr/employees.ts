@@ -30,7 +30,6 @@ export const EMPLOYMENT_TYPES = [
   'visiting',
   'not_recorded',
 ] as const;
-export type EmploymentTypeValue = (typeof EMPLOYMENT_TYPES)[number];
 
 export const HISTORY_FIELDS = [
   'department',
@@ -138,28 +137,6 @@ export function employeeFieldTiers(input: FieldTierInput): { record: boolean; pr
   };
 }
 
-export interface EmployeeRow {
-  staffId: string;
-  employeeCode: string;
-  fullName: string;
-  legalName: string | null;
-  departmentId: string | null;
-  departmentName: string | null;
-  title: string | null;
-  managerId: string | null;
-  managerName: string | null;
-  workEmail: string | null;
-  workPhone: string | null;
-  workLocation: string | null;
-  timezone: string;
-  employmentType: string;
-  employmentStatus: EmploymentStatus;
-  employmentStartDate: string | null;
-  employmentEndDate: string | null;
-  staffStatus: string;
-  hasLogin: boolean;
-}
-
 export interface EmployeeDirectoryEntry {
   staffId: string;
   employeeCode: string;
@@ -183,6 +160,10 @@ export interface EmployeeRecordFields {
   staffStatus: string;
   hasLogin: boolean;
 }
+
+/** A full employee row (all tiers), as loaded by the server. */
+export type EmployeeRow = EmployeeDirectoryEntry &
+  EmployeeRecordFields & { legalName: string | null };
 
 export type EmployeeView = EmployeeDirectoryEntry & {
   /** Null when the caller may not see record-tier fields. */

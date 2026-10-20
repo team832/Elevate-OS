@@ -20,6 +20,12 @@ const HANDOFF_FILTERS = [
   { value: 'enrolled', label: 'Enrolled' },
 ] as const;
 
+const SORTS = [
+  { value: 'newest', label: 'Admitted most recently' },
+  { value: 'oldest', label: 'Admitted longest ago' },
+  { value: 'name', label: 'Name A–Z' },
+];
+
 const stateTone = (s: DirectoryState | null) =>
   s === 'enrolled' ? 'success' : s === 'awaiting_enrolment' ? 'info' : 'neutral';
 
@@ -67,67 +73,59 @@ async function Filters({ query }: { query: ReturnType<typeof studentListQuery.pa
         <label htmlFor="students-q">Name or code</label>
         <input id="students-q" name="q" className="el-input" defaultValue={query.q ?? ''} />
       </div>
-      <div className="el-field">
-        <label htmlFor="students-state">Status</label>
-        <select
-          id="students-state"
-          name="state"
-          className="el-select"
-          defaultValue={query.state ?? ''}
-        >
-          <option value="">Any</option>
-          {DIRECTORY_STATES.map((s) => (
-            <option key={s} value={s}>
-              {DIRECTORY_STATE_LABELS[s]}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="el-field">
-        <label htmlFor="students-programme">Programme</label>
-        <select
-          id="students-programme"
-          name="programme"
-          className="el-select"
-          defaultValue={query.programme ?? ''}
-        >
-          <option value="">Any</option>
-          {programmes.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="el-field">
-        <label htmlFor="students-handoff">Handoff</label>
-        <select
-          id="students-handoff"
-          name="handoff"
-          className="el-select"
-          defaultValue={query.handoff ?? ''}
-        >
-          <option value="">Any</option>
-          {HANDOFF_FILTERS.map((h) => (
-            <option key={h.value} value={h.value}>
-              {h.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="el-field">
-        <label htmlFor="students-sort">Sort</label>
-        <select id="students-sort" name="sort" className="el-select" defaultValue={query.sort}>
-          <option value="newest">Admitted most recently</option>
-          <option value="oldest">Admitted longest ago</option>
-          <option value="name">Name A–Z</option>
-        </select>
-      </div>
+      <Select
+        name="state"
+        label="Status"
+        value={query.state ?? ''}
+        options={DIRECTORY_STATES.map((s) => ({ value: s, label: DIRECTORY_STATE_LABELS[s] }))}
+      />
+      <Select
+        name="programme"
+        label="Programme"
+        value={query.programme ?? ''}
+        options={programmes}
+      />
+      <Select
+        name="handoff"
+        label="Handoff"
+        value={query.handoff ?? ''}
+        options={HANDOFF_FILTERS}
+      />
+      <Select name="sort" label="Sort" value={query.sort} options={SORTS} any={false} />
       <button type="submit" className="el-button el-button-secondary">
         Show students
       </button>
       <a href="/ops/students">Clear filters</a>
     </form>
+  );
+}
+
+function Select({
+  name,
+  label,
+  value,
+  options,
+  any = true,
+}: {
+  name: string;
+  label: string;
+  value: string;
+  options: readonly { value: string; label: string }[];
+  /** Offer "Any" (no filter) first. */
+  any?: boolean;
+}) {
+  return (
+    <div className="el-field">
+      <label htmlFor={`students-${name}`}>{label}</label>
+      <select id={`students-${name}`} name={name} className="el-select" defaultValue={value}>
+        {any ? <option value="">Any</option> : null}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 

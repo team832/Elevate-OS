@@ -27,6 +27,7 @@ import {
 import { metric } from '@elevate/shared-contracts';
 import {
   incidentSla,
+  isOpenTask,
   istToday,
   openTasksMetric,
   overdueTasksMetric,
@@ -45,8 +46,6 @@ import { accessScope, type Actor } from '../context';
 import { blockedProjectRows } from '../planning';
 import { loadSettings } from '../settings';
 import { acknowledgementTotals } from '../sops';
-
-const OPEN_TASK = ['not_started', 'in_progress', 'waiting', 'at_risk', 'blocked'];
 
 /** Unresolved deliveries for Ops consumers, or of Ops-produced events (read-only). */
 export async function unresolvedIntegrationErrors(db: Database, limit = 50) {
@@ -87,6 +86,9 @@ export async function unresolvedIntegrationErrors(db: Database, limit = 50) {
   };
 }
 
+const INBOX_DEFINITION =
+  'Items in your approvals inbox: requests you may decide that you did not raise.';
+
 export async function buildOperationsReport(
   db: Database,
   actor: Actor,
@@ -95,8 +97,7 @@ export async function buildOperationsReport(
   await accessScope(db, actor, 'ops:dashboard:read');
   const now = options.now ?? new Date();
   const today = istToday(now);
-  const asOfLabel = `As of ${windowLabel(today, today)}`;
-  const asOf = { from: today, to: today, label: asOfLabel };
+  const asOf = { from: today, to: today, label: `As of ${windowLabel(today, today)}` };
   const settings = await loadSettings(db);
 
   // --- tasks and capacity -------------------------------------------------------------------------
@@ -165,7 +166,7 @@ export async function buildOperationsReport(
   // --- deadlines (next 7 days) --------------------------------------------------------------------
   const deadlineItems: DeadlineItem[] = [];
   for (const t of kpiTasks)
-    if (OPEN_TASK.includes(t.status) && t.dueDate)
+    if (isOpenTask(t.status) && t.dueDate)
       deadlineItems.push({
         kind: 'task',
         id: t.id,
@@ -299,16 +300,11 @@ export async function buildOperationsReport(
       pendingApprovalsForYou:
         inbox.total === null
           ? metric.missing('The approval sources could not be loaded.', {
-              definition:
-                'Items in your approvals inbox: requests you may decide that you did not raise.',
+              definition: INBOX_DEFINITION,
               window: asOf,
               unit: 'count',
             })
-          : pointCount(
-              inbox.total,
-              'Items in your approvals inbox: requests you may decide that you did not raise. Point in time.',
-              now,
-            ),
+          : pointCount(inbox.total, `${INBOX_DEFINITION} Point in time.`, now),
       unresolvedIntegrationErrors: pointCount(
         integration.total,
         'Event deliveries with status failed or dead whose consumer is an Ops consumer (ops.*) or whose event was produced by Ops. Read-only. Point in time.',

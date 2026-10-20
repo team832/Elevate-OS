@@ -4,7 +4,7 @@
  * re-checks the domain state machine, writes the transition row and the audit
  * event in the caller's transaction.
  */
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   opsAdmissions,
   opsAdmissionTransitions,
@@ -22,9 +22,14 @@ import type {
   StaffMemberId,
   UserId,
 } from '@elevate/shared-types';
-import { checkTransition, istToday, type AdmissionStatus, type TransitionContext } from '../domain';
+import {
+  checkTransition,
+  istToday,
+  type AdmissionStatus,
+  type ResolvedSettings,
+  type TransitionContext,
+} from '../domain';
 import { nextCode } from './context';
-import type { ResolvedSettings } from '../domain';
 
 export type AdmissionRow = typeof opsAdmissions.$inferSelect;
 
@@ -72,11 +77,11 @@ export async function createAdmissionRecord(
   await recordAudit(tx, {
     actorUserId: input.createdBy,
     module: 'ops',
+    requestId: input.requestId,
     action: 'admission.created',
     entityType: 'admission',
     entityId: row.id,
     after: row,
-    requestId: input.requestId,
     metadata: { leadId: input.leadId },
   });
   return row;
@@ -85,13 +90,13 @@ export async function createAdmissionRecord(
 export interface ApplyTransitionInput {
   admission: AdmissionRow;
   to: AdmissionStatus;
-  actorType: 'user' | 'system';
+  /** The person making the change; null = a system change (an Academic OS reply). */
   actorUserId: UserId | null;
   reason?: string | null;
   /** Validated closure code (checkReasonCode); stored on the case and the transition row. */
   reasonCode?: string | null;
   eventId?: IntegrationEventId | null;
-  context: Omit<TransitionContext, 'actor' | 'reason' | 'heldFromStatus'>;
+  context?: Omit<TransitionContext, 'actor' | 'reason' | 'heldFromStatus'>;
   requestId?: string;
   /** Extra columns to set with the status (e.g. enrolment ids). */
   patch?: Partial<typeof opsAdmissions.$inferInsert>;
@@ -105,9 +110,10 @@ export async function applyTransition(
 ): Promise<AdmissionRow> {
   const { admission, to } = input;
   const from = admission.status as AdmissionStatus;
+  const actorType = input.actorUserId ? 'user' : 'system';
   const check = checkTransition(from, to, {
     ...input.context,
-    actor: input.actorType,
+    actor: actorType,
     reason: input.reason,
     heldFromStatus: (admission.heldFromStatus as AdmissionStatus | null) ?? null,
   });
@@ -121,12 +127,14 @@ export async function applyTransition(
     });
   }
   const now = new Date();
+  const reason = input.reason?.trim() || null;
+  const reasonCode = input.reasonCode ?? null;
   const values: Partial<typeof opsAdmissions.$inferInsert> = {
     status: to,
-    statusReason: input.reason?.trim() || null,
+    statusReason: reason,
     statusChangedAt: now,
     heldFromStatus: to === 'on_hold' ? from : null,
-    statusReasonCode: input.reasonCode ?? null,
+    statusReasonCode: reasonCode,
     ...input.patch,
   };
   if (from === 'counselled' && to === 'admission_pending') values.demoSkipped = true;
@@ -141,34 +149,31 @@ export async function applyTransition(
     throw new InvalidStateTransitionError(
       'The admission changed while you were working on it; reload.',
     );
+  const eventId = input.eventId ?? null;
   await tx.insert(opsAdmissionTransitions).values({
     admissionId: admission.id,
     fromStatus: from,
     toStatus: to,
-    reason: input.reason?.trim() || null,
-    reasonCode: input.reasonCode ?? null,
-    actorType: input.actorType,
+    reason,
+    reasonCode,
+    actorType,
     actorUserId: input.actorUserId,
-    eventId: input.eventId ?? null,
+    eventId,
     at: now,
   });
   await recordAudit(tx, {
-    actorType: input.actorType === 'system' ? 'system' : 'user',
+    actorType,
     actorUserId: input.actorUserId,
     module: 'ops',
     action: 'admission.transitioned',
     entityType: 'admission',
     entityId: admission.id,
     before: { status: from },
-    after: { status: to, reason: input.reason ?? null, reasonCode: input.reasonCode ?? null },
+    after: { status: to, reason: input.reason ?? null, reasonCode },
     requestId: input.requestId,
-    metadata: {
-      leadId: admission.leadId,
-      rule: check.rule.meaning,
-      eventId: input.eventId ?? null,
-    },
+    metadata: { leadId: admission.leadId, rule: check.rule.meaning, eventId },
   });
-  await applySideEffects(tx, updated, from, to, input);
+  await applySideEffects(tx, admission.id, to, input);
   return updated;
 }
 
@@ -181,33 +186,23 @@ export async function applyTransition(
  */
 async function applySideEffects(
   tx: Database,
-  admission: AdmissionRow,
-  _from: AdmissionStatus,
+  admissionId: AdmissionId,
   to: AdmissionStatus,
   input: ApplyTransitionInput,
 ): Promise<void> {
   const terms = input.settings?.['demo.terms'].value;
+  const paidDemos = and(
+    eq(opsDemos.admissionId, admissionId),
+    eq(opsDemos.feeStatus, 'paid_verified'),
+  );
   if (to === 'lost') {
     await tx
       .update(opsFollowUps)
       .set({ status: 'cancelled', outcome: `Case closed as lost: ${input.reason ?? ''}`.trim() })
-      .where(and(eq(opsFollowUps.admissionId, admission.id), eq(opsFollowUps.status, 'open')));
-    if (terms && terms.refundableIfNotJoining === false) {
-      await tx
-        .update(opsDemos)
-        .set({ feeStatus: 'retained_non_refundable' })
-        .where(
-          and(
-            eq(opsDemos.admissionId, admission.id),
-            inArray(opsDemos.feeStatus, ['paid_verified']),
-          ),
-        );
-    }
+      .where(and(eq(opsFollowUps.admissionId, admissionId), eq(opsFollowUps.status, 'open')));
+    if (terms && terms.refundableIfNotJoining === false)
+      await tx.update(opsDemos).set({ feeStatus: 'retained_non_refundable' }).where(paidDemos);
   }
-  if (to === 'admitted' && terms?.adjustedAgainstFeesOnJoining) {
-    await tx
-      .update(opsDemos)
-      .set({ feeStatus: 'adjusted_against_fees' })
-      .where(and(eq(opsDemos.admissionId, admission.id), eq(opsDemos.feeStatus, 'paid_verified')));
-  }
+  if (to === 'admitted' && terms?.adjustedAgainstFeesOnJoining)
+    await tx.update(opsDemos).set({ feeStatus: 'adjusted_against_fees' }).where(paidDemos);
 }
