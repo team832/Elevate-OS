@@ -6,6 +6,8 @@
 import type { ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can, type Permission } from '@elevate/authorization';
+import { getDb } from '@elevate/database';
+import { countUnread } from '@elevate/notifications';
 import { requirePageAccess, type PageAccess } from '@elevate/server-kit/next';
 import { AppShell, ErrorState } from '@elevate/shared-ui';
 import { MODULE } from '../domain';
@@ -44,10 +46,30 @@ export function actorFor(user: AuthenticatedUser): Actor {
   return { user };
 }
 
-export function AcademicShell({ access, active, children }: { access: PageAccess; active: Section; children: ReactNode }) {
-  const nav = NAV.filter((n) => can(access.user, n.permission)).map((n) => ({ href: n.href, label: n.label, active: n.key === active }));
+/** Unread in-app notifications for the top bar; null (hidden) when unknown. */
+async function unreadFor(access: PageAccess): Promise<number | null> {
+  if (!can(access.user, 'platform:notifications:read')) return null;
+  try {
+    return await countUnread(getDb(), access.user.id);
+  } catch {
+    return null;
+  }
+}
+
+export async function AcademicShell({ access, active, children }: { access: PageAccess; active: Section; children: ReactNode }) {
+  const user = access.user;
+  const nav = NAV.filter((n) => can(user, n.permission)).map((n) => ({ href: n.href, label: n.label, active: n.key === active }));
   return (
-    <AppShell user={access.user} modules={access.modules} current="academic" logoutAction={MODULE_PATHS.logoutApi} nav={nav}>
+    <AppShell
+      user={user}
+      modules={access.modules}
+      current="academic"
+      logoutAction={MODULE_PATHS.logoutApi}
+      nav={nav}
+      search={can(user, 'academic:students:read') ? { action: MODULE_PATHS.students, label: 'Search students' } : undefined}
+      myWorkHref={can(user, 'ops:tasks:read') ? '/ops/tasks?view=mine' : undefined}
+      unreadNotifications={await unreadFor(access)}
+    >
       {access.status === 'forbidden' ? (
         <ErrorState title="No access to this page" description="Your roles do not include the permission this page needs. Ask an academic coordinator or a platform administrator." />
       ) : (

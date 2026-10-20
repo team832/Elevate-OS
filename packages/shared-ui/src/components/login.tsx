@@ -1,12 +1,18 @@
 import { Alert } from './states';
 import { Button, Field, TextInput } from './forms';
-import { Wordmark } from './layout';
+import { BrandLogo, COMPANY_NAME } from './layout';
 
 const ERROR_TEXT: Record<string, string> = {
   invalid: 'Email or password is incorrect.',
   missing: 'Enter your email and password.',
   locked: 'Too many failed attempts. Try again in 15 minutes.',
   unavailable: 'Sign-in is unavailable right now. Try again shortly.',
+};
+
+/** The app's basePath from its login action, e.g. `/ops/api/v1/auth/login` → `/ops`. */
+const basePathOf = (action: string) => {
+  const i = action.indexOf('/api/');
+  return i > 0 ? action.slice(0, i) : '';
 };
 
 /**
@@ -27,14 +33,17 @@ export function LoginForm({
   const message = error ? (ERROR_TEXT[error] ?? ERROR_TEXT.invalid) : undefined;
   return (
     <div className="el-login">
-      <section className="el-card el-login-card">
+      <section className="el-card el-login-card" aria-labelledby="el-login-title">
+        <div className="el-login-brand">
+          <BrandLogo basePath={basePathOf(action)} />
+          <span>{COMPANY_NAME}</span>
+        </div>
         <div className="el-card-body">
-          <Wordmark />
-          <p className="el-field-hint" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <h1 id="el-login-title" className="el-login-title">
             {subtitle ?? 'Sign in to Elevate OS'}
-          </p>
+          </h1>
           {message ? (
-            <div style={{ marginBottom: '1rem' }}>
+            <div className="el-login-alert">
               <Alert tone="danger">{message}</Alert>
             </div>
           ) : null}

@@ -7,9 +7,10 @@
 import { Suspense, type ReactNode } from 'react';
 import { can, type Permission } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
+import { countUnread } from '@elevate/notifications';
 import { AppError } from '@elevate/shared-contracts';
 import { currentRequestId, requirePageAccess, type PageAccess } from '@elevate/server-kit/next';
-import { AppShell, ErrorState, LoadingState } from '@elevate/shared-ui';
+import { AppShell, ErrorState, LoadingState, type Crumb } from '@elevate/shared-ui';
 import { MODULE } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
 
@@ -17,7 +18,11 @@ type NavRow = [key: string, label: string, href: string, permission: Permission]
 const section = (group: string | undefined, rows: NavRow[]) =>
   rows.map(([key, label, href, permission]) => ({ key, label, href, permission, group }));
 
-/** Module navigation: sections in the first row, the active section's pages in the second. */
+/**
+ * Module navigation (sidebar). Grouped items are listed under their section; the
+ * section holding the current page starts expanded. Settings pages are reached
+ * from the Settings link at the bottom of the sidebar (see SETTINGS_KEYS).
+ */
 const NAV = [
   ...section(undefined, [['home', 'Dashboard', '/ops', 'ops:module:access']]),
   ...section('Admissions', [
@@ -59,6 +64,19 @@ const NAV = [
   ]),
 ];
 
+/** Nav keys whose pages are "Settings" (bottom of the sidebar, not in the module list). */
+const SETTINGS_KEYS = new Set(['settings', 'policies']);
+
+/** Unread in-app notifications for the user; null (indicator hidden) when unknown. */
+async function unreadFor(access: PageAccess): Promise<number | null> {
+  if (!can(access.user, 'platform:notifications:read')) return null;
+  try {
+    return await countUnread(getDb(), access.user.id);
+  } catch {
+    return null;
+  }
+}
+
 export function gate(permission: Permission, returnTo: string): Promise<PageAccess> {
   return requirePageAccess(permission, {
     loginPath: MODULE_PATHS.login,
@@ -67,7 +85,7 @@ export function gate(permission: Permission, returnTo: string): Promise<PageAcce
   });
 }
 
-export function Frame({
+export async function Frame({
   access,
   active,
   children,
@@ -76,19 +94,39 @@ export function Frame({
   active: string;
   children: ReactNode;
 }) {
-  const nav = NAV.filter((n) => can(access.user, n.permission)).map((n) => ({
-    href: n.href,
-    label: n.label,
-    group: n.group,
-    active: n.key === active,
-  }));
+  const user = access.user;
+  const visible = NAV.filter((n) => can(user, n.permission));
+  const nav = visible
+    .filter((n) => !SETTINGS_KEYS.has(n.key))
+    .map((n) => ({ href: n.href, label: n.label, group: n.group, active: n.key === active }));
+  const settingsPage = visible.find((n) => n.key === active && SETTINGS_KEYS.has(n.key));
+  const breadcrumbs: Crumb[] | undefined = settingsPage
+    ? [
+        { label: 'Business Operations', href: '/ops' },
+        { label: 'Settings', href: '/ops/settings' },
+        ...(settingsPage.key === 'settings'
+          ? []
+          : [{ label: settingsPage.label, href: settingsPage.href }]),
+      ]
+    : undefined;
   return (
     <AppShell
-      user={access.user}
+      user={user}
       modules={access.modules}
       current="ops"
       logoutAction={MODULE_PATHS.logoutApi}
       nav={nav}
+      breadcrumbs={breadcrumbs}
+      search={
+        can(user, 'ops:leads:read') ? { action: '/ops/leads', label: 'Search leads' } : undefined
+      }
+      myWorkHref={can(user, 'ops:tasks:read') ? '/ops/tasks?view=mine' : undefined}
+      settings={
+        can(user, 'ops:settings:read')
+          ? { href: '/ops/settings', active: Boolean(settingsPage) }
+          : undefined
+      }
+      unreadNotifications={await unreadFor(access)}
     >
       {access.status === 'forbidden' ? (
         <ErrorState

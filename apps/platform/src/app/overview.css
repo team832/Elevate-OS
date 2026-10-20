@@ -1,0 +1,257 @@
+/* Workspace overview layout (uses shared-ui tokens only; no new colours). */
+/* Mobile first: one column; side panel beside the main column from 1180px. */
+.ov-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--el-space-4);
+  align-items: start;
+}
+/* On phones the decisions and today's classes come first. */
+.ov-side {
+  order: -1;
+}
+.ov-main,
+.ov-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--el-space-4);
+  min-width: 0;
+}
+
+/* Admissions pipeline: a list of stages on phones; from 720px chevron-cut stages
+   read left to right like the logo's mark. */
+.ov-pipeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+.ov-stage {
+  --cut: 0.875rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--el-space-3);
+  min-width: 0;
+  padding: var(--el-space-2) var(--el-space-3);
+  background: var(--el-surface-muted);
+  border: 1px solid var(--el-border);
+  border-radius: var(--el-radius-sm);
+}
+.ov-stage:last-child {
+  background: var(--el-accent-soft);
+}
+.ov-stage-count {
+  min-width: 2.5rem;
+  font-size: var(--el-text-lg);
+  font-weight: 650;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.ov-stage-label {
+  font-size: var(--el-text-sm);
+  color: var(--el-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ov-stage-bar {
+  display: block;
+  flex-basis: 100%;
+  height: 3px;
+  margin-top: var(--el-space-1);
+  background: var(--el-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.ov-stage-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--el-accent);
+}
+
+/* Follow-ups filter */
+.ov-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--el-space-2);
+  flex-wrap: wrap;
+  width: 100%;
+  font-size: var(--el-text-sm);
+}
+.ov-filter-input {
+  flex: 1 1 12rem;
+  width: auto;
+  max-width: 100%;
+  padding-top: 0.3125rem;
+  padding-bottom: 0.3125rem;
+}
+.ov-due {
+  color: var(--el-text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Attention panel */
+.ov-attention {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ov-attention li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--el-space-3);
+  padding: var(--el-space-3) 0;
+  border-bottom: 1px solid var(--el-border);
+}
+.ov-attention li:first-child {
+  padding-top: 0;
+}
+.ov-attention li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.ov-attention-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ov-attention-label {
+  display: inline-block;
+  padding: 0.125rem 0;
+  font-weight: 600;
+  font-size: var(--el-text-md);
+  color: var(--el-text);
+}
+a.ov-attention-label {
+  color: var(--el-text);
+}
+a.ov-attention-label:hover {
+  color: var(--el-accent-text);
+}
+.ov-attention-detail {
+  font-size: var(--el-text-xs);
+  color: var(--el-text-muted);
+}
+.ov-attention-count {
+  flex: none;
+  min-width: 2rem;
+  font-size: var(--el-text-lg);
+  font-weight: 650;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ov-attention-count[data-pending='true'] {
+  color: var(--el-accent-text);
+}
+.ov-attention li[data-status='unavailable'] .ov-attention-count {
+  font-size: var(--el-text-xs);
+  font-weight: 600;
+  color: var(--el-text-muted);
+  white-space: nowrap;
+  padding-top: 0.2rem;
+}
+
+/* Sample and unavailable notes */
+.ov-sample-note {
+  display: flex;
+  align-items: center;
+  gap: var(--el-space-2);
+  flex-wrap: wrap;
+  margin: 0 0 var(--el-space-3);
+  font-size: var(--el-text-xs);
+  color: var(--el-text-muted);
+}
+.ov-unavailable {
+  margin: 0;
+  padding: var(--el-space-3);
+  border: 1px dashed var(--el-border-strong);
+  border-radius: var(--el-radius-sm);
+  background: var(--el-surface-muted);
+  font-size: var(--el-text-sm);
+  color: var(--el-text-muted);
+}
+.ov-unavailable strong {
+  color: var(--el-text);
+}
+.el-enquiry-dupes,
+.el-enquiry-error {
+  margin-bottom: var(--el-space-4);
+}
+.el-enquiry-dupes ul {
+  padding-left: 1.25rem;
+}
+
+@media (min-width: 720px) {
+  .ov-pipeline {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 3px;
+  }
+  .ov-stage {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 2px;
+    padding: var(--el-space-3) calc(var(--cut) + var(--el-space-2)) var(--el-space-3)
+      calc(var(--cut) + var(--el-space-3));
+    border-width: 1px 0;
+    border-radius: 0;
+    clip-path: polygon(
+      0 0,
+      calc(100% - var(--cut)) 0,
+      100% 50%,
+      calc(100% - var(--cut)) 100%,
+      0 100%,
+      var(--cut) 50%
+    );
+  }
+  .ov-stage:first-child {
+    padding-left: var(--el-space-3);
+    border-left-width: 1px;
+    border-radius: var(--el-radius-sm) 0 0 var(--el-radius-sm);
+    clip-path: polygon(
+      0 0,
+      calc(100% - var(--cut)) 0,
+      100% 50%,
+      calc(100% - var(--cut)) 100%,
+      0 100%
+    );
+  }
+  .ov-stage-count {
+    min-width: 0;
+    font-size: var(--el-text-xl);
+  }
+  .ov-stage-label {
+    flex: none;
+  }
+  .ov-stage-bar {
+    flex: none;
+    margin-top: var(--el-space-2);
+  }
+  .ov-filter {
+    width: auto;
+    flex-wrap: nowrap;
+  }
+  .ov-filter-input {
+    flex: 0 1 19rem;
+  }
+}
+@media (min-width: 1180px) {
+  .ov-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+  }
+  .ov-side {
+    order: 0;
+  }
+}
+.el-enquiry-required {
+  margin-bottom: var(--el-space-3);
+}
+.el-enquiry-contact-error {
+  margin: calc(-1 * var(--el-space-2)) 0 var(--el-space-4);
+  font-size: var(--el-text-sm);
+}

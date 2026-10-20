@@ -5,7 +5,9 @@
  */
 import { Suspense, type ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
-import type { Permission } from '@elevate/authorization';
+import { can, type Permission } from '@elevate/authorization';
+import { getDb } from '@elevate/database';
+import { countUnread } from '@elevate/notifications';
 import { requirePageAccess } from '@elevate/server-kit/next';
 import { isAppError } from '@elevate/shared-contracts';
 import {
@@ -27,8 +29,20 @@ const NAV: { key: string; label: string; path: string }[] = [
   { key: 'metrics-import', label: 'Metrics import', path: 'metrics/import' },
   { key: 'weekly', label: 'Weekly report', path: 'metrics/weekly' },
   { key: 'campaigns', label: 'Campaigns', path: 'campaigns' },
-  { key: 'settings', label: 'Rules & settings', path: 'settings' },
 ];
+
+/** "Rules & settings" is reached from the Settings link at the bottom of the sidebar. */
+const SETTINGS = { key: 'settings', label: 'Rules & settings', path: 'settings' };
+
+/** Unread in-app notifications for the top bar; null (hidden) when unknown. */
+async function unreadFor(user: AuthenticatedUser): Promise<number | null> {
+  if (!can(user, 'platform:notifications:read')) return null;
+  try {
+    return await countUnread(getDb(), user.id);
+  } catch {
+    return null;
+  }
+}
 
 export type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -65,13 +79,35 @@ export async function MarketingPage(props: MarketingPageProps) {
   }));
   const notice = props.searchParams ? param(props.searchParams, 'notice') : undefined;
   const error = props.searchParams ? param(props.searchParams, 'error') : undefined;
+  const user = access.user;
+  const onSettings = props.active === SETTINGS.key;
   return (
     <AppShell
-      user={access.user}
+      user={user}
       modules={access.modules}
       current="marketing"
       logoutAction={MODULE_PATHS.logoutApi}
       nav={nav}
+      breadcrumbs={
+        onSettings
+          ? [
+              { label: 'Marketing OS', href: MODULE.basePath },
+              { label: SETTINGS.label, href: modulePath(SETTINGS.path) },
+            ]
+          : undefined
+      }
+      search={
+        can(user, 'marketing:ideas:read')
+          ? { action: modulePath('ideas'), label: 'Search ideas' }
+          : undefined
+      }
+      myWorkHref={can(user, 'ops:tasks:read') ? '/ops/tasks?view=mine' : undefined}
+      settings={
+        can(user, 'marketing:module:access')
+          ? { href: modulePath(SETTINGS.path), active: onSettings }
+          : undefined
+      }
+      unreadNotifications={await unreadFor(user)}
     >
       {access.status === 'forbidden' ? (
         <ErrorState

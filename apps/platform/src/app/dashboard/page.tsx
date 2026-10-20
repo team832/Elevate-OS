@@ -10,6 +10,7 @@ import {
   StatusBadge,
 } from '@elevate/shared-ui';
 import { PLATFORM_PATHS } from '../../lib/shell';
+import { platformShell } from '../../server/shell';
 
 export const metadata: Metadata = { title: 'Leadership dashboard' };
 export const dynamic = 'force-dynamic';
@@ -36,12 +37,14 @@ export default async function DashboardPage() {
     loginPath: PLATFORM_PATHS.login,
     returnTo: PLATFORM_PATHS.dashboard,
   });
+  const extras = await platformShell(access.user, 'dashboard');
   return (
     <AppShell
       user={access.user}
       modules={access.modules}
       current="platform"
       logoutAction={PLATFORM_PATHS.logoutApi}
+      {...extras}
     >
       {access.status === 'forbidden' ? (
         <ErrorState

@@ -33,6 +33,8 @@ export interface Column<T> {
 
 export interface DataTableProps<T> {
   columns: readonly Column<T>[];
+  /** Tighter rows for dense lists; on phones each row becomes a labelled block. */
+  compact?: boolean;
   rows: readonly T[];
   rowKey: (row: T) => string;
   /** Accessible table caption (visible). */
@@ -41,13 +43,20 @@ export interface DataTableProps<T> {
   empty?: ReactNode;
 }
 
-export function DataTable<T>({ columns, rows, rowKey, caption, empty }: DataTableProps<T>) {
+export function DataTable<T>({
+  columns,
+  rows,
+  rowKey,
+  caption,
+  empty,
+  compact,
+}: DataTableProps<T>) {
   if (rows.length === 0) {
     return <>{empty ?? <EmptyState title="Nothing here yet" />}</>;
   }
   return (
     <div className="el-table-wrap">
-      <table className="el-table">
+      <table className={compact ? 'el-table el-table-compact' : 'el-table'}>
         {caption ? <caption>{caption}</caption> : null}
         <thead>
           <tr>
@@ -62,7 +71,11 @@ export function DataTable<T>({ columns, rows, rowKey, caption, empty }: DataTabl
           {rows.map((row) => (
             <tr key={rowKey(row)}>
               {columns.map((c) => (
-                <td key={c.key} className={c.numeric ? 'el-num' : undefined}>
+                <td
+                  key={c.key}
+                  className={c.numeric ? 'el-num' : undefined}
+                  data-label={typeof c.header === 'string' ? c.header : undefined}
+                >
                   {c.render ? c.render(row) : String((row as Record<string, unknown>)[c.key] ?? '')}
                 </td>
               ))}
@@ -137,5 +150,74 @@ export function StatTile({
       <p className="el-stat-value">{formatMetricValue(metric)}</p>
       <p className="el-stat-note">{description}</p>
     </div>
+  );
+}
+
+/** Where a widget's data comes from. Sample data is fictional and always labelled. */
+export type DataSource = 'live' | 'sample';
+
+/** Visible label for sample (fictional) data; renders nothing for live data. */
+export function SourceBadge({ source, note }: { source: DataSource; note?: string }) {
+  if (source === 'live') return null;
+  return (
+    <span className="el-badge el-badge-sample" data-source="sample" title={note}>
+      Sample data
+    </span>
+  );
+}
+
+export interface MetricStripItem {
+  label: string;
+  metric: Metric;
+  /** Short line under the value (what is counted). */
+  note?: ReactNode;
+  /** Where the number can be checked. */
+  href?: string;
+  source?: DataSource;
+}
+
+/**
+ * A row of headline numbers separated by fine dividers. MISSING IS NOT ZERO:
+ * a missing metric shows "Not available" and its reason, never a number.
+ */
+export function MetricStrip({
+  items,
+  label,
+}: {
+  items: readonly MetricStripItem[];
+  label: string;
+}) {
+  return (
+    <ul className="el-metric-strip" aria-label={label}>
+      {items.map((item) => {
+        const m = item.metric;
+        const value =
+          m.status === 'missing'
+            ? 'Not available'
+            : m.status === 'estimated'
+              ? `≈ ${formatMetricValue(m)}`
+              : formatMetricValue(m);
+        return (
+          <li key={item.label} className="el-metric" data-status={m.status}>
+            <p className="el-metric-label">
+              {item.href && m.status !== 'missing' ? (
+                <a href={item.href}>{item.label}</a>
+              ) : (
+                item.label
+              )}
+              {item.source ? <SourceBadge source={item.source} /> : null}
+            </p>
+            <p className="el-metric-value">{value}</p>
+            {m.status === 'missing' ? (
+              <p className="el-metric-note">{m.reason}</p>
+            ) : m.status === 'estimated' ? (
+              <p className="el-metric-note">Estimated: {m.basis}</p>
+            ) : item.note ? (
+              <p className="el-metric-note">{item.note}</p>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

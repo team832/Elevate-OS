@@ -37,7 +37,7 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except API routes, Next internals, static files and the module zones.
-    '/((?!api/|_next/|favicon\\.ico|robots\\.txt|marketing(?:/|$)|academic(?:/|$)|ops(?:/|$)).*)',
+    // Everything except API routes, Next internals, static files (public/brand) and the module zones.
+    '/((?!api/|_next/|brand/|favicon\\.ico|robots\\.txt|marketing(?:/|$)|academic(?:/|$)|ops(?:/|$)).*)',
   ],
 };

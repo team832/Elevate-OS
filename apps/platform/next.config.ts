@@ -44,6 +44,12 @@ const nextConfig: NextConfig = {
     '@elevate/shared-contracts',
     '@elevate/shared-types',
     '@elevate/shared-ui',
+    '@elevate/notifications',
+    // The overview reads the modules' server services with the signed-in user
+    // (apps/platform/src/server/overview-adapter.ts); only their ./server entries are imported.
+    '@elevate/business-ops-os',
+    '@elevate/academic-os',
+    '@elevate/marketing-os',
   ],
   serverExternalPackages: ['@electric-sql/pglite', 'pg'],
   /**

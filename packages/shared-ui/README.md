@@ -1,27 +1,34 @@
 # @elevate/shared-ui
 
-React 19 components that work as **server components** (no hooks, no client JS) plus one plain-CSS stylesheet of design tokens (no Tailwind). Light and dark themes follow the OS.
+React 19 components for all four Elevate OS apps plus one plain-CSS stylesheet of design tokens (no Tailwind, no component library). Most components are server components; the few interactive ones (`ShellFrame`, `Tabs`, `Dialog`) are small `'use client'` files.
 
 ```tsx
 // app/layout.tsx (once per app)
 import '@elevate/shared-ui/styles.css';
 ```
 
+## Look (tokens in `src/styles.css`)
+Near-black sidebar (`--el-ink #16140F`), warm off-white canvas (`--el-bg #F5F4F1`), white surfaces, thin warm-grey rules (`--el-border #E4E1DB`), radii 8 / 6 / 4 px by role (panels / controls / badges), no shadows except overlays. Brand orange `#ED862A` (`--el-accent`) only for primary actions, the selected state and attention counts. Contrast decisions (measured, WCAG AA) are written at the top of `styles.css`; the important one: **white on #ED862A is 2.61:1, so primary buttons use near-black text on orange (6.58:1)** and orange text on light surfaces uses `--el-accent-text #A84F0D` (5.54:1). Type is the platform's native UI face (Segoe UI Variable on Windows) with tabular numbers. Styles are mobile first (`min-width` queries at 720 px and 1024 px). Light theme only.
+
+## Components
 | Component | Notes |
 |---|---|
-| `AppShell` | Top bar with the lowercase **elevate** wordmark (text), module switcher showing only `modules` you pass (use `modulesFor(user)`), user menu with a sign-out form posting to `logoutAction`; optional `nav` sub-navigation; `<main id="main">` with skip link. Module links are plain `<a>` (zones are separate apps). |
-| `Wordmark` | The lowercase "elevate" wordmark. |
-| `PageHeader` | `title`, `description`, `actions`. |
-| `Card` | `title`, `description`, `footer`, children. |
-| `DataTable` | `columns` (`key`, `header`, `render?`, `numeric?`), `rows`, `rowKey`, `caption`, `empty`. Renders `empty` (default EmptyState) when there are no rows. |
-| `StatusBadge`, `FeatureStatusBadge` | Tones: neutral, info, success, warning, danger. FeatureStatusBadge maps D-013 statuses. |
-| `Button`, `ButtonLink` | Variants: primary, secondary, danger, ghost; `block`. |
-| `Field`, `TextInput`, `Select`, `TextArea`, `Checkbox`, `fieldDescribedBy()` | Accessible form primitives (label, hint, error, `aria-invalid`). |
-| `Alert` | Tones info/success/warning/danger. |
-| `EmptyState`, `ErrorState` (shows request reference), `LoadingState` | Every screen needs loading/empty/error/success states (BUILD_PLAN definition of done). Use `LoadingState` in `loading.tsx`. |
-| `StatTile` | Renders a `Metric`. **Missing ≠ zero**: `missing` shows "Missing" + reason in a dashed tile, `estimated` shows "≈ value" + badge + basis, `ok` shows the number (0 is "0"). |
-| `LoginForm` | Plain HTML form posting to the login route (`action`, `next`, `error` code). |
+| `AppShell` | Sidebar (logo + "Elevate Education", Overview, optional platform `nav`, My work, the modules the user can open — the current module expanded with its `nav` grouped by `NavItem.group`, other modules as entry links — Settings, profile with sign-out) and top bar (breadcrumbs, search, unread-notification count, account menu). Props are backward compatible; new optional props: `breadcrumbs`, `search` ({action,label}), `myWorkHref`, `settings` ({href,active}), `unreadNotifications` (null hides it). Omitted props hide their control — no dead buttons. |
+| `ShellFrame` (client) | Small-screen sidebar behind a menu button: `aria-expanded`/`aria-controls`, focus moves into the sidebar, the page behind is `inert`, Escape/backdrop/close button close it and focus returns to the menu button. |
+| `BrandLogo`, `brandLogoSrc(basePath)`, `Wordmark` | Logo image from each app's `public/brand/elevate-logo.png` with explicit width/height (`BRAND_LOGO_SIZE`). |
+| `Breadcrumbs`, `defaultBreadcrumbs`, `navSections`, `initialsOf` | Shell helpers (exported for tests). |
+| `Icon` | Inline-SVG line icons: 24-unit grid, 1.5 px stroke, `currentColor`; decorative unless `label` is given. |
+| `MetricStrip` | Headline figures in one band with fine dividers. **Missing is "Not available" + reason, never 0.** |
+| `Tabs` (client) | Server-driven tabs (links that set a search parameter) with the WAI-ARIA keyboard model (`nextTabIndex`). |
+| `Dialog` (client), `useDialogClose` | Native `<dialog>` + `showModal()`: labelled by its title, Escape closes, focus returns to the trigger. |
+| `SourceBadge` | "Sample data" label for fictional data; renders nothing for live data. |
+| `PageHeader`, `Card` (+ `actions`, `meta`, `id`) | Page and panel headings. |
+| `DataTable` (+ `compact`) | `columns`, `rows`, `rowKey`, `caption`, `empty`. `compact` rows become labelled blocks on phones. |
+| `StatusBadge`, `FeatureStatusBadge`, `Button`, `ButtonLink`, `Field`, `TextInput`, `Select`, `TextArea`, `Checkbox`, `Alert`, `EmptyState`, `ErrorState`, `LoadingState`, `StatTile`, `LoginForm` | As before. `LoginForm` now shows the zone's logo (basePath taken from its `action`). |
 
-Client interactivity: write your own `'use client'` components in your module's `src/ui/` and keep using these classes (`el-*`).
+## Swapping the logo
+Put the new PNG in the repo root and run
+`node packages/shared-ui/scripts/brand-logo.mjs "<new file>.png"`.
+It trims the black margin losslessly (pixel bytes copied, verified), writes `apps/*/public/brand/elevate-logo.png`, `apps/platform/public/favicon.ico` (the first letter) and `src/brand-asset.ts` (the size). `--no-trim` copies the file unchanged. No code changes are needed.
 
-Tests: `tests/shared-ui.test.tsx` (server rendering with `react-dom/server`).
+Tests: `tests/shared-ui.test.tsx` (server rendering with `react-dom/server`; the keyboard model is tested through `nextTabIndex`).

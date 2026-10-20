@@ -23,7 +23,14 @@ describe('platform proxy', () => {
   it('does not match API routes, Next internals or module zones', () => {
     const re = new RegExp(`^${config.matcher[0]}$`);
     for (const path of ['/', '/dashboard', '/login']) expect(re.test(path)).toBe(true);
-    for (const path of ['/api/health', '/_next/static/x.js', '/marketing', '/academic/x', '/ops'])
+    for (const path of [
+      '/api/health',
+      '/_next/static/x.js',
+      '/brand/elevate-logo.png',
+      '/marketing',
+      '/academic/x',
+      '/ops',
+    ])
       expect(re.test(path)).toBe(false);
     expect(re.test('/operations')).toBe(true);
   });
