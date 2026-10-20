@@ -26,6 +26,9 @@ jobs:
           for k in SESSION_SECRET INTERNAL_SERVICE_TOKEN SEED_USER_PASSWORD; do
             sed -i "s|^$k=.*|$k=ci-only-$(openssl rand -hex 24)|" .env
           done
+      # next-env.d.ts and route types are generated files (git-ignored); create them like local dev does.
+      - name: Generate Next.js types
+        run: for app in apps/*/; do (cd "$app" && npx next typegen); done
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
