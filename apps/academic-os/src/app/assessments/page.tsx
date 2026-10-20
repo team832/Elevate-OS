@@ -5,6 +5,7 @@ import { listAssessments, listBatches } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
 import { StateBadge } from '../../ui/badges';
+import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -12,14 +13,22 @@ export const dynamic = 'force-dynamic';
 const KINDS = ['chapter_test', 'sectional', 'full_mock', 'practice'].map((v) => ({ value: v, label: v.replace(/_/g, ' ') }));
 
 export default async function AssessmentsPage() {
+  // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
   const access = await gate('academic:assessments:read', MODULE_PATHS.assessments);
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="assessments">{null}</AcademicShell>;
+  return (
+    <AcademicShell access={access} active="assessments" loading="Loading assessments…">
+      {access.status === 'allowed' ? <Body access={access} /> : null}
+    </AcademicShell>
+  );
+}
+
+async function Body({ access }: { access: PageAccess }) {
   const db = getDb();
   const actor = actorFor(access.user);
   const canWrite = can(access.user, 'academic:assessments:write');
   const data = await load(async () => ({ assessments: await listAssessments(db, actor), batches: canWrite ? await listBatches(db, actor) : [] }));
   return (
-    <AcademicShell access={access} active="assessments">
+    <>
       <PageHeader title="Assessments" description="Chapter tests, sectionals, full mocks and practice papers. Scoring rules are configured per assessment and section — no exam’s rule is built in; unknown values stay unknown until entered." />
       {!data.ok ? (
         <LoadError error={data.error} />
@@ -68,6 +77,6 @@ export default async function AssessmentsPage() {
           ) : null}
         </div>
       )}
-    </AcademicShell>
+    </>
   );
 }

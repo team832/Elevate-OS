@@ -6,7 +6,8 @@
   "description": "zod-validated environment loader with per-app subsets; fails loudly listing every missing or invalid variable.",
   "exports": {
     ".": "./src/index.ts",
-    "./node": "./src/load-root-env.ts"
+    "./node": "./src/load-root-env.ts",
+    "./security-headers": "./src/security-headers.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

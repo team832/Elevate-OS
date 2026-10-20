@@ -3,13 +3,14 @@
  * module navigation (items shown only for permissions the user holds — cosmetic;
  * every page and route checks again on the server).
  */
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can, type Permission } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { countUnread } from '@elevate/notifications';
 import { requirePageAccess, type PageAccess } from '@elevate/server-kit/next';
-import { AppShell, ErrorState } from '@elevate/shared-ui';
+import { AppError } from '@elevate/shared-contracts';
+import { AppShell, ErrorState, LoadingState } from '@elevate/shared-ui';
 import { MODULE } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
 import type { Actor } from '../server/context';
@@ -56,7 +57,8 @@ async function unreadFor(access: PageAccess): Promise<number | null> {
   }
 }
 
-export async function AcademicShell({ access, active, children }: { access: PageAccess; active: Section; children: ReactNode }) {
+/** Children render inside <Suspense> (fallback: loading). Call gate() before rendering this so the 307 is real (D-022). */
+export async function AcademicShell({ access, active, loading, children }: { access: PageAccess; active: Section; loading?: string; children: ReactNode }) {
   const user = access.user;
   const nav = NAV.filter((n) => can(user, n.permission)).map((n) => ({ href: n.href, label: n.label, active: n.key === active }));
   return (
@@ -73,17 +75,19 @@ export async function AcademicShell({ access, active, children }: { access: Page
       {access.status === 'forbidden' ? (
         <ErrorState title="No access to this page" description="Your roles do not include the permission this page needs. Ask an academic coordinator or a platform administrator." />
       ) : (
-        children
+        <Suspense fallback={<LoadingState label={loading} />}>{children}</Suspense>
       )}
     </AppShell>
   );
 }
 
-/** Render a load failure honestly (never as empty data). */
+/** Render a load failure honestly (never as empty data). Only AppError 4xx messages are shown; anything else stays generic (6.6). */
 export function LoadError({ error }: { error: unknown }) {
-  const message = error instanceof Error ? error.message : 'The data could not be loaded.';
-  const notFound = typeof error === 'object' && error !== null && 'code' in error && (error as { code: string }).code === 'NOT_FOUND';
-  return <ErrorState title={notFound ? 'Not found' : 'Could not load this page'} description={message} />;
+  if (error instanceof AppError && error.status < 500) {
+    return <ErrorState title={error.code === 'NOT_FOUND' ? 'Not found' : 'Could not load this page'} description={error.message} />;
+  }
+  console.error('academic page load failed', error);
+  return <ErrorState title="Could not load this page" description="The data could not be loaded. Try again; if it keeps happening, tell a platform administrator." />;
 }
 
 /** Run a loader; return either its data or the error, so pages can render an ErrorState. */

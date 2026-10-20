@@ -5,18 +5,27 @@ import { listBatches, listCourses } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
 import { PlanBadge, StateBadge } from '../../ui/badges';
+import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 
 export default async function BatchesPage() {
+  // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
   const access = await gate('academic:batches:read', MODULE_PATHS.batches);
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="batches">{null}</AcademicShell>;
+  return (
+    <AcademicShell access={access} active="batches" loading="Loading batches…">
+      {access.status === 'allowed' ? <Body access={access} /> : null}
+    </AcademicShell>
+  );
+}
+
+async function Body({ access }: { access: PageAccess }) {
   const db = getDb();
   const canWrite = can(access.user, 'academic:batches:write');
   const data = await load(async () => ({ batches: await listBatches(db, actorFor(access.user)), courses: canWrite ? await listCourses(db) : [] }));
   return (
-    <AcademicShell access={access} active="batches">
+    <>
       <PageHeader title="Batches" description="Cohorts, each following one course version. Teachers see only the batches they are assigned to." />
       {!data.ok ? (
         <LoadError error={data.error} />
@@ -67,6 +76,6 @@ export default async function BatchesPage() {
           ) : null}
         </div>
       )}
-    </AcademicShell>
+    </>
   );
 }

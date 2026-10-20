@@ -7,6 +7,7 @@ import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
 import { StateBadge } from '../../ui/badges';
 import { ConflictList } from '../../ui/conflicts';
+import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -16,9 +17,17 @@ const str = (v: string | string[] | undefined) => (typeof v === 'string' && v ? 
 const UUID = /^[0-9a-f-]{36}$/i;
 
 export default async function TimetablePage({ searchParams }: { searchParams: Search }) {
-  const sp = await searchParams;
+  // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
   const access = await gate('academic:timetable:read', MODULE_PATHS.timetable);
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="timetable">{null}</AcademicShell>;
+  return (
+    <AcademicShell access={access} active="timetable" loading="Loading timetable…">
+      {access.status === 'allowed' ? <Body access={access} searchParams={searchParams} /> : null}
+    </AcademicShell>
+  );
+}
+
+async function Body({ access, searchParams }: { access: PageAccess; searchParams: Search }) {
+  const sp = await searchParams;
   const db = getDb();
   const actor = actorFor(access.user);
   const today = todayIst();
@@ -35,7 +44,7 @@ export default async function TimetablePage({ searchParams }: { searchParams: Se
     rooms: canWrite ? await listRooms(db) : [],
   }));
   return (
-    <AcademicShell access={access} active="timetable">
+    <>
       <PageHeader title="Timetable" description="Scheduled class sessions with conflict detection. Hard constraints block scheduling; preferences are warnings. A conflict-free timetable is reported as feasible — never as optimal." />
       <form method="get" className="el-grid" style={{ alignItems: 'end' }}>
         <label>
@@ -127,6 +136,6 @@ export default async function TimetablePage({ searchParams }: { searchParams: Se
           ) : null}
         </div>
       )}
-    </AcademicShell>
+    </>
   );
 }

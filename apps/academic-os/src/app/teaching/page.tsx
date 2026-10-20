@@ -6,6 +6,7 @@ import { getBatch, getCourse, listClassRecords, listSessions, todayIst } from '.
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiButton, ApiForm } from '../../ui/api-form';
 import { StateBadge, fmtDateTime } from '../../ui/badges';
+import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -14,8 +15,16 @@ const COMPLETION = [{ value: 'completed', label: 'completed' }, { value: 'partia
 const ACTIVITY = ['main', 'practice', 'catch_up', 'test', 'discussion'].map((v) => ({ value: v, label: v }));
 
 export default async function TeachingPage() {
+  // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
   const access = await gate('academic:classes:read', MODULE_PATHS.teaching);
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="teaching">{null}</AcademicShell>;
+  return (
+    <AcademicShell access={access} active="teaching" loading="Loading teaching log…">
+      {access.status === 'allowed' ? <Body access={access} /> : null}
+    </AcademicShell>
+  );
+}
+
+async function Body({ access }: { access: PageAccess }) {
   const db = getDb();
   const actor = actorFor(access.user);
   const today = todayIst();
@@ -35,7 +44,7 @@ export default async function TeachingPage() {
     return { loggable, chaptersByBatch, records: await listClassRecords(db, actor, {}) };
   });
   return (
-    <AcademicShell access={access} active="teaching">
+    <>
       <PageHeader title="Teaching log" description="Log what was actually taught in each held session. Only coordinator-verified records count as delivered hours; corrections keep the original record." />
       {!data.ok ? (
         <LoadError error={data.error} />
@@ -124,6 +133,6 @@ export default async function TeachingPage() {
           </Card>
         </div>
       )}
-    </AcademicShell>
+    </>
   );
 }

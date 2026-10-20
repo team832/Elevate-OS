@@ -5,6 +5,7 @@ import { listCourses, listPlans, listProgrammes } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
 import { PlanBadge, StateBadge } from '../../ui/badges';
+import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -12,13 +13,21 @@ export const dynamic = 'force-dynamic';
 const LABELS = ['locked', 'approved', 'provisional', 'proposed', 'draft', 'unverified', 'unknown'].map((v) => ({ value: v, label: v }));
 
 export default async function CurriculumPage() {
+  // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
   const access = await gate('academic:courses:read', MODULE_PATHS.curriculum);
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="curriculum">{null}</AcademicShell>;
+  return (
+    <AcademicShell access={access} active="curriculum" loading="Loading curriculum…">
+      {access.status === 'allowed' ? <Body access={access} /> : null}
+    </AcademicShell>
+  );
+}
+
+async function Body({ access }: { access: PageAccess }) {
   const db = getDb();
   const data = await load(async () => ({ courses: await listCourses(db), plans: await listPlans(db), programmes: await listProgrammes(db) }));
   const canWrite = can(access.user, 'academic:courses:write');
   return (
-    <AcademicShell access={access} active="curriculum">
+    <>
       <PageHeader
         title="Courses and curriculum plans"
         description="Courses are versions under a core programme. Plan statuses: locked and provisional plans are immutable; changes are new proposed versions that supersede them after another coordinator approves. Planned counts are plans, never delivery."
@@ -107,6 +116,6 @@ export default async function CurriculumPage() {
           ) : null}
         </div>
       )}
-    </AcademicShell>
+    </>
   );
 }

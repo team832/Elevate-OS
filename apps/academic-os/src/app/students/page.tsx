@@ -5,22 +5,31 @@ import { listBatches, listStudents } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
 import { StateBadge } from '../../ui/badges';
+import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 
 export default async function StudentsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
+  const access = await gate('academic:students:read', MODULE_PATHS.students);
+  return (
+    <AcademicShell access={access} active="students" loading="Loading students…">
+      {access.status === 'allowed' ? <Body access={access} searchParams={searchParams} /> : null}
+    </AcademicShell>
+  );
+}
+
+async function Body({ access, searchParams }: { access: PageAccess; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
   const q = typeof sp.q === 'string' ? sp.q.slice(0, 100) : undefined;
-  const access = await gate('academic:students:read', MODULE_PATHS.students);
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="students">{null}</AcademicShell>;
   const db = getDb();
   const actor = actorFor(access.user);
   const canWrite = can(access.user, 'academic:students:write');
   const canEnrol = can(access.user, 'academic:enrolments:decide');
   const data = await load(async () => ({ students: await listStudents(db, actor, { q }), batches: canEnrol ? await listBatches(db, actor) : [] }));
   return (
-    <AcademicShell access={access} active="students">
+    <>
       <PageHeader title="Students" description="Student records owned by Academic OS. Teachers see only students enrolled in their batches. Development data is fictional." />
       <form method="get" className="el-grid" style={{ alignItems: 'end' }}>
         <label>
@@ -90,6 +99,6 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
           ) : null}
         </div>
       )}
-    </AcademicShell>
+    </>
   );
 }

@@ -6,14 +6,23 @@ import { MODULE_PATHS } from '../../server/paths';
 import { ApiButton, ApiForm } from '../../ui/api-form';
 import { StateBadge } from '../../ui/badges';
 import { InterventionsTable } from '../../ui/interventions';
+import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ProgressPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const sp = await searchParams;
+  // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
   const access = await gate('academic:progress:read', MODULE_PATHS.progress);
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="progress">{null}</AcademicShell>;
+  return (
+    <AcademicShell access={access} active="progress" loading="Loading progress…">
+      {access.status === 'allowed' ? <Body access={access} searchParams={searchParams} /> : null}
+    </AcademicShell>
+  );
+}
+
+async function Body({ access, searchParams }: { access: PageAccess; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams;
   const db = getDb();
   const actor = actorFor(access.user);
   const canWrite = can(access.user, 'academic:progress:write');
@@ -23,7 +32,7 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
     return { batches, selected, catchup: selected ? await listCatchup(db, actor, selected.id) : null, interventions: await listInterventions(db, actor) };
   });
   return (
-    <AcademicShell access={access} active="progress">
+    <>
       <PageHeader title="Progress, catch-up and interventions" description="Catch-up tasks come from missed classes (absent, excused, or held before a late joiner’s start). The order is deterministic and every score is explained." />
       {!data.ok ? (
         <LoadError error={data.error} />
@@ -92,6 +101,6 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
           </Card>
         </div>
       )}
-    </AcademicShell>
+    </>
   );
 }

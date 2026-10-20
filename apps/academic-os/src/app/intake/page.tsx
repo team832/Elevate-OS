@@ -5,17 +5,26 @@ import { getIntakeQueue } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiButton } from '../../ui/api-form';
 import { StateBadge, fmtDateTime } from '../../ui/badges';
+import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 
 export default async function IntakePage() {
+  // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
   const access = await gate('academic:enrolments:read', MODULE_PATHS.intake);
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="intake">{null}</AcademicShell>;
+  return (
+    <AcademicShell access={access} active="intake" loading="Loading intake…">
+      {access.status === 'allowed' ? <Body access={access} /> : null}
+    </AcademicShell>
+  );
+}
+
+async function Body({ access }: { access: PageAccess }) {
   const data = await load(() => getIntakeQueue(getDb()));
   const canRun = can(access.user, 'academic:enrolments:decide');
   return (
-    <AcademicShell access={access} active="intake">
+    <>
       <PageHeader title="Enrolment intake" description="Requests from Business Ops (ops.admission.enrolment_requested v1). Each is confirmed (academic.enrolment.confirmed v1) or rejected with a reason (academic.enrolment.rejected v1) in the same transaction." />
       <div className="el-stack">
         <Alert tone="warning" title="No scheduler yet">
@@ -64,6 +73,6 @@ export default async function IntakePage() {
           </>
         )}
       </div>
-    </AcademicShell>
+    </>
   );
 }

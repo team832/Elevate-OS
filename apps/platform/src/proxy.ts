@@ -1,9 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { withContentSecurityPolicy } from '@elevate/configuration/security-headers';
 
 /**
  * Platform proxy (Next.js 16's renamed middleware).
  *
  * - Gives every request an `x-request-id`.
+ * - Sets the Content-Security-Policy with a fresh nonce (static security headers are in next.config.ts).
  * - Sends visitors WITHOUT a session cookie to /login for platform pages.
  *   This is only a fast UX redirect: the cookie is not validated here.
  *   Every page and route still checks the session and permissions on the
@@ -28,10 +30,11 @@ export function proxy(request: NextRequest) {
     return redirect;
   }
 
-  const headers = new Headers(request.headers);
+  const { headers, csp } = withContentSecurityPolicy(request.headers);
   headers.set('x-request-id', requestId);
   const response = NextResponse.next({ request: { headers } });
   response.headers.set('x-request-id', requestId);
+  response.headers.set('Content-Security-Policy', csp);
   return response;
 }
 

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 import type { NextConfig } from 'next';
+import { securityHeaders } from '@elevate/configuration/security-headers';
 
 /** Walk up from the app directory to the workspace root (the package.json with "workspaces"). */
 function findRepoRoot(start: string): string {
@@ -33,6 +34,12 @@ const nextConfig: NextConfig = {
   basePath: '/marketing',
   reactStrictMode: true,
   poweredByHeader: false,
+  // Static security headers on every response; the per-request CSP is set in src/proxy.ts.
+  async headers() {
+    return [
+      { source: '/:path*', headers: securityHeaders() },
+    ];
+  },
   turbopack: { root: repoRoot },
   outputFileTracingRoot: repoRoot,
   transpilePackages: [
