@@ -57,10 +57,15 @@ describe('Business Ops seeds', () => {
     expect(await ctx.db.select().from(opsFeeRecords)).toHaveLength(3);
     expect(await ctx.db.select().from(opsEmployeeRecords)).toHaveLength(staff.length);
     for (const [table, status] of [
-      [opsShiftTemplates, 'proposed'],
       [opsRequisitions, 'draft'],
       [opsCandidates, 'active'],
     ] as const)
       expect((await ctx.db.select().from(table)).map((r) => r.status)).toEqual([status]);
+    // 1 proposed office-hours template + 2 "Sample — replace" templates (ops.sample-placeholders).
+    expect((await ctx.db.select().from(opsShiftTemplates)).map((r) => r.status)).toEqual([
+      'proposed',
+      'proposed',
+      'proposed',
+    ]);
   });
 });

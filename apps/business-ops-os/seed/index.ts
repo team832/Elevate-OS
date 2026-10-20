@@ -10,6 +10,7 @@ import { hrRecordsSeeds } from './hr-records';
 import { hrTimeSeeds } from './hr-time';
 import { legacySeeds } from './legacy';
 import { referenceSeeds } from './reference';
+import { samplePlaceholderSeeds } from './sample-placeholders';
 import { sampleSeeds } from './samples';
 
 export const seeds: readonly SeedDefinition[] = [
@@ -20,4 +21,5 @@ export const seeds: readonly SeedDefinition[] = [
   ...hrRecordsSeeds,
   ...hrTimeSeeds,
   ...hrLifecycleSeeds,
+  ...samplePlaceholderSeeds,
 ];
