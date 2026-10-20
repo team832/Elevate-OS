@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createLogger, loadEnvKeys } from '@elevate/configuration';
 import { getDb, insertAuditEvent, users, type Database } from '@elevate/database';
 import {
+  ForbiddenError,
   RateLimitedError,
   UnauthenticatedError,
   ValidationError,
@@ -19,6 +20,7 @@ import {
   serializeCookie,
   sessionCookieOptions,
 } from './cookies';
+import { assertAllowedEmail, isAllowedEmail } from './email-domain';
 import { burnVerificationTime, verifyPassword } from './password';
 import {
   SESSION_TTL_MS,
@@ -47,7 +49,7 @@ export interface PasswordCheckResult {
   displayName: string;
 }
 
-/** Check an email/password pair. Returns null for unknown email, wrong password or disabled user. */
+/** Check an email/password pair. Returns null for unknown email, wrong password, disabled user or a non-organisation email. */
 export async function checkPassword(
   db: Database,
   email: string,
@@ -69,7 +71,7 @@ export async function checkPassword(
     return null;
   }
   const ok = await verifyPassword(password, user.passwordHash);
-  if (!ok || user.status !== 'active') return null;
+  if (!ok || user.status !== 'active' || !isAllowedEmail(user.email)) return null;
   return { userId: user.id, email: user.email, displayName: user.displayName };
 }
 
@@ -149,6 +151,14 @@ export function createLoginHandler(options: AuthHandlerOptions) {
       }
       const { email, password } = parsed.data;
       nextPath = safeRelativePath(parsed.data.next, options.defaultRedirect);
+      if (!isAllowedEmail(email)) {
+        log.warn('login refused: not an organisation email', {
+          requestId,
+          module: options.module,
+          ip,
+        });
+        assertAllowedEmail(email);
+      }
       const key = `${email.toLowerCase()}|${ip}`;
       if (throttle.retryAfterMs(key) > 0 || ipThrottle.retryAfterMs(ip) > 0) {
         throw new RateLimitedError('Too many failed sign-in attempts. Try again in 15 minutes.');
@@ -201,7 +211,8 @@ export function createLoginHandler(options: AuthHandlerOptions) {
       if (!(
         error instanceof UnauthenticatedError ||
         error instanceof ValidationError ||
-        error instanceof RateLimitedError
+        error instanceof RateLimitedError ||
+        error instanceof ForbiddenError
       )) {
         log.error('login error', { requestId, error });
       }

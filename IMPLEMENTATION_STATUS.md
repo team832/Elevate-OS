@@ -236,7 +236,7 @@ Proposed or not built: teams, bulk employee import, photo or ID-card generation,
 | `db:generate`, `db:migrate`, `db:seed` against a database | Not run |
 
 ### Migrations
-None yet. The baseline migration is generated centrally in wave 3 from all schema files (the `ops` schema spans five files, D-029); nothing here was applied to a database.
+Baseline generated on 20 Oct 2026: `packages/database/migrations/0000_baseline.sql` (`drizzle-kit generate --name baseline`), 131 tables — core 12, marketing 20, academic 26, ops 73 (the `ops` schema spans five files, D-029). Review: foreign keys only within a schema or into `core` (academic→core 22, marketing→core 16, ops→core 158; no cross-module FK), no DROP/TRUNCATE. Applied to the local embedded PostgreSQL 18.4 only: `npm run db:migrate` twice (second run a no-op) and `npm run db:seed` twice (24 seeds; counts unchanged on the second run: ops.leads 6, ops.fee_records 3, ops.employee_records 10, ops.requisitions 1, ops.candidates 1, academic.students 6). Not applied to any non-local database. Later schema changes need a reviewed `0001_*` migration (`docs/DATABASE_MIGRATION_PLAN.md` §4).
 
 ### Generated documents to rerun
 `docs/SECURITY_AND_PERMISSIONS.md` is generated: run `npm run docs:permissions` after the permission list is final (IR-OPS-04). It was not edited by hand. `apps/business-ops-os/docs/PERMISSIONS.md` was generated from the same source on 19 Oct 2026.

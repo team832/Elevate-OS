@@ -1,0 +1,35 @@
+# Runs on every push and pull request; a red run blocks merging to main.
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Throwaway values generated per run so configuration validation passes; never real secrets.
+      - name: CI-only configuration
+        run: |
+          cp .env.example .env
+          for k in SESSION_SECRET INTERNAL_SERVICE_TOKEN SEED_USER_PASSWORD; do
+            sed -i "s|^$k=.*|$k=ci-only-$(openssl rand -hex 24)|" .env
+          done
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run secret-scan
+      - run: npm run build
+      # Production dependencies only: the 8 known dev-tool advisories (eslint plugin, drizzle-kit) are listed in HANDOFF.md.
+      - run: npm audit --omit=dev --audit-level=high

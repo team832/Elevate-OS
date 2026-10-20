@@ -80,6 +80,12 @@ export const users = core.table(
   (t) => [
     uniqueIndex('users_email_key').on(t.email),
     check('users_email_lowercase', sql`${t.email} = lower(${t.email})`),
+    // D-030: only organisation accounts; @example.test is the fictional seed/test domain,
+    // refused at sign-in in production by @elevate/authentication.
+    check(
+      'users_email_domain',
+      sql`${t.email} ~ '^[^@[:space:]]+@(elevateeducation\\.in|example\\.test)$'`,
+    ),
     check('users_status_check', sql`${t.status} IN ('active', 'disabled')`),
   ],
 );

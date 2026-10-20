@@ -1,0 +1,1 @@
+ALTER TABLE "core"."users" ADD CONSTRAINT "users_email_domain" CHECK ("core"."users"."email" ~ '^[^@[:space:]]+@(elevateeducation\.in|example\.test)$');

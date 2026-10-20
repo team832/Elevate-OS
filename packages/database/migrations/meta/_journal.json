@@ -8,6 +8,13 @@
       "when": 1792463159873,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792465116466,
+      "tag": "0001_users_email_domain",
+      "breakpoints": true
     }
   ]
 }
