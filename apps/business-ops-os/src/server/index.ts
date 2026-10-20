@@ -32,6 +32,14 @@ export {
 } from './reports/hr-records-metrics';
 export { hrLifecycleMetrics } from './reports/hr-lifecycle-metrics';
 export { hrTimeMetrics } from './reports/hr-time-metrics';
+export {
+  countAdmissionsByStatus,
+  countOpenLeads,
+  openFollowUpsForOverview,
+  staffPresentToday,
+} from './reports/overview';
+export { listTasks } from './tasks';
+export { TASK_STATUS_LABELS } from '../domain/tasks';
 export { buildDashboard } from './dashboard';
 export { fetchCrossModuleSummaries } from './summaries';
 export { getCrmAdapter, MockCrmAdapter, type CrmAdapter } from './adapters/crm';

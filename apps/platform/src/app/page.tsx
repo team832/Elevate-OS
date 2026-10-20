@@ -13,7 +13,6 @@ import {
   LoadingState,
   MetricStrip,
   PageHeader,
-  SourceBadge,
   StatusBadge,
   Tabs,
 } from '@elevate/shared-ui';
@@ -51,8 +50,9 @@ const dateLabel = (iso: string) =>
     timeZone: 'UTC',
   }).format(new Date(`${iso}T00:00:00Z`));
 
-/** "Overdue", "Today", "Tomorrow" or "21 Oct". */
-function dueLabel(due: string, today: string, tomorrow: string) {
+/** "Overdue", "Today", "Tomorrow", "21 Oct" or "No due date". */
+function dueLabel(due: string | null, today: string, tomorrow: string) {
+  if (due === null) return 'No due date';
   if (due < today) return <StatusBadge tone="danger">Overdue {dateLabel(due)}</StatusBadge>;
   if (due === today) return <StatusBadge tone="warning">Today</StatusBadge>;
   if (due === tomorrow) return 'Tomorrow';
@@ -150,7 +150,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           <Card
             id="pipeline"
             title="Admissions pipeline"
-            description="Open admission cases by stage."
+            description="Admission cases by current stage (Enrolled counts every enrolled case; lost and on hold are not shown)."
           >
             <Suspense fallback={<LoadingState label="Loading the pipeline…" />}>
               <Pipeline deps={deps} />
@@ -188,7 +188,14 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
             </Suspense>
           </Card>
 
-          <Card id="priorities" title="Team priorities" description="Open tasks by due date (IST).">
+          <Card
+            id="priorities"
+            title="Team priorities"
+            description="Open tasks by due date (IST)."
+            actions={
+              can(user, 'ops:tasks:read') ? <a href="/ops/tasks?view=open">View all tasks</a> : null
+            }
+          >
             <Suspense fallback={<LoadingState label="Loading tasks…" />}>
               <Priorities deps={deps} tab={tab} params={params} />
             </Suspense>
@@ -227,15 +234,6 @@ function WidgetState({ widget }: { widget: Widget<unknown> }) {
   return null;
 }
 
-function SampleNote({ widget }: { widget: Widget<unknown> }) {
-  if (widget.status !== 'ok' || widget.source !== 'sample') return null;
-  return (
-    <p className="ov-sample-note">
-      <SourceBadge source="sample" /> {widget.note}
-    </p>
-  );
-}
-
 async function Figures({
   deps,
   inbox,
@@ -250,22 +248,27 @@ async function Figures({
 async function Pipeline({ deps }: { deps: OverviewDeps }) {
   const w = await loadPipeline(deps);
   if (w.status !== 'ok') return <WidgetState widget={w} />;
+  if (w.data.every((s) => s.count === 0))
+    return (
+      <EmptyState
+        title="No admission cases yet"
+        description="Cases appear here once enquiries are recorded in Business Operations."
+        action={<a href="/ops/admissions">Open admissions</a>}
+      />
+    );
   const max = Math.max(1, ...w.data.map((s) => s.count));
   return (
-    <>
-      <SampleNote widget={w} />
-      <ol className="ov-pipeline" aria-label="Admission stages, in order">
-        {w.data.map((s) => (
-          <li key={s.key} className="ov-stage">
-            <span className="ov-stage-count">{s.count}</span>
-            <span className="ov-stage-label">{s.label}</span>
-            <span className="ov-stage-bar" aria-hidden="true">
-              <span style={{ width: `${Math.round((s.count / max) * 100)}%` }} />
-            </span>
-          </li>
-        ))}
-      </ol>
-    </>
+    <ol className="ov-pipeline" aria-label="Admission stages, in order">
+      {w.data.map((s) => (
+        <li key={s.key} className="ov-stage">
+          <span className="ov-stage-count">{s.count}</span>
+          <span className="ov-stage-label">{s.label}</span>
+          <span className="ov-stage-bar" aria-hidden="true">
+            <span style={{ width: `${Math.round((s.count / max) * 100)}%` }} />
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -282,14 +285,25 @@ async function FollowUps({
   if (w.status !== 'ok') return <WidgetState widget={w} />;
   const today = istDate(deps.now);
   const tomorrow = istDate(deps.now, 1);
+  const { rows, matched, total, capped } = w.data;
+  const caption = [
+    q ? `${matched} of ${total} open follow-ups match “${q}”.` : `${total} open follow-ups.`,
+    rows.length < matched ? `Showing the ${rows.length} due first.` : '',
+    capped ? `Only the first ${total} by due date are counted and searched here.` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   return (
     <>
-      <SampleNote widget={w} />
       <DataTable
         compact
-        caption={q ? `${w.data.rows.length} of ${w.data.total} follow-ups match “${q}”` : undefined}
+        caption={total > 0 ? caption : undefined}
         columns={[
-          { key: 'student', header: 'Student' },
+          {
+            key: 'student',
+            header: 'Student',
+            render: (r) => <a href={`/ops/leads/${r.leadId}`}>{r.student}</a>,
+          },
           { key: 'programme', header: 'Programme' },
           { key: 'owner', header: 'Owner' },
           {
@@ -302,11 +316,11 @@ async function FollowUps({
             render: (r) => <span className="ov-due">{dueLabel(r.due, today, tomorrow)}</span>,
           },
         ]}
-        rows={w.data.rows}
+        rows={rows}
         rowKey={(r) => r.id}
         empty={
           <EmptyState
-            title={q ? 'No follow-ups match this filter' : 'No follow-ups due'}
+            title={q ? 'No follow-ups match this filter' : 'No open follow-ups'}
             description={q ? 'Try a different name, programme or owner.' : undefined}
             action={q ? <a href={clearHref}>Clear the filter</a> : undefined}
           />
@@ -331,7 +345,6 @@ async function Priorities({
   const tomorrow = istDate(deps.now, 1);
   return (
     <>
-      <SampleNote widget={w} />
       <Tabs
         idBase="priorities"
         label="Team priorities"
@@ -345,8 +358,17 @@ async function Priorities({
       >
         <DataTable
           compact
+          caption={
+            w.data.rows.length < w.data.counts[tab]
+              ? `Showing the ${w.data.rows.length} due first of ${w.data.counts[tab]}.`
+              : undefined
+          }
           columns={[
-            { key: 'title', header: 'Task' },
+            {
+              key: 'title',
+              header: 'Task',
+              render: (r) => <a href={`/ops/tasks/${r.id}`}>{r.title}</a>,
+            },
             { key: 'owner', header: 'Owner' },
             { key: 'due', header: 'Due', render: (r) => dueLabel(r.due, today, tomorrow) },
             {
@@ -357,9 +379,11 @@ async function Priorities({
                   tone={
                     r.status === 'Blocked'
                       ? 'danger'
-                      : r.status === 'In progress'
-                        ? 'info'
-                        : 'neutral'
+                      : r.status === 'At risk'
+                        ? 'warning'
+                        : r.status === 'In progress'
+                          ? 'info'
+                          : 'neutral'
                   }
                 >
                   {r.status}
@@ -370,12 +394,21 @@ async function Priorities({
           rows={w.data.rows}
           rowKey={(r) => r.id}
           empty={
-            <EmptyState
-              title={tab === 'today' ? 'Nothing due today' : 'Nothing due this week'}
-              description="Switch to All tasks to see what is coming up."
-            />
+            tab === 'all' ? (
+              <EmptyState title="No open tasks" />
+            ) : (
+              <EmptyState
+                title={tab === 'today' ? 'Nothing due today' : 'Nothing due this week'}
+                description="Switch to All tasks to see what is coming up."
+              />
+            )
           }
         />
+        {w.data.capped ? (
+          <p className="ov-unavailable">
+            Counts stop at the first 1,000 open tasks by due date; “All tasks” may be higher.
+          </p>
+        ) : null}
       </Tabs>
     </>
   );

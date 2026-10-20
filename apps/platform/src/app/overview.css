@@ -156,16 +156,7 @@ a.ov-attention-label:hover {
   padding-top: 0.2rem;
 }
 
-/* Sample and unavailable notes */
-.ov-sample-note {
-  display: flex;
-  align-items: center;
-  gap: var(--el-space-2);
-  flex-wrap: wrap;
-  margin: 0 0 var(--el-space-3);
-  font-size: var(--el-text-xs);
-  color: var(--el-text-muted);
-}
+/* Unavailable notes */
 .ov-unavailable {
   margin: 0;
   padding: var(--el-space-3);
