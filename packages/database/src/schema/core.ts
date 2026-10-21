@@ -45,6 +45,7 @@ import type {
   RoleKey,
   SessionId,
   StaffMemberId,
+  StudentIdentityId,
   UserId,
 } from '@elevate/shared-types';
 
@@ -192,6 +193,25 @@ export const staffMembers = core.table(
       sql`${t.managerId} IS NULL OR ${t.managerId} <> ${t.id}`,
     ),
   ],
+);
+
+/**
+ * Canonical student identity (owner brief 20 Oct 2026, D-033): one row per person,
+ * shared by Business Ops (steward: admissions, demos, profile) and Academic OS
+ * (enrolments link to it by plain UUID). No contact data here — contacts live in
+ * restricted Ops tables. Never physically deleted; exits are recorded in Ops.
+ */
+export const students = core.table(
+  'students',
+  {
+    id: uuid('id').primaryKey().defaultRandom().$type<StudentIdentityId>(),
+    fullName: text('full_name').notNull(),
+    /** Fictional/sample rows are labelled so the UI can show SAMPLE DATA. */
+    isSample: boolean('is_sample').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('students_full_name_idx').on(t.fullName)],
 );
 
 export const programmes = core.table(

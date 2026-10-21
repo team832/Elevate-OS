@@ -137,7 +137,6 @@ describe('dashboard KPIs (live DB)', () => {
     ).toBe(403);
     const d = await buildDashboard(ctx.db, manager, { summaries: false });
     expect(d.kpis.conversion.status).toBe('missing');
-    expect(d.kpis.taskCompletionRate).toMatchObject({ status: 'missing', value: null });
     expect(d.kpis.followUpCompliance.status).toBe('missing');
     expect(d.kpis.overdueWork).toMatchObject({ status: 'ok', value: 0 });
     expect(d.crossModule).toBeNull();
@@ -145,7 +144,7 @@ describe('dashboard KPIs (live DB)', () => {
 
   it('counts new leads and overdue follow-ups; workload is alphabetical, not ranked', async () => {
     const { lead } = await createLead(ctx.db, counsellor, {
-      studentName: 'Dash Test (fictional)',
+      studentName: 'Dash Test',
       studentPhone: phone(),
       interestMode: 'undecided',
       sourceCode: 'UNKNOWN',
@@ -159,7 +158,7 @@ describe('dashboard KPIs (live DB)', () => {
       summaries: stub(() => new Response('', { status: 500 })),
     });
     expect(d.kpis.newLeads.value).toBeGreaterThanOrEqual(1);
-    expect(d.breakdown.overdueFollowUps).toBeGreaterThanOrEqual(1);
+    expect(d.kpis.overdueWork.value).toBeGreaterThanOrEqual(1);
     expect(d.crossModule?.academic.status).toBe('unavailable');
     const names = d.workload.rows.map((r) => r.fullName);
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));

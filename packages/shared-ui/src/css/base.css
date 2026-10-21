@@ -1,0 +1,154 @@
+/*
+ * Elevate OS design tokens and component styles. Plain CSS, no build step.
+ * Import once in each app's root layout:  import '@elevate/shared-ui/styles.css';
+ * All classes are prefixed `el-`. Direction and decisions: owner, 21 Oct 2026
+ * ("keep black + Elevate orange, redesign the layout").
+ *
+ * LAYOUT: a black frame (sidebar, top bar and each page's masthead with its area
+ * tabs) around a warm-dark work tray. Neutrals are tinted toward the brand orange.
+ * Depth is a step in lightness plus a hairline: frame #000 < well #0a0907 < canvas
+ * #0d0b09 < card #16130f < overlay #1a1712 < raised #1f1b16.
+ * Orange marks only action and position: primary buttons, the current nav item,
+ * the current tab or KPI filter, the current journey stage.
+ *
+ * CONTRAST (WCAG 2.2 AA, computed on every surface above): text #f5f1ea >= 15.2:1;
+ * muted #b3a99b >= 7.4:1; orange text #ffa43d >= 8.7:1; black on the primary button
+ * 8.7:1; status text on its own 14% tint >= 5.4:1; text on the orange tint >= 5.6:1;
+ * control borders #7a6f62 >= 3.5:1; focus ring >= 8.7:1. Status colours sit next to a
+ * word, never alone, and are hue-separated from the brand orange.
+ *
+ * TYPE: the platform's own UI face (Segoe UI Variable on the office Windows PCs,
+ * SF Pro on Macs, Roboto on Android): no download, no CSP change, crisp at 13-15px.
+ * Titles and figures use its Display optical size. Scale: 12 meta, 13 tables and
+ * labels, 14 navigation, 15 body, 18 section titles, 24-30 page titles, 30 figures.
+ */
+:root {
+  color-scheme: dark;
+
+  /* frame: sidebar, top bar, page masthead */
+  --el-ink: #000000;
+  --el-ink-raised: #1a1713;
+  --el-ink-line: #231f1a;
+  --el-ink-text: #d9d2c7;
+  --el-ink-text-strong: #ffffff;
+  --el-ink-text-muted: #a39a8d;
+
+  /* work tray */
+  --el-bg: #0d0b09;
+  --el-well: #0a0907; /* tables, inputs, detail values */
+  --el-surface: #16130f; /* cards */
+  --el-overlay: #1a1712; /* dialogs, menus */
+  --el-surface-muted: #1f1b16; /* raised: table heads, hover, header bars */
+  --el-border: #2b2621;
+  --el-border-strong: #40392f;
+  --el-control-border: #7a6f62;
+  --el-text: #f5f1ea;
+  --el-text-muted: #b3a99b;
+
+  --el-accent: #ff8623;
+  --el-accent-strong: #ffa43d;
+  --el-accent-contrast: #000000;
+  --el-accent-text: #ffa43d;
+  --el-accent-soft: rgb(255 134 35 / 0.14);
+  --el-focus: #ffa43d;
+
+  --el-success-fg: #5fd38a;
+  --el-success-bg: rgb(95 211 138 / 0.14);
+  --el-warning-fg: #f0cf5a;
+  --el-warning-bg: rgb(240 207 90 / 0.14);
+  --el-danger-fg: #ff7b7b;
+  --el-danger-bg: rgb(255 123 123 / 0.14);
+  --el-info-fg: #7ab8ff;
+  --el-info-bg: rgb(122 184 255 / 0.14);
+  --el-neutral-fg: #d9d2c7;
+  --el-neutral-bg: rgb(255 255 255 / 0.08);
+
+  /* type */
+  --el-font:
+    'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue',
+    Roboto, 'Noto Sans', sans-serif;
+  --el-font-display:
+    'Segoe UI Variable Display', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue',
+    Roboto, 'Noto Sans', sans-serif;
+  --el-font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  --el-text-xs: 0.75rem; /* 12 meta */
+  --el-text-sm: 0.8125rem; /* 13 tables, labels */
+  --el-text-nav: 0.875rem; /* 14 navigation, tabs */
+  --el-text-md: 0.9375rem; /* 15 body */
+  --el-text-lg: 1.125rem; /* 18 section titles */
+  --el-text-xl: clamp(1.5rem, 1.15rem + 1vw, 1.875rem); /* 24-30 page titles */
+  --el-text-2xl: 1.875rem; /* 30 figures */
+
+  /* space, shape, depth */
+  --el-space-1: 0.25rem;
+  --el-space-2: 0.5rem;
+  --el-space-3: 0.75rem;
+  --el-space-4: 1rem;
+  --el-space-5: 1.5rem;
+  --el-space-6: 2rem;
+  --el-radius: 10px; /* cards, dialogs, strips */
+  --el-radius-sm: 6px; /* controls, wells */
+  --el-radius-xs: 4px; /* badges, segments */
+  --el-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
+  --el-shadow-overlay: 0 24px 64px rgb(0 0 0 / 0.75), 0 2px 8px rgb(0 0 0 / 0.6);
+  --el-sidebar-width: 15.5rem;
+  --el-topbar-height: 3.5rem;
+  --el-content-width: 110rem;
+  /* page padding: the masthead bleeds to these edges */
+  --el-main-px: var(--el-space-4);
+  --el-main-pt: var(--el-space-4);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+body {
+  background: var(--el-bg);
+  color: var(--el-text);
+  font-family: var(--el-font);
+  font-size: var(--el-text-md);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+/* Links read as links by their underline, not by colour: orange is kept for action. */
+a {
+  color: var(--el-text);
+  text-decoration-color: var(--el-control-border);
+  text-underline-offset: 0.2em;
+}
+a:hover {
+  color: var(--el-accent-text);
+  text-decoration-color: currentColor;
+}
+:focus-visible {
+  outline: 2px solid var(--el-focus);
+  outline-offset: 2px;
+}
+.el-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.el-icon {
+  flex: none;
+  display: inline-block;
+  vertical-align: middle;
+}
+.el-num,
+.el-tabular {
+  font-variant-numeric: tabular-nums;
+}

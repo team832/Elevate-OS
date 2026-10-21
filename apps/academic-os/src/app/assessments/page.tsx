@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
@@ -9,6 +10,7 @@ import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Assessments' };
 
 const KINDS = ['chapter_test', 'sectional', 'full_mock', 'practice'].map((v) => ({ value: v, label: v.replace(/_/g, ' ') }));
 
@@ -29,13 +31,13 @@ async function Body({ access }: { access: PageAccess }) {
   const data = await load(async () => ({ assessments: await listAssessments(db, actor), batches: canWrite ? await listBatches(db, actor) : [] }));
   return (
     <>
-      <PageHeader title="Assessments" description="Chapter tests, sectionals, full mocks and practice papers. Scoring rules are configured per assessment and section — no exam’s rule is built in; unknown values stay unknown until entered." />
+      <PageHeader title="Assessments" description="Tests and mocks, each scored by its own rules. Unknown values stay unknown until entered." />
       {!data.ok ? (
         <LoadError error={data.error} />
       ) : (
         <div className="el-stack">
           <Card>
-            <DataTable
+            <DataTable compact
               rows={data.data.assessments}
               rowKey={(a) => a.id}
               empty={<EmptyState title="No assessments" />}

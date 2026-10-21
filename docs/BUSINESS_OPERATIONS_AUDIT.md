@@ -1,5 +1,7 @@
 # Business Operations OS — baseline audit (19 Oct 2026)
 
+> **Superseded.** The HR and Operations features this audit measured were removed by the owner on 20 Oct 2026 (D-032; recoverable from commit `63da4e4`). The current audit is `apps/business-ops-os/docs/BUSINESS_OPERATIONS_AUDIT.md`.
+
 Status words follow D-013: Proposed, Approved, Implemented, Tested, Deployed. **Nothing is Deployed.** Everything below describes the repository at the end of the foundation commit `6ae40ad` ("Business Ops HR foundation: roles, permissions, schema split (D-028, D-029)"), on top of the wave 2 baseline `78c6d15`. Line references are to `6ae40ad` unless stated. Where the docs and the code disagree, the code is treated as the truth and the doc is named as stale.
 
 The measuring stick is the owner's Business Operations brief (HR, staff attendance, admissions, tasks/approvals, SOPs, departments, assets/incidents/risks/projects, dashboards, compensation records only, security matrix).

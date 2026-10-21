@@ -10,6 +10,7 @@ import {
   validateFeeRecord,
   type FeeRecordLike,
 } from '../../src/domain/fees';
+import { fmtPaise } from '../../src/ui/format';
 
 const r = (
   kind: FeeRecordLike['kind'],
@@ -41,6 +42,16 @@ describe('amounts in integer paise', () => {
     expect(formatPaise(5)).toBe('₹0.05');
     expect(formatPaise(-150)).toBe('−₹1.50');
     expect(formatPaise(null)).toBe('—');
+  });
+  it.each([
+    [10_000_000, '₹1,00,000'],
+    [150_050, '₹1,500.50'],
+    [5, '₹0.05'],
+    [-100, '−₹1'],
+    [0, '₹0'],
+    [null, '—'],
+  ])('screens drop ".00" only when paise are 0: %s → %s', (paise, shown) => {
+    expect(fmtPaise(paise)).toBe(shown);
   });
 });
 
@@ -84,19 +95,21 @@ describe('validateFeeRecord', () => {
       validateFeeRecord({ kind: 'due', amountPaise: 1, paymentDate: TODAY }, [], TODAY)[0]?.path,
     ).toBe('paymentDate');
   });
-  it('refund cannot exceed received minus earlier refunds; voided rows do not count', () => {
+  it('a refund names its payment and cannot exceed it less earlier refunds; voided rows do not count', () => {
     const existing = [
-      r('received', 1000),
-      r('refund', 300),
-      r('received', 5000, { status: 'voided' }),
+      r('received', 1000, { id: 'p1' }),
+      r('refund', 300, { reversesRecordId: 'p1' }),
+      r('refund', 999, { reversesRecordId: 'p1', status: 'voided' }),
+      r('received', 5000, { id: 'p2', status: 'voided' }),
     ];
     const refund = { kind: 'refund' as const, paymentDate: TODAY, receiptReference: 'RF' };
-    expect(validateFeeRecord({ ...refund, amountPaise: 700 }, existing, TODAY)).toEqual([]);
-    expect(validateFeeRecord({ ...refund, amountPaise: 701 }, existing, TODAY)[0]?.message).toMatch(
-      /₹7\.00 available/,
-    );
+    const of = (id: string, amountPaise: number) =>
+      validateFeeRecord({ ...refund, amountPaise, reversesRecordId: id }, existing, TODAY);
+    expect(of('p1', 700)).toEqual([]);
+    expect(of('p1', 701)[0]?.message).toMatch(/₹7\.00 available/);
+    expect(of('p2', 1)[0]?.path).toBe('reversesRecordId');
     expect(validateFeeRecord({ ...refund, amountPaise: 1 }, [], TODAY)[0]?.path).toBe(
-      'amountPaise',
+      'reversesRecordId',
     );
   });
   it('reports several problems at once', () => {

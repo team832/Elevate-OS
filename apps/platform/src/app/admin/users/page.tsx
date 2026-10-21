@@ -5,7 +5,6 @@ import { getDb } from '@elevate/database';
 import { currentRequestId, requirePageAccess } from '@elevate/server-kit/next';
 import {
   AppShell,
-  Card,
   DataTable,
   Dialog,
   EmptyState,
@@ -63,7 +62,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
         <>
           <PageHeader
             title="Users & roles"
-            description="Everyone with an Elevate OS account and the roles that decide what they can open. Someone who signs in with Google for the first time appears here with no roles until an administrator gives them some."
+            description="Everyone with an account and their roles. First-time Google sign-ins appear with no roles."
             actions={
               can(user, 'platform:users:manage') ? (
                 <Dialog
@@ -143,7 +142,7 @@ async function UserList({ query, raw }: { query: ListUsersQuery; raw: Record<str
   const from = (list.page - 1) * list.pageSize + 1;
   const to = from + list.items.length - 1;
   return (
-    <Card title={`${list.total} account${list.total === 1 ? '' : 's'}${filtered ? ' match' : ''}`}>
+    <div className="el-stack">
       <form className="ur-filters" method="get" action={PLATFORM_PATHS.users} role="search">
         <div className="el-field">
           <label htmlFor="f-q">Name or email</label>
@@ -204,6 +203,8 @@ async function UserList({ query, raw }: { query: ListUsersQuery; raw: Record<str
         {filtered ? <a href={PLATFORM_PATHS.users}>Clear filters</a> : null}
       </form>
       <DataTable
+        compact
+        caption={`${list.total} account${list.total === 1 ? '' : 's'}${filtered ? ' match these filters' : ''}`}
         rows={list.items}
         rowKey={(u) => u.id}
         empty={
@@ -224,12 +225,12 @@ async function UserList({ query, raw }: { query: ListUsersQuery; raw: Record<str
           {
             key: 'displayName',
             header: 'Name',
-            render: (u) => <a href={`${PLATFORM_PATHS.users}/${u.id}`}>{u.displayName}</a>,
-          },
-          {
-            key: 'email',
-            header: 'Email',
-            render: (u) => <span className="ur-cell-email">{u.email}</span>,
+            render: (u) => (
+              <div>
+                <a href={`${PLATFORM_PATHS.users}/${u.id}`}>{u.displayName}</a>
+                <div className="el-field-hint ur-cell-email">{u.email}</div>
+              </div>
+            ),
           },
           { key: 'status', header: 'Status', render: (u) => <AccountStatus status={u.status} /> },
           {
@@ -259,6 +260,6 @@ async function UserList({ query, raw }: { query: ListUsersQuery; raw: Record<str
           {to < list.total ? <a href={pageHref(list.page + 1)}>Next page</a> : null}
         </nav>
       ) : null}
-    </Card>
+    </div>
   );
 }

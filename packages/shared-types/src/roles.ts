@@ -14,13 +14,7 @@ export const ROLE_KEYS = [
   'admissions_counsellor',
   'operations_manager',
   'auditor',
-  // Business Ops HR permission profiles (D-028). Profiles, not people: nobody holds
-  // them until a platform administrator assigns them (OD-009).
-  'hr_manager',
-  'hr_contributor',
-  'recruiter',
-  'department_manager',
-  'employee',
+  // Fee records in Business Ops (D-028). A profile, not a person (OD-009).
   'finance_officer',
 ] as const;
 

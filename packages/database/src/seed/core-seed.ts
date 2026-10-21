@@ -36,16 +36,34 @@ export const SEED_PROGRAMMES = [
   [
     'IPMAT',
     'IPMAT preparation',
-    'IIM integrated-programme entrance preparation (IPMAT Indore/Rohtak, JIPMAT, IIMB UG-AT).',
+    'IPM entrance preparation (IPMAT, IIM Indore; owner shorthand "IAM IP mat"). The IIM Bangalore UG admission test (IIMB UG-AT) is coached in the same batch; its syllabus finishes earlier because that exam comes first (owner, 21 Oct 2026).',
     'active',
   ],
   ['CUET', 'CUET (UG) preparation', 'Common University Entrance Test (UG) preparation.', 'active'],
   ['COMMERCE_11_12', 'Class 11–12 Commerce', 'Class 11–12 Commerce board preparation.', 'active'],
   [
+    'CLASS_11',
+    'Class 11 Commerce',
+    'Complete Class 11 Commerce batch (Commerce only); alone or with CLAT, IPMAT or CUET (owner, 20–21 Oct 2026).',
+    'active',
+  ],
+  [
+    'CLASS_12',
+    'Class 12 Commerce',
+    'Complete Class 12 Commerce batch (Commerce only); alone or with CLAT, IPMAT, CUET or CA Foundation (owner, 20–21 Oct 2026).',
+    'active',
+  ],
+  [
+    'DROPPER',
+    'Dropper',
+    'Dropper batch for students who have finished Class 12; always with one exam: CLAT, IPMAT (incl. IIMB UG-AT), CUET or CA Foundation (owner, 21 Oct 2026).',
+    'active',
+  ],
+  [
     'CA_FOUNDATION',
     'CA Foundation',
-    'CA Foundation preparation. Legacy plan: paused; 1 March 2027 start confirmed; Accountancy plan provisional.',
-    'planned',
+    'CA Foundation preparation; running now (owner, 21 Oct 2026).',
+    'active',
   ],
 ] as const satisfies readonly (readonly [
   string,
@@ -55,9 +73,10 @@ export const SEED_PROGRAMMES = [
 ])[];
 
 /**
- * One FICTIONAL user per role. Names are deliberately role-alliterative so
- * nobody mistakes them for real staff. Email domain `example.test` is reserved
- * and can never receive mail.
+ * One SAMPLE user per role (D-036): named "Sample <role>" so nobody mistakes them for
+ * real staff; the teacher is the sample Maths teacher (Academic seeds give them Quant).
+ * Email domain `example.test` is reserved, can never receive mail and is refused at
+ * sign-in in production (D-030).
  */
 export const SEED_USERS: readonly {
   role: RoleKey;
@@ -70,7 +89,7 @@ export const SEED_USERS: readonly {
   {
     role: 'platform_admin',
     email: 'platform-admin@example.test',
-    displayName: 'Ada Admin (fictional)',
+    displayName: 'Sample Platform Admin',
     department: 'TECHNOLOGY_DATA',
     title: 'Platform administrator',
     managerRole: 'director',
@@ -78,7 +97,7 @@ export const SEED_USERS: readonly {
   {
     role: 'director',
     email: 'director@example.test',
-    displayName: 'Dev Director (fictional)',
+    displayName: 'Sample Director',
     department: 'LEADERSHIP_OPERATIONS',
     title: 'Director',
     managerRole: null,
@@ -86,7 +105,7 @@ export const SEED_USERS: readonly {
   {
     role: 'marketing_manager',
     email: 'marketing-manager@example.test',
-    displayName: 'Mira Marketing (fictional)',
+    displayName: 'Sample Marketing Manager',
     department: 'MARKETING_GROWTH',
     title: 'Marketing manager',
     managerRole: 'director',
@@ -94,7 +113,7 @@ export const SEED_USERS: readonly {
   {
     role: 'marketing_contributor',
     email: 'marketing-contributor@example.test',
-    displayName: 'Kabir Content (fictional)',
+    displayName: 'Sample Content Contributor',
     department: 'MARKETING_GROWTH',
     title: 'Content contributor',
     managerRole: 'marketing_manager',
@@ -102,7 +121,7 @@ export const SEED_USERS: readonly {
   {
     role: 'academic_coordinator',
     email: 'academic-coordinator@example.test',
-    displayName: 'Anu Academics (fictional)',
+    displayName: 'Sample Academic Coordinator',
     department: 'ACADEMICS',
     title: 'Academic coordinator',
     managerRole: 'director',
@@ -110,15 +129,15 @@ export const SEED_USERS: readonly {
   {
     role: 'teacher',
     email: 'teacher@example.test',
-    displayName: 'Tara Teacher (fictional)',
+    displayName: 'Sample Maths Teacher',
     department: 'ACADEMICS',
-    title: 'Teacher',
+    title: 'Maths teacher',
     managerRole: 'academic_coordinator',
   },
   {
     role: 'admissions_counsellor',
     email: 'admissions-counsellor@example.test',
-    displayName: 'Chetan Counsellor (fictional)',
+    displayName: 'Sample Counsellor',
     department: 'ADMISSIONS_COUNSELLING',
     title: 'Admissions counsellor',
     managerRole: 'operations_manager',
@@ -126,7 +145,7 @@ export const SEED_USERS: readonly {
   {
     role: 'operations_manager',
     email: 'operations-manager@example.test',
-    displayName: 'Om Operations (fictional)',
+    displayName: 'Sample Operations Manager',
     department: 'LEADERSHIP_OPERATIONS',
     title: 'Operations manager',
     managerRole: 'director',
@@ -134,7 +153,7 @@ export const SEED_USERS: readonly {
   {
     role: 'auditor',
     email: 'auditor@example.test',
-    displayName: 'Avi Auditor (fictional)',
+    displayName: 'Sample Auditor',
     department: null,
     title: null,
     managerRole: null,
@@ -158,7 +177,8 @@ const departmentsSeed = defineSeed({
 const programmesSeed = defineSeed({
   name: 'core.programmes',
   module: 'platform',
-  description: 'Programme catalogue (CLAT, IPMAT, CUET, COMMERCE_11_12, CA_FOUNDATION)',
+  description:
+    'Programme catalogue (CLAT, IPMAT, CUET, CLASS_11, CLASS_12, DROPPER, COMMERCE_11_12, CA_FOUNDATION)',
   async run({ db }) {
     for (const [code, name, description, status] of SEED_PROGRAMMES) {
       await db
@@ -172,7 +192,7 @@ const programmesSeed = defineSeed({
 const usersSeed = defineSeed({
   name: 'core.users',
   module: 'platform',
-  description: 'One fictional user per role (@example.test) with SEED_USER_PASSWORD',
+  description: 'One sample user per role ("Sample <role>", @example.test) with SEED_USER_PASSWORD',
   async run({ db, seedUserPassword, hashPassword }) {
     const passwordHash = await hashPassword(seedUserPassword);
     for (const u of SEED_USERS) {
@@ -193,7 +213,7 @@ const usersSeed = defineSeed({
 const staffSeed = defineSeed({
   name: 'core.staff_members',
   module: 'platform',
-  description: 'Fictional staff records linked to the seed users',
+  description: 'Sample staff records linked to the seed users',
   dependsOn: ['core.departments', 'core.users'],
   async run({ db }) {
     const deptRows = await db

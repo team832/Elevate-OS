@@ -26,7 +26,7 @@ export async function staffUser(
 ): Promise<StaffUser> {
   const user = await createTestUser(db, {
     roles,
-    displayName: options.name ?? `${roles.join('+') || 'staff'} (fictional)`,
+    displayName: options.name ?? `${roles.join('+') || 'staff'}`,
   });
   const [staff] = await db
     .insert(staffMembers)

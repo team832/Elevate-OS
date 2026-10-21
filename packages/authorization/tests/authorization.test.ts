@@ -96,29 +96,26 @@ describe('least privilege', () => {
   });
 });
 
-describe('Business Ops approval and acknowledgement grants', () => {
+describe('Business Ops approval and sensitive grants', () => {
   const holders = (permission: Parameters<typeof can>[1]) =>
     ROLE_KEYS.filter((r) => can(as(r), permission)).sort();
   it.each([
-    ['ops:compensation:approve', ['finance_officer', 'hr_manager']],
-    ['ops:policies:approve', ['director', 'hr_manager', 'operations_manager']],
-    [
-      'ops:sops:acknowledge',
-      ROLE_KEYS.filter((r) => r !== 'auditor' && can(as(r), 'ops:sops:read')).sort(),
-    ],
+    ['ops:admissions:approve', ['director', 'operations_manager']],
+    ['ops:student_private:read', ['admissions_counsellor', 'operations_manager']],
+    // Admissions lifecycle (D-041/D-043): holders proposed; counsellor, auditor, teacher, finance hold none.
+    ['ops:admissions:confirm', ['director', 'operations_manager']],
+    ['ops:kyc:verify', ['operations_manager']],
+    ['ops:student_reports:review', ['operations_manager']],
+    ['ops:event_messages:send', ['operations_manager']],
   ] as const)('%s is held by exactly %j', (permission, roles) => {
     expect(holders(permission)).toEqual([...roles]);
-  });
-
-  it('department managers read recruitment only for their interview panels (own)', () => {
-    expect(scopeFor(as('department_manager'), 'ops:recruitment:read')).toBe('own');
   });
 });
 
 describe('modulesFor', () => {
   it('lists the modules a user can open', () => {
     expect(modulesFor(as('director'))).toEqual(['platform', 'marketing', 'academic', 'ops']);
-    expect(modulesFor(as('teacher'))).toEqual(['platform', 'academic']);
+    expect(modulesFor(as('teacher'))).toEqual(['platform', 'academic', 'ops']);
     expect(modulesFor(as('admissions_counsellor'))).toEqual(['platform', 'ops']);
     expect(modulesFor(as('auditor'))).toEqual(['platform', 'marketing', 'academic', 'ops']);
   });

@@ -1,0 +1,33 @@
+/* Money area (fee structure, student fees). Instalment bar: one segment per instalment, sized by amount. */
+.ops-fees-bar {
+  display: flex;
+  gap: var(--el-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ops-fees-bar > li {
+  flex: var(--ops-fees-share, 1) 1 0;
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: var(--el-space-1);
+  min-width: 0;
+}
+.ops-fees-bar .ops-hbar-track {
+  justify-self: stretch;
+}
+.ops-fees-amount {
+  font-family: var(--el-font-display);
+  font-size: var(--el-text-lg);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 40rem) {
+  .ops-fees-bar {
+    flex-direction: column;
+  }
+  .ops-fees-bar > li {
+    flex: none;
+  }
+}

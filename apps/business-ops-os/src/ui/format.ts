@@ -1,5 +1,10 @@
 /** Display helpers (Asia/Kolkata). */
 import type { Tone } from '@elevate/shared-ui';
+import { formatPaise } from '../domain/fees';
+
+/** Money on screens: "₹1,00,000" for whole rupees, "₹1,500.50" otherwise. PDFs keep `formatPaise` ("₹1,00,000.00"). */
+export const fmtPaise = (paise: number | null | undefined) =>
+  formatPaise(paise).replace(/\.00$/, '');
 
 const dateTime = new Intl.DateTimeFormat('en-IN', {
   timeZone: 'Asia/Kolkata',
@@ -28,9 +33,25 @@ export function fmtDate(value: string | null | undefined): string {
   return dateOnly.format(new Date(`${value}T00:00:00Z`));
 }
 
+const monthYear = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'UTC',
+  month: 'long',
+  year: 'numeric',
+});
+
+/** A `YYYY-MM` month, e.g. "October 2026". */
+export const fmtMonth = (value: string) => monthYear.format(new Date(`${value}-01T00:00:00Z`));
+
+/** Words with their own spelling (channel and payment codes). */
+const WORDS: Record<string, string> = { upi: 'UPI', whatsapp: 'WhatsApp', sms: 'SMS' };
+
 export function humanise(value: string | null | undefined): string {
   if (!value) return '—';
-  return value.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  return value
+    .split('_')
+    .map((w) => WORDS[w] ?? w)
+    .join(' ')
+    .replace(/^\w/, (c) => c.toUpperCase());
 }
 
 export function decisionTone(state: string): Tone {

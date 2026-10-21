@@ -6,7 +6,8 @@ import { withContentSecurityPolicy } from '@elevate/configuration/security-heade
  *
  * - Gives every request an `x-request-id`.
  * - Sets the Content-Security-Policy with a fresh nonce (static security headers are in next.config.ts).
- * - Sends visitors WITHOUT a session cookie to /login for platform pages.
+ * - Sends visitors WITHOUT a session cookie to /login for platform pages, except the
+ *   public front page `/` and `/login` itself.
  *   This is only a fast UX redirect: the cookie is not validated here.
  *   Every page and route still checks the session and permissions on the
  *   server (getCurrentUser / requirePageAccess / defineRoute).
@@ -20,7 +21,8 @@ export function proxy(request: NextRequest) {
   const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
   const { pathname, search } = request.nextUrl;
 
-  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  const isPublic =
+    pathname === '/' || PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (!isPublic && !request.cookies.get(SESSION_COOKIE)?.value) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
@@ -40,7 +42,7 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except API routes, Next internals, static files (public/brand) and the module zones.
-    '/((?!api/|_next/|brand/|favicon\\.ico|robots\\.txt|marketing(?:/|$)|academic(?:/|$)|ops(?:/|$)).*)',
+    // Everything except API routes, Next internals, static files (favicon, icon) and the module zones.
+    '/((?!api/|_next/|favicon\\.ico|icon\\.svg|robots\\.txt|marketing(?:/|$)|academic(?:/|$)|ops(?:/|$)).*)',
   ],
 };

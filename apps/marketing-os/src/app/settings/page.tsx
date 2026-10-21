@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
 import { Card, DataTable, StatusBadge } from '@elevate/shared-ui';
 import { modulePath } from '../../domain';
@@ -6,6 +7,7 @@ import { ProposedBadge } from '../../ui/badges';
 import { MarketingPage, Section, type SearchParams } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Marketing rules and settings' };
 
 export default async function SettingsPage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -27,6 +29,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
               <div className="el-stack">
                 <Card title="Policies">
                   <DataTable
+                    compact
                     rows={policies}
                     rowKey={(p) => p.key}
                     columns={[
@@ -54,6 +57,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
                   description="Block = approval refused; flag = approver must confirm; manual = checklist item."
                 >
                   <DataTable
+                    compact
                     rows={rules}
                     rowKey={(r) => r.id}
                     columns={[

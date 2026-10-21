@@ -1,7 +1,7 @@
 import { defineConfig } from 'drizzle-kit';
 
 /**
- * Central migration config (D-005). Covers all schema files (ops is split across ops*.ts, D-029).
+ * Central migration config (D-005). Covers all schema files.
  * `npm run db:generate` (root) writes SQL to ./migrations; `npm run db:migrate`
  * applies it. Module teams do not run generate during wave 2 (see BUILD_PLAN).
  */
@@ -12,10 +12,13 @@ export default defineConfig({
     './src/schema/marketing.ts',
     './src/schema/academic.ts',
     './src/schema/ops.ts',
-    './src/schema/ops-hr.ts',
-    './src/schema/ops-lifecycle.ts',
-    './src/schema/ops-time.ts',
-    './src/schema/ops-work.ts',
+    './src/schema/ops-demos.ts',
+    './src/schema/ops-students.ts',
+    './src/schema/ops-meetings.ts',
+    './src/schema/ops-fees-intake.ts',
+    './src/schema/ops-applications.ts',
+    './src/schema/ops-onboarding.ts',
+    './src/schema/ops-tasks.ts',
   ],
   out: './migrations',
   schemaFilter: ['core', 'marketing', 'academic', 'ops'],

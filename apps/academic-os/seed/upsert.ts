@@ -53,14 +53,15 @@ export async function upsertSubject(
 
 export async function upsertChapter(
   db: Database,
-  values: { courseId: CourseId; subjectId: AcademicSubjectId; code: string; title: string; sortOrder: number },
+  values: { courseId: CourseId; subjectId: AcademicSubjectId; code: string; title: string; sortOrder: number; weight?: number },
 ): Promise<AcademicChapterId> {
   const [row] = await db
     .insert(academicChapters)
     .values(values)
     .onConflictDoUpdate({
       target: [academicChapters.courseId, academicChapters.code],
-      set: { subjectId: values.subjectId, title: values.title, sortOrder: values.sortOrder },
+      // weight undefined → drizzle leaves the column out, so seeds without weights never reset it.
+      set: { subjectId: values.subjectId, title: values.title, sortOrder: values.sortOrder, weight: values.weight },
     })
     .returning({ id: academicChapters.id });
   return row!.id;

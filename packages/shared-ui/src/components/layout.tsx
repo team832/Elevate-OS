@@ -1,44 +1,8 @@
 import type { ReactNode } from 'react';
 import { MODULES, type ModuleKey } from '@elevate/shared-types';
-import { BRAND_LOGO_SIZE } from '../brand-asset';
+import { BrandLogo } from './brand';
 import { Icon, type IconName } from './icons';
 import { ShellFrame } from './shell-client';
-
-/** Company name shown next to the logo. */
-export const COMPANY_NAME = 'Elevate Education';
-
-/** The lowercase "elevate" wordmark as text (kept for places without the image). */
-export function Wordmark({ href = '/' }: { href?: string }) {
-  return (
-    <a className="el-wordmark" href={href} aria-label="elevate — home">
-      elevate
-    </a>
-  );
-}
-
-/**
- * Browser path of the brand logo for an app. Every app serves the same file from
- * `public/brand/elevate-logo.png` under its basePath (swap it with
- * `node packages/shared-ui/scripts/brand-logo.mjs <new-file.png>`).
- */
-export function brandLogoSrc(basePath = ''): string {
-  return `${basePath}/brand/elevate-logo.png`;
-}
-
-/** The logo image (white + orange on black). Height is set in CSS; width follows the file. */
-export function BrandLogo({ basePath = '', className }: { basePath?: string; className?: string }) {
-  return (
-    // A plain <img>: the file is a static asset of each zone and must not be resized or re-encoded.
-    <img
-      className={['el-brand-logo', className].filter(Boolean).join(' ')}
-      src={brandLogoSrc(basePath)}
-      width={BRAND_LOGO_SIZE.width}
-      height={BRAND_LOGO_SIZE.height}
-      alt="elevate"
-      decoding="async"
-    />
-  );
-}
 
 export interface ShellUser {
   displayName: string;
@@ -214,29 +178,26 @@ function SidebarLink({
   );
 }
 
-function ModuleSections({ nav }: { nav: readonly NavItem[] }) {
+function ModuleSections({ nav, label }: { nav: readonly NavItem[]; label: string }) {
   return (
-    <ul className="el-nav-list el-nav-sub">
-      {navSections(nav).map((s) =>
+    <ul className="el-nav-list el-nav-sections" aria-label={label}>
+      {navSections(nav).map((s, i) =>
         s.kind === 'link' ? (
           <li key={s.item.href + s.item.label}>
             <SidebarLink href={s.item.href} label={s.item.label} current={s.item.active} />
           </li>
         ) : (
-          <li key={`group-${s.name}`}>
-            <details className="el-nav-group" open={s.active || undefined}>
-              <summary>
-                <span>{s.name}</span>
-                <Icon name="chevron-down" size={16} className="el-nav-caret" />
-              </summary>
-              <ul className="el-nav-list">
-                {s.items.map((item) => (
-                  <li key={item.href + item.label}>
-                    <SidebarLink href={item.href} label={item.label} current={item.active} />
-                  </li>
-                ))}
-              </ul>
-            </details>
+          <li key={`group-${s.name}`} className="el-nav-group">
+            <span className="el-nav-heading" id={`el-navgroup-${i}`}>
+              {s.name}
+            </span>
+            <ul className="el-nav-list" aria-labelledby={`el-navgroup-${i}`}>
+              {s.items.map((item) => (
+                <li key={item.href + item.label}>
+                  <SidebarLink href={item.href} label={item.label} current={item.active} />
+                </li>
+              ))}
+            </ul>
           </li>
         ),
       )}
@@ -245,61 +206,40 @@ function ModuleSections({ nav }: { nav: readonly NavItem[] }) {
 }
 
 function Sidebar(props: AppShellProps) {
-  const { user, modules, current, logoutAction, nav = [], myWorkHref, settings } = props;
-  const basePath = MODULES[current].basePath;
+  const { user, modules, current, nav = [], myWorkHref, settings } = props;
   const overviewCurrent = current === 'platform' && !nav.some((n) => n.active);
   return (
     <div className="el-sidebar-inner">
       <a className="el-sidebar-brand" href="/">
-        <BrandLogo basePath={basePath} />
-        <span className="el-sidebar-company">{COMPANY_NAME}</span>
+        <BrandLogo size="sm" />
       </a>
       <nav className="el-sidebar-nav" aria-label="Modules and sections">
-        <ul className="el-nav-list">
+        {/* Module switcher: the current module is marked, its sections are listed below. */}
+        <ul className="el-nav-list el-nav-modules" aria-label="Modules">
           <li>
             <SidebarLink href="/" label="Overview" icon="overview" current={overviewCurrent} />
           </li>
-          {current === 'platform'
-            ? nav.map((n) => (
-                <li key={n.href}>
-                  <SidebarLink href={n.href} label={n.label} icon="dashboard" current={n.active} />
-                </li>
-              ))
-            : null}
+          {MODULE_NAV.filter((m) => modules.includes(m.key)).map((m) => (
+            <li key={m.key}>
+              <a
+                className="el-nav-link el-nav-module"
+                href={moduleHref(m.key)}
+                data-current={m.key === current ? 'true' : undefined}
+              >
+                <Icon name={m.icon} />
+                <span>{m.label}</span>
+              </a>
+            </li>
+          ))}
           {myWorkHref ? (
             <li>
               <SidebarLink href={myWorkHref} label="My work" icon="my-work" />
             </li>
           ) : null}
         </ul>
-        <ul className="el-nav-list el-nav-modules">
-          {MODULE_NAV.filter((m) => modules.includes(m.key)).map((m) =>
-            m.key === current ? (
-              <li key={m.key}>
-                <details className="el-nav-module" open>
-                  <summary>
-                    <Icon name={m.icon} />
-                    <span>{m.label}</span>
-                    <Icon name="chevron-down" size={16} className="el-nav-caret" />
-                  </summary>
-                  {nav.length > 0 ? (
-                    <ModuleSections nav={nav} />
-                  ) : (
-                    <ul className="el-nav-list el-nav-sub">
-                      <li>
-                        <SidebarLink href={moduleHref(m.key)} label="Dashboard" />
-                      </li>
-                    </ul>
-                  )}
-                </details>
-              </li>
-            ) : (
-              <li key={m.key}>
-                <SidebarLink href={moduleHref(m.key)} label={m.label} icon={m.icon} />
-              </li>
-            ),
-          )}
-        </ul>
+        {nav.length > 0 ? (
+          <ModuleSections nav={nav} label={`${moduleLabel(current)} sections`} />
+        ) : null}
       </nav>
       <div className="el-sidebar-foot">
         {settings ? (
@@ -319,12 +259,6 @@ function Sidebar(props: AppShellProps) {
             <p className="el-profile-roles">{roleLabel(user.roles)}</p>
           </div>
         </div>
-        <form method="post" action={logoutAction}>
-          <button className="el-nav-link el-signout" type="submit">
-            <Icon name="sign-out" />
-            <span>Sign out</span>
-          </button>
-        </form>
       </div>
     </div>
   );
@@ -401,11 +335,11 @@ function TopBar(props: AppShellProps) {
 }
 
 /**
- * Page frame used by all four apps: a near-black sidebar (logo, Overview, My work,
- * the modules the user can open with the current module's sections, Settings and
- * the profile with sign-out) and a top bar (breadcrumbs, search, notifications,
- * account menu). Module links are plain <a> because each module is a separate zone.
- * On small screens the sidebar sits behind a menu button (see ShellFrame).
+ * Page frame used by all four apps: a black sidebar (logo, the module switcher, the
+ * current module's sections in labelled groups, Settings and the profile) and a black
+ * top bar (breadcrumbs, search, notifications, account menu with sign-out). Module
+ * links are plain <a> because each module is a separate zone. On small screens the
+ * sidebar sits behind a menu button (see ShellFrame).
  */
 export function AppShell(props: AppShellProps) {
   const sidebarId = `el-sidebar-${props.current}`;
@@ -424,19 +358,53 @@ export function PageHeader({
   title,
   description,
   actions,
+  meta,
+  tabs,
 }: {
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
+  /** Small labels next to the title (status, reference, "Sample data"). */
+  meta?: ReactNode;
+  /** Area navigation shown along the bottom of the header (e.g. <AdmissionsNav />). */
+  tabs?: ReactNode;
 }) {
   return (
     <div className="el-page-header">
-      <div>
-        <h1>{title}</h1>
-        {description ? <p>{description}</p> : null}
+      <div className="el-page-head">
+        <div className="el-page-titles">
+          <div className="el-page-titlerow">
+            <h1>{title}</h1>
+            {meta ?? null}
+          </div>
+          {description ? <p className="el-page-description">{description}</p> : null}
+        </div>
+        {actions ? <div className="el-page-actions">{actions}</div> : null}
       </div>
-      {actions ? <div className="el-page-actions">{actions}</div> : null}
+      {tabs ?? null}
     </div>
+  );
+}
+
+/** Area tabs for a PageHeader (`tabs`): links; the current one is marked for screen readers. */
+export function Subnav({
+  label,
+  items,
+  current,
+}: {
+  label: string;
+  items: readonly (readonly [href: string, text: string])[];
+  /** Href of the current page. */
+  current?: string;
+}) {
+  return (
+    <nav className="el-subnav" aria-label={label}>
+      {items.map(([href, text]) => (
+        <a key={href} href={href} aria-current={href === current ? 'page' : undefined}>
+          {text}
+        </a>
+      ))}
+    </nav>
   );
 }
 

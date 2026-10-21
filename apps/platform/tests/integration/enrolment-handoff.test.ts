@@ -154,7 +154,7 @@ describe('admission → enrolment handoff across Business Ops and Academic OS', 
     expect(row).toMatchObject({
       status: 'enrolled',
       handoffStatus: 'enrolled',
-      studentId: student!.id,
+      academicStudentId: student!.id,
       enrolmentId: enrolment!.id,
       academicExistingStudent: false,
     });
@@ -242,7 +242,7 @@ describe('admission → enrolment handoff across Business Ops and Academic OS', 
     const first = await admitted();
     await requestEnrolment(ctx.db, counsellor, first.admissionId);
     await settle();
-    const knownStudentId = (await admissionRow(first.admissionId)).studentId;
+    const knownStudentId = (await admissionRow(first.admissionId)).academicStudentId;
     expect(knownStudentId).not.toBeNull();
     const second = await admitted({ leadId: first.leadId, programme: 'CLAT' });
     const req = await requestEnrolment(ctx.db, counsellor, second.admissionId);

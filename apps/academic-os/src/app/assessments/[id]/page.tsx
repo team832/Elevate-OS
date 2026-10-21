@@ -1,6 +1,7 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Card, PageHeader } from '@elevate/shared-ui';
+import { ButtonLink, Card, PageHeader } from '@elevate/shared-ui';
 import { checkAssessmentScheduleFor, getAssessment, getResults, validateAssessment } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiButton, ApiForm } from '../../../ui/api-form';
@@ -10,6 +11,7 @@ import { ConflictList } from '../../../ui/conflicts';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Assessment' };
 
 const SECTIONS_EXAMPLE = JSON.stringify(
   [
@@ -47,8 +49,9 @@ export default async function AssessmentPage({ params, searchParams }: { params:
     <AcademicShell access={access} active="assessments">
       <PageHeader
         title={`${a.code} — ${a.title}`}
-        description={<>{a.kind.replace(/_/g, ' ')} · batch {a.batchCode} · {a.scheduledDate ?? 'not scheduled'} · {a.durationMinutes === null ? 'duration unknown' : `${a.durationMinutes} min`} · <StateBadge state={a.status} /></>}
-        actions={<a href={MODULE_PATHS.assessments}>All assessments</a>}
+        meta={<StateBadge state={a.status} />}
+        description={`${a.kind.replace(/_/g, ' ')} · batch ${a.batchCode} · ${a.scheduledDate ?? 'not scheduled'} · ${a.durationMinutes === null ? 'duration unknown' : `${a.durationMinutes} min`}`}
+        actions={<ButtonLink href={MODULE_PATHS.assessments}>All assessments</ButtonLink>}
       />
       <div className="el-stack">
         <ScoringSection a={a} />

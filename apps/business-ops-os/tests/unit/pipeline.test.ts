@@ -43,8 +43,12 @@ describe('admission state machine (A-03)', () => {
     for (const s of ADMISSION_STATUSES) if (s !== 'enrolled') expect(froms.has(s)).toBe(true);
   });
 
-  it('enrolled is terminal; lost only reopens to new', () => {
-    expect(TRANSITIONS.filter((t) => t.from === 'enrolled')).toEqual([]);
+  it('enrolled leaves only through the student lifecycle; lost only reopens to new', () => {
+    expect(
+      TRANSITIONS.filter((t) => t.from === 'enrolled').every(
+        (t) => t.guard === 'student_lifecycle' || t.guard === 'exit_record',
+      ),
+    ).toBe(true);
     expect(TRANSITIONS.filter((t) => t.from === 'lost').map((t) => t.to)).toEqual(['new']);
   });
 

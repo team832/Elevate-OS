@@ -4,11 +4,12 @@
  * re-checks the domain state machine, writes the transition row and the audit
  * event in the caller's transaction.
  */
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import {
+  opsLeads,
+  students,
   opsAdmissions,
   opsAdmissionTransitions,
-  opsDemos,
   opsFollowUps,
   type Database,
 } from '@elevate/database';
@@ -20,6 +21,7 @@ import type {
   LeadId,
   ProgrammeId,
   StaffMemberId,
+  StudentIdentityId,
   UserId,
 } from '@elevate/shared-types';
 import {
@@ -51,9 +53,13 @@ export async function createAdmissionRecord(
     counsellorStaffId: StaffMemberId | null;
     createdBy: UserId;
     requestId?: string;
+    /** Opening status and reason (the conversion opens extra programme cases at `admission_pending`). */
+    initial?: { status: AdmissionStatus; reason: string };
+    patch?: Partial<typeof opsAdmissions.$inferInsert>;
   },
 ): Promise<AdmissionRow> {
   const code = await nextCode(tx, 'admission', 'ops.admissions');
+  const status = input.initial?.status ?? 'new';
   const [row] = await tx
     .insert(opsAdmissions)
     .values({
@@ -61,18 +67,19 @@ export async function createAdmissionRecord(
       leadId: input.leadId,
       programmeId: input.programmeId,
       counsellorStaffId: input.counsellorStaffId,
-      status: 'new',
+      status,
       createdBy: input.createdBy,
+      ...input.patch,
     })
     .returning();
   if (!row) throw new Error('admission insert returned no row');
   await tx.insert(opsAdmissionTransitions).values({
     admissionId: row.id,
     fromStatus: null,
-    toStatus: 'new',
+    toStatus: status,
     actorType: 'user',
     actorUserId: input.createdBy,
-    reason: 'Admission case opened',
+    reason: input.initial?.reason ?? 'Admission case opened',
   });
   await recordAudit(tx, {
     actorUserId: input.createdBy,
@@ -109,7 +116,7 @@ export async function applyTransition(
   input: ApplyTransitionInput,
 ): Promise<AdmissionRow> {
   const { admission, to } = input;
-  const from = admission.status as AdmissionStatus;
+  const from = admission.status;
   const actorType = input.actorUserId ? 'user' : 'system';
   const check = checkTransition(from, to, {
     ...input.context,
@@ -179,10 +186,9 @@ export async function applyTransition(
 
 /**
  * Side effects of closing states (documented in ALGORITHMS.md A-03):
- * - lost: open follow-ups of this admission are cancelled; a verified demo fee
- *   is marked retained (non-refundable) when the demo terms say so;
- * - admitted: a verified demo fee is marked "adjusted against fees" when the
- *   demo terms say so.
+ * - lost: open follow-ups of this admission are cancelled;
+ * - admitted: the case gets its canonical student.
+ * The demo fee is never a status flag here: it lives in the ledger (charge category `demo`).
  */
 async function applySideEffects(
   tx: Database,
@@ -190,19 +196,72 @@ async function applySideEffects(
   to: AdmissionStatus,
   input: ApplyTransitionInput,
 ): Promise<void> {
-  const terms = input.settings?.['demo.terms'].value;
-  const paidDemos = and(
-    eq(opsDemos.admissionId, admissionId),
-    eq(opsDemos.feeStatus, 'paid_verified'),
-  );
   if (to === 'lost') {
     await tx
       .update(opsFollowUps)
       .set({ status: 'cancelled', outcome: `Case closed as lost: ${input.reason ?? ''}`.trim() })
       .where(and(eq(opsFollowUps.admissionId, admissionId), eq(opsFollowUps.status, 'open')));
-    if (terms && terms.refundableIfNotJoining === false)
-      await tx.update(opsDemos).set({ feeStatus: 'retained_non_refundable' }).where(paidDemos);
   }
-  if (to === 'admitted' && terms?.adjustedAgainstFeesOnJoining)
-    await tx.update(opsDemos).set({ feeStatus: 'adjusted_against_fees' }).where(paidDemos);
+  if (to === 'admitted') await ensureStudentIdentity(tx, admissionId);
+}
+
+/**
+ * The canonical student (core.students) already held by this lead or a lead
+ * merged into it: the same person, so it is linked without review.
+ */
+export async function sameLeadIdentity(
+  tx: Database,
+  leadId: LeadId,
+): Promise<StudentIdentityId | null> {
+  const merged = await tx
+    .select({ id: opsLeads.id })
+    .from(opsLeads)
+    .where(eq(opsLeads.mergedIntoLeadId, leadId));
+  const [row] = await tx
+    .select({ id: opsAdmissions.studentId })
+    .from(opsAdmissions)
+    .where(
+      and(
+        inArray(opsAdmissions.leadId, [leadId, ...merged.map((m) => m.id)]),
+        isNotNull(opsAdmissions.studentId),
+      ),
+    )
+    .limit(1);
+  return row?.id ?? null;
+}
+
+/**
+ * Serialises identity decisions for one lead until commit. An advisory lock, not the lead row:
+ * callers of ensureStudentIdentity hold the case, while lead-first paths (merge, assignment,
+ * activity) lock lead → case, so a lead row lock there could deadlock with them.
+ */
+export const lockLeadIdentity = (tx: Database, leadId: string) =>
+  tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`ops.lead-identity:${leadId}`}))`);
+
+/**
+ * Every admitted case — and every demo from booking (brief §3) — has a canonical student
+ * (A-STU-6): the case's own, else the lead's (or a lead merged into it), else a new one (sample
+ * follows the lead). Never merges by contact: matches stay duplicate flags for review.
+ * Idempotent; call inside the transaction that holds the case.
+ */
+export async function ensureStudentIdentity(tx: Database, admissionId: AdmissionId) {
+  const [a] = await tx
+    .select({ id: opsAdmissions.studentId, leadId: opsAdmissions.leadId })
+    .from(opsAdmissions)
+    .where(eq(opsAdmissions.id, admissionId));
+  if (a!.id) return { studentId: a!.id, identity: 'existing' as const };
+  // One identity per lead even when two of its cases are booked or admitted at the same time.
+  await lockLeadIdentity(tx, a!.leadId);
+  const sameLead = await sameLeadIdentity(tx, a!.leadId);
+  let studentId = sameLead;
+  if (!studentId) {
+    const [lead] = await tx
+      .select({ fullName: opsLeads.studentName, isSample: opsLeads.isSample })
+      .from(opsLeads)
+      .where(eq(opsLeads.id, a!.leadId));
+    const [created] = await tx.insert(students).values(lead!).returning({ id: students.id });
+    studentId = created!.id;
+  }
+  await tx.update(opsAdmissions).set({ studentId }).where(eq(opsAdmissions.id, admissionId));
+  return { studentId, identity: sameLead ? ('same_lead' as const) : ('created' as const) };
 }

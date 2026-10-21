@@ -103,8 +103,8 @@ describe('normaliseEmail', () => {
 });
 
 describe('names (weak signal)', () => {
-  it('normaliseName strips honorifics, accents, punctuation and the fictional marker', () => {
-    expect(normaliseName('Ms. Riyá  SHARMA (fictional)')).toBe('riya sharma');
+  it('normaliseName strips honorifics, accents and punctuation', () => {
+    expect(normaliseName('Ms. Riyá  SHARMA.')).toBe('riya sharma');
   });
   it('jaroWinkler: identical 1, disjoint 0, empty 0', () => {
     expect(jaroWinkler('martha', 'martha')).toBe(1);
@@ -125,7 +125,7 @@ describe('names (weak signal)', () => {
 
 const rec = (over: Partial<ContactRecord> & { id: string }): ContactRecord => ({
   code: `LEAD-${over.id.padStart(6, '0')}`,
-  studentName: 'Riya Sharma (fictional)',
+  studentName: 'Riya Sharma',
   studentPhone: null,
   studentEmail: null,
   guardianPhone: null,

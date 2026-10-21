@@ -81,12 +81,12 @@ describe('student identity and directory', () => {
   });
   it('private fields are removed (deeply in audit payloads) unless allowed', () => {
     const rec = {
-      fullName: 'A (fictional)',
+      fullName: 'A',
       studentPhone: '+919800000000',
-      guardianName: 'G (fictional)',
+      guardianName: 'G',
     };
     expect(redactStudentPrivate(rec, false)).toEqual({
-      fullName: 'A (fictional)',
+      fullName: 'A',
       privateFields: 'hidden',
     });
     expect(redactStudentPrivate(rec, true)).toMatchObject({
@@ -213,10 +213,21 @@ describe('admissions KPIs', () => {
     expect(
       upcomingDemos(
         [
-          { status: 'scheduled', dayDates: ['2026-10-19', '2026-10-20'] },
-          { status: 'scheduled', dayDates: ['2026-10-25', '2026-10-26'] },
-          { status: 'scheduled', dayDates: ['2026-10-26'] },
-          { status: 'cancelled', dayDates: ['2026-10-20'] },
+          // d1: classes yesterday and today → counted once; d2: class in 6 days → counted;
+          // d3: 7 days out → outside; d4: closed demo; d5: class today already recorded.
+          ...[
+            ['d1', 'open', 'present', '2026-10-18T10:30:00Z'],
+            ['d1', 'open', 'scheduled', '2026-10-19T10:30:00Z'],
+            ['d2', 'open', 'scheduled', '2026-10-25T10:30:00Z'],
+            ['d3', 'open', 'scheduled', '2026-10-26T10:30:00Z'],
+            ['d4', 'declined', 'scheduled', '2026-10-19T10:30:00Z'],
+            ['d5', 'open', 'present', '2026-10-19T04:30:00Z'],
+          ].map(([demoId, outcome, attendance, at]) => ({
+            demoId: demoId!,
+            outcome: outcome!,
+            attendance: attendance!,
+            startsAt: new Date(at!),
+          })),
         ],
         now,
         7,

@@ -1,377 +1,343 @@
+/**
+ * Student profile (owner brief §8): a header with the name, status, admission number, active
+ * programmes and batches, primary contact (masked unless permitted), the journey and one next
+ * step; the ten record sections are underline tabs kept in `?tab=` (deep links and refresh keep
+ * the section). Only the selected section loads.
+ */
+import type { ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { can } from '@elevate/authorization';
-import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { ADMISSION_STATUS_LABELS, type AdmissionStatus } from '../../../domain';
-import { FEE_BALANCE_LABELS, formatPaise } from '../../../domain/fees';
+import { PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { ACTIVE_CASE_STATUSES } from '../../../domain/student-lifecycle';
 import { getStudent } from '../../../server/students';
-import { ActionForm } from '../../../ui/action-form';
-import { fmtDate, fmtDateTime, humanise, statusTone } from '../../../ui/format';
+import { fmtDateTime, humanise } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
+import { listHref } from '../../../ui/list-controls';
+import { RecordTable } from '../../../ui/record-table';
+import { DetailTable, Segment } from '../../../ui/sections';
+import { StudentFeedbackSection } from '../../../ui/student-feedback-section';
+import { StudentFeesSection } from '../../../ui/student-fees-section';
+import { KycTab } from '../_components/profile-kyc';
+import { OnboardingTab } from '../_components/profile-onboarding';
+import { AcademicSections } from '../_components/academic-sections';
+import {
+  ActivityTimeline,
+  AdmissionFacts,
+  ExitRecords,
+  HistoryTable,
+  lifecycleLinks,
+  NO_LIFECYCLE,
+  PrimaryAction,
+  ProfileForm,
+  ProgrammesTable,
+  StudentJourney,
+  StudentMeta,
+  UpcomingTable,
+  type Profile,
+} from '../_components/profile-sections';
+import { SectionNav } from '../_components/section-nav';
 
 export const dynamic = 'force-dynamic';
+export const metadata = { title: 'Student record' };
 
-export default async function StudentPage({ params }: { params: Promise<{ id: string }> }) {
+const TABS = [
+  ['overview', 'Overview'],
+  ['kyc', 'KYC & guardians'],
+  ['enrolments', 'Enrolments'],
+  ['onboarding', 'Onboarding'],
+  ['fees', 'Fees'],
+  ['attendance', 'Attendance'],
+  ['assessments', 'Assessments'],
+  ['feedback', 'Feedback'],
+  ['reports', 'Documents'],
+  ['timeline', 'Timeline'],
+] as const;
+type TabKey = (typeof TABS)[number][0];
+type Query = { action?: string; tab?: string; item?: string; doc?: string };
+
+export default async function StudentPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Query>;
+}) {
   const { id } = await params;
-  const access = await gate('ops:students:read', `/ops/students/${id}`);
+  const query = await searchParams;
+  const access = await gate('ops:students:read', listHref(`/ops/students/${id}`, query));
+  // Loaded before the frame so a former student's record highlights "Past students".
+  const r = await load((db) => getStudent(db, access.user, id));
   return (
-    <Frame access={access} active="students">
-      <p>
-        <a href="/ops/students">All students</a>
-      </p>
-      <Section label="Loading student…">
-        <Profile user={access.user} id={id} />
-      </Section>
+    <Frame access={access} active={r.ok && r.data.population === 'former' ? 'past' : 'students'}>
+      {r.ok ? (
+        <Section label="Loading section…">
+          <StudentProfile user={access.user} d={r.data} id={id} query={query} />
+        </Section>
+      ) : (
+        r.view
+      )}
     </Frame>
   );
 }
 
-const statusLabel = (s: string) => ADMISSION_STATUS_LABELS[s as AdmissionStatus] ?? humanise(s);
+/** "Class 12 Commerce (batch assigned) + CLAT UG preparation (batch requested)". */
+const programmesLine = (d: Profile) =>
+  d.cases
+    .filter(
+      (c) =>
+        (ACTIVE_CASE_STATUSES as readonly string[]).includes(c.status) ||
+        c.population === 'on_hold',
+    )
+    .map(
+      (c) =>
+        `${c.programme?.name ?? 'Programme not set'} (batch ${c.enrolledBatchId ? 'assigned' : c.intendedBatchId ? 'requested' : 'to be assigned'})`,
+    )
+    .join(' + ') || 'No active programme';
 
-async function Profile({ user, id }: { user: AuthenticatedUser; id: string }) {
-  const r = await load((db) => getStudent(db, user, id));
-  if (!r.ok) return r.view;
-  const d = r.data;
+async function StudentProfile({
+  user,
+  d,
+  id,
+  query,
+}: {
+  user: AuthenticatedUser;
+  d: Profile;
+  id: string;
+  query: Query;
+}) {
   const a = d.admission;
-  const p = d.person;
-  const h = d.handoff;
-  const canWrite = can(user, 'ops:admissions:write');
+  const base = `/ops/students/${id}`;
+  const tab: TabKey = TABS.some(([k]) => k === query.tab) ? (query.tab as TabKey) : 'overview';
+  const pc = d.primaryContact;
   return (
-    <div className="el-stack">
+    <>
       <PageHeader
-        title={p.fullName}
-        description={
-          <>
-            Admission <a href={`/ops/admissions/${a.id}`}>{a.code}</a> · lead{' '}
-            <a href={`/ops/leads/${p.leadId}`}>{p.leadCode}</a> ·{' '}
-            {d.programme?.code ?? 'no programme'}
-            {d.programme ? ` (${d.programme.name})` : ''}
-          </>
+        title={d.person.fullName}
+        meta={<StudentMeta d={d} />}
+        description={[
+          programmesLine(d),
+          a.academicYear ? `Academic year ${a.academicYear}` : 'Academic year not recorded',
+          pc ? `${pc.label}: ${pc.phone ?? 'no phone'}` : 'No contact recorded',
+        ].join(' · ')}
+        actions={<PrimaryAction d={d} base={base} />}
+        tabs={
+          <SectionNav label={`${d.person.fullName}: record sections`}>
+            {TABS.map(([key, label]) => (
+              <a
+                key={key}
+                href={listHref(base, { tab: key })}
+                aria-current={key === tab ? 'page' : undefined}
+              >
+                {label}
+              </a>
+            ))}
+          </SectionNav>
         }
       />
-      <div className="el-grid">
-        <Card title="Admission">
-          <p>
-            <StatusBadge
-              tone={
-                a.state === 'enrolled' ? 'success' : a.state === 'withdrawn' ? 'neutral' : 'info'
-              }
+      <div className="el-stack">
+        <StudentJourney d={d} />
+        {await panel(tab, d, user, query, base)}
+      </div>
+      <ProfileForm d={d} action={query.action} base={listHref(base, { tab })} />
+    </>
+  );
+}
+
+/** The selected tab's content (only that tab's data is loaded). */
+async function panel(
+  tab: TabKey,
+  d: Profile,
+  user: AuthenticatedUser,
+  query: Query,
+  base: string,
+): Promise<ReactNode> {
+  const links = lifecycleLinks(d, base);
+  const studentId = d.identity?.id;
+  const noIdentity = (title: string) => (
+    <Segment title={title}>
+      <p>This student has no canonical record yet, so nothing can be linked here.</p>
+    </Segment>
+  );
+  switch (tab) {
+    case 'overview':
+      return (
+        <>
+          <div className="ops-panels">
+            <Segment
+              title="Admission"
+              flush
+              description={links.length ? undefined : NO_LIFECYCLE}
+              actions={links.length ? links : null}
             >
-              {a.stateLabel}
-            </StatusBadge>
-          </p>
-          <p>Admission owner: {d.owner?.fullName ?? 'Unassigned'}</p>
-          <p>Admitted on: {fmtDate(a.admissionDate)}</p>
-          <p>
-            Mode: {humanise(a.deliveryMode)} · intended start {fmtDate(a.intendedStartDate)}
-          </p>
-          {a.state === 'withdrawn' ? (
-            <p>
-              Withdrawn: {a.statusReasonLabel ?? 'reason not coded'}
-              {a.statusReason ? ` — ${a.statusReason}` : ''}
-            </p>
-          ) : null}
-          {d.otherAdmissions.length ? (
-            <p className="el-field-hint">
-              Other admission cases of this person:{' '}
-              {d.otherAdmissions.map((o, i) => (
-                <span key={o.id}>
-                  {i ? ', ' : ''}
-                  <a href={`/ops/admissions/${o.id}`}>{o.code}</a> ({statusLabel(o.status)})
-                </span>
-              ))}
-            </p>
-          ) : null}
-        </Card>
-        <Card
-          title="Academic OS record"
-          description="Academic OS owns the student and enrolment. Business Ops stores only the ids Academic returned."
-        >
-          {d.academic.path ? (
-            <>
-              <p>
-                <a href={d.academic.path}>Open the student in Academic OS</a>
-              </p>
-              <p className="el-field-hint">
-                Enrolled {fmtDateTime(d.academic.enrolledAt)}
-                {d.academic.existingStudent ? ' · Academic reused an existing student record' : ''}
-              </p>
-            </>
-          ) : (
-            <p>Not linked yet: Academic OS has not confirmed an enrolment.</p>
-          )}
-        </Card>
-      </div>
-
-      <Card
-        title="Enrolment handoff"
-        description="Requests to Academic OS. Enrolled only after Academic confirms. A new request is allowed only when the previous one can no longer enrol the student (rejected, or failed after every automatic retry)."
-      >
-        <p>
-          <StatusBadge tone={h.view.tone}>{h.view.label}</StatusBadge>
-          {h.view.detail ? ` ${h.view.detail}` : ''}
-        </p>
-        {h.replies.some((x) => x.opsStatus && x.opsStatus !== 'processed') ? (
-          <Alert tone="danger" title="Business Ops could not apply Academic's reply">
-            {h.replies
-              .filter((x) => x.opsStatus && x.opsStatus !== 'processed')
-              .map((x) => `${x.type} (${x.opsStatus}): ${x.opsError ?? 'no error recorded'}`)
-              .join('; ')}
-          </Alert>
-        ) : null}
-        <DataTable
-          rows={h.attempts}
-          rowKey={(x) => x.id}
-          empty={
-            <EmptyState
-              title="No attempts recorded"
-              description={
-                h.attempt > 0
-                  ? `Requested before attempts were tracked (attempt ${h.attempt}, ${fmtDateTime(h.requestedAt)}).`
-                  : 'Enrolment has not been requested.'
-              }
-            />
-          }
-          columns={[
-            { key: 'n', header: 'Attempt', render: (x) => x.attempt },
-            { key: 'kind', header: 'Why', render: (x) => humanise(x.kind) },
-            {
-              key: 'by',
-              header: 'Requested',
-              render: (x) => `${fmtDateTime(x.requestedAt)} by ${x.requestedByName ?? 'unknown'}`,
-            },
-            {
-              key: 'outcome',
-              header: 'Outcome',
-              render: (x) => (
-                <StatusBadge tone={statusTone(x.outcome === 'confirmed' ? 'enrolled' : x.outcome)}>
-                  {humanise(x.outcome)}
-                </StatusBadge>
-              ),
-            },
-            {
-              key: 'detail',
-              header: 'Detail',
-              render: (x) =>
-                [
-                  x.rejectionCode ? `${x.rejectionCode}: ${x.rejectionReason}` : null,
-                  x.reason,
-                  x.note,
-                ]
-                  .filter(Boolean)
-                  .join(' · '),
-            },
-          ]}
+              <AdmissionFacts d={d} />
+            </Segment>
+            <Segment title="Coming up" flush description="Open follow-ups and meetings.">
+              <UpcomingTable d={d} />
+            </Segment>
+          </div>
+          <ExitRecords d={d} />
+        </>
+      );
+    case 'kyc':
+      return <KycTab d={d} user={user} action={query.action} documentId={query.doc} base={base} />;
+    case 'enrolments':
+      return (
+        <>
+          <Segment
+            title="Programmes and batches"
+            flush
+            description="A class cohort and an entrance programme are separate cases. Batches are assigned in Academic OS."
+          >
+            <ProgrammesTable d={d} />
+          </Segment>
+          <HandoffSegment d={d} />
+          <Segment title="Status history" flush>
+            <HistoryTable d={d} />
+          </Segment>
+          {d.numberChanges.length ? <NumberHistory d={d} /> : null}
+        </>
+      );
+    case 'onboarding':
+      return studentId ? (
+        <OnboardingTab
+          identityId={studentId}
+          admissionId={d.admission.id}
+          user={user}
+          action={query.action}
+          itemId={query.item}
+          base={base}
         />
-        {canWrite && h.retry.allowed && h.retry.via === 'retry' ? (
-          <ActionForm
-            action={`/ops/api/v1/admissions/${a.id}/enrolment-retry`}
-            submitLabel="Send a new enrolment request"
-            fields={[
+      ) : (
+        noIdentity('Onboarding')
+      );
+    case 'fees':
+      return studentId ? (
+        <StudentFeesSection studentId={studentId} user={user} />
+      ) : (
+        noIdentity('Fees and instalments')
+      );
+    case 'attendance':
+    case 'assessments':
+      return (
+        <div className="ops-panels">
+          <Section label="Loading Academic OS data…">
+            <AcademicSections d={d} show={tab} />
+          </Section>
+        </div>
+      );
+    case 'feedback':
+      return studentId ? (
+        <StudentFeedbackSection studentId={studentId} user={user} />
+      ) : (
+        noIdentity('Feedback')
+      );
+    case 'reports':
+      return (
+        <Segment title="Reports and documents" flush>
+          <DetailTable
+            rows={[
               {
-                name: 'reason',
-                label: 'Why it is safe to try again',
-                required: true,
-                hint: 'Academic OS gave up on the previous request, so it created nothing. The new attempt keeps the same admission.',
+                label: 'Student report',
+                value: d.actions.report ? (
+                  <a href={`/ops/students/${studentId}/report`}>
+                    Open or generate the student report
+                  </a>
+                ) : (
+                  'Needs permission to generate student reports and a linked student record.'
+                ),
+              },
+              {
+                label: 'Admission form and acknowledgement',
+                value: <a href={`/ops/admissions/${d.admission.id}`}>On the admission record</a>,
+              },
+              {
+                label: 'Identity documents',
+                value: 'Masked references only, under KYC and guardians (no scans are stored).',
               },
             ]}
           />
-        ) : null}
-        {canWrite && h.retry.allowed && h.retry.via === 'request' ? (
-          <p>
-            <a href={`/ops/admissions/${a.id}`}>Request enrolment from the admission page</a>
-          </p>
-        ) : null}
-      </Card>
-
-      <div className="el-grid">
-        <Card
-          title="Contact and consent"
-          description="Private: students may be minors (ops:student_private:read)."
+        </Segment>
+      );
+    case 'timeline':
+      return (
+        <Segment
+          title="Timeline"
+          description="From the audit trail, newest first (latest 100). KYC details are in the KYC history."
         >
-          {p.privateFields === 'visible' ? (
-            <>
-              <p>
-                Student: {p.studentPhone ?? '—'} · {p.studentEmail ?? '—'}
-              </p>
-              <p>
-                Guardian: {p.guardianName ?? '—'} ({humanise(p.guardianRelationship)}) ·{' '}
-                {p.guardianPhone ?? '—'} · {p.guardianEmail ?? '—'}
-              </p>
-              <p>City: {p.city ?? '—'}</p>
-              {p.consent ? (
-                <p>
-                  Consent {p.consent.status} by {p.consent.by}; channels:{' '}
-                  {p.consent.allowedChannels.length ? p.consent.allowedChannels.join(', ') : 'none'}
-                  {p.consent.preferredContact
-                    ? `; contact the ${p.consent.preferredContact} first`
-                    : ''}{' '}
-                  <span className="el-field-hint">({fmtDateTime(p.consent.recordedAt)})</span>
-                </p>
-              ) : (
-                <p>Consent and communication preferences: not recorded.</p>
-              )}
-              {canWrite ? (
-                <ActionForm
-                  action={`/ops/api/v1/admissions/${a.id}/contact-preferences`}
-                  method="PUT"
-                  submitLabel="Save consent and preferences"
-                  variant="secondary"
-                  fields={[
-                    {
-                      name: 'consentStatus',
-                      label: 'Consent to contact',
-                      type: 'select',
-                      required: true,
-                      options: [
-                        { value: 'given', label: 'Given' },
-                        { value: 'refused', label: 'Refused' },
-                        { value: 'withdrawn', label: 'Withdrawn' },
-                      ],
-                    },
-                    {
-                      name: 'consentBy',
-                      label: 'Given or refused by',
-                      type: 'select',
-                      required: true,
-                      options: [
-                        { value: 'guardian', label: 'Guardian' },
-                        { value: 'student', label: 'Student' },
-                        { value: 'both', label: 'Both' },
-                      ],
-                    },
-                    {
-                      name: 'allowedChannels',
-                      label: 'Allowed channels (call, whatsapp, sms, email; comma separated)',
-                      type: 'list',
-                      hint: 'Leave empty unless consent is given.',
-                    },
-                    {
-                      name: 'preferredContact',
-                      label: 'Contact first',
-                      type: 'select',
-                      options: [
-                        { value: 'guardian', label: 'Guardian' },
-                        { value: 'student', label: 'Student' },
-                      ],
-                    },
-                    { name: 'note', label: 'Note' },
-                  ]}
-                />
-              ) : null}
-            </>
-          ) : (
-            <Alert tone="info" title="Restricted">
-              Your roles can see this student&apos;s admission and handoff, not their contact or
-              consent details.
-            </Alert>
-          )}
-          <p>
-            Stage: {humanise(p.currentStage)} · board {p.schoolBoard ?? '—'}
-          </p>
-        </Card>
-        <Card title="Fees (manually recorded)">
-          {d.fees ? (
-            <>
-              <p>{FEE_BALANCE_LABELS[d.fees.balanceState]}</p>
-              <p>
-                Due {formatPaise(d.fees.duePaise)} · received {formatPaise(d.fees.netReceivedPaise)}{' '}
-                (checked by a second person: {formatPaise(d.fees.verifiedNetReceivedPaise)}) ·
-                balance {formatPaise(d.fees.balancePaise)}
-              </p>
-              <p className="el-field-hint">{d.fees.disclaimer}</p>
-              <p>
-                <a href={`/ops/admissions/${a.id}#fees`}>See and record fee entries</a>
-              </p>
-            </>
-          ) : (
-            <p>Fee records need ops:fees:read.</p>
-          )}
-        </Card>
-      </div>
+          <ActivityTimeline rows={d.timeline} />
+        </Segment>
+      );
+  }
+}
 
-      <Card
-        title="Status history"
-        description="Every pipeline change, with coded reasons where given."
-      >
-        <DataTable
-          rows={d.history}
-          rowKey={(t) => t.id}
-          columns={[
-            { key: 'at', header: 'When', render: (t) => fmtDateTime(t.at) },
-            {
-              key: 'move',
-              header: 'Change',
-              render: (t) =>
-                `${t.fromStatus ? statusLabel(t.fromStatus) : '—'} → ${statusLabel(t.toStatus)}`,
-            },
-            {
-              key: 'by',
-              header: 'By',
-              render: (t) =>
-                t.actorType === 'system' ? 'Academic OS reply' : (t.actorName ?? 'user'),
-            },
-            {
-              key: 'reason',
-              header: 'Reason',
-              render: (t) => [t.reasonLabel, t.reason].filter(Boolean).join(' — '),
-            },
-          ]}
-        />
-      </Card>
+function NumberHistory({ d }: { d: Profile }) {
+  return (
+    <Segment title="Admission number history" flush>
+      <RecordTable
+        rows={d.numberChanges}
+        rowKey={(c) => c.id}
+        columns={[
+          { key: 'at', header: 'When', render: (c) => fmtDateTime(c.at) },
+          { key: 'from', header: 'From', render: (c) => c.previousNumber ?? 'None' },
+          { key: 'to', header: 'To', render: (c) => c.newNumber },
+          {
+            key: 'how',
+            header: 'How',
+            render: (c) => (c.kind === 'auto' ? 'Automatic' : 'Entered by hand'),
+          },
+          { key: 'by', header: 'By', render: (c) => c.actorName },
+          { key: 'reason', header: 'Reason', render: (c) => c.reason ?? '—' },
+        ]}
+      />
+    </Segment>
+  );
+}
 
-      <div className="el-grid">
-        <Card title="Enquiries">
-          <DataTable
-            rows={d.enquiries}
-            rowKey={(e) => `${e.receivedAt.toString()}-${e.sourceCode}`}
-            empty={<EmptyState title="No enquiries recorded" />}
-            columns={[
-              { key: 'at', header: 'Received', render: (e) => fmtDateTime(e.receivedAt) },
-              { key: 'source', header: 'Source', render: (e) => e.sourceLabel },
-              {
-                key: 'programme',
-                header: 'Programme',
-                render: (e) => e.programmeCode ?? 'Undecided',
-              },
-            ]}
-          />
-        </Card>
-        <Card title="Counselling">
-          <DataTable
-            rows={d.counselling}
-            rowKey={(s) => s.id}
-            empty={<EmptyState title="No counselling sessions" />}
-            columns={[
-              { key: 'at', header: 'When', render: (s) => fmtDateTime(s.scheduledAt) },
-              { key: 'who', header: 'Counsellor', render: (s) => s.counsellorName },
-              { key: 'status', header: 'Status', render: (s) => humanise(s.status) },
-              { key: 'outcome', header: 'Outcome', render: (s) => s.outcome ?? '' },
-            ]}
-          />
-        </Card>
-        <Card title="Demo">
-          <DataTable
-            rows={d.demos}
-            rowKey={(x) => x.id}
-            empty={
-              <EmptyState
-                title="No demo booked"
-                description="The demo can be skipped with a reason while the setting allows it."
-              />
-            }
-            columns={[
-              { key: 'days', header: 'Days', render: (x) => x.dayDates.map(fmtDate).join(', ') },
-              { key: 'status', header: 'Status', render: (x) => humanise(x.status) },
-              {
-                key: 'fee',
-                header: 'Demo fee',
-                render: (x) =>
-                  `${humanise(x.feeStatus)} (terms ${x.feeTermsState.replace(/_/g, ' ')})`,
-              },
-            ]}
-          />
-        </Card>
-      </div>
-    </div>
+/** Enrolment handoff to Academic OS (requests, replies, attempts). */
+function HandoffSegment({ d }: { d: Profile }) {
+  const h = d.handoff;
+  return (
+    <Segment
+      title="Enrolment handoff"
+      flush
+      description="Requests to Academic OS; enrolled only after Academic confirms."
+      actions={
+        h.retry.allowed ? (
+          <a href={`/ops/admissions/${d.admission.id}`}>Request enrolment again</a>
+        ) : null
+      }
+    >
+      <DetailTable
+        rows={[
+          {
+            label: 'Status',
+            value: (
+              <>
+                <StatusBadge tone={h.view.tone}>{h.view.label}</StatusBadge>
+                {h.view.detail ? ` ${h.view.detail}` : ''}
+              </>
+            ),
+          },
+          !!d.academic.path && {
+            label: 'Academic OS',
+            value: <a href={d.academic.path}>Open the student in Academic OS</a>,
+          },
+        ]}
+      />
+      <RecordTable
+        caption="Requests"
+        rows={h.attempts}
+        rowKey={(x) => x.id}
+        empty="Enrolment not requested yet."
+        columns={[
+          { key: 'n', header: 'Attempt', numeric: true, render: (x) => x.attempt },
+          {
+            key: 'by',
+            header: 'Requested',
+            render: (x) => `${fmtDateTime(x.requestedAt)} by ${x.requestedByName ?? 'unknown'}`,
+          },
+          { key: 'outcome', header: 'Outcome', render: (x) => humanise(x.outcome) },
+        ]}
+      />
+    </Segment>
   );
 }

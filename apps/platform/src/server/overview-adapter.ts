@@ -3,13 +3,10 @@
  *
  * Every widget is loaded with the SIGNED-IN user, through the modules' own server
  * services, so each number respects that user's permissions and record scope:
- *   - Pending approvals, Admission decisions, Attendance corrections
- *       → Business Ops `listApprovalInbox`
+ *   - Pending approvals, Admission decisions → Business Ops `listApprovalInbox`
  *   - Active enquiries   → Business Ops `countOpenLeads` (`ops:leads:read`)
- *   - Staff present      → Business Ops `staffPresentToday` (`ops:attendance:read`, HR scope)
  *   - Admissions pipeline → Business Ops `countAdmissionsByStatus` (`ops:admissions:read`)
  *   - Follow-ups         → Business Ops `openFollowUpsForOverview` (`ops:leads:read`)
- *   - Team priorities    → Business Ops `listTasks` view `open` (`ops:tasks:read`)
  *   - Students enrolled  → Academic `listStudents` (scoped like the Students page)
  *   - Today's classes    → Academic `listSessions` for today in IST (scoped)
  *   - Content approvals  → Marketing `listContentItems({ state: 'in_review' })`,
@@ -23,13 +20,11 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { programmes, type Database } from '@elevate/database';
 import { metric, type Metric } from '@elevate/shared-contracts';
 import {
-  TASK_STATUS_LABELS,
   countAdmissionsByStatus,
   countOpenLeads,
+  APPROVAL_SOURCES,
   listApprovalInbox,
-  listTasks,
   openFollowUpsForOverview,
-  staffPresentToday,
 } from '@elevate/business-ops-os/server';
 import { listSessions, listStudents } from '@elevate/academic-os/server';
 import { listContentItems } from '@elevate/marketing-os/server';
@@ -74,14 +69,6 @@ export function istDate(now: Date, offsetDays = 0): string {
   }).format(new Date(now.getTime() + offsetDays * 86_400_000));
 }
 
-/** Monday–Sunday (IST) week containing `now`. */
-export function istWeek(now: Date): { from: string; to: string } {
-  const today = istDate(now);
-  const weekday = new Date(`${today}T00:00:00Z`).getUTCDay(); // 0 = Sunday
-  const back = (weekday + 6) % 7;
-  return { from: istDate(now, -back), to: istDate(now, 6 - back) };
-}
-
 const dayWindow = (now: Date) => {
   const d = istDate(now);
   return { from: d, to: d, label: 'Today' };
@@ -93,7 +80,12 @@ type Inbox = Awaited<ReturnType<typeof listApprovalInbox>>;
 
 export function loadInbox(deps: OverviewDeps): Promise<Widget<Inbox>> {
   return attempt('approvals inbox', async () => {
-    if (!can(deps.user, 'ops:module:access')) return noAccess('Business Operations approvals');
+    // Module access alone (e.g. a teacher) is not enough: an empty inbox would read as a real 0.
+    const decides = APPROVAL_SOURCES.some((s) =>
+      [s.permission].flat().some((p) => can(deps.user, p)),
+    );
+    if (!can(deps.user, 'ops:module:access') || !decides)
+      return noAccess('Business Operations approvals');
     return { status: 'ok', data: await listApprovalInbox(deps.db, deps.user) };
   });
 }
@@ -101,7 +93,7 @@ export function loadInbox(deps: OverviewDeps): Promise<Widget<Inbox>> {
 // --- metric strip ---------------------------------------------------------------------------------
 
 export interface OverviewMetric {
-  key: 'activeEnquiries' | 'studentsEnrolled' | 'staffPresent' | 'pendingApprovals';
+  key: 'activeEnquiries' | 'studentsEnrolled' | 'pendingApprovals';
   label: string;
   metric: Metric;
   href?: string;
@@ -114,8 +106,6 @@ const STUDENT_LIST_CAP = 500;
 export const METRIC_DEFINITIONS = {
   activeEnquiries:
     'Leads you can see (merged duplicates excluded) whose admission case is still open: any status except enrolled or lost (on hold counts as open).',
-  staffPresent:
-    'Staff in your HR scope with an attendance session (not superseded) on today’s IST date, including those who have clocked out.',
   studentsEnrolled: 'Students with an active batch enrolment that you can see.',
   pendingApprovals: 'Items in your Business Operations approvals inbox that you may decide.',
 } as const;
@@ -161,36 +151,6 @@ export async function loadMetrics(
       href: '/ops/leads',
       note: scopeFor(user, 'ops:leads:read') === 'own' ? 'Open, assigned to you' : 'Open leads',
     }),
-  );
-
-  const staffPresent = figure(
-    'staffPresent',
-    'Staff present',
-    { permission: 'ops:attendance:read', area: 'staff attendance', unreachable: opsDown },
-    async () => {
-      const today = await staffPresentToday(db, user, now);
-      if (!today)
-        return {
-          metric: missing('staffPresent', 'Your account is not linked to staff records in scope.'),
-        };
-      const noShifts = today.withShift === 0;
-      if (!today.recordedToday)
-        return {
-          metric: missing(
-            'staffPresent',
-            noShifts
-              ? 'No attendance recorded today, and no shifts are assigned for today.'
-              : 'No attendance recorded today.',
-          ),
-        };
-      return {
-        href: '/ops/hr/attendance',
-        metric: metric.ok(today.present, meta('staffPresent')),
-        note: noShifts
-          ? 'No shifts are assigned for today'
-          : `${today.withShift} with a shift assigned today`,
-      };
-    },
   );
 
   const studentsEnrolled = figure(
@@ -244,13 +204,13 @@ export async function loadMetrics(
                 : metric.ok(box.data.total, meta('pendingApprovals')),
   };
 
-  return [await activeEnquiries, await studentsEnrolled, await staffPresent, pendingApprovals];
+  return [await activeEnquiries, await studentsEnrolled, pendingApprovals];
 }
 
 // --- attention panel ------------------------------------------------------------------------------
 
 export interface AttentionItem {
-  key: 'admissionDecisions' | 'attendanceCorrections' | 'contentApprovals';
+  key: 'admissionDecisions' | 'contentApprovals';
   label: string;
   /** What exactly is counted (shown under the label). */
   detail: string;
@@ -260,61 +220,28 @@ export interface AttentionItem {
   reason?: string;
 }
 
-const INBOX_ROWS: {
-  key: AttentionItem['key'];
-  label: string;
-  sourceKey: string;
-  permission: Permission;
-  href: string;
-  area: string;
-}[] = [
-  {
-    key: 'admissionDecisions',
+/** The fee-arrangement list of the approvals inbox (null count = not available, with a reason). */
+function admissionDecisions(box: Widget<Inbox>): AttentionItem {
+  const base = {
+    key: 'admissionDecisions' as const,
     label: 'Admission decisions',
-    sourceKey: 'ops.fee_arrangements',
-    permission: 'ops:admissions:approve',
     href: '/ops/operations/approvals#ops.fee_arrangements',
-    area: 'admission approvals',
-  },
-  {
-    key: 'attendanceCorrections',
-    label: 'Attendance corrections',
-    sourceKey: 'ops.attendance_corrections',
-    permission: 'ops:attendance:approve',
-    href: '/ops/operations/approvals#ops.attendance_corrections',
-    area: 'attendance correction decisions',
-  },
-];
+    detail: '',
+    count: null,
+  };
+  if (box.status === 'error') return { ...base, reason: 'Approvals could not be loaded just now.' };
+  if (box.status === 'unavailable') return { ...base, reason: box.reason };
+  const source = box.data.sources.find((s) => s.key === 'ops.fee_arrangements');
+  if (!source) return { ...base, reason: 'Not part of your role (admission approvals).' };
+  if (source.status === 'unavailable' || source.count === null)
+    return { ...base, detail: source.label, reason: 'This list could not be loaded just now.' };
+  return { ...base, detail: source.label, count: source.count };
+}
 
 export async function loadAttention(
   deps: OverviewDeps,
   inbox: Promise<Widget<Inbox>>,
 ): Promise<AttentionItem[]> {
-  const box = await inbox;
-  const rows: AttentionItem[] = INBOX_ROWS.map((r) => {
-    const base = { key: r.key, label: r.label, href: r.href };
-    if (box.status === 'error')
-      return {
-        ...base,
-        detail: '',
-        count: null,
-        reason: 'Approvals could not be loaded just now.',
-      };
-    if (box.status === 'unavailable')
-      return { ...base, detail: '', count: null, reason: box.reason };
-    const source = box.data.sources.find((s) => s.key === r.sourceKey);
-    if (!source)
-      return { ...base, detail: '', count: null, reason: `Not part of your role (${r.area}).` };
-    if (source.status === 'unavailable' || source.count === null)
-      return {
-        ...base,
-        detail: source.label,
-        count: null,
-        reason: 'This list could not be loaded just now.',
-      };
-    return { ...base, detail: source.label, count: source.count };
-  });
-
   const content: AttentionItem = {
     key: 'contentApprovals',
     label: 'Content approvals',
@@ -334,7 +261,7 @@ export async function loadAttention(
       content.reason = 'Marketing OS could not be reached just now.';
     }
   }
-  return [...rows, content];
+  return [admissionDecisions(await inbox), content];
 }
 
 // --- admissions pipeline ------------------------------------------------------------------------
@@ -429,77 +356,6 @@ export function loadFollowUps(
         matched: matched.length,
         total: all.length,
         capped: all.length >= FOLLOW_UP_CAP,
-      },
-    };
-  });
-}
-
-// --- team priorities --------------------------------------------------------------------------------
-
-export const PRIORITY_TABS = ['today', 'week', 'all'] as const;
-export type PriorityTab = (typeof PRIORITY_TABS)[number];
-export const PRIORITY_TAB_LABELS: Record<PriorityTab, string> = {
-  today: 'Today',
-  week: 'This week',
-  all: 'All tasks',
-};
-
-/** Rows shown per tab; "View all tasks" opens the full list. */
-export const PRIORITY_ROWS = 10;
-/** `listTasks` returns at most this many tasks. */
-const TASK_LIST_CAP = 1000;
-
-export function parsePriorityTab(value: unknown): PriorityTab {
-  return PRIORITY_TABS.includes(value as PriorityTab) ? (value as PriorityTab) : 'today';
-}
-
-export interface PriorityRow {
-  id: string;
-  title: string;
-  owner: string;
-  /** IST calendar day; null = no due date set. */
-  due: string | null;
-  /** Business Ops status label, e.g. "Blocked". */
-  status: string;
-}
-
-/**
- * Today = due today or overdue; This week = due by Sunday (IST); All = every open task.
- * Rows arrive in due-date order (no due date last) from `listTasks`.
- */
-export function filterPriorities(
-  rows: readonly PriorityRow[],
-  tab: PriorityTab,
-  now: Date,
-): PriorityRow[] {
-  if (tab === 'all') return [...rows];
-  const until = tab === 'today' ? istDate(now) : istWeek(now).to;
-  return rows.filter((r) => r.due !== null && r.due <= until);
-}
-
-export function loadPriorities(
-  deps: OverviewDeps,
-  tab: PriorityTab,
-): Promise<Widget<{ rows: PriorityRow[]; counts: Record<PriorityTab, number>; capped: boolean }>> {
-  return attempt('priorities', async () => {
-    if (!can(deps.user, 'ops:tasks:read')) return noAccess('Business Operations tasks');
-    const tasks = await listTasks(deps.db, deps.user, 'open', deps.now);
-    const all: PriorityRow[] = tasks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      owner: t.ownerName ?? 'No owner',
-      due: t.dueDate,
-      status: TASK_STATUS_LABELS[t.status as keyof typeof TASK_STATUS_LABELS] ?? t.status,
-    }));
-    const counts = Object.fromEntries(
-      PRIORITY_TABS.map((t) => [t, filterPriorities(all, t, deps.now).length]),
-    ) as Record<PriorityTab, number>;
-    return {
-      status: 'ok',
-      data: {
-        rows: filterPriorities(all, tab, deps.now).slice(0, PRIORITY_ROWS),
-        counts,
-        capped: all.length >= TASK_LIST_CAP,
       },
     };
   });

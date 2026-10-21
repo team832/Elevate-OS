@@ -1,7 +1,8 @@
 import { Suspense } from 'react';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { requirePageAccess } from '@elevate/server-kit/next';
+import { getCurrentUser, requirePageAccess } from '@elevate/server-kit/next';
+import { MODULES } from '@elevate/shared-types';
 import {
   AppShell,
   ButtonLink,
@@ -10,17 +11,16 @@ import {
   Dialog,
   EmptyState,
   ErrorState,
+  JourneyRail,
   LoadingState,
   MetricStrip,
+  MODULE_NAV,
   PageHeader,
   StatusBadge,
-  Tabs,
 } from '@elevate/shared-ui';
-import { PLATFORM_PATHS } from '../lib/shell';
+import { MODULE_BLURBS, PLATFORM_PATHS } from '../lib/shell';
 import { platformShell } from '../server/shell';
 import {
-  PRIORITY_TAB_LABELS,
-  PRIORITY_TABS,
   enquiryProgrammes,
   istDate,
   loadAttention,
@@ -28,15 +28,15 @@ import {
   loadInbox,
   loadMetrics,
   loadPipeline,
-  loadPriorities,
   loadTodayClasses,
-  parsePriorityTab,
   type OverviewDeps,
-  type PriorityTab,
   type Widget,
 } from '../server/overview-adapter';
+import { JsonForm } from '../ui/json-form';
 import { NewEnquiryForm } from '../ui/new-enquiry-form';
+import { FrontPage } from './_components/front-page';
 import './overview.css';
+import './home.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,16 +50,20 @@ const dateLabel = (iso: string) =>
     timeZone: 'UTC',
   }).format(new Date(`${iso}T00:00:00Z`));
 
-/** "Overdue", "Today", "Tomorrow", "21 Oct" or "No due date". */
-function dueLabel(due: string | null, today: string, tomorrow: string) {
-  if (due === null) return 'No due date';
-  if (due < today) return <StatusBadge tone="danger">Overdue {dateLabel(due)}</StatusBadge>;
+/** "Overdue · 29 days (22 Sept)", "Today", "Tomorrow" or the date. */
+function dueLabel(due: string, today: string, tomorrow: string) {
+  const late = Math.round((Date.parse(today) - Date.parse(due)) / 86_400_000);
+  if (late > 0)
+    return (
+      <StatusBadge tone="danger">
+        Overdue · {late} day{late === 1 ? '' : 's'} ({dateLabel(due)})
+      </StatusBadge>
+    );
   if (due === today) return <StatusBadge tone="warning">Today</StatusBadge>;
   if (due === tomorrow) return 'Tomorrow';
   return dateLabel(due);
 }
 
-/** Query string for the overview with one parameter changed (keeps the others). */
 function hrefWith(params: Record<string, string | undefined>, key: string, value?: string) {
   const next = new URLSearchParams();
   for (const [k, v] of Object.entries({ ...params, [key]: value })) if (v) next.set(k, v);
@@ -68,23 +72,23 @@ function hrefWith(params: Record<string, string | undefined>, key: string, value
 }
 
 export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
-  // Permission check first: signed-out visitors get a real 307 before any Suspense boundary.
+  if (!(await getCurrentUser())) return <FrontPage />;
   const access = await requirePageAccess('platform:module:access', {
     loginPath: PLATFORM_PATHS.login,
     returnTo: '/',
   });
   const { user, modules } = access;
-  const extras = await platformShell(user, 'overview');
+  const shell = {
+    user,
+    modules,
+    current: 'platform' as const,
+    logoutAction: PLATFORM_PATHS.logoutApi,
+    ...(await platformShell(user, 'overview')),
+  };
 
   if (access.status === 'forbidden') {
     return (
-      <AppShell
-        user={user}
-        modules={modules}
-        current="platform"
-        logoutAction={PLATFORM_PATHS.logoutApi}
-        {...extras}
-      >
+      <AppShell {...shell}>
         <ErrorState
           title="No access"
           description="Your account has no role that opens Elevate OS. Ask a platform administrator."
@@ -94,11 +98,10 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   }
 
   const sp = await searchParams;
-  const tab = parsePriorityTab(one(sp.tasks));
   const fq = one(sp.fq)?.slice(0, 100);
-  const params = { tasks: tab === 'today' ? undefined : tab, fq: fq || undefined };
+  const params = { fq: fq || undefined };
   const deps: OverviewDeps = { db: getDb(), user, now: new Date() };
-  const inbox = loadInbox(deps); // shared by the figures and the attention panel
+  const inbox = loadInbox(deps);
   const canAddEnquiry = can(user, 'ops:leads:write');
   const programmes = canAddEnquiry ? await enquiryProgrammes(deps.db) : [];
   const today = new Intl.DateTimeFormat('en-IN', {
@@ -109,35 +112,22 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   }).format(deps.now);
 
   return (
-    <AppShell
-      user={user}
-      modules={modules}
-      current="platform"
-      logoutAction={PLATFORM_PATHS.logoutApi}
-      {...extras}
-    >
+    <AppShell {...shell}>
       <PageHeader
-        title="Workspace overview"
-        description={`What needs attention across admissions, people, classes and content, ${today}.`}
+        title="Overview"
+        description={`${today}: what needs attention across admissions, classes and content.`}
         actions={
-          <>
-            {canAddEnquiry ? (
-              <Dialog
-                id="new-enquiry"
-                title="New enquiry"
-                description="Creates a lead in Business Operations. Student name and at least one phone or email are needed; duplicates are flagged, never merged."
-                triggerLabel="New enquiry"
-                triggerIcon="plus"
-              >
-                <NewEnquiryForm programmes={programmes} />
-              </Dialog>
-            ) : null}
-            {can(user, 'ops:tasks:read') ? (
-              <ButtonLink href="/ops/tasks?view=mine" variant="secondary">
-                View tasks
-              </ButtonLink>
-            ) : null}
-          </>
+          canAddEnquiry ? (
+            <Dialog
+              id="new-enquiry"
+              title="New enquiry"
+              description="Creates a lead in Business Operations. Student name and at least one phone or email are needed; duplicates are flagged, never merged."
+              triggerLabel="New enquiry"
+              triggerIcon="plus"
+            >
+              <NewEnquiryForm programmes={programmes} />
+            </Dialog>
+          ) : null
         }
       />
 
@@ -145,83 +135,105 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         <Figures deps={deps} inbox={inbox} />
       </Suspense>
 
-      <div className="ov-layout">
-        <div className="ov-main">
-          <Card
-            id="pipeline"
-            title="Admissions pipeline"
-            description="Admission cases by current stage (Enrolled counts every enrolled case; lost and on hold are not shown)."
-          >
-            <Suspense fallback={<LoadingState label="Loading the pipeline…" />}>
-              <Pipeline deps={deps} />
-            </Suspense>
-          </Card>
+      <div className="el-stack">
+        <Card
+          id="pipeline"
+          title="Admissions pipeline"
+          description="Open admission cases by stage. Lost and on-hold cases are not shown."
+          actions={
+            can(user, 'ops:admissions:read') ? (
+              <ButtonLink href="/ops/admissions/overview">Admissions overview</ButtonLink>
+            ) : null
+          }
+        >
+          <Suspense fallback={<LoadingState label="Loading the pipeline…" />}>
+            <Pipeline deps={deps} />
+          </Suspense>
+        </Card>
 
-          <Card
-            id="follow-ups"
-            title="Follow-ups"
-            description="Next contact due with each student."
-            actions={
-              <form className="ov-filter" method="get" action="/" role="search">
-                {params.tasks ? <input type="hidden" name="tasks" value={params.tasks} /> : null}
-                <label className="el-visually-hidden" htmlFor="ov-fq">
-                  Filter follow-ups
-                </label>
-                <input
-                  id="ov-fq"
-                  className="el-input ov-filter-input"
-                  type="search"
-                  name="fq"
-                  placeholder="Student, programme or owner"
-                  defaultValue={fq}
-                  maxLength={100}
+        <div className="ov-layout">
+          <div className="ov-main">
+            <Card
+              id="follow-ups"
+              title="Follow-ups"
+              description="Next contact due with each student, most overdue first."
+              actions={
+                <form className="ov-filter" method="get" action="/" role="search">
+                  <label className="el-visually-hidden" htmlFor="ov-fq">
+                    Search follow-ups
+                  </label>
+                  <input
+                    id="ov-fq"
+                    className="el-input ov-filter-input"
+                    type="search"
+                    name="fq"
+                    placeholder="Search follow-ups"
+                    defaultValue={fq}
+                    maxLength={100}
+                  />
+                  <button className="el-button el-button-secondary" type="submit">
+                    Search
+                  </button>
+                  {fq ? <a href={hrefWith(params, 'fq')}>Clear</a> : null}
+                </form>
+              }
+            >
+              <Suspense fallback={<LoadingState label="Loading follow-ups…" />}>
+                <FollowUps
+                  deps={deps}
+                  q={fq}
+                  clearHref={hrefWith(params, 'fq')}
+                  canClose={can(user, 'ops:leads:write')}
                 />
-                <button className="el-button el-button-secondary" type="submit">
-                  Filter
-                </button>
-                {fq ? <a href={hrefWith(params, 'fq')}>Clear</a> : null}
-              </form>
-            }
-          >
-            <Suspense fallback={<LoadingState label="Loading follow-ups…" />}>
-              <FollowUps deps={deps} q={fq} clearHref={hrefWith(params, 'fq')} />
-            </Suspense>
-          </Card>
+              </Suspense>
+            </Card>
+          </div>
 
-          <Card
-            id="priorities"
-            title="Team priorities"
-            description="Open tasks by due date (IST)."
-            actions={
-              can(user, 'ops:tasks:read') ? <a href="/ops/tasks?view=open">View all tasks</a> : null
-            }
-          >
-            <Suspense fallback={<LoadingState label="Loading tasks…" />}>
-              <Priorities deps={deps} tab={tab} params={params} />
-            </Suspense>
-          </Card>
-        </div>
-
-        <div className="ov-side">
-          <Card id="attention" title="Needs your decision">
-            <Suspense fallback={<LoadingState label="Loading…" />}>
-              <Attention deps={deps} inbox={inbox} />
-            </Suspense>
-          </Card>
-          <Card id="classes" title="Today’s classes" description="Scheduled sessions you can see.">
-            <Suspense fallback={<LoadingState label="Loading today’s classes…" />}>
-              <TodayClasses deps={deps} />
-            </Suspense>
-          </Card>
+          <div className="ov-side">
+            <Card id="attention" title="Needs your decision">
+              <Suspense fallback={<LoadingState label="Loading…" />}>
+                <Attention deps={deps} inbox={inbox} />
+              </Suspense>
+            </Card>
+            <Card
+              id="classes"
+              title="Today’s classes"
+              description="Scheduled sessions you can see."
+            >
+              <Suspense fallback={<LoadingState label="Loading today’s classes…" />}>
+                <TodayClasses deps={deps} />
+              </Suspense>
+            </Card>
+            <Modules modules={modules} />
+          </div>
         </div>
       </div>
     </AppShell>
   );
 }
 
-// --- sections (each loads its own data inside a Suspense boundary) ------------------------------
+/** One line per module the user can open (the module checks again on the server). */
+function Modules({ modules }: { modules: readonly string[] }) {
+  const open = MODULE_NAV.filter((m) => modules.includes(m.key));
+  if (open.length === 0) return null;
+  return (
+    <Card id="modules" title="Go to">
+      <ul className="ov-attention">
+        {open.map((m) => (
+          <li key={m.key}>
+            <div className="ov-attention-text">
+              <a className="ov-attention-label" href={MODULES[m.key].basePath}>
+                {m.label}
+              </a>
+              <span className="ov-attention-detail">{MODULE_BLURBS[m.key]}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
 
-/** Renders the non-ok states of a widget, or null when it has data. */
 function WidgetState({ widget }: { widget: Widget<unknown> }) {
   if (widget.status === 'unavailable')
     return (
@@ -247,6 +259,7 @@ async function Figures({
 
 async function Pipeline({ deps }: { deps: OverviewDeps }) {
   const w = await loadPipeline(deps);
+  const canLeads = can(deps.user, 'ops:leads:read');
   if (w.status !== 'ok') return <WidgetState widget={w} />;
   if (w.data.every((s) => s.count === 0))
     return (
@@ -256,19 +269,17 @@ async function Pipeline({ deps }: { deps: OverviewDeps }) {
         action={<a href="/ops/admissions">Open admissions</a>}
       />
     );
-  const max = Math.max(1, ...w.data.map((s) => s.count));
   return (
-    <ol className="ov-pipeline" aria-label="Admission stages, in order">
-      {w.data.map((s) => (
-        <li key={s.key} className="ov-stage">
-          <span className="ov-stage-count">{s.count}</span>
-          <span className="ov-stage-label">{s.label}</span>
-          <span className="ov-stage-bar" aria-hidden="true">
-            <span style={{ width: `${Math.round((s.count / max) * 100)}%` }} />
-          </span>
-        </li>
-      ))}
-    </ol>
+    <JourneyRail
+      label="Admission stages, in order"
+      stages={w.data.map((s) => ({
+        key: s.key,
+        label: s.label,
+        count: s.count,
+        // Only a one-status stage maps exactly onto the leads list's stage filter.
+        href: canLeads && s.statuses.length === 1 ? `/ops/leads?stage=${s.statuses[0]}` : undefined,
+      }))}
+    />
   );
 }
 
@@ -276,10 +287,13 @@ async function FollowUps({
   deps,
   q,
   clearHref,
+  canClose,
 }: {
   deps: OverviewDeps;
   q?: string;
   clearHref: string;
+  /** ops:leads:write; the server re-checks permission and scope. */
+  canClose: boolean;
 }) {
   const w = await loadFollowUps(deps, q);
   if (w.status !== 'ok') return <WidgetState widget={w} />;
@@ -294,123 +308,72 @@ async function FollowUps({
     .filter(Boolean)
     .join(' ');
   return (
-    <>
-      <DataTable
-        compact
-        caption={total > 0 ? caption : undefined}
-        columns={[
-          {
-            key: 'student',
-            header: 'Student',
-            render: (r) => <a href={`/ops/leads/${r.leadId}`}>{r.student}</a>,
-          },
-          { key: 'programme', header: 'Programme' },
-          { key: 'owner', header: 'Owner' },
-          {
-            key: 'nextStep',
-            header: 'Next step',
-          },
-          {
-            key: 'due',
-            header: 'Due',
-            render: (r) => <span className="ov-due">{dueLabel(r.due, today, tomorrow)}</span>,
-          },
-        ]}
-        rows={rows}
-        rowKey={(r) => r.id}
-        empty={
-          <EmptyState
-            title={q ? 'No follow-ups match this filter' : 'No open follow-ups'}
-            description={q ? 'Try a different name, programme or owner.' : undefined}
-            action={q ? <a href={clearHref}>Clear the filter</a> : undefined}
-          />
-        }
-      />
-    </>
-  );
-}
-
-async function Priorities({
-  deps,
-  tab,
-  params,
-}: {
-  deps: OverviewDeps;
-  tab: PriorityTab;
-  params: Record<string, string | undefined>;
-}) {
-  const w = await loadPriorities(deps, tab);
-  if (w.status !== 'ok') return <WidgetState widget={w} />;
-  const today = istDate(deps.now);
-  const tomorrow = istDate(deps.now, 1);
-  return (
-    <>
-      <Tabs
-        idBase="priorities"
-        label="Team priorities"
-        selected={tab}
-        items={PRIORITY_TABS.map((t) => ({
-          key: t,
-          label: PRIORITY_TAB_LABELS[t],
-          href: `${hrefWith(params, 'tasks', t === 'today' ? undefined : t)}#priorities`,
-          count: w.data.counts[t],
-        }))}
-      >
-        <DataTable
-          compact
-          caption={
-            w.data.rows.length < w.data.counts[tab]
-              ? `Showing the ${w.data.rows.length} due first of ${w.data.counts[tab]}.`
-              : undefined
-          }
-          columns={[
-            {
-              key: 'title',
-              header: 'Task',
-              render: (r) => <a href={`/ops/tasks/${r.id}`}>{r.title}</a>,
-            },
-            { key: 'owner', header: 'Owner' },
-            { key: 'due', header: 'Due', render: (r) => dueLabel(r.due, today, tomorrow) },
-            {
-              key: 'status',
-              header: 'Status',
-              render: (r) => (
-                <StatusBadge
-                  tone={
-                    r.status === 'Blocked'
-                      ? 'danger'
-                      : r.status === 'At risk'
-                        ? 'warning'
-                        : r.status === 'In progress'
-                          ? 'info'
-                          : 'neutral'
-                  }
-                >
-                  {r.status}
-                </StatusBadge>
-              ),
-            },
-          ]}
-          rows={w.data.rows}
-          rowKey={(r) => r.id}
-          empty={
-            tab === 'all' ? (
-              <EmptyState title="No open tasks" />
-            ) : (
-              <EmptyState
-                title={tab === 'today' ? 'Nothing due today' : 'Nothing due this week'}
-                description="Switch to All tasks to see what is coming up."
-              />
-            )
-          }
+    <DataTable
+      compact
+      caption={caption}
+      columns={[
+        {
+          key: 'student',
+          header: 'Student',
+          render: (r) => (
+            <div>
+              <a href={`/ops/leads/${r.leadId}`}>{r.student}</a>
+              <div className="el-field-hint">
+                {r.programme} · {r.nextStep}
+              </div>
+            </div>
+          ),
+        },
+        { key: 'owner', header: 'Owner' },
+        {
+          key: 'due',
+          header: 'Due',
+          render: (r) => <span className="ov-due">{dueLabel(r.due, today, tomorrow)}</span>,
+        },
+        ...(canClose
+          ? [
+              {
+                key: 'done',
+                header: 'Done',
+                // Completing needs an outcome (evidence), as in Business Operations.
+                render: (r: (typeof rows)[number]) => (
+                  <details className="pf-done">
+                    <summary className="el-button el-button-secondary">
+                      Mark done<span className="el-visually-hidden">: {r.student}</span>
+                    </summary>
+                    <JsonForm
+                      action={`/ops/api/v1/follow-ups/${r.id}`}
+                      submitLabel="Done"
+                      variant="secondary"
+                    >
+                      <input type="hidden" name="action" value="complete" />
+                      <div className="el-field">
+                        <label htmlFor={`fu-${r.id}`}>What happened *</label>
+                        <input
+                          id={`fu-${r.id}`}
+                          name="outcome"
+                          className="el-input"
+                          required
+                          maxLength={1000}
+                        />
+                      </div>
+                    </JsonForm>
+                  </details>
+                ),
+              },
+            ]
+          : []),
+      ]}
+      rows={rows}
+      rowKey={(r) => r.id}
+      empty={
+        <EmptyState
+          title={q ? 'No follow-ups match this filter' : 'No open follow-ups'}
+          description={q ? 'Try a different name, programme or owner.' : undefined}
+          action={q ? <a href={clearHref}>Clear the filter</a> : undefined}
         />
-        {w.data.capped ? (
-          <p className="ov-unavailable">
-            Counts stop at the first 1,000 open tasks by due date; “All tasks” may be higher.
-          </p>
-        ) : null}
-      </Tabs>
-    </>
+      }
+    />
   );
 }
 

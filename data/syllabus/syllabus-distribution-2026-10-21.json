@@ -1,0 +1,4240 @@
+{
+ "generatedOn": "2026-10-21",
+ "generatedBy": "SYLLABUS-RESEARCH agent; accuracy-reviewed 2026-10-21 (verdict: seed as drafts after small fixes, applied)",
+ "weightFormula": "weight = max(1, round_half_up(10 x share / maxShare)); maxShare taken within one scoring unit (one paper/test). Group marks covering n chapters are split equally. Where no official or proxy share exists the weight is 1 (schema default = unweighted).",
+ "programmes": [
+  {
+   "programmeCode": "IPMAT",
+   "courseCode": "IPMAT-BASE",
+   "action": "weights-only on existing chapters (no new course; 253-class locked plan, 75-minute classes and chapter codes untouched)",
+   "status": "draft",
+   "source": {
+    "url": "https://iimidr.ac.in/wp-content/uploads/2026/01/AdmissionProcedure_IPM-2026-31_-Domestic-Applicants.pdf",
+    "title": "IIM Indore IPM 2026-31 Admission Procedure (Domestic)",
+    "year": "2026",
+    "retrieved": "2026-10-21"
+   },
+   "otherSources": [
+    {
+     "url": "https://ug.iimb.ac.in/wp-content/uploads/2026/10/UG-Admissions-Process_2026.pdf",
+     "title": "IIMB B.Sc. (Hons) Data Science & Economics 2027-31 Admission Procedure",
+     "year": "2026 test / 2027 intake",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://ug.iimb.ac.in/wp-content/uploads/2026/10/UG-Admissions-FAQ_2026.pdf",
+     "title": "IIMB FAQs - UG Admissions Test 2026",
+     "year": "2026",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://iimrohtak.ac.in/ipm-admission.php",
+     "title": "IIM Rohtak IPM admission page (IPM AT 2026)",
+     "year": "2026",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cdnbbsr.s3waas.gov.in/s388a839f2f6f1427879fc33ee4acf4f66/uploads/2026/04/20260416666062493.pdf",
+     "title": "NTA JIPMAT-2026 Information Bulletin",
+     "year": "2026",
+     "retrieved": "2026-10-21"
+    }
+   ],
+   "relatedExams": [
+    "IIMB UG-AT (coached inside IPMAT batch, D-037)",
+    "IPMAT Rohtak (related, not a separate programme)",
+    "JIPMAT (related, not a separate programme)"
+   ],
+   "officialTopicList": "none: IIM Indore and IIM Rohtak publish sections only; JIPMAT says 'up to class 10 Mathematics'; IIMB says 'NCERT X, XI and XII'. Chapter list = existing IPMAT-BASE (derived, not official).",
+   "subjects": [
+    {
+     "code": "QUANT",
+     "name": "Quantitative Ability",
+     "chapters": [
+      {
+       "code": "Q-01",
+       "title": "Calculation Foundations",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 0
+      },
+      {
+       "code": "Q-02",
+       "title": "Number Systems",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 1
+      },
+      {
+       "code": "Q-03",
+       "title": "Percentages",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 2
+      },
+      {
+       "code": "Q-04",
+       "title": "Ratio and Proportion",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 3
+      },
+      {
+       "code": "Q-05",
+       "title": "Averages, Mixtures and Alligation",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 4
+      },
+      {
+       "code": "Q-06",
+       "title": "Profit, Loss and Discounts",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 5
+      },
+      {
+       "code": "Q-07",
+       "title": "Interest and Instalments",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 6
+      },
+      {
+       "code": "Q-08",
+       "title": "Time and Work",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 7
+      },
+      {
+       "code": "Q-09",
+       "title": "Time, Speed and Distance",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 8
+      },
+      {
+       "code": "Q-10",
+       "title": "Basic Algebra",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 9
+      },
+      {
+       "code": "Q-11",
+       "title": "Advanced Algebra",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 10
+      },
+      {
+       "code": "Q-12",
+       "title": "Sequences, Series and Binomial",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 11
+      },
+      {
+       "code": "Q-13",
+       "title": "Sets, Relations and Functions",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 12
+      },
+      {
+       "code": "Q-14",
+       "title": "Matrices and Determinants",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 13
+      },
+      {
+       "code": "Q-15",
+       "title": "Geometry",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 14
+      },
+      {
+       "code": "Q-16",
+       "title": "Mensuration",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 15
+      },
+      {
+       "code": "Q-17",
+       "title": "Coordinate Geometry",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 16
+      },
+      {
+       "code": "Q-18",
+       "title": "Trigonometry",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 17
+      },
+      {
+       "code": "Q-19",
+       "title": "Counting and Probability",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 18
+      },
+      {
+       "code": "Q-20",
+       "title": "Statistics",
+       "share": 0.398,
+       "weight": 10,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.3980; max subject mean 0.3980; weight = round(10 x 0.3980/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 19
+      },
+      {
+       "code": "HM-01",
+       "title": "Higher maths: Complex Numbers",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 20
+      },
+      {
+       "code": "HM-02",
+       "title": "Higher maths: Inverse Trigonometry",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 21
+      },
+      {
+       "code": "HM-03",
+       "title": "Higher maths: Conic Sections extension",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 22
+      },
+      {
+       "code": "HM-04",
+       "title": "Higher maths: Limits and Continuity",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 23
+      },
+      {
+       "code": "HM-05",
+       "title": "Higher maths: Differentiation",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 24
+      },
+      {
+       "code": "HM-06",
+       "title": "Higher maths: Applications of Derivatives",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 25
+      },
+      {
+       "code": "HM-07",
+       "title": "Higher maths: Integration and Applications",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 26
+      },
+      {
+       "code": "HM-08",
+       "title": "Higher maths: Differential Equations",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 27
+      },
+      {
+       "code": "HM-09",
+       "title": "Higher maths: Vectors and 3D Geometry",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 28
+      },
+      {
+       "code": "HM-10",
+       "title": "Higher maths: Probability Extensions",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 29
+      },
+      {
+       "code": "HM-11",
+       "title": "Higher maths: Linear Programming",
+       "share": 0.3155,
+       "weight": 8,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) with JIPMAT=0 because combined-iim-syllabus.json quant_topic_evidence marks this topic 'X' (beyond JIPMAT's Class 10 scope) = 0.3155; max subject mean 0.3980; weight = round(10 x 0.3155/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 30
+      }
+     ]
+    },
+    {
+     "code": "VERBAL",
+     "name": "Verbal Ability",
+     "chapters": [
+      {
+       "code": "V-01",
+       "title": "Grammar foundations",
+       "share": 0.3648,
+       "weight": 9,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.340) = 0.3648; max subject mean 0.3980; weight = round(10 x 0.3648/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 31
+      },
+      {
+       "code": "V-02",
+       "title": "Grammar application",
+       "share": 0.3648,
+       "weight": 9,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.340) = 0.3648; max subject mean 0.3980; weight = round(10 x 0.3648/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 32
+      },
+      {
+       "code": "V-03",
+       "title": "Vocabulary",
+       "share": 0.3648,
+       "weight": 9,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.340) = 0.3648; max subject mean 0.3980; weight = round(10 x 0.3648/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 33
+      },
+      {
+       "code": "V-04",
+       "title": "RC and Critical Reasoning foundations",
+       "share": 0.3648,
+       "weight": 9,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.340) = 0.3648; max subject mean 0.3980; weight = round(10 x 0.3648/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 34
+      },
+      {
+       "code": "V-05",
+       "title": "Genre-wise RC",
+       "share": 0.3648,
+       "weight": 9,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.340) = 0.3648; max subject mean 0.3980; weight = round(10 x 0.3648/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 35
+      },
+      {
+       "code": "V-06",
+       "title": "Verbal question formats",
+       "share": 0.3648,
+       "weight": 9,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.500, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.340) = 0.3648; max subject mean 0.3980; weight = round(10 x 0.3648/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 36
+      }
+     ]
+    },
+    {
+     "code": "LR",
+     "name": "Logical Reasoning",
+     "chapters": [
+      {
+       "code": "LR-01",
+       "title": "Syllogism",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 37
+      },
+      {
+       "code": "LR-02",
+       "title": "Venn Diagrams",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 38
+      },
+      {
+       "code": "LR-03",
+       "title": "Coding & Decoding",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 39
+      },
+      {
+       "code": "LR-04",
+       "title": "Blood Relations",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 40
+      },
+      {
+       "code": "LR-05",
+       "title": "Inequalities",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 41
+      },
+      {
+       "code": "LR-06",
+       "title": "Arrangements & Puzzles",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 42
+      },
+      {
+       "code": "LR-07",
+       "title": "Team Selection",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 43
+      },
+      {
+       "code": "LR-08",
+       "title": "Games & Quantitative Puzzles",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 44
+      },
+      {
+       "code": "LR-09",
+       "title": "Input & Output",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 45
+      },
+      {
+       "code": "LR-10",
+       "title": "Analogy",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 46
+      },
+      {
+       "code": "LR-11",
+       "title": "Classification",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 47
+      },
+      {
+       "code": "LR-12",
+       "title": "Series",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 48
+      },
+      {
+       "code": "LR-13",
+       "title": "Direction and Distance",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 49
+      },
+      {
+       "code": "LR-14",
+       "title": "Order and Ranking",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 50
+      },
+      {
+       "code": "LR-15",
+       "title": "Clocks and Calendars",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 51
+      },
+      {
+       "code": "LR-16",
+       "title": "Logical Sequence of Words",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 52
+      },
+      {
+       "code": "LR-17",
+       "title": "Data Sufficiency",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 53
+      },
+      {
+       "code": "LR-18",
+       "title": "Cubes and Dice",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 54
+      },
+      {
+       "code": "LR-19",
+       "title": "Visual Reasoning",
+       "share": 0.2373,
+       "weight": 6,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.286, IPMAT Rohtak 2026=0.333, JIPMAT 2026=0.330) = 0.2373; max subject mean 0.3980; weight = round(10 x 0.2373/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 55
+      }
+     ]
+    },
+    {
+     "code": "DI",
+     "name": "Data Interpretation",
+     "chapters": [
+      {
+       "code": "DI-01",
+       "title": "Tables",
+       "share": 0.1896,
+       "weight": 5,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.000, JIPMAT 2026=0.330) = 0.1896; max subject mean 0.3980; weight = round(10 x 0.1896/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 56
+      },
+      {
+       "code": "DI-02",
+       "title": "Bar Graphs",
+       "share": 0.1896,
+       "weight": 5,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.000, JIPMAT 2026=0.330) = 0.1896; max subject mean 0.3980; weight = round(10 x 0.1896/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 57
+      },
+      {
+       "code": "DI-03",
+       "title": "Line Graphs",
+       "share": 0.1896,
+       "weight": 5,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.000, JIPMAT 2026=0.330) = 0.1896; max subject mean 0.3980; weight = round(10 x 0.1896/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 58
+      },
+      {
+       "code": "DI-04",
+       "title": "Pie Charts",
+       "share": 0.1896,
+       "weight": 5,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.000, JIPMAT 2026=0.330) = 0.1896; max subject mean 0.3980; weight = round(10 x 0.1896/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 59
+      },
+      {
+       "code": "DI-05",
+       "title": "Mixed Charts",
+       "share": 0.1896,
+       "weight": 5,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.000, JIPMAT 2026=0.330) = 0.1896; max subject mean 0.3980; weight = round(10 x 0.1896/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 60
+      },
+      {
+       "code": "DI-06",
+       "title": "Caselets",
+       "share": 0.1896,
+       "weight": 5,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.000, JIPMAT 2026=0.330) = 0.1896; max subject mean 0.3980; weight = round(10 x 0.1896/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 61
+      },
+      {
+       "code": "DI-07",
+       "title": "Logical DI",
+       "share": 0.1896,
+       "weight": 5,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.000, JIPMAT 2026=0.330) = 0.1896; max subject mean 0.3980; weight = round(10 x 0.1896/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 62
+      },
+      {
+       "code": "DI-08",
+       "title": "Miscellaneous Formats",
+       "share": 0.1896,
+       "weight": 5,
+       "weightBasis": "mean over 4 target exams of subject share (IPMAT Indore 2026=0.000, IIMB UG-AT 2026=0.429, IPMAT Rohtak 2026=0.000, JIPMAT 2026=0.330) = 0.1896; max subject mean 0.3980; weight = round(10 x 0.1896/0.3980)",
+       "weightSource": "derived",
+       "sourceRef": "data/legacy/academic/ipmat-baseline.json (chapter); exam shares from official 2026 documents",
+       "official": false,
+       "sortOrder": 63
+      }
+     ]
+    }
+   ],
+   "examShareTable": {
+    "IPMAT Indore 2026 (ATS weights 25/25/50)": {
+     "QUANT": 0.5,
+     "VERBAL": 0.5,
+     "LR": 0,
+     "DI": 0
+    },
+    "IIMB UG-AT 2026 (pre-PI test points 30/20/20 of 70)": {
+     "QUANT": 0.42857142857142855,
+     "VERBAL": 0.2857142857142857,
+     "LR": 0.2857142857142857,
+     "DI": 0.42857142857142855
+    },
+    "IPMAT Rohtak 2026 (40/40/40 Qs)": {
+     "QUANT": 0.3333333333333333,
+     "VERBAL": 0.3333333333333333,
+     "LR": 0.3333333333333333,
+     "DI": 0
+    },
+    "JIPMAT 2026 (33/33/34 Qs, DILR combined)": {
+     "QUANT": 0.33,
+     "VERBAL": 0.34,
+     "LR": 0.33,
+     "DI": 0.33
+    }
+   },
+   "subjectMeans": {
+    "QUANT": 0.3979761904761905,
+    "VERBAL": 0.36476190476190473,
+    "LR": 0.23726190476190476,
+    "DI": 0.18964285714285714
+   }
+  },
+  {
+   "programmeCode": "CLAT",
+   "courseCode": "CLAT-SYL-2027",
+   "familyCode": "CLAT-SYL",
+   "status": "draft",
+   "source": {
+    "url": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html",
+    "title": "Consortium of NLUs: CLAT 2027 UG Question Paper Format",
+    "year": "2027 cycle",
+    "retrieved": "2026-10-21"
+   },
+   "subjects": [
+    {
+     "code": "ENG",
+     "name": "English Language",
+     "officialQuestions": "22-26",
+     "sourceUrl": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html",
+     "chapters": [
+      {
+       "code": "ENG-01",
+       "title": "Reading comprehension passages (~450 words; main point, inference, summary, viewpoints)",
+       "share": 20,
+       "weight": 8,
+       "weightBasis": "section share ~20% (22-26 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 20/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'English Language'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "COM-C12-2627:ENG-01",
+        "CUET-SYL-2026:ENG-01..ENG-03",
+        "IPMAT-BASE:V-04",
+        "IPMAT-BASE:V-05"
+       ]
+      },
+      {
+       "code": "ENG-02",
+       "title": "Meaning of words and phrases in context",
+       "share": 20,
+       "weight": 8,
+       "weightBasis": "section share ~20% (22-26 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 20/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'English Language'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "IPMAT-BASE:V-03",
+        "CUET-SYL-2026:ENG-07"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "CA",
+     "name": "Current Affairs, including General Knowledge",
+     "officialQuestions": "28-32",
+     "sourceUrl": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html",
+     "chapters": [
+      {
+       "code": "CA-01",
+       "title": "Contemporary events of significance from India and the world",
+       "share": 25,
+       "weight": 10,
+       "weightBasis": "section share ~25% (28-32 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 25/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Current Affairs, including General Knowledge'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CUET-SYL-2026:GAT-02"
+       ]
+      },
+      {
+       "code": "CA-02",
+       "title": "Arts and culture",
+       "share": 25,
+       "weight": 10,
+       "weightBasis": "section share ~25% (28-32 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 25/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Current Affairs, including General Knowledge'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CUET-SYL-2026:GAT-01"
+       ]
+      },
+      {
+       "code": "CA-03",
+       "title": "International affairs",
+       "share": 25,
+       "weight": 10,
+       "weightBasis": "section share ~25% (28-32 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 25/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Current Affairs, including General Knowledge'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "CUET-SYL-2026:GAT-02"
+       ]
+      },
+      {
+       "code": "CA-04",
+       "title": "Historical events of continuing significance",
+       "share": 25,
+       "weight": 10,
+       "weightBasis": "section share ~25% (28-32 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 25/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Current Affairs, including General Knowledge'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "CUET-SYL-2026:GAT-01"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "LEG",
+     "name": "Legal Reasoning",
+     "officialQuestions": "28-32",
+     "sourceUrl": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html",
+     "chapters": [
+      {
+       "code": "LEG-01",
+       "title": "Identifying and applying rules and principles to fact situations",
+       "share": 25,
+       "weight": 10,
+       "weightBasis": "section share ~25% (28-32 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 25/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Legal Reasoning'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": []
+      },
+      {
+       "code": "LEG-02",
+       "title": "Effect of changing the rule on the outcome",
+       "share": 25,
+       "weight": 10,
+       "weightBasis": "section share ~25% (28-32 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 25/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Legal Reasoning'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": []
+      },
+      {
+       "code": "LEG-03",
+       "title": "Contemporary legal and public-policy matters from the news (derived: observed 2023-2026 papers)",
+       "share": 25,
+       "weight": 10,
+       "weightBasis": "section share ~25% (28-32 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 25/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Legal Reasoning'; chapter: derived from clat-pattern-intel 04-legal.md (observed papers), not an official list",
+       "official": false,
+       "sortOrder": 3,
+       "overlaps": []
+      },
+      {
+       "code": "LEG-04",
+       "title": "Contract, tort and criminal-law principles (derived: observed papers 2019-2025)",
+       "share": 25,
+       "weight": 10,
+       "weightBasis": "section share ~25% (28-32 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 25/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Legal Reasoning'; chapter: derived from clat-pattern-intel 04-legal.md",
+       "official": false,
+       "sortOrder": 4,
+       "overlaps": [
+        "CAF-SYL-2024:LAW-02"
+       ]
+      },
+      {
+       "code": "LEG-05",
+       "title": "Constitutional law and governance (derived: observed 2026 paper)",
+       "share": 25,
+       "weight": 10,
+       "weightBasis": "section share ~25% (28-32 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 25/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Legal Reasoning'; chapter: derived from clat-pattern-intel 04-legal.md",
+       "official": false,
+       "sortOrder": 5,
+       "overlaps": []
+      }
+     ]
+    },
+    {
+     "code": "LR",
+     "name": "Logical Reasoning",
+     "officialQuestions": "22-26",
+     "sourceUrl": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html",
+     "chapters": [
+      {
+       "code": "LR-01",
+       "title": "Arguments: premises, conclusions, strengthen/weaken, inference",
+       "share": 20,
+       "weight": 8,
+       "weightBasis": "section share ~20% (22-26 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 20/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Logical Reasoning'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": []
+      },
+      {
+       "code": "LR-02",
+       "title": "Analogies, contradictions and equivalence",
+       "share": 20,
+       "weight": 8,
+       "weightBasis": "section share ~20% (22-26 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 20/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Logical Reasoning'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "IPMAT-BASE:LR-10",
+        "IPMAT-BASE:LR-11"
+       ]
+      },
+      {
+       "code": "LR-03",
+       "title": "Analytical puzzles: arrangement, sequencing, coded relations (derived: 2025-2026 papers)",
+       "share": 20,
+       "weight": 8,
+       "weightBasis": "section share ~20% (22-26 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 20/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Logical Reasoning'; chapter: derived from clat-pattern-intel 05-logical.md (observed 2025-26)",
+       "official": false,
+       "sortOrder": 3,
+       "overlaps": [
+        "IPMAT-BASE:LR-04",
+        "IPMAT-BASE:LR-06",
+        "CAF-SYL-2024:QA-11",
+        "CAF-SYL-2024:QA-12",
+        "CUET-SYL-2026:GAT-06"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "QT",
+     "name": "Quantitative Techniques",
+     "officialQuestions": "10-14",
+     "sourceUrl": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html",
+     "chapters": [
+      {
+       "code": "QT-01",
+       "title": "Ratios and proportions",
+       "share": 10,
+       "weight": 4,
+       "weightBasis": "section share ~10% (10-14 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 10/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Quantitative Techniques'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "IPMAT-BASE:Q-03",
+        "IPMAT-BASE:Q-04",
+        "CUET-SYL-2026:GAT-05",
+        "CAF-SYL-2024:QA-01"
+       ]
+      },
+      {
+       "code": "QT-02",
+       "title": "Basic algebra",
+       "share": 10,
+       "weight": 4,
+       "weightBasis": "section share ~10% (10-14 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 10/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Quantitative Techniques'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "IPMAT-BASE:Q-10",
+        "CUET-SYL-2026:GAT-05"
+       ]
+      },
+      {
+       "code": "QT-03",
+       "title": "Mensuration",
+       "share": 10,
+       "weight": 4,
+       "weightBasis": "section share ~10% (10-14 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 10/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Quantitative Techniques'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "IPMAT-BASE:Q-16",
+        "CUET-SYL-2026:GAT-05"
+       ]
+      },
+      {
+       "code": "QT-04",
+       "title": "Statistical estimation",
+       "share": 10,
+       "weight": 4,
+       "weightBasis": "section share ~10% (10-14 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 10/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Quantitative Techniques'; chapter: official syllabus wording: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html (retrieved 2026-10-21)",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "IPMAT-BASE:Q-20",
+        "CUET-SYL-2026:GAT-05"
+       ]
+      },
+      {
+       "code": "QT-05",
+       "title": "Numerical information in prose sets (2 sets x 6 observed 2024-26)",
+       "share": 10,
+       "weight": 4,
+       "weightBasis": "section share ~10% (10-14 of 120 Qs, official); every chapter inherits its section share because the chapter list is not official; weight = round(10 x 10/25)",
+       "weightSource": "official",
+       "sourceRef": "https://consortiumofnlus.ac.in/clat-2027/ug-question-format.html section 'Quantitative Techniques'; chapter: official: 'short sets of facts or propositions, or other textual representations of numerical information' (https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html, retrieved 2026-10-21); 2 sets x 6 is observed, not official",
+       "official": false,
+       "sortOrder": 5,
+       "overlaps": [
+        "IPMAT-BASE:DI-06"
+       ]
+      }
+     ]
+    }
+   ],
+   "otherSources": [
+    {
+     "url": "https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html",
+     "title": "Consortium of NLUs: CLAT 2027 UG Syllabus",
+     "year": "2027 cycle",
+     "retrieved": "2026-10-21"
+    }
+   ]
+  },
+  {
+   "programmeCode": "CUET",
+   "courseCode": "CUET-SYL-2026",
+   "familyCode": "CUET-SYL",
+   "status": "draft",
+   "source": {
+    "url": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2026/01/202601031633478370.pdf",
+    "title": "NTA CUET (UG) 2026 Information Bulletin",
+    "year": "2026",
+    "retrieved": "2026-10-21"
+   },
+   "otherSources": [
+    {
+     "url": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227980877010.pdf",
+     "title": "NTA CUET (UG) 2026 syllabus: English 101",
+     "year": "2026",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227522720880.pdf",
+     "title": "NTA CUET (UG) 2026 syllabus: Accountancy 301",
+     "year": "2026",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf",
+     "title": "NTA CUET (UG) 2026 syllabus: Business Studies 305",
+     "year": "2026",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf",
+     "title": "NTA CUET (UG) 2026 syllabus: Economics 309",
+     "year": "2026",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf",
+     "title": "NTA CUET (UG) 2026 syllabus: Mathematics/Applied Mathematics 319",
+     "year": "2026",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227140287889.pdf",
+     "title": "NTA CUET (UG) 2026 syllabus: General Aptitude Test 501",
+     "year": "2026",
+     "retrieved": "2026-10-21"
+    }
+   ],
+   "scope": "Commerce-stream set: English 101 + Accountancy 301 + Business Studies 305 + Economics 309 + Maths/Applied Maths 319 + GAT 501 (6 papers; NTA allows max 5 per candidate)",
+   "subjects": [
+    {
+     "code": "ENG",
+     "name": "English (101)",
+     "sourceUrl": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227980877010.pdf",
+     "chapters": [
+      {
+       "code": "ENG-01",
+       "title": "Reading comprehension: factual passages (max 300 words)",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227980877010.pdf topics 1-2",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "COM-C12-2627:ENG-01",
+        "CLAT-SYL-2027:ENG-01",
+        "IPMAT-BASE:V-04"
+       ]
+      },
+      {
+       "code": "ENG-02",
+       "title": "Reading comprehension: narrative passages",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227980877010.pdf topics 1-2",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "COM-C12-2627:ENG-01"
+       ]
+      },
+      {
+       "code": "ENG-03",
+       "title": "Reading comprehension: literary passages",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227980877010.pdf topics 1-2",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "COM-C12-2627:ENG-01",
+        "IPMAT-BASE:V-05"
+       ]
+      },
+      {
+       "code": "ENG-04",
+       "title": "Verbal ability: rearranging the parts",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227980877010.pdf topics 1-2",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "IPMAT-BASE:V-06"
+       ]
+      },
+      {
+       "code": "ENG-05",
+       "title": "Verbal ability: match the following",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227980877010.pdf topics 1-2",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": []
+      },
+      {
+       "code": "ENG-06",
+       "title": "Verbal ability: choosing the correct word",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227980877010.pdf topics 1-2",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "IPMAT-BASE:V-02"
+       ]
+      },
+      {
+       "code": "ENG-07",
+       "title": "Verbal ability: synonyms and antonyms",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227980877010.pdf topics 1-2",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": [
+        "IPMAT-BASE:V-03"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "GAT",
+     "name": "General Aptitude Test (501)",
+     "sourceUrl": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227140287889.pdf",
+     "chapters": [
+      {
+       "code": "GAT-01",
+       "title": "General Knowledge",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227140287889.pdf topic list",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CLAT-SYL-2027:CA-02",
+        "CLAT-SYL-2027:CA-04"
+       ]
+      },
+      {
+       "code": "GAT-02",
+       "title": "Current Affairs",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227140287889.pdf topic list",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CLAT-SYL-2027:CA-01",
+        "CLAT-SYL-2027:CA-03"
+       ]
+      },
+      {
+       "code": "GAT-03",
+       "title": "General Mental Ability",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227140287889.pdf topic list",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "IPMAT-BASE:LR-01..LR-19"
+       ]
+      },
+      {
+       "code": "GAT-04",
+       "title": "Numerical Ability",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227140287889.pdf topic list",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "IPMAT-BASE:Q-01..Q-09"
+       ]
+      },
+      {
+       "code": "GAT-05",
+       "title": "Quantitative Reasoning (simple application of arithmetic, algebra, geometry, mensuration, statistics)",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227140287889.pdf topic list",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "IPMAT-BASE:Q-03..Q-05",
+        "IPMAT-BASE:Q-15",
+        "IPMAT-BASE:Q-16",
+        "IPMAT-BASE:Q-20",
+        "CLAT-SYL-2027:QT-01..QT-04"
+       ]
+      },
+      {
+       "code": "GAT-06",
+       "title": "Logical and Analytical Reasoning",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227140287889.pdf topic list",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "IPMAT-BASE:LR-01..LR-19",
+        "CLAT-SYL-2027:LR-03",
+        "CAF-SYL-2024:QA-09..QA-12"
+       ]
+      },
+      {
+       "code": "GAT-07",
+       "title": "General Science and Environment Literacy (in the 501 syllabus PDF; not in the bulletin's feature list)",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official weightage published; unweighted default 1 (schema default = unweighted)",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227140287889.pdf topic list",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": []
+      }
+     ]
+    },
+    {
+     "code": "ACC",
+     "name": "Accountancy / Book Keeping (301)",
+     "sourceUrl": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227522720880.pdf",
+     "chapters": [
+      {
+       "code": "ACC-01",
+       "title": "Unit I: Accounting for Partnership",
+       "share": 12.0,
+       "weight": 5,
+       "weightBasis": "CBSE unit marks: 36 marks for group 'CBSE XII Unit 1 Accounting for Partnership Firms (covers CUET Units I-III)' split equally over 3 units = 12.00; max in paper 24.00; weight = round(10 x 12.00 / 24.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227522720880.pdf Units I-V",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "COM-C12-2627:ACC-01"
+       ]
+      },
+      {
+       "code": "ACC-02",
+       "title": "Unit II: Reconstitution of a Partnership Firm",
+       "share": 12.0,
+       "weight": 5,
+       "weightBasis": "CBSE unit marks: 36 marks for group 'CBSE XII Unit 1 Accounting for Partnership Firms (covers CUET Units I-III)' split equally over 3 units = 12.00; max in paper 24.00; weight = round(10 x 12.00 / 24.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227522720880.pdf Units I-V",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "COM-C12-2627:ACC-01"
+       ]
+      },
+      {
+       "code": "ACC-03",
+       "title": "Unit III: Dissolution of Partnership Firm",
+       "share": 12.0,
+       "weight": 5,
+       "weightBasis": "CBSE unit marks: 36 marks for group 'CBSE XII Unit 1 Accounting for Partnership Firms (covers CUET Units I-III)' split equally over 3 units = 12.00; max in paper 24.00; weight = round(10 x 12.00 / 24.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227522720880.pdf Units I-V",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "COM-C12-2627:ACC-01"
+       ]
+      },
+      {
+       "code": "ACC-04",
+       "title": "Unit IV: Company Accounts: Accounting for Share and Debenture Capital",
+       "share": 24.0,
+       "weight": 10,
+       "weightBasis": "CBSE unit marks: 24 marks; max in paper 24.00; weight = round(10 x 24.00 / 24.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227522720880.pdf Units I-V",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "COM-C12-2627:ACC-02",
+        "CAF-SYL-2024:ACC-11"
+       ]
+      },
+      {
+       "code": "ACC-05",
+       "title": "Unit V: Analysis of Financial Statements (incl. ratios and cash flow)",
+       "share": 20.0,
+       "weight": 8,
+       "weightBasis": "CBSE unit marks: 20 marks; max in paper 24.00; weight = round(10 x 20.00 / 24.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227522720880.pdf Units I-V",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "COM-C12-2627:ACC-03",
+        "COM-C12-2627:ACC-04"
+       ]
+      },
+      {
+       "code": "ACC-06",
+       "title": "Unit V (optional): Computerised Accounting System",
+       "share": 20.0,
+       "weight": 8,
+       "weightBasis": "CBSE unit marks: 20 marks; max in paper 24.00; weight = round(10 x 20.00 / 24.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227522720880.pdf Units I-V",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "COM-C12-2627:ACC-05"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "BST",
+     "name": "Business Studies (305)",
+     "sourceUrl": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf",
+     "chapters": [
+      {
+       "code": "BST-01",
+       "title": "Unit I: Nature and Significance of Management",
+       "share": 5.3333,
+       "weight": 7,
+       "weightBasis": "CBSE unit marks: 16 marks for group 'Units 1-3' split equally over 3 units = 5.33; max in paper 7.50; weight = round(10 x 5.33 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "COM-C12-2627:BST-01"
+       ]
+      },
+      {
+       "code": "BST-02",
+       "title": "Unit II: Principles of Management",
+       "share": 5.3333,
+       "weight": 7,
+       "weightBasis": "CBSE unit marks: 16 marks for group 'Units 1-3' split equally over 3 units = 5.33; max in paper 7.50; weight = round(10 x 5.33 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "COM-C12-2627:BST-02"
+       ]
+      },
+      {
+       "code": "BST-03",
+       "title": "Unit III: Business Environment",
+       "share": 5.3333,
+       "weight": 7,
+       "weightBasis": "CBSE unit marks: 16 marks for group 'Units 1-3' split equally over 3 units = 5.33; max in paper 7.50; weight = round(10 x 5.33 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "COM-C12-2627:BST-03"
+       ]
+      },
+      {
+       "code": "BST-04",
+       "title": "Unit IV: Planning",
+       "share": 7.0,
+       "weight": 9,
+       "weightBasis": "CBSE unit marks: 14 marks for group 'Units 4-5' split equally over 2 units = 7.00; max in paper 7.50; weight = round(10 x 7.00 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "COM-C12-2627:BST-04"
+       ]
+      },
+      {
+       "code": "BST-05",
+       "title": "Unit V: Organising",
+       "share": 7.0,
+       "weight": 9,
+       "weightBasis": "CBSE unit marks: 14 marks for group 'Units 4-5' split equally over 2 units = 7.00; max in paper 7.50; weight = round(10 x 7.00 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "COM-C12-2627:BST-05"
+       ]
+      },
+      {
+       "code": "BST-06",
+       "title": "Unit VI: Staffing",
+       "share": 6.6667,
+       "weight": 9,
+       "weightBasis": "CBSE unit marks: 20 marks for group 'Units 6-8' split equally over 3 units = 6.67; max in paper 7.50; weight = round(10 x 6.67 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "COM-C12-2627:BST-06"
+       ]
+      },
+      {
+       "code": "BST-07",
+       "title": "Unit VII: Directing",
+       "share": 6.6667,
+       "weight": 9,
+       "weightBasis": "CBSE unit marks: 20 marks for group 'Units 6-8' split equally over 3 units = 6.67; max in paper 7.50; weight = round(10 x 6.67 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": [
+        "COM-C12-2627:BST-07"
+       ]
+      },
+      {
+       "code": "BST-08",
+       "title": "Unit VIII: Controlling",
+       "share": 6.6667,
+       "weight": 9,
+       "weightBasis": "CBSE unit marks: 20 marks for group 'Units 6-8' split equally over 3 units = 6.67; max in paper 7.50; weight = round(10 x 6.67 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 8,
+       "overlaps": [
+        "COM-C12-2627:BST-08"
+       ]
+      },
+      {
+       "code": "BST-09",
+       "title": "Unit IX: Business Finance",
+       "share": 7.5,
+       "weight": 10,
+       "weightBasis": "CBSE unit marks: 15 marks for group 'Units 9-10' split equally over 2 units = 7.50; max in paper 7.50; weight = round(10 x 7.50 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 9,
+       "overlaps": [
+        "COM-C12-2627:BST-09"
+       ]
+      },
+      {
+       "code": "BST-10",
+       "title": "Unit X: Financial Markets",
+       "share": 7.5,
+       "weight": 10,
+       "weightBasis": "CBSE unit marks: 15 marks for group 'Units 9-10' split equally over 2 units = 7.50; max in paper 7.50; weight = round(10 x 7.50 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 10,
+       "overlaps": [
+        "COM-C12-2627:BST-10"
+       ]
+      },
+      {
+       "code": "BST-11",
+       "title": "Unit XI: Marketing",
+       "share": 7.5,
+       "weight": 10,
+       "weightBasis": "CBSE unit marks: 15 marks for group 'Units 11-12' split equally over 2 units = 7.50; max in paper 7.50; weight = round(10 x 7.50 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 11,
+       "overlaps": [
+        "COM-C12-2627:BST-11"
+       ]
+      },
+      {
+       "code": "BST-12",
+       "title": "Unit XII: Consumer Protection",
+       "share": 7.5,
+       "weight": 10,
+       "weightBasis": "CBSE unit marks: 15 marks for group 'Units 11-12' split equally over 2 units = 7.50; max in paper 7.50; weight = round(10 x 7.50 / 7.50) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/20251227259182286.pdf Units I-XII",
+       "official": true,
+       "sortOrder": 12,
+       "overlaps": [
+        "COM-C12-2627:BST-12"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "ECO",
+     "name": "Economics / Business Economics (309)",
+     "sourceUrl": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf",
+     "chapters": [
+      {
+       "code": "ECO-01",
+       "title": "Micro I: Introduction, Theory of Consumer Behaviour",
+       "share": 18.0,
+       "weight": 9,
+       "weightBasis": "CBSE unit marks: 18 marks; max in paper 20.00; weight = round(10 x 18.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "COM-C11-2627:ECO-04",
+        "COM-C11-2627:ECO-05",
+        "CAF-SYL-2024:ECO-02"
+       ]
+      },
+      {
+       "code": "ECO-02",
+       "title": "Micro II: Production and Costs",
+       "share": 7.0,
+       "weight": 4,
+       "weightBasis": "CBSE unit marks: 14 marks for group 'CBSE XI Producer Behaviour and Supply' split equally over 2 units = 7.00; max in paper 20.00; weight = round(10 x 7.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "COM-C11-2627:ECO-06",
+        "CAF-SYL-2024:ECO-03"
+       ]
+      },
+      {
+       "code": "ECO-03",
+       "title": "Micro III: The Theory of the Firm under Perfect Competition",
+       "share": 7.0,
+       "weight": 4,
+       "weightBasis": "CBSE unit marks: 14 marks for group 'CBSE XI Producer Behaviour and Supply' split equally over 2 units = 7.00; max in paper 20.00; weight = round(10 x 7.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "COM-C11-2627:ECO-06",
+        "CAF-SYL-2024:ECO-04"
+       ]
+      },
+      {
+       "code": "ECO-04",
+       "title": "Micro IV: Market Equilibrium and Simple Applications",
+       "share": 8.0,
+       "weight": 4,
+       "weightBasis": "CBSE unit marks: 8 marks; max in paper 20.00; weight = round(10 x 8.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "COM-C11-2627:ECO-07",
+        "CAF-SYL-2024:ECO-04"
+       ]
+      },
+      {
+       "code": "ECO-05",
+       "title": "Macro I: Introduction and National Income Accounting",
+       "share": 10.0,
+       "weight": 5,
+       "weightBasis": "CBSE unit marks: 10 marks; max in paper 20.00; weight = round(10 x 10.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "COM-C12-2627:ECO-01",
+        "CAF-SYL-2024:ECO-05"
+       ]
+      },
+      {
+       "code": "ECO-06",
+       "title": "Macro II: Money and Banking",
+       "share": 6.0,
+       "weight": 3,
+       "weightBasis": "CBSE unit marks: 6 marks; max in paper 20.00; weight = round(10 x 6.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "COM-C12-2627:ECO-02",
+        "CAF-SYL-2024:ECO-08"
+       ]
+      },
+      {
+       "code": "ECO-07",
+       "title": "Macro III: Determination of Income and Employment",
+       "share": 12.0,
+       "weight": 6,
+       "weightBasis": "CBSE unit marks: 12 marks; max in paper 20.00; weight = round(10 x 12.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": [
+        "COM-C12-2627:ECO-03",
+        "CAF-SYL-2024:ECO-05"
+       ]
+      },
+      {
+       "code": "ECO-08",
+       "title": "Macro IV: Government Budget and the Economy",
+       "share": 6.0,
+       "weight": 3,
+       "weightBasis": "CBSE unit marks: 6 marks; max in paper 20.00; weight = round(10 x 6.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 8,
+       "overlaps": [
+        "COM-C12-2627:ECO-04",
+        "CAF-SYL-2024:ECO-07"
+       ]
+      },
+      {
+       "code": "ECO-09",
+       "title": "Macro V: Open Economy Macroeconomics",
+       "share": 6.0,
+       "weight": 3,
+       "weightBasis": "CBSE unit marks: 6 marks; max in paper 20.00; weight = round(10 x 6.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 9,
+       "overlaps": [
+        "COM-C12-2627:ECO-05",
+        "CAF-SYL-2024:ECO-09"
+       ]
+      },
+      {
+       "code": "ECO-10",
+       "title": "IED I: Development Policies and Experience (1947-90)",
+       "share": 6.0,
+       "weight": 3,
+       "weightBasis": "CBSE unit marks: 12 marks for group 'CBSE XII Development Experience (1947-90) and Economic Reforms since 1991' split equally over 2 units = 6.00; max in paper 20.00; weight = round(10 x 6.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 10,
+       "overlaps": [
+        "COM-C12-2627:ECO-06",
+        "CAF-SYL-2024:ECO-10"
+       ]
+      },
+      {
+       "code": "ECO-11",
+       "title": "IED II: Economic Reforms since 1991",
+       "share": 6.0,
+       "weight": 3,
+       "weightBasis": "CBSE unit marks: 12 marks for group 'CBSE XII Development Experience (1947-90) and Economic Reforms since 1991' split equally over 2 units = 6.00; max in paper 20.00; weight = round(10 x 6.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 11,
+       "overlaps": [
+        "COM-C12-2627:ECO-06",
+        "CAF-SYL-2024:ECO-10"
+       ]
+      },
+      {
+       "code": "ECO-12",
+       "title": "IED III: Current Challenges facing the Indian Economy",
+       "share": 20.0,
+       "weight": 10,
+       "weightBasis": "CBSE unit marks: 20 marks; max in paper 20.00; weight = round(10 x 20.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 12,
+       "overlaps": [
+        "COM-C12-2627:ECO-07"
+       ]
+      },
+      {
+       "code": "ECO-13",
+       "title": "IED IV: Development Experiences of India: A Comparison with Neighbours",
+       "share": 8.0,
+       "weight": 4,
+       "weightBasis": "CBSE unit marks: 8 marks; max in paper 20.00; weight = round(10 x 8.00 / 20.00) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271366341541.pdf Courses I-III",
+       "official": true,
+       "sortOrder": 13,
+       "overlaps": [
+        "COM-C12-2627:ECO-08"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "MATH",
+     "name": "Mathematics / Applied Mathematics (319): Section A1 + B1 (Mathematics) or B2 (Applied)",
+     "sourceUrl": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf",
+     "chapters": [
+      {
+       "code": "MATH-A1-01",
+       "title": "Section A1: Algebra (matrices, determinants, inverse, simultaneous equations)",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official or proxy split for Section A1; unweighted default 1",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section A1",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "COM-C12-2627:MATH-02..MATH-06",
+        "COM-C12-2627:AMATH-02..AMATH-04",
+        "COM-C12-2627:AMATH-08"
+       ]
+      },
+      {
+       "code": "MATH-A1-02",
+       "title": "Section A1: Calculus (higher-order derivatives, increasing/decreasing functions, maxima and minima)",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official or proxy split for Section A1; unweighted default 1",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section A1",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "COM-C12-2627:MATH-02..MATH-06",
+        "COM-C12-2627:AMATH-02..AMATH-04",
+        "COM-C12-2627:AMATH-08"
+       ]
+      },
+      {
+       "code": "MATH-A1-03",
+       "title": "Section A1: Integration and its applications",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official or proxy split for Section A1; unweighted default 1",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section A1",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "COM-C12-2627:MATH-02..MATH-06",
+        "COM-C12-2627:AMATH-02..AMATH-04",
+        "COM-C12-2627:AMATH-08"
+       ]
+      },
+      {
+       "code": "MATH-A1-04",
+       "title": "Section A1: Differential equations (order, degree, variable separable)",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official or proxy split for Section A1; unweighted default 1",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section A1",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "COM-C12-2627:MATH-02..MATH-06",
+        "COM-C12-2627:AMATH-02..AMATH-04",
+        "COM-C12-2627:AMATH-08"
+       ]
+      },
+      {
+       "code": "MATH-A1-05",
+       "title": "Section A1: Probability distributions (simple probability)",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official or proxy split for Section A1; unweighted default 1",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section A1",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "COM-C12-2627:MATH-02..MATH-06",
+        "COM-C12-2627:AMATH-02..AMATH-04",
+        "COM-C12-2627:AMATH-08"
+       ]
+      },
+      {
+       "code": "MATH-A1-06",
+       "title": "Section A1: Linear programming (graphical method)",
+       "share": null,
+       "weight": 1,
+       "weightBasis": "no official or proxy split for Section A1; unweighted default 1",
+       "weightSource": "none",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section A1",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "COM-C12-2627:MATH-02..MATH-06",
+        "COM-C12-2627:AMATH-02..AMATH-04",
+        "COM-C12-2627:AMATH-08"
+       ]
+      },
+      {
+       "code": "MATH-B1-01",
+       "title": "Section B1: Relations and Functions",
+       "share": 8,
+       "weight": 2,
+       "weightBasis": "CBSE 041 XII unit marks 8; max in section 35; weight = round(10 x 8/35) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B1",
+       "official": true,
+       "sortOrder": 101,
+       "overlaps": [
+        "COM-C12-2627:MATH-01"
+       ]
+      },
+      {
+       "code": "MATH-B1-02",
+       "title": "Section B1: Algebra",
+       "share": 10,
+       "weight": 3,
+       "weightBasis": "CBSE 041 XII unit marks 10; max in section 35; weight = round(10 x 10/35) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B1",
+       "official": true,
+       "sortOrder": 102,
+       "overlaps": [
+        "COM-C12-2627:MATH-02"
+       ]
+      },
+      {
+       "code": "MATH-B1-03",
+       "title": "Section B1: Calculus",
+       "share": 35,
+       "weight": 10,
+       "weightBasis": "CBSE 041 XII unit marks 35; max in section 35; weight = round(10 x 35/35) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B1",
+       "official": true,
+       "sortOrder": 103,
+       "overlaps": [
+        "COM-C12-2627:MATH-03"
+       ]
+      },
+      {
+       "code": "MATH-B1-04",
+       "title": "Section B1: Vectors and Three-dimensional Geometry",
+       "share": 14,
+       "weight": 4,
+       "weightBasis": "CBSE 041 XII unit marks 14; max in section 35; weight = round(10 x 14/35) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B1",
+       "official": true,
+       "sortOrder": 104,
+       "overlaps": [
+        "COM-C12-2627:MATH-04"
+       ]
+      },
+      {
+       "code": "MATH-B1-05",
+       "title": "Section B1: Linear Programming",
+       "share": 5,
+       "weight": 1,
+       "weightBasis": "CBSE 041 XII unit marks 5; max in section 35; weight = round(10 x 5/35) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B1",
+       "official": true,
+       "sortOrder": 105,
+       "overlaps": [
+        "COM-C12-2627:MATH-05"
+       ]
+      },
+      {
+       "code": "MATH-B1-06",
+       "title": "Section B1: Probability",
+       "share": 8,
+       "weight": 2,
+       "weightBasis": "CBSE 041 XII unit marks 8; max in section 35; weight = round(10 x 8/35) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B1",
+       "official": true,
+       "sortOrder": 106,
+       "overlaps": [
+        "COM-C12-2627:MATH-06"
+       ]
+      },
+      {
+       "code": "MATH-B2-01",
+       "title": "Section B2: Numbers, Quantification and Numerical Applications",
+       "share": 11,
+       "weight": 7,
+       "weightBasis": "CBSE 241 XII unit marks 11; max in section 15; weight = round(10 x 11/15) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B2",
+       "official": true,
+       "sortOrder": 201,
+       "overlaps": [
+        "COM-C12-2627:AMATH-01"
+       ]
+      },
+      {
+       "code": "MATH-B2-02",
+       "title": "Section B2: Algebra",
+       "share": 10,
+       "weight": 7,
+       "weightBasis": "CBSE 241 XII unit marks 10; max in section 15; weight = round(10 x 10/15) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B2",
+       "official": true,
+       "sortOrder": 202,
+       "overlaps": [
+        "COM-C12-2627:AMATH-02"
+       ]
+      },
+      {
+       "code": "MATH-B2-03",
+       "title": "Section B2: Calculus",
+       "share": 15,
+       "weight": 10,
+       "weightBasis": "CBSE 241 XII unit marks 15; max in section 15; weight = round(10 x 15/15) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B2",
+       "official": true,
+       "sortOrder": 203,
+       "overlaps": [
+        "COM-C12-2627:AMATH-03"
+       ]
+      },
+      {
+       "code": "MATH-B2-04",
+       "title": "Section B2: Probability Distributions",
+       "share": 10,
+       "weight": 7,
+       "weightBasis": "CBSE 241 XII unit marks 10; max in section 15; weight = round(10 x 10/15) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B2",
+       "official": true,
+       "sortOrder": 204,
+       "overlaps": [
+        "COM-C12-2627:AMATH-04"
+       ]
+      },
+      {
+       "code": "MATH-B2-05",
+       "title": "Section B2: Time-based Data",
+       "share": 6,
+       "weight": 4,
+       "weightBasis": "CBSE 241 XII unit marks 6; max in section 15; weight = round(10 x 6/15) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B2",
+       "official": true,
+       "sortOrder": 205,
+       "overlaps": [
+        "COM-C12-2627:AMATH-06"
+       ]
+      },
+      {
+       "code": "MATH-B2-06",
+       "title": "Section B2: Inferential Statistics",
+       "share": 5,
+       "weight": 3,
+       "weightBasis": "CBSE 241 XII unit marks 5; max in section 15; weight = round(10 x 5/15) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B2",
+       "official": true,
+       "sortOrder": 206,
+       "overlaps": [
+        "COM-C12-2627:AMATH-05"
+       ]
+      },
+      {
+       "code": "MATH-B2-07",
+       "title": "Section B2: Financial Mathematics",
+       "share": 15,
+       "weight": 10,
+       "weightBasis": "CBSE 241 XII unit marks 15; max in section 15; weight = round(10 x 15/15) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B2",
+       "official": true,
+       "sortOrder": 207,
+       "overlaps": [
+        "COM-C12-2627:AMATH-07"
+       ]
+      },
+      {
+       "code": "MATH-B2-08",
+       "title": "Section B2: Linear Programming",
+       "share": 8,
+       "weight": 5,
+       "weightBasis": "CBSE 241 XII unit marks 8; max in section 15; weight = round(10 x 8/15) [proxy: NTA gives no unit weightage; domain syllabus is 'As per NCERT syllabus', so CBSE 2026-27 unit marks are used]",
+       "weightSource": "proxy",
+       "sourceRef": "https://cdnbbsr.s3waas.gov.in/s3d1a21da7bca4abff8b0b61b87597de73/uploads/2025/12/202512271521179041.pdf Section B2",
+       "official": true,
+       "sortOrder": 208,
+       "overlaps": [
+        "COM-C12-2627:AMATH-08"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "programmeCode": "CA_FOUNDATION",
+   "courseCode": "CAF-SYL-2024",
+   "familyCode": "CAF-SYL",
+   "status": "draft",
+   "source": {
+    "url": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf",
+    "title": "ICAI Foundation Course syllabus with section-wise weightage (issued 26 Oct 2023; applicable May 2024 exams onwards till further changes)",
+    "year": "2023 (in force 2026)",
+    "retrieved": "2026-10-21"
+   },
+   "otherSources": [
+    {
+     "url": "https://icai-call-sahayata.icai.org/wp-content/uploads/2024/10/CA-Courses-.pdf",
+     "title": "ICAI FAQs on New Scheme of Education and Training (CA courses)",
+     "year": "2024",
+     "retrieved": "2026-10-21"
+    }
+   ],
+   "note": "ACC chapter codes ACC-01..ACC-11 match the existing course CAF-ACC-SEP27 one-to-one; the same weights can be set there by code.",
+   "subjects": [
+    {
+     "code": "ACC",
+     "name": "Paper 1: Accounting (100, subjective)",
+     "sourceUrl": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf",
+     "chapters": [
+      {
+       "code": "ACC-01",
+       "title": "Theoretical Framework",
+       "share": 7.5,
+       "weight": 4,
+       "weightBasis": "ICAI section I 5%-10% of 100 marks -> midpoint 7.5% = 7.50 marks; max in paper 20.00; weight = round(10 x 7.50/20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 1: Accounting (100, subjective) section I",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CAF-ACC-SEP27:ACC-01",
+        "COM-C11-2627:ACC-01"
+       ]
+      },
+      {
+       "code": "ACC-02",
+       "title": "Accounting Process",
+       "share": 6.5,
+       "weight": 3,
+       "weightBasis": "ICAI section II 30%-35% of 100 marks -> midpoint 32.5% = 32.50 marks, split equally over 5 chapters = 6.50; max in paper 20.00; weight = round(10 x 6.50/20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 1: Accounting (100, subjective) section II",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CAF-ACC-SEP27:ACC-02",
+        "COM-C11-2627:ACC-02"
+       ]
+      },
+      {
+       "code": "ACC-03",
+       "title": "Bank Reconciliation Statement",
+       "share": 6.5,
+       "weight": 3,
+       "weightBasis": "ICAI section II 30%-35% of 100 marks -> midpoint 32.5% = 32.50 marks, split equally over 5 chapters = 6.50; max in paper 20.00; weight = round(10 x 6.50/20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 1: Accounting (100, subjective) section II",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "CAF-ACC-SEP27:ACC-03",
+        "COM-C11-2627:ACC-02"
+       ]
+      },
+      {
+       "code": "ACC-04",
+       "title": "Inventories",
+       "share": 6.5,
+       "weight": 3,
+       "weightBasis": "ICAI section II 30%-35% of 100 marks -> midpoint 32.5% = 32.50 marks, split equally over 5 chapters = 6.50; max in paper 20.00; weight = round(10 x 6.50/20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 1: Accounting (100, subjective) section II",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "CAF-ACC-SEP27:ACC-04",
+        "COM-C11-2627:ACC-02"
+       ]
+      },
+      {
+       "code": "ACC-05",
+       "title": "Depreciation and Amortisation",
+       "share": 6.5,
+       "weight": 3,
+       "weightBasis": "ICAI section II 30%-35% of 100 marks -> midpoint 32.5% = 32.50 marks, split equally over 5 chapters = 6.50; max in paper 20.00; weight = round(10 x 6.50/20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 1: Accounting (100, subjective) section II",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "CAF-ACC-SEP27:ACC-05",
+        "COM-C11-2627:ACC-02"
+       ]
+      },
+      {
+       "code": "ACC-06",
+       "title": "Bills of Exchange and Promissory Notes",
+       "share": 6.5,
+       "weight": 3,
+       "weightBasis": "ICAI section II 30%-35% of 100 marks -> midpoint 32.5% = 32.50 marks, split equally over 5 chapters = 6.50; max in paper 20.00; weight = round(10 x 6.50/20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 1: Accounting (100, subjective) section II",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "CAF-ACC-SEP27:ACC-06",
+        "COM-C11-2627:ACC-02"
+       ]
+      },
+      {
+       "code": "ACC-07",
+       "title": "Preparation of Final Accounts of Sole Proprietors",
+       "share": 7.5,
+       "weight": 4,
+       "weightBasis": "ICAI section III 20%-25% of 100 marks -> midpoint 22.5% = 22.50 marks, split equally over 3 chapters = 7.50; max in paper 20.00; weight = round(10 x 7.50/20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 1: Accounting (100, subjective) section III",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": [
+        "CAF-ACC-SEP27:ACC-07",
+        "COM-C11-2627:ACC-03"
+       ]
+      },
+      {
+       "code": "ACC-08",
+       "title": "Financial Statements of Not-for-Profit Organisations",
+       "share": 7.5,
+       "weight": 4,
+       "weightBasis": "ICAI section III 20%-25% of 100 marks -> midpoint 22.5% = 22.50 marks, split equally over 3 chapters = 7.50; max in paper 20.00; weight = round(10 x 7.50/20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 1: Accounting (100, subjective) section III",
+       "official": true,
+       "sortOrder": 8,
+       "overlaps": [
+        "CAF-ACC-SEP27:ACC-08"
+       ]
+      },
+      {
+       "code": "ACC-09",
+       "title": "Accounts from Incomplete Records",
+       "share": 7.5,
+       "weight": 4,
+       "weightBasis": "ICAI section III 20%-25% of 100 marks -> midpoint 22.5% = 22.50 marks, split equally over 3 chapters = 7.50; max in paper 20.00; weight = round(10 x 7.50/20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 1: Accounting (100, subjective) section III",
+       "official": true,
+       "sortOrder": 9,
+       "overlaps": [
+        "CAF-ACC-SEP27:ACC-09"
+       ]
+      },
+      {
+       "code": "ACC-10",
+       "title": "Partnership and LLP Accounts",
+       "share": 17.5,
+       "weight": 9,
+       "weightBasis": "ICAI section IV 15%-20% of 100 marks -> midpoint 17.5% = 17.50 marks; max in paper 20.00; weight = round(10 x 17.50/20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 1: Accounting (100, subjective) section IV",
+       "official": true,
+       "sortOrder": 10,
+       "overlaps": [
+        "CAF-ACC-SEP27:ACC-10",
+        "COM-C12-2627:ACC-01",
+        "CUET-SYL-2026:ACC-01..ACC-03"
+       ]
+      },
+      {
+       "code": "ACC-11",
+       "title": "Company Accounts",
+       "share": 20.0,
+       "weight": 10,
+       "weightBasis": "ICAI section V 15%-25% of 100 marks -> midpoint 20.0% = 20.00 marks; max in paper 20.00; weight = round(10 x 20.00/20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 1: Accounting (100, subjective) section V",
+       "official": true,
+       "sortOrder": 11,
+       "overlaps": [
+        "CAF-ACC-SEP27:ACC-11",
+        "COM-C12-2627:ACC-02",
+        "CUET-SYL-2026:ACC-04"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "LAW",
+     "name": "Paper 2: Business Laws (100, subjective)",
+     "sourceUrl": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf",
+     "chapters": [
+      {
+       "code": "LAW-01",
+       "title": "Indian Regulatory Framework",
+       "share": 2.5,
+       "weight": 1,
+       "weightBasis": "ICAI section I 0%-5% of 100 marks -> midpoint 2.5% = 2.50 marks; max in paper 25.00; weight = round(10 x 2.50/25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 2: Business Laws (100, subjective) section I",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": []
+      },
+      {
+       "code": "LAW-02",
+       "title": "The Indian Contract Act, 1872",
+       "share": 25.0,
+       "weight": 10,
+       "weightBasis": "ICAI section II 20%-30% of 100 marks -> midpoint 25.0% = 25.00 marks; max in paper 25.00; weight = round(10 x 25.00/25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 2: Business Laws (100, subjective) section II",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": []
+      },
+      {
+       "code": "LAW-03",
+       "title": "The Sale of Goods Act, 1930",
+       "share": 17.5,
+       "weight": 7,
+       "weightBasis": "ICAI section III 15%-20% of 100 marks -> midpoint 17.5% = 17.50 marks; max in paper 25.00; weight = round(10 x 17.50/25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 2: Business Laws (100, subjective) section III",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": []
+      },
+      {
+       "code": "LAW-04",
+       "title": "The Indian Partnership Act, 1932",
+       "share": 17.5,
+       "weight": 7,
+       "weightBasis": "ICAI section IV 15%-20% of 100 marks -> midpoint 17.5% = 17.50 marks; max in paper 25.00; weight = round(10 x 17.50/25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 2: Business Laws (100, subjective) section IV",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "COM-C11-2627:BST-02"
+       ]
+      },
+      {
+       "code": "LAW-05",
+       "title": "The Limited Liability Partnership Act, 2008",
+       "share": 7.5,
+       "weight": 3,
+       "weightBasis": "ICAI section V 5%-10% of 100 marks -> midpoint 7.5% = 7.50 marks; max in paper 25.00; weight = round(10 x 7.50/25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 2: Business Laws (100, subjective) section V",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": []
+      },
+      {
+       "code": "LAW-06",
+       "title": "The Companies Act, 2013",
+       "share": 17.5,
+       "weight": 7,
+       "weightBasis": "ICAI section VI 15%-20% of 100 marks -> midpoint 17.5% = 17.50 marks; max in paper 25.00; weight = round(10 x 17.50/25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 2: Business Laws (100, subjective) section VI",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "COM-C11-2627:BST-02"
+       ]
+      },
+      {
+       "code": "LAW-07",
+       "title": "The Negotiable Instruments Act, 1881",
+       "share": 12.5,
+       "weight": 5,
+       "weightBasis": "ICAI section VII 10%-15% of 100 marks -> midpoint 12.5% = 12.50 marks; max in paper 25.00; weight = round(10 x 12.50/25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 2: Business Laws (100, subjective) section VII",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": []
+      }
+     ]
+    },
+    {
+     "code": "QA",
+     "name": "Paper 3: Quantitative Aptitude (100, objective)",
+     "sourceUrl": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf",
+     "chapters": [
+      {
+       "code": "QA-01",
+       "title": "Ratio and Proportion, Indices and Logarithms",
+       "share": 3.3333,
+       "weight": 2,
+       "weightBasis": "ICAI section I (Part A) 20%-30% of 40 marks -> midpoint 25.0% = 10.00 marks, split equally over 3 chapters = 3.33; max in paper 14.00; weight = round(10 x 3.33/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section I (Part A)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "IPMAT-BASE:Q-04",
+        "IPMAT-BASE:Q-01"
+       ]
+      },
+      {
+       "code": "QA-02",
+       "title": "Equations",
+       "share": 3.3333,
+       "weight": 2,
+       "weightBasis": "ICAI section I (Part A) 20%-30% of 40 marks -> midpoint 25.0% = 10.00 marks, split equally over 3 chapters = 3.33; max in paper 14.00; weight = round(10 x 3.33/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section I (Part A)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "IPMAT-BASE:Q-10",
+        "IPMAT-BASE:Q-11"
+       ]
+      },
+      {
+       "code": "QA-03",
+       "title": "Linear Inequalities",
+       "share": 3.3333,
+       "weight": 2,
+       "weightBasis": "ICAI section I (Part A) 20%-30% of 40 marks -> midpoint 25.0% = 10.00 marks, split equally over 3 chapters = 3.33; max in paper 14.00; weight = round(10 x 3.33/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section I (Part A)",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "IPMAT-BASE:Q-11"
+       ]
+      },
+      {
+       "code": "QA-04",
+       "title": "Mathematics of Finance",
+       "share": 14.0,
+       "weight": 10,
+       "weightBasis": "ICAI section II (Part A) 30%-40% of 40 marks -> midpoint 35.0% = 14.00 marks; max in paper 14.00; weight = round(10 x 14.00/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section II (Part A)",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "IPMAT-BASE:Q-07",
+        "COM-C11-2627:AMATH-06",
+        "COM-C12-2627:AMATH-07"
+       ]
+      },
+      {
+       "code": "QA-05",
+       "title": "Permutations and Combinations",
+       "share": 4.0,
+       "weight": 3,
+       "weightBasis": "ICAI section III (Part A) 30%-50% of 40 marks -> midpoint 40.0% = 16.00 marks, split equally over 4 chapters = 4.00; max in paper 14.00; weight = round(10 x 4.00/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section III (Part A)",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "IPMAT-BASE:Q-19",
+        "COM-C11-2627:MATH-02"
+       ]
+      },
+      {
+       "code": "QA-06",
+       "title": "Sequence and Series",
+       "share": 4.0,
+       "weight": 3,
+       "weightBasis": "ICAI section III (Part A) 30%-50% of 40 marks -> midpoint 40.0% = 16.00 marks, split equally over 4 chapters = 4.00; max in paper 14.00; weight = round(10 x 4.00/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section III (Part A)",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "IPMAT-BASE:Q-12",
+        "COM-C11-2627:MATH-02"
+       ]
+      },
+      {
+       "code": "QA-07",
+       "title": "Sets, Relations, Functions; Basics of Limits and Continuity",
+       "share": 4.0,
+       "weight": 3,
+       "weightBasis": "ICAI section III (Part A) 30%-50% of 40 marks -> midpoint 40.0% = 16.00 marks, split equally over 4 chapters = 4.00; max in paper 14.00; weight = round(10 x 4.00/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section III (Part A)",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": [
+        "IPMAT-BASE:Q-13",
+        "COM-C11-2627:MATH-01",
+        "COM-C11-2627:MATH-04"
+       ]
+      },
+      {
+       "code": "QA-08",
+       "title": "Basic Applications of Differential and Integral Calculus in Business and Economics",
+       "share": 4.0,
+       "weight": 3,
+       "weightBasis": "ICAI section III (Part A) 30%-50% of 40 marks -> midpoint 40.0% = 16.00 marks, split equally over 4 chapters = 4.00; max in paper 14.00; weight = round(10 x 4.00/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section III (Part A)",
+       "official": true,
+       "sortOrder": 8,
+       "overlaps": [
+        "IPMAT-BASE:HM-04..HM-07",
+        "COM-C11-2627:AMATH-03"
+       ]
+      },
+      {
+       "code": "QA-09",
+       "title": "Number Series, Coding and Decoding, Odd Man Out",
+       "share": 5.0,
+       "weight": 4,
+       "weightBasis": "ICAI section IV-a (Part B) 20%-30% of 20 marks -> midpoint 25.0% = 5.00 marks; max in paper 14.00; weight = round(10 x 5.00/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section IV-a (Part B)",
+       "official": true,
+       "sortOrder": 9,
+       "overlaps": [
+        "IPMAT-BASE:LR-03",
+        "IPMAT-BASE:LR-12",
+        "IPMAT-BASE:LR-11",
+        "CUET-SYL-2026:GAT-06"
+       ]
+      },
+      {
+       "code": "QA-10",
+       "title": "Direction Tests",
+       "share": 5.0,
+       "weight": 4,
+       "weightBasis": "ICAI section IV-b (Part B) 20%-30% of 20 marks -> midpoint 25.0% = 5.00 marks; max in paper 14.00; weight = round(10 x 5.00/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section IV-b (Part B)",
+       "official": true,
+       "sortOrder": 10,
+       "overlaps": [
+        "IPMAT-BASE:LR-13",
+        "CUET-SYL-2026:GAT-06"
+       ]
+      },
+      {
+       "code": "QA-11",
+       "title": "Seating Arrangements",
+       "share": 5.0,
+       "weight": 4,
+       "weightBasis": "ICAI section IV-c (Part B) 20%-30% of 20 marks -> midpoint 25.0% = 5.00 marks; max in paper 14.00; weight = round(10 x 5.00/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section IV-c (Part B)",
+       "official": true,
+       "sortOrder": 11,
+       "overlaps": [
+        "IPMAT-BASE:LR-06",
+        "CLAT-SYL-2027:LR-03",
+        "CUET-SYL-2026:GAT-06"
+       ]
+      },
+      {
+       "code": "QA-12",
+       "title": "Blood Relations",
+       "share": 5.0,
+       "weight": 4,
+       "weightBasis": "ICAI section IV-d (Part B) 20%-30% of 20 marks -> midpoint 25.0% = 5.00 marks; max in paper 14.00; weight = round(10 x 5.00/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section IV-d (Part B)",
+       "official": true,
+       "sortOrder": 12,
+       "overlaps": [
+        "IPMAT-BASE:LR-04",
+        "CLAT-SYL-2027:LR-03",
+        "CUET-SYL-2026:GAT-06"
+       ]
+      },
+      {
+       "code": "QA-13",
+       "title": "Statistical Representation of Data; Sampling",
+       "share": 9.5,
+       "weight": 7,
+       "weightBasis": "ICAI section V (Part C) 45%-50% of 40 marks -> midpoint 47.5% = 19.00 marks, split equally over 2 chapters = 9.50; max in paper 14.00; weight = round(10 x 9.50/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section V (Part C)",
+       "official": true,
+       "sortOrder": 13,
+       "overlaps": [
+        "COM-C11-2627:ECO-02",
+        "IPMAT-BASE:DI-01..DI-05"
+       ]
+      },
+      {
+       "code": "QA-14",
+       "title": "Measures of Central Tendency and Dispersion",
+       "share": 9.5,
+       "weight": 7,
+       "weightBasis": "ICAI section V (Part C) 45%-50% of 40 marks -> midpoint 47.5% = 19.00 marks, split equally over 2 chapters = 9.50; max in paper 14.00; weight = round(10 x 9.50/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section V (Part C)",
+       "official": true,
+       "sortOrder": 14,
+       "overlaps": [
+        "COM-C11-2627:ECO-03",
+        "IPMAT-BASE:Q-20"
+       ]
+      },
+      {
+       "code": "QA-15",
+       "title": "Probability",
+       "share": 5.5,
+       "weight": 4,
+       "weightBasis": "ICAI section VI (Part C) 25%-30% of 40 marks -> midpoint 27.5% = 11.00 marks, split equally over 2 chapters = 5.50; max in paper 14.00; weight = round(10 x 5.50/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section VI (Part C)",
+       "official": true,
+       "sortOrder": 15,
+       "overlaps": [
+        "IPMAT-BASE:Q-19",
+        "COM-C11-2627:MATH-05"
+       ]
+      },
+      {
+       "code": "QA-16",
+       "title": "Theoretical Distributions",
+       "share": 5.5,
+       "weight": 4,
+       "weightBasis": "ICAI section VI (Part C) 25%-30% of 40 marks -> midpoint 27.5% = 11.00 marks, split equally over 2 chapters = 5.50; max in paper 14.00; weight = round(10 x 5.50/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section VI (Part C)",
+       "official": true,
+       "sortOrder": 16,
+       "overlaps": [
+        "IPMAT-BASE:HM-10",
+        "COM-C12-2627:AMATH-04"
+       ]
+      },
+      {
+       "code": "QA-17",
+       "title": "Correlation and Regression",
+       "share": 5.0,
+       "weight": 4,
+       "weightBasis": "ICAI section VII (Part C) 10%-15% of 40 marks -> midpoint 12.5% = 5.00 marks; max in paper 14.00; weight = round(10 x 5.00/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section VII (Part C)",
+       "official": true,
+       "sortOrder": 17,
+       "overlaps": [
+        "COM-C11-2627:ECO-03"
+       ]
+      },
+      {
+       "code": "QA-18",
+       "title": "Index Numbers",
+       "share": 5.0,
+       "weight": 4,
+       "weightBasis": "ICAI section VIII (Part C) 10%-15% of 40 marks -> midpoint 12.5% = 5.00 marks; max in paper 14.00; weight = round(10 x 5.00/14.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 3: Quantitative Aptitude (100, objective) section VIII (Part C)",
+       "official": true,
+       "sortOrder": 18,
+       "overlaps": [
+        "COM-C11-2627:ECO-03"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "ECO",
+     "name": "Paper 4: Business Economics (100, objective)",
+     "sourceUrl": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf",
+     "chapters": [
+      {
+       "code": "ECO-01",
+       "title": "Introduction to Business Economics",
+       "share": 5.0,
+       "weight": 3,
+       "weightBasis": "ICAI section I 5%-5% of 100 marks -> midpoint 5.0% = 5.00 marks; max in paper 15.00; weight = round(10 x 5.00/15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 4: Business Economics (100, objective) section I",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "COM-C11-2627:ECO-04"
+       ]
+      },
+      {
+       "code": "ECO-02",
+       "title": "Theory of Demand and Supply",
+       "share": 10.0,
+       "weight": 7,
+       "weightBasis": "ICAI section II 10%-10% of 100 marks -> midpoint 10.0% = 10.00 marks; max in paper 15.00; weight = round(10 x 10.00/15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 4: Business Economics (100, objective) section II",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "COM-C11-2627:ECO-05",
+        "CUET-SYL-2026:ECO-01"
+       ]
+      },
+      {
+       "code": "ECO-03",
+       "title": "Theory of Production and Cost",
+       "share": 10.0,
+       "weight": 7,
+       "weightBasis": "ICAI section III 10%-10% of 100 marks -> midpoint 10.0% = 10.00 marks; max in paper 15.00; weight = round(10 x 10.00/15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 4: Business Economics (100, objective) section III",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "COM-C11-2627:ECO-06",
+        "CUET-SYL-2026:ECO-02"
+       ]
+      },
+      {
+       "code": "ECO-04",
+       "title": "Price Determination in Different Markets",
+       "share": 15.0,
+       "weight": 10,
+       "weightBasis": "ICAI section IV 15%-15% of 100 marks -> midpoint 15.0% = 15.00 marks; max in paper 15.00; weight = round(10 x 15.00/15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 4: Business Economics (100, objective) section IV",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "COM-C11-2627:ECO-07",
+        "CUET-SYL-2026:ECO-03",
+        "CUET-SYL-2026:ECO-04"
+       ]
+      },
+      {
+       "code": "ECO-05",
+       "title": "Determination of National Income",
+       "share": 15.0,
+       "weight": 10,
+       "weightBasis": "ICAI section V 15%-15% of 100 marks -> midpoint 15.0% = 15.00 marks; max in paper 15.00; weight = round(10 x 15.00/15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 4: Business Economics (100, objective) section V",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "COM-C12-2627:ECO-01",
+        "COM-C12-2627:ECO-03",
+        "CUET-SYL-2026:ECO-05",
+        "CUET-SYL-2026:ECO-07"
+       ]
+      },
+      {
+       "code": "ECO-06",
+       "title": "Business Cycles",
+       "share": 5.0,
+       "weight": 3,
+       "weightBasis": "ICAI section VI 5%-5% of 100 marks -> midpoint 5.0% = 5.00 marks; max in paper 15.00; weight = round(10 x 5.00/15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 4: Business Economics (100, objective) section VI",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": []
+      },
+      {
+       "code": "ECO-07",
+       "title": "Public Finance",
+       "share": 10.0,
+       "weight": 7,
+       "weightBasis": "ICAI section VII 10%-10% of 100 marks -> midpoint 10.0% = 10.00 marks; max in paper 15.00; weight = round(10 x 10.00/15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 4: Business Economics (100, objective) section VII",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": [
+        "COM-C12-2627:ECO-04",
+        "CUET-SYL-2026:ECO-08"
+       ]
+      },
+      {
+       "code": "ECO-08",
+       "title": "Money Market",
+       "share": 10.0,
+       "weight": 7,
+       "weightBasis": "ICAI section VIII 10%-10% of 100 marks -> midpoint 10.0% = 10.00 marks; max in paper 15.00; weight = round(10 x 10.00/15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 4: Business Economics (100, objective) section VIII",
+       "official": true,
+       "sortOrder": 8,
+       "overlaps": [
+        "COM-C12-2627:ECO-02",
+        "CUET-SYL-2026:ECO-06"
+       ]
+      },
+      {
+       "code": "ECO-09",
+       "title": "International Trade",
+       "share": 10.0,
+       "weight": 7,
+       "weightBasis": "ICAI section IX 10%-10% of 100 marks -> midpoint 10.0% = 10.00 marks; max in paper 15.00; weight = round(10 x 10.00/15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 4: Business Economics (100, objective) section IX",
+       "official": true,
+       "sortOrder": 9,
+       "overlaps": [
+        "COM-C12-2627:ECO-05",
+        "CUET-SYL-2026:ECO-09"
+       ]
+      },
+      {
+       "code": "ECO-10",
+       "title": "Indian Economy (before 1950, 1950-1991, 1991 onwards)",
+       "share": 10.0,
+       "weight": 7,
+       "weightBasis": "ICAI section X 10%-10% of 100 marks -> midpoint 10.0% = 10.00 marks; max in paper 15.00; weight = round(10 x 10.00/15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://resource.cdn.icai.org/76829bos61899-foundation.pdf Paper 4: Business Economics (100, objective) section X",
+       "official": true,
+       "sortOrder": 10,
+       "overlaps": [
+        "COM-C12-2627:ECO-06",
+        "CUET-SYL-2026:ECO-10",
+        "CUET-SYL-2026:ECO-11"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "programmeCode": "CLASS_11",
+   "courseCode": "COM-C11-2627",
+   "familyCode": "COM-C11",
+   "status": "draft",
+   "source": {
+    "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf",
+    "title": "CBSE Accountancy (055) Class XI & XII 2026-27",
+    "year": "2026-27",
+    "retrieved": "2026-10-21"
+   },
+   "otherSources": [
+    {
+     "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf",
+     "title": "CBSE Business Studies (054) Class XI & XII 2026-27",
+     "year": "2026-27",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf",
+     "title": "CBSE Economics (030) Class XI & XII 2026-27",
+     "year": "2026-27",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf",
+     "title": "CBSE Mathematics (041) Class XI & XII 2026-27",
+     "year": "2026-27",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf",
+     "title": "CBSE Applied Mathematics (241) Grade XI & XII 2026-27",
+     "year": "2026-27",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf",
+     "title": "CBSE English Core (301) Class XI & XII 2026-27",
+     "year": "2026-27",
+     "retrieved": "2026-10-21"
+    }
+   ],
+   "note": "Students take either MATH (041) or AMATH (241) as the fifth subject (D-037: Commerce only).",
+   "subjects": [
+    {
+     "code": "ACC",
+     "name": "Accountancy (055)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "ACC-01",
+       "title": "Theoretical Framework",
+       "share": 12.0,
+       "weight": 3,
+       "weightBasis": "CBSE XI unit marks: 12 marks; max in paper 44.00; weight = round(10 x 12.00 / 44.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CAF-SYL-2024:ACC-01"
+       ]
+      },
+      {
+       "code": "ACC-02",
+       "title": "Accounting Process",
+       "share": 44.0,
+       "weight": 10,
+       "weightBasis": "CBSE XI unit marks: 44 marks; max in paper 44.00; weight = round(10 x 44.00 / 44.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CAF-SYL-2024:ACC-02..ACC-06"
+       ]
+      },
+      {
+       "code": "ACC-03",
+       "title": "Financial Statements of Sole Proprietorship",
+       "share": 24.0,
+       "weight": 5,
+       "weightBasis": "CBSE XI unit marks: 24 marks; max in paper 44.00; weight = round(10 x 24.00 / 44.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "CAF-SYL-2024:ACC-07"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "BST",
+     "name": "Business Studies (054)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "BST-01",
+       "title": "Nature and Purpose of Business",
+       "share": 8.0,
+       "weight": 8,
+       "weightBasis": "CBSE XI grouped marks: 16 marks for group 'Units 1-2' split equally over 2 units = 8.00; max in paper 10.00; weight = round(10 x 8.00 / 10.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": []
+      },
+      {
+       "code": "BST-02",
+       "title": "Forms of Business Organisations",
+       "share": 8.0,
+       "weight": 8,
+       "weightBasis": "CBSE XI grouped marks: 16 marks for group 'Units 1-2' split equally over 2 units = 8.00; max in paper 10.00; weight = round(10 x 8.00 / 10.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CAF-SYL-2024:LAW-04",
+        "CAF-SYL-2024:LAW-06"
+       ]
+      },
+      {
+       "code": "BST-03",
+       "title": "Public, Private and Global Enterprises",
+       "share": 7.0,
+       "weight": 7,
+       "weightBasis": "CBSE XI grouped marks: 14 marks for group 'Units 3-4' split equally over 2 units = 7.00; max in paper 10.00; weight = round(10 x 7.00 / 10.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": []
+      },
+      {
+       "code": "BST-04",
+       "title": "Business Services",
+       "share": 7.0,
+       "weight": 7,
+       "weightBasis": "CBSE XI grouped marks: 14 marks for group 'Units 3-4' split equally over 2 units = 7.00; max in paper 10.00; weight = round(10 x 7.00 / 10.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": []
+      },
+      {
+       "code": "BST-05",
+       "title": "Emerging Modes of Business",
+       "share": 5.0,
+       "weight": 5,
+       "weightBasis": "CBSE XI grouped marks: 10 marks for group 'Units 5-6' split equally over 2 units = 5.00; max in paper 10.00; weight = round(10 x 5.00 / 10.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": []
+      },
+      {
+       "code": "BST-06",
+       "title": "Social Responsibility of Business and Business Ethics",
+       "share": 5.0,
+       "weight": 5,
+       "weightBasis": "CBSE XI grouped marks: 10 marks for group 'Units 5-6' split equally over 2 units = 5.00; max in paper 10.00; weight = round(10 x 5.00 / 10.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": []
+      },
+      {
+       "code": "BST-07",
+       "title": "Sources of Business Finance",
+       "share": 10.0,
+       "weight": 10,
+       "weightBasis": "CBSE XI grouped marks: 20 marks for group 'Units 7-8' split equally over 2 units = 10.00; max in paper 10.00; weight = round(10 x 10.00 / 10.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": []
+      },
+      {
+       "code": "BST-08",
+       "title": "Small Business",
+       "share": 10.0,
+       "weight": 10,
+       "weightBasis": "CBSE XI grouped marks: 20 marks for group 'Units 7-8' split equally over 2 units = 10.00; max in paper 10.00; weight = round(10 x 10.00 / 10.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 8,
+       "overlaps": []
+      },
+      {
+       "code": "BST-09",
+       "title": "Internal Trade",
+       "share": 10.0,
+       "weight": 10,
+       "weightBasis": "CBSE XI grouped marks: 20 marks for group 'Units 9-10' split equally over 2 units = 10.00; max in paper 10.00; weight = round(10 x 10.00 / 10.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 9,
+       "overlaps": []
+      },
+      {
+       "code": "BST-10",
+       "title": "International Business",
+       "share": 10.0,
+       "weight": 10,
+       "weightBasis": "CBSE XI grouped marks: 20 marks for group 'Units 9-10' split equally over 2 units = 10.00; max in paper 10.00; weight = round(10 x 10.00 / 10.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 10,
+       "overlaps": []
+      }
+     ]
+    },
+    {
+     "code": "ECO",
+     "name": "Economics (030)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "ECO-01",
+       "title": "Statistics: Introduction",
+       "share": 7.5,
+       "weight": 3,
+       "weightBasis": "CBSE XI unit marks: 15 marks for group 'Introduction + Collection, Organisation and Presentation of Data' split equally over 2 units = 7.50; max in paper 25.00; weight = round(10 x 7.50 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": []
+      },
+      {
+       "code": "ECO-02",
+       "title": "Statistics: Collection, Organisation and Presentation of Data",
+       "share": 7.5,
+       "weight": 3,
+       "weightBasis": "CBSE XI unit marks: 15 marks for group 'Introduction + Collection, Organisation and Presentation of Data' split equally over 2 units = 7.50; max in paper 25.00; weight = round(10 x 7.50 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CAF-SYL-2024:QA-13"
+       ]
+      },
+      {
+       "code": "ECO-03",
+       "title": "Statistics: Statistical Tools and Interpretation",
+       "share": 25.0,
+       "weight": 10,
+       "weightBasis": "CBSE XI unit marks: 25 marks; max in paper 25.00; weight = round(10 x 25.00 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "CAF-SYL-2024:QA-14",
+        "CAF-SYL-2024:QA-17",
+        "CAF-SYL-2024:QA-18"
+       ]
+      },
+      {
+       "code": "ECO-04",
+       "title": "Microeconomics: Introduction",
+       "share": 4.0,
+       "weight": 2,
+       "weightBasis": "CBSE XI unit marks: 4 marks; max in paper 25.00; weight = round(10 x 4.00 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-01",
+        "CAF-SYL-2024:ECO-01"
+       ]
+      },
+      {
+       "code": "ECO-05",
+       "title": "Microeconomics: Consumer's Equilibrium and Demand",
+       "share": 14.0,
+       "weight": 6,
+       "weightBasis": "CBSE XI unit marks: 14 marks; max in paper 25.00; weight = round(10 x 14.00 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-01",
+        "CAF-SYL-2024:ECO-02"
+       ]
+      },
+      {
+       "code": "ECO-06",
+       "title": "Microeconomics: Producer Behaviour and Supply",
+       "share": 14.0,
+       "weight": 6,
+       "weightBasis": "CBSE XI unit marks: 14 marks; max in paper 25.00; weight = round(10 x 14.00 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-02",
+        "CUET-SYL-2026:ECO-03",
+        "CAF-SYL-2024:ECO-03"
+       ]
+      },
+      {
+       "code": "ECO-07",
+       "title": "Microeconomics: Forms of Market and Price Determination under Perfect Competition with simple applications",
+       "share": 8.0,
+       "weight": 3,
+       "weightBasis": "CBSE XI unit marks: 8 marks; max in paper 25.00; weight = round(10 x 8.00 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XI course structure table (p.2)",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-04",
+        "CAF-SYL-2024:ECO-04"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "MATH",
+     "name": "Mathematics (041)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "MATH-01",
+       "title": "Sets and Functions",
+       "share": 23.0,
+       "weight": 9,
+       "weightBasis": "CBSE XI unit marks: 23 marks; max in paper 25.00; weight = round(10 x 23.00 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf Class XI unit table (p.1-2)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CAF-SYL-2024:QA-07",
+        "IPMAT-BASE:Q-13"
+       ]
+      },
+      {
+       "code": "MATH-02",
+       "title": "Algebra",
+       "share": 25.0,
+       "weight": 10,
+       "weightBasis": "CBSE XI unit marks: 25 marks; max in paper 25.00; weight = round(10 x 25.00 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf Class XI unit table (p.1-2)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CAF-SYL-2024:QA-05",
+        "CAF-SYL-2024:QA-06",
+        "IPMAT-BASE:Q-10",
+        "IPMAT-BASE:Q-11",
+        "IPMAT-BASE:Q-12",
+        "IPMAT-BASE:Q-19"
+       ]
+      },
+      {
+       "code": "MATH-03",
+       "title": "Coordinate Geometry",
+       "share": 12.0,
+       "weight": 5,
+       "weightBasis": "CBSE XI unit marks: 12 marks; max in paper 25.00; weight = round(10 x 12.00 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf Class XI unit table (p.1-2)",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "IPMAT-BASE:Q-17"
+       ]
+      },
+      {
+       "code": "MATH-04",
+       "title": "Calculus",
+       "share": 8.0,
+       "weight": 3,
+       "weightBasis": "CBSE XI unit marks: 8 marks; max in paper 25.00; weight = round(10 x 8.00 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf Class XI unit table (p.1-2)",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "CAF-SYL-2024:QA-07",
+        "IPMAT-BASE:HM-04"
+       ]
+      },
+      {
+       "code": "MATH-05",
+       "title": "Statistics and Probability",
+       "share": 12.0,
+       "weight": 5,
+       "weightBasis": "CBSE XI unit marks: 12 marks; max in paper 25.00; weight = round(10 x 12.00 / 25.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf Class XI unit table (p.1-2)",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "CAF-SYL-2024:QA-14",
+        "CAF-SYL-2024:QA-15",
+        "IPMAT-BASE:Q-19",
+        "IPMAT-BASE:Q-20"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "AMATH",
+     "name": "Applied Mathematics (241)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "AMATH-01",
+       "title": "Numbers, Quantification and Numerical Applications",
+       "share": 10.0,
+       "weight": 6,
+       "weightBasis": "CBSE XI unit marks: 10 marks; max in paper 18.00; weight = round(10 x 10.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XI unit table (p.2)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "IPMAT-BASE:Q-02",
+        "IPMAT-BASE:Q-05"
+       ]
+      },
+      {
+       "code": "AMATH-02",
+       "title": "Algebra",
+       "share": 18.0,
+       "weight": 10,
+       "weightBasis": "CBSE XI unit marks: 18 marks; max in paper 18.00; weight = round(10 x 18.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XI unit table (p.2)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CAF-SYL-2024:QA-05",
+        "CAF-SYL-2024:QA-06",
+        "IPMAT-BASE:Q-12",
+        "IPMAT-BASE:Q-13"
+       ]
+      },
+      {
+       "code": "AMATH-03",
+       "title": "Calculus",
+       "share": 12.0,
+       "weight": 7,
+       "weightBasis": "CBSE XI unit marks: 12 marks; max in paper 18.00; weight = round(10 x 12.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XI unit table (p.2)",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "CAF-SYL-2024:QA-08"
+       ]
+      },
+      {
+       "code": "AMATH-04",
+       "title": "Combinatorics and Probability",
+       "share": 10.0,
+       "weight": 6,
+       "weightBasis": "CBSE XI unit marks: 10 marks; max in paper 18.00; weight = round(10 x 10.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XI unit table (p.2)",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "CAF-SYL-2024:QA-05",
+        "CAF-SYL-2024:QA-15",
+        "IPMAT-BASE:Q-19"
+       ]
+      },
+      {
+       "code": "AMATH-05",
+       "title": "Descriptive Statistics",
+       "share": 10.0,
+       "weight": 6,
+       "weightBasis": "CBSE XI unit marks: 10 marks; max in paper 18.00; weight = round(10 x 10.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XI unit table (p.2)",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "CAF-SYL-2024:QA-14",
+        "IPMAT-BASE:Q-20"
+       ]
+      },
+      {
+       "code": "AMATH-06",
+       "title": "Basics of Financial Mathematics",
+       "share": 15.0,
+       "weight": 8,
+       "weightBasis": "CBSE XI unit marks: 15 marks; max in paper 18.00; weight = round(10 x 15.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XI unit table (p.2)",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "CAF-SYL-2024:QA-04",
+        "IPMAT-BASE:Q-07"
+       ]
+      },
+      {
+       "code": "AMATH-07",
+       "title": "Coordinate Geometry",
+       "share": 5.0,
+       "weight": 3,
+       "weightBasis": "CBSE XI unit marks: 5 marks; max in paper 18.00; weight = round(10 x 5.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XI unit table (p.2)",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": [
+        "IPMAT-BASE:Q-17"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "ENG",
+     "name": "English Core (301)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "ENG-01",
+       "title": "Reading: unseen passages",
+       "share": 18.0,
+       "weight": 10,
+       "weightBasis": "CBSE XI question-design marks (Hornbill 3+3+6+6, Snapshots 4+3+6): 18 marks; max in paper 18.00; weight = round(10 x 18.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf Class XI Sections A-C",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CUET-SYL-2026:ENG-01..ENG-03",
+        "IPMAT-BASE:V-04",
+        "CLAT-SYL-2027:ENG-01"
+       ]
+      },
+      {
+       "code": "ENG-02",
+       "title": "Reading: note making and summary",
+       "share": 8.0,
+       "weight": 4,
+       "weightBasis": "CBSE XI question-design marks (Hornbill 3+3+6+6, Snapshots 4+3+6): 8 marks; max in paper 18.00; weight = round(10 x 8.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf Class XI Sections A-C",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": []
+      },
+      {
+       "code": "ENG-03",
+       "title": "Grammar",
+       "share": 7.0,
+       "weight": 4,
+       "weightBasis": "CBSE XI question-design marks (Hornbill 3+3+6+6, Snapshots 4+3+6): 7 marks; max in paper 18.00; weight = round(10 x 7.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf Class XI Sections A-C",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "IPMAT-BASE:V-01",
+        "IPMAT-BASE:V-02"
+       ]
+      },
+      {
+       "code": "ENG-04",
+       "title": "Creative writing",
+       "share": 16.0,
+       "weight": 9,
+       "weightBasis": "CBSE XI question-design marks (Hornbill 3+3+6+6, Snapshots 4+3+6): 16 marks; max in paper 18.00; weight = round(10 x 16.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf Class XI Sections A-C",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": []
+      },
+      {
+       "code": "ENG-05",
+       "title": "Literature: Hornbill (prose and poetry)",
+       "share": 18.0,
+       "weight": 10,
+       "weightBasis": "CBSE XI question-design marks (Hornbill 3+3+6+6, Snapshots 4+3+6): 18 marks; max in paper 18.00; weight = round(10 x 18.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf Class XI Sections A-C",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": []
+      },
+      {
+       "code": "ENG-06",
+       "title": "Literature: Snapshots (supplementary reader)",
+       "share": 13.0,
+       "weight": 7,
+       "weightBasis": "CBSE XI question-design marks (Hornbill 3+3+6+6, Snapshots 4+3+6): 13 marks; max in paper 18.00; weight = round(10 x 13.00 / 18.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf Class XI Sections A-C",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "programmeCode": "CLASS_12",
+   "courseCode": "COM-C12-2627",
+   "familyCode": "COM-C12",
+   "status": "draft",
+   "source": {
+    "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf",
+    "title": "CBSE Accountancy (055) Class XI & XII 2026-27",
+    "year": "2026-27",
+    "retrieved": "2026-10-21"
+   },
+   "otherSources": [
+    {
+     "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf",
+     "title": "CBSE Business Studies (054) Class XI & XII 2026-27",
+     "year": "2026-27",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf",
+     "title": "CBSE Economics (030) Class XI & XII 2026-27",
+     "year": "2026-27",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf",
+     "title": "CBSE Mathematics (041) Class XI & XII 2026-27",
+     "year": "2026-27",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf",
+     "title": "CBSE Applied Mathematics (241) Grade XI & XII 2026-27",
+     "year": "2026-27",
+     "retrieved": "2026-10-21"
+    },
+    {
+     "url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf",
+     "title": "CBSE English Core (301) Class XI & XII 2026-27",
+     "year": "2026-27",
+     "retrieved": "2026-10-21"
+    }
+   ],
+   "note": "Existing course ONL-C12-ACC (online Class 12 Accountancy, 14 chapters) maps onto ACC-01..ACC-04 (see overlaps).",
+   "subjects": [
+    {
+     "code": "ACC",
+     "name": "Accountancy (055)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "ACC-01",
+       "title": "Accounting for Partnership Firms",
+       "share": 36.0,
+       "weight": 10,
+       "weightBasis": "CBSE XII unit marks: 36 marks; max in paper 36.00; weight = round(10 x 36.00 / 36.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CUET-SYL-2026:ACC-01..ACC-03",
+        "CAF-SYL-2024:ACC-10",
+        "ONL-C12-ACC:ACC12-01..ACC12-07"
+       ]
+      },
+      {
+       "code": "ACC-02",
+       "title": "Accounting for Companies",
+       "share": 24.0,
+       "weight": 7,
+       "weightBasis": "CBSE XII unit marks: 24 marks; max in paper 36.00; weight = round(10 x 24.00 / 36.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CUET-SYL-2026:ACC-04",
+        "CAF-SYL-2024:ACC-11",
+        "ONL-C12-ACC:ACC12-08..ACC12-09"
+       ]
+      },
+      {
+       "code": "ACC-03",
+       "title": "Analysis of Financial Statements",
+       "share": 12.0,
+       "weight": 3,
+       "weightBasis": "CBSE XII unit marks: 12 marks; max in paper 36.00; weight = round(10 x 12.00 / 36.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "CUET-SYL-2026:ACC-05",
+        "ONL-C12-ACC:ACC12-10..ACC12-13"
+       ]
+      },
+      {
+       "code": "ACC-04",
+       "title": "Cash Flow Statement",
+       "share": 8.0,
+       "weight": 2,
+       "weightBasis": "CBSE XII unit marks: 8 marks; max in paper 36.00; weight = round(10 x 8.00 / 36.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "CUET-SYL-2026:ACC-05",
+        "ONL-C12-ACC:ACC12-14"
+       ]
+      },
+      {
+       "code": "ACC-05",
+       "title": "Computerised Accounting (alternative to Part B units 3-4; 20 marks)",
+       "share": 20.0,
+       "weight": 6,
+       "weightBasis": "CBSE XII unit marks: 20 marks; max in paper 36.00; weight = round(10 x 20.00 / 36.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "CUET-SYL-2026:ACC-06"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "BST",
+     "name": "Business Studies (054)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "BST-01",
+       "title": "Nature and Significance of Management",
+       "share": 5.3333,
+       "weight": 7,
+       "weightBasis": "CBSE XII grouped marks: 16 marks for group 'Units 1-3' split equally over 3 units = 5.33; max in paper 7.50; weight = round(10 x 5.33 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CUET-SYL-2026:BST-01"
+       ]
+      },
+      {
+       "code": "BST-02",
+       "title": "Principles of Management",
+       "share": 5.3333,
+       "weight": 7,
+       "weightBasis": "CBSE XII grouped marks: 16 marks for group 'Units 1-3' split equally over 3 units = 5.33; max in paper 7.50; weight = round(10 x 5.33 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CUET-SYL-2026:BST-02"
+       ]
+      },
+      {
+       "code": "BST-03",
+       "title": "Business Environment",
+       "share": 5.3333,
+       "weight": 7,
+       "weightBasis": "CBSE XII grouped marks: 16 marks for group 'Units 1-3' split equally over 3 units = 5.33; max in paper 7.50; weight = round(10 x 5.33 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "CUET-SYL-2026:BST-03"
+       ]
+      },
+      {
+       "code": "BST-04",
+       "title": "Planning",
+       "share": 7.0,
+       "weight": 9,
+       "weightBasis": "CBSE XII grouped marks: 14 marks for group 'Units 4-5' split equally over 2 units = 7.00; max in paper 7.50; weight = round(10 x 7.00 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "CUET-SYL-2026:BST-04"
+       ]
+      },
+      {
+       "code": "BST-05",
+       "title": "Organising",
+       "share": 7.0,
+       "weight": 9,
+       "weightBasis": "CBSE XII grouped marks: 14 marks for group 'Units 4-5' split equally over 2 units = 7.00; max in paper 7.50; weight = round(10 x 7.00 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "CUET-SYL-2026:BST-05"
+       ]
+      },
+      {
+       "code": "BST-06",
+       "title": "Staffing",
+       "share": 6.6667,
+       "weight": 9,
+       "weightBasis": "CBSE XII grouped marks: 20 marks for group 'Units 6-8' split equally over 3 units = 6.67; max in paper 7.50; weight = round(10 x 6.67 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "CUET-SYL-2026:BST-06"
+       ]
+      },
+      {
+       "code": "BST-07",
+       "title": "Directing",
+       "share": 6.6667,
+       "weight": 9,
+       "weightBasis": "CBSE XII grouped marks: 20 marks for group 'Units 6-8' split equally over 3 units = 6.67; max in paper 7.50; weight = round(10 x 6.67 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": [
+        "CUET-SYL-2026:BST-07"
+       ]
+      },
+      {
+       "code": "BST-08",
+       "title": "Controlling",
+       "share": 6.6667,
+       "weight": 9,
+       "weightBasis": "CBSE XII grouped marks: 20 marks for group 'Units 6-8' split equally over 3 units = 6.67; max in paper 7.50; weight = round(10 x 6.67 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 8,
+       "overlaps": [
+        "CUET-SYL-2026:BST-08"
+       ]
+      },
+      {
+       "code": "BST-09",
+       "title": "Financial Management",
+       "share": 7.5,
+       "weight": 10,
+       "weightBasis": "CBSE XII grouped marks: 15 marks for group 'Units 9-10' split equally over 2 units = 7.50; max in paper 7.50; weight = round(10 x 7.50 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 9,
+       "overlaps": [
+        "CUET-SYL-2026:BST-09"
+       ]
+      },
+      {
+       "code": "BST-10",
+       "title": "Financial Markets",
+       "share": 7.5,
+       "weight": 10,
+       "weightBasis": "CBSE XII grouped marks: 15 marks for group 'Units 9-10' split equally over 2 units = 7.50; max in paper 7.50; weight = round(10 x 7.50 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 10,
+       "overlaps": [
+        "CUET-SYL-2026:BST-10"
+       ]
+      },
+      {
+       "code": "BST-11",
+       "title": "Marketing Management",
+       "share": 7.5,
+       "weight": 10,
+       "weightBasis": "CBSE XII grouped marks: 15 marks for group 'Units 11-12' split equally over 2 units = 7.50; max in paper 7.50; weight = round(10 x 7.50 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 11,
+       "overlaps": [
+        "CUET-SYL-2026:BST-11"
+       ]
+      },
+      {
+       "code": "BST-12",
+       "title": "Consumer Protection",
+       "share": 7.5,
+       "weight": 10,
+       "weightBasis": "CBSE XII grouped marks: 15 marks for group 'Units 11-12' split equally over 2 units = 7.50; max in paper 7.50; weight = round(10 x 7.50 / 7.50)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf Class XII course structure table (p.9)",
+       "official": true,
+       "sortOrder": 12,
+       "overlaps": [
+        "CUET-SYL-2026:BST-12"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "ECO",
+     "name": "Economics (030)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "ECO-01",
+       "title": "Macro: National Income and Related Aggregates",
+       "share": 10.0,
+       "weight": 5,
+       "weightBasis": "CBSE XII unit marks: 10 marks; max in paper 20.00; weight = round(10 x 10.00 / 20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-05",
+        "CAF-SYL-2024:ECO-05"
+       ]
+      },
+      {
+       "code": "ECO-02",
+       "title": "Macro: Money and Banking",
+       "share": 6.0,
+       "weight": 3,
+       "weightBasis": "CBSE XII unit marks: 6 marks; max in paper 20.00; weight = round(10 x 6.00 / 20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-06",
+        "CAF-SYL-2024:ECO-08"
+       ]
+      },
+      {
+       "code": "ECO-03",
+       "title": "Macro: Determination of Income and Employment",
+       "share": 12.0,
+       "weight": 6,
+       "weightBasis": "CBSE XII unit marks: 12 marks; max in paper 20.00; weight = round(10 x 12.00 / 20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-07",
+        "CAF-SYL-2024:ECO-05"
+       ]
+      },
+      {
+       "code": "ECO-04",
+       "title": "Macro: Government Budget and the Economy",
+       "share": 6.0,
+       "weight": 3,
+       "weightBasis": "CBSE XII unit marks: 6 marks; max in paper 20.00; weight = round(10 x 6.00 / 20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-08",
+        "CAF-SYL-2024:ECO-07"
+       ]
+      },
+      {
+       "code": "ECO-05",
+       "title": "Macro: Balance of Payments",
+       "share": 6.0,
+       "weight": 3,
+       "weightBasis": "CBSE XII unit marks: 6 marks; max in paper 20.00; weight = round(10 x 6.00 / 20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-09",
+        "CAF-SYL-2024:ECO-09"
+       ]
+      },
+      {
+       "code": "ECO-06",
+       "title": "IED: Development Experience (1947-90) and Economic Reforms since 1991",
+       "share": 12.0,
+       "weight": 6,
+       "weightBasis": "CBSE XII unit marks: 12 marks; max in paper 20.00; weight = round(10 x 12.00 / 20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-10",
+        "CUET-SYL-2026:ECO-11",
+        "CAF-SYL-2024:ECO-10"
+       ]
+      },
+      {
+       "code": "ECO-07",
+       "title": "IED: Current Challenges facing Indian Economy",
+       "share": 20.0,
+       "weight": 10,
+       "weightBasis": "CBSE XII unit marks: 20 marks; max in paper 20.00; weight = round(10 x 20.00 / 20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-12"
+       ]
+      },
+      {
+       "code": "ECO-08",
+       "title": "IED: Development Experience of India - A Comparison with Neighbours",
+       "share": 8.0,
+       "weight": 4,
+       "weightBasis": "CBSE XII unit marks: 8 marks; max in paper 20.00; weight = round(10 x 8.00 / 20.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf Class XII course structure table",
+       "official": true,
+       "sortOrder": 8,
+       "overlaps": [
+        "CUET-SYL-2026:ECO-13"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "MATH",
+     "name": "Mathematics (041)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "MATH-01",
+       "title": "Relations and Functions",
+       "share": 8.0,
+       "weight": 2,
+       "weightBasis": "CBSE XII unit marks: 8 marks; max in paper 35.00; weight = round(10 x 8.00 / 35.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf Class XII unit table",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B1-01"
+       ]
+      },
+      {
+       "code": "MATH-02",
+       "title": "Algebra (Matrices, Determinants)",
+       "share": 10.0,
+       "weight": 3,
+       "weightBasis": "CBSE XII unit marks: 10 marks; max in paper 35.00; weight = round(10 x 10.00 / 35.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf Class XII unit table",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B1-02",
+        "IPMAT-BASE:Q-14"
+       ]
+      },
+      {
+       "code": "MATH-03",
+       "title": "Calculus",
+       "share": 35.0,
+       "weight": 10,
+       "weightBasis": "CBSE XII unit marks: 35 marks; max in paper 35.00; weight = round(10 x 35.00 / 35.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf Class XII unit table",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B1-03",
+        "IPMAT-BASE:HM-04..HM-08"
+       ]
+      },
+      {
+       "code": "MATH-04",
+       "title": "Vectors and Three-Dimensional Geometry",
+       "share": 14.0,
+       "weight": 4,
+       "weightBasis": "CBSE XII unit marks: 14 marks; max in paper 35.00; weight = round(10 x 14.00 / 35.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf Class XII unit table",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B1-04",
+        "IPMAT-BASE:HM-09"
+       ]
+      },
+      {
+       "code": "MATH-05",
+       "title": "Linear Programming",
+       "share": 5.0,
+       "weight": 1,
+       "weightBasis": "CBSE XII unit marks: 5 marks; max in paper 35.00; weight = round(10 x 5.00 / 35.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf Class XII unit table",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B1-05",
+        "IPMAT-BASE:HM-11"
+       ]
+      },
+      {
+       "code": "MATH-06",
+       "title": "Probability",
+       "share": 8.0,
+       "weight": 2,
+       "weightBasis": "CBSE XII unit marks: 8 marks; max in paper 35.00; weight = round(10 x 8.00 / 35.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf Class XII unit table",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B1-06",
+        "IPMAT-BASE:HM-10"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "AMATH",
+     "name": "Applied Mathematics (241)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "AMATH-01",
+       "title": "Numbers, Quantification and Numerical Applications",
+       "share": 11.0,
+       "weight": 7,
+       "weightBasis": "CBSE XII unit marks: 11 marks; max in paper 15.00; weight = round(10 x 11.00 / 15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XII unit table (p.10)",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B2-01"
+       ]
+      },
+      {
+       "code": "AMATH-02",
+       "title": "Algebra",
+       "share": 10.0,
+       "weight": 7,
+       "weightBasis": "CBSE XII unit marks: 10 marks; max in paper 15.00; weight = round(10 x 10.00 / 15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XII unit table (p.10)",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B2-02"
+       ]
+      },
+      {
+       "code": "AMATH-03",
+       "title": "Calculus",
+       "share": 15.0,
+       "weight": 10,
+       "weightBasis": "CBSE XII unit marks: 15 marks; max in paper 15.00; weight = round(10 x 15.00 / 15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XII unit table (p.10)",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B2-03"
+       ]
+      },
+      {
+       "code": "AMATH-04",
+       "title": "Probability Distributions",
+       "share": 10.0,
+       "weight": 7,
+       "weightBasis": "CBSE XII unit marks: 10 marks; max in paper 15.00; weight = round(10 x 10.00 / 15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XII unit table (p.10)",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B2-04",
+        "CAF-SYL-2024:QA-16"
+       ]
+      },
+      {
+       "code": "AMATH-05",
+       "title": "Inferential Statistics",
+       "share": 5.0,
+       "weight": 3,
+       "weightBasis": "CBSE XII unit marks: 5 marks; max in paper 15.00; weight = round(10 x 5.00 / 15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XII unit table (p.10)",
+       "official": true,
+       "sortOrder": 5,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B2-06"
+       ]
+      },
+      {
+       "code": "AMATH-06",
+       "title": "Time-based Data",
+       "share": 6.0,
+       "weight": 4,
+       "weightBasis": "CBSE XII unit marks: 6 marks; max in paper 15.00; weight = round(10 x 6.00 / 15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XII unit table (p.10)",
+       "official": true,
+       "sortOrder": 6,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B2-05"
+       ]
+      },
+      {
+       "code": "AMATH-07",
+       "title": "Financial Mathematics",
+       "share": 15.0,
+       "weight": 10,
+       "weightBasis": "CBSE XII unit marks: 15 marks; max in paper 15.00; weight = round(10 x 15.00 / 15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XII unit table (p.10)",
+       "official": true,
+       "sortOrder": 7,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B2-07",
+        "CAF-SYL-2024:QA-04"
+       ]
+      },
+      {
+       "code": "AMATH-08",
+       "title": "Linear Programming",
+       "share": 8.0,
+       "weight": 5,
+       "weightBasis": "CBSE XII unit marks: 8 marks; max in paper 15.00; weight = round(10 x 8.00 / 15.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf Grade XII unit table (p.10)",
+       "official": true,
+       "sortOrder": 8,
+       "overlaps": [
+        "CUET-SYL-2026:MATH-B2-08"
+       ]
+      }
+     ]
+    },
+    {
+     "code": "ENG",
+     "name": "English Core (301)",
+     "sourceUrl": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf",
+     "chapters": [
+      {
+       "code": "ENG-01",
+       "title": "Reading: unseen passages (factual/descriptive/literary + case-based)",
+       "share": 22.0,
+       "weight": 8,
+       "weightBasis": "CBSE XII question-design marks (Flamingo 6+6+10+5, Vistas 4+4+5): 22 marks; max in paper 27.00; weight = round(10 x 22.00 / 27.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf Class XII Sections A-C",
+       "official": true,
+       "sortOrder": 1,
+       "overlaps": [
+        "CUET-SYL-2026:ENG-01..ENG-03",
+        "IPMAT-BASE:V-04",
+        "CLAT-SYL-2027:ENG-01"
+       ]
+      },
+      {
+       "code": "ENG-02",
+       "title": "Creative writing",
+       "share": 18.0,
+       "weight": 7,
+       "weightBasis": "CBSE XII question-design marks (Flamingo 6+6+10+5, Vistas 4+4+5): 18 marks; max in paper 27.00; weight = round(10 x 18.00 / 27.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf Class XII Sections A-C",
+       "official": true,
+       "sortOrder": 2,
+       "overlaps": []
+      },
+      {
+       "code": "ENG-03",
+       "title": "Literature: Flamingo (prose and poetry)",
+       "share": 27.0,
+       "weight": 10,
+       "weightBasis": "CBSE XII question-design marks (Flamingo 6+6+10+5, Vistas 4+4+5): 27 marks; max in paper 27.00; weight = round(10 x 27.00 / 27.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf Class XII Sections A-C",
+       "official": true,
+       "sortOrder": 3,
+       "overlaps": []
+      },
+      {
+       "code": "ENG-04",
+       "title": "Literature: Vistas (supplementary reader)",
+       "share": 13.0,
+       "weight": 5,
+       "weightBasis": "CBSE XII question-design marks (Flamingo 6+6+10+5, Vistas 4+4+5): 13 marks; max in paper 27.00; weight = round(10 x 13.00 / 27.00)",
+       "weightSource": "official",
+       "sourceRef": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/English_core_SecP2_2026-27.pdf Class XII Sections A-C",
+       "official": true,
+       "sortOrder": 4,
+       "overlaps": []
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

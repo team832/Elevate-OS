@@ -171,7 +171,7 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `INTEGRATION_CONTRACT.md` | Identities, IDs, ownership, permissions, API, events, summaries, versioning, failure behaviour |
 | `DATABASE_DESIGN.md` | Schemas, conventions, core tables |
 | `IMPLEMENTATION_STATUS.md` | What is built and the evidence |
-| `docs/DECISIONS.md` | Decision log (D-001 … D-027) |
+| `docs/DECISIONS.md` | Decision log (D-001 … D-057) |
 | `docs/BUILD_PLAN.md` | Waves, ownership, module layout, definition of done |
 | `docs/EXISTING_PROJECT_AUDIT.md` | Audit of the legacy material |
 | `docs/PRODUCT_REQUIREMENTS.md` | Product requirements |

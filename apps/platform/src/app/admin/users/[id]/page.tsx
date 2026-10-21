@@ -14,6 +14,7 @@ import {
   ErrorState,
   LoadingState,
   PageHeader,
+  StatusBadge,
 } from '@elevate/shared-ui';
 import { PLATFORM_PATHS } from '../../../../lib/shell';
 import { platformShell } from '../../../../server/shell';
@@ -93,6 +94,20 @@ async function Account({ viewer, id }: { viewer: AuthenticatedUser; id: Authenti
       <PageHeader
         title={user.displayName}
         description={user.email}
+        meta={
+          <>
+            <AccountStatus status={user.status} />
+            {roles.length ? (
+              roles.map((r) => (
+                <StatusBadge key={r} tone="neutral">
+                  {roleLabels([r])}
+                </StatusBadge>
+              ))
+            ) : (
+              <StatusBadge tone="warning">No roles yet</StatusBadge>
+            )}
+          </>
+        }
         actions={
           !canStatus ? null : user.status === 'active' ? (
             <Dialog
@@ -124,94 +139,90 @@ async function Account({ viewer, id }: { viewer: AuthenticatedUser; id: Authenti
           )
         }
       />
-      {self ? (
-        <Alert tone="info" title="This is your own account">
-          You cannot change your own roles or disable yourself. Another administrator must do it.
-        </Alert>
-      ) : null}
-      <Card title="Account">
-        <dl className="ur-facts">
-          <div>
-            <dt>Status</dt>
-            <dd>
-              <AccountStatus status={user.status} />
-            </dd>
-          </div>
-          <div>
-            <dt>How they sign in</dt>
-            <dd>
-              {user.hasPassword
-                ? 'Has a password; can also use Google sign-in'
-                : 'No password: signs in with Google. Setting a password by email comes later.'}
-            </dd>
-          </div>
-          <div>
-            <dt>Last sign-in</dt>
-            <dd>{fmtWhen(user.lastLoginAt)}</dd>
-          </div>
-          <div>
-            <dt>Created</dt>
-            <dd>
-              {fmtDay(user.createdAt)}
-              {user.viaGoogle ? ', at their first Google sign-in' : ''}
-            </dd>
-          </div>
-        </dl>
-      </Card>
-      <Card
-        title="Roles"
-        description={
-          roles.length === 0
-            ? 'No roles yet: this person sees “No access” everywhere until a role is given.'
-            : `Holds: ${roleLabels(roles)}.`
-        }
-      >
-        {canRoles ? (
-          <JsonForm
-            action={`${api}/roles`}
-            method="PUT"
-            submitLabel="Save roles"
-            arrays={['roles']}
-          >
-            <RoleChecklist held={roles} />
-          </JsonForm>
-        ) : (
-          <>
-            {self ? null : (
-              <p className="el-field-hint">Only a platform administrator can change roles.</p>
-            )}
-            <RoleChecklist held={roles} disabled />
-          </>
-        )}
-      </Card>
-      <Card title="History" description="Changes to this account, newest first (last 50).">
-        <DataTable
-          compact
-          rows={history}
-          rowKey={(h) => h.id}
-          columns={[
-            { key: 'at', header: 'When', render: (h) => fmtWhen(h.at) },
-            {
-              key: 'action',
-              header: 'What happened',
-              render: (h) => {
-                const before = (h.before as { roles?: string[] } | null)?.roles;
-                const after = (h.after as { roles?: string[] } | null)?.roles;
-                return (
-                  <>
-                    {auditLabel(h.action)}
-                    {after && h.action !== 'user.created_via_google'
-                      ? `: ${before ? `${roleLabels(before) || 'none'} → ` : ''}${roleLabels(after) || 'none'}`
-                      : ''}
-                  </>
-                );
+      <div className="el-stack">
+        {self ? (
+          <Alert tone="info" title="This is your own account">
+            You cannot change your own roles or disable yourself. Another administrator must do it.
+          </Alert>
+        ) : null}
+        <Card title="Account">
+          <dl className="ur-facts">
+            <div>
+              <dt>How they sign in</dt>
+              <dd>
+                {user.hasPassword
+                  ? 'Has a password; can also use Google sign-in'
+                  : 'No password: signs in with Google. Setting a password by email comes later.'}
+              </dd>
+            </div>
+            <div>
+              <dt>Last sign-in</dt>
+              <dd>{fmtWhen(user.lastLoginAt)}</dd>
+            </div>
+            <div>
+              <dt>Created</dt>
+              <dd>
+                {fmtDay(user.createdAt)}
+                {user.viaGoogle ? ', at their first Google sign-in' : ''}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+        <Card
+          title="Roles"
+          description={
+            roles.length === 0
+              ? 'No roles yet: this person sees “No access” everywhere until a role is given.'
+              : `Holds: ${roleLabels(roles)}.`
+          }
+        >
+          {canRoles ? (
+            <JsonForm
+              action={`${api}/roles`}
+              method="PUT"
+              submitLabel="Save roles"
+              arrays={['roles']}
+            >
+              <RoleChecklist held={roles} />
+            </JsonForm>
+          ) : (
+            <>
+              {self ? null : (
+                <p className="el-field-hint">Only a platform administrator can change roles.</p>
+              )}
+              <RoleChecklist held={roles} disabled />
+            </>
+          )}
+        </Card>
+        <Card title="History" description="Changes to this account, newest first (last 50).">
+          <DataTable
+            compact
+            rows={history}
+            rowKey={(h) => h.id}
+            columns={[
+              { key: 'at', header: 'When', render: (h) => fmtWhen(h.at) },
+              {
+                key: 'action',
+                header: 'What happened',
+                render: (h) => {
+                  const before = (h.before as { roles?: string[] } | null)?.roles;
+                  const after = (h.after as { roles?: string[] } | null)?.roles;
+                  return (
+                    <>
+                      {auditLabel(h.action)}
+                      {after && h.action !== 'user.created_via_google'
+                        ? `: ${before ? `${roleLabels(before) || 'none'} → ` : ''}${roleLabels(after) || 'none'}`
+                        : ''}
+                    </>
+                  );
+                },
               },
-            },
-            { key: 'by', header: 'By', render: (h) => h.actorName ?? 'System' },
-          ]}
-          empty={<p className="el-field-hint">No recorded changes yet.</p>}
-        />
-      </Card>
+              { key: 'by', header: 'By', render: (h) => h.actorName ?? 'System' },
+            ]}
+            empty={<p className="el-field-hint">No recorded changes yet.</p>}
+          />
+        </Card>
+      </div>
     </>
   );
 }

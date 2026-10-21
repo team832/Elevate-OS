@@ -1,0 +1,2 @@
+ALTER TABLE "ops"."fee_plans" DROP CONSTRAINT "fee_plans_approved_check";--> statement-breakpoint
+ALTER TABLE "ops"."fee_plans" ADD CONSTRAINT "fee_plans_approved_check" CHECK ("ops"."fee_plans"."status" <> 'active' OR ("ops"."fee_plans"."approval_id" IS NOT NULL AND "ops"."fee_plans"."approved_by" IS NOT NULL AND "ops"."fee_plans"."approved_at" IS NOT NULL));

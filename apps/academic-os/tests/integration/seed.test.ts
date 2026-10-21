@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { hashPassword } from '@elevate/authentication';
 import {
@@ -8,16 +8,19 @@ import {
   academicChapters,
   academicClassRecords,
   academicConceptBookChapters,
+  academicCourses,
   academicCurriculumPlans,
   academicPlanItems,
   academicResults,
   academicStudents,
   academicSubjects,
+  academicTeacherAssignments,
   type Database,
 } from '@elevate/database';
 import { coreSeeds, runSeeds } from '@elevate/database/seed';
 import { createTestUser, setupTestDatabase } from '@elevate/testing';
 import { seeds } from '../../seed';
+import { readSyllabus } from '../../seed/syllabus';
 import { getBatchFeasibility } from '../../src/server';
 
 const ctx = setupTestDatabase();
@@ -135,6 +138,48 @@ describe('Academic OS seeds (legacy planning data, fictional people)', () => {
     }
     const students = await ctx.db.select().from(academicStudents);
     expect(students.every((s) => s.fullName.includes('(fictional)') && (s.email ?? '').endsWith('@example.test'))).toBe(true);
+  });
+
+  it('draft syllabus courses match the reviewed distribution; IPMAT-BASE gets weights only', async () => {
+    const byCourse = new Map(readSyllabus().programmes.map((p) => [p.courseCode, p]));
+    const courses = await ctx.db.select().from(academicCourses).where(inArray(academicCourses.code, [...byCourse.keys()]));
+    expect(courses).toHaveLength(6);
+    for (const c of courses) {
+      const p = byCourse.get(c.code)!;
+      if (c.code === 'IPMAT-BASE') expect(c.status).toBe('active'); // set by academic.ipmat-baseline, not by this seed
+      else expect(c).toMatchObject({ status: 'draft', mode: null, classMinutes: null, description: expect.stringMatching(/^Draft syllabus — pending owner verification\..*retrieved 2026-10-21/) });
+      const rows = await ctx.db
+        .select({ subject: academicSubjects.code, code: academicChapters.code, title: academicChapters.title, sortOrder: academicChapters.sortOrder, weight: academicChapters.weight })
+        .from(academicChapters)
+        .innerJoin(academicSubjects, eq(academicSubjects.id, academicChapters.subjectId))
+        .where(eq(academicChapters.courseId, c.id));
+      const expected = p.subjects.flatMap((s) => s.chapters.map((ch) => ({ subject: s.code, code: ch.code, title: ch.title, sortOrder: ch.sortOrder, weight: ch.weight })));
+      expect(rows.sort((a, b) => a.code.localeCompare(b.code))).toEqual(expected.sort((a, b) => a.code.localeCompare(b.code)));
+    }
+    const subjects = await ctx.db
+      .select({ course: academicCourses.code, code: academicSubjects.code, name: academicSubjects.name })
+      .from(academicSubjects)
+      .innerJoin(academicCourses, eq(academicCourses.id, academicSubjects.courseId))
+      .where(inArray(academicSubjects.code, ['MATH', 'AMATH']));
+    for (const course of ['COM-C11-2627', 'COM-C12-2627']) {
+      expect(subjects.filter((s) => s.course === course).map((s) => s.name).sort()).toEqual(['Applied Mathematics (241)', 'Mathematics (041)']);
+    }
+    expect(courses.find((c) => c.code === 'CUET-SYL-2026')!.description).toMatch(/pick five/);
+  });
+
+  it('CA Foundation CAF-ACC-SEP27 converges to active on re-run (D-037); no teachers on syllabus drafts', async () => {
+    await ctx.db.update(academicCourses).set({ status: 'paused' }).where(eq(academicCourses.code, 'CAF-ACC-SEP27'));
+    await seedAll(ctx.db);
+    const [ca] = await ctx.db.select().from(academicCourses).where(eq(academicCourses.code, 'CAF-ACC-SEP27'));
+    expect(ca!.status).toBe('active');
+    expect((await planTotals(ctx.db, 'IPMAT-BASELINE-253')).classes).toBe(253);
+    const onSyllabus = await ctx.db
+      .select({ id: academicTeacherAssignments.id })
+      .from(academicTeacherAssignments)
+      .innerJoin(academicSubjects, eq(academicSubjects.id, academicTeacherAssignments.subjectId))
+      .innerJoin(academicCourses, eq(academicCourses.id, academicSubjects.courseId))
+      .where(sql`${academicCourses.sourceRef} like 'data/syllabus/%'`);
+    expect(onSyllabus).toHaveLength(0);
   });
 
   it('the seeded Class 12 calendar reproduces 345 − 28 = 317 net vs 305 required (headroom 12)', async () => {

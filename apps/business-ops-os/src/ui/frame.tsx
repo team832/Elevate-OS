@@ -10,62 +10,51 @@ import { getDb } from '@elevate/database';
 import { countUnread } from '@elevate/notifications';
 import { AppError } from '@elevate/shared-contracts';
 import { currentRequestId, requirePageAccess, type PageAccess } from '@elevate/server-kit/next';
-import { AppShell, ErrorState, LoadingState, type Crumb } from '@elevate/shared-ui';
+import { AppShell, ButtonLink, ErrorState, LoadingState, type Crumb } from '@elevate/shared-ui';
 import { MODULE } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
+import { searchable } from '../server/search';
+import { SearchShortcut } from './global-search';
 
 type NavRow = [key: string, label: string, href: string, permission: Permission];
 const section = (group: string | undefined, rows: NavRow[]) =>
   rows.map(([key, label, href, permission]) => ({ key, label, href, permission, group }));
 
 /**
- * Module navigation (sidebar). Grouped items are listed under their section; the
- * section holding the current page starts expanded. Settings pages are reached
- * from the Settings link at the bottom of the sidebar (see SETTINGS_KEYS).
+ * Module navigation (sidebar): always-open groups by the job staff came to do. Each
+ * link shows only with its permission. Settings is reached from the link at the
+ * bottom of the sidebar (see SETTINGS_KEYS).
  */
 const NAV = [
-  ...section(undefined, [['home', 'Dashboard', '/ops', 'ops:module:access']]),
+  ...section('Today', [
+    ['home', 'Today', '/ops', 'ops:module:access'],
+    ['tasks', 'My day', '/ops/tasks', 'ops:tasks:read'],
+  ]),
   ...section('Admissions', [
+    ['overview', 'Overview', '/ops/admissions/overview', 'ops:admissions:read'],
+    ['admissions', 'Demo students', '/ops/admissions', 'ops:leads:read'],
+    ['applications', 'Applications', '/ops/admissions/applications', 'ops:admissions:read'],
     ['leads', 'Leads', '/ops/leads', 'ops:leads:read'],
-    ['schedule', 'Schedule', '/ops/schedule', 'ops:leads:read'],
-    ['admissions', 'Admissions', '/ops/admissions', 'ops:admissions:read'],
-    ['students', 'Students', '/ops/students', 'ops:students:read'],
+    ['meetings', 'Events and counselling', '/ops/meetings', 'ops:appointments:read'],
+  ]),
+  ...section('Students', [
+    ['students', 'Active students', '/ops/students', 'ops:students:read'],
+    ['past', 'Past students', '/ops/students/past', 'ops:students:read'],
+  ]),
+  ...section('Money', [
+    ['fees', 'Fee structure', '/ops/fees', 'ops:fees:read'],
+    ['approvals', 'Approvals', '/ops/operations/approvals', 'ops:module:access'],
   ]),
   ...section('People', [
-    ['hr-employees', 'Employees', '/ops/hr/employees', 'ops:employees:read'],
-    ['hr-departments', 'Departments', '/ops/hr/departments', 'ops:organisation:read'],
+    ['teachers', 'Teachers', '/ops/teachers', 'ops:teachers:read'],
     ['staff', 'Staff directory', '/ops/staff', 'ops:organisation:read'],
-    ['recruitment', 'Recruitment', '/ops/hr/recruitment', 'ops:recruitment:read'],
-    ['onboarding', 'Onboarding', '/ops/hr/onboarding', 'ops:lifecycle:read'],
-    ['offboarding', 'Offboarding', '/ops/hr/offboarding', 'ops:lifecycle:read'],
-    ['hr-compensation', 'Compensation', '/ops/hr/compensation', 'ops:compensation:read'],
-  ]),
-  ...section('Time & leave', [
-    ['my-time', 'My attendance & leave', '/ops/hr/attendance/me', 'ops:attendance:record'],
-    ['attendance', 'Attendance', '/ops/hr/attendance', 'ops:attendance:read'],
-    ['shifts', 'Shifts', '/ops/hr/shifts', 'ops:shifts:read'],
-    ['leave', 'Leave', '/ops/hr/leave', 'ops:leave:read'],
-    ['timesheets', 'Timesheets', '/ops/hr/timesheets', 'ops:hr_reports:read'],
-  ]),
-  ...section('Operations', [
-    ['tasks', 'Tasks', '/ops/tasks', 'ops:tasks:read'],
-    ['approvals', 'Approvals', '/ops/operations/approvals', 'ops:module:access'],
-    ['sops', 'SOPs', '/ops/sops', 'ops:sops:read'],
-    ['incidents', 'Incidents', '/ops/incidents', 'ops:incidents:read'],
-    ['decisions', 'Decisions', '/ops/decisions', 'ops:decisions:read'],
-    ['risks', 'Risks', '/ops/risks', 'ops:risks:read'],
-    ['projects', 'Projects', '/ops/projects', 'ops:risks:read'],
-    ['assets', 'Assets', '/ops/operations/assets', 'ops:assets:read'],
   ]),
   ...section('Reports', [['reports', 'Reports', '/ops/reports', 'ops:module:access']]),
-  ...section('Settings', [
-    ['settings', 'Settings', '/ops/settings', 'ops:settings:read'],
-    ['policies', 'Policies & compliance', '/ops/settings/policies', 'ops:settings:read'],
-  ]),
+  ...section('Settings', [['settings', 'Settings', '/ops/settings', 'ops:settings:read']]),
 ];
 
 /** Nav keys whose pages are "Settings" (bottom of the sidebar, not in the module list). */
-const SETTINGS_KEYS = new Set(['settings', 'policies']);
+const SETTINGS_KEYS = new Set(['settings']);
 
 /** Unread in-app notifications for the user; null (indicator hidden) when unknown. */
 async function unreadFor(access: PageAccess): Promise<number | null> {
@@ -88,13 +77,17 @@ export function gate(permission: Permission, returnTo: string): Promise<PageAcce
 export async function Frame({
   access,
   active,
+  query,
   children,
 }: {
   access: PageAccess;
   active: string;
+  /** The search text to keep in the top-bar box (the search page). */
+  query?: string;
   children: ReactNode;
 }) {
   const user = access.user;
+  const canSearch = searchable(user);
   const visible = NAV.filter((n) => can(user, n.permission));
   const nav = visible
     .filter((n) => !SETTINGS_KEYS.has(n.key))
@@ -104,9 +97,6 @@ export async function Frame({
     ? [
         { label: 'Business Operations', href: '/ops' },
         { label: 'Settings', href: '/ops/settings' },
-        ...(settingsPage.key === 'settings'
-          ? []
-          : [{ label: settingsPage.label, href: settingsPage.href }]),
       ]
     : undefined;
   return (
@@ -118,9 +108,17 @@ export async function Frame({
       nav={nav}
       breadcrumbs={breadcrumbs}
       search={
-        can(user, 'ops:leads:read') ? { action: '/ops/leads', label: 'Search leads' } : undefined
+        canSearch
+          ? {
+              action: '/ops/search',
+              // Phone and email matching needs contact access (server/search.ts).
+              label: can(user, 'ops:student_private:read')
+                ? 'Search name or phone'
+                : 'Search name or reference',
+              defaultValue: query,
+            }
+          : undefined
       }
-      myWorkHref={can(user, 'ops:tasks:read') ? '/ops/tasks?view=mine' : undefined}
       settings={
         can(user, 'ops:settings:read')
           ? { href: '/ops/settings', active: Boolean(settingsPage) }
@@ -128,6 +126,7 @@ export async function Frame({
       }
       unreadNotifications={await unreadFor(access)}
     >
+      {canSearch ? <SearchShortcut inputId="el-search-ops" /> : null}
       {access.status === 'forbidden' ? (
         <ErrorState
           title="No access"
@@ -144,6 +143,9 @@ export async function Frame({
 export function Section({ children, label }: { children: ReactNode; label?: string }) {
   return <Suspense fallback={<LoadingState label={label ?? 'Loading…'} />}>{children}</Suspense>;
 }
+
+// An empty href reloads this page with its query: a retry that works without JavaScript.
+const retry = <ButtonLink href="">Try again</ButtonLink>;
 
 /** Load data for a section; returns either the data or a rendered error state. */
 export async function load<T>(
@@ -166,6 +168,6 @@ export async function load<T>(
       };
     }
     console.error('ops page section failed', error);
-    return { ok: false, view: <ErrorState requestId={requestId} /> };
+    return { ok: false, view: <ErrorState requestId={requestId} action={retry} /> };
   }
 }

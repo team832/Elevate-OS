@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Alert, Button, Card, DataTable, EmptyState, StatusBadge } from '@elevate/shared-ui';
@@ -8,6 +9,7 @@ import { IntegrationBadge, ProposedBadge } from '../../ui/badges';
 import { MarketingPage, Section, type SearchParams } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Marketing accounts' };
 
 export default async function AccountsPage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -16,7 +18,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
       path={modulePath('accounts')}
       active="accounts"
       title="Social accounts"
-      description="The account registry (MKT-001). Handles are shown only when confirmed — never guessed. Integration status changes only through an adapter check."
+      description="Elevate's social accounts. Handles appear only once confirmed, never guessed."
       searchParams={await searchParams}
     >
       {(user) => (
@@ -51,6 +53,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
                   </Alert>
                 ))}
                 <DataTable
+                  compact
                   caption={`${accounts.length} accounts`}
                   rows={accounts}
                   rowKey={(a) => a.id}

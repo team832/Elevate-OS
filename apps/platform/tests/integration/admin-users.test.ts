@@ -66,7 +66,7 @@ const ROUTES: [string, Call, boolean][] = [
 
 describe('Users & roles: who may call what', () => {
   it.each(ROUTES)('%s: 401 signed out, 403 for a teacher', async (_n, call) => {
-    const target = await createTestUser(ctx.db, { roles: ['employee'] });
+    const target = await createTestUser(ctx.db, { roles: ['auditor'] });
     expect((await call(null, target)).status).toBe(401);
     const teacher = await createTestUser(ctx.db, { roles: ['teacher'] });
     expect((await call(teacher, target)).status).toBe(403);
@@ -74,7 +74,7 @@ describe('Users & roles: who may call what', () => {
 
   it.each(ROUTES)('%s: director and auditor may only read', async (_n, call, readOnly) => {
     for (const role of ['director', 'auditor'] as RoleKey[]) {
-      const target = await createTestUser(ctx.db, { roles: ['employee'] });
+      const target = await createTestUser(ctx.db, { roles: ['auditor'] });
       const reader = await createTestUser(ctx.db, { roles: [role] });
       expect((await call(reader, target)).status).toBe(readOnly ? 200 : 403);
     }
@@ -87,12 +87,12 @@ describe('add a person', () => {
     const res = await send<{ id: UserId }>(a, list.POST, BASE, 'POST', {
       email: ' New.Person@ElevateEducation.in ',
       displayName: 'New Person (fictional)',
-      roles: ['teacher', 'employee', 'teacher'],
+      roles: ['teacher', 'auditor', 'teacher'],
     });
     expect(res.status).toBe(201);
     const [row] = await ctx.db.select().from(users).where(eq(users.id, res.data!.id));
     expect(row).toMatchObject({ email: 'new.person@elevateeducation.in', passwordHash: null });
-    expect(await rolesOf(res.data!.id)).toEqual(['employee', 'teacher']);
+    expect(await rolesOf(res.data!.id)).toEqual(['auditor', 'teacher']);
     const [audit] = await audits(res.data!.id, 'user.created');
     expect(audit).toMatchObject({ actorUserId: a.id, module: 'platform' });
   });
@@ -127,7 +127,7 @@ describe('save roles', () => {
 
   it('replaces the roles, takes effect on the next request and is audited with before/after', async () => {
     const a = await admin();
-    const target = await createTestUser(ctx.db, { roles: ['employee'] });
+    const target = await createTestUser(ctx.db, { roles: ['auditor'] });
     const res = await put(a, target.id, { roles: ['teacher', 'academic_coordinator'] });
     expect(res).toMatchObject({
       status: 200,
@@ -140,7 +140,7 @@ describe('save roles', () => {
     const [audit] = await audits(target.id, 'user.roles_changed');
     expect(audit).toMatchObject({
       actorUserId: a.id,
-      before: { roles: ['employee'] },
+      before: { roles: ['auditor'] },
       after: { roles: ['academic_coordinator', 'teacher'] },
     });
     // Saving the same roles again changes nothing and writes no audit row.
@@ -150,7 +150,7 @@ describe('save roles', () => {
 
   it('rejects unknown role keys (400), your own roles (403) and an unknown id (404)', async () => {
     const a = await admin();
-    const target = await createTestUser(ctx.db, { roles: ['employee'] });
+    const target = await createTestUser(ctx.db, { roles: ['auditor'] });
     expect((await put(a, target.id, { roles: ['superuser'] })).status).toBe(400);
     expect((await put(a, a.id, { roles: [] })).status).toBe(403);
     expect(await rolesOf(a.id)).toEqual(['platform_admin']);
@@ -256,7 +256,7 @@ describe('list and detail', () => {
     await ctx.db.insert(userRoles).values([
       { userId: id(1), role: 'teacher' },
       { userId: id(2), role: 'teacher' },
-      { userId: id(2), role: 'employee' },
+      { userId: id(2), role: 'auditor' },
     ]);
     await insertAuditEvent(ctx.db, {
       actorUserId: id(4),
@@ -279,7 +279,7 @@ describe('list and detail', () => {
     expect((await get('page=2')).items.map((u) => u.id)).toEqual([id(25), id(26)]);
     expect((await get('sort=email&dir=desc')).items[0]?.id).toBe(id(26));
     expect((await get('role=teacher')).items.map((u) => u.id)).toEqual([id(1), id(2)]);
-    expect((await get('role=teacher')).items[1]?.roles).toEqual(['employee', 'teacher']);
+    expect((await get('role=teacher')).items[1]?.roles).toEqual(['auditor', 'teacher']);
     expect((await get('role=none')).total).toBe(25);
     expect((await get('status=disabled')).items.map((u) => u.id)).toEqual([id(3)]);
     expect(first.items.find((u) => u.id === id(4))?.viaGoogle).toBe(true);
@@ -291,7 +291,7 @@ describe('list and detail', () => {
 
   it('detail returns the account, its roles and its history, never the password hash', async () => {
     const a = await admin();
-    const target = await createTestUser(ctx.db, { roles: ['employee'] });
+    const target = await createTestUser(ctx.db, { roles: ['auditor'] });
     await send(a, roles.PUT, `${BASE}/${target.id}/roles`, 'PUT', { roles: ['teacher'] });
     const res = await send<{
       user: Record<string, unknown>;

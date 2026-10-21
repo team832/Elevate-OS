@@ -13,7 +13,6 @@ import { GET as listStudents } from '../../src/app/api/v1/students/route';
 import { GET as getStudent } from '../../src/app/api/v1/students/[id]/route';
 import { GET as getLead } from '../../src/app/api/v1/leads/[id]/route';
 import { POST as transition } from '../../src/app/api/v1/admissions/[id]/transitions/route';
-import { POST as requestEnrolment } from '../../src/app/api/v1/admissions/[id]/enrolment-request/route';
 import { POST as retry } from '../../src/app/api/v1/admissions/[id]/enrolment-retry/route';
 import { PUT as prefs } from '../../src/app/api/v1/admissions/[id]/contact-preferences/route';
 import { processEnrolmentReplies } from '../../src/server/enrolment';
@@ -52,11 +51,8 @@ beforeAll(async () => {
   director = await createTestUser(ctx.db, { roles: ['director'] });
   auditor = await createTestUser(ctx.db, { roles: ['auditor'] });
   coordinator = await createTestUser(ctx.db, { roles: ['academic_coordinator'] });
-  admitted = await admittedCase(
-    { counsellor, manager, director },
-    { name: 'Directory Student (fictional)' },
-  );
-  pending = await pendingCase(counsellor, { name: 'Not Yet Admitted (fictional)' });
+  admitted = await admittedCase({ counsellor, manager, director }, { name: 'Directory Student' });
+  pending = await pendingCase(counsellor, { name: 'Not Yet Admitted' });
 });
 
 describe('student directory and profile (ops:students:read)', () => {
@@ -73,7 +69,7 @@ describe('student directory and profile (ops:students:read)', () => {
     expect(await status(listStudents, get(coordinator))).toBe(200);
     const searched = await callRoute<{ id: string }[]>(
       listStudents,
-      get(manager, '/ops/api/v1/students?q=Directory&state=admitted&limit=1'),
+      get(manager, '/ops/api/v1/students?q=Directory&state=awaiting_enrolment&limit=1'),
     );
     expect(searched.data?.map((s) => s.id)).toEqual([admitted.admissionId]);
   });
@@ -112,7 +108,7 @@ describe('lead contact masking (D-028, audit finding)', () => {
       expect(r.data?.privateVisible).toBe(false);
       expect(r.data?.lead).not.toHaveProperty('studentPhone');
       expect(r.data?.lead).not.toHaveProperty('guardianName');
-      expect(r.data?.lead.studentName).toBe('Directory Student (fictional)');
+      expect(r.data?.lead.studentName).toBe('Directory Student');
       expect(JSON.stringify(r.data?.history)).not.toMatch(/\+91|studentPhone|guardianPhone/);
     }
     for (const reader of [counsellor, manager]) {
@@ -186,7 +182,26 @@ describe('reason-coded closure (withdrawal)', () => {
       );
     expect(row?.reasonCode).toBe('chose_competitor');
 
+    // Confirmation requests enrolment at once; an Academic rejection brings the case back to admitted.
     const a = await admittedCase({ counsellor, manager, director });
+    await withTransaction(ctx.db, (tx) =>
+      publishEvent(tx, {
+        type: 'academic.enrolment.rejected',
+        version: 1,
+        idempotencyKey: enrolmentKeys.reply(a.eventId),
+        correlationId: a.eventId,
+        payload: {
+          requestEventId: a.eventId as never,
+          admissionId: a.admissionId as never,
+          leadId: a.leadId as never,
+          reasonCode: 'BATCH_FULL',
+          reason: 'Batch is full (test)',
+          rejectedAt: new Date().toISOString() as never,
+          rejectedByUserId: null,
+        },
+      }),
+    );
+    await processEnrolmentReplies(ctx.db);
     expect(
       (
         await close(a.admissionId, {
@@ -218,10 +233,7 @@ describe('handoff retry after a failure that needs a person', () => {
 
   it('refuses while Academic retries, allows a reasoned retry once dead, supersedes the old attempt and flags its late reply', async () => {
     const a = await admittedCase({ counsellor, manager, director });
-    const first = await callRoute<{ eventId: string }>(requestEnrolment, post(counsellor, {}), {
-      id: a.admissionId,
-    });
-    expect(first.status).toBe(201);
+    const first = { data: { eventId: a.eventId } }; // published by the confirmation
     const id = { id: a.admissionId };
     expect(await status(retry, post(counsellor, { reason: 'Still waiting (test)' }), id)).toBe(409);
     await failAcademic(5); // failed, will retry automatically

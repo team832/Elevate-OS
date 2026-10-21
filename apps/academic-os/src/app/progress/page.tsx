@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
@@ -10,6 +11,7 @@ import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Progress' };
 
 export default async function ProgressPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
@@ -33,7 +35,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
   });
   return (
     <>
-      <PageHeader title="Progress, catch-up and interventions" description="Catch-up tasks come from missed classes (absent, excused, or held before a late joiner’s start). The order is deterministic and every score is explained." />
+      <PageHeader title="Progress, catch-up and interventions" description="Catch-up tasks from missed classes, and interventions. Every priority score is explained." />
       {!data.ok ? (
         <LoadError error={data.error} />
       ) : (
@@ -59,7 +61,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
               description={`As of ${data.data.catchup.asOf}. Weights: recency ${data.data.catchup.weights.recency}, chapter ${data.data.catchup.weights.chapter}, upcoming assessment ${data.data.catchup.weights.assessment}, horizon ${data.data.catchup.weights.horizonDays} days. ${data.data.catchup.closed} task(s) closed.`}
             >
               {canWrite ? <ApiButton action={MODULE_PATHS.api(`batches/${data.data.selected.id}/catch-up`)} label="Generate tasks from missed classes" successMessage="Catch-up tasks generated (existing tasks are not duplicated)." showResult /> : null}
-              <DataTable
+              <DataTable compact
                 rows={data.data.catchup.ranked}
                 rowKey={(r) => r.taskId}
                 empty={<EmptyState title="No open catch-up tasks" />}

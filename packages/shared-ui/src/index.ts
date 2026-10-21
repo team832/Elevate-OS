@@ -8,4 +8,4 @@ export * from './components/tab-keys';
 export * from './components/tabs';
 export * from './components/dialog';
 export * from './components/shell-client';
-export { BRAND_LOGO_SIZE } from './brand-asset';
+export * from './components/brand';

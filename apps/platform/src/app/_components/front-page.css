@@ -1,0 +1,148 @@
+.fp {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 var(--el-space-4);
+}
+.fp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--el-space-4);
+  min-height: 4.5rem;
+  border-bottom: 1px solid var(--el-border);
+  color: var(--el-text);
+}
+.fp-header .el-brand-logo {
+  height: 2rem;
+}
+.fp-main {
+  display: grid;
+  gap: var(--el-space-6);
+  padding: var(--el-space-6) 0;
+}
+.fp-intro h1 {
+  margin: 0 0 var(--el-space-4);
+  max-width: 13em;
+  font-size: clamp(2rem, 1.3rem + 2.6vw, 3.25rem);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  color: var(--el-text);
+}
+.fp-lead {
+  margin: 0 0 var(--el-space-5);
+  max-width: 34rem;
+  font-size: var(--el-text-lg);
+  color: var(--el-text-muted);
+}
+.fp-facts {
+  display: grid;
+  gap: var(--el-space-4);
+  margin: 0;
+  padding-top: var(--el-space-4);
+  border-top: 1px solid var(--el-border);
+}
+.fp-facts dt,
+.fp-faculty .fp-note {
+  color: var(--el-text-muted);
+  font-size: var(--el-text-xs);
+  font-weight: 600;
+}
+.fp-facts dd {
+  margin: var(--el-space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+.fp-catalogue {
+  display: grid;
+  gap: var(--el-space-6);
+}
+.fp-programmes h2,
+.fp-faculty h2 {
+  margin: 0 0 var(--el-space-2);
+  font-size: var(--el-text-lg);
+  font-weight: 650;
+}
+.fp-programmes dl {
+  margin: 0;
+}
+.fp-programmes dl > div {
+  display: grid;
+  gap: var(--el-space-1);
+  padding: var(--el-space-3) 0;
+  border-top: 1px solid var(--el-border);
+}
+.fp-programmes dt {
+  font-weight: 650;
+  color: var(--el-text);
+}
+.fp-programmes dd {
+  margin: 0;
+  color: var(--el-text-muted);
+  font-size: var(--el-text-sm);
+}
+.fp-faculty ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  border-top: 1px solid var(--el-border);
+}
+.fp-faculty li {
+  display: flex;
+  flex-direction: column;
+  padding: var(--el-space-3) var(--el-space-3) var(--el-space-3) 0;
+}
+.fp-name {
+  font-weight: 600;
+}
+.fp-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--el-space-2) var(--el-space-5);
+  padding: var(--el-space-5) 0;
+  border-top: 1px solid var(--el-border);
+  color: var(--el-text-muted);
+  font-size: var(--el-text-sm);
+}
+.fp-footer p {
+  margin: 0;
+}
+.fp-footer ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--el-space-2) var(--el-space-5);
+}
+
+@media (min-width: 720px) {
+  .fp {
+    padding: 0 var(--el-space-6);
+  }
+  .fp-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fp-programmes dl > div {
+    grid-template-columns: 10rem minmax(0, 1fr);
+    gap: var(--el-space-4);
+  }
+}
+@media (min-width: 1024px) {
+  .fp-main {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: calc(2 * var(--el-space-6));
+    padding: calc(2 * var(--el-space-6)) 0;
+  }
+  .fp-intro {
+    align-self: start;
+    position: sticky;
+    top: var(--el-space-6);
+  }
+  .fp-faculty {
+    grid-column: 1 / -1;
+  }
+}

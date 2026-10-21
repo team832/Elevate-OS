@@ -1,14 +1,11 @@
 /**
- * Staff directory (OPS-014, OPS-015, PLT-016). Business Ops is the steward of
+ * Staff directory (OPS-014, PLT-016). Business Ops is the steward of
  * core.departments and core.staff_members: these are the only writers.
  * Out of scope (D-015, OD-026): payroll, biometrics, leave, appraisal, HRIS.
  */
 import { asc, eq } from 'drizzle-orm';
 import {
   departments,
-  opsEmployeeRecords,
-  opsOnboardingItems,
-  opsResponsibilities,
   opsStaffProfiles,
   staffMembers,
   users,
@@ -18,46 +15,31 @@ import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ValidationError } from '@elevate/shared-contracts';
 import type { DepartmentId, StaffMemberId, UserId } from '@elevate/shared-types';
 import type { z } from 'zod';
-import {
-  checkReportingLine,
-  DEFAULT_ONBOARDING_ITEMS,
-  responsibilityGaps,
-  RESPONSIBILITY_GAP_LABELS,
-} from '../domain';
-import { istToday } from '../domain/dates';
-import { historyChanges } from '../domain/hr/employees';
-import { accessScope, activeStaff, nextCode, type Actor } from './context';
-import { runDeactivationHook, writeHistory } from './hr/employee-core';
-import './hr/wiring';
+import { checkReportingLine } from '../domain';
+import { accessScope, activeStaff, type Actor } from './context';
 import { defined, opsAudit, rowById } from './ops-common';
 import type {
   createDepartmentBody,
   createStaffBody,
-  onboardingItemBody,
-  responsibilityBody,
   updateDepartmentBody,
-  updateResponsibilityBody,
   updateStaffBody,
 } from './schemas';
 
 const auditStaff = opsAudit('staff_member');
 const auditDepartment = opsAudit('department');
-const auditResponsibility = opsAudit('responsibility');
 
 export async function getDirectory(db: Database, actor: Actor) {
   await accessScope(db, actor, 'ops:organisation:read');
-  const [depts, staff, profiles, responsibilities] = await Promise.all([
+  const [depts, staff, profiles] = await Promise.all([
     db.select().from(departments).orderBy(asc(departments.name)),
     db.select().from(staffMembers).orderBy(asc(staffMembers.fullName)),
     db.select().from(opsStaffProfiles),
-    db.select().from(opsResponsibilities).orderBy(asc(opsResponsibilities.code)),
   ]);
   const byId = new Map(staff.map((s) => [s.id as string, s]));
   const deptName = new Map(depts.map((d) => [d.id as string, d.name]));
   const profile = new Map(profiles.map((p) => [p.staffId as string, p]));
   const name = (id: string | null) => (id ? (byId.get(id)?.fullName ?? null) : null);
   const dept = (id: string | null) => (id ? (deptName.get(id) ?? null) : null);
-  const gaps = responsibilityGaps(responsibilities, (id) => byId.get(id)?.status === 'active');
   return {
     departments: depts.map((d) => ({
       ...d,
@@ -71,13 +53,6 @@ export async function getDirectory(db: Database, actor: Actor) {
       employmentType: profile.get(s.id)?.employmentType ?? 'not_recorded',
       roleLabels: profile.get(s.id)?.roleLabels ?? [],
     })),
-    responsibilities: responsibilities.map((r) => ({
-      ...r,
-      departmentName: dept(r.departmentId),
-      holderName: name(r.holderStaffId),
-      backupName: name(r.backupStaffId),
-    })),
-    gaps: gaps.map((g) => ({ ...g, labels: g.gaps.map((k) => RESPONSIBILITY_GAP_LABELS[k]) })),
   };
 }
 
@@ -168,32 +143,6 @@ export async function updateStaff(
     const [after] = Object.keys(patch).length
       ? await tx.update(staffMembers).set(patch).where(eq(staffMembers.id, before.id)).returning()
       : [before];
-    const [profileBefore] = await tx
-      .select({ employmentType: opsStaffProfiles.employmentType })
-      .from(opsStaffProfiles)
-      .where(eq(opsStaffProfiles.staffId, before.id));
-    // Employment history (OPS-033): every tracked change, whichever screen made it.
-    await writeHistory(tx, {
-      staffId: before.id,
-      changes: historyChanges(
-        {
-          departmentId: before.departmentId,
-          title: before.title,
-          managerId: before.managerId,
-          employmentType: profileBefore?.employmentType ?? 'not_recorded',
-          employmentStatus: null,
-        },
-        {
-          ...('departmentId' in patch ? { departmentId: patch.departmentId ?? null } : {}),
-          ...('title' in patch ? { title: patch.title ?? null } : {}),
-          ...('managerId' in patch ? { managerId: patch.managerId ?? null } : {}),
-          ...(input.employmentType ? { employmentType: input.employmentType } : {}),
-        },
-      ),
-      effectiveOn: istToday(new Date()),
-      reason: 'Changed from the staff directory',
-      actorId: actor.id,
-    });
     if (input.employmentType || input.roleLabels) {
       const values = {
         staffId: before.id,
@@ -206,13 +155,6 @@ export async function updateStaff(
         .values(values)
         .onConflictDoUpdate({ target: opsStaffProfiles.staffId, set: values });
     }
-    if (input.status === 'inactive' && before.status !== 'inactive')
-      await runDeactivationHook(tx, actor, {
-        staffId: before.id,
-        source: 'staff_inactive',
-        effectiveOn: istToday(new Date()),
-        requestId,
-      });
     const audited = { before, after: { ...after, ...input } };
     await auditStaff(tx, actor, before.id, 'staff.updated', audited, requestId);
     return after;
@@ -277,87 +219,6 @@ export async function updateDepartment(
   });
 }
 
-/** Holder and backup must be active staff and two different people. */
-async function assertHolders(
-  db: Database,
-  input: { holderStaffId?: string | null; backupStaffId?: string | null },
-) {
-  for (const f of ['holderStaffId', 'backupStaffId'] as const)
-    if (input[f]) await activeStaff(db, input[f], f);
-}
-
-function assertHolderBackup(holder: string | null | undefined, backup: string | null | undefined) {
-  if (holder && backup && holder === backup)
-    throw new ValidationError('The backup must be a different person from the holder.', {
-      details: [{ location: 'body', path: ['backupStaffId'], message: 'Same as holder' }],
-    });
-}
-
-export async function createResponsibility(
-  db: Database,
-  actor: Actor,
-  input: z.output<typeof responsibilityBody>,
-  requestId?: string,
-) {
-  await accessScope(db, actor, 'ops:organisation:manage');
-  assertHolderBackup(input.holderStaffId, input.backupStaffId);
-  await assertHolders(db, input);
-  return withTransaction(db, async (tx) => {
-    const code = await nextCode(tx, 'responsibility', 'ops.responsibilities');
-    const [row] = await tx
-      .insert(opsResponsibilities)
-      .values({
-        code,
-        title: input.title,
-        description: input.description ?? null,
-        departmentId: (input.departmentId as DepartmentId | null) ?? null,
-        accountableRole: input.accountableRole ?? null,
-        holderStaffId: (input.holderStaffId as StaffMemberId | null) ?? null,
-        backupStaffId: (input.backupStaffId as StaffMemberId | null) ?? null,
-        handOverToRole: input.handOverToRole ?? null,
-        critical: input.critical,
-        source: 'Elevate OS',
-      })
-      .returning();
-    const id = row?.id ?? null;
-    await auditResponsibility(tx, actor, id, 'responsibility.created', { after: row }, requestId);
-    return row;
-  });
-}
-
-export async function updateResponsibility(
-  db: Database,
-  actor: Actor,
-  id: string,
-  input: z.output<typeof updateResponsibilityBody>,
-  requestId?: string,
-) {
-  await accessScope(db, actor, 'ops:organisation:manage');
-  await assertHolders(db, input);
-  return withTransaction(db, async (tx) => {
-    const before = await rowById(tx, opsResponsibilities, id, 'Responsibility', true);
-    assertHolderBackup(
-      'holderStaffId' in input ? input.holderStaffId : before.holderStaffId,
-      'backupStaffId' in input ? input.backupStaffId : before.backupStaffId,
-    );
-    const [after] = await tx
-      .update(opsResponsibilities)
-      .set(defined(input) as Partial<typeof opsResponsibilities.$inferInsert>)
-      .where(eq(opsResponsibilities.id, before.id))
-      .returning();
-    const audited = { before, after };
-    await auditResponsibility(tx, actor, before.id, 'responsibility.updated', audited, requestId);
-    return after;
-  });
-}
-
-const onboardingItems = (db: Database, staffId: StaffMemberId) =>
-  db
-    .select()
-    .from(opsOnboardingItems)
-    .where(eq(opsOnboardingItems.staffId, staffId))
-    .orderBy(asc(opsOnboardingItems.seq));
-
 export async function getStaffDetail(db: Database, actor: Actor, id: string) {
   await accessScope(db, actor, 'ops:organisation:read');
   const staff = await staffRow(db, id);
@@ -365,7 +226,6 @@ export async function getStaffDetail(db: Database, actor: Actor, id: string) {
     .select()
     .from(opsStaffProfiles)
     .where(eq(opsStaffProfiles.staffId, staff.id));
-  const onboarding = await onboardingItems(db, staff.id);
   const reports = await db
     .select({ id: staffMembers.id, fullName: staffMembers.fullName })
     .from(staffMembers)
@@ -374,72 +234,11 @@ export async function getStaffDetail(db: Database, actor: Actor, id: string) {
   const [dept] = staff.departmentId
     ? await db.select().from(departments).where(eq(departments.id, staff.departmentId))
     : [];
-  const [employee] = await db
-    .select({ employeeCode: opsEmployeeRecords.employeeCode })
-    .from(opsEmployeeRecords)
-    .where(eq(opsEmployeeRecords.staffId, staff.id));
   return {
     staff,
-    /** EMP code when this staff member has an HR employee record (link to /ops/hr/employees/[id]). */
-    employeeCode: employee?.employeeCode ?? null,
     profile: profile ?? null,
-    onboarding,
     reports,
     manager: manager ? { id: manager.id, fullName: manager.fullName } : null,
     department: dept ?? null,
   };
-}
-
-/** Create the default onboarding checklist (document references only). Idempotent. */
-export async function startOnboarding(
-  db: Database,
-  actor: Actor,
-  staffId: string,
-  requestId?: string,
-) {
-  await accessScope(db, actor, 'ops:organisation:manage');
-  return withTransaction(db, async (tx) => {
-    const staff = await staffRow(tx, staffId);
-    for (const [i, title] of DEFAULT_ONBOARDING_ITEMS.entries())
-      await tx
-        .insert(opsOnboardingItems)
-        .values({ staffId: staff.id, seq: i + 1, title })
-        .onConflictDoNothing();
-    await auditStaff(tx, actor, staff.id, 'staff.onboarding_started', {}, requestId);
-    return onboardingItems(tx, staff.id);
-  });
-}
-
-export async function updateOnboardingItem(
-  db: Database,
-  actor: Actor,
-  itemId: string,
-  input: z.output<typeof onboardingItemBody>,
-  requestId?: string,
-) {
-  await accessScope(db, actor, 'ops:organisation:manage');
-  return withTransaction(db, async (tx) => {
-    const before = await rowById(tx, opsOnboardingItems, itemId, 'Onboarding item', true);
-    const done = input.status === 'done';
-    const [after] = await tx
-      .update(opsOnboardingItems)
-      .set({
-        status: input.status,
-        documentRef: input.documentRef ?? before.documentRef,
-        completedAt: done ? new Date() : null,
-        completedBy: done ? actor.id : null,
-      })
-      .where(eq(opsOnboardingItems.id, before.id))
-      .returning();
-    const audited = { before, after };
-    await auditStaff(
-      tx,
-      actor,
-      before.staffId,
-      'staff.onboarding_item_updated',
-      audited,
-      requestId,
-    );
-    return after;
-  });
 }

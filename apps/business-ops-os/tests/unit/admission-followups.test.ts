@@ -20,18 +20,17 @@ const done = (itemKey: CheckState['itemKey'], recordedBy = 'u1'): CheckState => 
   recordedBy,
 });
 const allDone: CheckState[] = [
-  done('admission_form'),
   done('documents_verified'),
   done('fee_verification_1', 'u1'),
   done('fee_verification_2', 'u2'),
-  done('down_payment_verified'),
 ];
+const F = 'final_confirmation';
 
 describe('admission readiness (A-04)', () => {
-  it('normal: everything recorded and approved → ready', () => {
+  it('normal: everything recorded and approved → only the password-confirmed approval is left (D-041)', () => {
     expect(
       evaluateAdmissionReadiness({ checks: allDone, feeApproval: 'approved', hasProgramme: true }),
-    ).toEqual([]);
+    ).toEqual([F]);
   });
 
   it('missing: nothing recorded lists every gap in a fixed order', () => {
@@ -39,12 +38,11 @@ describe('admission readiness (A-04)', () => {
       evaluateAdmissionReadiness({ checks: [], feeApproval: 'none', hasProgramme: false }),
     ).toEqual([
       'programme_missing',
-      'admission_form',
       'documents_verified',
       'fee_verification_1',
       'fee_verification_2',
       'fee_arrangement_approval',
-      'down_payment_verified',
+      F,
     ]);
   });
 
@@ -54,38 +52,34 @@ describe('admission readiness (A-04)', () => {
     );
     expect(
       evaluateAdmissionReadiness({ checks: same, feeApproval: 'approved', hasProgramme: true }),
-    ).toEqual(['fee_verifiers_not_distinct']);
+    ).toEqual(['fee_verifiers_not_distinct', F]);
   });
 
   it('a pending or rejected approval is not an approval', () => {
     for (const state of ['pending', 'rejected', 'withdrawn'] as const)
       expect(
         evaluateAdmissionReadiness({ checks: allDone, feeApproval: state, hasProgramme: true }),
-      ).toEqual(['fee_arrangement_approval']);
+      ).toEqual(['fee_arrangement_approval', F]);
   });
 
   it('BR-OPS-6 parts are configurable (proposed); BR-OPS-7 parts are not', () => {
-    const minimal = [
-      done('admission_form'),
-      done('fee_verification_1', 'a'),
-      done('fee_verification_2', 'b'),
-    ];
+    const minimal = [done('fee_verification_1', 'a'), done('fee_verification_2', 'b')];
     expect(
       evaluateAdmissionReadiness({
         checks: minimal,
         feeApproval: 'approved',
         hasProgramme: true,
-        config: { requireDocuments: false, requireDownPayment: false },
+        config: { requireDocuments: false },
       }),
-    ).toEqual([]);
+    ).toEqual([F]);
     expect(
       evaluateAdmissionReadiness({
         checks: minimal,
         feeApproval: 'none',
         hasProgramme: true,
-        config: { requireDocuments: false, requireDownPayment: false },
+        config: { requireDocuments: false },
       }),
-    ).toEqual(['fee_arrangement_approval']);
+    ).toEqual(['fee_arrangement_approval', F]);
   });
 
   it('not_done / not_applicable items do not count as done', () => {
@@ -94,7 +88,7 @@ describe('admission readiness (A-04)', () => {
     );
     expect(
       evaluateAdmissionReadiness({ checks, feeApproval: 'approved', hasProgramme: true }),
-    ).toEqual(['documents_verified']);
+    ).toEqual(['documents_verified', F]);
   });
 
   it('verifier separation is checked at entry time', () => {

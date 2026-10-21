@@ -1,5 +1,5 @@
 import { defineRoute } from '@elevate/server-kit';
-import { listDuplicateQueue } from '../../../../../server/leads';
+import { listDuplicateQueue } from '../../../../../server/lead-duplicates';
 
 export const dynamic = 'force-dynamic';
 

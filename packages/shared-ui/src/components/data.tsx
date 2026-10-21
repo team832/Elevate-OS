@@ -221,3 +221,66 @@ export function MetricStrip({
     </ul>
   );
 }
+
+export interface JourneyStage {
+  key: string;
+  label: string;
+  /** Count at this stage; `null` = not recorded (never drawn as 0); omit in record mode. */
+  count?: number | null;
+  /** One short line under the label (what is counted, or a date in record mode). */
+  note?: ReactNode;
+  /** Filtered list or the step's screen. */
+  href?: string;
+  /** Record mode: where one student is on the journey. */
+  state?: 'done' | 'current' | 'upcoming';
+}
+
+const STAGE_STATE = { done: 'done', current: 'current stage', upcoming: 'not reached' };
+
+/**
+ * The admission journey (Demo → Application → Signed → Confirmed → Active) as
+ * chevron-cut stages, echoing the chevron in the Elevate logo. Dashboards pass
+ * counts (with a bar against the largest stage); a record passes `state` per stage.
+ * State is always in words for screen readers, never colour alone.
+ */
+export function JourneyRail({ label, stages }: { label: string; stages: readonly JourneyStage[] }) {
+  const max = Math.max(1, ...stages.map((s) => s.count ?? 0));
+  return (
+    <ol className="el-journey" aria-label={label}>
+      {stages.map((s) => {
+        const Body = s.href ? 'a' : 'div';
+        const body = (
+          <Body className="el-journey-body" href={s.href}>
+            {s.count !== undefined ? (
+              <span className="el-journey-count" data-missing={s.count === null || undefined}>
+                {s.count === null ? 'Not recorded' : s.count.toLocaleString('en-IN')}
+              </span>
+            ) : null}
+            <span className="el-journey-label">
+              {s.label}
+              {s.state ? (
+                <span className="el-visually-hidden">: {STAGE_STATE[s.state]}</span>
+              ) : null}
+            </span>
+            {s.note ? <span className="el-journey-note">{s.note}</span> : null}
+            {typeof s.count === 'number' ? (
+              <span className="el-journey-bar" aria-hidden="true">
+                <span style={{ width: `${Math.round((s.count / max) * 100)}%` }} />
+              </span>
+            ) : null}
+          </Body>
+        );
+        return (
+          <li
+            key={s.key}
+            className="el-journey-stage"
+            data-state={s.state}
+            aria-current={s.state === 'current' ? 'step' : undefined}
+          >
+            {body}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}

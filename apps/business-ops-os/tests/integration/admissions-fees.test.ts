@@ -16,7 +16,7 @@ import { POST as feeAction } from '../../src/app/api/v1/fees/[id]/route';
 import { GET as allFees } from '../../src/app/api/v1/fees/route';
 import { MANUAL_FEE_DISCLAIMER, type FeeSummary } from '../../src/domain/fees';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
-import { admittedCase, get, post } from './admissions-fixtures';
+import { get, pendingCase, post } from './admissions-fixtures';
 
 const ctx = setupTestDatabase();
 let manager: StaffUser;
@@ -45,7 +45,7 @@ beforeAll(async () => {
   director = await createTestUser(ctx.db, { roles: ['director'] });
   auditor = await createTestUser(ctx.db, { roles: ['auditor'] });
   coordinator = await createTestUser(ctx.db, { roles: ['academic_coordinator'] });
-  ({ admissionId } = await admittedCase({ counsellor, manager, director }));
+  ({ admissionId } = await pendingCase(counsellor));
 });
 
 const record = (user: { token: string }, body: unknown) =>
@@ -110,8 +110,12 @@ describe('fee records: validation (integer paise, INR)', () => {
     );
   });
 
-  it('a refund cannot exceed what was recorded as received (less earlier refunds)', async () => {
-    expect(await recorded(manager, refund(1, 'RF-0'))).toBe(400);
+  it('a refund must name the payment it returns (linked row)', async () => {
+    const res = await record(manager, refund(1, 'RF-0'));
+    expect(res.status).toBe(400);
+    expect(res.error?.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: ['reversesRecordId'] })]),
+    );
   });
 });
 
@@ -133,8 +137,13 @@ describe('fee records: summary, second-person check, void', () => {
       method: 'upi',
     });
     expect(paid.status).toBe(201);
-    expect(await recorded(manager, refund(2_000_001, 'RF-1'))).toBe(400);
-    expect(await recorded(manager, refund(50_000, 'RF-1'))).toBe(201);
+    const refundOf = { action: 'refund', paymentDate: today(), receiptReference: 'RF-1' };
+    expect(await acted(manager, { ...refundOf, amountPaise: 2_000_001 }, paid.data!.id)).toBe(400);
+    expect(await acted(manager, { ...refundOf, amountPaise: 50_000 }, paid.data!.id)).toBe(201);
+    // A refunded payment cannot be voided while its refund counts.
+    expect(
+      await acted(manager, { action: 'void', reason: 'Wrong row (test)' }, paid.data!.id),
+    ).toBe(409);
     const credit = { kind: 'adjustment', direction: 'credit', amountPaise: 100_000 };
     expect(await recorded(manager, credit)).toBe(201);
     const list = await callRoute<FeeList>(listFees, get(counsellor), { id: admissionId });

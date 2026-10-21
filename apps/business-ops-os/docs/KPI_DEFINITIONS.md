@@ -9,10 +9,8 @@ Implemented in `src/domain/kpis.ts` and `src/domain/staff.ts` (pure), loaded by 
 | New leads (K-01) | Leads whose first receipt date (IST) is in the window, excluding leads merged as duplicates | — (count) | Selected week | `ops.leads.first_received_at`, `merged_into_lead_id` | Admissions lead (`admissions_counsellor` team) | Always `ok`; 0 is a true zero (Ops is the system of record for leads entered here). If an external CRM stays the source (OD-010) the imported share is not yet shown (OPS-026, Proposed). |
 | Lead → admission conversion (K-06, BR-OPS-8) | Leads received in the **cohort week** whose admission first reached `admitted` within **N** days of receipt (N = setting `kpi.conversion.windowDays`, default 30, proposed) | Leads received in the cohort week (merged excluded) | Cohort = the latest Monday–Sunday week whose N-day window has fully elapsed (`cohort end + N ≤ as-of`) | `ops.leads`, `ops.admission_transitions` (first `→ admitted`) | Operations manager | `missing` "Window not elapsed: available from <date>" if asked for a cohort too recent; `missing` "No leads were received in the cohort window" when the denominator is 0. Never "this week's admissions ÷ this week's leads". |
 | Counselling and demo follow-up compliance (K-10 related) | Follow-ups of kind `counselling_followup` or `demo_followup`, due in the window with the due date already passed, completed on or before their due date (IST) | Those follow-ups (cancelled excluded) | Selected week, judged after each due date ends | `ops.follow_ups` | Admissions lead | `missing` when no such follow-up fell due in the window. Items due today are not judged yet. |
-| Task completion rate (K-14/K-15 related) | Tasks due in the window (due on or before as-of) whose status is `completed` | Tasks due in the window, due on or before as-of, not cancelled | Selected week | `ops.tasks` | Operations manager | `missing` when no task was due. Tasks without a due date are not in the denominator (they appear as `missing_due` flags instead). |
-| Overdue work (K-10/K-15) | Open tasks with due date < today (IST) + open follow-ups with due date < today | — (count, with the split shown) | Point in time (as-of) | `ops.tasks`, `ops.follow_ups` | Operations manager | Always `ok` (complete internal data). |
-| Unresolved blockers (K-15/K-19) | Open or mitigating `issue`/`blocker` items in the risk register + tasks with status `blocked` | — (count, split shown) | Point in time | `ops.risks`, `ops.tasks` | Operations manager | Always `ok`. Risks of kind `risk` are not blockers. |
-| Workload per staff member | Per active staff member: open tasks owned + open follow-ups owned + open admissions as counsellor | — | Point in time | `ops.tasks`, `ops.follow_ups`, `ops.admissions`, `core.staff_members` | Operations manager (capacity planning) | Rows sorted **by name**; it is a capacity view, **not a quality score and never a ranking**. Unassigned items are reported separately. |
+| Overdue follow-ups (K-10) | Open follow-ups with due date < today (IST) | — (count) | Point in time (as-of) | `ops.follow_ups` | Operations manager | Always `ok` (complete internal data). |
+| Workload per staff member | Per active staff member: open follow-ups owned + open admissions as counsellor | — | Point in time | `ops.follow_ups`, `ops.admissions`, `core.staff_members` | Operations manager (capacity planning) | Rows sorted **by name**; it is a capacity view, **not a quality score and never a ranking**. Unassigned items are reported separately. |
 
 ## Cross-module panels
 
@@ -24,14 +22,14 @@ Implemented in `src/domain/kpis.ts` and `src/domain/staff.ts` (pure), loaded by 
 Base URL: `ACADEMIC_OS_URL` / `MARKETING_OS_URL` when set, else `PLATFORM_URL` (the platform rewrites `/academic/*` and `/marketing/*`).
 
 ## Not built (Proposed)
-See the sections added below for admissions, HR and operations. Still not built: K-02 first contact within SLA (needs OD-011 service hours), K-03 median time to first contact, K-04/K-05 cohort counselling/demo rates, K-07 demo → admission, K-08 admissions confirmed, K-09 source mix, K-11 ownership health, K-12 duplicate rate, K-13 handoff timings, K-16–K-19 escalation/SOP/decision/risk aggregates, and target bands (OD-027). The data for most of them exists in the `ops` tables.
+See the admissions section below. Still not built: K-02 first contact within SLA (needs OD-011 service hours), K-03 median time to first contact, K-04/K-05 cohort counselling/demo rates, K-07 demo → admission, K-08 admissions confirmed, K-09 source mix, K-11 ownership health, K-12 duplicate rate, K-13 handoff timings and target bands (OD-027). K-14, K-15 (task part) and K-16–K-19 (escalation, SOP, decision, risk aggregates) were **removed with Operations (owner, 2026-10-20, D-032)**; the task completion rate and unresolved-blocker tiles went with them. The data for most of them exists in the `ops` tables.
 
 
 ---
 
 # KPIs added on 19 Oct 2026
 
-Same conventions as above: every value is a `Metric` (`ok` or `missing`, never a guess), Asia/Kolkata dates, no targets (OD-027), nothing coloured good or bad. **Owner** = the role accountable for acting on the figure, a proposal until OD-009 names people. None of these is a performance score; HR and operations figures are counts and exceptions, sorted by name where they list people.
+Same conventions as above: every value is a `Metric` (`ok` or `missing`, never a guess), Asia/Kolkata dates, no targets (OD-027), nothing coloured good or bad. **Owner** = the role accountable for acting on the figure, a proposal until OD-009 names people. None of these is a performance score.
 
 ## Admissions report (`src/domain/admissions-kpis.ts`, `src/server/reports/admissions.ts`; permission `ops:admissions:read`, own scope for counsellors; `GET /ops/api/v1/admissions/report`, `/ops/reports/admissions`)
 Default window: the IST Monday-to-Sunday week; `?from=&to=` overrides. Owner: admissions lead for K-ADM-01…07, 10, 11; operations manager for K-ADM-08, 09.
@@ -52,58 +50,24 @@ Default window: the IST Monday-to-Sunday week; `?from=&to=` overrides. Owner: ad
 
 Sources are `ops.*` tables. IST boundary: an enquiry at 18:30 UTC belongs to the next IST day. Not built: first-contact SLA (needs OD-011), cohort counselling and demo rates, source mix over time, duplicate rate.
 
-## HR records (`src/server/reports/hr-records-metrics.ts`; permission `ops:hr_reports:read`, HR scope). Owner: HR manager.
-| KPI | Function | Definition | Missing when |
+The HR records, HR lifecycle, HR time and Operations KPI sections were **removed by the owner on 2026-10-20 (D-032)**; recoverable from git commit 63da4e4.
+
+---
+
+# Admissions overview (21 Oct 2026, owner brief §4)
+
+`src/domain/admissions-kpis.ts` (pure) loaded by `src/server/admissions-overview.ts` (`buildAdmissionsOverview`), shown on `/ops/admissions/overview`. Permission `ops:admissions:read` (own scope = the counsellor's cases); demo-list figures need `ops:leads:read`; money figures need `ops:fees:read` (otherwise the money block is absent, not ₹0). Default window: the last 30 IST days (today − 29 … today); `?from=&to=` and `?programme=` (demos by the demo's programme, everything else by the case's) narrow every figure. No targets (OD-027); nothing is coloured good or bad. Missing is never zero. Tests: unit `admissions-kpis-overview.test.ts`; integration `admissions-overview.test.ts`.
+
+| KPI | Definition | Period | Missing-data behaviour |
 |---|---|---|---|
-| K-HR-01 Active employees | `activeEmployeesMetric(db, actor, now?)` | Employee records with status `active` on the day (onboarding, on notice and separated excluded). | No employee record exists in scope. |
-| K-HR-02 Employees by department | `employeesByDepartmentMetric(db, actor, now?)` | Current (not separated) employee records per non-archived department, plus a "No department recorded" row. | No employee record exists in scope (every department shows `missing`, never 0). |
-| K-HR-03 Upcoming joining dates | `upcomingJoiningDates(db, actor, {days = 30, now?})` | Onboarding or active employees whose recorded start date is in [today, today + days], listed; plus the count of onboarding employees with **no** start date (never guessed). | No employee record exists in scope. |
+| Demo list tiles | Taken from `listDemos` itself, so a tile and its list agree | As the demo list | absent without `ops:leads:read` |
+| Demo days attended | Demos with a class in the window; a day counts once when one of its classes was attended (present or late). Classes are not days. Also: planned days, demos with every planned day attended (`attended ≥ planned`) | Window | `missing` "No demo had a class in the window." |
+| Demo → admission conversion | Cohort = demos whose first demo day (earliest class not cancelled) is in the window AND whose `kpi.conversion.windowDays` (30, proposed) have passed; converted = reached "admission confirmed" within that many days of the first demo day (a confirmation before the first demo day does not count). Demos still inside their window are shown apart as `waiting`, never as not converted | Cohort window | `missing` when every demo is still waiting, or no demo had its first day in the window |
+| Applications awaiting | Applications at draft, ready for review, form generated, signatures confirmed right now (the list's status filter shows the same rows) | Point in time | real 0 |
+| Waiting for approval — blocked | Of the applications at "signatures confirmed", how many the confirmation gap check (A-APP-3) still blocks. The check runs for at most the **50 oldest** per page view (`APPROVAL_CHECK_LIMIT`); above that the screen says "Of the 50 oldest checked" | Point in time | — |
+| Admissions confirmed | Final confirmations (A-APP-4) on an IST day in the window, one per admission case. Legacy admissions without an approval record are not counted | Window | real 0 |
+| Overdue onboarding | Checklist items of current (not former) students with a due date before today that are not completed or not applicable, and how many admissions have one | Point in time | `missing` "No onboarding checklist has been built yet." |
+| Fees collected | Received minus refunds by payment date (IST) in the window, per charge (tuition, registration, demo); voided and reversed rows never count | Window | `null` (unknown) when there is no fee record at all |
+| Tuition outstanding | Owed (and credit held) across ACTIVE agreements (A-FEE-1) | Point in time | `null` when there is no active agreement |
 
-Tests: `hr-records-metrics.test.ts` (missing before any record; counts; department manager scope). The HR dashboard screen that shows them is not built (see `IMPLEMENTATION_STATUS.md`).
-
-## HR lifecycle (`src/server/reports/hr-lifecycle-metrics.ts` → `hrLifecycleMetrics(db, actor, {from, to})`). Owner: HR manager.
-Needs organisation-wide (`all` scope) `ops:recruitment:read` for K-HRL-01…03 and `ops:lifecycle:read` for K-HRL-04…07; without them the value is `missing` with that reason. Ids are assigned here (the slice note left them unnamed).
-
-| KPI | Definition | Window | Other missing case |
-|---|---|---|---|
-| K-HRL-01 Pipeline by stage | Applications currently at each stage (applied, screening, interview, offer, hired, rejected, withdrawn). | Point in time | — |
-| K-HRL-02 Open requisitions | Requisitions with status `open`. | Point in time | — |
-| K-HRL-03 Unfilled openings | Openings on open requisitions minus hires recorded against them. | Point in time | — |
-| K-HRL-04 Onboarding completion | Required checklist items resolved (done or not applicable) ÷ required items, across open onboarding cases. | Point in time | No open onboarding case, or the open cases have no required items |
-| K-HRL-05 Open onboarding cases | Cases of kind onboarding with status `open`. | Point in time | — |
-| K-HRL-06 Pending offboarding items | Unresolved items on offboarding cases that are `open` or `approved`. | Point in time | — |
-| K-HRL-07 Separations | Employees whose separation was applied in the window (IST days). | Default: the last 30 days to today | — |
-
-Tests: `hr-lifecycle-metrics.test.ts` (2 cases). Tile wiring on a dashboard is Proposed.
-
-## HR time (`src/server/reports/hr-time-metrics.ts` → `hrTimeMetrics(db, actor, window)`; permission `ops:hr_reports:read`, HR scope). Owner: HR manager.
-Counts are `ok` (0 open is a known fact). Hours are `ok` or `missing`. Staff attendance only; Academic class attendance is never read.
-
-| KPI | Definition | Unit | Source | Missing when |
-|---|---|---|---|---|
-| K-HRT-01 `attendanceExceptionsOpen` | Sessions flagged missing clock-out and still open, plus correction requests pending, now. | count | `attendance_sessions`, `attendance_corrections` | The caller's scope has no staff records |
-| K-HRT-02 `leaveRequestsAwaitingApproval` | Leave requests in `pending`, now. | count | `leave_requests` | same |
-| K-HRT-03 `scheduledHours` | Paid scheduled hours from shift assignments in the window (holidays and non-working days excluded). | hours | shifts, holidays | Nobody in scope has an assignment in the window |
-| K-HRT-04 `recordedHours` | Hours worked in closed, non-superseded sessions in the window, breaks excluded. | hours | `attendance_sessions` | No closed session in the window |
-
-Tests: `hr-time-attendance.test.ts`, `hr-time-leave.test.ts` ("timesheets, export and metrics"). Timesheet totals (A-45) use the same rules.
-
-## Operations (`domain/kpis.ts`, `src/server/reports/operations.ts`; permission `ops:dashboard:read`: operations manager, director, auditor). Owner: operations manager.
-Point in time as of the request (IST today), from Ops' own complete tables. Counts are `ok`; a real 0 is 0; rates with a 0 denominator are `missing`. Capacity tables are sorted by name and are not rankings. Tests: unit "operations KPIs: missing is not zero"; integration "operations report".
-
-| KPI | Numerator | Denominator | Source | Missing-data behaviour |
-|---|---|---|---|---|
-| K-OPS-01 Open tasks | Tasks not_started, in_progress, waiting, at_risk or blocked | — | `ops.tasks` | Always `ok` |
-| K-OPS-02 Overdue tasks | Open tasks with due date before today | — | `ops.tasks` | Tasks without a due date excluded (flagged elsewhere) |
-| K-OPS-03 Share of dated open tasks overdue | Overdue open tasks | Open tasks with a due date | `ops.tasks` | `missing` "No open task has a due date." |
-| K-OPS-04 Tasks awaiting supervisor review | Pending `task_reviews` | — | `ops.task_reviews` | Always `ok` |
-| K-OPS-05 Open tasks by department and by owner | Open, overdue, blocked and due in 7 days per group | — | `ops.tasks`, names | "No department" / "No owner" rows last |
-| K-OPS-06 SOP versions awaiting approval | Pending core approvals of policy `ops.sop.approve` | — | `core.approvals` | Always `ok` |
-| K-OPS-07 Outstanding SOP acknowledgements | Audience members with a login who have not acknowledged the version in force (once per person per SOP) | — | requirements, acknowledgements, staff, roles | Staff without a login reported separately |
-| K-OPS-08 SOP acknowledgement coverage | Acknowledged | Required (with a login) | same | `missing` "No SOP version currently requires acknowledgement." |
-| K-OPS-09 Unresolved incidents | Incidents open or in progress | — | `ops.incidents` | Always `ok` |
-| K-OPS-10 Incidents past resolution target | Unresolved incidents in state `breached` (A-53) | — | `ops.incidents` and setting `incidents.resolution_sla` (proposed, shown) | Always `ok` |
-| K-OPS-11 Blocked projects | Live projects with at least one block reason (A-54) | — | projects, milestones, tasks, risks | Always `ok` |
-| K-OPS-12 Approvals waiting for you | Inbox total (A-52) | — | approval sources | `missing` when every source failed; partial failures flagged |
-| K-OPS-13 Deadlines in the next 7 days | Open tasks, planned milestones, SOP and policy review dates, acknowledgement due dates with people outstanding, due today to today + 7 | — | several | Listed soonest first |
-| K-OPS-14 Unresolved integration errors | `core.event_deliveries` with status failed or dead whose consumer is `ops.*` or whose event producer is `ops` | — | `core.event_deliveries`, `core.integration_events` (read-only) | Always `ok` |
+**Admissions report change (21 Oct 2026):** a demo counts as completed when every planned demo DAY was attended (`demoProgress(...).attended ≥ plannedDayCount`), not by a count of classes. K-ADM-06 / K-ADM-07 still read the admission-level fee-arrangement decision; since A-FEE-8 the approval that matters is per agreement version, so these two tiles describe the older path (to revisit with the owner).

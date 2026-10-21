@@ -86,13 +86,12 @@ export function normaliseEmail(raw: string | null | undefined): EmailResult {
 
 const HONORIFICS = new Set(['mr', 'mrs', 'ms', 'miss', 'dr', 'shri', 'smt', 'kumari', 'master']);
 
-/** Lower-case, strip accents, punctuation, honorifics and the seed marker "(fictional)". */
+/** Lower-case, strip accents, punctuation and honorifics. */
 export function normaliseName(raw: string | null | undefined): string {
   return (raw ?? '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
-    .replace(/\(fictional\)/g, ' ')
     .replace(/[^a-z\s]/g, ' ')
     .split(/\s+/)
     .filter((t) => t && !HONORIFICS.has(t))

@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Alert, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
@@ -11,6 +12,7 @@ import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Timetable' };
 
 type Search = Promise<Record<string, string | string[] | undefined>>;
 const str = (v: string | string[] | undefined) => (typeof v === 'string' && v ? v : undefined);
@@ -45,7 +47,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
   }));
   return (
     <>
-      <PageHeader title="Timetable" description="Scheduled class sessions with conflict detection. Hard constraints block scheduling; preferences are warnings. A conflict-free timetable is reported as feasible — never as optimal." />
+      <PageHeader title="Timetable" description="Class sessions with conflict checks. Clashes block scheduling; preferences only warn." />
       <form method="get" className="el-grid" style={{ alignItems: 'end' }}>
         <label>
           Batch{' '}
@@ -70,7 +72,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
             <ConflictList verdict={data.data.check.verdict} hard={data.data.check.hard} preferences={data.data.check.preferences} notes={data.data.check.notes} />
           </Card>
           <Card title="Sessions">
-            <DataTable
+            <DataTable compact
               rows={data.data.sessions}
               rowKey={(s) => s.id}
               empty={<EmptyState title="No sessions in this range" />}

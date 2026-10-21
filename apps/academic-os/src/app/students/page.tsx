@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Alert, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
@@ -9,6 +10,7 @@ import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Academic students' };
 
 export default async function StudentsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
@@ -30,7 +32,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
   const data = await load(async () => ({ students: await listStudents(db, actor, { q }), batches: canEnrol ? await listBatches(db, actor) : [] }));
   return (
     <>
-      <PageHeader title="Students" description="Student records owned by Academic OS. Teachers see only students enrolled in their batches. Development data is fictional." />
+      <PageHeader title="Students" description="Teachers see only students in their batches. Development data is fictional." />
       <form method="get" className="el-grid" style={{ alignItems: 'end' }}>
         <label>
           Search name or code <input name="q" defaultValue={q ?? ''} className="el-input" />
@@ -43,7 +45,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
         <div className="el-stack">
           {!canWrite ? <Alert tone="info">Contact details (phone, email, guardian contact, date of birth) are hidden for your role (PLT-014).</Alert> : null}
           <Card>
-            <DataTable
+            <DataTable compact
               rows={data.data.students}
               rowKey={(s) => s.id}
               empty={<EmptyState title="No students" description={q ? 'No student matches this search.' : 'Students arrive through the enrolment intake or manual entry.'} />}

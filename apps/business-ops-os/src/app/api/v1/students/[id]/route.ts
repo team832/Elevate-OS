@@ -4,7 +4,7 @@ import { getStudent } from '../../../../../server/students';
 
 export const dynamic = 'force-dynamic';
 
-/** GET /ops/api/v1/students/[id] — Student profile by admission id; private fields need ops:student_private:read. */
+/** GET /ops/api/v1/students/[id] — Student profile by canonical student id (or an admission id from older links); private fields need ops:student_private:read. */
 export const GET = defineRoute(
   { permission: 'ops:students:read', params: idParams },
   async ({ user, db, params }) => getStudent(db, user, params.id),

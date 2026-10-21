@@ -12,6 +12,7 @@ import {
   metric,
   metricSchema,
   apiFailureSchema,
+  isMaskedReference,
   type EventPayload,
 } from '../src/index';
 import { z } from 'zod';
@@ -166,4 +167,18 @@ describe('errors', () => {
         .success,
     ).toBe(true);
   });
+});
+
+describe('isMaskedReference (D-043)', () => {
+  it.each([
+    ['XXXX-XXXX-1234', true],
+    ['XXXX XXXX 9012', true],
+    ['•••••1234F', true],
+    ['**34', true],
+    ['1234 5678 9012', false],
+    ['1234-5678-9012', false],
+    ['ABCDE1234F', false],
+    ['XXXX123456', false],
+    ['X', false],
+  ])('%s → %s', (value, ok) => expect(isMaskedReference(value)).toBe(ok));
 });

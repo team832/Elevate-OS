@@ -24,7 +24,7 @@ describe('platform API', () => {
     );
     expect(res.status).toBe(200);
     expect(res.data?.modules).toEqual(['platform', 'ops']);
-    expect(res.data?.permissions['ops:tasks:write']).toBe('own');
+    expect(res.data?.permissions['ops:leads:write']).toBe('own');
     expect(res.data?.permissions['platform:users:manage']).toBeUndefined();
   });
 

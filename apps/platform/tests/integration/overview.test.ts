@@ -9,12 +9,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import {
   opsAdmissions,
-  opsAttendanceSessions,
   opsFollowUps,
   opsLeads,
-  opsTasks,
   programmes,
   staffMembers,
+  type OpsAdmissionStatus,
 } from '@elevate/database';
 import { SEED_PROGRAMMES } from '@elevate/database/seed';
 import type { LeadId, RoleKey, StaffMemberId } from '@elevate/shared-types';
@@ -22,20 +21,15 @@ import { createTestUser, setupTestDatabase, type TestUser } from '@elevate/testi
 import {
   FOLLOW_UP_ROWS,
   filterFollowUps,
-  filterPriorities,
   istDate,
-  istWeek,
   loadAttention,
   loadFollowUps,
   loadInbox,
   loadMetrics,
   loadPipeline,
-  loadPriorities,
   loadTodayClasses,
   mapPipeline,
-  parsePriorityTab,
   type OverviewDeps,
-  type PriorityRow,
   type Widget,
 } from '../../src/server/overview-adapter';
 
@@ -73,7 +67,7 @@ function ok<T>(w: Widget<T>): T {
 let n = 0;
 async function lead(
   owner: Staff,
-  status: string,
+  status: OpsAdmissionStatus,
   options: { programme?: string; mergedInto?: LeadId } = {},
 ): Promise<LeadId> {
   n += 1;
@@ -104,7 +98,7 @@ async function lead(
     status,
     heldFromStatus: status === 'on_hold' ? 'contacted' : null,
     ...(status === 'enrolled'
-      ? { enrolmentId: randomUUID() as never, studentId: randomUUID() as never }
+      ? { enrolmentId: randomUUID() as never, academicStudentId: randomUUID() as never }
       : {}),
     createdBy: owner.id,
   });
@@ -122,34 +116,7 @@ const followUp = (owner: Staff, leadId: LeadId, title: string, due: string, stat
     completedAt: status === 'done' ? now : null,
   } as never);
 
-const task = (owner: Staff, title: string, due: string | null, status = 'not_started') => {
-  n += 1;
-  return ctx.db.insert(opsTasks).values({
-    code: `TSK-${String(80000 + n)}`,
-    title,
-    ownerStaffId: owner.staffId,
-    dueDate: due,
-    status,
-    completedAt: status === 'completed' ? now : null,
-    completionNote: status === 'completed' ? 'Done (test)' : null,
-    createdBy: owner.id,
-  } as never);
-};
-
-const session = (who: Staff, status: 'open' | 'superseded') =>
-  ctx.db.insert(opsAttendanceSessions).values({
-    staffId: who.staffId,
-    workDate: day(0),
-    clockInAt: new Date(now.getTime() - 3_600_000),
-    timezone: 'Asia/Kolkata',
-    source: 'self',
-    status,
-    supersededAt: status === 'superseded' ? now : null,
-    createdBy: who.id,
-  } as never);
-
 let manager: OverviewDeps;
-let hr: OverviewDeps;
 let asha: Staff;
 let ravi: Staff;
 
@@ -160,7 +127,6 @@ beforeAll(async () => {
       .values({ code, name, description, status })
       .onConflictDoNothing();
   manager = await deps(['operations_manager']);
-  hr = await deps(['hr_manager']);
   asha = await staff(['admissions_counsellor'], 'Asha Counsellor');
   ravi = await staff(['admissions_counsellor'], 'Ravi Counsellor');
 });
@@ -172,7 +138,7 @@ describe('overview — permissions are respected', () => {
     expect(await inbox).toMatchObject({ status: 'unavailable' });
 
     const metrics = await loadMetrics(d, inbox);
-    for (const key of ['activeEnquiries', 'staffPresent', 'pendingApprovals']) {
+    for (const key of ['activeEnquiries', 'pendingApprovals']) {
       const m = byKey(metrics, key).metric;
       expect(m.status).toBe('missing');
       expect(m.value).toBeNull();
@@ -180,15 +146,9 @@ describe('overview — permissions are respected', () => {
     }
     for (const w of [await loadPipeline(d), await loadFollowUps(d, undefined)])
       expect(w).toMatchObject({ status: 'unavailable', reason: expect.stringMatching(/role/) });
-    // teachers hold ops:tasks:read (own tasks): the widget is shown, with only their tasks
-    expect(ok(await loadPriorities(d, 'all')).rows).toEqual([]);
 
     const attention = await loadAttention(d, inbox);
-    expect(attention.map((a) => a.key)).toEqual([
-      'admissionDecisions',
-      'attendanceCorrections',
-      'contentApprovals',
-    ]);
+    expect(attention.map((a) => a.key)).toEqual(['admissionDecisions', 'contentApprovals']);
     for (const a of attention) {
       expect(a.count).toBeNull();
       expect(a.reason).toBeTruthy();
@@ -198,12 +158,6 @@ describe('overview — permissions are respected', () => {
   it('a marketing contributor (no Academic timetable) gets "unavailable" for today’s classes, not an empty list', async () => {
     const d = await deps(['marketing_contributor']);
     expect(await loadTodayClasses(d)).toMatchObject({ status: 'unavailable' });
-  });
-
-  it('an HR manager has no lead, admissions or follow-up access', async () => {
-    expect(await metricOf(hr, 'activeEnquiries')).toMatchObject({ status: 'missing' });
-    expect(await loadPipeline(hr)).toMatchObject({ status: 'unavailable' });
-    expect(await loadFollowUps(hr, undefined)).toMatchObject({ status: 'unavailable' });
   });
 
   it('an operations manager gets the live approvals inbox count', async () => {
@@ -227,7 +181,7 @@ describe('overview — permissions are respected', () => {
 });
 
 describe('overview — empty data is an explicit empty state, missing is never zero', () => {
-  it('no leads, cases, follow-ups or tasks yet: measured zeros and empty lists, no rows invented', async () => {
+  it('no leads, cases or follow-ups yet: measured zeros and empty lists, no rows invented', async () => {
     expect(await metricOf(manager, 'activeEnquiries')).toMatchObject({ status: 'ok', value: 0 });
     expect(ok(await loadPipeline(manager)).every((s) => s.count === 0)).toBe(true);
     expect(ok(await loadFollowUps(manager, undefined))).toEqual({
@@ -236,25 +190,13 @@ describe('overview — empty data is an explicit empty state, missing is never z
       total: 0,
       capped: false,
     });
-    expect(ok(await loadPriorities(manager, 'all'))).toMatchObject({
-      rows: [],
-      counts: { today: 0, week: 0, all: 0 },
-    });
-  });
-
-  it('staff present: no attendance recorded by anyone today is "Not available", not 0', async () => {
-    const m = await metricOf(hr, 'staffPresent');
-    expect(m).toMatchObject({ status: 'missing', value: null });
-    expect(m.status === 'missing' && m.reason).toBe(
-      'No attendance recorded today, and no shifts are assigned for today.',
-    );
   });
 
   it('a failed inbox becomes "Not available", never 0', async () => {
     const failed: Promise<Widget<never>> = Promise.resolve({ status: 'error', message: 'x' });
     const pending = byKey(await loadMetrics(manager, failed), 'pendingApprovals');
     expect(pending.metric).toMatchObject({ status: 'missing', value: null });
-    for (const a of (await loadAttention(manager, failed)).slice(0, 2)) expect(a.count).toBeNull();
+    for (const a of (await loadAttention(manager, failed)).slice(0, 1)) expect(a.count).toBeNull();
   });
 });
 
@@ -273,13 +215,6 @@ describe('overview — live Business Ops data, scoped to the signed-in user', ()
     await followUp(asha, a2, 'Send the fee structure', day(0));
     await followUp(asha, a2, 'Already done', day(0), 'done');
     await followUp(ravi, r1, 'Confirm the counselling slot', day(1));
-
-    await task(asha, 'Close September attendance corrections', day(-1), 'blocked');
-    await task(asha, 'Publish the weekend timetable', istWeek(now).to, 'in_progress');
-    await task(asha, 'Plan the mock test hall', day(8));
-    await task(asha, 'Review call scripts', null);
-    await task(asha, 'Finished task', day(0), 'completed');
-    await task(ravi, 'Reconcile fee receipts', day(0), 'at_risk');
   });
 
   it('active enquiries: open, non-merged leads (on hold counts; enrolled, lost, merged do not)', async () => {
@@ -315,7 +250,10 @@ describe('overview — live Business Ops data, scoped to the signed-in user', ()
       'Confirm the counselling slot',
     ]);
     expect(all.rows.map((r) => r.due)).toEqual([day(-1), day(0), day(1)]);
-    expect(all.rows[0]).toMatchObject({ programme: 'CLAT', owner: 'Asha Counsellor (fictional)' });
+    expect(all.rows[0]).toMatchObject({
+      programme: 'CLAT UG preparation',
+      owner: 'Asha Counsellor (fictional)',
+    });
     for (const r of all.rows) {
       expect(Object.keys(r).sort()).toEqual(
         ['due', 'id', 'leadId', 'nextStep', 'owner', 'programme', 'student'].sort(),
@@ -328,61 +266,13 @@ describe('overview — live Business Ops data, scoped to the signed-in user', ()
 
   it('follow-up filter (?fq=) matches student, programme, owner or next step', async () => {
     const clat = ok(await loadFollowUps(manager, 'clat'));
-    expect(clat.rows.map((r) => r.programme)).toEqual(['CLAT']);
+    expect(clat.rows.map((r) => r.programme)).toEqual(['CLAT UG preparation']);
     expect(clat).toMatchObject({ matched: 1, total: 3 });
     expect(ok(await loadFollowUps(manager, 'ravi')).rows).toHaveLength(1);
     expect(ok(await loadFollowUps(manager, 'FEE STRUCTURE')).rows).toHaveLength(1);
     const none = ok(await loadFollowUps(manager, 'no such student'));
     expect(none).toMatchObject({ rows: [], matched: 0, total: 3 });
     expect(filterFollowUps(clat.rows, '  ')).toHaveLength(1);
-  });
-
-  it('team priorities: open tasks per tab, own scope, real status labels', async () => {
-    const all = ok(await loadPriorities(manager, 'all'));
-    expect(all.counts).toEqual({ today: 2, week: 3, all: 5 });
-    expect(all.rows.map((r) => r.title)).toEqual([
-      'Close September attendance corrections',
-      'Reconcile fee receipts',
-      'Publish the weekend timetable',
-      'Plan the mock test hall',
-      'Review call scripts',
-    ]);
-    expect(all.rows.map((r) => r.status)).toEqual([
-      'Blocked',
-      'At risk',
-      'In progress',
-      'Not started',
-      'Not started',
-    ]);
-    for (const tab of ['today', 'week', 'all'] as const) {
-      const w = ok(await loadPriorities(manager, tab));
-      expect(w.rows).toHaveLength(w.counts[tab]);
-    }
-    expect(ok(await loadPriorities(as(ravi), 'all')).rows.map((r) => r.title)).toEqual([
-      'Reconcile fee receipts',
-    ]);
-    expect(ok(await loadPriorities(as(asha), 'today')).counts).toEqual({
-      today: 1,
-      week: 2,
-      all: 4,
-    });
-  });
-
-  it('staff present: distinct staff with a live session today; 0 is real once attendance exists', async () => {
-    const present = await staff(['employee'], 'Present Employee');
-    const absent = await staff(['employee'], 'Absent Employee');
-    await session(present, 'open');
-    await session(absent, 'superseded'); // a replaced session is not attendance
-
-    const all = byKey(await loadMetrics(hr, loadInbox(hr)), 'staffPresent');
-    expect(all.metric).toMatchObject({ status: 'ok', value: 1 });
-    expect(all.note).toBe('No shifts are assigned for today');
-    expect(await metricOf(as(present), 'staffPresent')).toMatchObject({ status: 'ok', value: 1 });
-    // someone recorded attendance today, so "none of mine" is a measured 0
-    expect(await metricOf(as(absent), 'staffPresent')).toMatchObject({ status: 'ok', value: 0 });
-    // an employee login with no staff record: unknown, not 0
-    const unlinked = await metricOf(await deps(['employee']), 'staffPresent');
-    expect(unlinked).toMatchObject({ status: 'missing', value: null });
   });
 
   it('follow-ups are bounded: at most the first rows due, with the true match count', async () => {
@@ -396,22 +286,6 @@ describe('overview — live Business Ops data, scoped to the signed-in user', ()
 });
 
 describe('overview — pure helpers', () => {
-  it('priority tabs: Today = due today or overdue; This week = by Sunday; All = everything', () => {
-    const rows: PriorityRow[] = [
-      { id: 'a', title: 'overdue', owner: 'x', due: '2026-10-19', status: 'Not started' },
-      { id: 'b', title: 'today', owner: 'x', due: '2026-10-20', status: 'Not started' },
-      { id: 'c', title: 'sunday', owner: 'x', due: '2026-10-25', status: 'Not started' },
-      { id: 'd', title: 'next week', owner: 'x', due: '2026-10-26', status: 'Not started' },
-      { id: 'e', title: 'no due date', owner: 'x', due: null, status: 'Not started' },
-    ];
-    expect(istWeek(now)).toEqual({ from: '2026-10-19', to: '2026-10-25' });
-    expect(filterPriorities(rows, 'today', now).map((r) => r.id)).toEqual(['a', 'b']);
-    expect(filterPriorities(rows, 'week', now).map((r) => r.id)).toEqual(['a', 'b', 'c']);
-    expect(filterPriorities(rows, 'all', now).map((r) => r.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
-    expect(parsePriorityTab('week')).toBe('week');
-    expect(parsePriorityTab('nonsense')).toBe('today');
-  });
-
   it('maps Business Ops statuses onto the five overview stages (lost / on hold excluded)', () => {
     const stages = mapPipeline({
       new: 1,

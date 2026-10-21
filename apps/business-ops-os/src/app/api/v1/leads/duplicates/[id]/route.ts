@@ -1,5 +1,5 @@
 import { defineRoute } from '@elevate/server-kit';
-import { dismissDuplicateFlag } from '../../../../../../server/leads';
+import { dismissDuplicateFlag } from '../../../../../../server/lead-duplicates';
 import { duplicateReviewBody, idParams } from '../../../../../../server/schemas';
 
 export const dynamic = 'force-dynamic';

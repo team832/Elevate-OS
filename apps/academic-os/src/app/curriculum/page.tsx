@@ -1,14 +1,16 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { Card, DataTable, EmptyState, PageHeader, Subnav } from '@elevate/shared-ui';
 import { listCourses, listPlans, listProgrammes } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
 import { PlanBadge, StateBadge } from '../../ui/badges';
 import type { PageAccess } from '@elevate/server-kit/next';
-import { AcademicShell, LoadError, gate, load } from '../../ui/shell';
+import { AcademicShell, LoadError, gate, load, CURRICULUM_TABS } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Curriculum' };
 
 const LABELS = ['locked', 'approved', 'provisional', 'proposed', 'draft', 'unverified', 'unknown'].map((v) => ({ value: v, label: v }));
 
@@ -30,15 +32,15 @@ async function Body({ access }: { access: PageAccess }) {
     <>
       <PageHeader
         title="Courses and curriculum plans"
-        description="Courses are versions under a core programme. Plan statuses: locked and provisional plans are immutable; changes are new proposed versions that supersede them after another coordinator approves. Planned counts are plans, never delivery."
-        actions={<a href={MODULE_PATHS.conceptBooks}>Concept-book indices</a>}
+        description="Course versions and their plans. Locked plans change only by an approved new version."
+        tabs={<Subnav label="Curriculum" items={CURRICULUM_TABS} current={MODULE_PATHS.curriculum} />}
       />
       {!data.ok ? (
         <LoadError error={data.error} />
       ) : (
         <div className="el-stack">
           <Card title="Courses">
-            <DataTable
+            <DataTable compact
               rows={data.data.courses}
               rowKey={(c) => c.id}
               empty={<EmptyState title="No courses yet" description="Seed the legacy curriculum (npm run db:seed) or create a course below." />}
@@ -54,7 +56,7 @@ async function Body({ access }: { access: PageAccess }) {
             />
           </Card>
           <Card title="Curriculum plan versions">
-            <DataTable
+            <DataTable compact
               rows={data.data.plans}
               rowKey={(p) => p.id}
               empty={<EmptyState title="No plan versions yet" />}

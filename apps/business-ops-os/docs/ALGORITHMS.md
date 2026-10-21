@@ -9,7 +9,7 @@ Format (BUILD_PLAN): 1 Purpose · 2 Inputs · 3 Output · 4 Preconditions · 5 R
 2. **Inputs.** Raw phone / email / name strings (`normalisePhone`, `normaliseEmail`, `normaliseName`, `nameSimilarity` in `domain/contacts.ts`).
 3. **Output.** Phone: `{ ok, e164, kind: india_mobile | india_landline | international }` or `{ ok:false, reason: missing | invalid_characters | invalid_length | invalid_number }`. Email: lower-cased trimmed address or `missing | invalid`. Name: normalised token string and a similarity in [0, 1].
 4. **Preconditions.** None (total functions).
-5. **Rules.** Separators (space, `-`, `.`, `(`, `)`, `/`) are removed. Only digits and one leading `+` are allowed. `00` → `+`. India is the default country: 10 digits; `0` + 10; `91` + 10; `091` + 10; `+91` + 10; `+91 (0)` + 10 (trunk zero after the country code) all become `+91XXXXXXXXXX`. The national number must not start with 0. First digit 6–9 = mobile, 1–5 = landline (STD code). Other countries need `+`/`00` and 8–15 digits and are kept as given. Emails are trimmed and lower-cased only — **no** Gmail dot/`+tag` rewriting (that would merge different people). Names: accents, punctuation, honorifics (Mr, Ms, Dr, Shri, Smt, Kumari…) and the seed marker "(fictional)" are removed. Name similarity is token-level: each token of the shorter name is paired (greedy, best Jaro-Winkler first) with an unused token of the longer name; score = sum ÷ token count of the longer name. Word order does not matter; a typo scores high; a shared surname alone (siblings) scores low.
+5. **Rules.** Separators (space, `-`, `.`, `(`, `)`, `/`) are removed. Only digits and one leading `+` are allowed. `00` → `+`. India is the default country: 10 digits; `0` + 10; `91` + 10; `091` + 10; `+91` + 10; `+91 (0)` + 10 (trunk zero after the country code) all become `+91XXXXXXXXXX`. The national number must not start with 0. First digit 6–9 = mobile, 1–5 = landline (STD code). Other countries need `+`/`00` and 8–15 digits and are kept as given. Emails are trimmed and lower-cased only — **no** Gmail dot/`+tag` rewriting (that would merge different people). Names: accents, punctuation and honorifics (Mr, Ms, Dr, Shri, Smt, Kumari…) are removed. Name similarity is token-level: each token of the shorter name is paired (greedy, best Jaro-Winkler first) with an unused token of the longer name; score = sum ÷ token count of the longer name. Word order does not matter; a typo scores high; a shared surname alone (siblings) scores low.
 6. **Steps.** trim → empty? `missing` → strip separators → character check → `00`→`+` → country branch → length/first-digit checks → E.164.
 7. **Edge cases.** `0000000000` is read as an international `00` prefix and rejected; `98765 43210 ext 12` is rejected (letters); idempotent on its own output. The service reports every invalid field at once (400 with `path`).
 8. **Permissions.** Pure; used by `ops:leads:write` routes.
@@ -71,6 +71,7 @@ Format (BUILD_PLAN): 1 Purpose · 2 Inputs · 3 Output · 4 Preconditions · 5 R
 10. **Limitations.** Stage SLAs/timers per stage are not modelled (OD-011). `lost` vs `not_interested` (PRD) are one status with a reason.
 
 ## A-04 Admission confirmation gate — OPS-010, BR-OPS-6/7
+**Changed 21 Oct 2026:** see "A-04 (changed 21 Oct 2026)" below; admission now happens only through A-APP-4.
 1. **Purpose.** "Admitted" only when the confirmed-admission definition holds; a demo fee alone never counts.
 2. **Inputs.** Checklist rows (`item_key`, `status`, `recorded_by`), latest fee-arrangement approval status, programme chosen, setting `admission.confirmation`.
 3. **Output.** Ordered list of gaps (`evaluateAdmissionReadiness`).
@@ -106,95 +107,59 @@ Format (BUILD_PLAN): 1 Purpose · 2 Inputs · 3 Output · 4 Preconditions · 5 R
 9. **Tests.** `admission-followups.test.ts` "overdue computation (A-06)" (**timezone boundary** 18:29:59Z vs 18:30:00Z; UTC-midnight trap), "reminder selection"; integration `dashboard.test.ts` "reminder job … once per day".
 10. **Limitations.** No scheduler yet (wave 3); in-app notifications only (email adapter is a mock).
 
-## A-07 Dependency validation (graphs) — OPS-016, OPS-025
-1. **Purpose.** Reject dependency cycles for tasks and milestones; reuse for reporting lines.
-2. **Inputs.** Edge list `{ from, to }` ("from depends on to"), proposed edge.
-3. **Output.** `wouldCreateCycle` → `{ cycle:false }` or `{ cycle:true, path }`; `findCycle`; `findPath` (BFS, shortest, deterministic); `ancestorChain` (loop-safe parent walk).
-4. **Preconditions.** Task edges are added under an advisory lock (`pg_advisory_xact_lock`) so two concurrent inserts cannot form a cycle together.
-5. **Rules.** Adding `A → B` creates a cycle iff `B` already reaches `A` (or `A = B`). Neighbours are visited in sorted order so the reported path is stable.
-6. **Steps.** Load all edges → check → insert or 409 with the path in task codes (`TSK-00003 → TSK-00001 → TSK-00002 → TSK-00003`).
-7. **Edge cases.** Self-edges are 400 (and blocked by a CHECK); duplicate edges are ignored.
-8. **Permissions.** `ops:tasks:write` (own: owner of the dependent task); milestones `ops:risks:write`.
-9. **Tests.** `tests/unit/tasks-escalation.test.ts` "dependency graph (A-07)" (**3-node cycle**, self, 2-node, DAG, shortest path, loop-safe chain); integration `tasks.test.ts` "rejects a dependency cycle", `organisation-planning.test.ts` "milestone dependencies".
-10. **Limitations.** Loads the whole edge table per check (fine for thousands of edges).
+## A-07 Reporting-line walk — OPS-014
+1. **Purpose.** Loop-safe walk up a parent chain, used for staff reporting lines (A-10).
+2. **Inputs.** A start id and a `parentOf(id)` lookup.
+3. **Output.** `ancestorChain` → `{ chain, loop }`.
+4. **Preconditions.** —
+5. **Rules.** Stops at a missing parent or the first repeated id (reported as `loop`).
+6. **Steps.** Walk parents until none or a repeat.
+7. **Edge cases.** A pre-existing loop is reported, never followed forever.
+8. **Permissions.** Internal.
+9. **Tests.** `staff-settings.test.ts` "staff rules (A-10)".
+10. **Limitations.** The task and milestone dependency checks that used this file were removed with Operations (owner, 2026-10-20, D-032; git 63da4e4). The unused graph helpers (`findPath`, `findCycle`, `wouldCreateCycle`) were deleted too.
 
 ## A-08 Task status and completion rules — OPS-016, BR-OPS-10/11
-1. **Purpose.** Status standard Not started / In progress / Waiting / At risk / Blocked / Completed / Cancelled with evidence-based completion.
-2. **Inputs.** `from`, `to`, reason, completion note, evidence link, has owner, open blocker codes, override reason.
-3. **Output.** `{ ok, overrideUsed }` or an error code.
-4. **Preconditions.** Row lock; blockers loaded from `ops.task_dependencies`.
-5. **Rules.** Open ↔ open freely, except **Blocked** and **Cancelled** need a reason. **Completed** needs an owner and a completion note or evidence link, and no open blocker unless an override reason is given (recorded on the task and audited as `task.completed_with_override`). Closed tasks only reopen to In progress with a reason. Closing a task resolves its open escalations. `blocked_since` is set when entering Blocked. Flags: `missing_owner`, `missing_due`, `overdue`, `due_today` (IST).
-6. **Steps.** check → update → (close escalations) → audit.
-7. **Edge cases.** A DB CHECK also requires `completed_at` and note/evidence for completed rows.
-8. **Permissions.** `ops:tasks:write`; own scope = task owner only.
-9. **Tests.** `tasks-escalation.test.ts` "task status rules (A-08)"; integration `tasks.test.ts` "cannot complete while a blocker is open…".
-10. **Limitations.** No routine templates (OPS-018, Proposed).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-09 Assignment and escalation — OPS-017, BR-OPS-10
-1. **Purpose.** Overdue or long-blocked tasks reach the right manager automatically, with an audit trail; the owner keeps the task.
-2. **Inputs.** Open tasks (`status`, `dueDate`, `blockedSince`, `ownerStaffId`, levels already raised), `now`, setting `tasks.escalation` (**proposed**: L2 at 2, L3 at 5, L4 at 10 days overdue; blocked ≥ 3 days → L2; respond within 1 day), staff reporting lines (`core.staff_members.manager_id`).
-3. **Output.** Escalation proposals `{ level, trigger, daysOverdue, thresholdDays, reason, respondBy }` and a recipient resolution.
-4. **Preconditions.** Job runs in one transaction; `ops.escalations` is unique per (task, level).
-5. **Rules.** `daysOverdue = IST today − due date`. Each level whose threshold is reached and that was not raised before is raised **once**, in order (a task first evaluated 12 days late gets L2, L3 and L4 records). Recipient for level *L* = the (L−1)th manager up the owner's reporting line; if the line is shorter, the top of the chain above the owner; no manager → `no_manager_on_record`; a looping line → `reporting_loop` (never followed); no owner → `no_owner`. Without a recipient the escalation is routed to every `operations_manager` user. The task's `escalation_level` rises; ownership never changes.
-6. **Steps.** Load open tasks, staff, existing escalations → `evaluateEscalation` → `resolveEscalationRecipient` → insert (`ON CONFLICT DO NOTHING`) → audit `task.escalated` → notify recipient(s) and owner. Recipients acknowledge, then resolve with a note.
-7. **Edge cases.** Boundary: overdue by exactly the threshold escalates; one day less does not. Closed tasks and tasks without due dates never escalate on "overdue".
-8. **Permissions.** Job: `ops:jobs:run`. Acknowledge/resolve: the recipient (any `ops:tasks:write`) or an all-scope `ops:tasks:write` holder.
-9. **Tests.** `tasks-escalation.test.ts` "escalation rules (A-09)"; integration `tasks.test.ts` "overdue tasks escalate … idempotent … acknowledges", "no owner … routed".
-10. **Limitations.** Calendar days, not working days; a level is raised once per task even if the due date later moves and the task becomes overdue again; thresholds await OD-011/OD-027.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
-## A-10 Reporting lines and responsibility gaps — OPS-014, OPS-015
-1. **Purpose.** Keep the reporting graph a tree and show uncovered responsibilities.
-2. **Inputs.** Staff id, proposed manager, current manager map; responsibilities with holder/backup/critical/status; staff active map.
-3. **Output.** `checkReportingLine` → ok or `{ message, path }`; `responsibilityGaps` → `[{ code, title, critical, gaps[] }]`.
+## A-10 Reporting lines — OPS-014
+1. **Purpose.** Keep the reporting graph a tree.
+2. **Inputs.** Staff id, proposed manager, current manager map.
+3. **Output.** `checkReportingLine` → ok or `{ message, path }`.
 4. **Preconditions.** —
-5. **Rules.** A person cannot manage themselves; a new manager whose chain contains the person is a loop (409). Gaps: `no_holder`, `no_backup`, `holder_is_backup`, `holder_inactive`, `backup_inactive`; retired items ignored; critical first, then code. Holder = backup is also rejected on save (400).
+5. **Rules.** A person cannot manage themselves; a new manager whose chain contains the person is a loop (409); the manager must be active.
 6. **Steps.** The service loads the manager map in the transaction and checks before updating `core.staff_members`.
-7. **Edge cases.** The legacy role list imports 12 responsibilities with **no** holders (names are blank in the source, OD-009) — they all appear as gaps.
+7. **Edge cases.** A manager whose own chain already loops is rejected with "fix it first".
 8. **Permissions.** Read `ops:organisation:read`; write `ops:organisation:manage`.
-9. **Tests.** `sops-staff-policies.test.ts` "staff rules (A-10)"; integration `organisation-planning.test.ts` "rejects reporting-line loops", "gap report".
-10. **Limitations.** No HR data at all (D-015/OD-026): no leave, availability or payroll.
+9. **Tests.** `staff-settings.test.ts` "staff rules (A-10)"; integration `organisation.test.ts` "rejects reporting-line loops".
+10. **Limitations.** Responsibilities and their gap report (OPS-015) were removed with Operations (owner, 2026-10-20, D-032). No HR data.
 
 ## A-11 SOP lifecycle and approval requirements — OPS-019, PLT-004, PLT-006
-1. **Purpose.** Make proposed vs approved SOPs explicit and approve a specific version under separation of duties.
-2. **Inputs.** SOP status, current version (status, content, hash at submission, review), owner/reviewer (staff → user), decider.
-3. **Output.** `nextSopStatus`, `sopSubmissionProblems`, `sopApprovalProblems`, `sopDecisionState`.
-4. **Preconditions.** Row lock on the SOP.
-5. **Rules.** Statuses `not_drafted → draft → in_review → approved → retired` (UI label "Proposed — not policy" for everything not approved). Submission needs an owner, a reviewer who is **not** the owner, and content; it stores `sha256(content)` and opens a core approval whose subject is the **version** (policy `ops.sop.approve`, no self-approval). Approval needs: the version in review and unchanged since submission; the **assigned reviewer** recorded "recommend approval"; the approver holds `ops:sops:approve`, is **not the SOP owner** (403) and not the requester (core rule). Reject needs a reason. Changes requested → the requester withdraws → edits → resubmits. Editing an approved SOP creates a new version while the approved one stays in force; approving it supersedes the old one. Versions are never deleted.
-6. **Steps.** `sopWorkflow(submit | review | withdraw | approve | reject | retire)`.
-7. **Edge cases.** Retired SOPs cannot be edited; an SOP cannot be retired while a version is in review.
-8. **Permissions.** Write/submit/withdraw/retire `ops:sops:write` (operations manager); review = the assigned reviewer; approve/reject `ops:sops:approve` (director, operations manager).
-9. **Tests.** `sops-staff-policies.test.ts` "SOP approval requirement rules (A-11)"; integration `sops.test.ts` lifecycle, new-draft-keeps-approved, withdraw.
-10. **Limitations.** Acknowledgements and review-due flags are built (A-50, A-51); a review-due reminder job is not; `effective`/`under_revision` from the PRD are folded into `approved` + a draft version.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-12 KPI aggregation — OPS-024
 See `docs/KPI_DEFINITIONS.md` for every definition (numerator, denominator, window, source, owner, missing-data behaviour).
 1. **Purpose.** Compute the management KPIs without ever showing missing data as 0.
-2. **Inputs.** Plain rows (leads with first-admitted time, follow-ups, tasks, risks, staff, open admissions), window (IST Mon–Sun week by default), `asOf`, conversion window days.
+2. **Inputs.** Plain rows (leads with first-admitted time, follow-ups, staff, open admissions), window (IST Mon–Sun week by default), `asOf`, conversion window days.
 3. **Output.** `Metric` objects (`ok | missing`) from `@elevate/shared-contracts`.
 4. **Preconditions.** Rows loaded by `loadKpiRows`.
 5. **Rules.** A rate with denominator 0 → `missing` with a reason (**never 0 %**). Cohort conversion is `missing` until `cohort end + N days ≤ as-of`; the dashboard picks the latest fully elapsed Mon–Sun cohort (`latestElapsedCohortWeek`). Counts from Ops' own complete tables are `ok` (a real zero is 0). Percentages are rounded to one decimal.
-6. **Steps.** Pure functions in `domain/kpis.ts`, combined by `buildDashboard`.
-7. **Edge cases.** Merged leads excluded; cancelled tasks/follow-ups excluded; items due today are not judged for compliance until the day ends.
+6. **Steps.** Pure functions in `domain/kpis.ts`, combined by `buildDashboard`. Overdue work (K-10) = open follow-ups whose due date is before today (IST); the task completion rate and unresolved-blocker KPIs were removed with Operations (D-032).
+7. **Edge cases.** Merged leads excluded; cancelled follow-ups excluded; items due today are not judged for compliance until the day ends.
 8. **Permissions.** `ops:dashboard:read`.
 9. **Tests.** `tests/unit/kpis.test.ts` (normal, IST boundary, **denominator zero → missing**, window not elapsed, boundary N days); integration `dashboard.test.ts`.
 10. **Limitations.** K-02/K-03 (SLA, time to first contact), K-07 and K-11–K-19 from the PRD are not built (Proposed). Targets await OD-027.
 
 ## A-13 Legacy import — PLT-011, OPS-019, OPS-021
-1. **Purpose.** Bring the legacy decision log, work inventory, SOP registers, the online coordinator SOP and the role list into Ops without inventing approvals or names.
-2. **Inputs.** `data/legacy/ops/operations-workbook.json`, `sops.json`, `roles.json` (validated with zod — a malformed extract fails loudly).
-3. **Output.** Records with namespaced codes and the verbatim legacy status.
-4. **Preconditions.** Core departments seeded.
-5. **Rules.** Codes `LEGACY-OPSWB-…` (Elevate-Operations.xlsx), `LEGACY-ONLINE-…`, `LEGACY-MKTEASY-…` can never collide with `DEC-0001`, `SOP-0001` or requirement IDs `OPS-001` (DI-21). Decisions keep `Confirmed/Open/Provisional` → `confirmed/open/provisional`; an unknown word throws. Work-inventory status uses the extract's normalised word. SOP registers: operations (25) and online (16) rows → `not_drafted`; marketing summaries MKT-01…09 (v1.0, "Approved by" blank) and the online coordinator SOP (dated 2026-09-18, unsigned) → **`draft`** (OD-028) with version 0.1; blank form lines ("Assigned staff: ____") are not steps and no names are filled. Legacy "Function" words map to provisional department codes (a proposal). Re-import is idempotent and never downgrades work done in Elevate OS.
-6. **Steps.** `seed/legacy.ts` → domain mappers → upsert on code.
-7. **Edge cases.** `SOP-001` means different things in two registers — both are kept under different namespaces.
-8. **Permissions.** Seeds (development only).
-9. **Tests.** `tests/unit/legacy.test.ts`; integration `sops.test.ts` "legacy import", `organisation-planning.test.ts` "imports 24 legacy decisions", `seeds.test.ts`.
-10. **Limitations.** Online Actions ON-001…010 (tasks) and the online Rules (as policies) are not imported yet.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-14 Workload per staff member — OPS-024
 1. **Purpose.** Show assigned open items per person as a capacity view.
-2. **Inputs.** Active staff; owners of open tasks and open follow-ups; counsellors of open admissions.
-3. **Output.** Rows `{ fullName, openTasks, openFollowUps, openAdmissions, totalOpenItems }` + an unassigned count.
+2. **Inputs.** Active staff; owners of open follow-ups; counsellors of open admissions.
+3. **Output.** Rows `{ fullName, openFollowUps, openAdmissions, totalOpenItems }` + an unassigned count.
 4. **Preconditions.** —
 5. **Rules.** **Not a quality or performance score; never ranked** — rows are sorted by name (PRD 4.3 excludes rankings and scorecards). Inactive staff omitted; unassigned items counted separately.
 6. **Steps.** Count by owner id.
@@ -217,14 +182,14 @@ See `docs/KPI_DEFINITIONS.md` for every definition (numerator, denominator, wind
 
 ## A-16 Business codes — D-009
 1. **Purpose.** Human codes that are never reused.
-2. **Inputs.** Kind (`LEAD` 6 digits, `ADM` 6, `TSK` 5, `SOP` 4, `DEC` 4, `RSK` 4, `PRJ` 4, `INC` 5, `RESP` 4).
+2. **Inputs.** Kind (`LEAD` 6 digits, `ADM` 6, `FEE` 6).
 3. **Output.** The next code.
 4. **Preconditions.** Inside the creating transaction.
 5. **Rules.** `pg_advisory_xact_lock(hashtext('ops.code.<kind>'))`, then `max(code)` over well-formed codes (zero-padded, so lexicographic = numeric) + 1; the unique index is the final guard; legacy codes do not match the pattern.
 6. **Steps.** Lock → max → format.
 7. **Edge cases.** Concurrent creators serialise on the lock.
 8. **Permissions.** Internal.
-9. **Tests.** `sops-staff-policies.test.ts` "registers"; integration tests assert code formats.
+9. **Tests.** `staff-settings.test.ts` "business codes"; integration tests assert code formats.
 10. **Limitations.** Gaps after rolled-back transactions are possible and harmless.
 
 ---
@@ -276,7 +241,7 @@ The five slice notes used their own ids. They are renumbered here to continue th
 | A-OPS-10 | A-55 |
 | A-OPS-11 | A-56 |
 
-Same format and rules as above. Admissions A-17…A-20, HR records A-21…A-28, HR lifecycle A-29…A-38 (note id `HL-A1…10`), HR time A-39…A-45, operations A-46…A-56.
+Same format and rules as above. Admissions A-17…A-20 and the approvals inbox A-52 remain; HR records A-21…A-28, HR lifecycle A-29…A-38, HR time A-39…A-45 and operations A-46…A-51, A-53…A-56 were removed by the owner on 2026-10-20 (D-032; recoverable from git 63da4e4).
 
 ## A-17 Fee record validation and summary — OPS-072
 1. **Purpose.** Accept only well-formed manual fee entries and show what they add up to without pretending to be accounting.
@@ -327,289 +292,578 @@ Same format and rules as above. Admissions A-17…A-20, HR records A-21…A-28, 
 10. **Limitations.** Loads all request events (fine at current volume); no targets (OD-027).
 
 ## A-21 Field tiers and projection — OPS-037
-1. **Purpose.** Return only the employee fields the caller may see.
-2. **Inputs.** Row, `{isSelf, canManage, lifecycleCovers, privateCovers}` (`server/hr/access.ts → employeeVisibility`).
-3. **Output.** `EmployeeView`: directory fields always; `record` object or null; `legalName` key present only for the private tier (`domain/hr/employees.ts → employeeFieldTiers, projectEmployee`).
-4. **Preconditions.** `ops:employees:read` held and HR scope covers the row.
-5. **Rules.** record = self ∨ manage-scope covers ∨ lifecycle-read scope covers. private = private-read scope (self only when `own`) covers. Projection builds a new object and never copies a hidden field.
-6. **Steps.** hrScope → visibility → per-row tiers → project.
-7. **Edge cases.** A separated employee is 404 for directory-tier callers. List filters and sorts on record fields → 403 unless every listable row is record-visible.
-8. **Permissions.** As in `docs/PERMISSIONS.md` (tiers).
-9. **Tests.** Unit "field tiers and projection"; integration "field-level protection …".
-10. **Limitations.** Uses `ops:lifecycle:read` as the signal for "may see employment facts"; a dedicated permission is requested (IR-OPS-11).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-22 Employment-status transitions — OPS-033
-1. **Purpose.** Keep the employment status meaningful and auditable.
-2. **Inputs.** from, to, reason, end date (`checkEmploymentStatusChange`).
-3. **Output.** ok, or `NO_CHANGE | ILLEGAL | REASON_REQUIRED | END_DATE_REQUIRED`.
-4. **Preconditions.** Employee record row locked.
-5. **Rules.** onboarding → active | separated; active → on_notice | separated; on_notice → active | separated; separated is final (a re-hire is a new record). Reason always required; separation needs an end date. Nobody changes their own status.
-6. **Steps.** check → update record (end date on separation; cleared when notice is withdrawn) → history row → audit `employee.status_changed` → on separation `runDeactivationHook`.
-7. **Edge cases.** ILLEGAL/NO_CHANGE → 409; missing reason or date → 400.
-8. **Permissions.** `ops:employees:manage`; the lifecycle slice calls `changeEmploymentStatus` after its own approval.
-9. **Tests.** Unit "employment status transitions"; integration "validates employment-status transitions".
-10. **Limitations.** Notice period and last-day rules are not modelled (owner policy).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-23 Employment history diff — OPS-033
-1. **Purpose.** One history row per tracked field that actually changed.
-2. **Inputs.** `before` (null for a new employee) and a partial `after` (`historyChanges`).
-3. **Output.** `[{field, fromValue, toValue}]` in fixed field order.
-4. **Preconditions.** None (pure).
-5. **Rules.** Absent keys are unchanged; null counts as a value; on creation only non-null values are written.
-6. **Steps.** Compare each tracked key → emit → `writeHistory` inserts with effective date, reason and actor.
-7. **Edge cases.** Setting the same value writes nothing.
-8. **Permissions.** Called by services that already checked permission.
-9. **Tests.** Unit "employment history diff"; integration "writes a history row for every tracked change …".
-10. **Limitations.** Department and manager names are resolved at read time (today's names).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-24 Department-head succession — OPS-032
-1. **Purpose.** One current head per department, with history.
-2. **Inputs.** Current tenure, new `{staffId, startsOn}` (`planHeadSuccession`).
-3. **Output.** ok + `endCurrentOn` (start − 1 day), or a message.
-4. **Preconditions.** Department row locked; the new head is active staff; the department is not archived.
-5. **Rules.** The same person → refused. The new start must be after the current head's start.
-6. **Steps.** plan → close the current tenure → insert the new one → audit.
-7. **Edge cases.** Ending a tenure before its start → 400.
-8. **Permissions.** `ops:organisation:manage`.
-9. **Tests.** Unit "org tree and head succession"; integration "keeps department-head history".
-10. **Limitations.** Acting or co-heads are not modelled.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-25 Document status and deletion — OPS-035
-1. **Purpose.** Keep document records honest and deletions deliberate.
-2. **Inputs.** status, action, actor, requester, reason (`checkDocumentAction`).
-3. **Output.** New status, or `ILLEGAL | SELF_DECISION | REASON_REQUIRED`.
-4. **Preconditions.** Row locked; manage scope; identity kinds need private manage.
-5. **Rules.** hold: active/superseded → retention_hold (reason). release_hold → active. request_deletion: active/superseded → deletion_requested (reason; blocked by a hold). approve: → deleted, by a different user, `confirm:true`, not the subject. reject → active (reason).
-6. **Steps.** check → update → audit `employee_document.<action>` → notify the other HR managers on request.
-7. **Edge cases.** A deleted record keeps its title and metadata; downloads answer 409.
-8. **Permissions.** `ops:employee_documents:manage`.
-9. **Tests.** Unit "document actions"; integration "deletion: requested by one person …".
-10. **Limitations.** No automatic expiry or retention processing (setting open).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-26 Compensation approval and effective dating — OPS-036
-1. **Purpose.** Exactly one set of terms in effect on any date, approved by a second person.
-2. **Inputs.** Draft, the employee's other records, approver `{userId, staffId}` (`planCompensationApproval`).
-3. **Output.** ok + the record to supersede and its end date, or `ILLEGAL | SELF_APPROVAL | CONFLICT`.
-4. **Preconditions.** All the employee's records locked `FOR UPDATE`.
-5. **Rules.** Only drafts. Approver ≠ drafter and ≠ subject. No approved or superseded record may start on or after the draft's date. The current approved record gets `effective_to = start − 1` and status `superseded`. Unique index: one `approved` per employee.
-6. **Steps.** plan → supersede → approve → audit (no amounts) → notify the drafter.
-7. **Edge cases.** An earlier-dated correction → cancel and re-draft (the 409 explains). Overlaps are reported, never silently resolved (`effectiveRecordAt.conflict`).
-8. **Permissions.** `ops:compensation:manage` to draft; `ops:compensation:approve` to approve.
-9. **Tests.** Unit "compensation"; integration "approval by a different person …", "cannot approve their own pay".
-10. **Limitations.** No pay-revision workflow beyond draft/approve; no arrears or proration (payroll is out of scope).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-27 Compensation validation and export — OPS-036
-1. **Purpose.** Record only earnings and allowances, and hand them over exactly.
-2. **Inputs.** basis, amount (paise or rupee string), components, effective date.
-3. **Output.** Validation issues; CSV rows of the terms in effect on `asOf`.
-4. **Preconditions.** Export permission.
-5. **Rules.** Integers ≥ 0, ≤ ₹10 crore. Component kinds are earning or allowance only. Labels naming deductions or statutory items (tax, TDS, PF, EPF, ESI, LWF, professional tax, payslip, net pay) are refused. Labels are unique. Listed components must add up to the amount. Rupee strings are converted exactly. CSV cells are quoted and `=`, `+`, `-`, `@` prefixes neutralised.
-6. **Steps.** Load approved and superseded records → effective per employee → refuse on overlap → CSV → audit `compensation.exported` (reference, as-of date, row count).
-7. **Edge cases.** Employees with no terms on the date are omitted (not zero rows).
-8. **Permissions.** `ops:compensation:export` (finance officer).
-9. **Tests.** Unit "formats paise exactly and neutralises CSV formulas"; integration "export …".
-10. **Limitations.** File download only; no push to a payroll provider.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-28 Asset assignment and return — OPS-038
-1. **Purpose.** Know who holds each asset.
-2. **Inputs.** Asset status, open assignment, employee status, dates (`checkAssignment`, `statusAfterReturn`, `checkAssetStatusChange`).
-3. **Output.** ok or message; status after return.
-4. **Preconditions.** Asset row locked.
-5. **Rules.** Assign only `available` assets with no open assignment, to employees with a record who are not separated or inactive; due date not before the hand-over. Return: good/worn → available, damaged → in_repair, lost → lost. Manual changes: available ↔ in_repair, → retired, → lost, lost → available (found). An assigned asset changes only by return.
-6. **Steps.** check → insert assignment → set status → audit → notify the holder. Return: close the assignment → set status → audit.
-7. **Edge cases.** The unique index refuses a second open assignment under a race.
-8. **Permissions.** `ops:assets:manage` (all). Read: `ops:assets:read` with HR scope (employees see their own assets, department managers their chain).
-9. **Tests.** Unit "assets"; integration "assets".
-10. **Limitations.** No depreciation, purchase or warranty data.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-29 Transition edge tables (requisition, application, offer) — OPS-040, 042, 044
-1. **Purpose.** Make every status change an explicit legal edge that names the authority it needs.
-2. **Inputs.** from, to, `{canDecide, reason, viaConversion, actorIsRequester, actorIsPreparer}` (`checkEdge`, `domain/hr/recruitment.ts`).
-3. **Output.** ok + the edge, or a code: `NO_CHANGE` / `ILLEGAL` (409), `REASON_REQUIRED` (400), `NOT_AUTHORISED` / `SELF_APPROVAL` (403).
-4. **Preconditions.** Row locked. For `manage` edges the service has already checked that the caller's scope covers the record.
-5. **Rules.** One generic table serves the three entities; each edge needs `manage`, `decide` or `conversion` (only the conversion service). Edges are drawn in `docs/WORKFLOWS.md`. An application becomes `hired` only through conversion. The requester cannot open a requisition and the preparer cannot approve an offer.
-6. **Steps.** Same state → table lookup → authority → reason → self-approval check.
-7. **Edge cases.** Selection (`interview → offer`) is a `decide` edge; an offer cannot be approved by its preparer.
-8. **Permissions.** `ops:recruitment:manage` or `ops:recruitment:decide` per edge.
-9. **Tests.** Unit `hr-lifecycle-domain.test.ts` ("requisition …", "application …", "offer …"); integration `hr-lifecycle-recruitment.test.ts` ("allows the table and refuses everything else", "opening needs a decider who is not the requester", "an offer is never approved by the person who prepared it").
-10. **Limitations.** The tables are our proposal; who selects and who approves offers is owner decision OD-041.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-30 Candidate to employee conversion — OPS-045
-1. **Purpose.** Turn an accepted offer into an employee and an onboarding case exactly once.
-2. **Inputs.** Application id; optional manager, work email, work location.
-3. **Output.** `{created, staffId, employeeCode, onboardingCaseId}`; 201 the first time, 200 `{created: false}` afterwards.
-4. **Preconditions.** Application in stage `offer`, an `accepted` offer, an `active` candidate.
-5. **Rules.** One transaction: lock the application `FOR UPDATE`; if it already has an employee, return it; `insertEmployee` (status onboarding, start = proposed start date, title = offered designation, department and type from the requisition, manager = input or hiring manager); stage → `hired` with the employee link; open the onboarding case; requisition → `filled` when hires reach openings.
-6. **Steps.** As in rule 5; audit `candidate.converted`.
-7. **Edge cases.** Work-email clash → 409. Two simultaneous calls → one employee (row lock plus unique `employee_staff_id`).
-8. **Permissions.** `ops:recruitment:decide`.
-9. **Tests.** `hr-lifecycle-recruitment.test.ts` "conversion is idempotent: two calls → one employee, one onboarding case"; journey test.
-10. **Limitations.** Offers carry no salary; compensation is a separate approved record (HR records, A-26).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-31 Interview feedback rule — OPS-043
-1. **Purpose.** Only the people who interview give feedback, and notes stay with those who need them.
-2. **Inputs.** Interview, panel, caller, application status (`domain/hr/recruitment.ts`).
-3. **Output.** Allowed or refused; visibility of notes.
-4. **Preconditions.** The caller is a panelist of the interview.
-5. **Rules.** Only an assigned panelist may submit (scope is irrelevant); interview `scheduled` or `completed`; application open. Notes are visible to recruitment managers who cover the application and to the author; recommendations to every reader of the application. Interviewers see only the applications they sit on.
-6. **Steps.** Check panel membership → check states → store recommendation and notes with `submitted_by/at`.
-7. **Edge cases.** Auditor and director see recommendations, not notes. A department manager cannot interview until granted `own(ops:recruitment:read)`.
-8. **Permissions.** `ops:recruitment:read` plus panel membership.
-9. **Tests.** Unit "interview feedback rule"; integration "interviewers see only what they interview for…", "feedback notes are masked for auditor and director…".
-10. **Limitations.** One recommendation per panelist; feedback is not hidden until all have submitted (OD-041).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-32 Unsuccessful-candidate anonymisation — OPS-049
-1. **Purpose.** Remove personal data of candidates who did not join, without losing the process record.
-2. **Inputs.** Candidate, applications, offers, setting `hr.candidate_retention`.
-3. **Output.** The candidate row anonymised in place, or a refusal; a "retention due" flag.
-4. **Preconditions.** At least one application, all rejected or withdrawn, no live offer, not hired.
-5. **Rules.** Removes name (becomes "Anonymised candidate (CAND-x)"), email, phone, source detail, consent note, interview notes and offer notes/reference. Keeps stage history and recommendations. The `due` flag appears only when the open setting `hr.candidate_retention` gets a value; nothing is removed automatically.
-6. **Steps.** Check eligibility → require `{confirm: true}` → blank the fields in one transaction → audit.
-7. **Edge cases.** A candidate with a live application is refused (409).
-8. **Permissions.** `ops:recruitment:decide`.
-9. **Tests.** `hr-lifecycle-recruitment.test.ts` "unsuccessful-candidate anonymisation".
-10. **Limitations.** Retention period is open (OD-036); no automatic run.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-33 Onboarding checklist generation — OPS-046
-1. **Purpose.** Give every new employee the same checklist, dated from their start.
-2. **Inputs.** Setting `hr.onboarding_template`, employee start date, case date, opener, manager.
-3. **Output.** Items with assignee, due date and required flag.
-4. **Preconditions.** An onboarding case is opened (by conversion or by HR).
-5. **Rules.** Due = base + offset, where base is the employment start date, else the case date. The assignee is HR (the case opener), the manager or the employee. The template is `proposed` (6 items).
-6. **Steps.** Read the setting → compute dates → insert items keyed `template:<k>`.
-7. **Edge cases.** Items are unique per case by item key, so a refresh never duplicates.
-8. **Permissions.** `ops:lifecycle:manage`.
-9. **Tests.** `hr-lifecycle-cases.test.ts` "gates completion on required items…".
-10. **Limitations.** Template approval is owner decision OD-045.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-34 Offboarding checklist generation — OPS-047
-1. **Purpose.** Make sure nothing is left with a person who is leaving.
-2. **Inputs.** Employee, open asset assignments, owned tasks, leads with an open admission, open admissions, active responsibilities, setting `hr.offboarding_checklist`, last working day (LWD).
-3. **Output.** Items by kind: asset return, ownership transfer, access revocation, final settlement, exit interview.
-4. **Preconditions.** An offboarding case with a last working day not before the employment start date.
-5. **Rules.** One asset return per open assignment (due LWD, completed from the asset register); one hand-over per owned record (due LWD minus N days, setting); access revocation (due LWD + 1, system); final settlement (required per setting); exit interview (optional). `refresh` adds new items idempotently by item key.
-6. **Steps.** Collect records → build items → insert the missing ones.
-7. **Edge cases.** An LWD before the start date → 400.
-8. **Permissions.** `ops:lifecycle:manage`.
-9. **Tests.** `hr-lifecycle-cases.test.ts` "generates asset returns and ownership transfers…", "refuses a last working day before the employment start date".
-10. **Limitations.** Notice period is not modelled (OD-045).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-35 Checklist item rules — OPS-046, 047
-1. **Purpose.** Stop items being ticked without the thing having happened.
-2. **Inputs.** Item kind, requested status, note, evidence.
-3. **Output.** Allowed or refused (400/409).
-4. **Preconditions.** Case live.
-5. **Rules.** `asset_return` and `access_revocation` are never marked done by hand; `ownership_transfer` is done only through the transfer action (which reassigns the record); `not_applicable` and `blocked` need a note; final settlement needs evidence.
-6. **Steps.** Check kind → check status → store with `completed_by/at`.
-7. **Edge cases.** A returned asset completes its item from the asset register.
-8. **Permissions.** `ops:lifecycle:manage` (all scope).
-9. **Tests.** `hr-lifecycle-cases.test.ts` (item cases).
-10. **Limitations.** Evidence is a text reference, not a file.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-36 Completion gating and separation — OPS-046, 048
-1. **Purpose.** Approve only when required work is done, and apply a separation exactly once on the right day.
-2. **Inputs.** Case, items, approver, IST today, last working day.
-3. **Output.** Approval; employment `separated`; staff `inactive`; one `ops.employee.separated` v1 event; case `completed`.
-4. **Preconditions.** Approver is not the employee; `{confirm: true}`.
-5. **Rules.** Gaps = required items still unresolved (offboarding excludes access revocation). Onboarding approval → employee `active` with an employment-history row. Offboarding approval → employee `on_notice`. A separation is due when IST today is after the last working day; `runSeparations` then applies it. Retraction before that returns the employee to `active`.
-6. **Steps.** `applySeparation`: employment status → separated, staff → inactive, `publishSeparation` in the same transaction, case completed. With no login the access item is done at once.
-7. **Edge cases.** Running the job twice publishes once. Self-approval → 403.
-8. **Permissions.** `ops:lifecycle:approve`; retraction also needs it.
-9. **Tests.** `hr-lifecycle-cases.test.ts` ("approval puts the employee on notice; separation publishes one event and history survives", "an employee without a login…", "an approved separation can be retracted…"); `hr-lifecycle-employee-journey.test.ts`.
-10. **Limitations.** No scheduler; jobs run from the screens or the jobs route.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-37 Access revocation sync — OPS-048
-1. **Purpose.** Show the true state of the login shutdown on the offboarding case.
-2. **Inputs.** Delivery of the separation event for consumer `platform.access-revocation`; platform audit `user.access_revoked`.
-3. **Output.** Access item `done` with evidence, or `blocked` with the error.
-4. **Preconditions.** Separation event published.
-5. **Rules.** A processed delivery plus the audit row (`metadata.eventId`, `sessionsDeleted`) completes the item; a dead delivery blocks it. The platform consumer disables the login and deletes sessions once per event.
-6. **Steps.** `processAccessRevocations` reads delivery and audit → updates the item.
-7. **Edge cases.** A rerun changes nothing.
-8. **Permissions.** Runs with the lifecycle jobs (`ops:lifecycle:approve`).
-9. **Tests.** Platform `access-revocation.test.ts` (3 cases); `hr-lifecycle-cases.test.ts`.
-10. **Limitations.** No platform job route calls `processAccessRevocations` yet.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-38 Lifecycle reminders — OPS-046
-1. **Purpose.** Remind assignees once per day about overdue checklist items.
-2. **Inputs.** Items, IST today, case status.
-3. **Output.** Notifications and a stamp on the item.
-4. **Preconditions.** Item unresolved, due date before today, case live.
-5. **Rules.** One notification per item per IST day to the assignee, or to the HR managers when the item has none; `last_reminded_on` is stamped with today.
-6. **Steps.** Select → notify → stamp, in one transaction.
-7. **Edge cases.** A second run on the same day sends nothing.
-8. **Permissions.** `ops:lifecycle:approve` (job).
-9. **Tests.** `hr-lifecycle-cases.test.ts` "overdue items get one reminder per IST day".
-10. **Limitations.** No scheduler.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-39 Attendance calculations
-1. **Purpose.** Hours worked and the work date of a session. 2. **Inputs.** clock-in/out instants (UTC), break minutes, employee timezone. 3. **Output.** `workedMinutes` (null while open), `workDate`. 4. **Preconditions.** clock-out > clock-in. 5. **Rules.** worked = elapsed − unpaid break, never < 0; work date = calendar day of clock-in in the employee's IANA zone (an overnight session belongs to the day it started); max session length (`attendance.rules.maxSessionHours`, proposed 16) and break < session for manual/CSV/correction input. Timezone conversion uses `Intl` with two offset refinements (`domain/hr/calendar.ts`). 6. **Steps.** convert local inputs → instants → validate → store. 7. **Edge cases.** open session = null (not 0); DST gaps resolve to the earlier offset; break records are summed on clock-out. 8. **Permissions.** record (self), manage (manual). 9. **Tests.** unit "attendance hour calculations", "calendar and timezones". 10. **Limitations.** No sub-minute precision; zones with DST are handled but only IST is in use.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-40 Late / early flags and missing clock-out
-1. **Purpose.** Flag deviations from the assigned shift. 2. **Inputs.** session, shift window (template + work date + tz), grace minutes. 3. **Output.** `lateMinutes`, `earlyDepartureMinutes` (0 within grace, the full difference beyond it, null = not measured); missing clock-out flag. 4. **Preconditions.** a shift applies on the work date (assignment active, working weekday, not a holiday). 5. **Rules.** late if clock-in − shift start > `lateGraceMinutes`; early if shift end − clock-out > `earlyDepartureGraceMinutes`; missing clock-out when still open after shift end + `missingClockOutGraceMinutes`, or after clock-in + max session length when no shift applies or the clock-in was after the shift ended. 6. **Steps.** late at clock-in; early at clock-out; job `runMissingClockOutCheck(db, now)` claims each session atomically (`missing_clock_out_flagged_at IS NULL`), audits and notifies once. 7. **Edge cases.** no shift → "not measured", never "on time"; flags cleared on clock-out. 8. **Permissions.** job: `ops:jobs:run`. 9. **Tests.** unit "late / early flags with grace", "missing clock-out"; integration "missing clock-out job". 10. **Limitations.** No scheduler (manual button / jobs route).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-41 Overlap detection (sessions, assignments, leave)
-1. **Purpose.** Refuse double records. 2. **Inputs.** candidate vs existing rows of the same employee. 3. **Output.** conflicts. 4. **Preconditions.** per-employee advisory lock. 5. **Rules.** sessions overlap when intervals intersect (open = until now); one session per work date unless allowed. Assignments overlap on inclusive date ranges; with split shifts allowed they conflict only if the shifts overlap in local time on a shared weekday (week-minute model incl. overnight spill). Leave overlaps per half day with the employee's own pending/approved requests. 6. **Steps.** lock → load → compare → 409 with details. 7. **Edge cases.** cancelled/rejected/withdrawn rows ignored; superseded sessions ignored. 8. **Permissions.** as the write. 9. **Tests.** unit "overlap detection…", "assignment conflicts…", "overnight shift overlaps…", "detects overlap with own pending/approved leave"; integration conflicts. 10. **Limitations.** Leave does not check other people's leave (team availability shows it instead).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-42 Working-day counting (leave)
-1. **Purpose.** Days a leave request costs. 2. **Inputs.** span with parts, employee assignments, `leave.rules`, holidays for the employee's location. 3. **Output.** days (0.5 steps) + per-date breakdown with exclusions. 4. **Preconditions.** valid parts. 5. **Rules.** a date counts when it is a working weekday of the covering shift (or of the proposed default week Mon–Sat when no shift covers it) and not a holiday (approved, plus proposed if `countProposedHolidays`); start/end parts count 0.5. 6. **Steps.** iterate dates → classify → sum; a total of 0 is refused. 7. **Edge cases.** Sunday-only request → 400; location-specific holidays apply only to matching employees. 8. **Permissions.** request. 9. **Tests.** unit "counts working days…"; integration "counts working days (Sunday and the Sikar holiday excluded, half days)". 10. **Limitations.** Count fixed at request time; later holiday changes do not recount.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-43 Balance ledger
-1. **Purpose.** Balances without inventing entitlements. 2. **Inputs.** ledger rows per employee + type. 3. **Output.** `not_configured` or `{allocated, adjusted, used, reversed, balance}`. 4. **Preconditions.** none. 5. **Rules.** no allocation row → not configured (never 0); balance = allocation + adjustment − usage + reversal; usage written on approval, reversal on cancellation of approved leave (unique per request → idempotent); allocations/adjustments only by `ops:leave:manage`, never for oneself; accrual/carry-forward/encashment are `open` settings and nothing runs them. 6–7. Requests are not blocked by balance (entitlements open). 8. **Permissions.** read/manage. 9. **Tests.** unit "balance ledger…"; integration balance + cancellation cases. 10. **Limitations.** No leave year boundaries (period label is free text).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-44 CSV import
-1. **Purpose.** Bulk staff attendance from a file. 2. **Inputs.** CSV text, actor scope, existing sessions, rules. 3. **Output.** per-row results; on commit a batch. 4. **Preconditions.** `ops:attendance:manage`. 5. **Rules.** RFC 4180 parser; columns `employee_code, date, clock_in, clock_out` + optional `break_minutes, timezone, note`; `clock_out` `HH:MM` or `YYYY-MM-DD HH:MM`; ≤ 5000 rows, ≤ 2 MB; every row validated independently; file sha256 unique. 6. **Steps.** hash → already imported? return batch → parse → validate → preview, or (commit) lock → re-check hash → re-validate inside the transaction → insert batch + valid sessions → audit. 7. **Edge cases.** BOM, CRLF, lone CR, blank lines, quoted commas/newlines, malformed quotes (file error with line). 8. **Permissions.** manage + HR scope per row. 9. **Tests.** unit CSV suites; integration "CSV import". 10. **Limitations.** Changing one byte makes a new file (duplicate rows are then row errors).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-45 Timesheet summary — OPS-059
-1. **Purpose.** Show scheduled against worked time per employee or department without judging anyone.
-2. **Inputs.** Shift assignments, holidays, sessions, corrections and approved leave for the period (at most 62 days).
-3. **Output.** Per day: scheduled minutes (or "not scheduled" with the reason), worked minutes of closed non-superseded sessions, flags, leave, pending corrections. Per period: totals as measured values.
-4. **Preconditions.** The caller holds `ops:hr_reports:read` covering the staff.
-5. **Rules.** Scheduled is missing when no day in the period has an assignment; worked is missing when no closed session exists; the "unapproved difference" is shown only when both are known (overtime records are not built).
-6. **Steps.** Load rows → classify each day → sum.
-7. **Edge cases.** No shift: "not measured", never "on time".
-8. **Permissions.** `ops:hr_reports:read`; the CSV needs `ops:hr_reports:export` and is audited as `timesheet.exported`.
-9. **Tests.** Unit "timesheet summary"; integration "timesheets, export and metrics" (3 cases).
-10. **Limitations.** Computed on read; range at most 62 days.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-46 Comment hiding — OPS-060
-1. Keep comments append-only while allowing mistakes to be withdrawn. 2. actor, author, manager flag, hidden flag, reason (`checkCommentHide`). 3. ok or `ALREADY_HIDDEN | NOT_ALLOWED | REASON_REQUIRED`. 4. Comment row locked. 5. Only author or all-scope task writer; reason required; once. 6. check → set hidden fields → audit `task.comment_hidden`. 7. Hidden body is withheld from own-scope readers; all-scope readers (manager, director, auditor) still see it. 8. tasks:write. 9. unit "comment hiding"; integration "only the author or a manager hides…". 10. No moderation workflow; text is never deleted.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-47 Supervisor review — OPS-062
-1. Second pair of eyes on selected completed tasks. 2. Review status, decision, note, decider, submitter, owner/reviewer/accountable logins, manager flag (`checkTaskReviewDecision`). 3. ok or `NOT_PENDING | SELF_REVIEW | OWNER_REVIEW | NOT_REVIEWER | NOTE_REQUIRED`. 4. Task and pending review locked. 5. Decider ≠ submitter; ≠ owner; = named reviewer, else accountable owner, or a manager; return needs a note. 6. completion with a requirement inserts cycle n+1 and notifies the reviewer(s); decision updates the review, a return reopens the task; both audited and the owner notified. 7. Owner cannot reopen while pending; requirement cannot be removed while pending. 8. Requirement: all-scope tasks:write; decision: tasks:write + rule. 9. unit table; integration 2 tests; inbox test. 10. One reviewer per cycle; no multi-step review.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-48 Reminders and overdue handling — OPS-063
-1. Tell owners before work falls due and when it is late. 2. Task status, due date, now, setting `tasks.reminders {leadDays: 1, notifyBackupWhenOverdue: true}` (proposed, OD-011), reminders already sent (`taskRemindersDue`). 3. `due_soon` / `overdue` kinds to send. 4. Open tasks with a due date. 5. due_soon when 0 ≤ days until due ≤ leadDays (IST); overdue when the due date has passed; each once per task + due date. 6. Job inserts a `task_reminders` row (unique) then notifies owner → else accountable → else operations managers, plus backup for overdue; audits `task.reminder_sent`. 7. Late UTC evening counts as the next IST day (tested); a changed due date is reminded again; tasks without due date are never reminded (they are flagged `missing_due`). 8. Route jobs:run; scheduler calls the function. 9. unit table (10 cases); integration "reminder job…". 10. No scheduler yet; escalations (A-09) remain the follow-up for long overdue work.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-49 Activity history — OPS-060
-1. One readable history per task. 2. Audit events `entityType = task` (`describeTaskActivity`). 3. `{kind, summary}` per event, newest first. 4. Every task change is audited in its transaction. 5. Reassignment = owner/accountable/backup change; other changed fields listed by label; unknown actions shown verbatim. 6. Load ≤ 300 events + staff names → map. 7. System jobs show "System job". 8. tasks:read with participant scope. 9. unit table; integration "activity history". 10. Comment text is not repeated in the activity line (it is in the comments panel).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-50 SOP publication and review due — OPS-064
-1. Say truthfully whether an SOP is in force. 2. status, approved version, schedule, archive flag, IST today; review window (`sopPublicationState`, `reviewDueFlag`, `sopScheduleProblems`). 3. publication state; review flag not_set/overdue/due_soon/ok. 4. —. 5. the mapping in `docs/WORKFLOWS.md`; dates only on the approved version in force of a live SOP; review ≥ effective; window = setting `registers.review_due.dueSoonDays` (30, proposed). 6. PUT schedule upserts and audits `sop.schedule_set`. 7. No effective date = "approved — not published"; a new draft keeps the approved version and its dates in force. 8. sops:write to set; sops:read to see. 9. unit tables; integration "SOP effective date…", coordinator test. 10. The register's legacy `next_review_date` is shown when no version date is set.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-51 Required acknowledgements — OPS-065
-1. Know who has read the procedure in force. 2. Requirements (department / role), audience members, acknowledgements (`inAckAudience`, `acknowledgementStatus`, `acknowledgeProblems`). 3. acknowledged / outstanding / no-login lists; may-acknowledge. 4. Approved version in force. 5. Department audience = active staff of the department; role audience = active users holding the role; a person counts once per version; staff without a login are reported separately, never counted as acknowledged; read-only (auditor-only) principals cannot acknowledge; once per version. 6. Requirement insert notifies the audience; acknowledgement insert audited `sop.acknowledged`. 7. A newly approved version needs new requirements and acknowledgements (version-specific). 8. sops:write to require/withdraw; `ops:sops:acknowledge` + membership to acknowledge; names only for sops:write or dashboard:read. 9. unit tables; integration 2 tests. 10. Acknowledging needs `ops:sops:acknowledge` plus audience membership.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-52 Approvals inbox — OPS-068
-1. One place for every decision waiting for me. 2. Actor, `APPROVAL_SOURCES` (each `{key, label, permission, list(db, actor)}`). 3. Per source: status ok/unavailable, count (null when unavailable), items with link, readiness and blockers; total (null when every source failed). 4. Session. 5. Sources the actor lacks permission for are omitted; each source applies its record rules (SOP: not requester, not SOP owner; reviews: assigned reviewer; fee arrangements: not requester; task reviews: A-47; policies: not proposer); the inbox drops any item requested by the actor as a second guard; the inbox decides nothing — links go to the record. 6. Run sources in order, catch failures. 7. An SOP waiting for its reviewer is shown "Not yet" with the reason (the approver may still reject). 8. module:access + per-source permission. 9. `operations-approvals.test.ts`. 10. HR sources not registered yet (registration point in `server/approvals.ts`).
+1. One place for every decision waiting for me. 2. Actor, `APPROVAL_SOURCES` (each `{key, label, permission, list(db, actor)}`); today one source, fee arrangements. 3. Per source: status ok/unavailable, count (null when unavailable), items with link; total (null when every source failed). 4. Session. 5. Sources the actor lacks permission for are omitted; fee arrangements: not the requester; the inbox drops any item requested by the actor as a second guard and decides nothing — links go to the admission. 6. Run sources in order, catch failures. 7. A failed source is "unavailable", never 0. 8. module:access + `ops:admissions:approve`. 9. Platform `overview.test.ts` (inbox count and "Admission decisions"). 10. The SOP, SOP-review, task-review, policy and HR sources were removed with HR and Operations (owner, 2026-10-20, D-032; git 63da4e4).
 
 ## A-53 Incident resolution targets — OPS-068
-1. Flag incidents left open too long. 2. Status, severity, occurred/resolved instants, setting `incidents.resolution_sla {low 14, medium 7, high 2}` days (proposed, OD-011) (`incidentSla`). 3. state within/due_today/breached/resolved_within/resolved_late/unrated, target date, days open. 4. —. 5. Target = occurred date (IST) + N; compared on IST dates. 6. Computed on read. 7. Unknown severity → unrated. 8. incidents:read. 9. unit table; integration "incident resolution target flags". 10. Calendar days, not working hours (service hours are OD-011).
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-54 Blocked projects — OPS-067
-1. Surface projects that cannot move. 2. Project status, milestones with dependencies, counts of blocked linked tasks and open linked issues/blockers (`projectBlockReasons`). 3. Reasons (empty = not blocked). 4. Live projects only (planned/active/on_hold). 5. on_hold; missed milestone; planned milestone depending on a missed or overdue planned milestone; blocked tasks; open blockers. 6. Load and evaluate. 7. Completed/cancelled projects are never listed. 8. risks:read. 9. unit table; integration "blocked projects". 10. —
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-55 Policies & compliance register — OPS-066
-1. Let Elevate record its own policies and obligations with provenance and approval. 2. Entry, versions, settings catalogue (`nextPolicyStatus`, `policyProposalProblems`, `policyApprovalProblems`, `isSettingKey`). 3. New status / problems. 4. Entry row locked. 5. Text lives in versions; a draft is edited in place, anything else starts a new version; proposing needs requirement text and an accountable person; linked keys must be existing `SETTING_DEFINITIONS` keys; review ≥ effective; approval through core approvals policy `ops.policy.approve` (no self-approval) supersedes the previous approved version; retired entries are read-only. 6. As for SOPs (same pattern: request/decide/withdraw approval, audit each step). 7. Editing a proposed version → 409 (withdraw first). 8. settings:read / settings:manage (approval: `ops:settings:manage` or `ops:policies:approve`, never the proposer). 9. integration 3 tests; unit tables. 10. **Seeded with nothing**; Elevate OS never supplies or checks policy text; nothing is legal advice.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
 
 ## A-56 Operations KPIs — OPS-069
-1. **Purpose.** Point-in-time figures for the operations dashboard.
-2. **Inputs.** Tasks, reviews, SOP and acknowledgement rows, incidents, projects, the approvals inbox, event deliveries; IST today.
-3. **Output.** Metrics (`ok`, or `missing` with a reason) and tables by department and owner (`server/reports/operations.ts`).
-4. **Preconditions.** The caller holds `ops:dashboard:read`.
-5. **Rules.** Definitions are in `docs/KPI_DEFINITIONS.md` (K-OPS-01…14). Counts are real zeros; rates with a zero denominator are `missing`; capacity tables are sorted by name, never ranked; no targets (OD-027).
-6. **Steps.** Load in parallel → pure functions in `domain/kpis.ts`.
-7. **Edge cases.** A failed approval source marks the inbox total partial; if every source fails the total is `missing`.
-8. **Permissions.** `ops:dashboard:read`.
-9. **Tests.** Unit "operations KPIs: missing is not zero"; integration "operations report".
-10. **Limitations.** Unresolved integration errors read `core.event_deliveries` only.
+**Removed (owner, 2026-10-20, D-032)** — recoverable from git commit 63da4e4.
+
+
+---
+
+## Added on 20 Oct 2026: A-57 … A-84 (admissions workspace)
+
+Rules from the owner's admissions brief of 20 Oct 2026. The slice notes (once in `docs/parts/`, now deleted and merged here) used their own ids; code comments and test names still quote them, so the table maps old to new. Requirements: OPS-080 … OPS-121 (`requirements/REQUIREMENTS.md`). Status per D-013; nothing is Deployed.
+
+| Slice id | Now | Rule | Slice id | Now | Rule |
+|---|---|---|---|---|---|
+| D-1 | A-57 | Demo progress | A-MTG-1 | A-73 | Appointment overlap |
+| D-2 | A-58 | Demo view (Current / Upcoming / Previous) | A-MTG-2 | A-74 | Appointment status transitions |
+| D-3 | A-59 | Next class | A-MTG-3 | A-75 | Feedback rules (both directions) |
+| D-4 | A-60 | Attendance changes | A-FEE-1 | A-76 | Fee plan totals |
+| D-5 | A-61 | Reschedule and cancel | A-FEE-2 | A-77 | Instalment allocation |
+| D-6 | A-62 | Demo outcome | A-FEE-3 | A-78 | Instalment status |
+| D-7 | A-63 | Demo checklist | A-FEE-4 | A-79 | Reconciliation gate |
+| D-8 | A-64 | Follow-up urgency, setup gaps, KPI tiles | A-FEE-5 | A-80 | List fee status |
+| A-STU-1 | A-65 | Admission number | A-INT-1 | A-81 | Lead handoff intake |
+| A-STU-6 | A-66 | Student identity decision | A-REP-1 | A-82 | Admissions funnel |
+| (ADM-STU-01) | A-67 | Conversion transaction | A-REP-2 | A-83 | Demo conversion |
+| A-STU-2 | A-68 | Student populations | A-REP-3 | A-84 | Student summary |
+| (lifecycle edges) | A-69 | Student lifecycle transitions | | | |
+| A-STU-3 | A-70 | Results and attendance (comparable averages) | | | |
+| A-STU-4 | A-71 | Contact masking and contact search | | | |
+| A-STU-5 | A-72 | Student report fields | | | |
+
+The "D-n" ids in the demo slice are not decision-log entries; they were renamed to avoid the clash with `docs/DECISIONS.md`.
+
+## A-57 Demo progress — OPS-081 (changed 21 Oct 2026, D-038)
+1. **Purpose.** Show "2 of 3 days attended".
+2. **Inputs.** The demo's sessions (`day_number`, attendance, start) and `planned_day_count` copied at booking (`domain/demos.ts` `dayState`, `demoDays`, `demoProgress`).
+3. **Output.** `{ attended, planned, daysScheduled, sessionsAttended, liveSessions, label, sessionsLabel }`.
+4. **Preconditions.** None.
+5. **Rules.** A demo is 3 demo days (`admissions.demo.day_count`, approved); a day holds one or more classes. A day counts as attended when at least one of its classes was `present` or `late`. Day summary, first rule that applies: attended · scheduled (a class still to come or to record) · absent · excused · not recorded · cancelled · no class. Classes attended are shown separately and are never days. A day beyond the plan only through `admissions.demo.extension` (proposed, off). A substitute teacher is flagged.
+6. **Steps.** Group classes by day → day state → count attended days.
+7. **Edge cases.** Cancelled classes are ignored; a day whose classes were all cancelled is not attended. Existing classes from before `0007`: day N = class N.
+8. **Permissions.** Read with `ops:leads:read` (counsellor own).
+9. **Tests.** Unit `demos.test.ts` (D-1 day progress); integration `demos.test.ts`.
+10. **Limitations.** A missed day redone on a later date stays the same day number (no hidden 4th day).
+
+## A-58 Demo view (Current / Upcoming / Previous) — OPS-083
+1. **Purpose.** Put each demo in exactly one tab.
+2. **Inputs.** Outcome, sessions, now.
+3. **Output.** `current | upcoming | previous`.
+4. **Preconditions.** None.
+5. **Rules.** Outcome other than `open` → Previous. Otherwise Current from 00:00 IST on the calendar day of the earliest session that is not cancelled; before that day, or with no live session, Upcoming.
+6. **Steps.** Compare `istToday(first start)` with `istToday(now)`.
+7. **Edge cases.** 23:59:59 IST the day before → Upcoming; 00:00:00 IST → Current (tested at 18:29:59Z and 18:30:00Z). A cancelled first session is ignored. Converted demos stay in Previous with the admission number.
+8. **Permissions.** `ops:leads:read` (own scope = demo counsellor, case counsellor or lead owner).
+9. **Tests.** Unit "D-2 view at IST calendar boundaries"; integration "list views (GET /demos)".
+10. **Limitations.** Classification runs in the service after one SQL query; fine for hundreds of demos, move into SQL if volumes grow.
+
+## A-59 Next class — OPS-083
+1. **Purpose.** The "Next class" column and the "attendance to record" hint.
+2. **Inputs.** Sessions, now.
+3. **Output.** `{ next, awaitingRecord }`.
+4. **Preconditions.** None.
+5. **Rules.** Next = earliest `scheduled`/`rescheduled` session starting at or after now. Awaiting record = `scheduled`/`rescheduled` sessions that have already started.
+6. **Steps.** One pass over the sessions sorted by start.
+7. **Edge cases.** No pending session → no next class; the cell says so.
+8. **Permissions.** Read.
+9. **Tests.** Unit "D-3 next class".
+10. **Limitations.** None known.
+
+## A-60 Attendance changes — OPS-081, OPS-082
+1. **Purpose.** Legal attendance updates with a history.
+2. **Inputs.** Session (attendance, start), new value (`present | absent | not_recorded | scheduled`), reason, now.
+3. **Output.** OK with a `correction` flag, or a message (400/409).
+4. **Preconditions.** `ops:leads:write`, own scope.
+5. **Rules.** Same value refused. A cancelled session must be rescheduled first. `present`, `absent`, `not_recorded` only once the session has started. Changing a recorded value is a correction and needs a reason. Back to `scheduled` only as a correction. `present`/`absent` need `recorded_at` and `recorded_by` (DB CHECK).
+6. **Steps.** Lock demo and case → validate → update → one `demo_session_changes` row per changed field (first recording too) → recompute the legacy summary columns → audit `demo_session.attendance`. When an open demo has no pending session and at least one `present`, the case moves `demo_scheduled → demo_attended` and the demo follow-up is created (A-05).
+7. **Edge cases.** Corrections stay allowed after the demo is closed; reschedule, cancel and assign do not.
+8. **Permissions.** `ops:leads:write` (counsellor own).
+9. **Tests.** Unit "D-4 attendance changes"; integration "records, refuses before start, corrections need a reason and keep history".
+10. **Limitations.** Teachers cannot record attendance themselves (they hold no demo permission).
+
+## A-61 Reschedule and cancel — OPS-084
+1. **Purpose.** Move or cancel one demo class without losing what happened.
+2. **Inputs.** Session, new start (and optional end) or cancel, reason.
+3. **Output.** Updated session; change rows.
+4. **Preconditions.** Demo outcome `open`; `ops:leads:write`.
+5. **Rules.** Reason always required. Reschedule sets attendance `rescheduled` and keeps the class length unless an end is given. Cancel sets `cancelled`. An attended session cannot be rescheduled; only `scheduled`/`rescheduled` sessions can be cancelled; a cancelled or absent session can be rescheduled (make-up class). The reason goes to `exception_reason` and the change table.
+6. **Steps.** Lock → validate → update → change rows (`schedule`, `attendance`) → audit.
+7. **Edge cases.** Closed demo → 409.
+8. **Permissions.** `ops:leads:write` (own).
+9. **Tests.** Unit "D-5/D-6 session changes and outcome"; integration "reschedule needs a reason and marks the session rescheduled".
+10. **Limitations.** The teacher is notified only through the appointment flow, not on a demo-class reschedule.
+
+## A-62 Demo outcome — OPS-086
+1. **Purpose.** Close a demo without converting it.
+2. **Inputs.** Outcome (`declined | withdrawn | not_converted | cancelled`), reason.
+3. **Output.** Closed demo.
+4. **Preconditions.** Outcome `open`.
+5. **Rules.** Reason required (also DB CHECK `demos_outcome_reason`). `converted` is never accepted here (only A-67 sets it, together with `converted_admission_id`, DB CHECK `demos_converted_link`).
+6. **Steps.** Future pending sessions → `cancelled`, past unrecorded ones → `not_recorded` (with change rows) → set outcome, reason, time, actor → if the case is still `demo_scheduled` and the outcome is `cancelled` or `not_converted`, the case returns to `counselled` so a new demo can be booked; declined and withdrawn leave the pipeline to staff (closing a case as lost needs its closure code, A-03) → audit `demo.outcome_set`.
+7. **Edge cases.** Second close → 409. One open demo per case (unique partial index).
+8. **Permissions.** `ops:leads:write` (own).
+9. **Tests.** Integration "outcome needs a reason, cannot be converted by hand, closes pending sessions".
+10. **Limitations.** No reopen.
+
+## A-63 Demo checklist — OPS-085
+1. **Purpose.** The fee and admission checklist of brief §6.
+2. **Inputs.** Append-only `ops.checklist_entries` for the demo; sessions.
+3. **Output.** 11 items with status and latest entry; `done of total`.
+4. **Preconditions.** None to read; `ops:leads:write` to add an entry.
+5. **Rules.** Latest entry per item wins (tie: later row). No entry = pending. `waived` needs a reason (DB CHECK). Three items are derived from sessions and read-only: `sessions_recorded` (every session recorded), `mock_prepared` (furthest mock stage past pending; not applicable when no mock is planned), `mock_result_linked` (a session holds a result reference). Done = anything but pending. A fee discussion is never evidence of payment.
+6. **Steps.** Group entries by item → pick latest → merge derived items → count.
+7. **Edge cases.** Writing a derived item → 400.
+8. **Permissions.** Write `ops:leads:write` (own).
+9. **Tests.** Unit "D-7 checklist"; integration "checklist: waiver needs a reason, derived items are read-only, latest entry wins".
+10. **Limitations.** Enforcement before conversion is setting `admissions.demo.checklist_required` (`proposed`, off); when on, A-67 refuses conversion with 400.
+
+## A-64 Follow-up urgency, setup gaps and KPI tiles — OPS-083, OPS-087
+1. **Purpose.** The Follow-up column, the "Follow-ups due" tile and Upcoming's "Still to arrange".
+2. **Inputs.** The case's open follow-ups, sessions, counsellor, the filtered demo rows.
+3. **Output.** Urgency per row; list of gaps; five tile counts.
+4. **Preconditions.** None.
+5. **Rules.** Urgency = the case's earliest open follow-up with the A-06 due state (overdue from 00:00 IST the next day). Gaps: sessions not scheduled vs planned, sessions without a teacher, no counsellor. Tiles use the same filtered rows as the list, ignoring the view and follow-up filters: current, upcoming, follow-ups due (today or overdue), conversions this IST calendar month, admissions pending decision (demo students whose case is `admission_pending`).
+6. **Steps.** Computed with the list query.
+7. **Edge cases.** No follow-up → "none set".
+8. **Permissions.** Read.
+9. **Tests.** Unit "summaries" (mock stage, setup gaps, follow-up urgency).
+10. **Limitations.** Follow-ups belong to the admission case; there are no demo-level follow-ups.
+
+## A-65 Admission number — OPS-090, OPS-091
+**Changed 21 Oct 2026 (D-037, D-040):** numbers are 001, 002 … and are given only in the final confirmation (A-APP-4); a number is never changed; a manual number only for a legacy case without one.
+1. **Purpose.** A unique, gap-tolerant admission number per conversion.
+2. **Inputs.** Setting `admissions.number.format` (`proposed`; default `{prefix:'', separator:'-', includeYear:false, width:5}`), IST year; for manual numbers the value and a reason (`domain/admission-numbers.ts`).
+3. **Output.** A number such as `00001` (or `[prefix][sep][year][sep]seq` once the owner approves a format); a change row.
+4. **Preconditions.** Inside the conversion transaction (A-67) or the correction route.
+5. **Rules.** Counter row per scope key (`all` or `Y2026`) locked `SELECT … FOR UPDATE`; values already used by a manual number are skipped; then `next+1` is written. Manual: `ops:admission_number:override`, pattern `^[A-Za-z0-9][A-Za-z0-9/-]{0,39}$`, reason of at least 10 characters (DB CHECK on manual change rows). Every number given or changed writes `ops.admission_number_changes` (previous, new, kind, reason, actor, time).
+6. **Steps.** Upsert counter → lock → skip used → format → write admission number (unique index) → change row.
+7. **Edge cases.** Unique violation → `ConflictError` 409; the whole transaction rolls back, nothing partial is written. Extra programme cases of the same conversion carry no number (the student's number is on the primary case).
+8. **Permissions.** `ops:admissions:convert` for automatic numbers; `ops:admission_number:override` (operations manager only) for manual ones.
+9. **Tests.** Unit `admission-numbers.test.ts`; integration `conversion.test.ts` → "10 parallel conversions get 10 unique, consecutive numbers", "manual number: permission + reason ≥ 10 + change row; a taken number is 409 with nothing written".
+10. **Limitations.** Format not approved by the owner. Gaps appear after a rolled-back conversion only if a manual number filled the slot; the counter itself rolls back with the transaction.
+
+## A-66 Student identity decision — OPS-092, D-033
+1. **Purpose.** One `core.students` row per person; never a silent merge.
+2. **Inputs.** Identity already linked to the same (or merged) lead; contact candidates (lead student/guardian phones and emails, `ops.guardians`); the person's choice (`existingStudentIdentityId` or `createNewStudent`).
+3. **Output.** `link | create | review (candidates) | invalid`.
+4. **Preconditions.** Contacts normalised (A-01).
+5. **Rules.** Same lead identity → link. Otherwise any contact match → review unless the person picked a candidate or confirmed a new student. No match → create. A case admitted without a conversion gets the lead's identity or a new one (`applyTransition` side effect).
+6. **Steps.** Look up same-lead identity → contact candidates → decide.
+7. **Edge cases.** A chosen id that is not a candidate → 400. Review → 409 `IDENTITY_REVIEW` with candidate names; nothing written.
+8. **Permissions.** Part of `ops:admissions:convert`.
+9. **Tests.** Unit `student-lifecycle.test.ts` → "identity decision (never auto-merge)"; integration "a shared contact means review (409 with candidates)…".
+10. **Limitations.** The match rule itself is owner decision OD-044 (open); no contact data in core, so matching runs on Ops tables only.
+
+## A-67 Conversion transaction — OPS-089, OPS-093
+**Changed 21 Oct 2026:** conversion now creates the APPLICATION (A-APP-1) and reuses the identity made at demo booking; it gives no admission number (D-040), requests no enrolment and creates no fee agreement (`admissionNumber` / `requestEnrolment` in the body → 400). Steps 5 and 10 below describe the 20 Oct version.
+1. **Purpose.** Turn a demo into an admission once, keeping the demo history.
+2. **Inputs.** Demo, its case, the wizard body (identity verified, guardian confirmation, programme codes, batch or "to be assigned", delivery mode, effective date, fee plan reference, discount request, identity choice, manual number + reason, request enrolment); `Idempotency-Key` header.
+3. **Output.** 201 with the admission(s), student identity, number; a replay returns the stored response.
+4. **Preconditions.** Demo outcome `open`; case in a convertible status; programme codes form an allowed combination (`isAllowedCombination`, D-034); checklist resolved when `admissions.demo.checklist_required` is on.
+5. **Rules.** One transaction: lock demo and case → identity (A-66) → programmes (the second programme of a combination opens its own case for the same student) → advance the case to `admission_pending`, and on to `admitted` if the gate A-04 passes → number (A-65) → demo `converted` with `outcome_at/by` and `converted_admission_id` → optional fee-arrangement approval request (core approvals, no self-approval) → optional enrolment request (A-15, outbox in the same transaction) → audit.
+6. **Steps.** As in 5; any failure rolls everything back.
+7. **Edge cases.** Already converted → 409 naming the admission; closed demo → 409; identity review → 409; number taken → 409; checklist required and open → 400.
+8. **Permissions.** `ops:admissions:convert` (operations manager; counsellor own). GET preview writes nothing.
+9. **Tests.** `conversion.test.ts` → "401 signed out, 403 auditor and out-of-scope counsellor, 400 invalid body or combination", "converts once in one transaction…; a retry replays", "a cohort + entrance combination opens a second case for the same student".
+10. **Limitations.** One admission number per conversion and each programme case passes the gate itself; whether a combination should share one number and one checklist is an owner question.
+
+## A-68 Student populations — OPS-095
+1. **Purpose.** Decide which list a student appears in.
+2. **Inputs.** Admission status, `held_from_status`, `admitted_at`.
+3. **Output.** `active | on_hold | former | in_admission`.
+4. **Preconditions.** Admission has a student identity.
+5. **Rules.** Active = `enrolled` (Academic confirmed). On hold = `on_hold` held from `enrolled`. Former = an exit status or `lost` after admission. Anything else is still in admission. Past demos (never converted) are demo records, listed in their own tab, never as former students.
+6. **Steps.** SQL filter per view; counts from the same query.
+7. **Edge cases.** A student with several cases appears once per view (A-84 for the summary order).
+8. **Permissions.** `ops:students:read` (counsellor own).
+9. **Tests.** Unit "populations"; integration "active lists enrolled only…".
+10. **Limitations.** Active stays empty until Academic confirms enrolments.
+
+## A-69 Student lifecycle transitions — OPS-094
+1. **Purpose.** Hold, resume, exit and reactivate with reasons and history.
+2. **Inputs.** Action (`hold` with review date, `resume`, `exit` with status, date, feedback, fee reference, `reactivationAllowed`, `reactivate`), reason (3+ characters), actor.
+3. **Output.** Updated admission; transition row; exit record when exiting.
+4. **Preconditions.** Edges live in `domain/pipeline.ts`, guarded so only the lifecycle service applies them.
+5. **Rules.** `enrolled → on_hold`; `on_hold → enrolled` (resume to held status); `enrolled`/`on_hold(enrolled)` → `withdrawn | completed | transferred | other_inactive` (`other_inactive` proposed); `admitted`/`on_hold(admitted)` → `cancelled_before_enrolment`; every exit status → `admitted` (reactivation; enrolment must be requested again). Every move needs a reason and is audited. Reactivation needs `ops:students:reactivate`, an exit record with `reactivation_allowed`, and an approver other than the person who recorded the exit; the record gets `reactivated_by/at` once.
+6. **Steps.** Lock → check edge → write status + `hold_review_date` → transition row → exit record → audit.
+7. **Edge cases.** Illegal edge → 409; missing reason → 400; reactivation by the recorder → 403. Nothing is ever deleted.
+8. **Permissions.** `ops:students:lifecycle` (operations manager; counsellor own); `ops:students:reactivate` (operations manager).
+9. **Tests.** Unit "student lifecycle transitions"; integration "hold (reason + review date)…", "exit writes an exit record…; reactivation needs permission, an allowing record and another approver".
+10. **Limitations.** Academic is not told about an exit (no event yet); the enrolment in Academic stays as it is.
+
+## A-70 Results and attendance (comparable averages) — OPS-097, OPS-121
+1. **Purpose.** Show Academic results without inventing numbers.
+2. **Inputs.** Per-student summary from Academic (`academicStudentSummarySchema` in `src/server/students.ts`, contract IR-OPS-STU-1).
+3. **Output.** Groups by exam type and maximum with average, coverage ("2 of 3 scored"); attendance present ÷ recorded with as-of time; or a state.
+4. **Preconditions.** Contract reachable.
+5. **Rules.** Average only within the same exam type and maximum. Unscored rows count in the shown denominator, never as 0. No data → "No results recorded". Academic unreachable → "Source unavailable (checked …)".
+6. **Steps.** `fetchInternal` → group → average.
+7. **Edge cases.** No scores → null average, not 0.
+8. **Permissions.** `ops:students:read`.
+9. **Tests.** Unit "comparable averages (missing is never zero)".
+10. **Limitations.** Academic does not serve the contract yet, so every profile shows "Source unavailable".
+
+## A-71 Contact masking and contact search — OPS-096, OPS-098
+1. **Purpose.** Protect minors' contacts while letting authorised staff find a student by phone.
+2. **Inputs.** Search term, reader's permissions.
+3. **Output.** Matching students; masked numbers.
+4. **Preconditions.** Contacts normalised (A-01).
+5. **Rules.** Phones shown masked (`+91 •••• ••12 34`) and only in a contact search. Contact search needs `ops:student_private:read`, matches partial numbers of 4+ digits, and writes an audit row `student.contact_search` with a masked value. Guardian contacts never enter audit rows.
+6. **Steps.** Permission check → normalise → match student and guardian contacts → audit.
+7. **Edge cases.** Without the permission the `contact` parameter is refused (403).
+8. **Permissions.** `ops:student_private:read` (operations manager; counsellor own).
+9. **Tests.** Unit "privacy helpers"; integration "search by name and admission number; contact search only with private access, masked and audited", "guardians (restricted)".
+10. **Limitations.** Older lead audit rows still hold contacts (redacted on read, A-18).
+
+## A-72 Student report fields — OPS-099
+1. **Purpose.** A student report that only contains what the reader may see, with a trail.
+2. **Inputs.** Student, period `from ≤ to`, reader's permissions.
+3. **Output.** Report and an `SR-XXXXXXXXXX` reference.
+4. **Preconditions.** `ops:student_reports:generate`.
+5. **Rules.** Groups `overview, programmes, results, attendance, feedback` always; `fees` only with `ops:fees:read`; `guardians` only with private access. Each generation writes `ops.report_exports` (who, when, period, groups) and an audit row. Reopening a reference shows the intersection with the reader's current permissions. The page prints from the browser; nothing is emailed and the page never claims it was.
+6. **Steps.** Decide groups → load persisted rows → insert export → audit.
+7. **Edge cases.** Missing sections say "unavailable", never zero.
+8. **Permissions.** `ops:student_reports:generate` (operations manager; counsellor own).
+9. **Tests.** Integration "generation writes an export row + audit with the permitted field groups; reference reopens it".
+10. **Limitations.** No PDF library; browser print only.
+
+## A-73 Appointment overlap — OPS-102
+1. **Purpose.** No double booking of a teacher or counsellor.
+2. **Inputs.** Candidate slot, the staff member's nearby appointments and scheduled demo classes, buffer minutes (setting `appointments.scheduling`, `proposed`) (`domain/appointments.ts` `slotsOverlap`, `findClash`).
+3. **Output.** The first clash or none.
+4. **Preconditions.** End after start.
+5. **Rules.** Half-open intervals `[start, end)`; clash when `a.start < b.end + buffer` and `b.start − buffer < a.end`. Only `proposed | scheduled | confirmed | rescheduled` block. A reschedule ignores itself. A demo session without an end uses the default length.
+6. **Steps.** Inside the transaction take a per-staff `pg_advisory_xact_lock`, lock nearby rows `FOR UPDATE`, check, insert.
+7. **Edge cases.** Touching edges allowed; a cancelled slot is free again; 409 names the clash with `details[0].path = ['startsAt']`.
+8. **Permissions.** `ops:appointments:manage`.
+9. **Tests.** Unit "A-MTG-1 appointment overlap"; integration "409 on overlap naming the clash…", "concurrent overlapping bookings: exactly one succeeds".
+10. **Limitations.** The demo-class clash path has no automated test.
+
+## A-74 Appointment status transitions — OPS-101
+1. **Purpose.** Legal appointment moves with history.
+2. **Inputs.** Current status, action (`confirm | reschedule | cancel | complete`), reason, now.
+3. **Output.** New status and change rows.
+4. **Preconditions.** `ops:appointments:manage` (own scope).
+5. **Rules.** proposed → scheduled / confirmed / rescheduled / cancelled; scheduled → confirmed / rescheduled / completed / cancelled; confirmed → rescheduled / completed / cancelled; rescheduled → confirmed / rescheduled / completed / cancelled; completed and cancelled are final. Reschedule and cancel need a reason (cancel also a DB CHECK); an outcome only after the start time. Every change writes `appointment_changes` rows (status, starts_at, ends_at, outcome) with actor and reason. Counselling linked to an admission moves the case (contacted → counselling_scheduled → counselled; last cancelled → contacted).
+6. **Steps.** Lock → check → overlap (A-73) on reschedule → update → change rows → notify the teacher in-app → audit.
+7. **Edge cases.** Illegal move → 409.
+8. **Permissions.** As 4.
+9. **Tests.** Unit "A-MTG-2 appointment status transitions"; integration "reschedule keeps history with reason and re-checks overlaps; cancel needs a reason".
+10. **Limitations.** No reminder job; email/SMS are simulated.
+
+## A-75 Feedback rules (both directions) — OPS-106, OPS-107
+1. **Purpose.** Keep teacher→student and student/guardian→teacher feedback apart.
+2. **Inputs.** Author, target, body; moderation action.
+3. **Output.** Feedback rows; rating summary.
+4. **Preconditions.** The two directions use two tables.
+5. **Rules.** Teacher → student: author or `ops:feedback:manage`; a teacher writes only as self and only about students met in an appointment or demo class; a draft is edited in place; editing a final row inserts version n+1 with `supersedes_id` (unique, so no forks); superseded versions are read-only (409). Student/guardian → teacher: recorded by staff (`ops:feedback:record`), no edit path at all; moderation pending → approved | rejected | hidden, approved ↔ hidden, rejected final; the teacher it is about can never moderate it (403), even with the permission. The rating summary averages approved rated rows only and shows the denominator.
+6. **Steps.** Check author/scope → insert or version → audit.
+7. **Edge cases.** Rating outside 1–5 → 400 (also DB CHECK).
+8. **Permissions.** `ops:feedback:read`, `:write` (teacher own), `:manage`, `:record`, `:moderate`.
+9. **Tests.** Unit "A-MTG-3 feedback rules"; integration `feedback.test.ts` (all cases).
+10. **Limitations.** After enrolment, teacher→student feedback may belong to Academic (IR-OPS-MTG-2). Rating scale 1–5 is a proposal.
+
+## A-76 Fee plan totals — OPS-109, OPS-110
+Superseded on 21 Oct 2026 by **A-FEE-1** (annual fee agreements, D-039) in "Added on 21 Oct 2026" below.
+
+## A-77 Instalment allocation (proposed) — OPS-111
+Superseded on 21 Oct 2026 by **A-FEE-2** (annual fee agreements, D-039) in "Added on 21 Oct 2026" below.
+
+## A-78 Instalment status — OPS-111
+Superseded on 21 Oct 2026 by **A-FEE-3** (annual fee agreements, D-039) in "Added on 21 Oct 2026" below.
+
+## A-79 Reconciliation gate — OPS-112
+Superseded on 21 Oct 2026 by **A-FEE-4** (annual fee agreements, D-039) in "Added on 21 Oct 2026" below.
+
+## A-80 List fee status — OPS-113
+1. **Purpose.** One fee word per student in lists.
+2. **Inputs.** Students' active plans and instalment statuses (`feeStatusForStudents(db, studentIds, now?)`).
+3. **Output.** `paid | due | overdue | not_configured`.
+4. **Preconditions.** Caller shows it only to holders of `ops:fees:read` (no check inside).
+5. **Rules.** No active plan → not configured (a draft is not configured). Any overdue instalment → overdue. All paid → paid. Else due.
+6. **Steps.** One query per list.
+7. **Edge cases.** Missing plan never shows as paid.
+8. **Permissions.** See 4.
+9. **Tests.** Unit "student fee status for lists"; integration "feeStatusForStudents: missing plan is not_configured…".
+10. **Limitations.** None known.
+
+## A-81 Lead handoff intake — OPS-115
+1. **Purpose.** One Ops lead per Marketing lead, attribution kept.
+2. **Inputs.** `marketing.lead.handed_off` v1 events (outbox, consumer `ops.lead-intake`).
+3. **Output.** Receipt status `received | duplicate_review | accepted | failed`; lead.
+4. **Preconditions.** Source code exists in `ops.lead_sources`.
+5. **Rules.** Upsert the receipt by `marketing_lead_id` (unique). A later event for a receipt that is not failed only increments `duplicate_deliveries` (audited `lead_handoff.duplicate_ignored`). Otherwise process in a savepoint: map course interest to a programme code (code or name, case-insensitive; else keep the text in the lead notes), `createLead` (normalised contacts, first enquiry with source, channel and campaign ref, admission case, follow-up, audit, duplicate flags), record consent in `ops.contact_preferences`. Any duplicate match → `duplicate_review` (existing queue, never merged), else `accepted`.
+6. **Steps.** Per event as in 5; an error rolls back the savepoint only and marks the receipt `failed` with the message and attempt count. Retry by job (fewer than 5 attempts) or by the manager route.
+7. **Edge cases.** Unknown source → failed until the source exists; refused consent stores no channels.
+8. **Permissions.** `ops:jobs:run` + `ops:lead_handoffs:manage`; list with `ops:leads:read` (attribution only with `ops:lead_attribution:read`).
+9. **Tests.** `lead-intake.test.ts` (5 cases).
+10. **Limitations.** Marketing does not publish the event yet (mock events only); rows are attributed to the user who ran the job (no system actor, IR-OPS-PLT-1); no scheduler (IR-OPS-PLT-2).
+
+## A-82 Admissions funnel — OPS-118
+1. **Purpose.** Lead → demo → enrolment counts with honest denominators.
+2. **Inputs.** Leads first received in the period (IST), demos, sessions, admissions.
+3. **Output.** Stages with count, denominator and rate.
+4. **Preconditions.** Merged leads excluded; own scope for counsellors.
+5. **Rules.** Stages, each counted only if its denominator stage was reached: leads → demo booked → attended at least one class → attended every planned class → converted → enrolled (converted admission has `enrolled_at`). Rate = count ÷ denominator, one decimal; denominator 0 → "Not enough data". Admissions without a demo are outside this funnel.
+6. **Steps.** Load rows → pure function in `domain/admissions-funnel.ts`.
+7. **Edge cases.** A later flag without its earlier stage does not count.
+8. **Permissions.** `ops:admissions:read`.
+9. **Tests.** Unit "A-REP-1 funnel is nested"; integration `admissions-report-funnel.test.ts`.
+10. **Limitations.** No targets (OD-027).
+
+## A-83 Demo conversion — OPS-118
+1. **Purpose.** Conversion rate by programme, counsellor and source.
+2. **Inputs.** Demos with a class in the period (same rule as the demo list's date filter, so links match).
+3. **Output.** Total and groups with rate.
+4. **Preconditions.** As A-82.
+5. **Rules.** Groups: programme (demo programme, else lead interest), counsellor, first source + campaign (only with `ops:lead_attribution:read`). Rate = converted ÷ demos with an outcome (open demos excluded); 0 decided → "Not enough data". Converted counts link to `/ops/admissions?view=previous&outcome=converted&…`.
+6. **Steps.** As A-82.
+7. **Edge cases.** No decided demos → no rate.
+8. **Permissions.** `ops:admissions:read`; source groups need attribution permission.
+9. **Tests.** Unit "A-REP-2 conversion rate = converted ÷ decided"; integration "counts persisted rows with their denominators; source/campaign only with attribution".
+10. **Limitations.** None known.
+
+## A-84 Student summary — OPS-118
+1. **Purpose.** Active, on hold and former counts.
+2. **Inputs.** Admissions with a student identity; A-68 populations.
+3. **Output.** `{ active, on_hold, former }`.
+4. **Preconditions.** None.
+5. **Rules.** Each student once, in the order active > on hold > former; in-admission ignored. Links go to `/ops/students?view=…`.
+6. **Steps.** Group by student.
+7. **Edge cases.** Students with several cases counted once.
+8. **Permissions.** `ops:admissions:read`.
+9. **Tests.** Unit "A-REP-3 student summary".
+10. **Limitations.** Active is 0 until Academic confirms enrolments.
+
+---
+
+## Added on 21 Oct 2026: applications, annual fees, reports, onboarding, events, exits, tasks, search
+
+Rules from the owner's brief of 21 Oct 2026 (admissions lifecycle) and the owner decisions D-038 … D-049. Code comments quote these ids. Status: Implemented, Tested (tests named per rule); nothing is Deployed. Where a 20 Oct rule above changed, the old entry points here.
+
+## A-04 (changed 21 Oct 2026) Readiness ends with final confirmation
+`evaluateAdmissionReadiness` (`domain/admission-readiness.ts`) always ends with the gap `final_confirmation`, so `POST /admissions/{id}/transitions to: admitted` is 409: only A-APP-4 admits. `admission_form` and `down_payment_verified` no longer gate; `admission.confirmation` is now `{ requireDocuments }`. The fee gap `fee_arrangement_approval` ("No active fee agreement approved by an authorised approver") closes only when the admission, or a case of its application, has an ACTIVE agreement activated by its own plan-bound approval (A-FEE-8). Tests: unit `admission-followups.test.ts` (readiness ends with `final_confirmation`); integration `applications.test.ts`.
+
+## A-APP-1 Application status machine — OPS-APP-1, OPS-APP-3
+1. **Purpose.** One application per primary admission case; never admits anyone by itself.
+2. **Inputs.** Application row, action, version sent by the client (`domain/applications.ts` `applicationActionBlocked`, `statusAfter`).
+3. **Output.** Next status or the reason it is blocked.
+4. **Preconditions.** Case in `admission_pending` (direct) or created by conversion / readmission.
+5. **Rules.** draft → ready_for_review → form_generated → signatures_confirmed → admission_confirmed; withdrawn from any status before confirmation. Any material save makes version N+1, sets status draft and invalidates the live signature confirmation. The reference `APP-nnnnnn` mirrors the case code `ADM-nnnnnn` (no new counter). Every case of an application carries `admissions.application_id` (the primary too).
+6. **Steps.** Lock the application → compare `version` → apply → audit.
+7. **Edge cases.** A stale version → 409 `STALE_VERSION`; a signature confirmation for a form of another version → 409.
+8. **Permissions.** `ops:admissions:write` (own scope); the form also needs `ops:student_private:read`.
+9. **Tests.** Unit `applications.test.ts` (status machine); integration `applications.test.ts`.
+10. **Limitations.** None known.
+
+## A-APP-2 Application content and hash — OPS-APP-2
+1. **Purpose.** Know exactly what was printed, signed and confirmed.
+2. **Inputs.** Student KYC (on the lead), guardians (or the lead's guardian), bundle programmes, batch / mode / start, academic year, the ACTIVE fee agreement and its instalments, `fees.registration`, `admissions.declarations`, the paper-form answers.
+3. **Output.** Snapshot + SHA-256 of its canonical JSON (keys sorted, `canonicalJson`).
+4. **Preconditions.** None.
+5. **Rules.** Material content = the snapshot; when the live content differs from the current version the screen says "Details changed since version N" (`changedParts`). The form PDF records version, template and SHA-256, prints "Application — admission pending" and a reference, never a number.
+6. **Steps.** Build snapshot → hash → compare.
+7. **Edge cases.** Declarations not configured → the block says so and confirmation is blocked.
+8. **Permissions.** As A-APP-1; KYC and form answers read only with `ops:student_private:read`.
+9. **Tests.** Unit `applications.test.ts` (canonical JSON), `admission-form.test.ts`, `admission-documents.test.ts` (3 A4 pages with long names, ₹, missing values).
+10. **Limitations.** Devanagari prints as "?" with a footer note (no complex-script shaping in pdf-lib).
+
+## A-APP-3 Information and confirmation gaps — OPS-APP-4, BR-OPS-6/7
+1. **Purpose.** List what still stops "ready" and the final confirmation.
+2. **Inputs.** Snapshot, settings (`admissions.kyc.required_fields`, `admissions.kyc.id_document_types`, `admissions.signatures.required_signers`, `admissions.declarations`, `admission.payment_gate`), verified identity documents, the live signature confirmation, ledger.
+3. **Output.** `informationGaps` (for ready) and `confirmationGaps` (adds the rest).
+4. **Preconditions.** None.
+5. **Rules.** Information: required KYC fields (a child's phone/email is satisfied by a guardian's); a guardian when the signer rule needs one or guardian fields are set; a programme; an approved fee agreement (= active plan); a counsellor. Confirmation adds: declarations approved (a proposed or missing text blocks — no self-approval of wording); mandatory ID document types verified; a live signature confirmation of the current version and a form of the same version; required signers by age ON THE SIGNING DAY (no date of birth ⇒ guardian); payment gate `none | registration_fee | first_instalment` over non-voided received minus refunds (`paymentGap`).
+6. **Steps.** Pure functions in `domain/applications.ts`.
+7. **Edge cases.** 18th birthday on the signing day = adult; a bundle case that is lost or held is never skipped silently (reported).
+8. **Permissions.** Read with the application.
+9. **Tests.** Unit `applications.test.ts` (gap tables, signers at the 18 boundary, payment gate table).
+10. **Limitations.** Approver role holders are Proposed (D-041).
+
+## A-APP-4 Final confirmation transaction — OPS-APP-4, D-040, D-041
+1. **Purpose.** The only way a case becomes `admitted`; gives the admission number.
+2. **Inputs.** `{ password, applicationVersion }`, the signed-in user (from the session, never the client).
+3. **Output.** 201 confirmation (number, approval row, enrolment request) or 200 `replayed: true`.
+4. **Preconditions.** Status `signatures_confirmed`, no gaps (A-APP-3).
+5. **Rules.** Lock the application row FOR UPDATE → lock the case (scope) → an existing approval for the same version replays it, for another version 409 → status, version and case checks → gaps → `verifyCurrentUserPassword` (always spends scrypt time; a Google-only account gets `no_password`; 5 failures in 15 min lock for 15 min). A failure writes audit `admission.confirm_failed` with the reason only, committed, then 403 / 429. Success: number from the counter FOR UPDATE written to the admission first → `admission_approvals` row (accepted snapshot: application, version, hash, signature, payment gate, paid; method and time of the re-check, never the password) → each bundle case `admitted` + `publishEnrolmentRequest` → application `admission_confirmed` → audit `admission.confirmed`.
+6. **Steps.** One transaction.
+7. **Edge cases.** Two clicks or a retry → one approval, one number (unique row + replay). The route does NOT use `defineRoute` idempotency: its stored hash would be an unsalted SHA-256 of a body holding the password, and it would roll back the failed-attempt audit.
+8. **Permissions.** `ops:admissions:confirm` (director, operations manager: Proposed).
+9. **Tests.** Integration `applications.test.ts` (acceptance 6–11, 18, 20, 21: wrong password, lock, replay, concurrent `Promise.all`, gaps); `packages/authentication/tests/reauth.test.ts` (8).
+10. **Limitations.** Google-only accounts (all real staff today) cannot confirm until the owner decides on Google re-authentication (D-041). The throttle is per process memory. Legacy admissions (before `0007`) show "Legacy — verification required" and are reconciled with `POST /admissions/{id}/legacy-verification` (note ≥ 10, audited); no approval is invented for them.
+
+## A-FEE-1 … A-FEE-7 Annual fee agreements (replace A-76 … A-79) — D-039
+`domain/fee-plans.ts`, ledger helpers in `domain/fees.ts`. Permissions: read `ops:fees:read` (own scope); record `ops:fees:record`. Tests: unit `fee-plans.test.ts`, `fee-agreements.test.ts` (seeded property tests), `admissions-fees.test.ts`; integration `fee-plans.test.ts`, `admissions-fees.test.ts`. Money is integer paise; nothing here is a verified payment.
+- **A-FEE-1 `planTotals`.** Totals from effective ledger rows; `outstandingPaise = max(0, balance)`, `creditPaise = max(0, −balance)` (a credit is shown, never absorbed).
+- **A-FEE-2 `allocateInstalments(instalments, ledger, today)`.** Payments first, then reductions (discount + waiver + credit − debit). Each fills the instalments its rows name (`instalment_id`) first, then the others oldest due date first (no due date last). Links only set priority; the applied total = min(max(0, net + reductions), scheduled), never more than an instalment's amount.
+- **A-FEE-3 `instalmentStatus`.** `paid` | `waived_adjusted` (covered with any reduction) | `overdue` (a real due date before today, money left) | `part_paid` | `unpaid`. No "due soon" state (`fees.allocation.dueWindowDays` unused).
+- **A-FEE-4 `reconcilePlan`.** Issues: schedule ≠ tuition, refunds > payments, debits > reductions, foreign kinds or instalments. A credit is not an issue.
+- **A-FEE-5 `splitTuition(totalPaise, sharesPercent)`.** 50 / 25 / 25 (`fees.tuition_split`, approved): floor each share, remainder to the LAST. Registration and demo charges are outside the split (`charge_category`).
+- **A-FEE-6 `checkFeeStructureChange`.** Only an owner-approved figure can be approved; promoting needs `ops:admissions:approve` and a reason ≥ 10.
+- **A-FEE-7 `agreementStatus`, `nextDue`.** Overall state; overdue wins; a debit above the instalments stays owed.
+- **Ledger.** `effectiveRecords`: voided rows, reversal rows and the rows they reverse never count. A reversal is a linked row of the same kind, direction and amount with a reason; a refund is a `refund` linked to a `received` row, ≤ that payment less its earlier refunds. A payment with live refunds cannot be reversed or voided. `chargeSummary(records, category)` keeps tuition, registration and demo apart. Registration is charged once per student across admissions (₹5,000, D-044; per-year re-registration is an open owner question). Tuition rows without an agreement are refused while the student has an open one. Tuition is capped at ₹1,00,00,000.
+- **Versions.** One agreement per student and academic year (the bundle is charged once; the student row is locked FOR UPDATE). Adjust = close vN ("Replaced by version N+1: reason") + insert vN+1 (`supersedes_plan_id`, `adjustment_reason`); the ledger of a version is the rows of its whole chain; an old instalment link maps to the same instalment number. A new agreement after a closed one continues the chain. Closing or adjusting an ACTIVE agreement needs `ops:admissions:approve`.
+- **Demo credit.** `fees.demo_credit` is on, but nothing is credited automatically at confirmation: a credit is a manual `adjustment` credit with `demoId`, at most the demo fee paid (net), once.
+
+## A-FEE-8 Approval bound to one agreement version — BR-OPS-7
+1. **Purpose.** An approval can activate only the exact terms it approved.
+2. **Inputs.** The draft `fee_plans` row, core approvals with policy `ops.fee_agreement.version` (`server/approval-policies.ts`; subject type `fee_plan`, subject id = `fee_plans.id`).
+3. **Output.** `canActivate` per agreement; activation or 409.
+4. **Preconditions.** Both fee verifications recorded by two different people before the request (`POST /fee-plans/{id}/approval-request`).
+5. **Rules.** One pending request per version; the requester and the version's maker can never decide it (`POST /fee-plans/{id}/decision` approves or rejects only). Finance (`ops:fees:record`) then activates with the version's OWN latest approval, approved by someone other than the maker. Admission-level `ops.admission.fee_arrangement` approvals stay readable and activate nothing (the earlier fallback was removed). The Approvals inbox lists these requests (source `ops.fee_agreements`) with "Tuition ₹before → ₹after (change)" only for `ops:fees:read` holders.
+6. **Steps.** Request → decide → activate, each its own audited transaction.
+7. **Edge cases.** A sibling admission's or another year's approval, an approval requested before the version existed, a rejected or re-created draft: all refused (it.each of 10 reuse paths).
+8. **Permissions.** Request `ops:admissions:write`; decide `ops:admissions:approve`; activate `ops:fees:record`.
+9. **Tests.** Integration `fee-plans.test.ts` "an approval binds one exact agreement version"; `approvals-inbox.test.ts`.
+10. **Limitations.** Rule O2 (**Proposed**, owner to confirm): a discount, waiver or credit (not a demo credit) on an active agreement needs `ops:admissions:approve`, a reason, and a poster who is not the agreement's maker; today one such approver may post it alone (only the operations manager holds both permissions).
+
+## A-RPT-1 … A-RPT-5 Student progress reports — A-STU-5, IR-OPS-STU-1
+`domain/student-report.ts`, `server/student-report.ts`; PDF `progress-report/1`. Tests: unit `academic-evidence.test.ts`, `progress-report-pdf.test.ts`; integration `academic-reports.test.ts`.
+- **A-RPT-1 Sections by audience (`reportSections`).** Staff audiences: overview, programmes, results, attendance, feedback (`ops:feedback:read`), fees (`ops:fees:read`), guardians (private data). Guardian / student: overview, programmes, results, attendance, summary, plus fees totals only when an `ops:fees:read` holder asks for them. Readers see `readableSections` (today's permissions). Audiences come from `reports.audiences` (proposed; 400 when not enabled).
+- **A-RPT-2 Workflow (`reportTransition`).** draft → reviewed needs the review permission and a reviewer other than the creator; reviewed → final needs the review permission; draft → final only when `reviewBeforeFinal` is off; final never moves. The snapshot is built at draft creation and never refreshed, so the reviewer approves exactly what becomes final.
+- **A-RPT-3 Evidence.** Attended = present + late + partial; rate = attended ÷ (recorded − excused), null when 0. A comparison only within the result's own assessment and cohort, "Insufficient data" when fewer than 2 scored; trend per exam type over scored results (first → last %, |Δ| < 1 = level; fewer than 2 = insufficient); different maximum scores are labelled "formats differ … compared as percentages".
+- **A-RPT-4 Constructive summary.** Evidence lines from measured facts; strengths, areas and next steps only from SUBMITTED and SHAREABLE teacher reviews (never the observation text); empty → "No strengths recorded for this period."; next steps are titled "Proposed next step — not yet agreed with the teacher".
+- **A-RPT-5 Period.** "In period" = the IST calendar day of the instant (`inIstPeriod`).
+- **Source.** Attendance and results come from Academic `GET /academic/api/internal/v1/students/{academicStudentId}/summary` (`academic.student_summary` v1, rule A-ACD-STU-SUMMARY in `apps/academic-os/docs`); enrolment reviews by own-scope teachers fail closed when Academic is unreachable.
+
+## A-MTG-4 Demo review grid — A-MTG-3
+Per demo day and teacher, from the classes they taught: submitted (current final review) > draft > pending (taught a present/late class, no review) > not due. Teacher reviews live in one store (`ops.teacher_student_feedback`) with `scope` (general / demo_session / enrolment) and `visibility` (internal by default, shareable). Fed by `demoFeedbackByDay`. Tests: unit `academic-evidence.test.ts`; integration `academic-reports.test.ts`. Limitation: `demoFeedbackByDay` has no own-scope check of its own; its caller gates the demo (final wave item).
+
+## A-ONB-1 Onboarding checklist — owner brief §8
+1. **Purpose.** What a newly confirmed student still needs (KYC check, batch, registration payment, counselling, biometric, books, ID card).
+2. **Inputs.** Versioned templates (`ops.onboarding_templates`), the student's running cases, item status events, material moves (`domain/onboarding.ts`).
+3. **Output.** Items with status; counts; overdue.
+4. **Preconditions.** An admission.
+5. **Rules.** Copy from the latest ACTIVE version of each template whose programme codes overlap the student's cases and whose class category matches (null = any); several programmes = union by item key. A later version never rewrites items; "Add new template items" adds missing keys only; items can be added by hand or set Not applicable (kept in history). Status events are append-only, latest wins; blocked needs a note. Material items carry `programmeCode` and `requiredQuantity` (default 1): held ≥ required → Completed, 0 < held < required → In progress; manual "completed" refused until fully issued; return/replacement ≤ copies held. Biometric "completed" needs an evidence reference. Overdue = due date before IST today and not completed / not applicable (`isOnboardingOverdue`).
+6. **Steps.** Generate → record status / materials, each audited (`onboarding.*`).
+7. **Edge cases.** No matching template → message, nothing created.
+8. **Permissions.** Read `ops:students:read`; write `ops:admissions:write` (own scope); templates `ops:settings:read` / `ops:settings:manage`.
+9. **Tests.** Unit `onboarding.test.ts`; integration `student-kyc-onboarding.test.ts`.
+10. **Limitations.** The `proposed_standard` v1 template is a proposal (owner to confirm items, due days, owners); `catalogueCode` is a free code.
+
+## A-KYC-1 Identity documents, guardians, siblings — D-043
+Masked reference only (`checkMaskedReference` over the shared `isMaskedReference`: at most 4 digits and a mask character). A new document is unverified and supersedes the previous one of the same type and person (kept, linked). Verify / reject once (409 after), with `ops:kyc:verify` + private read; rejection needs a note. Exactly one live primary guardian (the first is primary automatically; the primary cannot be unset or archived while other live guardians exist; an archived guardian is never primary; promotion audit carries `demotedGuardianIds`). Sibling links never merge or change either record and need write + private access to BOTH students (refusal and unknown id are both 404). KYC history = audit rows with masked contacts and no address text. Tests: integration `student-kyc-onboarding.test.ts`. Limitations: no unlink of a wrong sibling link; no four-eyes on verification (owner question).
+
+## A-EVT-1 … A-EVT-3 Events and webinars — owner brief §12
+- **A-EVT-1 Audience (`server/events.ts`).** Canonical students whose SAME case matches every filter (populations, programmes, class/category, batches); empty populations use `events.eligibility` (proposed: demo and active; guardians invited). Resolved once into participant rows with a name snapshot; later additions and removals are explicit rows; editing the filter never rewrites them. Cases without a student identity are counted, not added. Capacity counts registered participants only. Own-scope staff reach only students whose case they counsel or lead they own; guardian names need all-scope `ops:student_private:read`; a removed student's guardians are removed too.
+- **A-EVT-2 Reach (`reachable`).** A known contact, consent `given` with the channel allowed on EVERY case of the student, and the guardian's own consent `given`. Anything unrecorded means "do not send".
+- **A-EVT-3 Send (`messageStatus`).** Only a provider reference proves a send; otherwise `simulated`. Scheduling sends nothing; a send needs `ops:event_messages:send`.
+Tests: unit `events.test.ts`; integration `events.test.ts`.
+
+## A-STU-7 Exit and readmission — owner brief §11
+1. **Purpose.** A returning student is readmitted without erasing history.
+2. **Inputs.** The exited case, `{ reason, programmeCode?, academicYear? }`.
+3. **Output.** A NEW case on the SAME lead and identity at `admission_pending`, with a new application (origin `readmission`, `previous_admission_id`).
+4. **Preconditions.** The case has an exit status; no open readmission; no live case of the same programme for the student.
+5. **Rules.** The closed case, its number and its exit record are untouched; the new case gets its own number only at final confirmation (D-040). Reactivating the exited case itself stays possible (`ops:students:reactivate`, never by whoever recorded the exit, only when the exit record allows it, refused while a readmission is open). Exit records add reason code (`admissions.closure_reasons`), prior batch, balance in paise (shown only with `ops:fees:read`; "Not recorded" when null), material status and closing notes.
+6. **Steps.** Lock every case of the student in id order (no deadlock between concurrent readmit / reactivate) → checks → create case + application → audit `student.readmission_started`.
+7. **Edge cases.** A second readmit → 409 naming the open one.
+8. **Permissions.** `ops:students:lifecycle` + `ops:admissions:write`.
+9. **Tests.** Integration `student-exit-readmission.test.ts`.
+10. **Limitations.** Academic does not yet stop attendance on exit (IR-OPS-EXIT-1 `ops.enrolment.closed`) and completion candidates need batch end dates (IR-OPS-EXIT-2).
+
+## A-TSK-1 … A-TSK-4 Daily tasks and end-of-day reports — owner decision 21 Oct 2026
+`domain/staff-tasks.ts` (pure), `server/staff-tasks.ts`, `server/eod-reports.ts`. Tests: unit `staff-tasks.test.ts`; integration `staff-tasks.test.ts`. Permissions: `ops:tasks:read`, `ops:tasks:write` (own scope = your tasks; logging for someone else needs all scope), `ops:eod:review`.
+- **A-TSK-1 `resolveTaskState`.** Statuses Not started / In progress / Done / Blocked / On hold. Done ⇒ 100 % and no reason. A reason explains the current status: a status change drops it unless given again. Blocked and on hold always need one (400 on `reason`).
+- **A-TSK-2 `isOverdue`.** Not done and past its due time, or past its due day when no time is set (IST).
+- **A-TSK-3 `nextOccurrence`.** Daily +1 day, weekly +7, monthly keeps the series' day of the month clamped to month end (31 Jan → 28 Feb → 31 Mar). Marking a recurring task done creates the next one.
+- **A-TSK-4 `buildEodSnapshot`.** Done = completed on the report day; open = due that day and not done; carried = due earlier and not done; overdue judged at now, or at the end of the report day once it is over; high priority first. One report per staff member and day.
+- **Submit / review / share.** Submit needs a reason on every not-done task (`missingReasons`), freezes the snapshot, sends it to the reporting manager (`core.staff_members.manager_id`, in-app notice); without an active manager with a login it goes to every `ops:eod:review` holder (shortcut). "Late" = submitted after the report day (IST). Review: an EOD reviewer or the manager it was sent to, never your own. Share by WhatsApp or email goes through the mock messaging adapter: "Simulated — not sent", audited.
+- **Limitations.** No weekly or monthly range report and no calendar view (not built).
+
+## A-SRCH-1 Search — owner brief §4
+`parseSearch` (`server/search.ts`): trimmed (≤ 100 characters); "contact-shaped" when it is an email (a@b.c) or phone-like with at least 4 digits. Under 2 characters → nothing. Groups leads / demos / applications / students, 10 hits each (+ "more"), each with its own read permission and own scope. Contact matching only with `ops:student_private:read`, audited `student.contact_search` with a masked value; phones returned masked to those holders only. The student list box (`app/students/_components/student-list.tsx`) treats 10+ digits or an email as a contact search; admission numbers are 3 digits, so they are never mistaken for a phone. Tests: unit `search.test.ts`, `student-contact-search.test.ts`; integration `search.test.ts`. Limitation: `GET /ops/search?q=` keeps the query in the URL, so host logs must drop query strings.

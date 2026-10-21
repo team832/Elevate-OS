@@ -3,11 +3,12 @@ import { requirePageAccess } from '@elevate/server-kit/next';
 import {
   Alert,
   AppShell,
+  ButtonLink,
   Card,
   DataTable,
   ErrorState,
+  FeatureStatusBadge,
   PageHeader,
-  StatusBadge,
 } from '@elevate/shared-ui';
 import { PLATFORM_PATHS } from '../../lib/shell';
 import { platformShell } from '../../server/shell';
@@ -19,16 +20,14 @@ const SOURCES = [
   {
     contract: 'MarketingSummaryV1',
     owner: 'Marketing OS',
+    figures: 'Ideas captured, content approved, posts scheduled and published',
     endpoint: '/marketing/api/internal/v1/summary',
-    state:
-      'Not built yet — wave 2 (Marketing) builds the endpoint, wave 3 (Integration) connects it here.',
   },
   {
     contract: 'AcademicDeliverySummaryV1',
     owner: 'Academic OS',
+    figures: 'Classes delivered, attendance rate, assessments, syllabus completion',
     endpoint: '/academic/api/internal/v1/summary',
-    state:
-      'Not built yet — wave 2 (Academic) builds the endpoint, wave 3 (Integration) connects it here.',
   },
 ];
 
@@ -52,35 +51,57 @@ export default async function DashboardPage() {
           description="The leadership dashboard needs the platform:dashboard:read permission."
         />
       ) : (
-        <div className="el-stack">
+        <>
           <PageHeader
             title="Leadership dashboard"
-            description="Consolidated view across Marketing OS, Academic OS and Business Ops OS."
+            description="Marketing and Academic figures for leadership, once each source is connected."
+            actions={
+              <ButtonLink href={PLATFORM_PATHS.home}>Today’s figures on the Overview</ButtonLink>
+            }
           />
-          <Alert tone="info" title="Consolidated reporting arrives in the integration wave">
-            No figures are shown here yet, on purpose. This page will display the modules’ summary
-            contracts once they exist; until then any number would be invented. When a source is
-            unreachable the dashboard will say “source unavailable” — it will never show zero in
-            place of missing data.
-          </Alert>
-          <Card title="Planned data sources">
-            <DataTable
-              columns={[
-                { key: 'contract', header: 'Contract', render: (r) => <code>{r.contract}</code> },
-                { key: 'owner', header: 'Owner' },
-                { key: 'endpoint', header: 'Endpoint', render: (r) => <code>{r.endpoint}</code> },
-                {
-                  key: 'status',
-                  header: 'Status',
-                  render: () => <StatusBadge tone="neutral">Proposed</StatusBadge>,
-                },
-                { key: 'state', header: 'Notes' },
-              ]}
-              rows={SOURCES}
-              rowKey={(r) => r.contract}
-            />
-          </Card>
-        </div>
+          <div className="el-stack">
+            <Alert tone="info" title="Not connected yet, so no figures are shown">
+              <p>
+                Marketing OS and Academic OS publish a summary, but this page does not read them
+                yet. Until it does, any number here would be invented. When a source cannot be
+                reached the page will say so; it never shows zero in place of missing data.
+              </p>
+              <ul>
+                {SOURCES.map((s) => (
+                  <li key={s.contract}>
+                    <strong>{s.owner}:</strong> {s.figures.toLowerCase()}
+                  </li>
+                ))}
+              </ul>
+            </Alert>
+            <Card title="Data sources" description="Where each figure will come from.">
+              <DataTable
+                compact
+                columns={[
+                  { key: 'owner', header: 'Source' },
+                  { key: 'figures', header: 'Figures' },
+                  {
+                    key: 'endpoint',
+                    header: 'Summary',
+                    render: (r) => (
+                      <div>
+                        <code>{r.contract}</code>
+                        <div className="el-field-hint">{r.endpoint}</div>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: 'status',
+                    header: 'Connected here',
+                    render: () => <FeatureStatusBadge status="Proposed" />,
+                  },
+                ]}
+                rows={SOURCES}
+                rowKey={(r) => r.contract}
+              />
+            </Card>
+          </div>
+        </>
       )}
     </AppShell>
   );

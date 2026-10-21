@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import {
@@ -20,6 +21,7 @@ import { ContentStateBadge, PlacementBadge } from '../../../ui/badges';
 import { MarketingPage, Section, type SearchParams } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Idea' };
 
 export default async function IdeaDetailPage({
   params,
@@ -122,6 +124,7 @@ export default async function IdeaDetailPage({
 
                 <Card title={`Content items (${d.contentItems.length})`}>
                   <DataTable
+                    compact
                     rows={d.contentItems}
                     rowKey={(i) => i.id}
                     empty={<EmptyState title="No content items yet" />}
@@ -178,6 +181,7 @@ export default async function IdeaDetailPage({
 
                 <Card title={`Placements (${d.placements.length})`}>
                   <DataTable
+                    compact
                     rows={d.placements}
                     rowKey={(p) => p.id}
                     empty={<EmptyState title="Not placed on any account yet" />}

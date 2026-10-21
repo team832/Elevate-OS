@@ -9,7 +9,8 @@
  */
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type FormEvent } from 'react';
-import { toBody, type FieldSpec } from './action-form';
+import { groupSections, toBody, type FieldSpec } from './action-form';
+import { FormSection } from './sections';
 
 interface Match {
   leadId: string;
@@ -21,7 +22,13 @@ interface Match {
   ownerName: string | null;
 }
 
-export function LeadCreateForm({ fields }: { fields: readonly FieldSpec[] }) {
+export function LeadCreateForm({
+  fields,
+  cancelHref,
+}: {
+  fields: readonly FieldSpec[];
+  cancelHref?: string;
+}) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [matches, setMatches] = useState<Match[] | null>(null);
@@ -57,7 +64,8 @@ export function LeadCreateForm({ fields }: { fields: readonly FieldSpec[] }) {
       setMessage(`${json.error?.message ?? 'Could not save.'} ${details}`.trim());
       return;
     }
-    router.push(`/ops/leads/${json.data.lead.id}`);
+    // Next adds the basePath itself (D-022).
+    router.push(`/leads/${json.data.lead.id}`);
   }
 
   function onSubmit(e: FormEvent) {
@@ -67,45 +75,50 @@ export function LeadCreateForm({ fields }: { fields: readonly FieldSpec[] }) {
 
   return (
     <form ref={formRef} onSubmit={onSubmit} className="el-stack" noValidate>
-      <div className="el-grid">
-        {fields.map((f) => {
-          const id = `lead-${f.name}`;
-          return (
-            <div key={f.name} className="el-field">
-              <label htmlFor={id}>
-                {f.label}
-                {f.required ? ' *' : ''}
-              </label>
-              {f.type === 'select' ? (
-                <select
-                  id={id}
-                  name={f.name}
-                  className="el-select"
-                  defaultValue={f.defaultValue ?? ''}
-                >
-                  {!f.required ? <option value="">—</option> : null}
-                  {f.options?.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              ) : f.type === 'textarea' ? (
-                <textarea id={id} name={f.name} className="el-textarea" rows={2} />
-              ) : (
-                <input
-                  id={id}
-                  name={f.name}
-                  className="el-input"
-                  type={f.type ?? 'text'}
-                  defaultValue={f.defaultValue}
-                />
-              )}
-              {f.hint ? <p className="el-field-hint">{f.hint}</p> : null}
-            </div>
-          );
-        })}
-      </div>
+      {groupSections(fields).map((g) => (
+        <FormSection key={g.title ?? 'lead'} title={g.title ?? 'Lead'}>
+          {g.fields.map((f) => {
+            const id = `lead-${f.name}`;
+            return (
+              <div
+                key={f.name}
+                className={f.type === 'textarea' ? 'el-field el-field-wide' : 'el-field'}
+              >
+                <label htmlFor={id}>
+                  {f.label}
+                  {f.required ? ' *' : ''}
+                </label>
+                {f.type === 'select' ? (
+                  <select
+                    id={id}
+                    name={f.name}
+                    className="el-select"
+                    defaultValue={f.defaultValue ?? ''}
+                  >
+                    {!f.required ? <option value="">—</option> : null}
+                    {f.options?.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : f.type === 'textarea' ? (
+                  <textarea id={id} name={f.name} className="el-textarea" rows={2} />
+                ) : (
+                  <input
+                    id={id}
+                    name={f.name}
+                    className="el-input"
+                    type={f.type ?? 'text'}
+                    defaultValue={f.defaultValue}
+                  />
+                )}
+                {f.hint ? <p className="el-field-hint">{f.hint}</p> : null}
+              </div>
+            );
+          })}
+        </FormSection>
+      ))}
       {matches ? (
         <div className="el-alert el-tone-warning" role="alert">
           <p className="el-alert-title">
@@ -158,9 +171,12 @@ export function LeadCreateForm({ fields }: { fields: readonly FieldSpec[] }) {
           {message}
         </div>
       ) : null}
-      <button type="submit" className="el-button el-button-primary" disabled={busy}>
-        {busy ? 'Saving…' : 'Create lead'}
-      </button>
+      <div className="ops-form-footer">
+        {cancelHref ? <a href={cancelHref}>Cancel</a> : null}
+        <button type="submit" className="el-button el-button-primary" disabled={busy}>
+          {busy ? 'Saving…' : 'Create lead'}
+        </button>
+      </div>
     </form>
   );
 }

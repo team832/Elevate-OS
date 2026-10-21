@@ -126,7 +126,7 @@ Browser-facing REST under `/academic/api/v1/…` built with `defineRoute` (401 �
 | Students & progress | `GET/POST students`; `GET students/:id`; `GET students/:id/progress`; `GET/POST enrolments`; `GET/POST batches/:id/catch-up`; `PATCH catch-up-tasks/:id`; `GET/POST interventions`; `PATCH interventions/:id` |
 | Intake | `GET enrolment-intake`; `POST enrolment-intake/run` |
 | Settings | `GET settings`; `PUT settings/:key` |
-| Internal | `GET /academic/api/internal/v1/summary` (bearer `INTERNAL_SERVICE_TOKEN` + `X-Elevate-Caller: ops|platform`) → `AcademicDeliverySummaryV1` |
+| Internal | `GET /academic/api/internal/v1/summary` (bearer `INTERNAL_SERVICE_TOKEN` + `X-Elevate-Caller: ops|platform`) → `AcademicDeliverySummaryV1`; `GET /academic/api/internal/v1/students/{id}/summary` (caller `ops` only) → `AcademicStudentSummaryV1` (IR-OPS-STU-1) |
 | Platform | `GET health`, `POST auth/login`, `POST auth/logout` (Foundation) |
 
 ## 7. Events produced and consumed

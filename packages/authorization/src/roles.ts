@@ -38,42 +38,16 @@ export const ROLES: Readonly<Record<RoleKey, { label: string; description: strin
   operations_manager: {
     label: 'Operations manager',
     description:
-      'Runs Business Ops OS: tasks, SOPs, departments and staff (steward), admissions oversight.',
+      'Runs Business Ops OS: departments and staff (steward), settings, admissions oversight.',
   },
   auditor: {
     label: 'Auditor',
     description:
-      'Read-only access to explicitly authorised record sets. Never sees private HR, compensation or student-contact records. Can never change anything.',
-  },
-  hr_manager: {
-    label: 'HR manager',
-    description:
-      'Runs HR in Business Ops OS: employee records incl. private fields, recruitment decisions, onboarding/offboarding approval, attendance and leave approval, compensation records.',
-  },
-  hr_contributor: {
-    label: 'HR contributor',
-    description:
-      'Maintains employee records, recruitment, onboarding/offboarding checklists, attendance and leave records. No private HR fields, no compensation, no final approvals.',
-  },
-  recruiter: {
-    label: 'Recruitment staff',
-    description:
-      'Works requisitions, candidates, applications and interviews assigned to them. No selection decisions, no employee records.',
-  },
-  department_manager: {
-    label: 'Department manager',
-    description:
-      'Sees and approves attendance, corrections and leave for the people who report to them (directly or indirectly). No private HR fields or compensation.',
-  },
-  employee: {
-    label: 'Employee',
-    description:
-      'Self-service: own attendance, leave requests, shifts, documents and tasks; the non-sensitive staff directory.',
+      'Read-only access to explicitly authorised record sets. Never sees private student-contact records. Can never change anything.',
   },
   finance_officer: {
     label: 'Finance-authorised user',
-    description:
-      'Compensation records and exports, and manually recorded admission fee records. No payroll execution.',
+    description: 'Manually recorded admission fee records. No payroll execution.',
   },
 };
 

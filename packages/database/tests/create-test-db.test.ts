@@ -36,6 +36,7 @@ describe('createTestDb', () => {
       'programmes',
       'sessions',
       'staff_members',
+      'students',
       'user_roles',
       'users',
     ]);

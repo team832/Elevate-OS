@@ -55,6 +55,4 @@ export const assessmentFinalisedV1 = defineEvent({
   payload: assessmentFinalisedV1Payload,
 });
 
-export const academicEvents = [
-  assessmentFinalisedV1,
-] as const satisfies readonly EventDefinition[];
+export const academicEvents = [assessmentFinalisedV1] as const satisfies readonly EventDefinition[];

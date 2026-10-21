@@ -1,5 +1,5 @@
 import { defineRoute } from '@elevate/server-kit';
-import { checkDuplicates } from '../../../../../server/leads';
+import { checkDuplicates } from '../../../../../server/lead-duplicates';
 import { duplicateCheckBody } from '../../../../../server/schemas';
 
 export const dynamic = 'force-dynamic';

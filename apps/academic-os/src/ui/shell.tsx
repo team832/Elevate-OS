@@ -26,17 +26,23 @@ export type Section =
   | 'progress'
   | 'intake';
 
-const NAV: { key: Section; label: string; href: string; permission: Permission }[] = [
-  { key: 'home', label: 'Dashboard', href: MODULE_PATHS.home, permission: 'academic:module:access' },
-  { key: 'curriculum', label: 'Curriculum', href: MODULE_PATHS.curriculum, permission: 'academic:courses:read' },
-  { key: 'batches', label: 'Batches', href: MODULE_PATHS.batches, permission: 'academic:batches:read' },
-  { key: 'timetable', label: 'Timetable', href: MODULE_PATHS.timetable, permission: 'academic:timetable:read' },
-  { key: 'teaching', label: 'Teaching log', href: MODULE_PATHS.teaching, permission: 'academic:classes:read' },
-  { key: 'assessments', label: 'Assessments', href: MODULE_PATHS.assessments, permission: 'academic:assessments:read' },
-  { key: 'students', label: 'Students', href: MODULE_PATHS.students, permission: 'academic:students:read' },
-  { key: 'progress', label: 'Progress', href: MODULE_PATHS.progress, permission: 'academic:progress:read' },
-  { key: 'intake', label: 'Enrolment intake', href: MODULE_PATHS.intake, permission: 'academic:enrolments:read' },
+const NAV: { key: Section; label: string; href: string; permission: Permission; group: string }[] = [
+  { key: 'home', label: 'Dashboard', href: MODULE_PATHS.home, permission: 'academic:module:access', group: 'Today' },
+  { key: 'batches', label: 'Batches', href: MODULE_PATHS.batches, permission: 'academic:batches:read', group: 'Teaching' },
+  { key: 'timetable', label: 'Timetable', href: MODULE_PATHS.timetable, permission: 'academic:timetable:read', group: 'Teaching' },
+  { key: 'teaching', label: 'Teaching log', href: MODULE_PATHS.teaching, permission: 'academic:classes:read', group: 'Teaching' },
+  { key: 'students', label: 'Students', href: MODULE_PATHS.students, permission: 'academic:students:read', group: 'Students' },
+  { key: 'progress', label: 'Progress', href: MODULE_PATHS.progress, permission: 'academic:progress:read', group: 'Students' },
+  { key: 'intake', label: 'Enrolment intake', href: MODULE_PATHS.intake, permission: 'academic:enrolments:read', group: 'Students' },
+  { key: 'curriculum', label: 'Curriculum', href: MODULE_PATHS.curriculum, permission: 'academic:courses:read', group: 'Curriculum' },
+  { key: 'assessments', label: 'Assessments', href: MODULE_PATHS.assessments, permission: 'academic:assessments:read', group: 'Assessments' },
 ];
+
+/** Curriculum area tabs (courses and plans, concept-book indices). */
+export const CURRICULUM_TABS = [
+  [MODULE_PATHS.curriculum, 'Courses and plans'],
+  [MODULE_PATHS.conceptBooks, 'Concept-book indices'],
+] as const;
 
 /** requirePageAccess with the module's login path and basePath (browser paths, D-022). */
 export function gate(permission: Permission, returnTo: string): Promise<PageAccess> {
@@ -60,7 +66,7 @@ async function unreadFor(access: PageAccess): Promise<number | null> {
 /** Children render inside <Suspense> (fallback: loading). Call gate() before rendering this so the 307 is real (D-022). */
 export async function AcademicShell({ access, active, loading, children }: { access: PageAccess; active: Section; loading?: string; children: ReactNode }) {
   const user = access.user;
-  const nav = NAV.filter((n) => can(user, n.permission)).map((n) => ({ href: n.href, label: n.label, active: n.key === active }));
+  const nav = NAV.filter((n) => can(user, n.permission)).map((n) => ({ href: n.href, label: n.label, group: n.group, active: n.key === active }));
   return (
     <AppShell
       user={user}
@@ -69,7 +75,6 @@ export async function AcademicShell({ access, active, loading, children }: { acc
       logoutAction={MODULE_PATHS.logoutApi}
       nav={nav}
       search={can(user, 'academic:students:read') ? { action: MODULE_PATHS.students, label: 'Search students' } : undefined}
-      myWorkHref={can(user, 'ops:tasks:read') ? '/ops/tasks?view=mine' : undefined}
       unreadNotifications={await unreadFor(access)}
     >
       {access.status === 'forbidden' ? (

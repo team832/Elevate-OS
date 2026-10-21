@@ -1,6 +1,7 @@
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, Card, DataTable, EmptyState, PageHeader, StatTile, StatusBadge } from '@elevate/shared-ui';
+import { metric } from '@elevate/shared-contracts';
+import { Alert, Card, DataTable, EmptyState, MetricStrip, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import { addDays, type IsoDate } from '@elevate/shared-types';
 import { buildAcademicDeliverySummary, getIntakeQueue, listPlans, listSessions, todayIst } from '../server';
 import { MODULE_PATHS } from '../server/paths';
@@ -22,21 +23,12 @@ const LABELS: Record<string, string> = {
   syllabusCompletionRate: 'Syllabus completion (verified)',
 };
 
-function HoursTile({ label, value, note }: { label: string; value: number | null; note: string }) {
-  return value === null ? (
-    <div className="el-stat el-stat-missing" data-status="missing">
-      <p className="el-stat-label">{label}</p>
-      <p className="el-stat-value">Missing</p>
-      <p className="el-stat-note">{note}</p>
-    </div>
-  ) : (
-    <div className="el-stat" data-status="ok">
-      <p className="el-stat-label">{label}</p>
-      <p className="el-stat-value">{value} h</p>
-      <p className="el-stat-note">{note}</p>
-    </div>
-  );
-}
+/** Planned vs delivered hours (outside the summary contract; null = not measured). */
+const HOURS = [
+  ['hoursPlanned', 'Planned hours', 'Current locked or provisional plans. A plan, not delivery.'],
+  ['hoursDelivered', 'Delivered hours', 'Verified class records, all time.'],
+  ['hoursDeliveredInWindow', 'Delivered hours, 30 days', 'Verified class records in the window.'],
+] as const;
 
 export default async function DashboardPage() {
   const access = await gate('academic:module:access', MODULE_PATHS.home);
@@ -57,24 +49,11 @@ export default async function DashboardPage() {
 
   return (
     <AcademicShell access={access} active="home">
-      <PageHeader title="Academic OS" description={`Delivery figures for ${window.from} to ${window.to} (Asia/Kolkata). Planned figures are never shown as delivered; missing data is shown as missing, not zero.`} />
+      <PageHeader title="Academic OS" description={`Delivery from ${window.from} to ${window.to} (IST). Planned is never counted as delivered; missing is never zero.`} />
       <div className="el-stack">
         {summary ? (
           summary.ok ? (
-            <>
-              <div className="el-grid">
-                {Object.entries(summary.data.metrics).map(([key, metric]) => (
-                  <StatTile key={key} label={LABELS[key] ?? key} metric={metric} />
-                ))}
-              </div>
-              <Card title="Planned vs delivered hours" description={summary.data.extensions.note}>
-                <div className="el-grid">
-                  <HoursTile label="Planned hours (current plans)" value={summary.data.extensions.overall.hoursPlanned} note="Sum of planned minutes of active batches’ locked/provisional plans ÷ 60. A plan, not delivery." />
-                  <HoursTile label="Delivered hours (verified, all time)" value={summary.data.extensions.overall.hoursDelivered} note="Verified class records only." />
-                  <HoursTile label="Delivered hours in window" value={summary.data.extensions.overall.hoursDeliveredInWindow} note="Verified class minutes of sessions dated in the window." />
-                </div>
-              </Card>
-            </>
+            <Figures summary={summary.data} />
           ) : (
             <LoadError error={summary.error} />
           )
@@ -83,7 +62,7 @@ export default async function DashboardPage() {
         {mySessions ? (
           <Card title="Your sessions today" description="Sessions you teach. Log what you taught and take attendance from the teaching log.">
             {mySessions.ok ? (
-              <DataTable
+              <DataTable compact
                 rows={mySessions.data}
                 rowKey={(s) => s.id}
                 empty={<EmptyState title="No sessions today" description="Nothing is timetabled for you today." />}
@@ -109,8 +88,8 @@ export default async function DashboardPage() {
               ) : (
                 <p>
                   {planCounts.map(([status, n]) => (
-                    <span key={status} style={{ marginRight: '0.75rem' }}>
-                      <PlanBadge status={status} /> {n}
+                    <span key={status}>
+                      <PlanBadge status={status} /> {n}{' '}
                     </span>
                   ))}
                   <a href={MODULE_PATHS.curriculum}>Open curriculum</a>
@@ -123,7 +102,7 @@ export default async function DashboardPage() {
         ) : null}
 
         {intake ? (
-          <Card title="Enrolment intake" description="Requests from Business Ops (ops.admission.enrolment_requested).">
+          <Card title="Enrolment intake" description="Admissions confirmed in Business Operations, waiting to become enrolments.">
             {intake.ok ? (
               <p>
                 <StatusBadge tone={intake.data.waiting > 0 ? 'warning' : 'neutral'}>{intake.data.waiting} waiting</StatusBadge>{' '}
@@ -139,5 +118,48 @@ export default async function DashboardPage() {
         {!showSummary && !mySessions ? <Alert tone="info">The delivery summary needs academic:summary:read.</Alert> : null}
       </div>
     </AcademicShell>
+  );
+}
+
+/**
+ * Measured figures in one strip; figures that cannot be measured yet are listed together
+ * with their reasons (never drawn as 0), and every definition stays one click away.
+ */
+function Figures({ summary }: { summary: Awaited<ReturnType<typeof buildAcademicDeliverySummary>> }) {
+  const hours = summary.extensions.overall;
+  const all = [
+    ...Object.entries(summary.metrics).map(([key, m]) => ({ key, label: LABELS[key] ?? key, metric: m, definition: m.definition })),
+    ...HOURS.map(([key, label, definition]) => {
+      const value = hours[key];
+      const meta = { definition, window: summary.window, unit: 'hours' as const };
+      return { key, label, definition, metric: value === null ? metric.missing('Nothing to measure yet.', meta) : metric.ok(value, meta) };
+    }),
+  ];
+  const missing = all.filter((f) => f.metric.status === 'missing');
+  return (
+    <>
+      <MetricStrip label="Delivery figures" items={all.filter((f) => f.metric.status !== 'missing')} />
+      {missing.length ? (
+        <Alert tone="info" title={`Not measured yet (${missing.length})`}>
+          <ul>
+            {missing.map((f) => (
+              <li key={f.key}>
+                <strong>{f.label}:</strong> {f.metric.status === 'missing' ? f.metric.reason : null}
+              </li>
+            ))}
+          </ul>
+        </Alert>
+      ) : null}
+      <Card title="How each figure is counted">
+        <DataTable compact
+          rows={all}
+          rowKey={(f) => f.key}
+          columns={[
+            { key: 'label', header: 'Figure' },
+            { key: 'definition', header: 'Counted as' },
+          ]}
+        />
+      </Card>
+    </>
   );
 }

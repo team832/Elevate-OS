@@ -9,31 +9,26 @@
  * - link to the record where the decision is taken (the inbox decides nothing).
  * A source that throws is shown as "unavailable" (never as 0 items).
  *
- * HR sources (leave, attendance corrections, requisitions, offers, lifecycle
- * cases, compensation drafts, document deletions) live in `./hr/approval-sources`.
+ * Sources: annual fee agreement versions (D-039; decided here through the same decide function
+ * as the student's fee section) and the older admission-level fee arrangements. The SOP, task
+ * review, policy and HR sources were removed with HR and Operations (D-032).
  */
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, ne } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { can, type Permission } from '@elevate/authorization';
 import {
   approvals,
   opsAdmissions,
+  opsFeePlans,
   opsLeads,
-  opsPolicies,
-  opsPolicyVersions,
-  opsSops,
-  opsSopVersions,
+  students,
   users,
   type Database,
 } from '@elevate/database';
 import type { UserId } from '@elevate/shared-types';
-import { SOP_APPROVAL_PROBLEM_LABELS } from '../domain';
-import { feeArrangementPolicy, sopApprovalPolicy } from './approval-policies';
-import { accessScope, staffIdForUser, type Actor } from './context';
-import { HR_APPROVAL_SOURCES } from './hr/approval-sources';
-import { staffUserLookup } from './ops-common';
-import { policyApprovalPolicy } from './policies-register';
-import { sopApprovalCheck } from './sops';
-import { listTaskReviewsForDecider } from './tasks';
+import { ownAdmissionFilter } from './admissions';
+import { feeAgreementPolicy, feeArrangementPolicy } from './approval-policies';
+import { accessScope, type Actor } from './context';
 
 export interface ApprovalInboxItem {
   /** Stable id of the thing to decide (approval id, review id, version id). */
@@ -46,9 +41,14 @@ export interface ApprovalInboxItem {
   requestedAt: string;
   /** In-module browser path where the decision is taken. */
   link: string;
+  /** API path that decides it from the inbox (approve / reject), when the source allows that. */
+  decide?: string;
   /** False when the decision is possible but something must happen first (shown, not hidden). */
   ready: boolean;
   blockers: string[];
+  /** Tuition before → after (before null = a new agreement); only with ops:fees:read. */
+  beforePaise?: number | null;
+  afterPaise?: number;
 }
 
 export interface ApprovalSource {
@@ -58,6 +58,13 @@ export interface ApprovalSource {
   permission: Permission | readonly Permission[];
   list(db: Database, actor: Actor): Promise<ApprovalInboxItem[]>;
 }
+
+/** What the actor may see of a request: the student's name, and amounts (a request comment may name them). */
+const visibility = (actor: Actor) => ({
+  named: can(actor, 'ops:students:read'),
+  amounts: can(actor, 'ops:fees:read'),
+});
+const HIDDEN_NAME = 'Student (name hidden)';
 
 const holdsSourcePermission = (actor: Actor, p: ApprovalSource['permission']) =>
   (Array.isArray(p) ? p : [p]).some((x: Permission) => can(actor, x));
@@ -74,82 +81,6 @@ const inboxItem = (
 });
 
 // --- core sources --------------------------------------------------------------------------------
-
-export const sopVersionApprovalSource: ApprovalSource = {
-  key: 'ops.sop_versions',
-  label: 'SOP versions awaiting approval',
-  permission: 'ops:sops:approve',
-  async list(db, actor) {
-    const rows = await db
-      .select({ a: approvals, v: opsSopVersions, sop: opsSops, requester: users.displayName })
-      .from(approvals)
-      .innerJoin(opsSopVersions, eq(opsSopVersions.id, approvals.subjectId))
-      .innerJoin(opsSops, eq(opsSops.id, opsSopVersions.sopId))
-      .innerJoin(users, eq(users.id, approvals.requestedBy))
-      .where(and(eq(approvals.policy, sopApprovalPolicy.key), eq(approvals.status, 'pending')))
-      .orderBy(asc(approvals.requestedAt));
-    const userOf = await staffUserLookup(db);
-    const out: ApprovalInboxItem[] = [];
-    for (const { a, v, sop, requester } of rows) {
-      if (a.requestedBy === actor.id) continue;
-      const problems = sopApprovalCheck(sop, v, userOf, actor.id);
-      // The owner can never approve their own SOP: not their item to decide.
-      if (problems.includes('approver_is_owner')) continue;
-      out.push(
-        inboxItem({
-          id: a.id,
-          title: `${sop.code} ${sop.title} — version ${v.versionLabel}`,
-          detail: a.requestComment,
-          requestedByUserId: a.requestedBy,
-          requestedByName: requester,
-          requestedAt: a.requestedAt,
-          link: `/ops/sops/${sop.id}`,
-          ready: problems.length === 0,
-          blockers: problems.map((p) => SOP_APPROVAL_PROBLEM_LABELS[p]),
-        }),
-      );
-    }
-    return out;
-  },
-};
-
-export const sopReviewSource: ApprovalSource = {
-  key: 'ops.sop_reviews',
-  label: 'SOP versions waiting for your review',
-  permission: 'ops:sops:read',
-  async list(db, actor) {
-    const me = await staffIdForUser(db, actor.id);
-    if (!me) return [];
-    const rows = await db
-      .select({ v: opsSopVersions, sop: opsSops, a: approvals, requester: users.displayName })
-      .from(opsSopVersions)
-      .innerJoin(opsSops, eq(opsSops.id, opsSopVersions.sopId))
-      .innerJoin(approvals, eq(approvals.id, opsSopVersions.approvalId))
-      .innerJoin(users, eq(users.id, approvals.requestedBy))
-      .where(
-        and(
-          eq(opsSopVersions.status, 'in_review'),
-          eq(opsSops.reviewerStaffId, me),
-          isNull(opsSopVersions.reviewOutcome),
-          eq(approvals.status, 'pending'),
-        ),
-      )
-      .orderBy(asc(approvals.requestedAt));
-    return rows
-      .filter(({ a }) => a.requestedBy !== actor.id)
-      .map(({ v, sop, a, requester }) =>
-        inboxItem({
-          id: v.id,
-          title: `${sop.code} ${sop.title} — version ${v.versionLabel}`,
-          detail: 'Record a review: recommend approval or request changes.',
-          requestedByUserId: a.requestedBy,
-          requestedByName: requester,
-          requestedAt: a.requestedAt,
-          link: `/ops/sops/${sop.id}`,
-        }),
-      );
-  },
-};
 
 export const feeArrangementSource: ApprovalSource = {
   key: 'ops.fee_arrangements',
@@ -171,13 +102,14 @@ export const feeArrangementSource: ApprovalSource = {
       .innerJoin(users, eq(users.id, approvals.requestedBy))
       .where(and(eq(approvals.policy, feeArrangementPolicy.key), eq(approvals.status, 'pending')))
       .orderBy(asc(approvals.requestedAt));
+    const { named, amounts } = visibility(actor);
     return rows
       .filter(({ a }) => a.requestedBy !== actor.id)
       .map(({ a, code, admissionId, student, requester }) =>
         inboxItem({
           id: a.id,
-          title: `${code} — ${student}`,
-          detail: a.requestComment,
+          title: `${code} — ${named ? student : HIDDEN_NAME}`,
+          detail: amounts ? a.requestComment : null,
           requestedByUserId: a.requestedBy,
           requestedByName: requester,
           requestedAt: a.requestedAt,
@@ -187,69 +119,62 @@ export const feeArrangementSource: ApprovalSource = {
   },
 };
 
-export const taskReviewSource: ApprovalSource = {
-  key: 'ops.task_reviews',
-  label: 'Completed tasks waiting for your review',
-  permission: 'ops:tasks:write',
+const previous = alias(opsFeePlans, 'previous_plan');
+
+/** Draft agreement versions waiting for their own approval; never listed to their maker. */
+export const feeAgreementSource: ApprovalSource = {
+  key: 'ops.fee_agreements',
+  label: 'Fee agreements awaiting approval',
+  permission: 'ops:admissions:approve',
   async list(db, actor) {
-    const rows = await listTaskReviewsForDecider(db, actor);
-    return rows.map(({ review, task, submitterName }) =>
+    const access = await accessScope(db, actor, 'ops:admissions:approve');
+    const rows = await db
+      .select({
+        a: approvals,
+        plan: opsFeePlans,
+        before: previous.totalPaise,
+        student: students.fullName,
+        requester: users.displayName,
+      })
+      .from(approvals)
+      .innerJoin(opsFeePlans, eq(opsFeePlans.id, approvals.subjectId))
+      .leftJoin(previous, eq(previous.id, opsFeePlans.supersedesPlanId))
+      .innerJoin(students, eq(students.id, opsFeePlans.studentId))
+      .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsFeePlans.admissionId))
+      .innerJoin(opsLeads, eq(opsLeads.id, opsAdmissions.leadId))
+      .innerJoin(users, eq(users.id, approvals.requestedBy))
+      .where(
+        and(
+          eq(approvals.policy, feeAgreementPolicy.key),
+          eq(approvals.status, 'pending'),
+          eq(opsFeePlans.status, 'draft'),
+          ne(opsFeePlans.createdBy, actor.id),
+          ne(approvals.requestedBy, actor.id),
+          ownAdmissionFilter(access),
+        ),
+      )
+      .orderBy(asc(approvals.requestedAt));
+    const { named, amounts } = visibility(actor);
+    return rows.map(({ a, plan, before, student, requester }) =>
       inboxItem({
-        id: review.id,
-        title: `${task.code} ${task.title}`,
-        detail:
-          task.completionNote ?? (task.evidenceLink ? `Evidence: ${task.evidenceLink}` : null),
-        requestedByUserId: review.submittedBy,
-        requestedByName: submitterName,
-        requestedAt: review.submittedAt,
-        link: `/ops/tasks/${task.id}`,
+        id: a.id,
+        title: `${named ? student : HIDDEN_NAME}: fee agreement ${plan.academicYear ?? '(year not recorded)'}, version ${plan.version}`,
+        detail: amounts ? a.requestComment : null,
+        ...(amounts && { beforePaise: before, afterPaise: plan.totalPaise }),
+        requestedByUserId: a.requestedBy,
+        requestedByName: requester,
+        requestedAt: a.requestedAt,
+        link: `/ops/students/${plan.studentId}?tab=fees`,
+        decide: `/ops/api/v1/fee-plans/${plan.id}/decision`,
       }),
     );
   },
 };
 
-export const policyVersionApprovalSource: ApprovalSource = {
-  key: 'ops.policy_versions',
-  label: 'Company policy versions awaiting approval',
-  permission: 'ops:policies:approve',
-  async list(db, actor) {
-    const rows = await db
-      .select({ a: approvals, v: opsPolicyVersions, p: opsPolicies, requester: users.displayName })
-      .from(approvals)
-      .innerJoin(opsPolicyVersions, eq(opsPolicyVersions.id, approvals.subjectId))
-      .innerJoin(opsPolicies, eq(opsPolicies.id, opsPolicyVersions.policyId))
-      .innerJoin(users, eq(users.id, approvals.requestedBy))
-      .where(and(eq(approvals.policy, policyApprovalPolicy.key), eq(approvals.status, 'pending')))
-      .orderBy(asc(approvals.requestedAt));
-    return rows
-      .filter(({ a, v }) => a.requestedBy !== actor.id && v.proposedBy !== actor.id)
-      .map(({ a, v, p, requester }) =>
-        inboxItem({
-          id: a.id,
-          title: `${p.code} ${p.title} — version ${v.versionNumber}`,
-          detail: a.requestComment,
-          requestedByUserId: a.requestedBy,
-          requestedByName: requester,
-          requestedAt: a.requestedAt,
-          link: `/ops/settings/policies/${p.id}`,
-        }),
-      );
-  },
-};
-
-/** Sources implemented by the operations area. */
-export const CORE_APPROVAL_SOURCES: readonly ApprovalSource[] = [
-  sopVersionApprovalSource,
-  sopReviewSource,
-  feeArrangementSource,
-  taskReviewSource,
-  policyVersionApprovalSource,
-];
-
 /** The registry used by the inbox and the dashboards. Each source follows the rules above. */
 export const APPROVAL_SOURCES: readonly ApprovalSource[] = [
-  ...CORE_APPROVAL_SOURCES,
-  ...HR_APPROVAL_SOURCES,
+  feeAgreementSource,
+  feeArrangementSource,
 ];
 
 export interface InboxSourceResult {

@@ -33,7 +33,7 @@ export const caFoundationSeed = defineSeed({
       mode: 'offline',
       classMinutes: 75,
       classMinutesStatus: 'proposed',
-      status: 'paused',
+      status: 'active', // D-037: CA Foundation is running (owner, 21 Oct 2026)
       sourceRef: sourceRef('ca-foundation-accountancy.json'),
     });
     const subjectId = await upsertSubject(db, courseId, 'ACC', 'Accountancy', 0);

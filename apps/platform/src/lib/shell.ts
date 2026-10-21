@@ -14,5 +14,5 @@ export const MODULE_BLURBS = {
     'Ideas, content, approvals, publishing records and marketing metrics across Elevate’s accounts.',
   academic:
     'Courses, batches, timetables, teaching assignments, attendance, assessments and enrolments.',
-  ops: 'Leads, counselling, demos, admissions, tasks, SOPs, decisions and the organisation structure.',
+  ops: 'Leads, counselling, demos, admissions, fee records and the staff directory.',
 } as const;

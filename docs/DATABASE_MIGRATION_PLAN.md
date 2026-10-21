@@ -22,6 +22,7 @@
 | `npm run db:migrate` | Apply pending migrations to `DATABASE_URL` (fails clearly if none exist) |
 | `npm run db:seed` | Core + module seeds (local databases only; refuses `NODE_ENV=production`) |
 | `npm run db:reset` | **Dev only**: drops `core, marketing, academic, ops, drizzle` and re-runs migrate + seed. Refuses unless `DATABASE_URL` is localhost/127.0.0.1/PGlite and `NODE_ENV≠production`; 5-second countdown unless `--yes` |
+| `npm run db:clear-samples` | **Before real use**: deletes every sample row (`is_sample` leads, students, staff without login, and everything that belongs to them) in one transaction and prints rows deleted per table; real rows are untouched (D-036). Same local-only refusal and countdown as `db:reset` (a production database is never seeded, so it never holds samples) |
 | `npm run db:backup` | `pg_dump -Fc` of the five schemas to `.data/backups/` (needs PostgreSQL 18 client tools, D-024) |
 
 ## 4. Writing a safe change (after the baseline exists)

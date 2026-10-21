@@ -1,199 +1,234 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { getDirectory } from '../../server/organisation';
+import { ButtonLink, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { EMPLOYMENT_TYPES } from '../../domain';
+import { getDirectory, getStaffDetail } from '../../server/organisation';
 import { formOptions } from '../../server/options';
 import { ActionForm } from '../../ui/action-form';
-import { EMPLOYMENT_TYPES } from '../../domain/hr/employees';
-import { humanise, statusTone } from '../../ui/format';
+import { humanise } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
-import { options } from '../../ui/hr-records';
+import { listHref, options, SearchPanel } from '../../ui/list-controls';
+import { FormModal, RecordModal } from '../../ui/record-modal';
+import { RecordTable } from '../../ui/record-table';
+import { Segment } from '../../ui/sections';
+import { StaffEditModal, StaffProfile } from './staff-record';
 
 export const dynamic = 'force-dynamic';
+export const metadata = { title: 'Staff directory' };
 
-export default async function StaffPage() {
-  const access = await gate('ops:organisation:read', '/ops/staff');
+type Params = Record<string, string | undefined>;
+const BASE = '/ops/staff';
+const STATUSES = ['active', 'on_leave', 'inactive'];
+
+export default async function StaffPage({ searchParams }: { searchParams: Promise<Params> }) {
+  const access = await gate('ops:organisation:read', BASE);
+  const sp = await searchParams;
   return (
     <Frame access={access} active="staff">
       <PageHeader
-        title="Staff directory and responsibilities"
-        description="Departments, people, reporting lines and who holds each responsibility with a backup. Business Ops stewards these records."
+        title="Staff directory"
+        description="Everyone on staff, their department and who they report to. Teachers and counsellors are staff."
+        actions={
+          can(access.user, 'ops:organisation:manage') ? (
+            <ButtonLink
+              variant="primary"
+              href={listHref(BASE, sp, { new: '1', open: undefined, act: undefined })}
+            >
+              Add staff member
+            </ButtonLink>
+          ) : undefined
+        }
       />
-      <Alert tone="info" title="Where HR records are">
-        Employee records, private HR details, documents and compensation are under{' '}
-        <a href="/ops/hr/employees">Employees</a>; department heads and the reporting tree under{' '}
-        <a href="/ops/hr/departments">Departments and reporting lines</a> (D-028). Payroll and
-        biometric devices are out of scope. Named holders and backups are owner decision OD-009.
-      </Alert>
       <Section>
-        <Directory user={access.user} />
+        <Directory user={access.user} sp={sp} />
       </Section>
+      {sp.open ? (
+        <Section label="Loading staff member…">
+          <OpenStaff user={access.user} sp={sp} id={sp.open} />
+        </Section>
+      ) : null}
     </Frame>
   );
 }
 
-async function Directory({ user }: { user: AuthenticatedUser }) {
-  const r = await load(async (db) => ({
-    d: await getDirectory(db, user),
-    options: await formOptions(db),
-  }));
-  if (!r.ok) return r.view;
-  const { d, options: o } = r.data;
+async function Directory({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
   const manage = can(user, 'ops:organisation:manage');
+  const r = await load(async (db) => {
+    const [d, o] = await Promise.all([
+      getDirectory(db, user),
+      manage && sp.new && !sp.open ? formOptions(db) : null,
+    ]);
+    return { d, o };
+  });
+  if (!r.ok) return r.view;
+  const { d, o } = r.data;
+  const q = sp.q?.trim().toLowerCase();
+  const rows = d.staff.filter(
+    (s) =>
+      (!q || s.fullName.toLowerCase().includes(q)) &&
+      (!sp.department || s.departmentId === sp.department) &&
+      (!sp.status || s.status === sp.status),
+  );
+  const close = (patch: Params) => listHref(BASE, sp, patch);
   return (
     <div className="el-stack">
-      <Card
-        title="Responsibility gaps (OPS-015)"
-        description="Active responsibilities with no holder, no backup, or the same person as both. Critical ones first."
-      >
-        <DataTable
-          rows={d.gaps}
-          rowKey={(g) => g.code}
-          empty={<EmptyState title="No gaps" />}
-          columns={[
-            { key: 'code', header: 'Code' },
-            { key: 'title', header: 'Responsibility' },
-            {
-              key: 'critical',
-              header: '',
-              render: (g) =>
-                g.critical ? <StatusBadge tone="danger">Critical</StatusBadge> : null,
-            },
-            { key: 'labels', header: 'Gaps', render: (g) => g.labels.join('; ') },
-          ]}
-        />
-      </Card>
-      <Card title="Staff">
-        <DataTable
-          rows={d.staff}
-          rowKey={(s) => s.id}
-          empty={<EmptyState title="No staff yet" />}
-          columns={[
-            {
-              key: 'fullName',
-              header: 'Name',
-              render: (s) => <a href={`/ops/staff/${s.id}`}>{s.fullName}</a>,
-            },
-            { key: 'title', header: 'Title', render: (s) => s.title ?? '—' },
-            { key: 'departmentName', header: 'Department', render: (s) => s.departmentName ?? '—' },
-            { key: 'managerName', header: 'Reports to', render: (s) => s.managerName ?? '—' },
-            {
-              key: 'roleLabels',
-              header: 'Role labels',
-              render: (s) => s.roleLabels.join(', ') || '—',
-            },
-            { key: 'hasLogin', header: 'Login', render: (s) => (s.hasLogin ? 'Yes' : 'No') },
-            {
-              key: 'status',
-              header: 'Status',
-              render: (s) => (
-                <StatusBadge tone={statusTone(s.status === 'active' ? 'accepted' : 'open')}>
-                  {humanise(s.status)}
-                </StatusBadge>
-              ),
-            },
-          ]}
-        />
-      </Card>
-      <Card
+      <SearchPanel
+        action={BASE}
+        search={{ name: 'q', label: 'Name', value: sp.q }}
+        filters={[
+          {
+            name: 'department',
+            label: 'Department',
+            type: 'select',
+            value: sp.department,
+            options: d.departments.map((x) => ({ value: x.id, label: x.name })),
+          },
+          {
+            name: 'status',
+            label: 'Status',
+            type: 'select',
+            value: sp.status,
+            options: options(STATUSES),
+          },
+        ]}
+      />
+      <RecordTable
+        caption={`${rows.length} staff member${rows.length === 1 ? '' : 's'}`}
+        rows={rows}
+        rowKey={(s) => s.id}
+        rowHref={(s) => close({ open: s.id, act: undefined, new: undefined })}
+        linkColumn="fullName"
+        empty={<EmptyState title="No staff match" description="Clear a filter to see everyone." />}
+        columns={[
+          { key: 'fullName', header: 'Name' },
+          { key: 'title', header: 'Title', render: (s) => s.title ?? 'Not recorded' },
+          {
+            key: 'departmentName',
+            header: 'Department',
+            render: (s) => s.departmentName ?? 'None',
+          },
+          { key: 'managerName', header: 'Reports to', render: (s) => s.managerName ?? 'Nobody' },
+          {
+            key: 'roleLabels',
+            header: 'Role labels',
+            render: (s) => s.roleLabels.join(', ') || 'None',
+          },
+          { key: 'hasLogin', header: 'Login', render: (s) => (s.hasLogin ? 'Yes' : 'No') },
+          {
+            key: 'status',
+            header: 'Status',
+            render: (s) => (
+              <StatusBadge tone={s.status === 'active' ? 'success' : 'warning'}>
+                {humanise(s.status)}
+              </StatusBadge>
+            ),
+          },
+        ]}
+      />
+      <Segment
         title="Departments"
-        description="13 provisional departments from the legacy model (D-026); confirming them is an owner decision."
+        flush
+        description="13 provisional departments from the legacy model; confirming them is an owner decision. Open one to list its staff."
       >
-        <DataTable
+        <RecordTable
           rows={d.departments}
           rowKey={(x) => x.id}
+          rowHref={(x) => listHref(BASE, { department: x.id })}
+          linkColumn="name"
           columns={[
+            { key: 'name', header: 'Department' },
             { key: 'code', header: 'Code' },
-            { key: 'name', header: 'Name' },
             {
               key: 'status',
               header: 'Status',
               render: (x) => (
                 <StatusBadge tone={x.status === 'active' ? 'success' : 'warning'}>
-                  {x.status}
+                  {humanise(x.status)}
                 </StatusBadge>
               ),
             },
             { key: 'headcount', header: 'Staff', numeric: true },
           ]}
         />
-      </Card>
-      <Card title="Responsibilities">
-        <DataTable
-          rows={d.responsibilities}
-          rowKey={(x) => x.id}
-          empty={<EmptyState title="No responsibilities recorded" />}
-          columns={[
-            { key: 'code', header: 'Code' },
-            { key: 'title', header: 'Function / process' },
-            {
-              key: 'accountableRole',
-              header: 'Accountable role',
-              render: (x) => x.accountableRole ?? '—',
-            },
-            {
-              key: 'holderName',
-              header: 'Holder',
-              render: (x) => x.holderName ?? <StatusBadge tone="warning">Not named</StatusBadge>,
-            },
-            {
-              key: 'backupName',
-              header: 'Backup',
-              render: (x) => x.backupName ?? <StatusBadge tone="warning">None</StatusBadge>,
-            },
-            {
-              key: 'handOverToRole',
-              header: 'Hands over to',
-              render: (x) => x.handOverToRole ?? '—',
-            },
-          ]}
-        />
-      </Card>
-      {manage ? (
-        <div className="el-grid">
-          <Card title="Add staff member">
-            <ActionForm
-              action="/ops/api/v1/staff"
-              submitLabel="Add"
-              redirectTo="/ops/staff/{id}"
-              fields={[
-                { name: 'fullName', label: 'Full name', required: true },
-                { name: 'title', label: 'Title' },
-                {
-                  name: 'departmentId',
-                  label: 'Department',
-                  type: 'select',
-                  options: o.departments,
-                },
-                { name: 'managerId', label: 'Reports to', type: 'select', options: o.staff },
-                {
-                  name: 'employmentType',
-                  label: 'Employment type',
-                  type: 'select',
-                  required: true,
-                  defaultValue: 'not_recorded',
-                  options: options(EMPLOYMENT_TYPES),
-                },
-                { name: 'roleLabels', label: 'Role labels (comma separated)', type: 'list' },
-              ]}
-            />
-          </Card>
-          <Card title="Add responsibility">
-            <ActionForm
-              action="/ops/api/v1/responsibilities"
-              submitLabel="Add"
-              fields={[
-                { name: 'title', label: 'Function / process', required: true },
-                { name: 'accountableRole', label: 'Accountable role' },
-                { name: 'holderStaffId', label: 'Holder', type: 'select', options: o.staff },
-                { name: 'backupStaffId', label: 'Backup', type: 'select', options: o.staff },
-                { name: 'handOverToRole', label: 'Hands over to (role)' },
-                { name: 'critical', label: 'Critical process', type: 'checkbox' },
-              ]}
-            />
-          </Card>
-        </div>
+      </Segment>
+      {o ? (
+        <FormModal id="staff-new" title="Add staff member" closeHref={close({ new: undefined })}>
+          <ActionForm
+            action="/ops/api/v1/staff"
+            submitLabel="Add staff member"
+            // Router path: Next adds the /ops basePath itself (D-022).
+            redirectTo="/staff?open={id}"
+            secondary={<a href={close({ new: undefined })}>Cancel</a>}
+            fields={[
+              { name: 'fullName', label: 'Full name', required: true, section: 'Person' },
+              { name: 'title', label: 'Title', section: 'Person' },
+              {
+                name: 'departmentId',
+                label: 'Department',
+                type: 'select',
+                options: o.departments,
+                section: 'Role',
+              },
+              {
+                name: 'managerId',
+                label: 'Reports to',
+                type: 'select',
+                options: o.staff,
+                section: 'Role',
+              },
+              {
+                name: 'employmentType',
+                label: 'Employment type',
+                type: 'select',
+                required: true,
+                defaultValue: 'not_recorded',
+                options: options(EMPLOYMENT_TYPES),
+                section: 'Role',
+              },
+              {
+                name: 'roleLabels',
+                label: 'Role labels (comma separated)',
+                type: 'list',
+                section: 'Role',
+              },
+            ]}
+          />
+        </FormModal>
       ) : null}
     </div>
+  );
+}
+
+/** The `?open=` record loads on its own, so a failure stays inside the modal and the list stays. */
+async function OpenStaff({ user, sp, id }: { user: AuthenticatedUser; sp: Params; id: string }) {
+  const close = (patch: Params) => listHref(BASE, sp, patch);
+  const edit = sp.act === 'edit' && can(user, 'ops:organisation:manage');
+  const r = await load(async (db) =>
+    Promise.all([getStaffDetail(db, user, id), edit ? formOptions(db) : null]),
+  );
+  if (!r.ok)
+    return (
+      <RecordModal
+        id="staff-modal"
+        title="Staff member"
+        closeHref={close({ open: undefined, act: undefined })}
+      >
+        {r.view}
+      </RecordModal>
+    );
+  const [d, o] = r.data;
+  return o ? (
+    <StaffEditModal d={d} o={o} closeHref={close({ act: undefined })} />
+  ) : (
+    <RecordModal
+      id="staff-modal"
+      title={d.staff.fullName}
+      meta={d.staff.title ?? undefined}
+      fullHref={`${BASE}/${d.staff.id}`}
+      closeHref={close({ open: undefined, act: undefined })}
+      returnId={d.staff.id}
+    >
+      <StaffProfile d={d} user={user} editHref={close({ act: 'edit' })} level={3} />
+    </RecordModal>
   );
 }

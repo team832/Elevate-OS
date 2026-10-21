@@ -11,7 +11,7 @@
  * or an admission that already moved on are ignored and audited, so a reply
  * processed twice yields one transition.
  */
-import { and, desc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, or } from 'drizzle-orm';
 import {
   opsAdmissions,
   opsEnrolmentAttempts,
@@ -38,6 +38,7 @@ import {
   type IntegrationEvent,
 } from '@elevate/shared-contracts';
 import type { IntegrationEventId, LeadId, StaffMemberId, StudentId } from '@elevate/shared-types';
+import type { ResolvedSettings } from '../domain';
 import { retryDecision } from '../domain/students';
 import { accessScope, userIdsForStaff, userIdsWithRole, notFound, type Actor } from './context';
 import { opsAudit } from './ops-common';
@@ -65,14 +66,22 @@ export async function knownStudentIdForPerson(
     .select({ id: opsLeads.id })
     .from(opsLeads)
     .where(eq(opsLeads.mergedIntoLeadId, leadId));
+  // The same canonical student (core.students) may also hold admissions of another lead.
+  const [self] = await tx
+    .select({ identity: opsAdmissions.studentId })
+    .from(opsAdmissions)
+    .where(eq(opsAdmissions.id, excludeAdmissionId as never));
   const [row] = await tx
-    .select({ studentId: opsAdmissions.studentId })
+    .select({ studentId: opsAdmissions.academicStudentId })
     .from(opsAdmissions)
     .where(
       and(
-        inArray(opsAdmissions.leadId, [leadId, ...merged.map((m) => m.id)]),
+        or(
+          inArray(opsAdmissions.leadId, [leadId, ...merged.map((m) => m.id)]),
+          self?.identity ? eq(opsAdmissions.studentId, self.identity) : undefined,
+        ),
         ne(opsAdmissions.id, excludeAdmissionId as never),
-        isNotNull(opsAdmissions.studentId),
+        isNotNull(opsAdmissions.academicStudentId),
       ),
     )
     .orderBy(desc(opsAdmissions.enrolledAt))
@@ -199,47 +208,62 @@ export async function requestEnrolment(
 ) {
   const access = await accessScope(db, actor, 'ops:admissions:write');
   const settings = await loadSettings(db);
-  return withTransaction(db, async (tx) => {
-    const admission = await lockAccessible(tx, access, admissionId);
-    const attempt = admission.enrolmentAttempt + 1;
-    const transition = {
-      admission,
-      to: 'enrolment_requested' as const,
-      actorUserId: actor.id,
-      context: { viaEnrolmentHandoff: true },
+  return withTransaction(db, async (tx) =>
+    publishEnrolmentRequest(tx, actor, await lockAccessible(tx, access, admissionId), {
+      ...options,
       settings,
-    };
-    // Check the transition before building the payload (clear 409 on double submit).
-    if (admission.status !== 'admitted') await applyTransition(tx, transition);
-    const event = await publishRequest(tx, admission, attempt, actor, options.notes ?? null);
-    const updated = await applyTransition(tx, {
-      ...transition,
-      reason: `Enrolment requested from Academic OS (attempt ${attempt})`,
-      eventId: event.id,
-      requestId: options.requestId,
-      patch: {
-        enrolmentAttempt: attempt,
-        handoffStatus: 'pending',
-        lastRequestEventId: event.id,
-        enrolmentRequestedAt: new Date(),
-        rejectionCode: null,
-        rejectionReason: null,
-        rejectedAt: null,
-      },
-    });
-    await tx
-      .insert(opsEnrolmentAttempts)
-      .values({
-        admissionId: admission.id,
-        attempt,
-        requestEventId: event.id,
-        kind: admission.handoffStatus === 'rejected' ? 'after_rejection' : 'initial',
-        reason: options.notes?.trim() || null,
-        requestedBy: actor.id,
-      })
-      .onConflictDoNothing();
-    return { admission: updated, eventId: event.id, attempt, eventCreated: event.created };
+    }),
+  );
+}
+
+/**
+ * The request itself, in the caller's transaction on a LOCKED admission; the caller has checked
+ * permission (`requestEnrolment`, or the final admission confirmation by an approver).
+ */
+export async function publishEnrolmentRequest(
+  tx: Database,
+  actor: Actor,
+  admission: AdmissionRow,
+  options: { notes?: string | null; requestId?: string; settings: ResolvedSettings },
+) {
+  const attempt = admission.enrolmentAttempt + 1;
+  const transition = {
+    admission,
+    to: 'enrolment_requested' as const,
+    actorUserId: actor.id,
+    context: { viaEnrolmentHandoff: true },
+    settings: options.settings,
+  };
+  // Check the transition before building the payload (clear 409 on double submit).
+  if (admission.status !== 'admitted') await applyTransition(tx, transition);
+  const event = await publishRequest(tx, admission, attempt, actor, options.notes ?? null);
+  const updated = await applyTransition(tx, {
+    ...transition,
+    reason: `Enrolment requested from Academic OS (attempt ${attempt})`,
+    eventId: event.id,
+    requestId: options.requestId,
+    patch: {
+      enrolmentAttempt: attempt,
+      handoffStatus: 'pending',
+      lastRequestEventId: event.id,
+      enrolmentRequestedAt: new Date(),
+      rejectionCode: null,
+      rejectionReason: null,
+      rejectedAt: null,
+    },
   });
+  await tx
+    .insert(opsEnrolmentAttempts)
+    .values({
+      admissionId: admission.id,
+      attempt,
+      requestEventId: event.id,
+      kind: admission.handoffStatus === 'rejected' ? 'after_rejection' : 'initial',
+      reason: options.notes?.trim() || null,
+      requestedBy: actor.id,
+    })
+    .onConflictDoNothing();
+  return { admission: updated, eventId: event.id, attempt, eventCreated: event.created };
 }
 
 /**
@@ -421,7 +445,7 @@ async function applyEnrolmentConfirmed(
     patch: {
       handoffStatus: 'enrolled',
       enrolmentId: p.enrolmentId,
-      studentId: p.studentId,
+      academicStudentId: p.studentId,
       enrolledAt: new Date(p.confirmedAt),
       academicExistingStudent: p.existingStudent,
       enrolledCourseId: p.courseId ?? null,

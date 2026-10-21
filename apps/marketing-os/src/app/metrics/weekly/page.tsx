@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
 import {
   Alert,
@@ -20,9 +21,10 @@ import {
 } from '../../../domain';
 import { weeklyReport } from '../../../server';
 import { IntegrationBadge } from '../../../ui/badges';
-import { MarketingPage, Section, param, type SearchParams } from '../../../ui/shell';
+import { MarketingPage, Section, param, type SearchParams, METRICS_TABS } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Weekly report' };
 
 const nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
 
@@ -54,7 +56,8 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
       path={modulePath('metrics/weekly')}
       active="weekly"
       title="Weekly report"
-      description="IST Monday–Sunday. Numbers come only from imported exports and the labelled manual audit; missing values are shown as missing and never added as zero."
+      tabs={METRICS_TABS}
+      description="Monday to Sunday (IST), from imported exports only. Missing values are never added as zero."
       searchParams={sp}
     >
       {() => (
@@ -90,6 +93,7 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
                   />
                 ) : (
                   <DataTable
+                    compact
                     caption={`By ${groupBy}`}
                     rows={r.aggregation.groups}
                     rowKey={(g) => g.key}
@@ -158,6 +162,7 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
                   description="Planned uses the ORIGINAL publish time. Sandbox publications are not real posts."
                 >
                   <DataTable
+                    compact
                     rows={r.accounts}
                     rowKey={(a) => a.accountCode}
                     columns={[

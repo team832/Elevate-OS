@@ -25,6 +25,10 @@ export type LeadId = Brand<string, 'LeadId'>;
 export type AdmissionId = Brand<string, 'AdmissionId'>;
 export type TaskId = Brand<string, 'TaskId'>;
 
+// --- Canonical identities (core schema) ---------------------------------------------
+/** One person who studies (or studied) with Elevate; `core.students`. Academic rows link to it. */
+export type StudentIdentityId = Brand<string, 'StudentIdentityId'>;
+
 // --- Academic OS (academic schema) ---------------------------------------------
 export type StudentId = Brand<string, 'StudentId'>;
 export type CourseId = Brand<string, 'CourseId'>;

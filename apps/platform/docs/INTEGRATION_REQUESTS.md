@@ -1,0 +1,9 @@
+# Platform: integration requests received
+
+Requests from module teams to the platform / integration owner (shared packages, scheduler, system principals). Each module also lists its own requests in `apps/<module>/docs/INTEGRATION_REQUESTS.md`. Status: **Open** unless noted.
+
+| ID | From | Request | Why | Status |
+|---|---|---|---|---|
+| IR-OPS-PLT-1 | Business Ops (admissions, 20 Oct 2026) | A system actor (service principal) for records created by jobs and event consumers, e.g. leads created by `ops.lead-intake` from Marketing handoffs. | With no system user, intake rows and audit entries are attributed to whichever staff member ran the job. | Open |
+| IR-OPS-PLT-2 | Business Ops | A scheduler for the Ops jobs (all idempotent, `POST /ops/api/v1/jobs/{job}`): `lead-intake` every few minutes, `enrolment-replies` every minute, `follow-up-reminders` daily at 09:00 IST. Extends IR-OPS-02. | Today an operations manager runs them by hand, so handoffs and reminders wait until someone does. | Open |
+| IR-OPS-PLT-3 | Business Ops | Move the dark theme block (`THEME:start` … in `platform/elevate-glass.css`, `academic-os/academic.css`, `marketing-os/marketing-theme.css`, `business-ops-os/ops.css`, kept identical by hand) and the right-hand `Drawer` component (`apps/business-ops-os/src/ui/drawer.tsx`, native `<dialog>`, focus trap and return, full-screen sheet on phones) into `@elevate/shared-ui`. | Four copies of the theme drift; other modules need the same drawer for list quick views. | Theme part done (21 Oct 2026, UI redesign): the dark tokens and shell styles now live in `@elevate/shared-ui/styles.css`; the four app copies are deleted. Drawer part open. |

@@ -1,97 +1,241 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { Alert, Card, PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { DECISION_STATE_LABELS } from '../../domain';
+import { EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { DECISION_STATE_LABELS, type ResolvedSetting } from '../../domain';
 import { getCrmAdapter } from '../../server/adapters/crm';
+import { listTemplates } from '../../server/onboarding';
 import { listSettings } from '../../server/settings';
 import { ActionForm } from '../../ui/action-form';
-import { decisionTone } from '../../ui/format';
+import { AdmissionsNav } from '../../ui/admissions-nav';
+import { humanise } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
+import { listHref, SearchPanel } from '../../ui/list-controls';
+import { FormModal, RecordModal } from '../../ui/record-modal';
+import { RecordTable } from '../../ui/record-table';
+import { DetailTable, Segment } from '../../ui/sections';
+import { OnboardingTemplates } from './_components/onboarding-templates';
+import { decisionCodes, StateBadge, valueRows } from './_components/setting-value';
 
 export const dynamic = 'force-dynamic';
+export const metadata = { title: 'Settings' };
 
-export default async function SettingsPage() {
-  const access = await gate('ops:settings:read', '/ops/settings');
+type Params = Record<string, string | undefined>;
+const BASE = '/ops/settings';
+/** Settings shown under Admissions → Settings (owner brief §4). */
+const ADMISSIONS_PREFIXES = [
+  'admission',
+  'demo.',
+  'fees.',
+  'events.',
+  'reports.',
+  'kpi.conversion',
+];
+const inAdmissions = (key: string) => ADMISSIONS_PREFIXES.some((p) => key.startsWith(p));
+
+const ORIGIN_TEXT: Record<string, string> = {
+  default: 'Default from the legacy record',
+  stored: 'Changed in Elevate OS',
+};
+const INVALID = 'Stored value invalid: default used';
+
+/** Groups in display order; the first matching pattern wins (demo keys before admission keys). */
+const GROUPS: [string, RegExp][] = [
+  ['Admissions', /^(admissions?\.(?!demo\.)|followups\.|kpi\.)/],
+  ['Demos', /^((admissions\.)?demo\.|pipeline\.demo)/],
+  ['Fees', /^fees\./],
+  ['Events and appointments', /^(events|appointments)\./],
+  ['Reports', /^reports\./],
+  ['Other', /./],
+];
+const groupOf = (key: string) => GROUPS.find(([, re]) => re.test(key))![0];
+
+/** "Source: D-038" (a small hint), or nothing when no decision record is named. */
+const SourceHint = ({ s }: { s: ResolvedSetting }) => {
+  const codes = decisionCodes(s.ownerDecision);
+  return codes ? <p className="el-field-hint">Source: {codes}</p> : null;
+};
+
+/** A one-field value reads inline ("Amount: ₹1,000"); larger values become label/value rows. */
+function Value({ s }: { s: ResolvedSetting }) {
+  const [first, ...rest] = valueRows(s.value);
+  return first && !rest.length ? (
+    <>
+      {first.label}: {first.value}
+    </>
+  ) : (
+    <DetailTable rows={valueRows(s.value)} />
+  );
+}
+
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<Params> }) {
+  const access = await gate('ops:settings:read', BASE);
+  const sp = await searchParams;
+  const admissions = sp.group === 'admissions';
   return (
     <Frame access={access} active="settings">
       <PageHeader
-        title="Configuration and policy states"
-        description="Each value shows its decision state and source. Changing a value here keeps it Proposed — approving a policy is a leadership decision."
+        title={admissions ? 'Admissions settings' : 'Configuration and policy states'}
+        description="What each rule is set to now. A change made here stays Proposed until leadership approves it."
+        tabs={admissions ? <AdmissionsNav current="settings" user={access.user} /> : undefined}
       />
-      <nav className="el-subnav" aria-label="Settings sections">
-        <a href="/ops/settings" aria-current="page">
-          Configurable settings
-        </a>
-        <a href="/ops/settings/policies">Policies &amp; compliance register</a>
-      </nav>
-      <p className="el-field-hint">
-        Settings are the values the system uses. Company policy documents and compliance
-        obligations, and which settings implement them, are kept in the{' '}
-        <a href="/ops/settings/policies">policies &amp; compliance register</a>.
-      </p>
       <Section>
-        <Settings user={access.user} />
+        <Settings user={access.user} sp={sp} admissions={admissions} />
       </Section>
     </Frame>
   );
 }
 
-async function Settings({ user }: { user: AuthenticatedUser }) {
-  const r = await load(async (db) => ({
-    settings: await listSettings(db, user),
-    crm: await getCrmAdapter().status(),
-  }));
+async function Settings({
+  user,
+  sp,
+  admissions,
+}: {
+  user: AuthenticatedUser;
+  sp: Params;
+  admissions: boolean;
+}) {
+  const r = await load(async (db) => {
+    const [settings, crm, templates] = await Promise.all([
+      listSettings(db, user),
+      getCrmAdapter().status(),
+      admissions ? listTemplates(db, user) : [],
+    ]);
+    return { settings, crm, templates };
+  });
   if (!r.ok) return r.view;
+  const { settings, crm, templates } = r.data;
+  const q = sp.q?.trim().toLowerCase();
+  const rows = settings.filter(
+    (s) =>
+      (!admissions || inAdmissions(s.key)) &&
+      (!q || `${s.label} ${s.description}`.toLowerCase().includes(q)) &&
+      (!sp.state || s.decisionState === sp.state),
+  );
+  const groups = GROUPS.map(([title]) => ({
+    title,
+    items: rows.filter((s) => groupOf(s.key) === title),
+  })).filter((g) => g.items.length);
+  const states = [...new Set(settings.map((s) => s.decisionState))];
+  const open = settings.find((s) => s.key === sp.open);
   const manage = can(user, 'ops:settings:manage');
+  const close = (patch: Params) => listHref(BASE, sp, patch);
+  const changeLink = (s: ResolvedSetting) =>
+    manage && s.editable ? (
+      <a href={close({ open: s.key, act: 'edit' })}>Change (stays proposed)</a>
+    ) : undefined;
   return (
     <div className="el-stack">
-      <Alert tone="info" title="External CRM">
-        {r.data.crm.detail} Connection:{' '}
-        <StatusBadge tone="neutral">{r.data.crm.connection}</StatusBadge>
-      </Alert>
-      {r.data.settings.map((s) => (
-        <Card key={s.key} title={s.label} description={s.description}>
-          <p>
-            <StatusBadge tone={decisionTone(s.decisionState)}>
-              {DECISION_STATE_LABELS[s.decisionState]}
-            </StatusBadge>
-            {s.ownerDecision ? ` · owner decision ${s.ownerDecision}` : ''} ·{' '}
-            {s.origin === 'default'
-              ? 'default from the legacy record'
-              : s.origin === 'stored'
-                ? 'changed in Elevate OS'
-                : 'stored value invalid — default used'}
-          </p>
-          <pre className="el-pre">{JSON.stringify(s.value, null, 2)}</pre>
-          <p className="el-field-hint">Source: {s.source}</p>
-          {manage && s.editable ? (
-            <SettingEditor settingKey={s.key} value={JSON.stringify(s.value)} />
-          ) : null}
-        </Card>
-      ))}
+      {admissions ? null : (
+        <Segment title="External CRM" flush>
+          <DetailTable
+            rows={[
+              {
+                label: 'Connection',
+                value: <StatusBadge tone="neutral">{humanise(crm.connection)}</StatusBadge>,
+              },
+              { label: 'Detail', value: crm.detail },
+            ]}
+          />
+        </Segment>
+      )}
+      <SearchPanel
+        action={BASE}
+        hidden={admissions ? { group: 'admissions' } : undefined}
+        search={{ name: 'q', label: 'Setting name', value: sp.q }}
+        filters={[
+          {
+            name: 'state',
+            label: 'Decision state',
+            type: 'select',
+            value: sp.state,
+            options: states.map((s) => ({ value: s, label: DECISION_STATE_LABELS[s] })),
+          },
+        ]}
+      />
+      {groups.length ? (
+        groups.map((g) => (
+          <Segment key={g.title} title={g.title} flush>
+            <RecordTable
+              caption={`${g.title}: ${g.items.length} setting${g.items.length === 1 ? '' : 's'}`}
+              rows={g.items}
+              rowKey={(s) => s.key}
+              rowHref={(s) => close({ open: s.key, act: undefined })}
+              linkColumn="label"
+              columns={[
+                { key: 'label', header: 'Setting' },
+                { key: 'value', header: 'Current value', render: (s) => <Value s={s} /> },
+                {
+                  key: 'state',
+                  header: 'State',
+                  render: (s) => (
+                    <>
+                      <StateBadge state={s.decisionState} />
+                      <SourceHint s={s} />
+                      {ORIGIN_TEXT[s.origin] ? null : (
+                        <StatusBadge tone="warning">{INVALID}</StatusBadge>
+                      )}
+                    </>
+                  ),
+                },
+              ]}
+            />
+          </Segment>
+        ))
+      ) : (
+        <EmptyState title="No settings match" description="Clear the search or the state filter." />
+      )}
+      {admissions ? <OnboardingTemplates templates={templates} manage={manage} sp={sp} /> : null}
+      {open && sp.act === 'edit' && manage && open.editable ? (
+        <FormModal
+          id="setting-edit"
+          title={`Change: ${open.label}`}
+          meta="The new value is saved as Proposed."
+          closeHref={close({ act: undefined })}
+        >
+          <ActionForm
+            action={`/ops/api/v1/settings/${open.key}`}
+            method="PUT"
+            submitLabel="Save as proposed"
+            redirectTo={close({ act: undefined })}
+            secondary={<a href={close({ act: undefined })}>Cancel</a>}
+            fields={[
+              {
+                name: 'value',
+                label: 'Value (JSON)',
+                type: 'json',
+                required: true,
+                defaultValue: JSON.stringify(open.value, null, 2),
+                section: 'Value',
+              },
+              { name: 'note', label: 'Why', section: 'Value' },
+            ]}
+          />
+        </FormModal>
+      ) : open ? (
+        <RecordModal
+          id="setting-modal"
+          title={open.label}
+          meta={<StateBadge state={open.decisionState} />}
+          closeHref={close({ open: undefined, act: undefined })}
+          returnId={open.key}
+        >
+          <Segment title="Current value" level={3} flush actions={changeLink(open)}>
+            <DetailTable rows={valueRows(open.value)} />
+          </Segment>
+          <Segment title="Setting" level={3} flush>
+            <DetailTable
+              rows={[
+                { label: 'What it controls', value: open.description },
+                { label: 'Decision state', value: <StateBadge state={open.decisionState} /> },
+                open.ownerDecision && { label: 'Owner decision', value: open.ownerDecision },
+                { label: 'Value from', value: ORIGIN_TEXT[open.origin] ?? INVALID },
+                { label: 'Editable here', value: open.editable ? 'Yes' : 'No' },
+              ]}
+            />
+          </Segment>
+          <p className="el-field-hint">Source: {open.source}</p>
+        </RecordModal>
+      ) : null}
     </div>
-  );
-}
-
-function SettingEditor({ settingKey, value }: { settingKey: string; value: string }) {
-  return (
-    <details>
-      <summary>Change (stays proposed)</summary>
-      <JsonSettingForm settingKey={settingKey} value={value} />
-    </details>
-  );
-}
-
-function JsonSettingForm({ settingKey, value }: { settingKey: string; value: string }) {
-  return (
-    <ActionForm
-      action={`/ops/api/v1/settings/${settingKey}`}
-      method="PUT"
-      submitLabel="Save as proposed"
-      fields={[
-        { name: 'value', label: 'Value (JSON)', type: 'json', required: true, defaultValue: value },
-        { name: 'note', label: 'Why' },
-      ]}
-    />
   );
 }

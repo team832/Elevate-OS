@@ -110,6 +110,10 @@ Validation codes: `NO_SECTIONS`, `RULE_INCOMPLETE`, `NO_ANSWER_KEY`, `KEY_INVALI
 | `PUT /settings/:key` | `settings:manage` | `value`, `status` proposed\|approved | setting row (404 unknown key; 400 invalid value) |
 
 ## 8. Internal summary
+### Per-student summary (IR-OPS-STU-1, 21 Oct 2026)
+`GET /academic/api/internal/v1/students/{academicStudentId}/summary?from=&to=` — `defineInternalRoute({ callers: ['ops'] })` (Business Ops only). Default window: the last 365 days ending today (IST); at most three years. Errors: 401 bad/missing token, 403 any caller other than `ops`, 400 invalid dates, `from > to` or a window over three years, 404 unknown student. Response: `AcademicStudentSummaryV1` (`contract: 'academic.student_summary'`, `version: 1`; fields in `INTEGRATION_CONTRACT.md` §7). Rules: held sessions per enrolment from the later of the window start and the enrolment start; attendance counts per status (unrecorded = held − the sum); teachers = the class record's teacher, else the session's teacher, once per subject; results only from final runs with the assessment date in the window; absent results have no score, percentile or rank; the comparison group is the assessment's batch and run. Service: `src/server/services/student-summary.ts`. Test: `tests/integration/student-summary.test.ts`.
+
+### Delivery summary
 `GET /academic/api/internal/v1/summary?from=&to=` — `defineInternalRoute({ callers: ['ops', 'platform'] })`; headers `Authorization: Bearer <INTERNAL_SERVICE_TOKEN>` and `X-Elevate-Caller: ops|platform`. Default window: the last 30 days ending today (IST). Errors: 401 bad/missing token, 403 unknown or disallowed caller, 400 invalid dates or `from > to`.
 
 Response: `AcademicDeliverySummaryV1` (`contract: 'academic.delivery_summary'`, `version: 1`, `generatedAt`, `window`, `metrics`, `programmes[]`) plus a non-contract `extensions` object (`hoursPlanned`, `hoursDelivered`, `hoursDeliveredInWindow`, null = missing).

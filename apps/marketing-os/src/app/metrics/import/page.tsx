@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import {
@@ -15,9 +16,10 @@ import {
 import { DATE_FORMATS, formatIst, modulePath } from '../../../domain';
 import { listAccounts, listMetricImports } from '../../../server';
 import { importMetricsAction } from '../../actions/placements';
-import { MarketingPage, Section, type SearchParams } from '../../../ui/shell';
+import { MarketingPage, Section, type SearchParams, METRICS_TABS } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Metrics import' };
 
 export default async function MetricsImportPage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -26,7 +28,8 @@ export default async function MetricsImportPage({ searchParams }: { searchParams
       path={modulePath('metrics/import')}
       active="metrics-import"
       title="Metrics import"
-      description="Import a Meta Business Suite (Instagram) or YouTube Studio CSV export. Declare the date format; blank cells stay missing (never 0); rejected rows are listed with reasons."
+      tabs={METRICS_TABS}
+      description="Import an Instagram or YouTube Studio CSV export. Blank cells stay missing, never 0."
       searchParams={await searchParams}
     >
       {(user) => (
@@ -99,6 +102,7 @@ export default async function MetricsImportPage({ searchParams }: { searchParams
                 ) : null}
                 <Card title="Recent imports">
                   <DataTable
+                    compact
                     rows={imports}
                     rowKey={(r) => r.imp.id}
                     empty={

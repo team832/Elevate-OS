@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from './icons';
 
-/** Width (px) from which the sidebar is permanently visible. Keep in sync with styles.css. */
+/** Width (px) from which the sidebar is permanently visible. Keep in sync with css/shell.css. */
 export const SIDEBAR_BREAKPOINT = 1024;
 
 export function ShellFrame({

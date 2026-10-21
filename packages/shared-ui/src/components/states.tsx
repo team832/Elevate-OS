@@ -38,21 +38,27 @@ export function EmptyState({
 
 export function ErrorState({
   title = 'Something went wrong',
-  description = 'The page could not be loaded. Try again; if it keeps happening, report the reference below.',
+  description = 'This could not be loaded. Try again in a moment; if it keeps happening, tell a platform administrator.',
   requestId,
   action,
 }: {
   title?: string;
   description?: ReactNode;
+  /** Shown as a reference to quote to an administrator; omitted when unknown. */
   requestId?: string;
+  /** Next step, e.g. a "Try again" link to the current URL. */
   action?: ReactNode;
 }) {
   return (
     <div className="el-state el-state-error" role="alert" data-state="error">
       <h2>{title}</h2>
       <p>{description}</p>
-      {requestId ? <p className="el-request-id">Reference: {requestId}</p> : null}
       {action ?? null}
+      {requestId ? (
+        <p>
+          Reference for the administrator: <code className="el-request-id">{requestId}</code>
+        </p>
+      ) : null}
     </div>
   );
 }

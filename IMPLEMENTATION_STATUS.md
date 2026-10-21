@@ -241,6 +241,30 @@ Baseline generated on 20 Oct 2026: `packages/database/migrations/0000_baseline.s
 ### Generated documents to rerun
 `docs/SECURITY_AND_PERMISSIONS.md` is generated: run `npm run docs:permissions` after the permission list is final (IR-OPS-04). It was not edited by hand. `apps/business-ops-os/docs/PERMISSIONS.md` was generated from the same source on 19 Oct 2026.
 
+## Business Ops: HR and Operations removed (owner, 20 Oct 2026, D-032)
+_The owner chose to delete the HR and Operations features. Last commit that contains them: `63da4e4` (branch `feature/business-ops-hr-admissions`); recover any file with `git checkout 63da4e4 -- <path>`. Rows **OPS-F8, F9, F11, F12, F23 to F31** above and the HR/operations parts of F10, F14, F15, F17 and F32 no longer exist. Nothing is Deployed._
+
+| Area | Before (63da4e4) | After |
+|---|---|---|
+| `ops` tables | 73 | 17 (56 dropped by `packages/database/migrations/0002_remove_hr_operations.sql`) |
+| Ops permission keys | 61 | 18 |
+| Roles | 15 | 10 (`hr_manager`, `hr_contributor`, `recruiter`, `department_manager`, `employee` removed; `finance_officer` kept for fee records) |
+| Ops API route files | 170 | 46 kept (new admissions routes from the parallel build not counted) |
+| Ops pages (`page.tsx`) | 55 | 15 kept |
+| Ops seeds | 13 | 5 |
+| Events | `ops.employee.separated` v1 + platform `access-revocation` consumer/job | removed (`opsEvents = []`) |
+
+Kept: leads, counselling, demos, admissions, students, fee records, follow-ups, enrolment handoff, schedule, settings (13 HR/task/incident keys removed), approvals inbox (fee arrangements only, new `approvals-inbox.test.ts`), staff directory and departments (`core` steward), `ops.staff_profiles`, dashboard (task and blocker KPIs removed), admissions report. Platform overview lost the Staff present tile, the Attendance corrections row and Team priorities; no "My work" link points at `/ops/tasks` any more. `src/ui/hr-records.tsx` became `src/ui/list-controls.tsx`.
+
+### Commands run and results
+| Command | Result |
+|---|---|
+| `npm run validate` before the removal (baseline) | PASS: Test Files 99 passed, Tests 1109 passed, 1 todo; secret-scan OK (984 files) |
+| `npm run validate` after the removal (another agent's parallel admissions work was already in the tree) | typecheck PASS, lint PASS (after `npx next typegen` in business-ops-os and platform; the stale `.next/types` from deleted routes failed the first run); tests: Test Files 71 passed, 1 failed (72); Tests 661 passed, 1 failed, 1 todo. The one failure is `packages/database/tests/create-test-db.test.ts` "creates every core table": it finds a new `core.students` table added by the parallel admissions work, not by this removal. Secret scan did not run because the tests failed. |
+| `npm run docs:permissions` | matrix written to `docs/SECURITY_AND_PERMISSIONS.md` (0 HR/task keys) |
+| `npm run build -w @elevate/business-ops-os` / `-w @elevate/platform` | PASS / PASS |
+| `npm run db:migrate` and `npm run db:seed` (local embedded PostgreSQL only, after copying `.data/postgres` to `.data/backup-before-hr-ops-removal-20261020`) | 3 migration files applied; `ops` schema has 17 tables; 0 rows left for the removed roles or the removed event; 17 seeds applied |
+
 ## Google sign-in (D-030) — 20 Oct 2026
 
 ### Features
@@ -278,6 +302,123 @@ Baseline generated on 20 Oct 2026: `packages/database/migrations/0000_baseline.s
 | U-03 | API `GET/POST /api/v1/admin/users`, `GET /api/v1/admin/users/[id]`, `PUT …/[id]/roles`, `PUT …/[id]/status`; no self-change (403), last active admin kept (409), unknown role 400, outside domain 403, duplicate 409, disabling revokes sessions, every change audited | Tested | `apps/platform/tests/integration/admin-users.test.ts` (26 tests: 401/403 per route, director/auditor read-only, add person, role save, disable/enable, last admin, list filters, detail) |
 
 Commands (20 Oct 2026): `npx tsc --noEmit -p` apps/platform, packages/authentication, packages/configuration → exit 0 each; `npx eslint <changed files> --max-warnings=0` → exit 0; `npx vitest run packages/authentication packages/configuration apps/platform` → `Test Files 17 passed (17)`, `Tests 160 passed | 1 todo (161)`; `npm run build -w @elevate/platform` → success, the two pages and four API routes listed. Manual: `next start --port 3010` on a scratch PGlite with fictional @elevateeducation.in users (stopped afterwards): signed-out `/admin/users` → 307 `/login?next=%2Fadmin%2Fusers`; admin → 200 with "No roles yet" and "via Google"; teacher → "No access"; detail shows Save roles and Disable account, own account shows the "your own account" note and neither; `PUT …/roles` → 200; `PUT` own status → 403. Not verified: a browser walk-through with screenshots, axe and keyboard-only use.
+
+## Business Ops: admissions workspace (owner brief, 20–21 Oct 2026)
+_Built in four slices on branch `feature/business-ops-hr-admissions`; merged docs on 21 Oct 2026. Requirements OPS-080 … OPS-121 (`apps/business-ops-os/requirements/REQUIREMENTS.md`), rules A-57 … A-84 (`docs/ALGORITHMS.md`). Decisions D-032 … D-035. Status per D-013; **nothing is Deployed**. Screens are Implemented only: none has been opened in a browser._
+
+| # | Feature | Status | Evidence |
+|---|---|---|---|
+| ADM-01 | Demo students with N sessions (default 3, `proposed` setting), per-session attendance, x/N progress, correction history, reschedule/cancel, outcome, checklist (OPS-080 … 086) | Tested | `tests/unit/demos.test.ts`, `tests/integration/demos.test.ts` |
+| ADM-02 | Demo landing `/ops/admissions` with KPI tiles, tabs, drawer, booking drawer; demo record page (OPS-083, 087) | Implemented | typecheck + lint only |
+| ADM-03 | Demo fixtures incl. "Tanisha Demo Student", SAMPLE DATA (OPS-088; one sample set since D-036) | Tested | `demos.test.ts` → "creates Tanisha…" |
+| ADM-04 | Convert to admission in one transaction; canonical student `core.students`; review instead of merge; programme combinations; admission numbers from a locked counter; manual override with reason (OPS-089 … 093) | Tested | `tests/integration/conversion.test.ts`, `tests/unit/admission-numbers.test.ts`, `tests/unit/student-lifecycle.test.ts` |
+| ADM-05 | Student lifecycle (hold, resume, exit records, reactivation by a second person), Active / Past lists, search with masked, audited contact lookup, guardians, student report with export audit (OPS-094 … 099) | Tested (API); screens Implemented | `tests/integration/students-profile.test.ts` |
+| ADM-06 | Conversion fixtures (OPS-100) | Tested | `seeds.test.ts` (numbers 001, 002); `seed/samples.ts` (D-036) |
+| ADM-07 | Appointments (6 types), double-booking refusal, change history, in-app teacher notification, email/SMS "simulated — not sent" (OPS-101 … 104) | Tested (API); screens and demo-class clash Implemented | `tests/integration/appointments.test.ts`, `tests/unit/appointments-feedback.test.ts` |
+| ADM-08 | Teachers directory/profile, 7 owner-supplied teachers without contact data, two feedback directions (OPS-105 … 108) | Tested (API, seed); screens Implemented | `appointments.test.ts` → "teacher seed…", `tests/integration/feedback.test.ts` |
+| ADM-09 | Fee plans, instalments, ledger kinds, instalment and list fee status, reconciliation gate (OPS-109 … 113) | Tested | `tests/unit/fee-plans.test.ts`, `tests/integration/fee-plans.test.ts` |
+| ADM-10 | Fee section on the student profile (OPS-114) | Implemented | server permissions tested in `fee-plans.test.ts` |
+| ADM-11 | Marketing lead handoff consumer with receipts, attribution, duplicate review, retry (OPS-115) | Tested with mock events | `tests/integration/lead-intake.test.ts` |
+| ADM-12 | Live Marketing sync (OPS-116) | Proposed (IR-MKT-OPS-HANDOFF) | — |
+| ADM-13 | "From Marketing" leads view (OPS-117) | Implemented | — |
+| ADM-14 | Funnel, demo conversion, student summary reports (OPS-118) | Tested (API, rules); screen Implemented | `tests/unit/admissions-funnel.test.ts`, `tests/integration/admissions-report-funnel.test.ts` |
+| ADM-15 | Fee and handoff fixtures (OPS-119) | Tested | `tests/integration/seeds.test.ts` (D-036) |
+| ADM-16 | Separate "Applications / Admission Decisions" and "Enrolment Handoffs" screens (OPS-120); Academic data on student lists (OPS-121) | Applications list Implemented 21 Oct (LC-02); handoffs screen and OPS-121 Proposed | — |
+
+### Migrations
+`packages/database/migrations/0003_admissions_workspace.sql` (generated by the coordinator, with a hand-written backfill for appointments and legacy demos; see `apps/business-ops-os/docs/DATA_MODEL.md`): creates `core.students` and 16 `ops` tables (33 `ops` tables in total) and widens the admissions, appointments, demos and fee-record columns and CHECKs. Applied to: [TODO coordinator: say where it was applied, e.g. local embedded PostgreSQL only].
+
+### Commands run and results
+Verification commands: pending coordinator run.
+| Command | Result |
+|---|---|
+| `npm run validate` (typecheck, lint, tests, secret scan) | [TODO coordinator: validate numbers — Test Files …, Tests …, secret-scan …] |
+| `npm run build -w @elevate/business-ops-os` | [TODO coordinator: validate numbers] |
+| `npm run docs:permissions` | [TODO coordinator: validate numbers] (35 `ops:*` keys; IR-OPS-13) |
+| `npm run db:migrate` (local only) | [TODO coordinator: validate numbers] |
+| `node build.mjs` in `C:\OPENBOT\Elevate-Not-Working` | see the register totals line in the docs-merge report |
+
+Slice runs reported by the build agents on 20 Oct 2026 (before the merge, not a whole-suite result): demos 2 files / 61 tests passed; counselling, teachers and feedback 3 files / 47 tests passed.
+
+### Known limitations
+- No screen has been checked in a browser (drawer focus and Escape, phone sheet, keyboard path, contrast).
+- Academic does not serve the per-student contract (IR-OPS-STU-1), so results and attendance show "Source unavailable"; Active stays empty until Academic confirms enrolments. _(21 Oct: IR-OPS-STU-1 done, LC-07.)_
+- Marketing does not publish `marketing.lead.handed_off`; no scheduler runs the jobs; no system actor for intake rows.
+- Admission number format, checklist enforcement, appointment buffer, allocation order and rating scale are `proposed` settings awaiting the owner.
+- Suspected defect found while merging the docs: closing a draft fee plan conflicts with the CHECK `fee_plans_approved_check` (`docs/WORKFLOWS.md`, fee plan). Not tested. _(21 Oct: fixed — the check now applies to active agreements only.)_
+- The prototype (`C:\OPENBOT\Elevate`) does not show any of this yet (IR-OPS-14).
+
+## Business Ops: clean sample data and clearer names (owner request, 21 Oct 2026, D-036)
+_Owned by the Business Ops team (data). Nothing is Deployed. Requirement OPS-122._
+
+| # | Feature | Status | Evidence |
+|---|---|---|---|
+| DATA-01 | One sample set (`seed/samples.ts`): 9 demo cases mapped 1:1 to the brief + 1 mock Marketing handoff; `is_sample` on leads, students, staff profiles; "Sample …" names; per-subject sample teachers; real teachers never on sample events | Tested | `tests/integration/seeds.test.ts` (case 1), `demos.test.ts` "creates Tanisha…" |
+| DATA-02 | `npm run db:clear-samples` (local only, one transaction, FK-safe order, counts printed, admission-number counter reset when no numbered admission is left) | Tested | `seeds.test.ts` (case 2); local run below |
+| DATA-03 | Migration `0005_clear_names` (renames, legacy demo columns and `demo_teachers` dropped, demo fee in paise, sample flags with backfill) | Implemented, applied locally | migrated schema = schema-built schema (PGlite comparison: 1151 columns, 568 constraints, 687 NOT NULL names identical); `npm run db:generate` → "No schema changes" |
+| DATA-04 | `docs/DATA_DICTIONARY.md` generated from the schema and its comments (`npm run docs:data-dictionary`, `-- --check`) | Implemented | 37 tables (5 core + 32 ops) |
+| DATA-05 | SAMPLE DATA badge on the leads list and lead page (demos, students already had it) | Implemented | typecheck + lint |
+
+### Commands run and results (21 Oct 2026)
+| Command | Result |
+|---|---|
+| Logical backup before 0005 (node + `pg`, `row_to_json` per table; `pg_dump` is not installed, D-024) | `.data/backup-before-0005-20261021-013733/` — 93 tables, 2399 rows, `MANIFEST.json` |
+| `npm run db:migrate` | `6 migration file(s) … applied or already up to date (node-postgres)` |
+| `npm run db:clear-samples -- --yes` (second run, after the new seed) | 259 sample rows deleted across 25 tables (first run removed the 366 old fixture rows) |
+| `npm run db:seed` | 17 seeds; `ops.samples: 10 sample students (9 demo cases + 1 Marketing handoff)` |
+| Local counts (node `pg` query) | leads 10 sample of 12 (2 unflagged leads typed by hand earlier, left for the owner); `core.students` 2 (both sample); admissions 14; admission numbers 001, 002; demos: open 4, converted 2, declined 1, not_converted 1, withdrawn 1; demo sessions 27; appointments: 9 completed counselling, 1 scheduled PTM, 1 cancelled teacher meeting; fee plan 1 active, ledger received + discount; 1 accepted handoff; real teachers on sample events 0 |
+| `npm run validate` | exit 0 — typecheck + lint (0 warnings) + `Test Files 86 passed (86)`, `Tests 896 passed | 1 todo (897)` + `secret-scan — OK (824 files checked …)`. Baseline before this change: 87 files / 893 tests; `admissions-seed.test.ts` and `fee-plans-seed.test.ts` were folded into `seeds.test.ts` (other agents' parallel changes account for the rest of the difference). First run had 1 flaky failure (a random staff UUID with 10 digits matched the "no phone" regex in `appointments.test.ts`); the assertion now ignores the id. |
+| `npm run build -w @elevate/business-ops-os` | `✓ Compiled successfully`, all routes listed, exit 0 |
+
+### Known limitations
+- Two hand-typed leads in the local database are not flagged sample (`LEAD-000007` "Overview Check Enquiry (fictional)", `LEAD-000008` "chdrt"); `db:clear-samples` keeps them. The owner decides whether to delete them.
+- Academic and Marketing seeds still use "(fictional)" names (outside this change).
+- The sample login accounts stay after `db:clear-samples` (other modules reference them; production refuses `@example.test`).
+
+## Business Ops: admissions lifecycle, fees, students, tasks and screen redesign (owner brief, 21 Oct 2026)
+_Built in parallel slices, each reviewed and fixed, then one whole-tree quality pass. Decisions D-038 … D-057. Migrations `0007_admissions_lifecycle` and `0008_staff_tasks` (both applied to the local database by the owner; 0008 sha256 `4e676815…b7e0`, frozen). Status per D-013; **nothing is Deployed**. Screens were looked at in Chrome by the coordinator at 1440 px and 390 px (no console errors, no sideways scroll); axe and Lighthouse were not run._
+
+| # | Feature | Status | Evidence (test files) |
+|---|---|---|---|
+| LC-01 | Demo = 3 demo days, each with one or more classes; late / excused marks; substitute flag; no-show outcome; student identity created at booking (D-038, D-050) | Tested | `apps/business-ops-os/tests/unit/demos.test.ts`, `tests/integration/demos.test.ts`, `tests/unit/pipeline.test.ts` |
+| LC-02 | Applications: versioned snapshot + SHA-256, status draft → ready → form → signatures → confirmed (or withdrawn); material change → new version, signatures invalidated; applications list screen (OPS-120) | Tested (API); screen Implemented | `tests/unit/applications.test.ts`, `tests/integration/applications.test.ts`, `tests/integration/conversion.test.ts` |
+| LC-03 | Admission form PDF (owner's paper form, sections 01–10 + terms, D-046), acknowledgement PDF, ID card (CR80); pdf-lib + Noto Sans (D-042) | Tested | `tests/unit/pdf-toolkit.test.ts`, `tests/unit/admission-documents.test.ts`, `tests/unit/admission-form.test.ts` |
+| LC-04 | Final confirmation with the approver's password (D-041), number given in the same transaction (D-040), replay-safe (D-053), Academic handoff; legacy admissions "verification required" + audited reconciliation | Tested | `tests/integration/applications.test.ts`, `packages/authentication/tests/reauth.test.ts`, `packages/database/tests/constraints/ops-admissions.test.ts` |
+| LC-05 | KYC: guardians (one primary), masked identity documents with verify / reject, sibling links; onboarding templates, checklist, materials | Tested | `tests/unit/onboarding.test.ts`, `tests/integration/student-kyc-onboarding.test.ts` |
+| LC-06 | Fee agreements: 50/25/25 split (D-039), registration ₹5,000 once per student (D-044), demo fee ₹1,000 (D-045), refunds and reversals as linked rows, versioned agreements, approval bound to one version (D-057) | Tested | `tests/unit/fee-agreements.test.ts`, `tests/unit/fee-plans.test.ts`, `tests/unit/admissions-fees.test.ts`, `tests/integration/fee-plans.test.ts`, `tests/integration/admissions-fees.test.ts`, `tests/integration/approvals-inbox.test.ts` |
+| LC-07 | Student reports (draft → reviewed → final, snapshot, PDF) using the new Academic per-student summary (IR-OPS-STU-1 done) | Tested | `tests/unit/academic-evidence.test.ts`, `tests/unit/progress-report-pdf.test.ts`, `tests/integration/academic-reports.test.ts`, `apps/academic-os/tests/integration/student-summary.test.ts` |
+| LC-08 | Events and webinars (participants, registration, attendance; messages simulated — no provider) | Tested (API); screen Implemented | `tests/unit/events.test.ts`, `tests/integration/events.test.ts` |
+| LC-09 | Exit records (reason, materials, closing notes, balance) and readmission; reactivation kept | Tested | `tests/integration/student-exit-readmission.test.ts`, `tests/unit/student-lifecycle.test.ts` |
+| LC-10 | Global search `/ops/search` (names, references; contacts only with private-data permission, audited) | Tested | `tests/unit/search.test.ts`, `tests/integration/search.test.ts`, `tests/unit/student-contact-search.test.ts` |
+| LC-11 | Daily tasks and EOD reports (`/ops/tasks`: My day, All, EOD, Team EOD; D-052) | Tested (API); screens Implemented | `tests/unit/staff-tasks.test.ts`, `tests/integration/staff-tasks.test.ts` |
+| LC-12 | Overview KPIs, admissions settings group, onboarding templates screen | Tested (API); screens Implemented | `tests/unit/admissions-kpis-overview.test.ts`, `tests/integration/admissions-overview.test.ts`, `tests/integration/student-kyc-onboarding.test.ts` (templates route) |
+| LC-13 | Money forms: one click only (button disabled before the request), automatic Idempotency-Key, error summary | Tested | `tests/unit/ui-kit.test.tsx` |
+| LC-14 | Draft syllabus courses (5) + IPMAT chapter weights; CA Foundation active (D-051) | Tested | `apps/academic-os/tests/integration/seed.test.ts` |
+| LC-15 | Screen redesign: dark theme kept, grouped sidebar, header band, figure strips, cards below 720 px, theme in `packages/shared-ui` (D-054) | Implemented (browser-checked by the coordinator) | `packages/shared-ui` tests; screenshots in the session scratchpad |
+| LC-16 | Database constraints for the new tables (98 cases) | Tested | `packages/database/tests/constraints/*.test.ts` |
+
+### Commands to re-run (exact)
+| Command | What it checks |
+|---|---|
+| `npm run validate` | typecheck, lint (0 warnings), every test, secret scan |
+| `npx vitest run apps/business-ops-os` | Business Ops unit + integration |
+| `npx vitest run packages/database packages/authentication` | constraints, migrations ≡ schema, password re-check |
+| `npx vitest run apps/academic-os apps/platform` | Academic summary route and seeds; platform sample enrolments |
+| `npm run build` | all four apps build |
+| `npm run docs:permissions -- --check` and `npm run docs:data-dictionary -- --check` | generated docs match the code |
+| `cd packages/database && npx drizzle-kit generate --name check` | "No schema changes" (delete any file it writes) |
+| `node build.mjs` in `C:\OPENBOT\Elevate-Not-Working` | register rebuilt |
+
+### Results
+Final totals (21 Oct 2026, run by the coordinator after the last change): `npm run validate` → exit 0 — typecheck all workspaces, lint 0 warnings, **124 test files, 1,642 tests passed (1 todo)**, secret scan OK (1,005 files). `npm run build` → exit 0 for platform, marketing-os, academic-os and business-ops-os. Browser walk-through on the local dev servers: 0 application console errors; full admission confirmation not walked end to end on sample data (needs a second person and a phone number by design). Status: **Implemented and Tested — not Deployed**.
+
+### Known limitations
+- Accounts that sign in only with Google cannot confirm admissions (D-041; owner decision on Google re-authentication).
+- Characters outside the PDF font (for example Devanagari) print as "?" with a footer note.
+- Event messages and EOD "share" are simulated; no messaging provider.
+- Weekly / monthly EOD range report and calendar view not built.
+- Academic does not yet receive `ops.enrolment.closed` (IR-OPS-EXIT-1) or serve batch end dates (IR-OPS-EXIT-2).
+- The prototype (`C:\OPENBOT\Elevate`) does not show applications, fee agreements, tasks or the new layout.
 
 ## Integration (wave 3)
 _Owned by the Integration agent._ Pending: baseline migration, cross-module tests (enrolment handoff end to end), consumer scheduler, platform consolidated dashboard from the summary contracts, docs reconciliation (`npm run docs:permissions`).

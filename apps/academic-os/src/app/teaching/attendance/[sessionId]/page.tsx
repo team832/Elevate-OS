@@ -1,6 +1,7 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, Card, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { Alert, ButtonLink, Card, EmptyState, PageHeader } from '@elevate/shared-ui';
 import { getSessionAttendance } from '../../../../server';
 import { MODULE_PATHS } from '../../../../server/paths';
 import { AttendanceForm } from '../../../../ui/attendance-form';
@@ -8,6 +9,7 @@ import { StateBadge } from '../../../../ui/badges';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Attendance' };
 
 export default async function AttendancePage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params;
@@ -21,8 +23,9 @@ export default async function AttendancePage({ params }: { params: Promise<{ ses
     <AcademicShell access={access} active="teaching">
       <PageHeader
         title={`Attendance — ${session.date} ${session.startTime}`}
-        description={<>{session.durationMinutes} min · <StateBadge state={session.status} /> · {recorded} recorded, {notRecorded} not recorded</>}
-        actions={<a href={MODULE_PATHS.teaching}>Teaching log</a>}
+        meta={<StateBadge state={session.status} />}
+        description={`${session.durationMinutes} min · ${recorded} recorded, ${notRecorded} not recorded`}
+        actions={<ButtonLink href={MODULE_PATHS.teaching}>Teaching log</ButtonLink>}
       />
       <div className="el-stack">
         <Alert tone="info">Students without a mark stay “not recorded”: they are excluded from attendance rates, never counted as absent. Changes are audited.</Alert>

@@ -16,20 +16,27 @@ import {
   ErrorState,
   LoadingState,
   PageHeader,
+  Subnav,
   type NavItem,
 } from '@elevate/shared-ui';
 import { MODULE, modulePath } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
 
-const NAV: { key: string; label: string; path: string }[] = [
-  { key: 'dashboard', label: 'Dashboard', path: '' },
-  { key: 'accounts', label: 'Accounts', path: 'accounts' },
-  { key: 'ideas', label: 'Ideas', path: 'ideas' },
-  { key: 'calendar', label: 'Calendar', path: 'calendar' },
-  { key: 'metrics-import', label: 'Metrics import', path: 'metrics/import' },
-  { key: 'weekly', label: 'Weekly report', path: 'metrics/weekly' },
-  { key: 'campaigns', label: 'Campaigns', path: 'campaigns' },
+const NAV: { key: string; label: string; path: string; group: string }[] = [
+  { key: 'dashboard', label: 'Dashboard', path: '', group: 'Plan' },
+  { key: 'calendar', label: 'Calendar', path: 'calendar', group: 'Plan' },
+  { key: 'campaigns', label: 'Campaigns', path: 'campaigns', group: 'Plan' },
+  { key: 'ideas', label: 'Ideas', path: 'ideas', group: 'Content' },
+  { key: 'accounts', label: 'Accounts', path: 'accounts', group: 'Accounts' },
+  { key: 'weekly', label: 'Weekly report', path: 'metrics/weekly', group: 'Metrics' },
+  { key: 'metrics-import', label: 'Metrics import', path: 'metrics/import', group: 'Metrics' },
 ];
+
+/** Metrics area tabs: [href, label]. */
+export const METRICS_TABS = [
+  [modulePath('metrics/weekly'), 'Weekly report'],
+  [modulePath('metrics/import'), 'Metrics import'],
+] as const;
 
 /** "Rules & settings" is reached from the Settings link at the bottom of the sidebar. */
 const SETTINGS = { key: 'settings', label: 'Rules & settings', path: 'settings' };
@@ -62,6 +69,8 @@ export interface MarketingPageProps {
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
+  /** Area tabs under the title (see `METRICS_TABS`). */
+  tabs?: readonly (readonly [href: string, label: string])[];
   searchParams?: Record<string, string | string[] | undefined>;
   children: (user: AuthenticatedUser) => ReactNode;
 }
@@ -75,6 +84,7 @@ export async function MarketingPage(props: MarketingPageProps) {
   const nav: NavItem[] = NAV.map((n) => ({
     href: modulePath(n.path),
     label: n.label,
+    group: n.group,
     active: n.key === props.active,
   }));
   const notice = props.searchParams ? param(props.searchParams, 'notice') : undefined;
@@ -101,7 +111,6 @@ export async function MarketingPage(props: MarketingPageProps) {
           ? { action: modulePath('ideas'), label: 'Search ideas' }
           : undefined
       }
-      myWorkHref={can(user, 'ops:tasks:read') ? '/ops/tasks?view=mine' : undefined}
       settings={
         can(user, 'marketing:module:access')
           ? { href: modulePath(SETTINGS.path), active: onSettings }
@@ -112,11 +121,24 @@ export async function MarketingPage(props: MarketingPageProps) {
       {access.status === 'forbidden' ? (
         <ErrorState
           title="No access"
-          description={`Your roles do not include ${props.permission}. Ask a platform administrator if you need it.`}
+          description="Your roles do not include the permission this page needs. Ask a platform administrator if you need it."
         />
       ) : (
         <>
-          <PageHeader title={props.title} description={props.description} actions={props.actions} />
+          <PageHeader
+            title={props.title}
+            description={props.description}
+            actions={props.actions}
+            tabs={
+              props.tabs ? (
+                <Subnav
+                  label={props.title}
+                  items={props.tabs}
+                  current={nav.find((n) => n.active)?.href}
+                />
+              ) : undefined
+            }
+          />
           {notice ? <Alert tone="success">{notice}</Alert> : null}
           {error ? (
             <Alert tone="danger" title="That did not work">

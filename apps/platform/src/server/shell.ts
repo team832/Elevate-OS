@@ -1,6 +1,6 @@
 /**
- * Shell extras for platform pages: platform nav, top-bar search target, "My work"
- * link and the unread-notification count. Every link is shown only to users whose
+ * Shell extras for platform pages: platform nav, top-bar search target and the
+ * unread-notification count. Every link is shown only to users whose
  * permissions open the target (the target checks again on the server).
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
@@ -10,10 +10,7 @@ import { countUnread } from '@elevate/notifications';
 import type { AppShellProps } from '@elevate/shared-ui';
 import { PLATFORM_PATHS } from '../lib/shell';
 
-type Extras = Pick<
-  AppShellProps,
-  'nav' | 'search' | 'myWorkHref' | 'settings' | 'unreadNotifications'
->;
+type Extras = Pick<AppShellProps, 'nav' | 'search' | 'settings' | 'unreadNotifications'>;
 
 /** Top-bar search: the first searchable list the user may open. */
 export function searchFor(user: AuthenticatedUser): AppShellProps['search'] {
@@ -54,7 +51,6 @@ export async function platformShell(
         : []),
     ],
     search: searchFor(user),
-    myWorkHref: can(user, 'ops:tasks:read') ? '/ops/tasks?view=mine' : undefined,
     settings: canUsers ? { href: PLATFORM_PATHS.users } : undefined,
     unreadNotifications: unread,
   };

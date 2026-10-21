@@ -1,11 +1,13 @@
+import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
-import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge, Subnav } from '@elevate/shared-ui';
 import { listConceptBooks } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { PlanBadge } from '../../../ui/badges';
-import { AcademicShell, LoadError, gate, load } from '../../../ui/shell';
+import { AcademicShell, LoadError, gate, load, CURRICULUM_TABS } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Concept-book indices' };
 
 export default async function ConceptBooksPage() {
   const access = await gate('academic:courses:read', MODULE_PATHS.conceptBooks);
@@ -13,7 +15,11 @@ export default async function ConceptBooksPage() {
   const data = await load(() => listConceptBooks(getDb()));
   return (
     <AcademicShell access={access} active="curriculum">
-      <PageHeader title="Concept-book indices" description="Chapter indices only (locked). Content is deliberately empty; question counts are planned allocations, not written questions. Chapter codes are never renumbered." />
+      <PageHeader
+        title="Concept-book indices"
+        description="Chapter indices only. Question counts are planned allocations, not written questions."
+        tabs={<Subnav label="Curriculum" items={CURRICULUM_TABS} current={MODULE_PATHS.conceptBooks} />}
+      />
       {!data.ok ? (
         <LoadError error={data.error} />
       ) : data.data.books.length === 0 ? (
@@ -25,7 +31,7 @@ export default async function ConceptBooksPage() {
           </Alert>
           {data.data.books.map((b) => (
             <Card key={b.bookCode} title={`${b.bookCode} — ${b.bookTitle}`} description={`${b.numberedChapters} numbered chapters`}>
-              <DataTable
+              <DataTable compact
                 rows={b.chapters}
                 rowKey={(c) => c.id}
                 columns={[

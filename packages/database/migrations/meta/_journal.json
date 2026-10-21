@@ -15,6 +15,55 @@
       "when": 1792465116466,
       "tag": "0001_users_email_domain",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792512523784,
+      "tag": "0002_remove_hr_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792520216379,
+      "tag": "0003_admissions_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792546062445,
+      "tag": "0004_fee_plan_close_without_approval",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792547882797,
+      "tag": "0005_clear_names",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792551718372,
+      "tag": "0006_fee_structures",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792572579587,
+      "tag": "0007_admissions_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792576067687,
+      "tag": "0008_staff_tasks",
+      "breakpoints": true
     }
   ]
 }

@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Button, Card, DataTable, EmptyState, Field, Select, TextInput } from '@elevate/shared-ui';
@@ -7,6 +8,7 @@ import { createCampaignAction } from '../actions/placements';
 import { MarketingPage, Section, type SearchParams } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Campaigns' };
 
 export default async function CampaignsPage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -15,7 +17,7 @@ export default async function CampaignsPage({ searchParams }: { searchParams: Se
       path={modulePath('campaigns')}
       active="campaigns"
       title="Campaigns"
-      description="Organic campaigns group placements; compare them on the weekly report (group by campaign). Paid campaigns, budgets and launch checks are Proposed."
+      description="Organic campaigns that group posts. Paid campaigns and budgets are Proposed."
       searchParams={await searchParams}
     >
       {(user) => (
@@ -25,6 +27,7 @@ export default async function CampaignsPage({ searchParams }: { searchParams: Se
             return (
               <div className="el-stack">
                 <DataTable
+                  compact
                   rows={campaigns}
                   rowKey={(c) => c.id}
                   empty={<EmptyState title="No campaigns yet" />}

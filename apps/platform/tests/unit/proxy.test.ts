@@ -12,8 +12,9 @@ describe('platform proxy', () => {
     expect(res.headers.get('x-request-id')).toBeTruthy();
   });
 
-  it('lets the login page and requests with a session cookie through', () => {
-    expect(proxy(new NextRequest('http://localhost:3000/login')).status).toBe(200);
+  it('lets the public front page, the login page and requests with a session cookie through', () => {
+    for (const path of ['/', '/login'])
+      expect(proxy(new NextRequest(`http://localhost:3000${path}`)).headers.get('location')).toBeNull();
     const withCookie = new NextRequest('http://localhost:3000/', {
       headers: { cookie: 'elevate_session=abc' },
     });
@@ -26,7 +27,8 @@ describe('platform proxy', () => {
     for (const path of [
       '/api/health',
       '/_next/static/x.js',
-      '/brand/elevate-logo.png',
+      '/favicon.ico',
+      '/icon.svg',
       '/marketing',
       '/academic/x',
       '/ops',

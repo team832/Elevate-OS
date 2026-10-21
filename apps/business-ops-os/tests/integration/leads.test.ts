@@ -64,7 +64,7 @@ async function newLead(user: StaffUser, over: Record<string, unknown> = {}) {
   return callRoute<Created>(
     createLead,
     post(user, '/ops/api/v1/leads', {
-      studentName: 'Riya Test (fictional)',
+      studentName: 'Riya Test',
       studentPhone: phone(),
       programmeCode: 'CLAT',
       sourceCode: 'WALK_IN',
@@ -117,7 +117,7 @@ describe('POST /ops/api/v1/leads', () => {
     const first = await newLead(counsellor, { studentPhone: raw });
     const dup = await newLead(counsellor, {
       studentPhone: `+91 ${raw.slice(1, 6)} ${raw.slice(6)}`,
-      studentName: 'Another Name (fictional)',
+      studentName: 'Another Name',
     });
     expect(dup.status).toBe(409);
     expect(
@@ -144,9 +144,9 @@ describe('POST /ops/api/v1/leads', () => {
 
   it('a shared guardian phone only is a POSSIBLE duplicate: saved with a warning, not blocked', async () => {
     const guardian = phone();
-    await newLead(counsellor, { studentName: 'Kabir Shah (fictional)', guardianPhone: guardian });
+    await newLead(counsellor, { studentName: 'Kabir Shah', guardianPhone: guardian });
     const res = await newLead(counsellor, {
-      studentName: 'Anaya Shah (fictional)',
+      studentName: 'Anaya Shah',
       guardianPhone: guardian,
     });
     expect(res.status).toBe(201);
@@ -155,11 +155,11 @@ describe('POST /ops/api/v1/leads', () => {
 
   it('duplicate preview hides names of leads the counsellor cannot open', async () => {
     const raw = phone();
-    await newLead(otherCounsellor, { studentPhone: raw, studentName: 'Hidden Person (fictional)' });
+    await newLead(otherCounsellor, { studentPhone: raw, studentName: 'Hidden Person' });
     const res = await callRoute<{ matches: Created['duplicates'] }>(
       checkDuplicates,
       post(counsellor, '/ops/api/v1/leads/check-duplicates', {
-        studentName: 'Someone (fictional)',
+        studentName: 'Someone',
         studentPhone: raw,
       }),
     );
@@ -186,6 +186,17 @@ describe('own scope, assignment and contact', () => {
     const id = { id: theirs.data!.lead.id };
     expect(await status(getLead, authedRequest(counsellor, '/x'), id)).toBe(403);
     expect(await status(getLead, authedRequest(manager, '/x'), id)).toBe(200);
+  });
+
+  it('campaign references show only to roles allowed to see marketing attribution', async () => {
+    const lead = await newLead(counsellor, { campaignRef: 'test-only-campaign' });
+    const id = { id: lead.data!.lead.id };
+    type Detail = { enquiries: { campaignRef: string | null }[] };
+    const as = async (user: StaffUser) =>
+      (await callRoute<Detail>(getLead, authedRequest(user, '/x'), id)).data!.enquiries[0]!
+        .campaignRef;
+    expect(await as(counsellor)).toBeNull();
+    expect(await as(manager)).toBe('test-only-campaign');
   });
 
   it('assignment: counsellor 403; manager assigns → handoff pending → owner accepts', async () => {
@@ -225,6 +236,27 @@ describe('own scope, assignment and contact', () => {
       { id },
     );
     expect(again.data?.admissionsMovedToContacted).toEqual([]);
+  });
+
+  it('flags: a new lead is new this week and awaiting contact until a two-way contact', async () => {
+    const id = (await newLead(counsellor)).data!.lead.id;
+    const ids = async (flag: string) =>
+      (
+        await callRoute<{ id: string }[]>(
+          listLeads,
+          authedRequest(counsellor, `/ops/api/v1/leads?flag=${flag}`),
+        )
+      ).data?.map((l) => l.id);
+    expect(await ids('new_this_week')).toContain(id);
+    expect(await ids('awaiting_contact')).toContain(id);
+    await callRoute(
+      activity,
+      post(counsellor, '/x', { kind: 'call', outcome: 'connected_two_way' }),
+      {
+        id,
+      },
+    );
+    expect(await ids('awaiting_contact')).not.toContain(id);
   });
 
   it('a new enquiry for another programme opens a second admission case', async () => {

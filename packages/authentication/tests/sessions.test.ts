@@ -211,6 +211,12 @@ describe('login / logout handlers', () => {
       next: '/academic',
     });
     expect(bad.headers.get('location')).toBe('/login?error=invalid&next=%2Facademic');
+    const outsider = await form({
+      email: 'someone@gmail.com',
+      password: 'fictional-password-1',
+      next: '/academic',
+    });
+    expect(outsider.headers.get('location')).toBe('/login?error=domain&next=%2Facademic');
   });
 
   it('logout revokes the session and clears the cookie', async () => {

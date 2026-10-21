@@ -1,0 +1,1069 @@
+{
+  "meta": {
+    "title": "Elevate Education public catalog: research draft",
+    "source_site": "https://elevateeducation.in",
+    "last_verified": "2026-10-20",
+    "approval_status": "unverified",
+    "doc": "apps/business-ops-os/docs/PUBLIC_COURSE_CATALOG_RESEARCH.md",
+    "method": "curl (HTTP status, raw HTML, JS bundle /static/js/main.acb9ea3f.js, sitemap.xml) + local headless Google Chrome command line (--headless=new --dump-dom) to render the client-side pages. Firecrawl scrape failed (account out of credits); WebFetch returned only the empty app shell. No Chrome extension was used.",
+    "rules": [
+      "Every value is copied from the public site or marked 'not found'. Nothing here is approved data.",
+      "confidence: 'stated' = the site says it; 'inferred' = the researcher's reading of site text, needs owner check.",
+      "College Directory programmes (external_programs) are university/college degrees, never Elevate batches.",
+      "Cohort types (Class 11, Class 12, Dropper) are not exams.",
+      "Outcome claims on the site (pass rates, average scores, satisfaction) are deliberately not imported."
+    ],
+    "existing_internal_codes_note": "packages/database/src/seed/core-seed.ts already seeds core.programmes codes CLAT, IPMAT, CUET, COMMERCE_11_12, CA_FOUNDATION. program.maps_to_core_programme uses those codes where the match is direct."
+  },
+
+  "cohort_types": [
+    {
+      "code": "CLASS_10",
+      "display_name": "Class 10th",
+      "aliases": ["Class 10th"],
+      "evidence": "Lead form 'Current Class' option only; no Class 10 course found.",
+      "source_url": "https://elevateeducation.in/",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "CLASS_11",
+      "display_name": "Class 11th",
+      "aliases": ["Class 11th", "11th Commerce", "Class 11"],
+      "evidence": "Lead form option; course sub-entry '11th Commerce' (eligibility 'Completed 10th Grade'); FAQ 'Can I join for Class 11?' answered 'Yes.'",
+      "source_url": "https://elevateeducation.in/commerce-coaching",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "CLASS_12",
+      "display_name": "Class 12th",
+      "aliases": ["Class 12th", "12th Commerce"],
+      "evidence": "Lead form option; course sub-entry '12th Commerce' (eligibility 'Completed 11th Commerce').",
+      "source_url": "https://elevateeducation.in/course/11th-commerce",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "POST_12_DROPPER",
+      "display_name": "12th Pass / Dropper",
+      "aliases": ["12th Pass / Dropper"],
+      "evidence": "Lead form 'Current Class' option only. No dropper or repeater batch is named anywhere on the site. 'Repeater' not found.",
+      "source_url": "https://elevateeducation.in/",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "IN_COLLEGE",
+      "display_name": "In College",
+      "aliases": ["In College"],
+      "evidence": "Lead form 'Current Class' option only.",
+      "source_url": "https://elevateeducation.in/",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    }
+  ],
+
+  "exam_types": [
+    {
+      "code": "CUET_UG",
+      "display_name": "CUET (UG)",
+      "aliases": ["CUET", "CUET (UG)", "CUET 2026", "CUET GAT", "CUET + Interview"],
+      "notes": "Site lists 3 sections, 50 questions per section, 45 mins per section, Computer Based Test (/course/cuet). Elevate's CUET pages cover commerce domain subjects, English and GAT.",
+      "source_urls": [
+        "https://elevateeducation.in/cuet-coaching",
+        "https://elevateeducation.in/course/cuet",
+        "https://elevateeducation.in/course-finder"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "IPMAT_INDORE",
+      "display_name": "IPMAT Indore",
+      "aliases": ["IPMAT Indore", "IPMAT", "IPM"],
+      "source_urls": [
+        "https://elevateeducation.in/ipmat",
+        "https://elevateeducation.in/college-directory"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "IPMAT_ROHTAK",
+      "display_name": "IPMAT Rohtak",
+      "aliases": ["IPMAT Rohtak"],
+      "source_urls": ["https://elevateeducation.in/ipmat"],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "JIPMAT",
+      "display_name": "JIPMAT",
+      "aliases": ["JIPMAT", "IPM & JIPMAT"],
+      "source_urls": [
+        "https://elevateeducation.in/ipmat",
+        "https://elevateeducation.in/course/cuet"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "IIMB_UG",
+      "display_name": "IIM Bangalore UG",
+      "aliases": ["IIM Bangalore UG", "IIM-B UG Test", "IIMB UG-AT"],
+      "notes": "Site ties it to IIMB BSc (Hons) Economics / Data Science. The site's test date 'December 2025' and deadline 'November 20, 2025' are past as of 2026-10-20.",
+      "source_urls": [
+        "https://elevateeducation.in/ipmat",
+        "https://elevateeducation.in/course/cuet"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "IIMB_BSC_ET",
+      "display_name": "IIMB BSc Entrance Test",
+      "aliases": ["IIMB BSc Entrance Test"],
+      "notes": "College Directory filter value only.",
+      "source_urls": ["https://elevateeducation.in/college-directory"],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "IIMB_DBE_ET",
+      "display_name": "IIMB DBE Entrance Test",
+      "aliases": ["IIMB DBE Entrance Test", "IIMB BBA DBE Entrance Test", "IIMB DBE Test"],
+      "notes": "College Directory only. No Elevate coaching page names it.",
+      "source_urls": ["https://elevateeducation.in/college-directory"],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "CLAT_UG",
+      "display_name": "CLAT (Common Law Admission Test)",
+      "aliases": ["CLAT", "CLAT (Common Law Admission Test)"],
+      "source_urls": [
+        "https://elevateeducation.in/clat",
+        "https://elevateeducation.in/course/clat"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "CA_FOUNDATION",
+      "display_name": "CA Foundation",
+      "aliases": ["CA Foundation"],
+      "source_urls": [
+        "https://elevateeducation.in/ca-foundation-coaching",
+        "https://elevateeducation.in/blog/ca-foundation-after-12th"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "CA_INTERMEDIATE",
+      "display_name": "CA Intermediate",
+      "aliases": ["CA Intermediate", "CA Inter"],
+      "source_urls": ["https://elevateeducation.in/course/ca-foundation"],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "BOARD_COMMERCE_11_12",
+      "display_name": "Commerce Boards (11th & 12th)",
+      "aliases": ["Commerce Boards", "Commerce boards", "COMMERCE BOARDS"],
+      "notes": "Board exams, not an entrance exam. Board name (CBSE/state) not found.",
+      "source_urls": ["https://elevateeducation.in/commerce-coaching"],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    }
+  ],
+
+  "directory_only_exams": {
+    "note": "Listed as College Directory filters only. No Elevate coaching is stated for these.",
+    "source_url": "https://elevateeducation.in/college-directory",
+    "values": [
+      "JEE Main",
+      "IIMK BMS AT",
+      "SAT",
+      "ACT",
+      "NPAT",
+      "H-CET",
+      "MAH CET",
+      "Merit-based + Entrance",
+      "XET",
+      "SET",
+      "Christ University Entrance Test",
+      "Merit-based",
+      "AILET (Own Exam)",
+      "SLAT (Symbiosis Law Admission Test)",
+      "LSAT India",
+      "CUET / DU LLB Entrance"
+    ]
+  },
+
+  "subjects": [
+    {
+      "code": "ACCOUNTANCY",
+      "display_name": "Accountancy",
+      "aliases": [
+        "Accountancy",
+        "Accounts",
+        "Acct",
+        "11th Accountancy",
+        "12th Accountancy",
+        "Accountancy / Book Keeping"
+      ],
+      "stages": ["CLASS_11", "CLASS_12"],
+      "used_for": ["BOARD_COMMERCE_11_12", "CUET_UG"],
+      "source_url": "https://elevateeducation.in/commerce-coaching",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "BUSINESS_STUDIES",
+      "display_name": "Business Studies",
+      "aliases": ["Business Studies", "BST", "11th Business Studies", "12th Business Studies"],
+      "stages": ["CLASS_11", "CLASS_12"],
+      "used_for": ["BOARD_COMMERCE_11_12", "CUET_UG"],
+      "source_url": "https://elevateeducation.in/commerce-coaching",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "ECONOMICS",
+      "display_name": "Economics",
+      "aliases": ["Economics", "Eco", "11th & 12th Economics", "Economics / Business Economics"],
+      "stages": ["CLASS_11", "CLASS_12"],
+      "used_for": ["BOARD_COMMERCE_11_12", "CUET_UG"],
+      "source_url": "https://elevateeducation.in/commerce-coaching",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "MATHEMATICS",
+      "display_name": "Mathematics",
+      "aliases": [
+        "Mathematics",
+        "Maths",
+        "11th & 12th Mathematics",
+        "Mathematics / Applied Mathematics"
+      ],
+      "stages": ["CLASS_11", "CLASS_12"],
+      "used_for": ["BOARD_COMMERCE_11_12", "CUET_UG"],
+      "source_url": "https://elevateeducation.in/commerce-coaching",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "ENGLISH",
+      "display_name": "English",
+      "aliases": ["English", "English Language"],
+      "stages": ["CLASS_11", "CLASS_12"],
+      "used_for": ["CUET_UG"],
+      "notes": "Taught for CUET (/cuet-coaching). Not listed as a taught board subject on /commerce-coaching; the blog calls it a mandatory school subject.",
+      "source_url": "https://elevateeducation.in/cuet-coaching",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "GAT",
+      "display_name": "General Aptitude Test (GAT)",
+      "aliases": ["General Aptitude (GAT)", "General Aptitude Test (GAT)", "GAT"],
+      "stages": [],
+      "used_for": ["CUET_UG"],
+      "source_url": "https://elevateeducation.in/cuet-coaching",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    }
+  ],
+
+  "programs": [
+    {
+      "code": "ACE_BATCH",
+      "display_name": "The ACE Batch",
+      "kind": "elevate_program",
+      "aliases": [
+        "The ACE Batch",
+        "ACE Batch",
+        "ACE Batch - Advanced Commerce & Entrance",
+        "THE ACE BATCH",
+        "Commerce + IPMAT + CUET",
+        "Advanced Commerce & Entrance"
+      ],
+      "description_quote": "India's most comprehensive online program covering Commerce Boards, CUET, and IPMAT",
+      "components": {
+        "exam_types": ["BOARD_COMMERCE_11_12", "CUET_UG", "IPMAT_INDORE"],
+        "subjects": ["ACCOUNTANCY", "BUSINESS_STUDIES", "ECONOMICS", "MATHEMATICS"]
+      },
+      "cohort_types": "not found (Commerce boards '11th & 12th' are included)",
+      "mode_stated": ["Online (/ace-batch: 'online program'; /course-combinations: '100% Online')"],
+      "price_stated": [
+        "'Unlock Pricing' on package cards",
+        "₹12,000/month (FAQ on /commerce-coaching)"
+      ],
+      "duration_stated": "not found",
+      "dates_stated": "not found",
+      "linked_from_navigation": true,
+      "maps_to_core_programme": "none (spans COMMERCE_11_12, CUET, IPMAT)",
+      "source_urls": [
+        "https://elevateeducation.in/ace-batch",
+        "https://elevateeducation.in/course-combinations",
+        "https://elevateeducation.in/commerce-coaching"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "COMMERCE_CUET_BATCH",
+      "display_name": "Commerce + CUET Batch",
+      "kind": "elevate_program",
+      "aliases": [
+        "Commerce + CUET Batch",
+        "COMMERCE + CUET",
+        "Board & University",
+        "BOARD + UNIVERSITY",
+        "Commerce + CUET batch"
+      ],
+      "description_quote": "Master your Commerce boards and ace CUET for top university admissions.",
+      "components": {
+        "exam_types": ["BOARD_COMMERCE_11_12", "CUET_UG"],
+        "subjects": ["ACCOUNTANCY", "BUSINESS_STUDIES", "ECONOMICS", "MATHEMATICS"]
+      },
+      "cohort_types": "not found (card says '11th & 12th Commerce (Accounts, BST, Economics, Maths)')",
+      "mode_stated": ["Online (/course-combinations: '100% Online')"],
+      "price_stated": [
+        "'Unlock Pricing' on package cards",
+        "₹10,000/month (FAQ on /commerce-coaching and /online-coaching)"
+      ],
+      "duration_stated": "not found",
+      "dates_stated": "not found",
+      "linked_from_navigation": true,
+      "maps_to_core_programme": "none (spans COMMERCE_11_12, CUET)",
+      "source_urls": [
+        "https://elevateeducation.in/course-combinations",
+        "https://elevateeducation.in/ace-batch",
+        "https://elevateeducation.in/commerce-coaching",
+        "https://elevateeducation.in/online-coaching"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "IPMAT_INTENSIVE",
+      "display_name": "IPMAT Intensive",
+      "kind": "elevate_program",
+      "aliases": [
+        "IPMAT Intensive",
+        "IPMAT INTENSIVE",
+        "IPMAT Only",
+        "IIM TRACK",
+        "IPMAT Intensive Coaching"
+      ],
+      "description_quote": "For students solely focused on cracking IPMAT.",
+      "components": { "exam_types": ["IPMAT_INDORE"], "subjects": [] },
+      "cohort_types": "not found",
+      "mode_stated": ["Online (/course-combinations: '100% Online')"],
+      "price_stated": ["'Unlock Pricing' on package cards"],
+      "duration_stated": "not found as a fixed value (/ipmat-coaching FAQ: 'Our intensive batch can prepare you in 4-5 months if you're starting with a decent math foundation')",
+      "dates_stated": "not found",
+      "linked_from_navigation": true,
+      "maps_to_core_programme": "IPMAT",
+      "source_urls": [
+        "https://elevateeducation.in/course-combinations",
+        "https://elevateeducation.in/ipmat-coaching"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "COMMERCE_BOARD_COACHING",
+      "display_name": "Commerce Board Coaching (11th & 12th)",
+      "kind": "elevate_program",
+      "aliases": [
+        "Commerce Board Coaching (11th & 12th)",
+        "COMMERCE BOARDS",
+        "11th & 12th Commerce",
+        "11th Commerce",
+        "12th Commerce",
+        "Commerce Boards (11th & 12th)"
+      ],
+      "description_quote": "Excel in 11th & 12th Commerce boards with expert coaching from Chartered Accountants and IIM Alumni.",
+      "components": {
+        "exam_types": ["BOARD_COMMERCE_11_12"],
+        "subjects": ["ACCOUNTANCY", "BUSINESS_STUDIES", "ECONOMICS", "MATHEMATICS"]
+      },
+      "cohort_types": ["CLASS_11", "CLASS_12"],
+      "mode_stated": [
+        "Live & interactive online (/commerce-coaching)",
+        "Offline (Face-to-Face) (/course/11th-commerce)"
+      ],
+      "price_stated": "not found as a standalone price (FAQ points to Commerce + CUET ₹10,000/month and ACE ₹12,000/month)",
+      "duration_stated": "2 Years (/course/11th-commerce); 1 Year each for '11th Commerce' and '12th Commerce'",
+      "dates_stated": "not found",
+      "linked_from_navigation": false,
+      "notes": "Whether this is a separate batch or only a landing page for the ACE / Commerce + CUET batches is unclear: its buttons link to /ace-batch.",
+      "maps_to_core_programme": "COMMERCE_11_12",
+      "source_urls": [
+        "https://elevateeducation.in/commerce-coaching",
+        "https://elevateeducation.in/course/11th-commerce"
+      ],
+      "confidence": "inferred",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "CA_FOUNDATION_INTER",
+      "display_name": "CA Foundation & CA Inter",
+      "kind": "elevate_program",
+      "aliases": [
+        "CA Foundation & CA Inter",
+        "CA Foundation Coaching",
+        "CA Intermediate Coaching",
+        "CA Foundation",
+        "CA Intermediate",
+        "CA FOUNDATION"
+      ],
+      "description_quote": "Complete preparation for Chartered Accountancy - from Foundation to Intermediate level.",
+      "components": { "exam_types": ["CA_FOUNDATION", "CA_INTERMEDIATE"], "subjects": [] },
+      "cohort_types": "not found (eligibility: '12th Pass (Any Stream) - Register after Class 10th' for Foundation)",
+      "mode_stated": ["Offline (Face-to-Face) (/course/ca-foundation)"],
+      "price_stated": "not found",
+      "duration_stated": "2-3 Years (Combined); CA Foundation 4-6 Months; CA Intermediate 8-12 Months",
+      "dates_stated": "not found",
+      "linked_from_navigation": false,
+      "notes": "Internal seed marks CA_FOUNDATION as 'planned' (paused, 1 March 2027 start). The public site advertises it now. Owner must reconcile.",
+      "maps_to_core_programme": "CA_FOUNDATION (Foundation part only)",
+      "source_urls": [
+        "https://elevateeducation.in/ca-foundation-coaching",
+        "https://elevateeducation.in/course/ca-foundation"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "CUET_IIM_ENTRANCE",
+      "display_name": "CUET & IIM Entrance",
+      "kind": "elevate_program",
+      "aliases": [
+        "CUET & IIM Entrance",
+        "CUET Coaching Programme",
+        "CUET (UG)",
+        "IPM & JIPMAT",
+        "IIM Bangalore UG",
+        "CUET 2026 PREPARATION"
+      ],
+      "description_quote": "Complete preparation for CUET, IPM, JIPMAT and IIM Bangalore UG.",
+      "components": {
+        "exam_types": ["CUET_UG", "IPMAT_INDORE", "IPMAT_ROHTAK", "JIPMAT", "IIMB_UG"],
+        "subjects": [
+          "ACCOUNTANCY",
+          "BUSINESS_STUDIES",
+          "ECONOMICS",
+          "MATHEMATICS",
+          "ENGLISH",
+          "GAT"
+        ]
+      },
+      "cohort_types": "not found (eligibility '12th Pass (Any Stream)')",
+      "mode_stated": [
+        "Offline (Face-to-Face) (/course/cuet)",
+        "100% Online & Live (/cuet-coaching)"
+      ],
+      "price_stated": "not found",
+      "duration_stated": "6-12 Months; CUET (UG) 6-8 Months; IPM & JIPMAT 8-10 Months; IIM Bangalore UG 12-18 Months",
+      "dates_stated": "not found",
+      "linked_from_navigation": false,
+      "maps_to_core_programme": "CUET and IPMAT (split needed)",
+      "source_urls": [
+        "https://elevateeducation.in/course/cuet",
+        "https://elevateeducation.in/cuet-coaching"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "code": "CLAT_COURSE",
+      "display_name": "CLAT (Common Law Admission Test)",
+      "kind": "elevate_program",
+      "aliases": ["CLAT (Common Law Admission Test)", "CLAT", "CLAT PREPARATION"],
+      "description_quote": "Prepare for India's most prestigious law entrance exam.",
+      "components": { "exam_types": ["CLAT_UG"], "subjects": [] },
+      "cohort_types": "not found (eligibility '12th Pass (Any Stream) with 45% marks (40% for SC/ST)')",
+      "mode_stated": ["Offline (Face-to-Face) (/course/clat)"],
+      "price_stated": "not found",
+      "duration_stated": "8-12 Months (/course/clat)",
+      "dates_stated": "not found",
+      "linked_from_navigation": false,
+      "notes": "The navigation 'CLAT' page (/clat) is an exam and law-school guide with counselling buttons; it names no batch or package. CLAT is absent from Course Packages. Only the unlinked /course/clat page presents it as an enrollable course.",
+      "maps_to_core_programme": "CLAT",
+      "source_urls": [
+        "https://elevateeducation.in/course/clat",
+        "https://elevateeducation.in/clat"
+      ],
+      "confidence": "stated",
+      "approval_status": "unverified"
+    }
+  ],
+
+  "course_offerings": [
+    {
+      "program_code": "COMMERCE_BOARD_COACHING",
+      "display_name": "11th Commerce",
+      "cohort_type": "CLASS_11",
+      "exam_type": "BOARD_COMMERCE_11_12",
+      "duration_stated": "1 Year",
+      "eligibility_stated": "Completed 10th Grade",
+      "mode_stated": "Offline (Face-to-Face)",
+      "batch_size_stated": "Limited Seats",
+      "source_url": "https://elevateeducation.in/course/11th-commerce",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "program_code": "COMMERCE_BOARD_COACHING",
+      "display_name": "12th Commerce",
+      "cohort_type": "CLASS_12",
+      "exam_type": "BOARD_COMMERCE_11_12",
+      "duration_stated": "1 Year",
+      "eligibility_stated": "Completed 11th Commerce",
+      "mode_stated": "Offline (Face-to-Face)",
+      "batch_size_stated": "Limited Seats",
+      "source_url": "https://elevateeducation.in/course/11th-commerce",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "program_code": "CA_FOUNDATION_INTER",
+      "display_name": "CA Foundation",
+      "cohort_type": "not found",
+      "exam_type": "CA_FOUNDATION",
+      "duration_stated": "4-6 Months",
+      "eligibility_stated": "12th Pass (Any Stream) - Register after Class 10th",
+      "mode_stated": "Offline (Face-to-Face)",
+      "batch_size_stated": "Limited Seats",
+      "source_url": "https://elevateeducation.in/course/ca-foundation",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "program_code": "CA_FOUNDATION_INTER",
+      "display_name": "CA Intermediate",
+      "cohort_type": "not found",
+      "exam_type": "CA_INTERMEDIATE",
+      "duration_stated": "8-12 Months",
+      "eligibility_stated": "CA Foundation Pass / Graduate (Commerce: 55%+ | Non-Commerce: 60%+)",
+      "mode_stated": "Offline (Face-to-Face)",
+      "batch_size_stated": "Limited Seats",
+      "source_url": "https://elevateeducation.in/course/ca-foundation",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "program_code": "CUET_IIM_ENTRANCE",
+      "display_name": "CUET (UG)",
+      "cohort_type": "not found",
+      "exam_type": "CUET_UG",
+      "duration_stated": "6-8 Months",
+      "eligibility_stated": "12th Pass (Any Stream)",
+      "mode_stated": "Offline (Face-to-Face)",
+      "batch_size_stated": "Limited Seats",
+      "source_url": "https://elevateeducation.in/course/cuet",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "program_code": "CUET_IIM_ENTRANCE",
+      "display_name": "IPM & JIPMAT",
+      "cohort_type": "not found",
+      "exam_type": "IPMAT_INDORE, IPMAT_ROHTAK, JIPMAT",
+      "duration_stated": "8-10 Months",
+      "eligibility_stated": "12th Pass (Any Stream)",
+      "mode_stated": "Offline (Face-to-Face)",
+      "batch_size_stated": "Limited Seats",
+      "source_url": "https://elevateeducation.in/course/cuet",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "program_code": "CUET_IIM_ENTRANCE",
+      "display_name": "IIM Bangalore UG",
+      "cohort_type": "not found",
+      "exam_type": "IIMB_UG",
+      "duration_stated": "12-18 Months",
+      "eligibility_stated": "Class 12 with Mathematics (Age ≤ 20 years)",
+      "mode_stated": "Offline (Face-to-Face)",
+      "batch_size_stated": "Limited Seats",
+      "source_url": "https://elevateeducation.in/course/cuet",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    },
+    {
+      "program_code": "CLAT_COURSE",
+      "display_name": "CLAT (Common Law Admission Test)",
+      "cohort_type": "not found",
+      "exam_type": "CLAT_UG",
+      "duration_stated": "8-12 Months",
+      "eligibility_stated": "12th Pass (Any Stream) with 45% marks (40% for SC/ST)",
+      "mode_stated": "Offline (Face-to-Face)",
+      "batch_size_stated": "Limited Seats",
+      "source_url": "https://elevateeducation.in/course/clat",
+      "confidence": "stated",
+      "approval_status": "unverified"
+    }
+  ],
+
+  "external_programs": {
+    "note": "College Directory entries: degrees run by universities/colleges. NOT Elevate batches. 45 institutions, read from the page (page 1 rendered) and the site's own data for pages 2-4.",
+    "source_url": "https://elevateeducation.in/college-directory",
+    "last_verified": "2026-10-20",
+    "approval_status": "unverified",
+    "items": [
+      {
+        "institution": "Indian Institute of Management Indore",
+        "city": "Indore",
+        "programs": ["Integrated Programme in Management (IPM)"],
+        "exams": ["IPMAT Indore"]
+      },
+      {
+        "institution": "Indian Institute of Management Rohtak",
+        "city": "Rohtak",
+        "programs": ["Integrated Programme in Management (IPM)"],
+        "exams": ["IPMAT Rohtak"]
+      },
+      {
+        "institution": "Indian Institute of Management Ranchi",
+        "city": "Ranchi",
+        "programs": ["Integrated Programme in Management (IPM)"],
+        "exams": ["IPMAT Indore"]
+      },
+      {
+        "institution": "IIM Bangalore - BBA DBE (Online)",
+        "city": "Bangalore",
+        "programs": ["BBA in Digital Business & Entrepreneurship"],
+        "exams": ["IIMB DBE Entrance Test", "CUET GAT", "JEE Main"]
+      },
+      {
+        "institution": "IIM Bangalore - BSc Programs",
+        "city": "Bangalore",
+        "programs": ["BSc in Economics", "BSc in Data Science and Applications"],
+        "exams": ["IIMB BSc Entrance Test"]
+      },
+      {
+        "institution": "Indian Institute of Management Kozhikode",
+        "city": "Kozhikode",
+        "programs": ["Bachelor of Management Studies (BMS)"],
+        "exams": ["IIMK BMS AT", "JEE Main", "SAT", "ACT"]
+      },
+      {
+        "institution": "Indian Institute of Management Mumbai",
+        "city": "Mumbai",
+        "programs": ["BS in Digital Sciences and Business Management"],
+        "exams": ["JEE Main"]
+      },
+      {
+        "institution": "Indian Institute of Management Shillong",
+        "city": "Shillong",
+        "programs": ["Integrated Programme in Management (IPM)"],
+        "exams": ["IPMAT Indore"]
+      },
+      {
+        "institution": "Indian Institute of Management Lucknow",
+        "city": "Lucknow",
+        "programs": ["Integrated Programme in Management (IPM)"],
+        "exams": ["IPMAT Indore"]
+      },
+      {
+        "institution": "Indian Institute of Management Bodh Gaya",
+        "city": "Bodh Gaya",
+        "programs": ["Integrated Programme in Management (IPM)"],
+        "exams": ["JIPMAT"]
+      },
+      {
+        "institution": "Indian Institute of Management Jammu",
+        "city": "Jammu",
+        "programs": ["Integrated Programme in Management (IPM)"],
+        "exams": ["JIPMAT"]
+      },
+      {
+        "institution": "Indian Institute of Management Amritsar",
+        "city": "Amritsar",
+        "programs": ["Integrated Programme in Management (IPM)"],
+        "exams": ["IPMAT Indore"]
+      },
+      {
+        "institution": "Shri Ram College of Commerce",
+        "city": "New Delhi",
+        "programs": ["B.Com (Honours)", "BA Economics (Honours)"],
+        "exams": ["CUET"]
+      },
+      {
+        "institution": "Lady Shri Ram College for Women",
+        "city": "New Delhi",
+        "programs": ["B.Com (Honours)", "BA Economics (Honours)"],
+        "exams": ["CUET"]
+      },
+      {
+        "institution": "St. Stephen's College",
+        "city": "New Delhi",
+        "programs": ["BA Economics (Honours)", "BA History (Honours)"],
+        "exams": ["CUET + Interview"]
+      },
+      {
+        "institution": "Hindu College",
+        "city": "New Delhi",
+        "programs": ["B.Com (Honours)", "BA Economics (Honours)"],
+        "exams": ["CUET"]
+      },
+      {
+        "institution": "Hansraj College",
+        "city": "New Delhi",
+        "programs": ["B.Com (Honours)", "BA Economics (Honours)"],
+        "exams": ["CUET"]
+      },
+      {
+        "institution": "Ramjas College",
+        "city": "New Delhi",
+        "programs": ["B.Com (Honours)", "B.Com", "BA Economics (Honours)"],
+        "exams": ["CUET"]
+      },
+      {
+        "institution": "Kirori Mal College",
+        "city": "New Delhi",
+        "programs": ["B.Com (Honours)", "B.Com", "BA Economics (Honours)"],
+        "exams": ["CUET"]
+      },
+      {
+        "institution": "Sri Venkateswara College",
+        "city": "New Delhi",
+        "programs": ["B.Com (Honours)", "B.Com", "BA Economics (Honours)"],
+        "exams": ["CUET"]
+      },
+      {
+        "institution": "Delhi School of Economics",
+        "city": "New Delhi",
+        "programs": ["BA Economics (Honours)", "MA Economics"],
+        "exams": ["CUET"]
+      },
+      {
+        "institution": "Shaheed Sukhdev College of Business Studies",
+        "city": "New Delhi",
+        "programs": ["BMS (Bachelor of Management Studies)", "BBA (Financial Investment Analysis)"],
+        "exams": ["CUET"]
+      },
+      {
+        "institution": "Gargi College",
+        "city": "New Delhi",
+        "programs": ["B.Com (Honours)", "BA Economics (Honours)"],
+        "exams": ["CUET"]
+      },
+      {
+        "institution": "Miranda House",
+        "city": "New Delhi",
+        "programs": ["B.Com (Honours)", "BA Economics (Honours)"],
+        "exams": ["CUET"]
+      },
+      {
+        "institution": "NMIMS University Mumbai",
+        "city": "Mumbai",
+        "programs": ["BBA", "BBA FinTech", "B.Com (Honours)", "BSc Finance", "BSc Economics"],
+        "exams": ["NPAT", "SAT", "ACT"]
+      },
+      {
+        "institution": "H.R. College of Commerce and Economics",
+        "city": "Mumbai",
+        "programs": ["B.Com", "BMS"],
+        "exams": ["H-CET", "MAH CET"]
+      },
+      {
+        "institution": "Jai Hind College",
+        "city": "Mumbai",
+        "programs": ["B.Com", "BMS", "BAF (Banking & Finance)"],
+        "exams": ["Merit-based + Entrance"]
+      },
+      {
+        "institution": "St. Xavier's College Mumbai",
+        "city": "Mumbai",
+        "programs": ["B.Com", "BMS"],
+        "exams": ["XET"]
+      },
+      {
+        "institution": "Symbiosis College of Arts & Commerce",
+        "city": "Pune",
+        "programs": ["BBA", "B.Com"],
+        "exams": ["SET"]
+      },
+      {
+        "institution": "Christ University",
+        "city": "Bangalore",
+        "programs": ["BBA", "B.Com", "BA Economics"],
+        "exams": ["Christ University Entrance Test"]
+      },
+      {
+        "institution": "Loyola College Chennai",
+        "city": "Chennai",
+        "programs": ["B.Com", "BBA", "BA Economics"],
+        "exams": ["Merit-based + Entrance"]
+      },
+      {
+        "institution": "Narsee Monjee College of Commerce and Economics",
+        "city": "Mumbai",
+        "programs": ["B.Com", "BMS", "BAF"],
+        "exams": ["Merit-based"]
+      },
+      {
+        "institution": "St. Xavier's College Kolkata",
+        "city": "Kolkata",
+        "programs": ["B.Com (Honours)", "BA Economics"],
+        "exams": ["Merit-based"]
+      },
+      {
+        "institution": "Madras Christian College",
+        "city": "Chennai",
+        "programs": ["B.Com", "BBA", "BA Economics"],
+        "exams": ["Merit-based + Entrance"]
+      },
+      {
+        "institution": "Mithibai College Mumbai",
+        "city": "Mumbai",
+        "programs": ["B.Com", "BMS"],
+        "exams": ["Merit-based"]
+      },
+      {
+        "institution": "National Law School of India University",
+        "city": "Bangalore",
+        "programs": ["BA LLB (Hons.)", "BBA LLB (Hons.)"],
+        "exams": ["CLAT"]
+      },
+      {
+        "institution": "NALSAR University of Law",
+        "city": "Hyderabad",
+        "programs": ["BA LLB (Hons.)"],
+        "exams": ["CLAT"]
+      },
+      {
+        "institution": "National Law University Delhi",
+        "city": "New Delhi",
+        "programs": ["BA LLB (Hons.)"],
+        "exams": ["AILET (Own Exam)"]
+      },
+      {
+        "institution": "The West Bengal National University of Juridical Sciences",
+        "city": "Kolkata",
+        "programs": ["BA LLB (Hons.)", "BBA LLB (Hons.)"],
+        "exams": ["CLAT"]
+      },
+      {
+        "institution": "National Law Institute University",
+        "city": "Bhopal",
+        "programs": ["BA LLB (Hons.)"],
+        "exams": ["CLAT"]
+      },
+      {
+        "institution": "National Law University Jodhpur",
+        "city": "Jodhpur",
+        "programs": ["BA LLB (Hons.)", "BBA LLB (Hons.)"],
+        "exams": ["CLAT"]
+      },
+      {
+        "institution": "Gujarat National Law University",
+        "city": "Gandhinagar",
+        "programs": ["BA LLB (Hons.)", "BBA LLB (Hons.)"],
+        "exams": ["CLAT"]
+      },
+      {
+        "institution": "Symbiosis Law School Pune",
+        "city": "Pune",
+        "programs": ["BA LLB (Hons.)", "BBA LLB (Hons.)"],
+        "exams": ["SLAT (Symbiosis Law Admission Test)"]
+      },
+      {
+        "institution": "Jindal Global Law School",
+        "city": "Sonipat",
+        "programs": ["BA LLB (Hons.)", "BBA LLB (Hons.)"],
+        "exams": ["LSAT India"]
+      },
+      {
+        "institution": "Faculty of Law, Delhi University",
+        "city": "New Delhi",
+        "programs": ["BA LLB", "LLB"],
+        "exams": ["CUET / DU LLB Entrance"]
+      }
+    ]
+  },
+
+  "owner_terms": [
+    {
+      "owner_term": "CLAT",
+      "site_support": "partial",
+      "site_wording": ["CLAT", "CLAT PREPARATION", "CLAT (Common Law Admission Test)"],
+      "candidate_codes": ["CLAT_COURSE", "CLAT_UG"],
+      "owner_confirmation_needed": true,
+      "note": "Enrollable course appears only on the unlinked /course/clat page; nav page /clat is a guide; not in Course Packages."
+    },
+    {
+      "owner_term": "IPMAT",
+      "site_support": "yes",
+      "site_wording": [
+        "IPMAT Intensive",
+        "IPMAT Intensive Coaching",
+        "IPMAT Indore",
+        "IPMAT Rohtak",
+        "IPM & JIPMAT"
+      ],
+      "candidate_codes": ["IPMAT_INTENSIVE", "ACE_BATCH", "IPMAT_INDORE", "IPMAT_ROHTAK"],
+      "owner_confirmation_needed": false
+    },
+    {
+      "owner_term": "IAM IP mat",
+      "site_support": "wording not found",
+      "site_wording": [],
+      "candidate_meanings": [
+        {
+          "meaning": "IIM IPMAT, i.e. the site's 'IIM / IPMAT' track (IPMAT Indore and IPMAT Rohtak)",
+          "evidence": "Top navigation label 'IIM / IPMAT' -> /ipmat; homepage card 'IIM Entrances' listing 'IPMAT Indore, Rohtak, JIPMAT, IIM Bangalore UG'",
+          "candidate_codes": ["IPMAT_INDORE", "IPMAT_ROHTAK", "IPMAT_INTENSIVE"]
+        },
+        {
+          "meaning": "IPM (IIM Integrated Programme in Management) as a course, rather than the IPMAT exam",
+          "evidence": "/course/cuet sub-course 'IPM & JIPMAT'; College Directory programme 'Integrated Programme in Management (IPM)'",
+          "candidate_codes": ["JIPMAT", "IPMAT_INDORE"]
+        }
+      ],
+      "owner_confirmation_needed": true
+    },
+    {
+      "owner_term": "IMBUG",
+      "site_support": "wording not found",
+      "site_wording": [],
+      "candidate_meanings": [
+        {
+          "meaning": "IIM Bangalore UG (site label), tied by the site to IIMB BSc (Hons) Economics / Data Science and the 'IIMB UG-AT' test",
+          "evidence": "/ipmat tab 'IIM Bangalore UG'; /course/cuet sub-course 'IIM Bangalore UG' (12-18 Months)",
+          "candidate_codes": ["IIMB_UG", "IIMB_BSC_ET"]
+        },
+        {
+          "meaning": "IIM Bangalore BBA in Digital Business & Entrepreneurship (BBA DBE) and its entrance test",
+          "evidence": "College Directory only: 'IIM Bangalore - BBA DBE (Online)', exam 'IIMB DBE Entrance Test'. No Elevate coaching page names DBE.",
+          "candidate_codes": ["IIMB_DBE_ET"]
+        }
+      ],
+      "owner_confirmation_needed": true
+    },
+    {
+      "owner_term": "CUET",
+      "site_support": "yes",
+      "site_wording": [
+        "Commerce + CUET Batch",
+        "CUET Coaching Programme",
+        "CUET (UG)",
+        "CUET & IIM Entrance"
+      ],
+      "candidate_codes": ["COMMERCE_CUET_BATCH", "CUET_IIM_ENTRANCE", "CUET_UG"],
+      "owner_confirmation_needed": false,
+      "note": "Taught subjects listed are commerce domain subjects, English and GAT only."
+    },
+    {
+      "owner_term": "Regular Class 11",
+      "site_support": "partial (no 'Regular' wording)",
+      "site_wording": ["11th Commerce", "Class 11th", "Commerce Boards (11th & 12th)"],
+      "candidate_codes": ["CLASS_11", "COMMERCE_BOARD_COACHING"],
+      "owner_confirmation_needed": true,
+      "note": "Commerce stream only. Whether 'Regular' means school-plus-coaching, a board-only batch, or something else is not on the site."
+    },
+    {
+      "owner_term": "Regular Class 12",
+      "site_support": "partial (no 'Regular' wording)",
+      "site_wording": ["12th Commerce", "Class 12th"],
+      "candidate_codes": ["CLASS_12", "COMMERCE_BOARD_COACHING"],
+      "owner_confirmation_needed": true
+    },
+    {
+      "owner_term": "Dropper/Repeater",
+      "site_support": "lead-form option only",
+      "site_wording": ["12th Pass / Dropper"],
+      "candidate_codes": ["POST_12_DROPPER"],
+      "owner_confirmation_needed": true,
+      "note": "No dropper batch; 'Repeater' not found. Course eligibility '12th Pass (Any Stream)' on CUET/IPM/CLAT entries does not name a dropper cohort."
+    },
+    {
+      "owner_term": "CA",
+      "site_support": "yes (Foundation and Intermediate)",
+      "site_wording": [
+        "CA Foundation Coaching",
+        "CA Intermediate Coaching",
+        "CA Foundation & CA Inter"
+      ],
+      "candidate_codes": ["CA_FOUNDATION_INTER", "CA_FOUNDATION", "CA_INTERMEDIATE"],
+      "owner_confirmation_needed": true,
+      "note": "CA Final not found. Internal seed says CA Foundation is planned for 1 March 2027."
+    },
+    {
+      "owner_term": "Commerce",
+      "site_support": "yes",
+      "site_wording": [
+        "Commerce Board Coaching (11th & 12th)",
+        "COMMERCE BOARDS",
+        "11th & 12th Commerce",
+        "COMMERCE + CUET"
+      ],
+      "candidate_codes": ["COMMERCE_BOARD_COACHING", "COMMERCE_CUET_BATCH", "ACE_BATCH"],
+      "owner_confirmation_needed": false
+    }
+  ],
+
+  "site_conflicts": [
+    {
+      "topic": "Mode",
+      "a": "Homepage '100% Online, Live & Interactive'; /course-combinations '100% Online'; /online-coaching",
+      "b": "Every /course/* page: 'Offline (Face-to-Face)'",
+      "urls": [
+        "https://elevateeducation.in/",
+        "https://elevateeducation.in/course-combinations",
+        "https://elevateeducation.in/course/cuet"
+      ]
+    },
+    {
+      "topic": "Price",
+      "a": "Package cards: 'Unlock Pricing' / 'Verify to see exclusive rates'",
+      "b": "FAQs: Commerce + CUET ₹10,000/month, ACE Batch ₹12,000/month",
+      "urls": [
+        "https://elevateeducation.in/course-combinations",
+        "https://elevateeducation.in/commerce-coaching",
+        "https://elevateeducation.in/online-coaching"
+      ]
+    },
+    {
+      "topic": "Recordings",
+      "a": "Homepage 'No recorded lectures'",
+      "b": "/commerce-coaching FAQ 'All live sessions are recorded and available for review'",
+      "urls": ["https://elevateeducation.in/", "https://elevateeducation.in/commerce-coaching"]
+    },
+    {
+      "topic": "CLAT pattern and NLU count",
+      "a": "/clat: English 28-32 Qs; '22 National Law Universities'",
+      "b": "/course/clat: English 22-26 Questions; '25 National Law Universities'",
+      "urls": ["https://elevateeducation.in/clat", "https://elevateeducation.in/course/clat"]
+    },
+    {
+      "topic": "IPMAT Indore pattern",
+      "a": "/ipmat: QA SA 15, QA MCQ 30, VA 45; weightage 65/35",
+      "b": "/ipmat-coaching: QA MCQ 40, QA SA 20, VA 40; interview 30%",
+      "urls": ["https://elevateeducation.in/ipmat", "https://elevateeducation.in/ipmat-coaching"]
+    },
+    {
+      "topic": "CA Foundation exam frequency",
+      "a": "/ca-foundation-coaching: 'Twice a year'",
+      "b": "/course/ca-foundation: 'three times a year'",
+      "urls": [
+        "https://elevateeducation.in/ca-foundation-coaching",
+        "https://elevateeducation.in/course/ca-foundation"
+      ]
+    },
+    {
+      "topic": "Stale dates",
+      "a": "/course/cuet IIM Bangalore UG: test 'December 13, 2025', deadline 'November 20, 2025'",
+      "b": "Past as of 2026-10-20",
+      "urls": ["https://elevateeducation.in/course/cuet"]
+    }
+  ]
+}

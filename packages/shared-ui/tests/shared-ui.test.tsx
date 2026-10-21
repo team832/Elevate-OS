@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { metric } from '@elevate/shared-contracts';
 import {
+  JourneyRail,
+  PageHeader,
   AppShell,
-  BRAND_LOGO_SIZE,
+  BrandLogo,
   DataTable,
   Dialog,
   ErrorState,
@@ -137,12 +139,12 @@ function shell(props: Partial<AppShellProps> = {}) {
 }
 
 describe('AppShell sidebar', () => {
-  it('shows the logo from the app basePath, the company name and Overview', () => {
+  it('shows the inline logo (named "Elevate Education") linking home, and Overview', () => {
     const html = shell();
-    expect(html).toContain('src="/ops/brand/elevate-logo.png"');
-    expect(html).toContain(`width="${BRAND_LOGO_SIZE.width}"`);
-    expect(html).toContain('alt="elevate"');
-    expect(html).toContain('Elevate Education');
+    expect(html).toMatch(
+      /<a class="el-sidebar-brand" href="\/"><svg class="el-brand-logo el-brand-logo-sm"[^>]*role="img" aria-label="Elevate Education"/,
+    );
+    expect(html).not.toContain('<img');
     expect(html).toMatch(/href="\/"[^>]*><svg[^>]*>.*?<\/svg><span>Overview<\/span>/);
   });
 
@@ -155,15 +157,18 @@ describe('AppShell sidebar', () => {
     expect(html).not.toContain('/marketing');
   });
 
-  it('expands the current module with its sections; the active page is marked', () => {
+  it('marks the current module and lists its sections in labelled groups; the page is marked', () => {
     const html = shell({ nav: opsNav.map((n, i) => ({ ...n, active: i === 2 })) });
-    expect(html).toContain('<details class="el-nav-module" open="">');
+    expect(html).toMatch(/class="el-nav-link el-nav-module" href="\/ops" data-current="true"/);
+    expect(html).toContain('aria-label="Business Operations sections"');
     expect(html).toContain('href="/ops/students" aria-current="page"');
-    // the active page's group is open, the others are closed
-    expect(html).toMatch(/<details class="el-nav-group" open=""><summary><span>Admissions</);
-    expect(html).toMatch(/<details class="el-nav-group"><summary><span>Operations</);
+    // groups are always open and name their list
+    expect(html).toMatch(
+      /<span class="el-nav-heading" id="(el-navgroup-\d+)">Admissions<\/span><ul class="el-nav-list" aria-labelledby="\1">/,
+    );
+    expect(html).toContain('>Operations</span>');
     // a one-item group named like its item is a plain link
-    expect(html).not.toContain('<span>Reports</span><svg');
+    expect(html).not.toContain('>Reports</span><ul');
     expect(html).toContain('href="/ops/reports"');
     expect(html.match(/aria-current="page"/g)).toHaveLength(2); // sidebar link + breadcrumb
   });
@@ -194,11 +199,11 @@ describe('AppShell sidebar', () => {
     expect(shell({ unreadNotifications: null })).not.toContain('el-notify');
   });
 
-  it('shows the profile (initials, name, roles) and sign-out forms', () => {
+  it('shows the profile (initials, name, roles); sign-out is in the account menu only', () => {
     const html = shell();
     expect(html).toContain('>OO<');
     expect(html).toContain('operations manager');
-    expect(html.match(/action="\/ops\/api\/v1\/auth\/logout"/g)).toHaveLength(2);
+    expect(html.match(/action="\/ops\/api\/v1\/auth\/logout"/g)).toHaveLength(1);
   });
 
   it('starts collapsed on small screens: menu button with aria-expanded=false', () => {
@@ -353,26 +358,68 @@ describe('DataTable and states', () => {
     expect(html).toContain('<td data-label="Name">CLAT</td>');
     expect(html).toContain('class="el-num" data-label="Count">3</td>');
   });
-  it('error state shows the request reference', () => {
-    expect(renderToStaticMarkup(<ErrorState requestId="req-123" />)).toContain(
-      'Reference: req-123',
+  it('error state: a reference only when it exists, and an action slot for Try again', () => {
+    const plain = renderToStaticMarkup(<ErrorState />);
+    expect(plain).not.toContain('Reference');
+    expect(plain).not.toContain('below');
+    const out = renderToStaticMarkup(
+      <ErrorState requestId="req-123" action={<a href="/ops/teachers">Try again</a>} />,
     );
+    expect(out).toContain('<a href="/ops/teachers">Try again</a>');
+    expect(out).toContain('<code class="el-request-id">req-123</code>');
   });
-  it('login form posts to the given action with the next path and shows the zone’s logo', () => {
+  it('brand logo: currentColor letters, orange chevrons, accessible name unless decorative', () => {
+    const named = renderToStaticMarkup(<BrandLogo />);
+    expect(named).toContain('role="img" aria-label="Elevate Education"');
+    expect(named).toContain('<title>Elevate Education</title>');
+    expect(named).toContain('stroke="currentColor"');
+    expect(named).toContain('stroke-linecap="round"');
+    expect(named).toContain('fill="#ff8623"');
+    expect(named).toContain('fill="#ffa43d"');
+    const decorative = renderToStaticMarkup(<BrandLogo decorative size="lg" />);
+    expect(decorative).toContain('aria-hidden="true"');
+    expect(decorative).not.toContain('<title>');
+    expect(decorative).toContain('el-brand-logo-lg');
+  });
+  it('login form keeps the post contract, shows the error above the form and the brand panel', () => {
     const html = renderToStaticMarkup(
-      <LoginForm action="/marketing/api/v1/auth/login" next="/marketing" error="invalid" />,
+      <LoginForm
+        action="/marketing/api/v1/auth/login"
+        next="/marketing"
+        error="invalid"
+        subtitle="Sign in to Marketing OS"
+      />,
     );
-    expect(html).toContain('action="/marketing/api/v1/auth/login"');
+    expect(html).toContain('action="/marketing/api/v1/auth/login" method="post"');
     expect(html).toContain('name="next" value="/marketing"');
-    expect(html).toContain('Email or password is incorrect.');
-    expect(html).toContain('src="/marketing/brand/elevate-logo.png"');
-    expect(renderToStaticMarkup(<LoginForm action="/api/v1/auth/login" next="/" />)).toContain(
-      'src="/brand/elevate-logo.png"',
+    expect(html).toContain('<h1 id="el-login-title" class="el-login-title">Staff sign in</h1>');
+    expect(html).toContain('Sign in to Marketing OS');
+    expect(html.indexOf('Email or password is incorrect.')).toBeLessThan(html.indexOf('<form'));
+    expect(html).toContain('role="alert"');
+    expect(html).not.toContain('aria-invalid'); // a wrong password is not pinned on one field
+    expect(html).toContain('aria-label="Elevate Education"');
+    for (const p of ['CLAT', 'IPMAT', 'CUET', 'CA Foundation', 'Class 11 Commerce', 'Dropper'])
+      expect(html).toContain(`<li>${p}</li>`);
+    expect(html).toContain('href="tel:+918505099888"');
+    expect(html).toContain('Trouble signing in? Ask the operations manager.');
+    expect(html).toMatch(/type="password" autoComplete="current-password"/);
+  });
+  it('login form marks both fields when the form came back empty', () => {
+    const html = renderToStaticMarkup(
+      <LoginForm action="/api/v1/auth/login" next="/" error="missing" />,
+    );
+    expect(html).toContain('Enter your email and password.');
+    expect(html).toMatch(/aria-invalid="true" id="email"[^>]*aria-describedby="email-error"/);
+    expect(html).toContain(
+      '<p class="el-field-error" id="email-error">Enter your email address.</p>',
+    );
+    expect(html).toContain(
+      '<p class="el-field-error" id="password-error">Enter your password.</p>',
     );
   });
   it('login form states the account domain and shows the Google link only when given', () => {
     const plain = renderToStaticMarkup(<LoginForm action="/api/v1/auth/login" next="/" />);
-    expect(plain).toContain('Use your @elevateeducation.in account.');
+    expect(plain).toContain('Use your <strong>@elevateeducation.in</strong> account.');
     expect(plain).not.toContain('Sign in with Google');
     const href = 'http://localhost:3000/api/v1/auth/google/start?next=%2Facademic';
     const google = renderToStaticMarkup(
@@ -390,5 +437,51 @@ describe('DataTable and states', () => {
     expect(
       renderToStaticMarkup(<LoginForm action="/api/v1/auth/login" next="/" error={code} />),
     ).toContain(text);
+  });
+});
+
+describe('PageHeader and JourneyRail', () => {
+  it('page header carries meta next to the title and the area tabs along its bottom', () => {
+    const html = renderToStaticMarkup(
+      <PageHeader
+        title="Admissions"
+        meta={<SourceBadge source="sample" />}
+        tabs={<nav className="el-subnav">t</nav>}
+      />,
+    );
+    expect(html).toMatch(/<h1>Admissions<\/h1><span class="el-badge el-badge-sample"/);
+    expect(html).toMatch(/<\/div><nav class="el-subnav">t<\/nav><\/div>$/);
+  });
+
+  const rail = (stages: Parameters<typeof JourneyRail>[0]['stages']) =>
+    renderToStaticMarkup(<JourneyRail label="Admission journey" stages={stages} />);
+
+  it.each([
+    [
+      'a count, linked, with a bar against the largest stage',
+      { count: 5, href: '/ops/admissions' },
+      ['href="/ops/admissions"', '>5<', 'width:50%'],
+    ],
+    ['a measured zero as 0', { count: 0 }, ['>0<', 'width:0%']],
+    [
+      'not recorded instead of 0, without a bar',
+      { count: null },
+      ['Not recorded', 'data-missing="true"'],
+    ],
+    [
+      'the current stage in words and as aria-current',
+      { state: 'current' as const },
+      ['aria-current="step"', ': current stage'],
+    ],
+  ])('shows %s', (_, stage, expected) => {
+    const html = rail([
+      { key: 'top', label: 'Top', count: 10 },
+      { key: 's', label: 'Demo', ...stage },
+    ]);
+    for (const e of expected) expect(html).toContain(e);
+  });
+
+  it('never draws a bar for a missing count', () => {
+    expect(rail([{ key: 's', label: 'Demo', count: null }])).not.toContain('el-journey-bar');
   });
 });

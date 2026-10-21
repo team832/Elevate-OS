@@ -1,215 +1,131 @@
-import type { AuthenticatedUser } from '@elevate/authentication';
-import { DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { EmptyState, PageHeader } from '@elevate/shared-ui';
+import { AdmissionsNav } from '../../ui/admissions-nav';
+import { Frame, gate, Section } from '../../ui/frame';
+import { ActiveDashboard } from './_components/student-dashboard';
 import {
-  DIRECTORY_STATE_LABELS,
-  DIRECTORY_STATES,
-  type DirectoryState,
-} from '../../domain/students';
-import { studentListQuery } from '../../server/admissions-schemas';
-import { formOptions } from '../../server/options';
-import { listStudents } from '../../server/students';
-import { fmtDate } from '../../ui/format';
-import { Frame, gate, load, Section } from '../../ui/frame';
+  listHref,
+  STUDENT_COLUMNS as C,
+  StudentListSection,
+  StudentQuickView,
+  StudentSearch,
+} from './_components/student-list';
 
 export const dynamic = 'force-dynamic';
+export const metadata = { title: 'Active students' };
 
-const HANDOFF_FILTERS = [
-  { value: 'not_requested', label: 'Not requested' },
-  { value: 'pending', label: 'Waiting for Academic OS' },
-  { value: 'rejected', label: 'Rejected by Academic OS' },
-  { value: 'enrolled', label: 'Enrolled' },
-] as const;
+const BASE = '/ops/students';
 
-const SORTS = [
-  { value: 'newest', label: 'Admitted most recently' },
-  { value: 'oldest', label: 'Admitted longest ago' },
-  { value: 'name', label: 'Name A–Z' },
-];
-
-const stateTone = (s: DirectoryState | null) =>
-  s === 'enrolled' ? 'success' : s === 'awaiting_enrolment' ? 'info' : 'neutral';
-
-export default async function StudentsPage({
+/**
+ * Active students, one row per student: any case admitted, awaiting or in enrolment (brief
+ * §11). `?view=on_hold` lists students on hold instead (they are not past students).
+ */
+export default async function ActiveStudentsPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const access = await gate('ops:students:read', '/ops/students');
-  const sp = await searchParams;
-  const parsed = studentListQuery.safeParse(sp);
-  const query = parsed.success ? parsed.data : studentListQuery.parse({});
+  const access = await gate('ops:students:read', BASE);
+  const { open, ...params } = await searchParams;
+  const held = params.view === 'on_hold';
+  const filtered = Object.entries(params).some(
+    ([k, v]) => v && !['page', 'sort', 'view'].includes(k),
+  );
   return (
     <Frame access={access} active="students">
       <PageHeader
-        title="Students"
-        description="Everyone whose admission was confirmed: admitted, waiting for Academic OS, enrolled, or withdrawn after admission. Academic OS holds the student record; this list shows the admission side and the handoff status. Contact details are not shown here."
+        title="Active students"
+        description="Students with a confirmed admission."
+        tabs={<AdmissionsNav current="active" user={access.user} />}
       />
-      {!parsed.success ? (
-        <p className="el-field-hint" role="status">
-          Some filters were not valid and were ignored.
-        </p>
-      ) : null}
-      <Section label="Loading filters…">
-        <Filters query={query} />
-      </Section>
-      <Section label="Loading students…">
-        <StudentList user={access.user} query={query} />
-      </Section>
-    </Frame>
-  );
-}
-
-async function Filters({ query }: { query: ReturnType<typeof studentListQuery.parse> }) {
-  const r = await load((db) => formOptions(db));
-  const programmes = r.ok ? r.data.programmes : [];
-  return (
-    <form
-      method="get"
-      action="/ops/students"
-      className="el-inline-form"
-      aria-label="Filter students"
-    >
-      <div className="el-field">
-        <label htmlFor="students-q">Name or code</label>
-        <input id="students-q" name="q" className="el-input" defaultValue={query.q ?? ''} />
-      </div>
-      <Select
-        name="state"
-        label="Status"
-        value={query.state ?? ''}
-        options={DIRECTORY_STATES.map((s) => ({ value: s, label: DIRECTORY_STATE_LABELS[s] }))}
-      />
-      <Select
-        name="programme"
-        label="Programme"
-        value={query.programme ?? ''}
-        options={programmes}
-      />
-      <Select
-        name="handoff"
-        label="Handoff"
-        value={query.handoff ?? ''}
-        options={HANDOFF_FILTERS}
-      />
-      <Select name="sort" label="Sort" value={query.sort} options={SORTS} any={false} />
-      <button type="submit" className="el-button el-button-secondary">
-        Show students
-      </button>
-      <a href="/ops/students">Clear filters</a>
-    </form>
-  );
-}
-
-function Select({
-  name,
-  label,
-  value,
-  options,
-  any = true,
-}: {
-  name: string;
-  label: string;
-  value: string;
-  options: readonly { value: string; label: string }[];
-  /** Offer "Any" (no filter) first. */
-  any?: boolean;
-}) {
-  return (
-    <div className="el-field">
-      <label htmlFor={`students-${name}`}>{label}</label>
-      <select id={`students-${name}`} name={name} className="el-select" defaultValue={value}>
-        {any ? <option value="">Any</option> : null}
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function pageHref(query: ReturnType<typeof studentListQuery.parse>, cursor: string) {
-  const p = new URLSearchParams();
-  for (const k of ['q', 'state', 'programme', 'handoff', 'sort'] as const) {
-    const v = query[k];
-    if (v) p.set(k, String(v));
-  }
-  p.set('cursor', cursor);
-  return `/ops/students?${p.toString()}`;
-}
-
-async function StudentList({
-  user,
-  query,
-}: {
-  user: AuthenticatedUser;
-  query: ReturnType<typeof studentListQuery.parse>;
-}) {
-  const r = await load((db) => listStudents(db, user, query));
-  if (!r.ok) return r.view;
-  const filtered = Boolean(query.q || query.state || query.programme || query.handoff);
-  return (
-    <>
-      <DataTable
-        caption={`${r.data.items.length} student(s) on this page`}
-        rows={r.data.items}
-        rowKey={(s) => s.id}
-        empty={
-          <EmptyState
-            title={filtered ? 'No students match these filters' : 'No admitted students yet'}
-            description={
-              filtered
-                ? 'Change or clear the filters.'
-                : 'A student appears here once an admission passes the confirmation checks and is marked admitted.'
+      <div className="el-stack">
+        <details className="el-explain">
+          <summary>How this list is defined</summary>
+          <p>
+            Enrolled students, and students whose admission is confirmed but who are still awaiting
+            Academic setup. A student who finished one programme but still studies another stays
+            here. Students on hold are under On hold; students who have left are under Past
+            students. Class 11 and Class 12 count students alone or with an entrance programme;
+            Dropper counts students with one entrance programme.
+          </p>
+          <p>
+            Teachers, latest test and class attendance come from Academic OS, which cannot be read
+            per student yet. They are left out here rather than shown as zero; each student&apos;s
+            record says &ldquo;Source unavailable&rdquo;.
+          </p>
+        </details>
+        <Section label="Loading summary…">
+          <ActiveDashboard user={access.user} base={BASE} params={params} />
+        </Section>
+        <Section label="Loading filters…">
+          <StudentSearch
+            basePath={BASE}
+            params={params}
+            user={access.user}
+            extra={[
+              {
+                name: 'view',
+                label: 'Lifecycle',
+                type: 'select',
+                anyLabel: 'Active',
+                options: [{ value: 'on_hold', label: 'On hold' }],
+                value: params.view,
+              },
+            ]}
+          />
+        </Section>
+        <Section label="Loading students…">
+          <StudentListSection
+            user={access.user}
+            basePath={BASE}
+            params={params}
+            view={held ? 'on_hold' : 'active'}
+            columns={
+              held
+                ? [C.student, C.number, C.programmes, C.review, C.reason, C.since, C.counsellor]
+                : [
+                    C.student,
+                    C.number,
+                    C.programmes,
+                    C.status,
+                    C.fees,
+                    C.next,
+                    C.activity,
+                    C.counsellor,
+                  ]
             }
-            action={
-              filtered ? (
-                <a href="/ops/students">Clear filters</a>
-              ) : (
-                <a href="/ops/admissions">Open the admissions pipeline</a>
-              )
+            empty={
+              <EmptyState
+                title={
+                  filtered
+                    ? 'No students match'
+                    : held
+                      ? 'No students on hold'
+                      : 'No active students yet'
+                }
+                description={
+                  filtered
+                    ? 'Change or clear the filters.'
+                    : held
+                      ? 'Put an enrolled student on hold from their record (reason and review date).'
+                      : 'A student appears here once their admission is confirmed.'
+                }
+                action={
+                  filtered ? (
+                    <a href={BASE}>Clear filters</a>
+                  ) : (
+                    <a href="/ops/admissions">Open demo students</a>
+                  )
+                }
+              />
             }
           />
-        }
-        columns={[
-          {
-            key: 'name',
-            header: 'Student',
-            render: (s) => <a href={`/ops/students/${s.id}`}>{s.studentName}</a>,
-          },
-          { key: 'code', header: 'Admission', render: (s) => s.code },
-          { key: 'programme', header: 'Programme', render: (s) => s.programmeCode ?? 'Not set' },
-          {
-            key: 'owner',
-            header: 'Admission owner',
-            render: (s) => s.counsellorName ?? 'Unassigned',
-          },
-          {
-            key: 'state',
-            header: 'Status',
-            render: (s) => (
-              <StatusBadge tone={stateTone(s.state)}>{s.stateLabel ?? s.status}</StatusBadge>
-            ),
-          },
-          {
-            key: 'handoff',
-            header: 'Academic OS handoff',
-            render: (s) => <StatusBadge tone={s.handoff.tone}>{s.handoff.label}</StatusBadge>,
-          },
-          { key: 'date', header: 'Admitted on', render: (s) => fmtDate(s.admissionDate) },
-          {
-            key: 'academic',
-            header: 'Academic record',
-            render: (s) =>
-              s.academicPath ? <a href={s.academicPath}>Open in Academic OS</a> : 'Not linked yet',
-          },
-        ]}
-      />
-      <nav className="el-inline-form" aria-label="Pages">
-        {query.cursor ? <a href="/ops/students">First page</a> : null}
-        {r.data.nextCursor ? <a href={pageHref(query, r.data.nextCursor)}>Next page</a> : null}
-      </nav>
-    </>
+        </Section>
+      </div>
+      {open ? (
+        <Section label="Loading student…">
+          <StudentQuickView user={access.user} id={open} closeHref={listHref(BASE, params)} />
+        </Section>
+      ) : null}
+    </Frame>
   );
 }

@@ -6,13 +6,17 @@
   gap: var(--el-space-3);
   align-items: flex-end;
 }
+/* One toolbar row on wide screens: search grows, selects share the rest. */
 .ur-filters .el-field {
   margin: 0;
-  min-width: min(100%, 12rem);
+  flex: 1 1 9rem;
+  min-width: min(100%, 9rem);
+}
+.ur-filters .el-field:first-child {
+  flex: 2 1 14rem;
 }
 .ur-pager {
   align-items: baseline;
-  margin-top: var(--el-space-3);
 }
 .ur-cell-email {
   overflow-wrap: anywhere;

@@ -74,27 +74,6 @@ export const platformPermissions = definePermissions<PlatformPermission>({
       'platform:approvals:read',
       { permission: 'platform:notifications:read', scope: 'own' },
     ],
-    hr_manager: [
-      'platform:module:access',
-      'platform:approvals:read',
-      { permission: 'platform:notifications:read', scope: 'own' },
-    ],
-    hr_contributor: [
-      'platform:module:access',
-      { permission: 'platform:notifications:read', scope: 'own' },
-    ],
-    recruiter: [
-      'platform:module:access',
-      { permission: 'platform:notifications:read', scope: 'own' },
-    ],
-    department_manager: [
-      'platform:module:access',
-      { permission: 'platform:notifications:read', scope: 'own' },
-    ],
-    employee: [
-      'platform:module:access',
-      { permission: 'platform:notifications:read', scope: 'own' },
-    ],
     finance_officer: [
       'platform:module:access',
       { permission: 'platform:notifications:read', scope: 'own' },

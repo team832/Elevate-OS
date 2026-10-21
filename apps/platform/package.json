@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Elevate OS integrated shell (port 3000): sign-in, home, consolidated views, and rewrites to the three module zones.",
+  "exports": {
+    "./seed": "./seed/index.ts"
+  },
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",

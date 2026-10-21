@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
@@ -10,6 +11,7 @@ import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Teaching log' };
 
 const COMPLETION = [{ value: 'completed', label: 'completed' }, { value: 'partial', label: 'partial' }];
 const ACTIVITY = ['main', 'practice', 'catch_up', 'test', 'discussion'].map((v) => ({ value: v, label: v }));
@@ -45,14 +47,14 @@ async function Body({ access }: { access: PageAccess }) {
   });
   return (
     <>
-      <PageHeader title="Teaching log" description="Log what was actually taught in each held session. Only coordinator-verified records count as delivered hours; corrections keep the original record." />
+      <PageHeader title="Teaching log" description="What was taught in each held session. Only verified records count as delivered hours." />
       {!data.ok ? (
         <LoadError error={data.error} />
       ) : (
         <div className="el-stack">
           {canRecord ? (
             <Card title="Your sessions (last 14 days)" description="Teachers see only the sessions they teach.">
-              <DataTable
+              <DataTable compact
                 rows={data.data.loggable}
                 rowKey={(s) => s.id}
                 empty={<EmptyState title="No sessions to log" description="Nothing held or scheduled for you in the last 14 days." />}
@@ -90,7 +92,7 @@ async function Body({ access }: { access: PageAccess }) {
             </Card>
           ) : null}
           <Card title="Class records">
-            <DataTable
+            <DataTable compact
               rows={data.data.records}
               rowKey={(r) => r.id}
               empty={<EmptyState title="No class records yet" description="Nothing has been logged, so nothing counts as delivered." />}

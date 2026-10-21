@@ -1,133 +1,116 @@
 # Business Ops OS: data model
 
-73 tables in schema `ops`, defined in five files (D-029). Column detail, constraints and states: `DOMAIN_MODEL.md`. Conventions (UUID keys, business codes, no FK between module schemas, rows not deleted): `DATABASE_DESIGN.md`. No migration exists yet; the baseline is generated centrally.
+32 tables in schema `ops` plus the canonical student in `core.students` (D-033). Every column,
+in plain words, with allowed values and examples: **[DATA_DICTIONARY.md](DATA_DICTIONARY.md)**
+(generated from the schema by `npm run docs:data-dictionary`). Files in `packages/database/src/schema/`:
 
-Diagram scope: relationships only, between `ops` tables and the `core` tables they reference (`CORE_*`). Ids of Academic records are plain uuids with no FK (D-005) and are not drawn. Fields are omitted on purpose.
+| File | Tables |
+|---|---|
+| `ops.ts` | settings, lead sources, leads, enquiries, lead activities, duplicate flags, admissions, admission transitions, admission checks, follow-ups, demos, fee records, enrolment attempts, contact preferences, staff profiles |
+| `ops-demos.ts` | `demo_sessions`, `demo_session_changes`, `checklist_entries` |
+| `ops-meetings.ts` | `appointments`, `appointment_participants`, `appointment_changes`, `staff_subject_capabilities`, `teacher_student_feedback`, `student_teacher_feedback` |
+| `ops-students.ts` | `admission_number_counters`, `admission_number_changes`, `exit_records`, `guardians`, `report_exports` |
+| `ops-fees-intake.ts` | `fee_plans`, `fee_instalments`, `lead_handoff_receipts` |
+| `core.ts` | `students` (Ops is steward) |
+
+Naming (D-036): `<x>_staff_id` = staff member; `student_id` = `core.students` everywhere in `ops`;
+`academic_student_id` = Academic OS's own student record (plain UUID); `<x>_by` = login user;
+`<x>_at` = UTC instant; `<x>_date` / `<x>_on` = Asia/Kolkata day; `<x>_paise` = integer paise;
+sample rows: `is_sample` on `ops.leads`, `core.students` and `ops.staff_profiles` (everything
+else follows its lead or student). Conventions (UUID keys, business codes, no FK between module
+schemas, rows not deleted): `docs/DATABASE_DESIGN.md`.
+
+Migration history: `0000_baseline` → `0001_users_email_domain` → `0002_remove_hr_operations`
+(D-032) → `0003_admissions_workspace` (demo sessions, students, appointments, fees; backfill
+reasoning in `docs/parts/admissions-*.md` §2) → `0004_fee_plan_close_without_approval` →
+**`0005_clear_names`** (D-036): `counselling_sessions` → `appointments` (`scheduled_at` →
+`starts_at`, `counsellor_staff_id` → `staff_id`, unused `attendees` dropped); legacy demo columns
+`subjects`, `day_dates`, `status`, `is_sample` and table `demo_teachers` dropped (sessions are the
+only source); `fee_amount_inr` numeric → `fee_amount_paise` bigint; `admissions.student_id` →
+`academic_student_id` and `student_identity_id` → `student_id` (also in `guardians`,
+`report_exports`); `appointment_participants.guardian_ref` → `guardian_id` with a foreign key;
+`staff_profiles.staff_ref` → `staff_code`; `is_sample` added to `leads` and `staff_profiles`
+(backfilled from flagged demos and the reserved `@example.test` domain) → `0006_fee_structures`
+(new table `ops.fee_structures`, additive; OPS-123). Where it has been applied: `IMPLEMENTATION_STATUS.md` (nothing is Deployed).
+
+## Diagram
+
+Relationships only. `CORE_*` = tables in `core`. Academic and Marketing ids are plain UUIDs with no FK (D-005) and are not drawn. `checklist_entries` points at a demo or an admission by `subject_type` + `subject_id` (no FK) and is drawn against demos. Links to `core.users` (created_by, actor, recorded_by …) are omitted.
 
 ```mermaid
 erDiagram
-  %% wave 2: leads, admissions, scheduling
+  %% leads and the admission case
   LEAD_SOURCES ||--o{ ENQUIRIES : source
   LEADS ||--o{ ENQUIRIES : has
   LEADS ||--o{ LEAD_ACTIVITIES : contact
   LEADS ||--o{ DUPLICATE_FLAGS : flagged
   LEADS ||--o{ FOLLOW_UPS : next_action
-  LEADS ||--o{ ADMISSIONS : cases
   LEADS ||--o| CONTACT_PREFERENCES : consent
+  LEADS ||--o{ ADMISSIONS : cases
+  LEAD_HANDOFF_RECEIPTS }o--o| LEADS : creates
+  CORE_INTEGRATION_EVENTS ||--o{ LEAD_HANDOFF_RECEIPTS : event
   CORE_PROGRAMMES ||--o{ ADMISSIONS : programme
+  CORE_STUDENTS ||--o{ ADMISSIONS : student
   ADMISSIONS ||--o{ ADMISSION_TRANSITIONS : history
-  ADMISSIONS ||--o{ ADMISSION_CHECKS : checklist
-  ADMISSIONS ||--o{ COUNSELLING_SESSIONS : counselling
-  ADMISSIONS ||--o{ DEMOS : demos
-  DEMOS ||--o{ DEMO_TEACHERS : teachers
-  ADMISSIONS ||--o{ FEE_RECORDS : fees
-  DEMOS ||--o{ FEE_RECORDS : demo_credit
+  ADMISSIONS ||--o{ ADMISSION_CHECKS : gate_items
+  ADMISSIONS ||--o{ ADMISSION_NUMBER_CHANGES : number_log
+  ADMISSIONS ||--o{ EXIT_RECORDS : exits
   ADMISSIONS ||--o{ ENROLMENT_ATTEMPTS : handoff
   CORE_INTEGRATION_EVENTS ||--o| ENROLMENT_ATTEMPTS : request_event
-  CORE_APPROVALS ||--o{ SOP_VERSIONS : approval
-  %% wave 2: tasks, SOPs, registers, projects
-  TASKS ||--o{ TASK_DEPENDENCIES : blocked_by
-  TASKS ||--o{ ESCALATIONS : escalated
-  TASKS ||--o{ TASK_COMMENTS : comments
-  TASKS ||--o{ TASK_REFERENCES : references
-  TASKS ||--o| TASK_REVIEW_REQUIREMENTS : needs_review
-  TASKS ||--o{ TASK_REVIEWS : review_cycles
-  TASKS ||--o{ TASK_REMINDERS : reminded
-  SOPS ||--o{ SOP_VERSIONS : versions
-  SOP_VERSIONS ||--o{ SOP_CHECKLIST_ITEMS : steps
-  SOP_VERSIONS ||--o| SOP_VERSION_SCHEDULES : dates
-  SOPS ||--o| SOP_ARCHIVES : archived
-  SOP_VERSIONS ||--o{ SOP_ACK_REQUIREMENTS : required_by
-  SOP_VERSIONS ||--o{ SOP_ACKNOWLEDGEMENTS : acknowledged
-  RISKS ||--o{ RISK_MITIGATIONS : actions
-  PROJECTS ||--o{ MILESTONES : milestones
-  MILESTONES ||--o{ MILESTONE_DEPENDENCIES : depends
-  POLICIES ||--|{ POLICY_VERSIONS : versions
-  CORE_APPROVALS ||--o{ POLICY_VERSIONS : approval
-  DECISIONS ||--o| DECISIONS : superseded_by
-  %% staff and HR records
+  %% demos
+  ADMISSIONS ||--o{ DEMOS : demos
+  DEMOS }o--o| ADMISSIONS : converted_to
+  DEMOS ||--|{ DEMO_SESSIONS : sessions
+  DEMO_SESSIONS ||--o{ DEMO_SESSION_CHANGES : changes
+  DEMOS ||--o{ CHECKLIST_ENTRIES : checklist
+  CORE_STAFF_MEMBERS ||--o{ DEMO_SESSIONS : teaches
+  %% students, guardians, reports
+  GUARDIANS ||--o{ APPOINTMENT_PARTICIPANTS : takes_part
+  CORE_STUDENTS ||--o{ GUARDIANS : guardians
+  CORE_STUDENTS ||--o{ REPORT_EXPORTS : reports
+  %% appointments
+  CORE_STUDENTS ||--o{ APPOINTMENTS : appointments
+  ADMISSIONS ||--o{ APPOINTMENTS : about
+  DEMOS ||--o{ APPOINTMENTS : demo_review
+  CORE_STAFF_MEMBERS ||--o{ APPOINTMENTS : assigned
+  APPOINTMENTS ||--o{ APPOINTMENT_PARTICIPANTS : participants
+  APPOINTMENTS ||--o{ APPOINTMENT_CHANGES : history
+  %% teachers and feedback
   CORE_STAFF_MEMBERS ||--o| STAFF_PROFILES : ops_profile
-  CORE_STAFF_MEMBERS ||--o{ RESPONSIBILITIES : holder
-  CORE_STAFF_MEMBERS ||--o{ ONBOARDING_ITEMS : checklist
-  CORE_STAFF_MEMBERS ||--o| EMPLOYEE_RECORDS : hr_extension
-  CORE_STAFF_MEMBERS ||--o{ EMPLOYMENT_HISTORY : changes
-  CORE_DEPARTMENTS ||--o{ DEPARTMENT_HEADS : head_tenures
-  CORE_STAFF_MEMBERS ||--o{ DEPARTMENT_HEADS : is_head
-  CORE_STAFF_MEMBERS ||--o| EMPLOYEE_PRIVATE_DETAILS : sensitive
-  CORE_STAFF_MEMBERS ||--o{ EMERGENCY_CONTACTS : sensitive
-  CORE_STAFF_MEMBERS ||--o{ EMPLOYEE_DOCUMENTS : metadata
-  EMPLOYEE_DOCUMENTS ||--o| EMPLOYEE_DOCUMENTS : superseded_by
-  CORE_STAFF_MEMBERS ||--o{ EMPLOYEE_IDENTITY_REFERENCES : sensitive_last4
-  EMPLOYEE_DOCUMENTS ||--o{ EMPLOYEE_IDENTITY_REFERENCES : optional_link
-  CORE_STAFF_MEMBERS ||--o{ COMPENSATION_RECORDS : sensitive
-  COMPENSATION_RECORDS ||--o| COMPENSATION_RECORDS : superseded_by
-  ASSETS ||--o{ ASSET_ASSIGNMENTS : history
-  CORE_STAFF_MEMBERS ||--o{ ASSET_ASSIGNMENTS : holder
-  %% recruitment and lifecycle
-  CORE_DEPARTMENTS ||--o{ REQUISITIONS : department
-  REQUISITIONS ||--o{ JOB_APPLICATIONS : receives
-  CANDIDATES ||--o{ JOB_APPLICATIONS : makes
-  JOB_APPLICATIONS ||--o{ JOB_APPLICATION_STAGES : history
-  JOB_APPLICATIONS ||--o{ INTERVIEWS : has
-  INTERVIEWS ||--o{ INTERVIEW_PANELISTS : panel
-  JOB_APPLICATIONS ||--o{ JOB_OFFERS : offers
-  JOB_APPLICATIONS |o--o| EMPLOYEE_RECORDS : hired_as
-  EMPLOYEE_RECORDS ||--o{ LIFECYCLE_CASES : cases
-  JOB_APPLICATIONS |o--o| LIFECYCLE_CASES : opens_onboarding
-  LIFECYCLE_CASES ||--o{ LIFECYCLE_ITEMS : checklist
-  ASSET_ASSIGNMENTS |o--o{ LIFECYCLE_ITEMS : return_item
-  CORE_INTEGRATION_EVENTS |o--o| LIFECYCLE_CASES : separation_event
-  %% attendance, shifts, leave
-  SHIFT_TEMPLATES ||--o{ SHIFT_ASSIGNMENTS : assigned
-  CORE_STAFF_MEMBERS ||--o{ SHIFT_ASSIGNMENTS : works
-  CORE_STAFF_MEMBERS ||--o{ ATTENDANCE_SESSIONS : records
-  ATTENDANCE_SESSIONS ||--o{ ATTENDANCE_BREAKS : breaks
-  ATTENDANCE_SESSIONS ||--o| ATTENDANCE_SESSIONS : superseded_by
-  ATTENDANCE_SESSIONS ||--o{ ATTENDANCE_CORRECTIONS : corrected_by
-  ATTENDANCE_CORRECTIONS ||--o| ATTENDANCE_SESSIONS : resulting_session
-  ATTENDANCE_IMPORTS ||--o{ ATTENDANCE_SESSIONS : created
-  LEAVE_TYPES ||--o{ LEAVE_REQUESTS : of_type
-  CORE_STAFF_MEMBERS ||--o{ LEAVE_REQUESTS : requests
-  LEAVE_REQUESTS ||--o{ LEAVE_LEDGER_ENTRIES : usage_reversal
-  LEAVE_TYPES ||--o{ LEAVE_LEDGER_ENTRIES : balance
+  CORE_STAFF_MEMBERS ||--o{ STAFF_SUBJECT_CAPABILITIES : subjects
+  CORE_STAFF_MEMBERS ||--o{ TEACHER_STUDENT_FEEDBACK : writes
+  CORE_STUDENTS ||--o{ TEACHER_STUDENT_FEEDBACK : about
+  TEACHER_STUDENT_FEEDBACK ||--o| TEACHER_STUDENT_FEEDBACK : supersedes
+  CORE_STAFF_MEMBERS ||--o{ STUDENT_TEACHER_FEEDBACK : about
+  CORE_STUDENTS ||--o{ STUDENT_TEACHER_FEEDBACK : from
+  %% fees
+  ADMISSIONS ||--o{ FEE_PLANS : plan
+  CORE_STUDENTS ||--o{ FEE_PLANS : student
+  CORE_APPROVALS ||--o{ FEE_PLANS : approval
+  FEE_PLANS ||--|{ FEE_INSTALMENTS : instalments
+  ADMISSIONS ||--o{ FEE_RECORDS : ledger
+  DEMOS ||--o{ FEE_RECORDS : demo_credit
 ```
-Not drawn: `settings`, `incidents`, `work_items`, `milestone` and `task` links to leads, admissions, SOPs, decisions and projects (nullable references), and every `created_by` / `recorded_by` link to `core.users`.
+Not drawn: `settings`, `admission_number_counters` (one row per scope key, no FK), and `fee_records.plan_id` / `instalment_id` (plain UUIDs checked by the service, to avoid an import cycle between schema files).
 
-## Tables
-Owner file: **ops.ts** = `packages/database/src/schema/ops.ts`; **hr** = `ops-hr.ts`; **life** = `ops-lifecycle.ts`; **time** = `ops-time.ts`; **work** = `ops-work.ts`. (S) = sensitive record set (`docs/PERMISSIONS.md`).
-
-| Table | Purpose | File |
+## Ownership
+| Data | Owner | Others reach it by |
 |---|---|---|
-| `settings` | Policy register values with decision states | ops.ts |
-| `lead_sources` | Configurable enquiry sources | ops.ts |
-| `leads`, `enquiries`, `lead_activities`, `duplicate_flags` | Leads, each enquiry with its source, contact attempts, duplicate warnings | ops.ts |
-| `admissions`, `admission_transitions`, `admission_checks` | Pipeline case per lead and programme, status history, confirmation checklist | ops.ts |
-| `follow_ups`, `counselling_sessions`, `demos`, `demo_teachers` | Next actions, appointments, demo classes | ops.ts |
-| `fee_records` | Manually recorded fee entries (paise) | ops.ts |
-| `enrolment_attempts` | One row per handoff request to Academic | ops.ts |
-| `contact_preferences` (S) | Consent and allowed channels per lead | ops.ts |
-| `tasks`, `task_dependencies`, `escalations` | Work items, blockers, L2 to L4 escalations | ops.ts |
-| `staff_profiles`, `responsibilities`, `onboarding_items` | Ops data on staff, role holders and backups, simple per-staff checklist | ops.ts |
-| `sops`, `sop_versions`, `sop_checklist_items` | SOP register, immutable versions, steps | ops.ts |
-| `incidents`, `decisions`, `risks`, `projects`, `milestones`, `milestone_dependencies`, `work_items` | Exceptions, decision log, risks, projects, legacy inventory | ops.ts |
-| `employee_records` | HR extension of a staff row: code, work contacts, status, dates (carries the legal name column) | hr |
-| `employment_history` | Append-only change log of department, title, manager, type, status | hr |
-| `department_heads` | Head tenures per department, one current | hr |
-| `employee_private_details` (S) | Personal contacts and address | hr |
-| `emergency_contacts` (S) | Up to five per employee | hr |
-| `employee_identity_references` (S) | Document kind and last four characters | hr |
-| `employee_documents` (S) | Document metadata, retention and two-person deletion; no files | hr |
-| `compensation_records` (S) | Effective-dated pay terms, draft to approved | hr |
-| `assets`, `asset_assignments` | Work assets and who holds them | hr |
-| `requisitions`, `candidates`, `job_applications`, `job_application_stages` | Hiring: openings, people, applications, stage history | life |
-| `interviews`, `interview_panelists`, `job_offers` | Interviews with feedback, offers (no salary) | life |
-| `lifecycle_cases`, `lifecycle_items` | Onboarding and offboarding cases and checklists | life |
-| `shift_templates`, `shift_assignments`, `holidays` | Shifts, who works which, holiday calendar | time |
-| `attendance_sessions`, `attendance_breaks`, `attendance_corrections`, `attendance_imports` | Staff clock records, corrections, CSV batches | time |
-| `leave_types`, `leave_requests`, `leave_ledger_entries` | Leave types, requests, balance ledger | time |
-| `task_comments`, `task_references`, `task_review_requirements`, `task_reviews`, `task_reminders` | Task side tables | work |
-| `sop_version_schedules`, `sop_archives`, `sop_ack_requirements`, `sop_acknowledgements` | SOP dates, archive flag, required reading | work |
-| `risk_mitigations` | Actions against a risk | work |
-| `policies`, `policy_versions` | Company policies and compliance register with versions | work |
+| Admission case, demos and sessions, checklist, admission numbers, exit records, guardians, report exports, appointments, feedback, fee plans and ledger, handoff receipts | Business Ops (`ops`) | Ops routes and services; summary contracts |
+| `core.students` (canonical student; name only, **no contact data**) | Ops is steward (creates it at conversion) | FK from `ops.*`; plain UUID from `academic.*` (IR-OPS-STU-2) |
+| `core.staff_members` (teachers and counsellors are staff) | Ops is steward | FK |
+| `core.programmes` | Academic is steward | FK |
+| Courses, batches, enrolments, class attendance, tests, marks | Academic OS | read contract (IR-OPS-STU-1); "Source unavailable" until then |
+| Marketing lead and attribution | Marketing OS | event `marketing.lead.handed_off` v1 → `lead_handoff_receipts` |
 
-Core tables Ops writes as steward: `core.departments`, `core.staff_members`. Ops publishes `ops.admission.enrolment_requested` v1 and `ops.employee.separated` v1 through `core.integration_events`.
+## Field definitions
+
+See [DATA_DICTIONARY.md](DATA_DICTIONARY.md): one section per table with every column, its
+type, whether it is required, allowed values, an example, its meaning, what it links to, which
+service writes it, and whether the row can be sample data. Instants are `timestamptz` (UTC);
+calendar days are `date` in Asia/Kolkata; money is integer paise (`bigint`), INR only.
+
+## Transactions and idempotency
+- Conversion (A-67), attendance changes (A-60), lifecycle moves (A-69), appointment booking (A-73), fee plan activation and ledger rows, and lead intake (A-81, per-event savepoint) each run in one transaction with their audit row.
+- Idempotency: `POST /demos/{id}/convert` and `POST /fee-plans` honour `Idempotency-Key`; lead intake is idempotent through `core.event_deliveries` and the unique `marketing_lead_id`.
+- Append-only history: `admission_transitions`, `demo_session_changes`, `checklist_entries`, `admission_number_changes`, `exit_records`, `appointment_changes`, feedback versions, fee ledger rows.

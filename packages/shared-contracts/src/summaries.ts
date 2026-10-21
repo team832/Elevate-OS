@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { isoDateSchema, isoDateTimeSchema, programmeCodeSchema } from './ids';
+import {
+  batchIdSchema,
+  enrolmentIdSchema,
+  isoDateSchema,
+  isoDateTimeSchema,
+  programmeCodeSchema,
+  staffMemberIdSchema,
+  studentIdSchema,
+} from './ids';
 
 /**
  * Cross-module read-only summaries (D-011.2), served at
@@ -136,6 +144,69 @@ export const academicDeliverySummaryV1Schema = z.object({
   ),
 });
 export type AcademicDeliverySummaryV1 = z.output<typeof academicDeliverySummaryV1Schema>;
+
+const count = z.int().min(0);
+
+/**
+ * One student's evidence from Academic OS for Business Ops (IR-OPS-STU-1), served at
+ * `GET /academic/api/internal/v1/students/{academicStudentId}/summary?from&to` (caller `ops`).
+ * Only final result runs. Absent is never a score of 0; `cohort.scored` is the number of
+ * students with a score in the same assessment (the comparison group).
+ */
+export const academicStudentSummaryV1Schema = z.object({
+  contract: z.literal('academic.student_summary'),
+  version: z.literal(1),
+  generatedAt: isoDateTimeSchema,
+  studentId: studentIdSchema,
+  window: metricWindowSchema,
+  enrolments: z.array(
+    z.object({
+      enrolmentId: enrolmentIdSchema,
+      programmeCode: programmeCodeSchema,
+      batchId: batchIdSchema.nullable(),
+      batchName: z.string().nullable(),
+      status: z.string().min(1),
+      /** Teacher assignments of the batch in the window (staff ids are core.staff_members). */
+      teachers: z.array(z.object({ staffId: staffMemberIdSchema, subject: z.string().min(1) })),
+    }),
+  ),
+  /** Held class sessions in the window and the student's recorded marks; unrecorded = held − sum. */
+  attendance: z.object({
+    held: count,
+    present: count,
+    partial: count,
+    late: count,
+    absent: count,
+    excused: count,
+  }),
+  results: z.array(
+    z
+      .object({
+        assessmentId: z.uuid(),
+        code: z.string().min(1),
+        subject: z.string().nullable(),
+        examType: z.string().min(1),
+        heldOn: isoDateSchema.nullable(),
+        state: z.enum(['scored', 'absent']),
+        score: z.number().nullable(),
+        maxScore: z.number().positive(),
+        percentile: z.number().min(0).max(100).nullable(),
+        rank: z.int().min(1).nullable(),
+        cohort: z.object({ label: z.string().min(1), scored: count }),
+        /** Result run version the figures come from (a re-run supersedes it). */
+        resultVersion: z.int().min(1),
+      })
+      .refine(
+        (r) =>
+          (r.state === 'absent') === (r.score === null) &&
+          (r.state === 'scored' || (r.percentile === null && r.rank === null)),
+        {
+          error: 'An absent result has no score, percentile or rank; a scored result has a score.',
+        },
+      ),
+  ),
+});
+export type AcademicStudentSummaryV1 = z.output<typeof academicStudentSummaryV1Schema>;
 
 // --- Consumer side ------------------------------------------------------------------
 

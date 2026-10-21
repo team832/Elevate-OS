@@ -16,6 +16,12 @@ export const ADMISSION_STATUSES = [
   'enrolled',
   'lost',
   'on_hold',
+  // Student lifecycle after admission (owner brief §9; docs/parts/admissions-students.md).
+  'withdrawn',
+  'completed',
+  'transferred',
+  'cancelled_before_enrolment',
+  'other_inactive',
 ] as const;
 export type AdmissionStatus = (typeof ADMISSION_STATUSES)[number];
 
@@ -32,7 +38,23 @@ export const ADMISSION_STATUS_LABELS: Record<AdmissionStatus, string> = {
   enrolled: 'Enrolled',
   lost: 'Lost',
   on_hold: 'On hold',
+  withdrawn: 'Withdrawn early',
+  completed: 'Completed',
+  transferred: 'Transferred',
+  cancelled_before_enrolment: 'Cancelled before enrolment',
+  other_inactive: 'Other inactive',
 };
+
+/** Exit statuses of an admitted student; each is recorded with an exit record (never deleted). */
+export const EXIT_STATUSES = [
+  'withdrawn',
+  'completed',
+  'transferred',
+  'cancelled_before_enrolment',
+  'other_inactive',
+] as const satisfies readonly AdmissionStatus[];
+export type ExitStatus = (typeof EXIT_STATUSES)[number];
+const isExit = (s: string): s is ExitStatus => (EXIT_STATUSES as readonly string[]).includes(s);
 
 /** The forward path, in order (used for board columns and "reached at least" checks). */
 export const PIPELINE_ORDER: readonly AdmissionStatus[] = [
@@ -50,7 +72,7 @@ export const PIPELINE_ORDER: readonly AdmissionStatus[] = [
 
 /** Open = still being worked (not enrolled, not lost). `on_hold` is open. */
 export function isOpenStatus(status: AdmissionStatus): boolean {
-  return status !== 'enrolled' && status !== 'lost';
+  return status !== 'enrolled' && status !== 'lost' && !isExit(status);
 }
 
 /** Statuses from which a person may mark the case lost / on hold (everything a counsellor still owns). */
@@ -72,7 +94,10 @@ export type TransitionGuard =
   | 'admission_readiness'
   | 'enrolment_handoff'
   | 'enrolment_reply'
-  | 'resume_to_held_status';
+  | 'resume_to_held_status'
+  | 'student_lifecycle'
+  | 'exit_record'
+  | 'reactivation';
 
 export interface TransitionRule {
   from: AdmissionStatus;
@@ -95,7 +120,7 @@ const rule = (
 
 /** The legal-transition table. Anything not listed is illegal. */
 export const TRANSITIONS: readonly TransitionRule[] = [
-  rule('new', 'contacted', 'First successful two-way contact (BR-OPS-4).', {
+  rule('new', 'contacted', 'First successful two-way contact.', {
     guard: 'successful_contact',
   }),
   rule('contacted', 'counselling_scheduled', 'Counselling appointment booked.'),
@@ -106,7 +131,7 @@ export const TRANSITIONS: readonly TransitionRule[] = [
   rule('counselling_scheduled', 'contacted', 'Appointment cancelled or missed; rebook.', {
     requiresReason: true,
   }),
-  rule('counselled', 'demo_scheduled', 'Demo booked (separate demo classes, BR-OPS-2).'),
+  rule('counselled', 'demo_scheduled', 'Demo booked (separate demo classes).'),
   rule(
     'counselled',
     'admission_pending',
@@ -121,7 +146,7 @@ export const TRANSITIONS: readonly TransitionRule[] = [
   rule(
     'admission_pending',
     'admitted',
-    'Admission confirmed: documents, two fee verifications, authorised fee approval, verified down payment (BR-OPS-6/7).',
+    'Admission confirmed: documents, two fee verifications, authorised fee approval, verified down payment.',
     { guard: 'admission_readiness' },
   ),
   rule(
@@ -156,6 +181,33 @@ export const TRANSITIONS: readonly TransitionRule[] = [
   ),
   rule('on_hold', 'lost', 'Lost while on hold.', { requiresReason: true }),
   rule('lost', 'new', 'Reopened (a reason is required).', { requiresReason: true }),
+  // Student lifecycle (owner brief §9): only through the student lifecycle service.
+  rule('enrolled', 'on_hold', 'Enrolled student paused (reason + review date).', {
+    requiresReason: true,
+    guard: 'student_lifecycle',
+  }),
+  rule('on_hold', 'enrolled', 'Resume the enrolled student.', {
+    requiresReason: true,
+    guard: 'resume_to_held_status',
+  }),
+  ...EXIT_STATUSES.flatMap((to) =>
+    (to === 'cancelled_before_enrolment'
+      ? (['admitted', 'on_hold'] as const)
+      : (['enrolled', 'on_hold'] as const)
+    ).map((from) =>
+      rule(from, to, 'Student exit, recorded with an exit record.', {
+        requiresReason: true,
+        guard: 'exit_record',
+        proposal: to === 'other_inactive',
+      }),
+    ),
+  ),
+  ...EXIT_STATUSES.map((from) =>
+    rule(from, 'admitted', 'Reactivated by an authorised approver; enrolment is requested again.', {
+      requiresReason: true,
+      guard: 'reactivation',
+    }),
+  ),
 ];
 
 export function findTransition(
@@ -165,15 +217,29 @@ export function findTransition(
   return TRANSITIONS.find((t) => t.from === from && t.to === to);
 }
 
+/** True for the student lifecycle edges (only the lifecycle service applies them). */
+export function isLifecycleRule(t: TransitionRule): boolean {
+  return (
+    t.guard === 'student_lifecycle' ||
+    t.guard === 'exit_record' ||
+    t.guard === 'reactivation' ||
+    (t.from === 'on_hold' && t.to === 'enrolled')
+  );
+}
+
 /** User-initiated targets reachable from a status (for action buttons). */
 export function allowedUserTargets(
   from: AdmissionStatus,
   context: { heldFromStatus?: AdmissionStatus | null; demoSkipAllowed?: boolean } = {},
 ): AdmissionStatus[] {
-  return TRANSITIONS.filter((t) => t.from === from && t.actor === 'user')
-    .filter((t) => t.guard !== 'resume_to_held_status' || t.to === context.heldFromStatus)
-    .filter((t) => t.guard !== 'demo_skip_policy' || context.demoSkipAllowed !== false)
-    .map((t) => t.to);
+  return (
+    TRANSITIONS.filter((t) => t.from === from && t.actor === 'user')
+      // Student lifecycle changes have their own actions (hold, resume, exit, reactivate).
+      .filter((t) => !isLifecycleRule(t))
+      .filter((t) => t.guard !== 'resume_to_held_status' || t.to === context.heldFromStatus)
+      .filter((t) => t.guard !== 'demo_skip_policy' || context.demoSkipAllowed !== false)
+      .map((t) => t.to)
+  );
 }
 
 export interface TransitionContext {
@@ -191,6 +257,8 @@ export interface TransitionContext {
   viaEnrolmentHandoff?: boolean;
   /** True only inside the enrolment-reply consumer. */
   viaEnrolmentReply?: boolean;
+  /** True only inside the student lifecycle service (hold / exit / reactivate). */
+  viaStudentLifecycle?: boolean;
 }
 
 export type TransitionCheck =
@@ -210,7 +278,7 @@ const GUARD_FAILURES: Record<
   successful_contact: (ctx) =>
     ctx.hasSuccessfulContact
       ? null
-      : 'Log a successful two-way contact first; unanswered calls do not count as contacted (BR-OPS-4).',
+      : 'Log a successful two-way contact first; unanswered calls do not count as contacted.',
   demo_skip_policy: (ctx) =>
     ctx.demoSkipAllowed === false
       ? 'Skipping the demo is switched off in the pipeline settings.'
@@ -226,10 +294,26 @@ const GUARD_FAILURES: Record<
   enrolment_reply: (ctx) =>
     ctx.viaEnrolmentReply ? null : 'Only Academic OS replies can make this change.',
   resume_to_held_status: (ctx, to) =>
-    ctx.heldFromStatus === to
-      ? null
-      : `Resume to the status held before the pause (${ctx.heldFromStatus ?? 'unknown'}).`,
+    // Resuming an enrolled student is a lifecycle change (its own permission and audit).
+    to === 'enrolled' && !ctx.viaStudentLifecycle
+      ? LIFECYCLE_ONLY
+      : ctx.heldFromStatus === to
+        ? null
+        : `Resume to the status held before the pause (${ctx.heldFromStatus ?? 'unknown'}).`,
+  student_lifecycle: (ctx) => (ctx.viaStudentLifecycle ? null : LIFECYCLE_ONLY),
+  exit_record: (ctx, to) => {
+    if (!ctx.viaStudentLifecycle) return LIFECYCLE_ONLY;
+    // From on_hold the status held before the pause decides (enrolled, or admitted for a cancellation).
+    const needed = to === 'cancelled_before_enrolment' ? 'admitted' : 'enrolled';
+    return ctx.heldFromStatus && ctx.heldFromStatus !== needed
+      ? `"${ADMISSION_STATUS_LABELS[to]}" applies only to a student who was ${needed}.`
+      : null;
+  },
+  reactivation: (ctx) => (ctx.viaStudentLifecycle ? null : LIFECYCLE_ONLY),
 };
+
+const LIFECYCLE_ONLY =
+  'Use the student lifecycle actions (hold, exit, reactivate) for this change.';
 
 /** Decide whether `from → to` is allowed in this context. Pure; no side effects. */
 export function checkTransition(

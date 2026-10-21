@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
@@ -9,6 +10,7 @@ import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Batches' };
 
 export default async function BatchesPage() {
   // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
@@ -26,13 +28,13 @@ async function Body({ access }: { access: PageAccess }) {
   const data = await load(async () => ({ batches: await listBatches(db, actorFor(access.user)), courses: canWrite ? await listCourses(db) : [] }));
   return (
     <>
-      <PageHeader title="Batches" description="Cohorts, each following one course version. Teachers see only the batches they are assigned to." />
+      <PageHeader title="Batches" description="Cohorts, each following one course version. Teachers see only their own batches." />
       {!data.ok ? (
         <LoadError error={data.error} />
       ) : (
         <div className="el-stack">
           <Card>
-            <DataTable
+            <DataTable compact
               rows={data.data.batches}
               rowKey={(b) => b.id}
               empty={<EmptyState title="No batches" description={canWrite ? 'Create a batch below.' : 'You are not assigned to any batch yet.'} />}

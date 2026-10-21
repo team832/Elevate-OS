@@ -2,11 +2,8 @@ import type { Database } from '@elevate/database';
 import { defineRoute } from '@elevate/server-kit';
 import type { Actor } from '../../../../../server/context';
 import { processEnrolmentReplies } from '../../../../../server/enrolment';
-import { runTaskEscalations, runTaskReminders } from '../../../../../server/escalations';
 import { runFollowUpReminders } from '../../../../../server/follow-ups';
-import { runMissingClockOutCheck } from '../../../../../server/hr/attendance';
-import { runSeparations } from '../../../../../server/hr/offboarding';
-import { runLifecycleReminders } from '../../../../../server/hr/onboarding';
+import { processLeadIntake } from '../../../../../server/lead-intake';
 import { jobParams, type OPS_JOBS } from '../../../../../server/schemas';
 
 export const dynamic = 'force-dynamic';
@@ -16,20 +13,13 @@ type Run = (db: Database, actor: Actor, requestId: string) => Promise<unknown>;
 /** Every job is idempotent; jobs taking an actor re-check `ops:jobs:run` themselves. */
 const JOBS: Record<(typeof OPS_JOBS)[number], Run> = {
   'follow-up-reminders': (db, actor, requestId) => runFollowUpReminders(db, { actor, requestId }),
-  'task-escalations': (db, actor, requestId) => runTaskEscalations(db, { actor, requestId }),
-  'task-reminders': (db, actor, requestId) => runTaskReminders(db, { actor, requestId }),
   'enrolment-replies': (db, actor) => processEnrolmentReplies(db, { actor }),
-  'attendance-missing-clock-out': (db, actor, requestId) =>
-    runMissingClockOutCheck(db, new Date(), { actor, requestId }),
-  'lifecycle-reminders': (db) => runLifecycleReminders(db),
-  separations: (db) => runSeparations(db),
+  'lead-intake': (db, actor, requestId) => processLeadIntake(db, { actor, requestId }),
 };
 
 /**
  * POST /ops/api/v1/jobs/{job} — run an Ops job by hand (a scheduler is a wave-3
- * integration item). Jobs: see `OPS_JOBS` in server/schemas.ts. HR lifecycle
- * approvers also run `lifecycle-reminders` / `separations` from
- * `POST /hr/lifecycle-cases/jobs`.
+ * integration item). Jobs: see `OPS_JOBS` in server/schemas.ts.
  */
 export const POST = defineRoute(
   { permission: 'ops:jobs:run', params: jobParams },

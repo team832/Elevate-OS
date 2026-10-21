@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
 import {
   Alert,
@@ -16,6 +17,7 @@ import { ContentStateBadge, PlacementBadge } from '../../ui/badges';
 import { MarketingPage, Section, param, type SearchParams } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Content calendar' };
 
 export default async function CalendarPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
@@ -31,7 +33,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
       path={modulePath('calendar')}
       active="calendar"
       title="Calendar"
-      description="Scheduled and published placements by IST date and account. Hard conflicts block scheduling; warnings are shown here and when scheduling."
+      description="Scheduled and published posts by date (IST) and account. Clashes block scheduling."
       searchParams={sp}
     >
       {() => (
@@ -88,6 +90,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
                     .map(([day, list]) => (
                       <Card key={day} title={day}>
                         <DataTable
+                          compact
                           rows={list}
                           rowKey={(r) => r.id}
                           columns={[
@@ -153,6 +156,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
                   description="Planned placements are not posts: they are not counted as scheduled or published."
                 >
                   <DataTable
+                    compact
                     rows={planned}
                     rowKey={(r) => r.p.id}
                     empty={<EmptyState title="No planned placements" />}

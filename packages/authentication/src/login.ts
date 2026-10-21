@@ -296,7 +296,9 @@ export function createLoginHandler(options: AuthHandlerOptions) {
               ? 'missing'
               : error instanceof UnauthenticatedError
                 ? 'invalid'
-                : 'unavailable';
+                : error instanceof ForbiddenError
+                  ? 'domain'
+                  : 'unavailable';
         return seeOther(withQuery(options.loginPath, { error: code, next: nextPath }));
       }
       return errorResponse(error, requestId);

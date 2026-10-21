@@ -31,7 +31,7 @@ export class MockCrmAdapter implements CrmAdapter {
     return {
       connection: 'not_configured' as const,
       detail:
-        'No CRM is connected. OD-010 (replace or import from the existing CRM) is open; this mock returns no data.',
+        'No CRM is connected. Whether to replace the existing CRM or import from it is an open owner decision; this mock returns no data.',
       verifiedAt: null,
     };
   }

@@ -1,6 +1,7 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { Alert, ButtonLink, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
 import { getCourse, getPlan } from '../../../../server';
 import { MODULE_PATHS } from '../../../../server/paths';
 import { ApiForm } from '../../../../ui/api-form';
@@ -8,6 +9,7 @@ import { PlanBadge, StateBadge, fmtDateTime } from '../../../../ui/badges';
 import { AcademicShell, LoadError, gate, load } from '../../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Curriculum plan' };
 
 export default async function PlanPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,8 +29,9 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
     <AcademicShell access={access} active="curriculum">
       <PageHeader
         title={`${plan.code} — ${plan.title}`}
-        description={<>Course {course.code} · version {plan.version} · <PlanBadge status={plan.status} /> <PlanBadge status={plan.countsStatus} prefix="counts" /> <PlanBadge status={plan.datesStatus} prefix="dates" /></>}
-        actions={<a href={MODULE_PATHS.curriculum}>All plans</a>}
+        description={`Course ${course.code} · version ${plan.version}`}
+        meta={<><PlanBadge status={plan.status} /> <PlanBadge status={plan.countsStatus} prefix="counts" /> <PlanBadge status={plan.datesStatus} prefix="dates" /></>}
+        actions={<ButtonLink href={MODULE_PATHS.curriculum}>All plans</ButtonLink>}
       />
       <div className="el-stack">
         <Alert tone="info" title="This is a plan, not delivery">
@@ -44,7 +47,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
           </Card>
         ) : null}
         <Card title="Planned classes by subject">
-          <DataTable
+          <DataTable compact
             rows={totals}
             rowKey={(t) => t.subjectCode}
             empty={<EmptyState title="No items yet" />}
@@ -58,7 +61,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
           />
         </Card>
         <Card title="Approval history" description="Locking or making a plan provisional needs another academic coordinator’s approval (core approvals; no self-approval).">
-          <DataTable
+          <DataTable compact
             rows={approvals}
             rowKey={(a) => a.id}
             empty={<EmptyState title="No approval requests" description={plan.legacyApprovedOn ? `Imported legacy status; recorded in the source as approved on ${plan.legacyApprovedOn}.` : undefined} />}
@@ -96,7 +99,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
           ) : null}
         </Card>
         <Card title={`Lesson sequence (${items.length} items)`}>
-          <DataTable
+          <DataTable compact
             rows={items}
             rowKey={(i) => i.id}
             empty={<EmptyState title="No items" />}

@@ -32,9 +32,9 @@ stateDiagram-v2
   on_hold --> new: resume to held status only
   on_hold --> lost
   lost --> new: reopen, reason
-  enrolled --> [*]
+  enrolled --> on_hold: student lifecycle (see below)
 ```
-Every non-terminal status from `new` to `admitted` can go to `lost` or `on_hold`; only the sources above are drawn once. `enrolment_requested` cannot be lost or held. Lifecycle names used in the brief map onto these statuses (see `requirements/REQUIREMENTS.md`, OPS-070).
+Every non-terminal status from `new` to `admitted` can go to `lost` or `on_hold`; only the sources above are drawn once. `enrolment_requested` cannot be lost or held. Lifecycle names used in the brief map onto these statuses (see `requirements/REQUIREMENTS.md`, OPS-070). After `admitted` and `enrolled` the student lifecycle below applies (A-69, 20 Oct 2026).
 
 ### Enrolment handoff attempt (A-19, table `enrolment_attempts`)
 ```mermaid
@@ -57,217 +57,261 @@ stateDiagram-v2
 ```
 Verified and voided are final. Entries are manual records, never verified payments.
 
-## HR records
+The HR records, recruitment and lifecycle, HR time and Operations workflows (tasks, SOPs, policies, risks) were removed by the owner on 2026-10-20 (D-032); recoverable from git commit 63da4e4.
 
-### Employment status (A-22)
+---
+
+## Admissions workspace (added 20 Oct 2026)
+
+Rules behind each diagram: `docs/ALGORITHMS.md` A-57 … A-84. Requirements: OPS-080 … OPS-121.
+
+### Demo outcome (A-62, A-67; column `demos.outcome`)
 ```mermaid
 stateDiagram-v2
-  [*] --> onboarding
-  onboarding --> active: onboarding approved
-  onboarding --> separated: reason, end date
-  active --> on_notice: separation approved
-  active --> separated: reason, end date
-  on_notice --> active: retracted before it applies
-  on_notice --> separated: last working day passed
-  separated --> [*]: final; a re-hire is a new record
+  [*] --> open: booked with 3 demo days (admissions.demo.day_count, D-038); identity created
+  open --> converted: Convert to admission (A-67 only), sets converted_admission_id
+  open --> declined: reason
+  open --> withdrawn: reason
+  open --> not_converted: reason
+  open --> cancelled: reason
+  open --> no_show: reason
+  no_show --> [*]
+  converted --> [*]
+  declined --> [*]
+  withdrawn --> [*]
+  not_converted --> [*]
+  cancelled --> [*]
 ```
-Reason always required; nobody changes their own status.
+Closing a demo cancels future pending sessions and marks past unrecorded ones `not_recorded`. `cancelled` and `not_converted` send a case still at `demo_scheduled` back to `counselled`. There is no reopen. Tabs: Upcoming and Current are `open` demos split by the first session's IST day (A-58); every other outcome is Previous.
 
-### Compensation record (A-26, table `compensation_records`)
-```mermaid
-stateDiagram-v2
-  [*] --> draft: hr_manager or finance_officer, not for oneself
-  draft --> approved: a different holder of ops:compensation:approve, forward in time
-  draft --> cancelled: reason
-  approved --> superseded: next approval, effective_to = new start - 1
-```
-At most one `approved` record per employee. Approval needs `confirm: true`.
-
-### Employee document (A-25, table `employee_documents`)
-```mermaid
-stateDiagram-v2
-  [*] --> active
-  active --> superseded: replaced
-  active --> retention_hold: reason
-  superseded --> retention_hold: reason
-  retention_hold --> active: release
-  active --> deletion_requested: reason, no hold
-  superseded --> deletion_requested
-  deletion_requested --> deleted: a different HR manager, confirm
-  deletion_requested --> active: rejected, reason
-```
-A deleted document keeps its metadata row; downloads answer 409.
-
-### Asset
-```mermaid
-stateDiagram-v2
-  [*] --> available
-  available --> assigned: assign (not separated employees)
-  assigned --> available: return good or worn
-  assigned --> in_repair: return damaged
-  assigned --> lost: return lost
-  available --> in_repair
-  in_repair --> available
-  available --> retired
-  available --> lost
-  lost --> available: found
-```
-
-## Recruitment and lifecycle (A-29…A-38)
-
-### Requisition
-```mermaid
-stateDiagram-v2
-  [*] --> draft
-  draft --> open: decide, not the requester
-  draft --> cancelled: manage, reason
-  open --> on_hold: manage, reason
-  on_hold --> open: manage
-  open --> filled: hires reach openings (automatic on conversion)
-  open --> cancelled: decide, reason
-  on_hold --> cancelled: decide, reason
-```
-
-### Application
-```mermaid
-stateDiagram-v2
-  [*] --> applied
-  applied --> screening
-  screening --> interview
-  interview --> screening: reason
-  interview --> offer: decide (selection)
-  offer --> interview: decide, reason, no live offer
-  offer --> hired: conversion service only
-  applied --> rejected: decide, reason
-  screening --> rejected
-  interview --> rejected
-  offer --> rejected
-  applied --> withdrawn: manage, reason
-  screening --> withdrawn
-  interview --> withdrawn
-  offer --> withdrawn
-```
-
-### Offer
-```mermaid
-stateDiagram-v2
-  [*] --> draft
-  draft --> approved: decide, not the preparer
-  draft --> withdrawn: manage, reason
-  approved --> extended: marked by hand, nothing is sent
-  approved --> withdrawn: decide, reason
-  extended --> accepted
-  extended --> declined: reason
-  extended --> withdrawn: decide, reason
-  extended --> expired
-```
-
-### Interview
+### Demo session attendance (A-60, A-61; column `demo_sessions.attendance`)
 ```mermaid
 stateDiagram-v2
   [*] --> scheduled
-  scheduled --> completed
+  scheduled --> present: after start
+  scheduled --> absent: after start
+  scheduled --> not_recorded: after start
+  scheduled --> rescheduled: reason
   scheduled --> cancelled: reason
-  scheduled --> no_show: reason
+  rescheduled --> present: after start
+  rescheduled --> absent: after start
+  rescheduled --> not_recorded: after start
+  rescheduled --> rescheduled: reason
+  rescheduled --> cancelled: reason
+  present --> absent: correction, reason
+  absent --> present: correction, reason
+  present --> not_recorded: correction, reason
+  not_recorded --> present: correction, reason
+  present --> scheduled: correction, reason
+  absent --> rescheduled: make-up class, reason
+  cancelled --> rescheduled: reason
 ```
+Since 21 Oct 2026 attendance also has `late` (counts as attended) and `excused` (does not); the same edges apply. Every change appends to `demo_session_changes`. Progress counts attended DAYS (a day with a present or late class, A-57). A present session cannot be rescheduled. Reschedule and cancel are refused once the demo is closed; corrections are still allowed.
 
-### Lifecycle case (onboarding and offboarding)
+### Conversion (A-65, A-66, A-67)
+```mermaid
+flowchart TD
+  A[Convert to admission: POST /demos/id/convert] --> B{demo outcome open and case convertible?}
+  B -- no --> X1[409, nothing written]
+  B -- yes --> C{checklist required setting on and items open?}
+  C -- yes --> X2[400, nothing written]
+  C -- no --> D{identity}
+  D -- same lead --> E[link core.students row]
+  D -- contact match, no choice --> X3[409 IDENTITY_REVIEW with candidates]
+  D -- person chose / confirmed new --> E
+  E --> F[programmes: allowed combination; second programme opens its own case]
+  F --> G[case to admission_pending, to admitted if gate A-04 passes]
+  G --> H{manual number?}
+  H -- no --> I[counter row FOR UPDATE, next number]
+  H -- yes, permission + reason --> J[manual number]
+  I --> K[demo outcome converted + link]
+  J --> K
+  K --> L[optional fee-arrangement approval request; optional enrolment request on the outbox]
+  L --> M[audit; commit]
+  I -. unique violation .-> X4[409, whole transaction rolled back]
+  J -. unique violation .-> X4
+```
+A retry with the same `Idempotency-Key` replays the stored response; a second conversion of the same demo is 409. **Changed 21 Oct 2026:** the identity already exists from booking; conversion creates the application and stops at `admission_pending` — no number, no enrolment request, no `admitted` (see "Admission end to end" below).
+
+### Student lifecycle (A-69; column `admissions.status` after admission)
 ```mermaid
 stateDiagram-v2
-  [*] --> open
-  open --> completed: onboarding approved, required items resolved
-  open --> approved: offboarding approved (not the employee), employee on_notice
-  approved --> completed: separation applied after the last working day
-  approved --> cancelled: retracted (approver), employee back to active
-  open --> cancelled: manage
+  admitted --> enrolment_requested: handoff (A-15)
+  enrolment_requested --> enrolled: Academic confirmed
+  enrolled --> on_hold: reason + review date
+  on_hold --> enrolled: resume, reason
+  enrolled --> withdrawn: exit record
+  enrolled --> completed: exit record
+  enrolled --> transferred: exit record
+  enrolled --> other_inactive: exit record (value proposed)
+  admitted --> cancelled_before_enrolment: exit record
+  withdrawn --> admitted: reactivate (approver, record allows it)
+  completed --> admitted: reactivate
+  transferred --> admitted: reactivate
+  other_inactive --> admitted: reactivate
+  cancelled_before_enrolment --> admitted: reactivate
 ```
-Separation sequence: approval puts the employee `on_notice`; the day after the last working day `runSeparations` sets `separated`, the staff row `inactive`, publishes `ops.employee.separated` v1 once in the same transaction; the platform consumer disables the login and deletes sessions; Ops completes the access-revocation item from the delivery.
+A student on hold from `enrolled` can also exit directly (same edges as from `enrolled`); on hold from `admitted` can be cancelled before enrolment. Every move needs a reason and is audited; reactivation needs `ops:students:reactivate`, an exit record with `reactivation_allowed`, and someone other than the person who recorded the exit. After reactivation, enrolment must be requested again. Since 21 Oct 2026 the recommended path back is **readmission** (below): a new case and application; reactivation is refused while a readmission is open. Nothing is deleted. Lists: Active = `enrolled`; On hold = `on_hold` held from `enrolled`; Former = exit statuses or `lost` after admission (A-68).
 
-## HR time (A-39…A-45)
-
-### Attendance session and correction
-```mermaid
-stateDiagram-v2
-  [*] --> open: clock in, manual, CSV
-  open --> closed: clock out
-  closed --> superseded: approved correction (row kept)
-  open --> superseded: approved correction
-```
-```mermaid
-stateDiagram-v2
-  [*] --> pending: request (ATC-)
-  pending --> approved: ops:attendance:approve, not requester, not the employee
-  pending --> rejected: note
-  pending --> withdrawn: requester only
-```
-Approval keeps the original, marks it `superseded` and creates a new `correction` session. A missed day has no original.
-
-### Leave request (A-42, A-43)
-```mermaid
-stateDiagram-v2
-  [*] --> pending: LVR-
-  pending --> approved: usage entry, never self
-  pending --> rejected: note
-  pending --> cancelled: requester or approver
-  approved --> cancelled: reversal entry; after start only an approver, reason
-```
-
-### Shift template, leave type and holiday
+### Appointment status (A-73, A-74; column `appointments.status`)
 ```mermaid
 stateDiagram-v2
   [*] --> proposed
-  proposed --> approved
-  approved --> proposed: timing of an approved template edited
-  approved --> retired: no active assignments
-  proposed --> retired
+  [*] --> scheduled
+  proposed --> scheduled
+  proposed --> confirmed
+  proposed --> rescheduled: reason
+  proposed --> cancelled: reason
+  scheduled --> confirmed
+  scheduled --> rescheduled: reason, overlap re-checked
+  scheduled --> completed: outcome, after start
+  scheduled --> cancelled: reason
+  confirmed --> rescheduled: reason
+  confirmed --> completed: outcome, after start
+  confirmed --> cancelled: reason
+  rescheduled --> confirmed
+  rescheduled --> rescheduled: reason
+  rescheduled --> completed: outcome, after start
+  rescheduled --> cancelled: reason
+  completed --> [*]
+  cancelled --> [*]
 ```
-Holiday: `proposed` and `approved` toggle, either goes to `withdrawn` (final). Shift assignment: `active` ends with an end date or becomes `cancelled` (reason).
+`proposed`, `scheduled`, `confirmed` and `rescheduled` block the staff member's time (A-73). Each change writes `appointment_changes` and notifies the teacher in-app; email/SMS are "simulated — not sent".
 
-## Operations (A-46…A-56)
-
-### Task review (side table, task keeps BR-OPS-10 statuses)
-```mermaid
-stateDiagram-v2
-  [*] --> pending: task completed with a review requirement
-  pending --> accepted: reviewer, not completer or owner
-  pending --> returned: note, task back to in_progress
-  returned --> pending: next completion opens cycle n+1
-```
-While `pending` the owner cannot reopen the task (409 `REVIEW_PENDING`).
-
-### SOP version, publication and acknowledgement
-```mermaid
-stateDiagram-v2
-  [*] --> draft
-  draft --> in_review: submit
-  in_review --> draft: withdraw or changes requested
-  in_review --> approved: core approval, not the owner, reviewer recommended
-  in_review --> rejected
-  approved --> superseded: newer version approved
-  approved --> retired: SOP retired
-  retired --> archived: archive flag (sop_archives)
-```
-Derived, not stored: **Published** = approved version in force with `effective_date` on or before today (IST). Acknowledgements are required per approved version by department or role, append-only, once per person per version.
-
-### Policy version (A-55)
+### Feedback (A-75)
+Teacher → student (`teacher_student_feedback.status`):
 ```mermaid
 stateDiagram-v2
   [*] --> draft
-  draft --> proposed: requirement text and accountable person, core approval requested
-  proposed --> approved: not the proposer, supersedes the old version
-  proposed --> rejected: comment
-  rejected --> draft
-  approved --> superseded: next version approved
-  approved --> retired: entry retired (read-only)
+  [*] --> final
+  draft --> draft: edit in place (author or manager)
+  draft --> final
+  final --> superseded: edit creates version n+1 (supersedes_id)
+  superseded --> [*]: read-only
 ```
-An approved entry stays `approved` while a newer version is drafted or proposed.
+"superseded" is not a stored status: a final row that another row supersedes is read-only (409 on edit).
 
-### Risk mitigation
+Student or guardian → teacher (`student_teacher_feedback.moderation_status`):
 ```mermaid
 stateDiagram-v2
-  [*] --> planned
-  planned --> in_progress
+  [*] --> pending: recorded by staff on their behalf
+  pending --> approved: moderator (never the teacher it is about)
+  pending --> rejected: moderator
+  pending --> hidden: moderator
+  approved --> hidden
+  hidden --> approved
+  rejected --> [*]
+```
+No edit path exists for this table; the teacher can read approved rows shared with them (`visibility = teacher_and_staff`).
+
+### Marketing lead handoff receipt (A-81; column `lead_handoff_receipts.status`)
+```mermaid
+stateDiagram-v2
+  [*] --> received: event marketing.lead.handed_off v1 delivered
+  received --> accepted: lead created, no duplicate match
+  received --> duplicate_review: duplicate match, lead flagged, never merged
+  received --> failed: error (savepoint rolled back), attempts + 1
+  failed --> accepted: retry (job under 5 attempts, or manager route)
+  failed --> duplicate_review: retry
+  failed --> failed: retry fails again
+  accepted --> accepted: later event counted in duplicate_deliveries
+  duplicate_review --> duplicate_review: later event counted
+```
+Live Marketing events do not exist yet; tests and seeds use a mock publisher and the UI says "Live sync with Marketing OS: not configured".
+
+### Annual fee agreement (A-FEE-1 … A-FEE-8; column `fee_plans.status`, 21 Oct 2026)
+```mermaid
+stateDiagram-v2
+  [*] --> draft: created (50/25/25 split, 3 due dates)
+  draft --> draft: approval requested (both fee verifications by two people) / approved or rejected by another approver
+  draft --> active: activate by finance, only with this version's own approved approval
+  draft --> closed: reason
+  active --> closed: reason (needs ops:admissions:approve)
+  active --> closed: adjust = close vN and create vN+1 as draft (needs ops:admissions:approve, reason ≥ 10)
+  closed --> [*]
+```
+One agreement per student and academic year. Ledger rows are append-only; corrections are reversals or refunds linked to their row. The CHECK `fee_plans_approved_check` now applies to `active` rows only, so closing a draft works (the 20 Oct defect note is resolved).
+
+---
+
+## Admissions lifecycle (added 21 Oct 2026)
+
+Rules: `ALGORITHMS.md` "Added on 21 Oct 2026". Status: Implemented, Tested; nothing is Deployed.
+
+### Admission end to end
+```mermaid
+flowchart TD
+  L[Lead + case] --> D[Book demo: 3 demo days; core.students identity created at booking]
+  D --> R[Record attendance per class: present, late, absent, excused]
+  R --> C[Convert to admission: creates the APPLICATION, case admission_pending]
+  L -. direct admission .-> C2[POST /applications on an admission_pending case]
+  C --> A1[Application draft: KYC, paper-form answers, programmes, batch, fee agreement]
+  C2 --> A1
+  A1 --> A2[Ready for review: information gaps empty]
+  A2 --> A3[Admission form PDF for this version]
+  A3 --> A4[Signatures confirmed on the printed form]
+  A4 --> A5{Approver confirms with own password}
+  A5 -- gaps, wrong password, stale version --> X[409 / 403 / 429, nothing admitted]
+  A5 -- ok --> N[Admission number 001… + approval row + case admitted + enrolment request to Academic]
+  N --> P[Acknowledgement PDF and ID card PDF]
+  N --> O[Onboarding checklist: KYC check, batch, registration payment, counselling, biometric, books, ID card]
+```
+Where each gap is fixed: student phone/email and a guardian taken from the lead → the lead's "Edit contact details" (`/ops/leads/{id}?act=details`); no counsellor → "Assign owner" on the lead (the lead owner counts unless the case names a counsellor); the other details → "Edit application details". A guardian already on a student profile is edited there. Before admission there is no student profile (`hasStudentRecord` in `domain/student-lifecycle.ts`: admitted, or the case has left the pipeline), so the admission case shows the annual fee agreement section itself; once the profile exists the case links to its Fees tab. A demo can be booked only for a counselled case with no open demo; the booking form says so and points to the case to record counselling.
+
+A material change at any step makes a new application version: back to draft, signatures invalidated. Legacy admissions (before migration 0007) show "Legacy — verification required" until an approver records the reconciliation.
+
+### Application (A-APP-1; column `applications.status`)
+```mermaid
+stateDiagram-v2
+  [*] --> draft
+  draft --> ready_for_review: no information gaps
+  ready_for_review --> form_generated: form PDF of this version
+  form_generated --> signatures_confirmed: required signers by age on the signing day
+  signatures_confirmed --> admission_confirmed: password confirmation (A-APP-4)
+  ready_for_review --> draft: material change (new version)
+  form_generated --> draft: material change
+  signatures_confirmed --> draft: material change (signature invalidated)
+  draft --> withdrawn: reason
+  ready_for_review --> withdrawn: reason
+  form_generated --> withdrawn: reason
+  signatures_confirmed --> withdrawn: reason
+  admission_confirmed --> [*]
+```
+
+### Exit and readmission (A-STU-7)
+```mermaid
+flowchart TD
+  E[Active or on hold] --> X[Exit record: status, reason code, materials, balance, closing notes]
+  X --> RA{Return?}
+  RA -- readmit (recommended) --> N[New case on the same lead and identity, admission_pending, application origin readmission]
+  RA -- reactivate (exit record allows it, another approver) --> Y[Same case back to admitted; enrolment requested again]
+  N --> F[Usual application path; new number only at final confirmation]
+```
+The closed case, its number and its exit record never change. One live case per student and programme.
+
+### Daily task (A-TSK-1 … A-TSK-3; column `staff_tasks.status`)
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> in_progress
+  pending --> done
   in_progress --> done
-  planned --> dropped: outcome
-  in_progress --> dropped: outcome
+  pending --> blocked: reason
+  in_progress --> blocked: reason
+  pending --> on_hold: reason
+  in_progress --> on_hold: reason
+  blocked --> in_progress
+  on_hold --> in_progress
+  done --> [*]: recurring → next occurrence created
 ```
+Any status can be set from any other; blocked and on hold always need a reason, and a status change drops the old reason.
+
+### End-of-day report (A-TSK-4; column `eod_reports.status`)
+```mermaid
+stateDiagram-v2
+  [*] --> draft: built from the day's tasks (refreshed while draft)
+  draft --> submitted: every not-done task has a reason; snapshot frozen; manager notified in-app
+  submitted --> submitted: reviewed by the manager it was sent to or an EOD reviewer (never your own)
+  submitted --> submitted: shared by WhatsApp or email — "Simulated — not sent"
+```
+One report per staff member and day. No manager with a login → every `ops:eod:review` holder receives it.

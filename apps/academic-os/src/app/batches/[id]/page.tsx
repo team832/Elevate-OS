@@ -1,6 +1,7 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { ButtonLink, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
 import { getBatch, getBatchCoverage, getBatchFeasibility, getCourse, listStaff, todayIst } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
@@ -9,6 +10,7 @@ import { CoverageSection, FeasibilitySection } from '../../../ui/batch-sections'
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Batch' };
 
 const WEEKDAY = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -31,8 +33,9 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
     <AcademicShell access={access} active="batches">
       <PageHeader
         title={`${b.code} — ${b.name}`}
-        description={<>{b.programmeCode} / {b.courseCode} · <StateBadge state={b.status} /> · {b.activeEnrolments} enrolled{b.capacity ? ` of ${b.capacity}` : ''} · class length {b.classLength.minutes ? `${b.classLength.minutes} min` : 'unknown'} <PlanBadge status={b.classLength.status} /></>}
-        actions={<a href={`${MODULE_PATHS.timetable}?batchId=${b.id}`}>Timetable</a>}
+        meta={<StateBadge state={b.status} />}
+        description={<>{b.programmeCode} / {b.courseCode} · {b.activeEnrolments} enrolled{b.capacity ? ` of ${b.capacity}` : ''} · class length {b.classLength.minutes ? `${b.classLength.minutes} min` : 'unknown'} <PlanBadge status={b.classLength.status} /></>}
+        actions={<ButtonLink href={`${MODULE_PATHS.timetable}?batchId=${b.id}`}>Timetable</ButtonLink>}
       />
       <div className="el-stack">
         {b.targetExamDate ? (
@@ -43,7 +46,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
         {coverage.ok ? <CoverageSection data={coverage.data} /> : <LoadError error={coverage.error} />}
         {feasibility ? feasibility.ok ? <FeasibilitySection data={feasibility.data} /> : <LoadError error={feasibility.error} /> : null}
         <Card title="Teacher assignments">
-          <DataTable
+          <DataTable compact
             rows={b.assignments}
             rowKey={(a) => a.id}
             empty={<EmptyState title="No teachers assigned" />}
@@ -71,7 +74,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
           ) : null}
         </Card>
         <Card title="Calendar rules" description="Weekly patterns that generate gross class slots.">
-          <DataTable
+          <DataTable compact
             rows={b.calendarRules}
             rowKey={(r) => r.id}
             empty={<EmptyState title="No calendar rules" />}
@@ -103,7 +106,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
           ) : null}
         </Card>
         <Card title="Closures, allowances and exam blackouts" description="Includes centre-wide rows. Undated allowances are replaced (not added to) by dated closures of the same kind.">
-          <DataTable
+          <DataTable compact
             rows={b.exclusions}
             rowKey={(x) => x.id}
             empty={<EmptyState title="No exclusions" />}

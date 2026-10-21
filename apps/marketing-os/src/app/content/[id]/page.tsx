@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Alert, Button, Card, ErrorState, Field, TextInput } from '@elevate/shared-ui';
@@ -16,6 +17,7 @@ import { PlacementPanel } from '../../../ui/placement-panel';
 import { MarketingPage, Section, type SearchParams } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Content item' };
 
 export default async function ContentItemPage({
   params,

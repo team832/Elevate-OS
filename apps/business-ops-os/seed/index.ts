@@ -1,25 +1,22 @@
 /**
  * Business Ops OS seeds, run by `npm run db:seed` after the core seeds.
- * Idempotent; fictional people only (D-016); legacy planning data keeps its
- * status label and is never seeded as delivered or approved.
+ * Idempotent; sample people only (D-036) plus the owner-supplied staff directory.
+ * `clearSamples` backs `npm run db:clear-samples`.
  */
 import type { SeedDefinition } from '@elevate/database/seed';
-import { admissionsSampleSeeds } from './admissions-samples';
-import { hrLifecycleSeeds } from './hr-lifecycle';
-import { hrRecordsSeeds } from './hr-records';
-import { hrTimeSeeds } from './hr-time';
-import { legacySeeds } from './legacy';
+import { onboardingTemplateSeeds } from './onboarding-templates';
 import { referenceSeeds } from './reference';
 import { samplePlaceholderSeeds } from './sample-placeholders';
 import { sampleSeeds } from './samples';
+import { teacherSeeds } from './teachers';
+
+export { clearSamples } from './clear-samples';
+export { seedSampleLifecycle } from './samples';
 
 export const seeds: readonly SeedDefinition[] = [
   ...referenceSeeds,
-  ...legacySeeds,
-  ...sampleSeeds,
-  ...admissionsSampleSeeds,
-  ...hrRecordsSeeds,
-  ...hrTimeSeeds,
-  ...hrLifecycleSeeds,
+  ...teacherSeeds,
   ...samplePlaceholderSeeds,
+  ...onboardingTemplateSeeds,
+  ...sampleSeeds,
 ];

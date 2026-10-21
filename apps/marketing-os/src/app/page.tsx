@@ -14,7 +14,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       path={modulePath()}
       active="dashboard"
       title="Marketing OS"
-      description="Honest counts of what is in Elevate OS: content by state, approvals waiting, what is scheduled and how each account is connected."
+      description="Content by state, approvals waiting, what is scheduled and how each account is connected."
       searchParams={await searchParams}
     >
       {() => <Section load={async () => <Dashboard />} />}
@@ -87,6 +87,7 @@ async function Dashboard() {
       </div>
       <Card title={`Awaiting approval (${d.awaitingApproval.length})`}>
         <DataTable
+          compact
           rows={d.awaitingApproval}
           rowKey={(r) => r.id}
           empty={<EmptyState title="Nothing is waiting for approval" />}
@@ -113,6 +114,7 @@ async function Dashboard() {
       </Card>
       <Card title={`Scheduled in the next 7 days (${d.upcomingScheduled.length})`}>
         <DataTable
+          compact
           rows={d.upcomingScheduled}
           rowKey={(r) => r.id}
           empty={<EmptyState title="Nothing scheduled in the next 7 days" />}

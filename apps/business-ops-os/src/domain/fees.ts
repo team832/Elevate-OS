@@ -8,7 +8,15 @@
  * zero ("nothing due" and "nothing recorded" are different facts).
  */
 
-export const FEE_RECORD_KINDS = ['due', 'received', 'refund', 'adjustment'] as const;
+/** `received` is the payment kind; discounts and waivers are their own rows (never folded into a payment). */
+export const FEE_RECORD_KINDS = [
+  'due',
+  'received',
+  'refund',
+  'adjustment',
+  'discount',
+  'waiver',
+] as const;
 export type FeeRecordKind = (typeof FEE_RECORD_KINDS)[number];
 export const FEE_RECORD_STATUSES = ['recorded', 'verified', 'voided'] as const;
 export type FeeRecordStatus = (typeof FEE_RECORD_STATUSES)[number];
@@ -26,9 +34,11 @@ export type FeeMethod = (typeof FEE_METHODS)[number];
 
 export const FEE_KIND_LABELS: Record<FeeRecordKind, string> = {
   due: 'Amount due',
-  received: 'Amount received',
+  received: 'Payment',
   refund: 'Refund',
   adjustment: 'Adjustment',
+  discount: 'Discount',
+  waiver: 'Waiver',
 };
 export const FEE_STATUS_LABELS: Record<FeeRecordStatus, string> = {
   recorded: 'Recorded (not verified)',
@@ -38,7 +48,7 @@ export const FEE_STATUS_LABELS: Record<FeeRecordStatus, string> = {
 
 /** Shown next to every fee figure in the UI and returned by the API. */
 export const MANUAL_FEE_DISCLAIMER =
-  'Manually recorded — not a verified payment transaction. The accounts system remains the record (OD-013).';
+  'Manually recorded — not a verified payment transaction. The accounts system remains the record.';
 
 /** Upper bound for one record: ₹1,00,00,000 (one crore) = 1,000,000,000 paise. */
 export const MAX_FEE_PAISE = 1_000_000_000;
@@ -90,11 +100,39 @@ export function formatPaise(paise: number | null | undefined): string {
   return `${sign}₹${grouped}.${String(frac).padStart(2, '0')}`;
 }
 
+/** What a ledger row is for (D-039): only tuition is split into instalments. */
+export const FEE_CHARGE_CATEGORIES = ['tuition', 'registration', 'demo'] as const;
+export type FeeChargeCategory = (typeof FEE_CHARGE_CATEGORIES)[number];
+export const FEE_CHARGE_LABELS: Record<FeeChargeCategory, string> = {
+  tuition: 'Tuition',
+  registration: 'Registration fee',
+  demo: 'Demo fee',
+};
+
 export interface FeeRecordLike {
   kind: FeeRecordKind;
   direction: FeeDirection | null;
   amountPaise: number;
   status: FeeRecordStatus;
+  id?: string;
+  /** Refund of a payment, or reversal of an entry of the same kind (linked rows, never deletion). */
+  reversesRecordId?: string | null;
+  chargeCategory?: FeeChargeCategory | string;
+}
+
+/** A reversal cancels an entry of its own kind; a `refund` linked to a payment is a refund, not a reversal. */
+function isReversal(r: FeeRecordLike, byId: Map<string, FeeRecordLike>) {
+  if (!r.reversesRecordId) return false;
+  return r.kind !== 'refund' || byId.get(r.reversesRecordId)?.kind === 'refund';
+}
+
+/** Rows that count: not voided, not a reversal, not reversed by a live reversal. */
+export function effectiveRecords<R extends FeeRecordLike>(records: readonly R[]): R[] {
+  const live = records.filter((r) => r.status !== 'voided');
+  const byId = new Map(records.flatMap((r) => (r.id ? [[r.id, r] as const] : [])));
+  const reversals = live.filter((r) => isReversal(r, byId));
+  const reversed = new Set(reversals.map((r) => r.reversesRecordId));
+  return live.filter((r) => !reversals.includes(r) && !(r.id && reversed.has(r.id)));
 }
 
 export interface NewFeeRecordInput {
@@ -104,6 +142,8 @@ export interface NewFeeRecordInput {
   paymentDate?: string | null;
   dueDate?: string | null;
   receiptReference?: string | null;
+  notes?: string | null;
+  reversesRecordId?: string | null;
 }
 
 export interface FeeRecordingConfig {
@@ -113,16 +153,38 @@ export interface FeeRecordingConfig {
 
 export const DEFAULT_FEE_RECORDING_CONFIG: FeeRecordingConfig = { requireReceiptReference: true };
 
-const sum = (rows: readonly FeeRecordLike[], pred: (r: FeeRecordLike) => boolean) =>
-  rows.filter(pred).reduce((acc, r) => acc + r.amountPaise, 0);
+function sumKinds(records: readonly FeeRecordLike[]) {
+  const sums: Record<Exclude<FeeRecordKind, 'adjustment'> | FeeDirection, number> = {
+    due: 0,
+    received: 0,
+    refund: 0,
+    discount: 0,
+    waiver: 0,
+    credit: 0,
+    debit: 0,
+  };
+  for (const r of records) {
+    const key = r.kind === 'adjustment' ? r.direction : r.kind;
+    if (key) sums[key] += r.amountPaise;
+  }
+  return sums;
+}
+
+/**
+ * Totals per kind of the rows that count (effectiveRecords), adjustments split by direction (one
+ * without a direction counts nowhere). The single place fee and plan ledger rows are summed.
+ */
+export const ledgerSums = (records: readonly FeeRecordLike[]) =>
+  sumKinds(effectiveRecords(records));
 
 /**
  * Validate a new fee record against the admission's existing records. Returns
  * every issue (empty = valid) so the API can report each field.
  * Rules: positive integer paise; `direction` iff adjustment; received/refund
  * need a payment date not after `today` (IST) and, when configured, a receipt
- * reference; a due record has no payment date; a refund may not exceed the
- * non-voided amount received minus earlier refunds.
+ * reference; a due record has no payment date. Linked rows (`reversesRecordId`):
+ * a refund names the payment it returns and never exceeds what is left of it; a
+ * reversal has the kind, direction and amount of the entry it cancels and a reason.
  */
 export function validateFeeRecord(
   input: NewFeeRecordInput,
@@ -133,6 +195,34 @@ export function validateFeeRecord(
   const issues: FeeIssue[] = [];
   const amount = checkAmountPaise(input.amountPaise);
   if (!('ok' in amount)) issues.push(amount);
+  const target = input.reversesRecordId
+    ? existing.find((r) => r.id === input.reversesRecordId)
+    : undefined;
+  const link = (message: string) => issues.push({ path: 'reversesRecordId', message });
+  if (input.reversesRecordId) {
+    const counted = effectiveRecords(existing);
+    if (!target) link('That entry is not on this admission.');
+    else if (!counted.includes(target))
+      link('That entry no longer counts (voided, reversed, or itself a reversal).');
+    else if (target.kind === input.kind) {
+      if (counted.some((r) => r.kind === 'refund' && r.reversesRecordId === target.id))
+        link('Reverse its refunds first.');
+      if ('ok' in amount && amount.value !== target.amountPaise)
+        issues.push({
+          path: 'amountPaise',
+          message: 'A reversal has the amount of the entry it cancels.',
+        });
+      if ((input.direction ?? null) !== target.direction)
+        issues.push({
+          path: 'direction',
+          message: 'A reversal has the direction of the entry it cancels.',
+        });
+      if (!input.notes?.trim())
+        issues.push({ path: 'notes', message: 'Give the reason for the reversal.' });
+      return issues;
+    } else if (input.kind !== 'refund' || target.kind !== 'received')
+      link('A linked entry is a refund of a payment or a reversal of the same kind of entry.');
+  } else if (input.kind === 'refund') link('Name the payment this refund returns.');
   if (input.kind === 'adjustment' && !input.direction)
     issues.push({
       path: 'direction',
@@ -156,14 +246,18 @@ export function validateFeeRecord(
       path: 'paymentDate',
       message: 'An amount due has a due date, not a payment date.',
     });
-  if (input.kind === 'refund' && 'ok' in amount) {
-    const active = existing.filter((r) => r.status !== 'voided');
+  if ((input.kind === 'discount' || input.kind === 'waiver') && !input.notes?.trim())
+    issues.push({ path: 'notes', message: `Give the reason for the ${input.kind}.` });
+  if (input.kind === 'refund' && target && 'ok' in amount) {
     const refundable =
-      sum(active, (r) => r.kind === 'received') - sum(active, (r) => r.kind === 'refund');
+      target.amountPaise -
+      effectiveRecords(existing)
+        .filter((r) => r.kind === 'refund' && r.reversesRecordId === target.id)
+        .reduce((sum, r) => sum + r.amountPaise, 0);
     if (amount.value > refundable)
       issues.push({
         path: 'amountPaise',
-        message: `A refund cannot exceed the amount recorded as received less earlier refunds (${formatPaise(Math.max(refundable, 0))} available).`,
+        message: `A refund cannot exceed the payment less earlier refunds of it (${formatPaise(Math.max(refundable, 0))} available).`,
       });
   }
   return issues;
@@ -176,6 +270,7 @@ export interface FeeSummary {
   currency: 'INR';
   /** Sum of `due` plus debit adjustments. */
   duePaise: number;
+  /** Credit adjustments, discounts and waivers. */
   creditAdjustmentsPaise: number;
   receivedPaise: number;
   refundedPaise: number;
@@ -192,20 +287,16 @@ export interface FeeSummary {
   disclaimer: string;
 }
 
-/** Aggregate an admission's fee records. Voided records are ignored (but counted). */
+/** Aggregate fee records. Voided rows and reversal pairs never count (voided rows are counted). */
 export function summariseFees(records: readonly FeeRecordLike[]): FeeSummary {
   const active = records.filter((r) => r.status !== 'voided');
-  const verified = active.filter((r) => r.status === 'verified');
-  const due =
-    sum(active, (r) => r.kind === 'due') +
-    sum(active, (r) => r.kind === 'adjustment' && r.direction === 'debit');
-  const credits = sum(active, (r) => r.kind === 'adjustment' && r.direction === 'credit');
-  const received = sum(active, (r) => r.kind === 'received');
-  const refunded = sum(active, (r) => r.kind === 'refund');
-  const net = received - refunded;
-  const verifiedNet =
-    sum(verified, (r) => r.kind === 'received') - sum(verified, (r) => r.kind === 'refund');
-  const hasDue = active.some((r) => r.kind === 'due');
+  const counted = effectiveRecords(records);
+  const s = sumKinds(counted);
+  const verified = sumKinds(counted.filter((r) => r.status === 'verified'));
+  const due = s.due + s.debit;
+  const credits = s.credit + s.discount + s.waiver;
+  const net = s.received - s.refund;
+  const hasDue = counted.some((r) => r.kind === 'due');
   const balance = hasDue ? due - credits - net : null;
   const balanceState: FeeBalanceState =
     active.length === 0
@@ -221,10 +312,10 @@ export function summariseFees(records: readonly FeeRecordLike[]): FeeSummary {
     currency: 'INR',
     duePaise: due,
     creditAdjustmentsPaise: credits,
-    receivedPaise: received,
-    refundedPaise: refunded,
+    receivedPaise: s.received,
+    refundedPaise: s.refund,
     netReceivedPaise: net,
-    verifiedNetReceivedPaise: verifiedNet,
+    verifiedNetReceivedPaise: verified.received - verified.refund,
     balancePaise: balance,
     balanceState,
     activeCount: active.length,
@@ -233,6 +324,10 @@ export function summariseFees(records: readonly FeeRecordLike[]): FeeSummary {
     disclaimer: MANUAL_FEE_DISCLAIMER,
   };
 }
+
+/** Summary of one charge (tuition, registration or demo) — the balances are never mixed. */
+export const chargeSummary = (records: readonly FeeRecordLike[], category: FeeChargeCategory) =>
+  summariseFees(records.filter((r) => (r.chargeCategory ?? 'tuition') === category));
 
 export const FEE_BALANCE_LABELS: Record<FeeBalanceState, string> = {
   no_records: 'No fee records',

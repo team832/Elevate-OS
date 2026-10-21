@@ -7,6 +7,7 @@
  *   academic.ipmat-class12             IPMAT-C12-2027 + plans 313 (superseded) → 305 (counts locked, dates provisional)
  *   academic.ca-foundation             CAF-ACC-SEP27 + plan CAF-ACC-V0.2 (provisional)
  *   academic.online-class12-accountancy ONL-C12-ACC + plan ONL-C12-ACC-226 (provisional)
+ *   academic.syllabus-drafts           draft syllabus courses CLAT/CUET/CAF/COM-C11/COM-C12 + IPMAT-BASE chapter weights
  *   academic.concept-books             6 concept-book indices (133 chapters + opening unit + aliases)
  *   academic.batches                   IPMAT-C12-APR27 (calendar, 28-slot allowance, mock-phase blackout), CAF-SEP27-REG
  *   academic.students                  6 fictional students enrolled in IPMAT-C12-APR27
@@ -16,12 +17,14 @@ import { batchesSeed, studentsSeed } from './batches';
 import { caFoundationSeed, onlineAccountancySeed } from './ca-online';
 import { conceptBooksSeed } from './concept-books';
 import { ipmatBaselineSeed, ipmatClass12Seed } from './ipmat';
+import { syllabusDraftsSeed } from './syllabus';
 
 export const seeds: readonly SeedDefinition[] = [
   ipmatBaselineSeed,
   ipmatClass12Seed,
   caFoundationSeed,
   onlineAccountancySeed,
+  syllabusDraftsSeed,
   conceptBooksSeed,
   batchesSeed,
   studentsSeed,

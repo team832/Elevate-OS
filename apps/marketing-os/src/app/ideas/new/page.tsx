@@ -1,9 +1,11 @@
+import type { Metadata } from 'next';
 import { Button, Card, Checkbox, Field, Select, TextArea, TextInput } from '@elevate/shared-ui';
 import { COURSE_PREFIXES, EXAM_PREFIXES, IDEA_SCOPES, modulePath } from '../../../domain';
 import { createIdeaAction } from '../../actions/ideas';
 import { MarketingPage, type SearchParams } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'New idea' };
 
 export default async function NewIdeaPage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -12,7 +14,7 @@ export default async function NewIdeaPage({ searchParams }: { searchParams: Sear
       path={modulePath('ideas/new')}
       active="ideas"
       title="New idea"
-      description="The code is assigned when you save. An identical title in the same course is refused; similar titles are saved with a warning so you can compare."
+      description="The code is given on save. Similar titles are saved with a warning; identical ones are refused."
       searchParams={await searchParams}
     >
       {() => (

@@ -76,6 +76,9 @@ export const SEEDED_PROGRAMME_CODES = [
   'IPMAT',
   'CUET',
   'COMMERCE_11_12',
+  'CLASS_11',
+  'CLASS_12',
+  'DROPPER',
   'CA_FOUNDATION',
 ] as const;
 

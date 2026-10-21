@@ -1,9 +1,9 @@
 /**
  * Leads and enquiries (OPS-001…OPS-006): capture with normalised contacts,
- * duplicate warnings (never auto-merge), assignment and acceptance, contact
- * attempts, explicit audited merge, and history.
+ * duplicate warnings (never auto-merge; matching and review in ./lead-duplicates.ts),
+ * assignment and acceptance, contact attempts, explicit audited merge, and history.
  */
-import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import {
   auditEvents,
   opsAdmissions,
@@ -17,7 +17,7 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import { scopeFor } from '@elevate/authorization';
+import { can, scopeFor } from '@elevate/authorization';
 import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ForbiddenError, ValidationError } from '@elevate/shared-contracts';
 import type { LeadId, ProgrammeId, StaffMemberId, UserId } from '@elevate/shared-types';
@@ -25,16 +25,24 @@ import {
   findDuplicateMatches,
   followUpFlags,
   isOpenStatus,
-  normaliseEmail,
-  normalisePhone,
-  PHONE_ERROR_MESSAGES,
+  istToday,
+  istWeekContaining,
   type AdmissionStatus,
-  type ContactRecord,
-  type DuplicateMatch,
   type IsoDate,
 } from '../domain';
 import { redactStudentPrivate, stripPrivateKeys } from '../domain/students';
 import { programmeRef, staffRef } from './admissions';
+import {
+  CONTACT_KEYS,
+  describeMatches,
+  duplicateCandidates,
+  flagDuplicates,
+  hasContact,
+  leadCovered,
+  matchesForNew,
+  normaliseContacts,
+  siblingsOnly,
+} from './lead-duplicates';
 import {
   accessScope,
   activeStaff,
@@ -48,80 +56,20 @@ import {
 } from './context';
 import { notifyOthers, opsAudit, rowById } from './ops-common';
 import { createRuleFollowUp } from './follow-ups';
-import { applyTransition, createAdmissionRecord, lockAdmission } from './pipeline';
-import type {
-  ActivityInput,
-  CreateLeadInput,
-  DuplicateCheckInput,
-  EnquiryInput,
-  UpdateLeadInput,
-} from './schemas';
+import {
+  applyTransition,
+  createAdmissionRecord,
+  lockAdmission,
+  lockLeadIdentity,
+} from './pipeline';
+import type { ActivityInput, CreateLeadInput, EnquiryInput, UpdateLeadInput } from './schemas';
 import { loadSettings } from './settings';
 
 export type LeadRow = typeof opsLeads.$inferSelect;
 
 const SUCCESSFUL_OUTCOMES = new Set(['connected_two_way', 'replied', 'visited']);
 
-// --- contact normalisation at the boundary ----------------------------------------------------
-
-const CONTACT_FIELDS = {
-  studentPhone: 'phone',
-  studentEmail: 'email',
-  guardianPhone: 'phone',
-  guardianEmail: 'email',
-} as const;
-type ContactField = keyof typeof CONTACT_FIELDS;
-const CONTACT_KEYS = Object.keys(CONTACT_FIELDS) as ContactField[];
-type NormalisedContacts = Record<ContactField, string | null>;
-
-const hasContact = (c: Partial<NormalisedContacts>) => CONTACT_KEYS.some((k) => c[k]);
-
-/** Normalise the four contact fields; every invalid field is reported (400 with paths). */
-export function normaliseContacts(
-  input: Partial<Record<ContactField, string | null>>,
-): NormalisedContacts {
-  const details: { location: 'body'; path: string[]; message: string }[] = [];
-  const out = {} as NormalisedContacts;
-  for (const field of CONTACT_KEYS) {
-    const raw = input[field];
-    out[field] = null;
-    if (raw === undefined || raw === null || raw.trim() === '') continue;
-    if (CONTACT_FIELDS[field] === 'phone') {
-      const r = normalisePhone(raw);
-      if (r.ok) out[field] = r.e164;
-      else
-        details.push({ location: 'body', path: [field], message: PHONE_ERROR_MESSAGES[r.reason] });
-    } else {
-      const r = normaliseEmail(raw);
-      if (r.ok) out[field] = r.email;
-      else details.push({ location: 'body', path: [field], message: 'Not a valid email address.' });
-    }
-  }
-  if (details.length > 0)
-    throw new ValidationError('Some contact details are not valid.', { details });
-  return out;
-}
-
 // --- access ------------------------------------------------------------------------------------
-
-/** Own scope: the lead's owner, or the counsellor of any of its admissions. */
-async function leadCovered(
-  db: Database,
-  access: AccessScope,
-  lead: Pick<LeadRow, 'id' | 'ownerStaffId'>,
-) {
-  if (access.scope === 'all') return true;
-  if (!access.staffId) return false;
-  if (lead.ownerStaffId === access.staffId) return true;
-  const [row] = await db
-    .select({ id: opsAdmissions.id })
-    .from(opsAdmissions)
-    .where(
-      and(eq(opsAdmissions.leadId, lead.id), eq(opsAdmissions.counsellorStaffId, access.staffId)),
-    )
-    .limit(1);
-  return Boolean(row);
-}
 
 async function assertLeadAccess(
   db: Database,
@@ -164,135 +112,6 @@ async function lockWorkableLead(tx: Database, access: AccessScope, id: string, m
   await assertLeadAccess(tx, access, lead);
   if (lead.mergedIntoLeadId) throw new ConflictError(merged);
   return lead;
-}
-
-// --- duplicate detection -----------------------------------------------------------------------
-
-async function duplicateCandidates(
-  db: Database,
-  contacts: NormalisedContacts,
-  previousSchool: string | null,
-  excludeLeadId?: string,
-): Promise<ContactRecord[]> {
-  const phones = [contacts.studentPhone, contacts.guardianPhone].filter((v): v is string =>
-    Boolean(v),
-  );
-  const emails = [contacts.studentEmail, contacts.guardianEmail].filter((v): v is string =>
-    Boolean(v),
-  );
-  const conditions: SQL[] = [];
-  if (phones.length)
-    conditions.push(
-      inArray(opsLeads.studentPhone, phones),
-      inArray(opsLeads.guardianPhone, phones),
-    );
-  if (emails.length)
-    conditions.push(
-      inArray(opsLeads.studentEmail, emails),
-      inArray(opsLeads.guardianEmail, emails),
-    );
-  if (previousSchool) conditions.push(isNotNull(opsLeads.previousSchool));
-  if (conditions.length === 0) return [];
-  const where = [isNull(opsLeads.mergedIntoLeadId), or(...conditions) as SQL];
-  if (excludeLeadId) where.push(ne(opsLeads.id, excludeLeadId as LeadId));
-  return db
-    .select({
-      id: opsLeads.id,
-      code: opsLeads.code,
-      studentName: opsLeads.studentName,
-      studentPhone: opsLeads.studentPhone,
-      studentEmail: opsLeads.studentEmail,
-      guardianPhone: opsLeads.guardianPhone,
-      guardianEmail: opsLeads.guardianEmail,
-      previousSchool: opsLeads.previousSchool,
-    })
-    .from(opsLeads)
-    .where(and(...where))
-    .limit(2000);
-}
-
-/** Duplicate matches for a lead that does not exist yet. */
-async function matchesForNew(
-  db: Database,
-  contacts: NormalisedContacts,
-  studentName: string,
-  previousSchool: string | null,
-) {
-  return findDuplicateMatches(
-    { id: '', code: '', studentName, previousSchool, ...contacts },
-    await duplicateCandidates(db, contacts, previousSchool),
-  );
-}
-
-/** Record open duplicate flags for `leadId` (an existing flag for the pair is kept). */
-async function flagDuplicates(
-  tx: Database,
-  leadId: LeadId,
-  matches: DuplicateMatch[],
-  exactAcknowledgement: string | null = null,
-) {
-  for (const m of matches)
-    await tx
-      .insert(opsDuplicateFlags)
-      .values({
-        leadId,
-        matchedLeadId: m.leadId as LeadId,
-        level: m.level,
-        signals: m.signals,
-        acknowledgement: m.level === 'exact' ? exactAcknowledgement : null,
-      })
-      .onConflictDoNothing();
-}
-
-export interface VisibleDuplicate extends DuplicateMatch {
-  /** False when the caller may not open the matched lead (own scope): only the code is shown. */
-  accessible: boolean;
-  studentName: string | null;
-  ownerName: string | null;
-}
-
-async function describeMatches(
-  db: Database,
-  access: AccessScope,
-  matches: DuplicateMatch[],
-): Promise<VisibleDuplicate[]> {
-  if (matches.length === 0) return [];
-  const rows = await db
-    .select({
-      id: opsLeads.id,
-      studentName: opsLeads.studentName,
-      ownerStaffId: opsLeads.ownerStaffId,
-      ownerName: staffMembers.fullName,
-    })
-    .from(opsLeads)
-    .leftJoin(staffMembers, eq(staffMembers.id, opsLeads.ownerStaffId))
-    .where(
-      inArray(
-        opsLeads.id,
-        matches.map((m) => m.leadId as LeadId),
-      ),
-    );
-  const byId = new Map(rows.map((r) => [r.id as string, r]));
-  const out: VisibleDuplicate[] = [];
-  for (const m of matches) {
-    const r = byId.get(m.leadId);
-    const accessible = r ? await leadCovered(db, access, r) : false;
-    out.push({
-      ...m,
-      accessible,
-      studentName: accessible ? (r?.studentName ?? null) : null,
-      ownerName: r?.ownerName ?? null,
-    });
-  }
-  return out;
-}
-
-/** Preview: what duplicate warnings would a lead with these details raise? */
-export async function checkDuplicates(db: Database, actor: Actor, input: DuplicateCheckInput) {
-  const access = await accessScope(db, actor, 'ops:leads:write');
-  const contacts = normaliseContacts(input);
-  const matches = await matchesForNew(db, contacts, input.studentName, clean(input.previousSchool));
-  return { normalised: contacts, matches: await describeMatches(db, access, matches) };
 }
 
 // --- create -------------------------------------------------------------------------------------
@@ -354,7 +173,8 @@ async function notifyAssigned(
 export async function createLead(
   db: Database,
   actor: Actor,
-  input: CreateLeadInput,
+  /** `isSample` is for the development seed only (no route accepts it, D-036). */
+  input: CreateLeadInput & { isSample?: boolean },
   requestId?: string,
 ) {
   const access = await accessScope(db, actor, 'ops:leads:write');
@@ -414,6 +234,7 @@ export async function createLead(
         ownerAssignedAt: ownerStaffId ? now : null,
         acceptedAt: ownerStaffId && ownerStaffId === actorStaffId ? now : null,
         notes: clean(input.notes),
+        isSample: input.isSample ?? false,
         createdBy: actor.id,
       })
       .returning();
@@ -480,11 +301,19 @@ function assignmentStatus(
 
 type LeadListRow = {
   assignment: ReturnType<typeof assignmentStatus>;
-  flags: { overdue: boolean; missingNextAction: boolean; openDuplicates: number };
+  flags: {
+    overdue: boolean;
+    missingNextAction: boolean;
+    openDuplicates: number;
+    newThisWeek: boolean;
+    awaitingContact: boolean;
+  };
 };
 
-/** The `flag` filters of the lead list (an unknown flag filters nothing). */
-const LIST_FLAGS = new Map<string, (r: LeadListRow) => boolean>([
+/** The `flag` filters of the lead list (an unknown flag filters nothing); pages count with them too. */
+export const LEAD_LIST_FLAGS = new Map<string, (r: LeadListRow) => boolean>([
+  ['new_this_week', (r) => r.flags.newThisWeek],
+  ['awaiting_contact', (r) => r.flags.awaitingContact],
   ['unassigned', (r) => r.assignment === 'unassigned'],
   ['handoff_pending', (r) => r.assignment === 'handoff_pending'],
   ['overdue', (r) => r.flags.overdue],
@@ -522,7 +351,12 @@ export async function listLeads(
     );
   }
   const leads = await db
-    .select({ lead: opsLeads, ownerName: staffMembers.fullName, programmeCode: programmes.code })
+    .select({
+      lead: opsLeads,
+      ownerName: staffMembers.fullName,
+      programmeCode: programmes.code,
+      programmeName: programmes.name,
+    })
     .from(opsLeads)
     .leftJoin(staffMembers, eq(staffMembers.id, opsLeads.ownerStaffId))
     .leftJoin(programmes, eq(programmes.id, opsLeads.programmeId))
@@ -557,8 +391,9 @@ export async function listLeads(
   ]);
   const settings = await loadSettings(db);
   const window = settings['followups.due_rules'].value.upcomingWindowDays;
-  const isOpen = (a: { status: string }) => isOpenStatus(a.status as AdmissionStatus);
-  const rows = leads.map(({ lead, ownerName, programmeCode }) => {
+  const isOpen = (a: { status: AdmissionStatus }) => isOpenStatus(a.status);
+  const weekStart = istWeekContaining(istToday(now)).from;
+  const rows = leads.map(({ lead, ownerName, programmeCode, programmeName }) => {
     const current =
       admissions
         .filter((a) => a.leadId === lead.id)
@@ -578,7 +413,9 @@ export async function listLeads(
       id: lead.id,
       code: lead.code,
       studentName: lead.studentName,
+      isSample: lead.isSample,
       programmeCode,
+      programmeName,
       ownerStaffId: lead.ownerStaffId,
       ownerName,
       receivedAt: lead.firstReceivedAt,
@@ -592,10 +429,13 @@ export async function listLeads(
         missingNextAction: (current ? isOpen(current) : false) && fu.missingNextAction,
         openDuplicates: duplicateFlags.length,
         exactDuplicate: duplicateFlags.some((f) => f.level === 'exact'),
+        newThisWeek: istToday(lead.firstReceivedAt) >= weekStart,
+        // An open lead nobody has reached two-way yet (BR-OPS-4).
+        awaitingContact: !lead.firstSuccessfulContactAt && (!current || isOpen(current)),
       },
     };
   });
-  const flagFilter = filters.flag ? LIST_FLAGS.get(filters.flag) : undefined;
+  const flagFilter = filters.flag ? LEAD_LIST_FLAGS.get(filters.flag) : undefined;
   return rows.filter(
     (r) => (!filters.status || r.status === filters.status) && (!flagFilter || flagFilter(r)),
   );
@@ -677,6 +517,8 @@ export async function getLead(db: Database, actor: Actor, id: string) {
     programme: await programmeRef(db, lead.programmeId),
     enquiries: enquiries.map((e) => ({
       ...e.enquiry,
+      // Campaign internals only for roles allowed to see marketing attribution (brief §10).
+      ...(can(actor, 'ops:lead_attribution:read') ? {} : { campaignRef: null, contentRef: null }),
       sourceLabel: e.sourceLabel,
       programmeCode: e.programmeCode,
     })),
@@ -829,7 +671,7 @@ export async function addEnquiry(
         .select({ id: opsAdmissions.id, status: opsAdmissions.status })
         .from(opsAdmissions)
         .where(and(eq(opsAdmissions.leadId, lead.id), eq(opsAdmissions.programmeId, programme.id)));
-      if (!open.some((a) => isOpenStatus(a.status as AdmissionStatus)))
+      if (!open.some((a) => isOpenStatus(a.status)))
         admission = await createAdmissionRecord(tx, {
           leadId: lead.id,
           programmeId: programme.id,
@@ -876,7 +718,7 @@ export async function assignLead(
     // Open admissions follow the lead unless another counsellor already holds them.
     const open = await tx.select().from(opsAdmissions).where(eq(opsAdmissions.leadId, before.id));
     for (const a of open) {
-      if (!isOpenStatus(a.status as AdmissionStatus)) continue;
+      if (!isOpenStatus(a.status)) continue;
       if (a.counsellorStaffId && a.counsellorStaffId !== before.ownerStaffId) continue;
       await tx
         .update(opsAdmissions)
@@ -1041,6 +883,8 @@ export async function mergeLeads(
   if (sourceId === targetId) throw new ValidationError('Choose two different leads.');
   const settings = await loadSettings(db);
   return withTransaction(db, async (tx) => {
+    // A booking on the target's case waits, then reuses the merged identity (no second one).
+    await lockLeadIdentity(tx, targetId);
     // Lock both leads in id order (no deadlock between two opposite merges).
     const locked = new Map<string, LeadRow>();
     for (const id of [sourceId, targetId].sort()) locked.set(id, await getLeadRow(tx, id, true));
@@ -1048,6 +892,10 @@ export async function mergeLeads(
     const target = locked.get(targetId) as LeadRow;
     if (source.mergedIntoLeadId || target.mergedIntoLeadId)
       throw new ConflictError('One of these leads was already merged.');
+    if (siblingsOnly(source, target))
+      throw new ConflictError(
+        `${source.code} and ${target.code} have different names, so they may be siblings sharing a parent's contact. They are not merged: dismiss the duplicate flag, or correct the name first if this really is the same student.`,
+      );
     const admissions = await tx
       .select()
       .from(opsAdmissions)
@@ -1060,7 +908,7 @@ export async function mergeLeads(
         `${source.code} has an admitted or enrolled case (${blocking.map((b) => b.code).join(', ')}); resolve it before merging.`,
       );
     for (const a of admissions) {
-      if (!isOpenStatus(a.status as AdmissionStatus)) continue;
+      if (!isOpenStatus(a.status)) continue;
       const row = await lockAdmission(tx, a.id);
       if (!row) continue;
       await applyTransition(tx, {
@@ -1129,62 +977,6 @@ export async function mergeLeads(
       );
     return { sourceCode: source.code, targetCode: target.code, targetId: target.id };
   });
-}
-
-/** Dismiss a duplicate warning after review ("different people"). */
-export async function dismissDuplicateFlag(
-  db: Database,
-  actor: Actor,
-  flagId: string,
-  note: string,
-  requestId?: string,
-) {
-  await accessScope(db, actor, 'ops:leads:merge');
-  return withTransaction(db, async (tx) => {
-    const flag = await rowById(tx, opsDuplicateFlags, flagId, 'Duplicate flag', true);
-    if (flag.status !== 'open') throw new ConflictError(`This flag is already ${flag.status}.`);
-    const [after] = await tx
-      .update(opsDuplicateFlags)
-      .set({ status: 'dismissed', reviewedBy: actor.id, reviewedAt: new Date(), reviewNote: note })
-      .where(eq(opsDuplicateFlags.id, flag.id))
-      .returning();
-    await opsAudit('duplicate_flag')(
-      tx,
-      actor,
-      flag.id,
-      'duplicate.dismissed',
-      { before: flag, after, metadata: { leadId: flag.leadId } },
-      requestId,
-    );
-    return after;
-  });
-}
-
-/** Open duplicate flags for the merge-review queue. */
-export async function listDuplicateQueue(db: Database, actor: Actor) {
-  await accessScope(db, actor, 'ops:leads:merge');
-  const rows = await db
-    .select({ flag: opsDuplicateFlags, leadCode: opsLeads.code, leadName: opsLeads.studentName })
-    .from(opsDuplicateFlags)
-    .innerJoin(opsLeads, eq(opsLeads.id, opsDuplicateFlags.leadId))
-    .where(eq(opsDuplicateFlags.status, 'open'))
-    .orderBy(desc(opsDuplicateFlags.createdAt))
-    .limit(200);
-  const matchedIds = rows.map((r) => r.flag.matchedLeadId);
-  const matched = matchedIds.length
-    ? await db
-        .select({ id: opsLeads.id, code: opsLeads.code, studentName: opsLeads.studentName })
-        .from(opsLeads)
-        .where(inArray(opsLeads.id, matchedIds))
-    : [];
-  const byId = new Map(matched.map((m) => [m.id as string, m]));
-  return rows.map((r) => ({
-    ...r.flag,
-    leadCode: r.leadCode,
-    leadName: r.leadName,
-    matchedCode: byId.get(r.flag.matchedLeadId)?.code ?? null,
-    matchedName: byId.get(r.flag.matchedLeadId)?.studentName ?? null,
-  }));
 }
 
 /** Lead sources for forms (OPS-002). */

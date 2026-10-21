@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import {
@@ -16,6 +17,7 @@ import { listIdeas, listQuarantine } from '../../server';
 import { MarketingPage, Section, param, type SearchParams } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Ideas' };
 
 export default async function IdeasPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
@@ -28,7 +30,7 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
       path={modulePath('ideas')}
       active="ideas"
       title="Ideas"
-      description="Every idea has a code COURSE-NNN that is never reused. Legacy rows that share an ID are quarantined until the owner decides (OD-003)."
+      description="Every idea gets a code (COURSE-NNN) that is never reused."
       searchParams={sp}
       actions={
         <ButtonLink variant="primary" href={modulePath('ideas/new')}>
@@ -79,6 +81,7 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
                   </div>
                 </form>
                 <DataTable
+                  compact
                   caption={`${ideas.length} idea(s)`}
                   rows={ideas}
                   rowKey={(i) => i.id}

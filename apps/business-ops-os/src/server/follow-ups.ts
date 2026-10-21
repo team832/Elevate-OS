@@ -97,7 +97,7 @@ export async function createFollowUp(
   const ownerId =
     input.ownerStaffId ?? (access.scope === 'own' ? access.staffId : null) ?? lead.ownerStaffId;
   if (!ownerId)
-    throw new ValidationError('Every follow-up needs an owner (BR-OPS-9).', {
+    throw new ValidationError('Every follow-up needs an owner.', {
       details: [{ location: 'body', path: ['ownerStaffId'], message: 'Required' }],
     });
   if (access.scope === 'own' && ownerId !== access.staffId)
@@ -145,7 +145,7 @@ export async function closeFollowUp(
       throw new InvalidStateTransitionError(`This follow-up is already ${current.status}.`);
     const outcome = input.outcome?.trim();
     if (!outcome)
-      throw new ValidationError('Record the outcome (completion needs evidence, BR-OPS-11).', {
+      throw new ValidationError('Record the outcome (completion needs evidence).', {
         details: [{ location: 'body', path: ['outcome'], message: 'Required' }],
       });
     const [row] = await tx

@@ -1,18 +1,67 @@
 # Elevate OS — handoff
 
-_Last updated 20 Oct 2026. Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
+_Last updated 21 Oct 2026. Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
 
 ## For the owner (plain language)
 
-**What it is.** Elevate OS is the internal system your staff sign in to. It has three parts: Marketing, Academic and Business Operations (admissions, HR, tasks, SOPs). It also has a home page with a leadership overview. Only `@elevateeducation.in` accounts can use it (decision D-030).
+**What it is.** Elevate OS is the internal system your staff sign in to. It has three parts — Marketing, Academic and Business Operations (enquiries, demos, admissions, students, fees, staff tasks) — and a home page with a leadership overview. Only `@elevateeducation.in` accounts can use it (D-030).
 
-**What works today.** All three parts are built and pass their automated tests on a developer's computer. The data in it is fictional sample data. It is **not on the internet yet**. Where it will be hosted is your decision, and so is the account it runs under.
+### Status report — 21 Oct 2026
 
-**What it needs from you.** `PLACEHOLDERS.md` lists every fact only you can supply: staff and roles, fees, holidays, leave rules, policies, targets and the logo file. The numbered open business decisions (OD-001 to OD-048) are in `docs/EXISTING_PROJECT_AUDIT.md` §9. Until you answer them, the system shows "Proposed" or "Not available". It never makes up a number.
+```
+What's live now: nothing on the internet yet. It runs on this computer at http://localhost:3000.
+What I did:
+- Demos now run over three demo days, and a student's record is made at the first booking.
+- Admissions follow your paper form: application, printed form, signatures, then a final
+  confirmation with the approver's password. The admission number (001, 002 …) is given
+  only at that moment, with an acknowledgement and an ID card to print.
+- Fees: yearly fee split 50 / 25 / 25, registration ₹5,000 once per student, demo ₹1,000;
+  every fee change needs a second person's approval.
+- Staff have "My day" tasks and a daily end-of-day report their manager can read.
+- The screens keep the dark look with a new, clearer layout and menu.
+What I need from you: change the password of the team@ account (steps below), then the
+  decisions in the table below, one at a time.
+What's next:
+- Final checks on every screen, then you try a full admission with sample data.
+- Choose where to host it, so it can go on the internet.
+Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff list, logo file and others).
+```
 
-**What is not connected yet.** Email sending, the social-media publishing tool, document uploads, a biometric attendance device and a CRM are all "pretend" connections (mock adapters). They record what would happen and never claim it happened. "Sign in with Google" needs a client ID from your Google account (`docs/GOOGLE_SIGN_IN_SETUP.md`).
+### Steps only you can do
 
-**Security.** Every page checks who is signed in and what they may see. Pages also send the standard browser protections against embedding, script injection and sniffing (details below). Passwords and keys are kept out of the code, in a private settings file (`.env`) that is never uploaded.
+**1. Change the password of the shared look-around account.** The account `team@elevateeducation.in` exists on this computer only. It can look at everything and change nothing, and it can never confirm an admission. Its password was typed in our chat, so treat it as known to others. There is no "change password" screen yet, so:
+1. Open http://localhost:3000 and sign in with your own account.
+2. Click **Users & roles** in the menu.
+3. Click **team@elevateeducation.in**, then **Disable account**, then confirm.
+4. Ask the developer to set a new password for it; turn it back on with **Enable account** once you have the new password. Do not send the new password in chat.
+
+**2. After pulling new code (on this computer only).** Open a terminal in the `elevate-os` folder and run, one at a time: `npm run db:start` (leave it open), then in a second terminal `npm run db:migrate`, then `npm run db:seed`. Never run these against a live database.
+
+**3. When it goes on the internet.** The search page puts what was typed in the address bar (`/ops/search?q=…`), which can be a phone number. In the hosting account, set request logs to **not keep query strings** (D-056). The developer does this with you on go-live day.
+
+### Decisions waiting for you
+
+Until you answer, the system uses the safe choice shown and marks it "Proposed".
+
+| Question | Safe choice used today |
+|---|---|
+| May staff who sign in with Google confirm admissions by signing in with Google again? Today every real staff account is Google-only, so **nobody real can confirm an admission yet** (D-041) | Only an account password is accepted |
+| Who may confirm admissions? | Director and operations manager (Proposed) |
+| Is the ₹5,000 registration fee charged again each academic year? (D-044) | Once per student |
+| Should the director see students' private details (phone, address, documents)? The director can confirm admissions but sees "Details hidden" | Hidden |
+| Discounts, waivers or credits on a running fee agreement: is one approver enough, or must a second person approve each one? (D-057) | One approver who did not make the agreement |
+| Should a paid demo fee be credited automatically when the student joins? | No — staff post the credit by hand |
+| Onboarding checklist items, due days and owners | A proposed standard list, marked "(proposed)" |
+| Who may add extra demo days, and who may correct demo attendance? | Extra days off |
+| Student or parent reports: which audiences, and should teacher names appear? | Staff-only reports |
+| The new menu grouping (Today, Admissions, Students, Money, People, Reports) (D-054) | As built |
+| The five draft syllabus courses and their codes; CA chapter weights (D-051) | Drafts, not used for teaching |
+
+Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), keep the dark look with a new layout (D-054).
+
+**What is not connected yet.** Email and text messages, event invitations, the social-media publishing tool, document uploads, a biometric device and a CRM are "pretend" connections: they record what would happen and never claim it happened. Hindi (Devanagari) text does not print in PDFs yet; it shows as "?" with a note.
+
+**Security.** Every page checks who is signed in and what they may see. Most students are minors, so phone numbers, addresses and documents are shown only to staff with the private-data permission, and every contact search is logged. Passwords and keys stay in a private settings file (`.env`) that is never uploaded.
 
 ---
 
@@ -20,14 +69,14 @@ _Last updated 20 Oct 2026. Branch `feature/business-ops-hr-admissions`. Nothing 
 
 | Area | State | Where to read more |
 |---|---|---|
-| Foundation (sign-in, sessions, roles, audit, outbox, approvals, shared UI) | Implemented, Tested | `IMPLEMENTATION_STATUS.md` |
-| Marketing OS, Academic OS, Business Ops OS (incl. HR, D-028) | Implemented, Tested | `IMPLEMENTATION_STATUS.md`, `apps/*/README.md` |
-| Baseline migration `0000_baseline.sql` | Implemented | `docs/DATABASE_MIGRATION_PLAN.md` |
+| Foundation (sign-in, Google sign-in, Users & roles, sessions, roles, audit, outbox, approvals, shared UI) | Implemented, Tested | `IMPLEMENTATION_STATUS.md` |
+| Marketing OS, Academic OS | Implemented, Tested | `IMPLEMENTATION_STATUS.md`, `apps/*/README.md` |
+| Business Ops: admissions lifecycle, fees, students, events, exits, reports, search, daily tasks & EOD, new layout (D-038 … D-057) | Implemented, Tested (API); screens checked in Chrome by the coordinator | `IMPLEMENTATION_STATUS.md` "admissions lifecycle" section |
+| Migrations `0000` … `0008` | Implemented; applied to the local database only | `docs/DATABASE_MIGRATION_PLAN.md` |
 | Security headers and CSP with per-request nonces (all four apps) | Implemented, Tested (unit test + production smoke, §6) | §5 below |
-| Google sign-in | Being built in parallel; needs the owner's OAuth client | `docs/GOOGLE_SIGN_IN_SETUP.md` |
 | Deployment, hosting, domain, monitoring, backups schedule | **Not built** (Proposed only) | `infrastructure/deployment/README.md` |
-| Password reset and account-admin screens, shared login rate limit, outbox scheduler | **Not built** | `infrastructure/deployment/README.md` "Must be resolved before go-live" |
-| Business facts (fees, holidays, staff, policies, targets) | **Missing — owner** | `PLACEHOLDERS.md`; OD-001…OD-048 in `docs/EXISTING_PROJECT_AUDIT.md` §9 |
+| Password reset / change screen, shared login rate limit, outbox scheduler, Google re-authentication for confirmation | **Not built** | `infrastructure/deployment/README.md`; `C:\OPENBOT\Elevate-Not-Working` |
+| Business facts (fees per programme, staff, holidays, targets) | **Missing — owner** | `PLACEHOLDERS.md`; OD-001…OD-048 in `docs/EXISTING_PROJECT_AUDIT.md` §9 |
 
 Status words follow D-013: Proposed → Approved → Implemented → Tested → Deployed. Nothing is Deployed.
 
@@ -63,6 +112,8 @@ Never run `db:reset` or `db:seed` against a non-local database. `pg_dump` is not
 - The three module apps run on a private network.
 - PostgreSQL is a managed service with backups.
 - CI runs `npm ci`, then `validate`, then `build`, then migrates after a verified backup.
+- Request logs on the host and any proxy keep the path **without the query string** (search addresses can hold phone numbers, D-056).
+- PDF fonts in `apps/business-ops-os/assets/fonts` must ship with the build (a `standalone` build needs `outputFileTracingIncludes`).
 
 Two settings are compiled in at **build** time, so set them before `npm run build`:
 - The module URLs, for the rewrites.
@@ -115,7 +166,7 @@ Run by the security agent on 20 Oct 2026 (Windows 11, Node 24.19.0):
 | Missing pages | `/ops/no-such-page`, `/academic/no-such-page`, `/marketing/no-such-page` → 404. `/no-such-page` → 307 to login when signed out (by design), 404 with a session cookie |
 | `curl -sI` headers | All headers in §5 are present on platform and module pages, and through the rewrite. No `X-Powered-By`. Each response has a new nonce. Every `<script>` (12 on `/login`) carries the matching nonce |
 | Browser (Chrome) | Production `/login`, `/academic/login`, `/marketing/login`, `/ops/no-such-page`: no console errors (no CSP violations). Dev: `/academic/login` through the platform shows `[HMR] connected` and no CSP errors |
-| Banned-pattern grep (Appendix C) | No hits in production code. `console.log` appears only in CLI scripts (`scripts/**`, `packages/shared-ui/scripts/brand-logo.mjs`), on purpose, as their output. Prose "any" in comments is not a type. Copy grep: brand-name hits only (exempt) |
+| Banned-pattern grep (Appendix C) | No hits in production code. `console.log` appears only in CLI scripts (`scripts/**`), on purpose, as their output. Prose "any" in comments is not a type. Copy grep: brand-name hits only (exempt) |
 | Data exposure spot check (§6.6) | `password_hash` is read only in `packages/authentication/src/login.ts`. Every join with `core.users` selects named columns. Session `token_hash` never leaves `sessions.ts` |
 
 Not verified: pages behind sign-in in a browser (the seed users are `@example.test`, which D-030 rejects); axe, Lighthouse and keyboard passes. These belong to the release run.
@@ -141,11 +192,12 @@ If a secret is ever committed, rotate it. Deleting the commit is not enough.
 
 | Service | Purpose | Status | Account owner |
 |---|---|---|---|
-| Google OAuth | "Sign in with Google" | Code in progress; needs the owner's client ID and secret | Owner (to create) |
+| Google OAuth | "Sign in with Google" | Built (D-030); needs the owner's client ID and secret | Owner (to create) |
 | Email sending | Reminders | Mock adapter (`packages/notifications`): records, sends nothing | — |
 | Publishing / metrics tool (e.g. Metricool, YouTube) | Marketing posting and numbers | Mock adapter: "SANDBOX: nothing was posted" | — |
 | CRM | Lead sync | Mock adapter (`apps/business-ops-os/src/server/adapters/crm.ts`) | — |
-| Document storage | HR and admission documents | Mock adapter: references only, no files | — |
+| Document storage | Admission documents | Not connected: identity documents keep a masked reference only, no files | — |
+| Messaging (SMS / WhatsApp / email) | Event invitations, EOD "share" | Simulated and audited; a message is never marked sent without a provider reference | Owner (to choose) |
 | Attendance device / provider | Staff attendance | Mock adapter; manual entry and CSV import work | — |
 | Hosting, managed PostgreSQL, domain | Going live | Not chosen (owner decision) | Owner |
 
@@ -153,12 +205,13 @@ None of these costs money today.
 
 ## 9. Where to change content
 
-Business content is data, so it is entered on the screens, not in code. For example, to add a company policy: sign in as an operations manager, open **Business Ops → Settings → Policies & compliance**, add the policy (it starts as a draft), and have a second person approve it. Programmes, departments, shift templates and leave types are edited the same way under each module's settings. Interface wording is in each app's `src/app/**/page.tsx` and needs a developer.
+Business content is data, so it is entered on the screens, not in code. For example, to change the demo fee: sign in as an operations manager, open **Business Ops → Settings**, find the admissions group and edit the value (every change is recorded). Programmes, departments, onboarding templates and fee structures are edited the same way under each module's settings. Interface wording is in each app's `src/app/**/page.tsx` and needs a developer.
 
 ## 10. Known limitations and the next three improvements
 
 Limitations:
-- No password reset.
+- No password reset or change screen.
+- Google-only accounts cannot confirm admissions (D-041).
 - The login throttle is per process.
 - There is no outbox scheduler; the intake is run by hand.
 - Module services often `select()` whole module rows. None are secret, but §6.6 prefers named columns, so that is a follow-up.
@@ -173,7 +226,8 @@ Next three improvements, in priority order:
 ## 11. Licences
 
 - **Logo:** `apps/*/public/brand/elevate-logo.png` and `favicon.ico` belong to the owner (Elevate Education).
-- **Fonts:** system fonts only (Segoe UI and platform fallbacks), so none are shipped.
+- **Fonts:** screens use system fonts. PDFs embed Noto Sans 2.015 Regular and Bold (SIL Open Font License 1.1; licence file `apps/business-ops-os/assets/fonts/OFL.txt`, D-042).
+- **PDF library:** `pdf-lib` 1.17.1 and `@pdf-lib/fontkit` 1.1.1 (MIT), owner-approved 21 Oct 2026.
 - **No third-party images.**
 - **npm dependencies:** all come from the public npm registry, and the project itself is `UNLICENSED` (private). A census of installed packages on 20 Oct 2026 found:
   - MIT 204, Apache-2.0 24, ISC 19, BSD-2-Clause 6, BSD-3-Clause 3, MPL-2.0 2, 0BSD 1, BlueOak-1.0.0 1, CC-BY-4.0 1 (data).

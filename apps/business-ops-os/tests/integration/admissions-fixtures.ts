@@ -1,17 +1,18 @@
 /**
  * Fixtures for the admissions-administration tests (fees, students, handoff,
- * report). Walk a fictional lead to `admitted` through the real route
+ * report). Walk a fictional lead to a confirmed admission through the real route
  * handlers. Everything is fictional; contacts come from the shared counter.
  */
+import { eq } from 'drizzle-orm';
 import { expect } from 'vitest';
+import { getDb, opsAdmissions, opsApplications } from '@elevate/database';
 import { authedRequest, callRoute } from '@elevate/testing';
 import { POST as createLead } from '../../src/app/api/v1/leads/route';
 import { POST as activity } from '../../src/app/api/v1/leads/[id]/activities/route';
-import { POST as counselling } from '../../src/app/api/v1/counselling/route';
-import { POST as counsellingUpdate } from '../../src/app/api/v1/counselling/[id]/route';
+import { POST as counselling } from '../../src/app/api/v1/appointments/route';
+import { PATCH as counsellingUpdate } from '../../src/app/api/v1/appointments/[id]/route';
 import { POST as transition } from '../../src/app/api/v1/admissions/[id]/transitions/route';
-import { POST as check } from '../../src/app/api/v1/admissions/[id]/checks/route';
-import { POST as feeApproval } from '../../src/app/api/v1/admissions/[id]/fee-approval/route';
+import { confirmAs, signedApplication } from './application-fixtures';
 import { phone } from './fixtures';
 
 export type Caller = { token: string };
@@ -27,15 +28,21 @@ let n = 0;
 /** A fresh lead owned by `counsellor`, counselled, demo skipped → `admission_pending`. */
 export async function pendingCase(
   counsellor: Caller,
-  options: { programmeCode?: string; name?: string; extra?: Record<string, unknown> } = {},
+  options: {
+    programmeCode?: string;
+    name?: string;
+    extra?: Record<string, unknown>;
+    /** Stop at `counselled` (e.g. to book a demo). */
+    counselledOnly?: boolean;
+  } = {},
 ) {
   n += 1;
   const lead = await callRoute<{ lead: { id: string }; admission: { id: string } }>(
     createLead,
     post(counsellor, {
-      studentName: options.name ?? `Admin Test ${n} (fictional)`,
+      studentName: options.name ?? `Admin Test ${n}`,
       studentPhone: phone(),
-      guardianName: `Guardian ${n} (fictional)`,
+      guardianName: `Guardian ${n}`,
       guardianRelationship: 'father',
       guardianPhone: phone(),
       currentStage: 'class_12',
@@ -54,14 +61,16 @@ export async function pendingCase(
     counselling,
     post(counsellor, {
       admissionId,
-      scheduledAt: new Date(Date.now() - 86_400_000).toISOString(),
-      mode: 'phone',
+      type: 'student_counselling',
+      startsAt: new Date(Date.now() - 86_400_000).toISOString(),
+      mode: 'online',
     }),
   );
   expect(s.status).toBe(201);
   await callRoute(counsellingUpdate, post(counsellor, { action: 'complete', outcome: 'Joining' }), {
     id: s.data!.id,
   });
+  if (options.counselledOnly) return { leadId, admissionId };
   const t = await callRoute<{ status: string }>(
     transition,
     post(counsellor, { to: 'admission_pending', reason: 'Family joins without a demo (test)' }),
@@ -71,55 +80,45 @@ export async function pendingCase(
   return { leadId, admissionId };
 }
 
-/** `pendingCase` → checklist (two different verifiers) → fee approval by `director` → admitted. */
+type People = { counsellor: Caller; manager: Caller; director: Caller & { password: string } };
+
+/**
+ * `pendingCase` → the real admission flow (application, fee approval, active plan, form,
+ * signatures) → confirmed by `director` with their password → `enrolment_requested`.
+ */
 export async function admittedCase(
-  people: { counsellor: Caller; manager: Caller; director: Caller },
+  people: People,
   options: Parameters<typeof pendingCase>[1] = {},
 ) {
   const ids = await pendingCase(people.counsellor, options);
-  for (const itemKey of [
-    'admission_form',
-    'documents_verified',
-    'fee_verification_1',
-    'down_payment_verified',
-  ])
-    expect(
-      (
-        await callRoute(check, post(people.counsellor, { itemKey, status: 'done' }), {
-          id: ids.admissionId,
-        })
-      ).status,
-    ).toBe(200);
-  expect(
-    (
-      await callRoute(
-        check,
-        post(people.manager, { itemKey: 'fee_verification_2', status: 'done' }),
-        {
-          id: ids.admissionId,
-        },
-      )
-    ).status,
-  ).toBe(200);
-  expect(
-    (
-      await callRoute(feeApproval, post(people.counsellor, { action: 'request' }), {
-        id: ids.admissionId,
-      })
-    ).status,
-  ).toBe(200);
-  expect(
-    (
-      await callRoute(feeApproval, post(people.director, { action: 'approve' }), {
-        id: ids.admissionId,
-      })
-    ).status,
-  ).toBe(200);
-  const res = await callRoute<{ status: string }>(
-    transition,
-    post(people.counsellor, { to: 'admitted' }),
-    { id: ids.admissionId },
-  );
-  expect(res.data?.status).toBe('admitted');
-  return ids;
+  return { ...ids, ...(await admit(people, ids.admissionId)) };
+}
+
+/**
+ * Confirm an `admission_pending` case (direct, or converted from a demo) the only way there is:
+ * the password-confirmed final approval (D-040/D-041). The admission ends `enrolment_requested`;
+ * `eventId` is the enrolment request published in the same transaction.
+ */
+export async function admit(people: People, admissionId: string) {
+  const db = getDb();
+  const [app] = await db
+    .select({ id: opsApplications.id })
+    .from(opsApplications)
+    .where(eq(opsApplications.admissionId, admissionId as never));
+  const s = await signedApplication(db, people, { admissionId, applicationId: app?.id });
+  const res = await confirmAs(people.director, s.applicationId, {
+    password: people.director.password,
+    applicationVersion: s.version,
+  });
+  expect(res.status).toBe(201);
+  const [row] = await db
+    .select({ eventId: opsAdmissions.lastRequestEventId, number: opsAdmissions.admissionNumber })
+    .from(opsAdmissions)
+    .where(eq(opsAdmissions.id, admissionId as never));
+  return {
+    admissionId,
+    applicationId: s.applicationId,
+    eventId: row!.eventId!,
+    admissionNumber: row!.number!,
+  };
 }

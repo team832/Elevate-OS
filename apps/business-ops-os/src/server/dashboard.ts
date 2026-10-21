@@ -4,36 +4,31 @@
  * Academic and Marketing panels come from their summary contracts and show
  * "source unavailable" when the fetch fails.
  */
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import {
   opsAdmissions,
   opsAdmissionTransitions,
+  opsDemos,
   opsFollowUps,
   opsLeads,
-  opsRisks,
-  opsTasks,
   staffMembers,
   type Database,
 } from '@elevate/database';
 import {
+  addDays,
   followUpCompliance,
   isOpenStatus,
-  isOpenTask,
   istToday,
   istWeekContaining,
   latestElapsedCohortWeek,
   leadToAdmissionConversion,
   newLeads,
-  OPEN_TASK_STATUSES,
   overdueWork,
-  taskCompletionRate,
-  unresolvedBlockers,
   workloadPerStaff,
-  type AdmissionStatus,
   type IsoDate,
   type KpiWindow,
-  type TaskStatus,
 } from '../domain';
+import { ownAdmissionFilter } from './admissions';
 import { accessScope, type Actor } from './context';
 import { loadSettings } from './settings';
 import {
@@ -50,57 +45,47 @@ export interface DashboardOptions {
 
 /** Load the rows the KPI functions need (no permission check; used by buildDashboard and tests). */
 export async function loadKpiRows(db: Database) {
-  const [leads, admittedTransitions, followUps, tasks, risks, staff, openAdmissions] =
-    await Promise.all([
-      db
-        .select({
-          id: opsLeads.id,
-          receivedAt: opsLeads.firstReceivedAt,
-          merged: opsLeads.mergedIntoLeadId,
-        })
-        .from(opsLeads),
-      db
-        .select({ leadId: opsAdmissions.leadId, at: opsAdmissionTransitions.at })
-        .from(opsAdmissionTransitions)
-        .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsAdmissionTransitions.admissionId))
-        .where(eq(opsAdmissionTransitions.toStatus, 'admitted')),
-      db
-        .select({
-          kind: opsFollowUps.kind,
-          dueDate: opsFollowUps.dueDate,
-          status: opsFollowUps.status,
-          completedAt: opsFollowUps.completedAt,
-          ownerStaffId: opsFollowUps.ownerStaffId,
-        })
-        .from(opsFollowUps),
-      db
-        .select({
-          status: opsTasks.status,
-          dueDate: opsTasks.dueDate,
-          completedAt: opsTasks.completedAt,
-          ownerStaffId: opsTasks.ownerStaffId,
-        })
-        .from(opsTasks),
-      db.select({ kind: opsRisks.kind, status: opsRisks.status }).from(opsRisks),
-      db
-        .select({
-          id: staffMembers.id,
-          fullName: staffMembers.fullName,
-          status: staffMembers.status,
-        })
-        .from(staffMembers),
-      db
-        .select({
-          status: opsAdmissions.status,
-          counsellor: opsAdmissions.counsellorStaffId,
-          leadId: opsAdmissions.leadId,
-        })
-        .from(opsAdmissions)
-        .innerJoin(
-          opsLeads,
-          and(eq(opsLeads.id, opsAdmissions.leadId), isNull(opsLeads.mergedIntoLeadId)),
-        ),
-    ]);
+  const [leads, admittedTransitions, followUps, staff, openAdmissions] = await Promise.all([
+    db
+      .select({
+        id: opsLeads.id,
+        receivedAt: opsLeads.firstReceivedAt,
+        merged: opsLeads.mergedIntoLeadId,
+      })
+      .from(opsLeads),
+    db
+      .select({ leadId: opsAdmissions.leadId, at: opsAdmissionTransitions.at })
+      .from(opsAdmissionTransitions)
+      .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsAdmissionTransitions.admissionId))
+      .where(eq(opsAdmissionTransitions.toStatus, 'admitted')),
+    db
+      .select({
+        kind: opsFollowUps.kind,
+        dueDate: opsFollowUps.dueDate,
+        status: opsFollowUps.status,
+        completedAt: opsFollowUps.completedAt,
+        ownerStaffId: opsFollowUps.ownerStaffId,
+      })
+      .from(opsFollowUps),
+    db
+      .select({
+        id: staffMembers.id,
+        fullName: staffMembers.fullName,
+        status: staffMembers.status,
+      })
+      .from(staffMembers),
+    db
+      .select({
+        status: opsAdmissions.status,
+        counsellor: opsAdmissions.counsellorStaffId,
+        leadId: opsAdmissions.leadId,
+      })
+      .from(opsAdmissions)
+      .innerJoin(
+        opsLeads,
+        and(eq(opsLeads.id, opsAdmissions.leadId), isNull(opsLeads.mergedIntoLeadId)),
+      ),
+  ]);
   const firstAdmitted = new Map<string, Date>();
   for (const t of admittedTransitions) {
     const prev = firstAdmitted.get(t.leadId);
@@ -113,14 +98,8 @@ export async function loadKpiRows(db: Database) {
       admittedAt: firstAdmitted.get(l.id) ?? null,
     })),
     followUps: followUps.map((f) => ({ ...f, dueDate: f.dueDate as IsoDate })),
-    tasks: tasks.map((t) => ({
-      ...t,
-      status: t.status as TaskStatus,
-      dueDate: t.dueDate as IsoDate | null,
-    })),
-    risks,
     staff,
-    openAdmissions: openAdmissions.filter((a) => isOpenStatus(a.status as AdmissionStatus)),
+    openAdmissions: openAdmissions.filter((a) => isOpenStatus(a.status)),
   };
 }
 
@@ -137,11 +116,8 @@ export async function buildDashboard(db: Database, actor: Actor, options: Dashbo
   const conversionDays = settings['kpi.conversion'].value.windowDays;
   const cohort = latestElapsedCohortWeek(now, conversionDays);
   const rows = await loadKpiRows(db);
-  const overdue = overdueWork(rows.tasks, rows.followUps, now);
-  const blockers = unresolvedBlockers(rows.risks, rows.tasks, now);
   const workload = workloadPerStaff({
     staff: rows.staff,
-    openTaskOwners: rows.tasks.filter((t) => isOpenTask(t.status)).map((t) => t.ownerStaffId),
     openFollowUpOwners: rows.followUps
       .filter((f) => f.status === 'open')
       .map((f) => f.ownerStaffId),
@@ -159,15 +135,7 @@ export async function buildDashboard(db: Database, actor: Actor, options: Dashbo
       newLeads: newLeads(rows.leads, window),
       conversion: leadToAdmissionConversion(rows.leads, cohort, conversionDays, now),
       followUpCompliance: followUpCompliance(rows.followUps, window, now),
-      taskCompletionRate: taskCompletionRate(rows.tasks, window, now),
-      overdueWork: overdue.metric,
-      unresolvedBlockers: blockers.metric,
-    },
-    breakdown: {
-      overdueTasks: overdue.tasks,
-      overdueFollowUps: overdue.followUps,
-      blockerRegisterItems: blockers.registerItems,
-      blockedTasks: blockers.blockedTasks,
+      overdueWork: overdueWork(rows.followUps, now),
     },
     workload,
     crossModule: summaries,
@@ -187,19 +155,12 @@ export async function myWork(db: Database, actor: Actor, now = new Date()) {
       linked: false as const,
       followUpsDue: 0,
       followUpsOverdue: 0,
-      openTasks: 0,
       openAdmissions: 0,
     };
   const followUps = await db
     .select({ dueDate: opsFollowUps.dueDate })
     .from(opsFollowUps)
     .where(and(eq(opsFollowUps.ownerStaffId, me.id), eq(opsFollowUps.status, 'open')));
-  const tasks = await db
-    .select({ id: opsTasks.id })
-    .from(opsTasks)
-    .where(
-      and(eq(opsTasks.ownerStaffId, me.id), inArray(opsTasks.status, [...OPEN_TASK_STATUSES])),
-    );
   const admissions = await db
     .select({ status: opsAdmissions.status })
     .from(opsAdmissions)
@@ -208,7 +169,105 @@ export async function myWork(db: Database, actor: Actor, now = new Date()) {
     linked: true as const,
     followUpsDue: followUps.filter((f) => f.dueDate === today).length,
     followUpsOverdue: followUps.filter((f) => f.dueDate < today).length,
-    openTasks: tasks.length,
-    openAdmissions: admissions.filter((a) => isOpenStatus(a.status as AdmissionStatus)).length,
+    openAdmissions: admissions.filter((a) => isOpenStatus(a.status)).length,
+  };
+}
+
+/** Counts per Asia/Kolkata day for the `days` days ending `to`, oldest first; other dates are ignored. */
+export function perDay(dates: readonly Date[], to: IsoDate, days: number) {
+  const counts = new Map<string, number>();
+  for (const d of dates) counts.set(istToday(d), (counts.get(istToday(d)) ?? 0) + 1);
+  return Array.from({ length: days }, (_, i) => {
+    const date = addDays(to, i - days + 1);
+    return { date, count: counts.get(date) ?? 0 };
+  });
+}
+
+/**
+ * Dashboard and report-card series (OPS-024 charts) from Ops' own complete tables, so an
+ * empty day is a real 0: leads received and demos converted per day over the last `days`
+ * days, and follow-ups by due state. Own scope matches the lists the figures link to:
+ * leads (owner or case counsellor), demos (plus the demo counsellor), follow-ups (owner).
+ */
+export async function activitySeries(
+  db: Database,
+  actor: Actor,
+  { now = new Date(), days = 30 }: { now?: Date; days?: number } = {},
+) {
+  const access = await accessScope(db, actor, 'ops:leads:read');
+  const today = istToday(now);
+  const from = addDays(today, -(days - 1));
+  const since = new Date(`${from}T00:00:00+05:30`);
+  const own = access.scope === 'own' ? access.staffId : undefined;
+  const nothing = sql`false`;
+  const leadScope =
+    own === undefined
+      ? undefined
+      : own
+        ? or(
+            eq(opsLeads.ownerStaffId, own),
+            inArray(
+              opsLeads.id,
+              db
+                .select({ id: opsAdmissions.leadId })
+                .from(opsAdmissions)
+                .where(eq(opsAdmissions.counsellorStaffId, own)),
+            ),
+          )
+        : nothing;
+  const demoScope = own
+    ? or(ownAdmissionFilter(access), eq(opsDemos.counsellorStaffId, own))
+    : ownAdmissionFilter(access);
+  const followUpScope =
+    own === undefined ? undefined : own ? eq(opsFollowUps.ownerStaffId, own) : nothing;
+  const [leads, conversions, followUps] = await Promise.all([
+    db
+      .select({ at: opsLeads.firstReceivedAt })
+      .from(opsLeads)
+      .where(
+        and(isNull(opsLeads.mergedIntoLeadId), gte(opsLeads.firstReceivedAt, since), leadScope),
+      ),
+    db
+      .select({ at: opsDemos.outcomeAt })
+      .from(opsDemos)
+      .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsDemos.admissionId))
+      .innerJoin(opsLeads, eq(opsLeads.id, opsDemos.leadId))
+      .where(and(eq(opsDemos.outcome, 'converted'), gte(opsDemos.outcomeAt, since), demoScope)),
+    db
+      .select({ status: opsFollowUps.status, dueDate: opsFollowUps.dueDate })
+      .from(opsFollowUps)
+      .where(
+        and(
+          or(eq(opsFollowUps.status, 'open'), gte(opsFollowUps.completedAt, since)),
+          followUpScope,
+        ),
+      ),
+  ]);
+  const week = istWeekContaining(today);
+  const leadsPerDay = perDay(
+    leads.map((l) => l.at),
+    today,
+    days,
+  );
+  const open = followUps.filter((f) => f.status === 'open');
+  return {
+    scope: access.scope,
+    window: { from, to: today },
+    week,
+    leadsPerDay,
+    newLeadsThisWeek: leadsPerDay
+      .filter((d) => d.date >= week.from)
+      .reduce((n, d) => n + d.count, 0),
+    conversionsPerDay: perDay(
+      conversions.flatMap((c) => (c.at ? [c.at] : [])),
+      today,
+      days,
+    ),
+    followUps: {
+      overdue: open.filter((f) => f.dueDate < today).length,
+      dueToday: open.filter((f) => f.dueDate === today).length,
+      upcoming: open.filter((f) => f.dueDate > today).length,
+      doneInWindow: followUps.filter((f) => f.status === 'done').length,
+    },
   };
 }

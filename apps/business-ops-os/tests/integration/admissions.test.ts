@@ -12,16 +12,15 @@ import {
   notifications,
   opsAdmissions,
   opsAdmissionTransitions,
-  opsDemos,
 } from '@elevate/database';
 import { publishEvent, withTransaction } from '@elevate/server-kit';
 import { enrolmentKeys } from '@elevate/shared-contracts';
 import { POST as createLead } from '../../src/app/api/v1/leads/route';
 import { POST as activity } from '../../src/app/api/v1/leads/[id]/activities/route';
-import { POST as counselling } from '../../src/app/api/v1/counselling/route';
-import { POST as counsellingUpdate } from '../../src/app/api/v1/counselling/[id]/route';
+import { POST as counselling } from '../../src/app/api/v1/appointments/route';
+import { PATCH as counsellingUpdate } from '../../src/app/api/v1/appointments/[id]/route';
 import { POST as demo } from '../../src/app/api/v1/demos/route';
-import { POST as demoUpdate } from '../../src/app/api/v1/demos/[id]/route';
+import { POST as demoSession } from '../../src/app/api/v1/demos/[id]/sessions/[sessionId]/route';
 import { GET as getAdmission } from '../../src/app/api/v1/admissions/[id]/route';
 import { POST as transition } from '../../src/app/api/v1/admissions/[id]/transitions/route';
 import { POST as check } from '../../src/app/api/v1/admissions/[id]/checks/route';
@@ -30,6 +29,8 @@ import { POST as requestEnrolment } from '../../src/app/api/v1/admissions/[id]/e
 import { POST as runJob } from '../../src/app/api/v1/jobs/[job]/route';
 import { processEnrolmentReplies } from '../../src/server/enrolment';
 import { isoDaysFromNow, phone, setupReference, staffUser, type StaffUser } from './fixtures';
+import { admit } from './admissions-fixtures';
+import { CONVERT_BODY, convertDemoAs } from './conversion-fixtures';
 
 const ctx = setupTestDatabase();
 let manager: StaffUser;
@@ -67,10 +68,11 @@ async function pendingAdmission() {
   const lead = await callRoute<{ lead: { id: string }; admission: { id: string } }>(
     createLead,
     post(counsellor, {
-      studentName: 'Pipeline Test (fictional)',
+      studentName: 'Pipeline Test',
       studentPhone: phone(),
-      guardianName: 'Parent Test (fictional)',
+      guardianName: 'Parent Test',
       guardianRelationship: 'mother',
+      guardianPhone: phone(),
       programmeCode: 'IPMAT',
       sourceCode: 'WEBINAR',
     }),
@@ -84,33 +86,47 @@ async function pendingAdmission() {
     counselling,
     post(counsellor, {
       admissionId,
-      scheduledAt: new Date(Date.now() - 86_400_000).toISOString(),
-      mode: 'in_person',
+      type: 'student_counselling',
+      startsAt: new Date(Date.now() - 86_400_000).toISOString(),
+      mode: 'offline',
     }),
   );
   expect(s.status).toBe(201);
   const done = { action: 'complete', outcome: 'Wants a demo' };
   expect(await status(counsellingUpdate, counsellor, done, { id: s.data!.id })).toBe(200);
+  const at = (days: number) => `${isoDaysFromNow(days)}T10:00:00+05:30`;
   const bad = await callRoute(
     demo,
-    post(counsellor, { admissionId, subjects: ['Quant'], dayDates: [isoDaysFromNow(-3)] }),
+    post(counsellor, { admissionId, sessions: [{ startsAt: at(-3), subject: 'Quant' }] }),
   );
-  expect(bad.status).toBe(400); // demo terms: 2 days
-  const d = await callRoute<{ id: string; feeAmountInr: string; feeTermsState: string }>(
+  expect(bad.status).toBe(400); // admissions.demo.day_count: 3
+  const d = await callRoute<{
+    id: string;
+    feeAmountPaise: number;
+    feeTermsState: string;
+    sessions: { id: string }[];
+  }>(
     demo,
     post(counsellor, {
       admissionId,
-      subjects: ['Quant', 'Verbal'],
-      dayDates: [isoDaysFromNow(-3), isoDaysFromNow(-2)],
+      sessions: [-4, -3, -2].map((day) => ({ startsAt: at(day), subject: 'Quant' })),
     }),
   );
   expect(d.status).toBe(201);
-  expect(d.data).toMatchObject({ feeAmountInr: '1000.00', feeTermsState: 'pending_verification' });
-  const fee = { action: 'record_fee', feeStatus: 'paid_verified', feeReference: 'RCPT-TEST-1' };
-  expect(await status(demoUpdate, counsellor, fee, { id: d.data!.id })).toBe(200);
-  expect(await status(demoUpdate, counsellor, { action: 'attended' }, { id: d.data!.id })).toBe(
-    200,
-  );
+  expect(d.data).toMatchObject({ feeAmountPaise: 100_000, feeTermsState: 'approved' }); // D-045
+  for (const s of d.data!.sessions)
+    // all sessions attended → case demo_attended
+    expect(
+      await status(
+        demoSession,
+        counsellor,
+        { action: 'attendance', attendance: 'present' },
+        {
+          id: d.data!.id,
+          sessionId: s.id,
+        },
+      ),
+    ).toBe(200);
   const t = await callRoute<{ status: string }>(
     transition,
     post(counsellor, { to: 'admission_pending' }),
@@ -142,18 +158,24 @@ async function completeChecks(admissionId: string) {
   expect(await status(check, manager, second, { id: admissionId })).toBe(200);
 }
 
+/** Demo → conversion → password-confirmed admission (D-040/D-041): enrolment attempt 1 is published. */
 async function admitted() {
   const ids = await pendingAdmission();
-  await completeChecks(ids.admissionId);
-  const id = { id: ids.admissionId };
-  expect(await status(feeApproval, counsellor, { action: 'request' }, id)).toBe(200);
-  expect(await status(feeApproval, director, { action: 'approve' }, id)).toBe(200);
-  const res = await callRoute<{ status: string }>(
-    transition,
-    post(counsellor, { to: 'admitted' }),
-    { id: ids.admissionId },
-  );
-  expect(res.data?.status).toBe('admitted');
+  const c = await convertDemoAs(counsellor, ids.demoId, {
+    ...CONVERT_BODY,
+    programmeCodes: ['CLASS_12', 'IPMAT'],
+  });
+  expect(c.error).toBeUndefined();
+  const a = await admit({ counsellor, manager, director }, ids.admissionId);
+  return { ...ids, eventId: a.eventId };
+}
+
+/** Academic rejects the current request: the case is `admitted` again, ready for a new request. */
+async function rejectedBack() {
+  const ids = await admitted();
+  await reply('rejected', ids.admissionId, ids.leadId, ids.eventId);
+  await processEnrolmentReplies(ctx.db);
+  expect((await admissionRow(ids.admissionId))?.status).toBe('admitted');
   return ids;
 }
 
@@ -171,6 +193,51 @@ const eventsFor = (admissionId: string) =>
       rows.filter((r) => (r.payload as { admissionId: string }).admissionId === admissionId),
     );
 
+const confirmedPayload = (requestEventId: string, admissionId: string, leadId: string) => ({
+  requestEventId: requestEventId as never,
+  admissionId: admissionId as never,
+  leadId: leadId as never,
+  enrolmentId: crypto.randomUUID() as never,
+  studentId: crypto.randomUUID() as never,
+  existingStudent: false,
+  programmeCode: 'IPMAT',
+  confirmedAt: new Date().toISOString() as never,
+  confirmedByUserId: null,
+});
+
+async function reply(
+  type: 'confirmed' | 'rejected',
+  admissionId: string,
+  leadId: string,
+  requestEventId: string,
+) {
+  return withTransaction(ctx.db, (tx) =>
+    type === 'confirmed'
+      ? publishEvent(tx, {
+          type: 'academic.enrolment.confirmed',
+          version: 1,
+          idempotencyKey: enrolmentKeys.reply(requestEventId),
+          correlationId: requestEventId,
+          payload: confirmedPayload(requestEventId, admissionId, leadId),
+        })
+      : publishEvent(tx, {
+          type: 'academic.enrolment.rejected',
+          version: 1,
+          idempotencyKey: enrolmentKeys.reply(requestEventId),
+          correlationId: requestEventId,
+          payload: {
+            requestEventId: requestEventId as never,
+            admissionId: admissionId as never,
+            leadId: leadId as never,
+            reasonCode: 'BATCH_FULL',
+            reason: 'Batch is full (test)',
+            rejectedAt: new Date().toISOString() as never,
+            rejectedByUserId: null,
+          },
+        }),
+  );
+}
+
 describe('admission confirmation gate (BR-OPS-6/7)', () => {
   it('cannot confirm without the checklist and an authorised approval; the demo fee alone never counts', async () => {
     const { admissionId } = await pendingAdmission();
@@ -179,7 +246,7 @@ describe('admission confirmation gate (BR-OPS-6/7)', () => {
     });
     expect(early.status).toBe(409);
     expect((early.error?.details as { missing: string[] }).missing).toEqual(
-      expect.arrayContaining(['Fee arrangement not approved by an authorised approver']),
+      expect.arrayContaining(['No active fee agreement approved by an authorised approver']),
     );
     await callRoute(check, post(counsellor, { itemKey: 'fee_verification_1', status: 'done' }), {
       id: admissionId,
@@ -202,17 +269,12 @@ describe('admission confirmation gate (BR-OPS-6/7)', () => {
       [director, 'approve', 200],
     ] as const)
       expect(await status(feeApproval, user, { action }, { id: admissionId })).toBe(code);
-    const res = await callRoute<{ status: string }>(
-      transition,
-      post(counsellor, { to: 'admitted' }),
-      { id: admissionId },
-    );
-    expect(res.data?.status).toBe('admitted');
-    const [d] = await ctx.db
-      .select()
-      .from(opsDemos)
-      .where(eq(opsDemos.admissionId, admissionId as never));
-    expect(d?.feeStatus).toBe('adjusted_against_fees'); // demo terms: adjusted on joining
+    // Approvals alone never admit: only the password-confirmed final approval does (D-041).
+    const res = await callRoute(transition, post(counsellor, { to: 'admitted' }), {
+      id: admissionId,
+    });
+    expect(res.status).toBe(409);
+    expect(JSON.stringify(res.error)).toContain('Confirm admission');
   });
 
   it('enrolled cannot be set by a person; illegal jumps are 409', async () => {
@@ -225,15 +287,9 @@ describe('admission confirmation gate (BR-OPS-6/7)', () => {
 });
 
 describe('enrolment handoff (outbox)', () => {
-  it('request publishes exactly one event in the same transaction; double submit gives one event', async () => {
-    const { admissionId } = await admitted();
-    const first = await callRoute<{ eventId: string; attempt: number }>(
-      requestEnrolment,
-      post(counsellor, {}),
-      { id: admissionId },
-    );
-    expect(first.status).toBe(201);
-    expect(first.data?.attempt).toBe(1);
+  it('confirmation publishes exactly one request event in the same transaction; a second request is refused', async () => {
+    const { admissionId, eventId } = await admitted();
+    const first = { data: { eventId } };
     const second = await callRoute(requestEnrolment, post(counsellor, {}), { id: admissionId });
     expect(second.status).toBe(409);
     const events = await eventsFor(admissionId);
@@ -261,7 +317,7 @@ describe('enrolment handoff (outbox)', () => {
   });
 
   it('an Idempotency-Key retry replays the stored response and still yields one event', async () => {
-    const { admissionId } = await admitted();
+    const { admissionId } = await rejectedBack();
     const headers = { 'idempotency-key': `test-only-${admissionId}` };
     const a = await callRoute<{ eventId: string }>(
       requestEnrolment,
@@ -277,71 +333,23 @@ describe('enrolment handoff (outbox)', () => {
     expect(b.status).toBe(201);
     expect(b.headers.get('idempotency-replayed')).toBe('true');
     expect(b.data?.eventId).toBe(a.data?.eventId);
-    expect(await eventsFor(admissionId)).toHaveLength(1);
+    expect(await eventsFor(admissionId)).toHaveLength(2); // attempt 1 (rejected) + this one
   });
 
   it('a failing payload rolls the status back (no event, still admitted)', async () => {
-    const { admissionId } = await admitted();
+    const { admissionId } = await rejectedBack();
     await ctx.db
       .update(opsAdmissions)
       .set({ programmeId: null })
       .where(eq(opsAdmissions.id, admissionId as never));
     expect(await status(requestEnrolment, counsellor, {}, { id: admissionId })).toBe(400);
-    expect(await eventsFor(admissionId)).toHaveLength(0);
+    expect(await eventsFor(admissionId)).toHaveLength(1); // only the rejected attempt 1
     expect((await admissionRow(admissionId))?.status).toBe('admitted');
   });
 
-  const confirmedPayload = (requestEventId: string, admissionId: string, leadId: string) => ({
-    requestEventId: requestEventId as never,
-    admissionId: admissionId as never,
-    leadId: leadId as never,
-    enrolmentId: crypto.randomUUID() as never,
-    studentId: crypto.randomUUID() as never,
-    existingStudent: false,
-    programmeCode: 'IPMAT',
-    confirmedAt: new Date().toISOString() as never,
-    confirmedByUserId: null,
-  });
-
-  async function reply(
-    type: 'confirmed' | 'rejected',
-    admissionId: string,
-    leadId: string,
-    requestEventId: string,
-  ) {
-    return withTransaction(ctx.db, (tx) =>
-      type === 'confirmed'
-        ? publishEvent(tx, {
-            type: 'academic.enrolment.confirmed',
-            version: 1,
-            idempotencyKey: enrolmentKeys.reply(requestEventId),
-            correlationId: requestEventId,
-            payload: confirmedPayload(requestEventId, admissionId, leadId),
-          })
-        : publishEvent(tx, {
-            type: 'academic.enrolment.rejected',
-            version: 1,
-            idempotencyKey: enrolmentKeys.reply(requestEventId),
-            correlationId: requestEventId,
-            payload: {
-              requestEventId: requestEventId as never,
-              admissionId: admissionId as never,
-              leadId: leadId as never,
-              reasonCode: 'BATCH_FULL',
-              reason: 'Batch is full (test)',
-              rejectedAt: new Date().toISOString() as never,
-              rejectedByUserId: null,
-            },
-          }),
-    );
-  }
-
   it('confirmed reply → enrolled; processed twice → one transition; counsellor notified', async () => {
-    const { admissionId, leadId } = await admitted();
-    const req = await callRoute<{ eventId: string }>(requestEnrolment, post(counsellor, {}), {
-      id: admissionId,
-    });
-    await reply('confirmed', admissionId, leadId, req.data!.eventId);
+    const { admissionId, leadId, eventId } = await admitted();
+    await reply('confirmed', admissionId, leadId, eventId);
     const run1 = await callRoute<{ processed: number }>(runJob, post(manager, {}), {
       job: 'enrolment-replies',
     });
@@ -361,7 +369,7 @@ describe('enrolment handoff (outbox)', () => {
     expect(transitions[0]).toMatchObject({ actorType: 'system', actorUserId: null });
     const row = await admissionRow(admissionId);
     expect(row).toMatchObject({ status: 'enrolled', handoffStatus: 'enrolled' });
-    expect(row?.studentId).not.toBeNull();
+    expect(row?.academicStudentId).not.toBeNull();
     const notes = await ctx.db
       .select()
       .from(notifications)
@@ -373,10 +381,8 @@ describe('enrolment handoff (outbox)', () => {
   });
 
   it('rejected reply → back to admitted with the reason; re-request is attempt 2 with a new key; stale replies are ignored', async () => {
-    const { admissionId, leadId } = await admitted();
-    const req1 = await callRoute<{ eventId: string }>(requestEnrolment, post(counsellor, {}), {
-      id: admissionId,
-    });
+    const { admissionId, leadId, eventId } = await admitted();
+    const req1 = { data: { eventId } };
     await reply('rejected', admissionId, leadId, req1.data!.eventId);
     await processEnrolmentReplies(ctx.db);
     expect(await admissionRow(admissionId)).toMatchObject({

@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
@@ -9,6 +10,7 @@ import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Enrolment intake' };
 
 export default async function IntakePage() {
   // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
@@ -25,7 +27,7 @@ async function Body({ access }: { access: PageAccess }) {
   const canRun = can(access.user, 'academic:enrolments:decide');
   return (
     <>
-      <PageHeader title="Enrolment intake" description="Requests from Business Ops (ops.admission.enrolment_requested v1). Each is confirmed (academic.enrolment.confirmed v1) or rejected with a reason (academic.enrolment.rejected v1) in the same transaction." />
+      <PageHeader title="Enrolment intake" description="Confirmed admissions from Business Operations. Confirm each enrolment, or reject it with a reason." />
       <div className="el-stack">
         <Alert tone="warning" title="No scheduler yet">
           The intake consumer (academic.enrolment-intake) runs only when someone presses “Process intake now”. A scheduler is a wave-3 integration item. Until a reply is sent, Business Ops shows the admission as awaiting Academic OS.
@@ -42,7 +44,7 @@ async function Body({ access }: { access: PageAccess }) {
               {canRun ? <ApiButton action={MODULE_PATHS.api('enrolment-intake/run')} label="Process intake now" variant="primary" successMessage="Intake run finished." showResult /> : null}
             </Card>
             <Card title="Failed and dead deliveries" description="Failed deliveries are retried on the next run; dead ones (after 5 attempts) need a person.">
-              <DataTable
+              <DataTable compact
                 rows={data.data.problems}
                 rowKey={(p) => p.eventId}
                 empty={<EmptyState title="No failed deliveries" />}
@@ -56,7 +58,7 @@ async function Body({ access }: { access: PageAccess }) {
               />
             </Card>
             <Card title="Processed requests">
-              <DataTable
+              <DataTable compact
                 rows={data.data.processed}
                 rowKey={(p) => p.id}
                 empty={<EmptyState title="Nothing processed yet" />}

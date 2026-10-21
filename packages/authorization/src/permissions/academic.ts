@@ -20,7 +20,10 @@ export const academicPermissionList = [
     key: 'academic:programmes:manage',
     description: 'Maintain the programme catalogue (steward of core.programmes).',
   },
-  { key: 'academic:courses:read', description: 'Read courses, curriculum plans and concept books.' },
+  {
+    key: 'academic:courses:read',
+    description: 'Read courses, curriculum plans and concept books.',
+  },
   {
     key: 'academic:courses:write',
     description: 'Create courses, subjects, chapters and proposed curriculum plan versions.',
@@ -34,7 +37,10 @@ export const academicPermissionList = [
   { key: 'academic:batches:write', description: 'Create and edit batches and their calendars.' },
   { key: 'academic:students:read', description: 'Read student records (teachers: own batches).' },
   { key: 'academic:students:write', description: 'Create and edit student records.' },
-  { key: 'academic:enrolments:read', description: 'Read enrolments and the enrolment intake queue.' },
+  {
+    key: 'academic:enrolments:read',
+    description: 'Read enrolments and the enrolment intake queue.',
+  },
   {
     key: 'academic:enrolments:decide',
     description: 'Run the enrolment intake consumer and enrol students manually with a reason.',

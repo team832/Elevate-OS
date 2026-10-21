@@ -1,62 +1,77 @@
 /**
  * OWNER: Business Ops OS team (see docs/BUILD_PLAN.md — file ownership).
  *
- * Tables of the `ops` schema: leads, enquiries, contact activity, duplicate
- * flags, admissions (pipeline), follow-ups, counselling, demos, tasks,
- * escalations, responsibilities, onboarding checklists, SOPs, incidents,
- * decisions, risks, projects, milestones, work inventory and settings
- * (D-010). Business Ops also stewards `core.departments` and
- * `core.staff_members` (written from Ops services, defined in ./core.ts).
+ * Tables of the `ops` schema: settings, leads, enquiries, contact activity, duplicate
+ * flags, admissions (pipeline), follow-ups, enrolment attempts, contact preferences and
+ * staff profiles (D-010). The rest of `ops` is split by concept: demos and their sessions
+ * in ./ops-demos.ts, students in ./ops-students.ts, appointments and feedback in
+ * ./ops-meetings.ts, the fee ledger, fee plans and the Marketing intake in
+ * ./ops-fees-intake.ts. Column helpers: ./ops-columns.ts.
+ * HR and Operations tables were removed by the owner on 20 Oct 2026 (D-032).
+ * Business Ops also stewards `core.departments` and `core.staff_members`
+ * (written from Ops services, defined in ./core.ts).
  *
  * Rules (D-005, D-009):
  * - Every table is `ops.table(...)`; every export is prefixed `ops`.
- * - Primary keys are UUIDs; human codes (LEAD-000001, SOP-0001, LEGACY-OPSWB-D-003)
+ * - Primary keys are UUIDs; human codes (LEAD-000001, ADM-000001)
  *   are separate unique columns. Legacy codes always start with `LEGACY-` (DI-21).
  * - Foreign keys only within `ops` or into `core`. Academic refs (course, batch,
  *   student, enrolment) are plain UUIDs validated through the enrolment contract.
  * - Only `import type` from workspace packages.
- * - Do not run `drizzle-kit generate`; tests build the schema with `createTestDb()`.
- * Column-level documentation: apps/business-ops-os/docs/DOMAIN_MODEL.md.
+ * - Names (D-036): `<x>_staff_id` = core.staff_members, `student_id` = core.students,
+ *   `<x>_by` / `actor_user_id` = core.users, `<x>_at` = UTC instant, `<x>_date` / `<x>_on` =
+ *   Asia/Kolkata calendar day, `<x>_paise` = integer paise (INR). Sample rows: `is_sample`.
+ * - Schema changes ship as a reviewed migration (docs/DATABASE_MIGRATION_PLAN.md §4);
+ *   tests build the schema with `createTestDb()`.
+ * Plain-language column list: apps/business-ops-os/docs/DATA_DICTIONARY.md
+ * (`npm run docs:data-dictionary`, generated from these comments).
  */
 import { sql } from 'drizzle-orm';
 import {
-  bigint,
   boolean,
   check,
-  date,
   index,
   integer,
   jsonb,
-  numeric,
-  pgSchema,
   primaryKey,
   text,
-  timestamp,
+  unique,
   uniqueIndex,
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import type {
   AdmissionId,
-  ApprovalId,
   BatchId,
   Brand,
   CourseId,
-  DepartmentId,
   EnrolmentId,
   IntegrationEventId,
   LeadId,
   ProgrammeId,
   StaffMemberId,
   StudentId,
-  TaskId,
   UserId,
 } from '@elevate/shared-types';
-import { approvals, departments, integrationEvents, programmes, staffMembers, users } from './core';
+import { integrationEvents, programmes, staffMembers, users } from './core';
+import {
+  createdAt,
+  inList,
+  instant,
+  isoDate,
+  ops,
+  staffRef,
+  staffRefRestrict,
+  studentRef,
+  updatedAt,
+  userRef,
+} from './ops-columns';
+// Cycle on purpose (admissions.application_id): used only in a lazy FK callback; see ops-columns.ts.
+import { opsApplications, type OpsApplicationId } from './ops-applications';
 
-export const ops = pgSchema('ops');
+export { ops };
 
-// --- branded ids for ops-only entities (LeadId, AdmissionId, TaskId live in shared-types) ---
+// --- branded ids for ops-only entities (LeadId, AdmissionId live in shared-types) ---
 export type OpsSettingId = Brand<string, 'OpsSettingId'>;
 export type OpsLeadSourceId = Brand<string, 'OpsLeadSourceId'>;
 export type OpsEnquiryId = Brand<string, 'OpsEnquiryId'>;
@@ -64,43 +79,7 @@ export type OpsLeadActivityId = Brand<string, 'OpsLeadActivityId'>;
 export type OpsDuplicateFlagId = Brand<string, 'OpsDuplicateFlagId'>;
 export type OpsAdmissionTransitionId = Brand<string, 'OpsAdmissionTransitionId'>;
 export type OpsFollowUpId = Brand<string, 'OpsFollowUpId'>;
-export type OpsCounsellingSessionId = Brand<string, 'OpsCounsellingSessionId'>;
-export type OpsDemoId = Brand<string, 'OpsDemoId'>;
-export type OpsEscalationId = Brand<string, 'OpsEscalationId'>;
-export type OpsResponsibilityId = Brand<string, 'OpsResponsibilityId'>;
-export type OpsOnboardingItemId = Brand<string, 'OpsOnboardingItemId'>;
-export type OpsSopId = Brand<string, 'OpsSopId'>;
-export type OpsSopVersionId = Brand<string, 'OpsSopVersionId'>;
-export type OpsSopChecklistItemId = Brand<string, 'OpsSopChecklistItemId'>;
-export type OpsIncidentId = Brand<string, 'OpsIncidentId'>;
-export type OpsDecisionId = Brand<string, 'OpsDecisionId'>;
-export type OpsRiskId = Brand<string, 'OpsRiskId'>;
-export type OpsProjectId = Brand<string, 'OpsProjectId'>;
-export type OpsMilestoneId = Brand<string, 'OpsMilestoneId'>;
-export type OpsWorkItemId = Brand<string, 'OpsWorkItemId'>;
-export type OpsFeeRecordId = Brand<string, 'OpsFeeRecordId'>;
 export type OpsEnrolmentAttemptId = Brand<string, 'OpsEnrolmentAttemptId'>;
-
-const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
-const updatedAt = () =>
-  timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date());
-const isoDate = (name: string) => date(name, { mode: 'string' });
-const staffRef = (name: string) =>
-  uuid(name)
-    .references(() => staffMembers.id, { onDelete: 'set null' })
-    .$type<StaffMemberId>();
-const userRef = (name: string) =>
-  uuid(name)
-    .references(() => users.id, { onDelete: 'restrict' })
-    .$type<UserId>();
-
-/** `IN (...)` list for CHECK constraints built from a readonly tuple. */
-function inList(values: readonly string[]) {
-  return sql.raw(`(${values.map((v) => `'${v.replace(/'/g, "''")}'`).join(', ')})`);
-}
 
 // --- status vocabularies (mirrored by the pure domain in apps/business-ops-os/src/domain) ---
 export const OPS_DECISION_STATES = [
@@ -124,7 +103,23 @@ export const OPS_ADMISSION_STATUSES = [
   'enrolled',
   'lost',
   'on_hold',
+  // Student lifecycle after admission (owner brief 20 Oct 2026 §9); exit records in ./ops-students.ts.
+  'withdrawn',
+  'completed',
+  'transferred',
+  'cancelled_before_enrolment',
+  'other_inactive',
 ] as const;
+export type OpsAdmissionStatus = (typeof OPS_ADMISSION_STATUSES)[number];
+const CLOSED_ADMISSION_STATUSES = [
+  'enrolled',
+  'lost',
+  'withdrawn',
+  'completed',
+  'transferred',
+  'cancelled_before_enrolment',
+  'other_inactive',
+] as const satisfies readonly OpsAdmissionStatus[];
 export const OPS_HANDOFF_STATUSES = ['not_requested', 'pending', 'enrolled', 'rejected'] as const;
 export const OPS_INTEREST_MODES = ['offline', 'online', 'undecided'] as const;
 export const OPS_STUDENT_STAGES = [
@@ -166,49 +161,6 @@ export const OPS_FOLLOW_UP_KINDS = [
   'demo_followup',
   'general',
 ] as const;
-export const OPS_TASK_STATUSES = [
-  'not_started',
-  'in_progress',
-  'waiting',
-  'at_risk',
-  'blocked',
-  'completed',
-  'cancelled',
-] as const;
-export const OPS_TASK_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
-export const OPS_SOP_STATUSES = [
-  'not_drafted',
-  'draft',
-  'in_review',
-  'approved',
-  'retired',
-] as const;
-export const OPS_SOP_VERSION_STATUSES = [
-  'draft',
-  'in_review',
-  'approved',
-  'rejected',
-  'superseded',
-] as const;
-export const OPS_DECISION_LOG_STATES = [
-  'open',
-  'proposed',
-  'confirmed',
-  'provisional',
-  'superseded',
-] as const;
-export const OPS_LEVELS = ['low', 'medium', 'high'] as const;
-// Admissions administration (OPS-070…, D-028)
-export const OPS_FEE_RECORD_KINDS = ['due', 'received', 'refund', 'adjustment'] as const;
-export const OPS_FEE_RECORD_STATUSES = ['recorded', 'verified', 'voided'] as const;
-export const OPS_FEE_METHODS = [
-  'cash',
-  'upi',
-  'bank_transfer',
-  'cheque',
-  'card_terminal',
-  'other',
-] as const;
 export const OPS_HANDOFF_ATTEMPT_KINDS = ['initial', 'after_rejection', 'after_failure'] as const;
 export const OPS_HANDOFF_ATTEMPT_OUTCOMES = [
   'pending',
@@ -229,11 +181,14 @@ export const opsSettings = ops.table(
   'settings',
   {
     id: uuid('id').primaryKey().defaultRandom().$type<OpsSettingId>(),
+    /** Setting name, e.g. `admissions.demo.day_count`. */
     key: text('key').notNull(),
     /** Open-ended config value (validated per key by the domain settings schema). */
     value: jsonb('value').notNull(),
     decisionState: text('decision_state').notNull().default('proposed'),
+    /** Where the value came from (brief, decision, legacy file). */
     source: text('source'),
+    /** Owner decision it implements, e.g. OD-013. */
     ownerDecision: text('owner_decision'),
     note: text('note'),
     updatedBy: uuid('updated_by')
@@ -258,7 +213,9 @@ export const opsLeadSources = ops.table(
     id: uuid('id').primaryKey().defaultRandom().$type<OpsLeadSourceId>(),
     /** Unique constraint (not just an index) because ops.enquiries.source_code references it. */
     code: text('code').notNull().unique('lead_sources_code_key'),
+    /** Name shown on screens, e.g. "Instagram (organic)". */
     label: text('label').notNull(),
+    /** `retired` sources stay on old enquiries but cannot be chosen. */
     status: text('status', { enum: ['active', 'retired'] })
       .notNull()
       .default('active'),
@@ -273,42 +230,77 @@ export const opsLeadSources = ops.table(
 
 // --- leads and enquiries -------------------------------------------------------------------
 
+/**
+ * One person who enquired (usually a student, often through a parent): contact details,
+ * programme interest, owner and first contact. Every lead has at least one contact; a
+ * duplicate is merged into another lead, never deleted. Restricted contact fields are
+ * masked in lists. Each enquiry is a row of `ops.enquiries`; the pipeline is `ops.admissions`.
+ */
 export const opsLeads = ops.table(
   'leads',
   {
     id: uuid('id').primaryKey().defaultRandom().$type<LeadId>(),
     code: text('code').notNull(),
+    /** Student name as given by the family. */
     studentName: text('student_name').notNull(),
+    /** Name the student likes to be called. */
     preferredName: text('preferred_name'),
     /** E.164 after normalisation (domain/contacts.ts). */
     studentPhone: text('student_phone'),
     /** Lower-cased and trimmed. */
     studentEmail: text('student_email'),
+    /** School stage when the enquiry came in. */
     currentStage: text('current_stage'),
+    /** School board, e.g. CBSE or RBSE. */
     schoolBoard: text('school_board'),
+    /** Current or last school. */
     previousSchool: text('previous_school'),
+    /** Home town or city. */
     city: text('city'),
+    /** Parent or guardian name (minors: the main contact). */
     guardianName: text('guardian_name'),
+    /** Relationship of that guardian to the student. */
     guardianRelationship: text('guardian_relationship'),
+    /** Guardian phone, E.164 (restricted; masked in lists). */
     guardianPhone: text('guardian_phone'),
+    /** Guardian email, lower-cased. */
     guardianEmail: text('guardian_email'),
     /** Programme of interest (core.programmes); null = undecided. */
     programmeId: uuid('programme_id')
       .references(() => programmes.id, { onDelete: 'restrict' })
       .$type<ProgrammeId>(),
+    /** Every programme the family is interested in (core.programmes codes, catalog order). */
+    interestedProgrammeCodes: text('interested_programme_codes')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /** Student date of birth (restricted; decides the guardian signature rule). */
+    dateOfBirth: isoDate('date_of_birth'),
+    /** Student home address (restricted). */
+    address: text('address'),
+    /** Emergency contact when it is not the guardian above (restricted). */
+    emergencyContactName: text('emergency_contact_name'),
+    /** Emergency contact phone, E.164 (restricted; masked in lists). */
+    emergencyContactPhone: text('emergency_contact_phone'),
+    /** Offline (Sikar centre), online, or not decided yet. */
     interestMode: text('interest_mode').notNull().default('undecided'),
-    firstReceivedAt: timestamp('first_received_at', { withTimezone: true }).notNull(),
+    firstReceivedAt: instant('first_received_at').notNull(),
+    /** Counsellor who owns the lead and its follow-ups. */
     ownerStaffId: staffRef('owner_staff_id'),
-    ownerAssignedAt: timestamp('owner_assigned_at', { withTimezone: true }),
+    /** When the current owner was assigned. */
+    ownerAssignedAt: instant('owner_assigned_at'),
     /** Handoff acceptance (OPS-004); reset whenever the owner changes. */
-    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    acceptedAt: instant('accepted_at'),
     /** First successful two-way contact (BR-OPS-4); set once. */
-    firstSuccessfulContactAt: timestamp('first_successful_contact_at', { withTimezone: true }),
+    firstSuccessfulContactAt: instant('first_successful_contact_at'),
+    /** Set when this lead was a duplicate and was merged into another (kept for history). */
     mergedIntoLeadId: uuid('merged_into_lead_id')
       .references((): AnyPgColumn => opsLeads.id, { onDelete: 'restrict' })
       .$type<LeadId>(),
-    mergedAt: timestamp('merged_at', { withTimezone: true }),
+    mergedAt: instant('merged_at'),
     notes: text('notes'),
+    /** Sample record for development (D-036): shown with a SAMPLE DATA badge, removed by `npm run db:clear-samples`. */
+    isSample: boolean('is_sample').notNull().default(false),
     createdBy: userRef('created_by').notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -320,6 +312,9 @@ export const opsLeads = ops.table(
     index('leads_student_email_idx').on(t.studentEmail),
     index('leads_guardian_phone_idx').on(t.guardianPhone),
     index('leads_guardian_email_idx').on(t.guardianEmail),
+    index('leads_merged_into_idx')
+      .on(t.mergedIntoLeadId)
+      .where(sql`${t.mergedIntoLeadId} IS NOT NULL`),
     index('leads_received_idx').on(t.firstReceivedAt),
     check('leads_code_format', sql`${t.code} ~ '^LEAD-[0-9]{6}$'`),
     check(
@@ -330,6 +325,11 @@ export const opsLeads = ops.table(
       'leads_phone_e164',
       sql`(${t.studentPhone} IS NULL OR ${t.studentPhone} ~ '^\\+[1-9][0-9]{7,14}$') AND (${t.guardianPhone} IS NULL OR ${t.guardianPhone} ~ '^\\+[1-9][0-9]{7,14}$')`,
     ),
+    check(
+      'leads_emergency_phone_e164',
+      sql`${t.emergencyContactPhone} IS NULL OR ${t.emergencyContactPhone} ~ '^\\+[1-9][0-9]{7,14}$'`,
+    ),
+    check('leads_interests_check', sql`cardinality(${t.interestedProgrammeCodes}) <= 6`),
     check(
       'leads_email_lowercase',
       sql`(${t.studentEmail} IS NULL OR ${t.studentEmail} = lower(${t.studentEmail})) AND (${t.guardianEmail} IS NULL OR ${t.guardianEmail} = lower(${t.guardianEmail}))`,
@@ -359,18 +359,24 @@ export const opsEnquiries = ops.table(
       .notNull()
       .references(() => opsLeads.id, { onDelete: 'restrict' })
       .$type<LeadId>(),
-    receivedAt: timestamp('received_at', { withTimezone: true }).notNull(),
+    receivedAt: instant('received_at').notNull(),
     /** Primary source (BR-OPS-5), a code from ops.lead_sources. Unknown stays UNKNOWN. */
     sourceCode: text('source_code')
       .notNull()
       .references(() => opsLeadSources.code, { onDelete: 'restrict' }),
+    /** Account or channel the enquiry came through, e.g. a specific Instagram account. */
     channel: text('channel'),
+    /** How the family says they heard of Elevate. */
     discoverySource: text('discovery_source'),
+    /** Marketing campaign reference, when known. */
     campaignRef: text('campaign_ref'),
+    /** Post or content reference, when known. */
     contentRef: text('content_ref'),
+    /** Programme asked about in this enquiry. */
     programmeId: uuid('programme_id')
       .references(() => programmes.id, { onDelete: 'restrict' })
       .$type<ProgrammeId>(),
+    /** Offline, online or undecided, as said in this enquiry. */
     interestMode: text('interest_mode').notNull().default('undecided'),
     notes: text('notes'),
     /** Lead this enquiry originally belonged to, when it was moved by a merge. */
@@ -394,10 +400,13 @@ export const opsLeadActivities = ops.table(
       .notNull()
       .references(() => opsLeads.id, { onDelete: 'restrict' })
       .$type<LeadId>(),
+    /** How contact was attempted. */
     kind: text('kind').notNull(),
+    /** What happened. */
     outcome: text('outcome').notNull(),
-    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    occurredAt: instant('occurred_at').notNull(),
     note: text('note'),
+    /** Staff member who made the contact. */
     staffId: staffRef('staff_id'),
     createdBy: userRef('created_by').notNull(),
     createdAt: createdAt(),
@@ -418,21 +427,24 @@ export const opsDuplicateFlags = ops.table(
       .notNull()
       .references(() => opsLeads.id, { onDelete: 'restrict' })
       .$type<LeadId>(),
+    /** The other lead that looks like the same person. */
     matchedLeadId: uuid('matched_lead_id')
       .notNull()
       .references(() => opsLeads.id, { onDelete: 'restrict' })
       .$type<LeadId>(),
+    /** `exact` = same phone/email; `possible` = similar name/school. */
     level: text('level', { enum: ['exact', 'possible'] }).notNull(),
+    /** Which details matched, e.g. student_phone. */
     signals: text('signals').array().notNull(),
+    /** Open until someone dismisses it or merges the leads. */
     status: text('status', { enum: ['open', 'dismissed', 'merged'] })
       .notNull()
       .default('open'),
     /** Why the creator went ahead despite the warning. */
     acknowledgement: text('acknowledgement'),
-    reviewedBy: uuid('reviewed_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewedBy: userRef('reviewed_by'),
+    reviewedAt: instant('reviewed_at'),
+    /** Reviewer note when dismissed or merged. */
     reviewNote: text('review_note'),
     createdAt: createdAt(),
   },
@@ -464,31 +476,44 @@ export const opsAdmissions = ops.table(
     programmeId: uuid('programme_id')
       .references(() => programmes.id, { onDelete: 'restrict' })
       .$type<ProgrammeId>(),
-    status: text('status').notNull().default('new'),
+    /** Where the case is in the pipeline (state machine: domain/pipeline.ts). */
+    status: text('status').$type<OpsAdmissionStatus>().notNull().default('new'),
+    /** Why the current status was set (free text). */
     statusReason: text('status_reason'),
     /** Status before `on_hold`, restored on resume. */
-    heldFromStatus: text('held_from_status'),
-    statusChangedAt: timestamp('status_changed_at', { withTimezone: true }).notNull().defaultNow(),
+    heldFromStatus: text('held_from_status').$type<OpsAdmissionStatus>(),
+    statusChangedAt: instant('status_changed_at').notNull().defaultNow(),
+    /** Counsellor responsible for the case. */
     counsellorStaffId: staffRef('counsellor_staff_id'),
+    /** How the student will study. */
     deliveryMode: text('delivery_mode', { enum: ['offline', 'online', 'hybrid'] }),
     intendedStartDate: isoDate('intended_start_date'),
     /** Academic-owned refs chosen in counselling (no FK across modules, D-005). */
     intendedCourseId: uuid('intended_course_id').$type<CourseId>(),
+    /** Academic OS batch chosen in counselling; null = to be assigned. */
     intendedBatchId: uuid('intended_batch_id').$type<BatchId>(),
+    /** True when the family joined without a demo. */
     demoSkipped: boolean('demo_skipped').notNull().default(false),
-    admittedAt: timestamp('admitted_at', { withTimezone: true }),
+    admittedAt: instant('admitted_at'),
+    /** Number of the latest enrolment request sent to Academic OS (0 = none). */
     enrolmentAttempt: integer('enrolment_attempt').notNull().default(0),
+    /** State of the enrolment request to Academic OS. */
     handoffStatus: text('handoff_status').notNull().default('not_requested'),
+    /** Latest `ops.admission.enrolment_requested` outbox event. */
     lastRequestEventId: uuid('last_request_event_id')
       .references(() => integrationEvents.id, { onDelete: 'set null' })
       .$type<IntegrationEventId>(),
-    enrolmentRequestedAt: timestamp('enrolment_requested_at', { withTimezone: true }),
+    /** When the latest enrolment request was sent. */
+    enrolmentRequestedAt: instant('enrolment_requested_at'),
+    /** Academic OS enrolment id from its confirmation. */
     enrolmentId: uuid('enrolment_id').$type<EnrolmentId>(),
-    studentId: uuid('student_id').$type<StudentId>(),
-    enrolledAt: timestamp('enrolled_at', { withTimezone: true }),
+    /** Academic OS student record id from the enrolment reply (plain UUID, no FK across modules). */
+    academicStudentId: uuid('academic_student_id').$type<StudentId>(),
+    /** When Academic OS confirmed the enrolment. */
+    enrolledAt: instant('enrolled_at'),
     rejectionCode: text('rejection_code'),
     rejectionReason: text('rejection_reason'),
-    rejectedAt: timestamp('rejected_at', { withTimezone: true }),
+    rejectedAt: instant('rejected_at'),
     /** Coded reason of the current status (closure codes, setting `admissions.closure_reasons`). */
     statusReasonCode: text('status_reason_code'),
     /** Asia/Kolkata calendar day the admission first reached `admitted`. */
@@ -498,15 +523,55 @@ export const opsAdmissions = ops.table(
     /** Course/batch Academic actually enrolled into (may differ from the intended ones). */
     enrolledCourseId: uuid('enrolled_course_id').$type<CourseId>(),
     enrolledBatchId: uuid('enrolled_batch_id').$type<BatchId>(),
+    /**
+     * Admission number (counter `ops.admission_number_counters`, format setting
+     * `admissions.number.format`, approved D-037). Given at final confirmation (D-040) and
+     * then immutable (composite FK from `ops.admission_approvals`); earlier changes are logged in
+
+     * `ops.admission_number_changes`. Null before confirmation and on extra programme
+     * admissions of the same conversion (the student's number is on the primary one).
+     */
+    admissionNumber: text('admission_number'),
+    /** Canonical student (core.students), linked at conversion or on admission. */
+    studentId: studentRef(),
+    /** Review date of an `on_hold` student (IST calendar day). */
+    holdReviewDate: isoDate('hold_review_date'),
+    /**
+     * `required` = admitted before final confirmation existed (no approval, signed form or
+     * payment evidence on record): shown "Legacy — verification required" until an approver
+     * reconciles it (`verified`). Null = a normal case.
+     */
+    legacyVerification: text('legacy_verification').$type<'required' | 'verified'>(),
+    legacyVerifiedBy: userRef('legacy_verified_by'),
+    legacyVerifiedAt: instant('legacy_verified_at'),
+    /** Application that covers this case (multi-programme bundles: every case of the bundle). */
+    applicationId: uuid('application_id')
+      .references((): AnyPgColumn => opsApplications.id, { onDelete: 'restrict' })
+      .$type<OpsApplicationId>(),
     createdBy: userRef('created_by').notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     uniqueIndex('admissions_code_key').on(t.code),
+    uniqueIndex('admissions_admission_number_key').on(t.admissionNumber),
+    index('admissions_student_idx').on(t.studentId),
+    index('admissions_application_idx').on(t.applicationId),
+    check(
+      'admissions_number_format',
+      sql`${t.admissionNumber} IS NULL OR ${t.admissionNumber} ~ '^[A-Za-z0-9][A-Za-z0-9/-]{0,39}$'`,
+    ),
     uniqueIndex('admissions_one_open_per_programme')
       .on(t.leadId, t.programmeId)
-      .where(sql`${t.status} NOT IN ('enrolled', 'lost')`),
+      .where(sql`${t.status} NOT IN ${inList(CLOSED_ADMISSION_STATUSES)}`),
+    // A NULL programme is not caught by the index above (NULLs are distinct).
+    uniqueIndex('admissions_one_open_without_programme')
+      .on(t.leadId)
+      .where(
+        sql`${t.programmeId} IS NULL AND ${t.status} NOT IN ${inList(CLOSED_ADMISSION_STATUSES)}`,
+      ),
+    // Target of the composite FK from ops.admission_approvals: a confirmed number cannot change (D-040).
+    unique('admissions_id_number_key').on(t.id, t.admissionNumber),
     index('admissions_status_idx').on(t.status, t.statusChangedAt),
     index('admissions_lead_idx').on(t.leadId),
     index('admissions_counsellor_idx').on(t.counsellorStaffId),
@@ -523,8 +588,16 @@ export const opsAdmissions = ops.table(
       sql`${t.statusReasonCode} IS NULL OR ${t.statusReasonCode} ~ '^[a-z][a-z0-9_]{1,39}$'`,
     ),
     check(
+      'admissions_legacy_check',
+      sql`${t.legacyVerification} IS NULL OR ${t.legacyVerification} IN ('required', 'verified')`,
+    ),
+    check(
+      'admissions_legacy_verified_check',
+      sql`(${t.legacyVerification} IS NOT DISTINCT FROM 'verified') = (${t.legacyVerifiedBy} IS NOT NULL AND ${t.legacyVerifiedAt} IS NOT NULL)`,
+    ),
+    check(
       'admissions_enrolled_has_ids',
-      sql`${t.status} <> 'enrolled' OR (${t.enrolmentId} IS NOT NULL AND ${t.studentId} IS NOT NULL)`,
+      sql`${t.status} <> 'enrolled' OR (${t.enrolmentId} IS NOT NULL AND ${t.academicStudentId} IS NOT NULL)`,
     ),
   ],
 );
@@ -538,20 +611,22 @@ export const opsAdmissionTransitions = ops.table(
       .notNull()
       .references(() => opsAdmissions.id, { onDelete: 'restrict' })
       .$type<AdmissionId>(),
-    fromStatus: text('from_status'),
-    toStatus: text('to_status').notNull(),
+    /** Status before (null for the first row). */
+    fromStatus: text('from_status').$type<OpsAdmissionStatus>(),
+    /** Status after. */
+    toStatus: text('to_status').$type<OpsAdmissionStatus>().notNull(),
+    /** Why (free text). */
     reason: text('reason'),
     /** Coded reason (closure), e.g. `chose_competitor`; null = not coded. */
     reasonCode: text('reason_code'),
+    /** `user` (a person) or `system` (an event reply or rule). */
     actorType: text('actor_type', { enum: ['user', 'system'] }).notNull(),
-    actorUserId: uuid('actor_user_id')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
+    actorUserId: userRef('actor_user_id'),
     /** Integration event that caused (reply) or was caused by (request) this transition. */
     eventId: uuid('event_id')
       .references(() => integrationEvents.id, { onDelete: 'set null' })
       .$type<IntegrationEventId>(),
-    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    at: instant('at').notNull().defaultNow(),
   },
   (t) => [
     index('admission_transitions_admission_idx').on(t.admissionId, t.at),
@@ -575,12 +650,14 @@ export const opsAdmissionChecks = ops.table(
       .notNull()
       .references(() => opsAdmissions.id, { onDelete: 'restrict' })
       .$type<AdmissionId>(),
+    /** Confirmation step, e.g. documents_verified. */
     itemKey: text('item_key').notNull(),
+    /** Done, not done, or not applicable. */
     status: text('status', { enum: ['done', 'not_done', 'not_applicable'] }).notNull(),
     /** Reference only (e.g. "receipt ref in accounts system"); no file, no amount (OD-013/OD-014). */
     reference: text('reference'),
     recordedBy: userRef('recorded_by').notNull(),
-    recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+    recordedAt: instant('recorded_at').notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ name: 'admission_checks_pkey', columns: [t.admissionId, t.itemKey] }),
@@ -604,30 +681,29 @@ export const opsFollowUps = ops.table(
     admissionId: uuid('admission_id')
       .references(() => opsAdmissions.id, { onDelete: 'restrict' })
       .$type<AdmissionId>(),
+    /** Why the follow-up exists. */
     kind: text('kind').notNull(),
+    /** What to do, in a few words. */
     title: text('title').notNull(),
     /** Asia/Kolkata calendar date. */
     dueDate: isoDate('due_date').notNull(),
-    ownerStaffId: uuid('owner_staff_id')
-      .notNull()
-      .references(() => staffMembers.id, { onDelete: 'restrict' })
-      .$type<StaffMemberId>(),
+    /** Staff member who must do it. */
+    ownerStaffId: staffRefRestrict('owner_staff_id').notNull(),
+    /** Open, done or cancelled. */
     status: text('status', { enum: ['open', 'done', 'cancelled'] })
       .notNull()
       .default('open'),
+    /** What happened (required when done). */
     outcome: text('outcome'),
-    completedAt: timestamp('completed_at', { withTimezone: true }),
-    completedBy: uuid('completed_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
+    completedAt: instant('completed_at'),
+    completedBy: userRef('completed_by'),
     /** IST date of the last reminder sent (one reminder per follow-up per day). */
     lastReminderOn: isoDate('last_reminder_on'),
+    /** `manual` = typed by staff; `rule` = created by a follow-up rule. */
     source: text('source', { enum: ['manual', 'rule'] })
       .notNull()
       .default('manual'),
-    createdBy: uuid('created_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
+    createdBy: userRef('created_by'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -635,212 +711,14 @@ export const opsFollowUps = ops.table(
     index('follow_ups_status_due_idx').on(t.status, t.dueDate),
     index('follow_ups_owner_idx').on(t.ownerStaffId, t.status),
     index('follow_ups_lead_idx').on(t.leadId),
+    index('follow_ups_admission_idx').on(t.admissionId, t.status),
     check('follow_ups_kind_check', sql`${t.kind} IN ${inList(OPS_FOLLOW_UP_KINDS)}`),
     check('follow_ups_status_check', sql`${t.status} IN ('open', 'done', 'cancelled')`),
     check('follow_ups_done_has_time', sql`${t.status} <> 'done' OR ${t.completedAt} IS NOT NULL`),
   ],
 );
 
-/** Counselling appointments (OPS-008). */
-export const opsCounsellingSessions = ops.table(
-  'counselling_sessions',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsCounsellingSessionId>(),
-    admissionId: uuid('admission_id')
-      .notNull()
-      .references(() => opsAdmissions.id, { onDelete: 'restrict' })
-      .$type<AdmissionId>(),
-    leadId: uuid('lead_id')
-      .notNull()
-      .references(() => opsLeads.id, { onDelete: 'restrict' })
-      .$type<LeadId>(),
-    scheduledAt: timestamp('scheduled_at', { withTimezone: true }).notNull(),
-    counsellorStaffId: uuid('counsellor_staff_id')
-      .notNull()
-      .references(() => staffMembers.id, { onDelete: 'restrict' })
-      .$type<StaffMemberId>(),
-    mode: text('mode', { enum: ['in_person', 'phone', 'video'] }).notNull(),
-    attendees: text('attendees', { enum: ['student', 'parent', 'both'] }),
-    status: text('status', { enum: ['scheduled', 'completed', 'no_show', 'cancelled'] })
-      .notNull()
-      .default('scheduled'),
-    recommendedProgrammeId: uuid('recommended_programme_id')
-      .references(() => programmes.id, { onDelete: 'restrict' })
-      .$type<ProgrammeId>(),
-    objections: text('objections'),
-    outcome: text('outcome'),
-    nextStep: text('next_step'),
-    completedAt: timestamp('completed_at', { withTimezone: true }),
-    createdBy: userRef('created_by').notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    index('counselling_sessions_scheduled_idx').on(t.scheduledAt),
-    index('counselling_sessions_admission_idx').on(t.admissionId),
-    check(
-      'counselling_sessions_status_check',
-      sql`${t.status} IN ('scheduled', 'completed', 'no_show', 'cancelled')`,
-    ),
-    check('counselling_sessions_mode_check', sql`${t.mode} IN ('in_person', 'phone', 'video')`),
-  ],
-);
-
-/**
- * Demo classes (OPS-009, BR-OPS-2). Always separate demo sessions, never a
- * main-batch session. Fee amount and terms are copied from the demo-terms
- * setting at booking, together with that setting's decision state.
- */
-export const opsDemos = ops.table(
-  'demos',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsDemoId>(),
-    admissionId: uuid('admission_id')
-      .notNull()
-      .references(() => opsAdmissions.id, { onDelete: 'restrict' })
-      .$type<AdmissionId>(),
-    leadId: uuid('lead_id')
-      .notNull()
-      .references(() => opsLeads.id, { onDelete: 'restrict' })
-      .$type<LeadId>(),
-    subjects: text('subjects').array().notNull(),
-    /** Demo days (Asia/Kolkata dates); how many comes from the demo-terms setting. */
-    dayDates: date('day_dates', { mode: 'string' }).array().notNull(),
-    status: text('status', { enum: ['scheduled', 'attended', 'missed', 'cancelled'] })
-      .notNull()
-      .default('scheduled'),
-    feeStatus: text('fee_status', {
-      enum: ['not_paid', 'paid_verified', 'adjusted_against_fees', 'retained_non_refundable'],
-    })
-      .notNull()
-      .default('not_paid'),
-    feeAmountInr: numeric('fee_amount_inr', { precision: 12, scale: 2 }),
-    /** Decision state of the demo-terms fee when booked (e.g. `approved`, recorded from legacy D-003). */
-    feeTermsState: text('fee_terms_state').notNull(),
-    feeReference: text('fee_reference'),
-    notes: text('notes'),
-    completedAt: timestamp('completed_at', { withTimezone: true }),
-    createdBy: userRef('created_by').notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    index('demos_admission_idx').on(t.admissionId),
-    check(
-      'demos_status_check',
-      sql`${t.status} IN ('scheduled', 'attended', 'missed', 'cancelled')`,
-    ),
-    check(
-      'demos_fee_status_check',
-      sql`${t.feeStatus} IN ('not_paid', 'paid_verified', 'adjusted_against_fees', 'retained_non_refundable')`,
-    ),
-    check('demos_has_subjects', sql`cardinality(${t.subjects}) >= 1`),
-    check('demos_has_days', sql`cardinality(${t.dayDates}) >= 1`),
-  ],
-);
-
-/** Teachers booked for a demo (and when they were notified). */
-export const opsDemoTeachers = ops.table(
-  'demo_teachers',
-  {
-    demoId: uuid('demo_id')
-      .notNull()
-      .references(() => opsDemos.id, { onDelete: 'cascade' })
-      .$type<OpsDemoId>(),
-    staffId: uuid('staff_id')
-      .notNull()
-      .references(() => staffMembers.id, { onDelete: 'restrict' })
-      .$type<StaffMemberId>(),
-    notifiedAt: timestamp('notified_at', { withTimezone: true }),
-  },
-  (t) => [primaryKey({ name: 'demo_teachers_pkey', columns: [t.demoId, t.staffId] })],
-);
-
 // --- admissions administration (OPS-070…) ----------------------------------------------------
-
-/**
- * Manually recorded administrative fee records per admission (OPS-072). NOT a
- * payment system: no gateway, no card data, never a verified transaction. The
- * accounts system stays the record (OD-013); these rows are what an authorised
- * staff member typed in, optionally checked by a second, different person.
- * Amounts are integer paise in INR (no floats). Rows are never deleted: a
- * mistake is voided with a reason. Summary rules: domain/fees.ts.
- */
-export const opsFeeRecords = ops.table(
-  'fee_records',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsFeeRecordId>(),
-    /** FEE-000001 (never reused). */
-    code: text('code').notNull(),
-    admissionId: uuid('admission_id')
-      .notNull()
-      .references(() => opsAdmissions.id, { onDelete: 'restrict' })
-      .$type<AdmissionId>(),
-    leadId: uuid('lead_id')
-      .notNull()
-      .references(() => opsLeads.id, { onDelete: 'restrict' })
-      .$type<LeadId>(),
-    kind: text('kind').notNull(),
-    /** For `adjustment`: `credit` lowers the balance due (e.g. demo fee adjusted), `debit` raises it. */
-    direction: text('direction'),
-    amountPaise: bigint('amount_paise', { mode: 'number' }).notNull(),
-    currency: text('currency').notNull().default('INR'),
-    /** Free-text reference to the fee schedule used (no fee schedule is approved in Elevate OS). */
-    pricingReference: text('pricing_reference'),
-    /** Receipt or transaction reference in the accounts system / bank statement. */
-    receiptReference: text('receipt_reference'),
-    method: text('method'),
-    /** Asia/Kolkata date the money moved (received/refund) or the date it is due (due). */
-    paymentDate: isoDate('payment_date'),
-    dueDate: isoDate('due_date'),
-    /** Demo whose fee this adjustment carries over (demo terms: adjusted against fees). */
-    demoId: uuid('demo_id')
-      .references(() => opsDemos.id, { onDelete: 'restrict' })
-      .$type<OpsDemoId>(),
-    status: text('status').notNull().default('recorded'),
-    notes: text('notes'),
-    recordedBy: userRef('recorded_by').notNull(),
-    recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
-    verifiedBy: uuid('verified_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    verifiedAt: timestamp('verified_at', { withTimezone: true }),
-    verificationNote: text('verification_note'),
-    voidedBy: uuid('voided_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    voidedAt: timestamp('voided_at', { withTimezone: true }),
-    voidReason: text('void_reason'),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    uniqueIndex('fee_records_code_key').on(t.code),
-    index('fee_records_admission_idx').on(t.admissionId, t.recordedAt),
-    index('fee_records_status_idx').on(t.status),
-    check('fee_records_code_format', sql`${t.code} ~ '^FEE-[0-9]{6}$'`),
-    check('fee_records_kind_check', sql`${t.kind} IN ${inList(OPS_FEE_RECORD_KINDS)}`),
-    check('fee_records_status_check', sql`${t.status} IN ${inList(OPS_FEE_RECORD_STATUSES)}`),
-    check(
-      'fee_records_method_check',
-      sql`${t.method} IS NULL OR ${t.method} IN ${inList(OPS_FEE_METHODS)}`,
-    ),
-    check('fee_records_amount_positive', sql`${t.amountPaise} > 0`),
-    check('fee_records_currency_inr', sql`${t.currency} = 'INR'`),
-    check(
-      'fee_records_direction_check',
-      sql`(${t.kind} = 'adjustment') = (${t.direction} IS NOT NULL) AND (${t.direction} IS NULL OR ${t.direction} IN ('credit', 'debit'))`,
-    ),
-    check(
-      'fee_records_verified_check',
-      sql`(${t.status} <> 'verified' OR (${t.verifiedBy} IS NOT NULL AND ${t.verifiedAt} IS NOT NULL)) AND (${t.verifiedBy} IS NULL OR ${t.verifiedBy} <> ${t.recordedBy})`,
-    ),
-    check(
-      'fee_records_voided_check',
-      sql`${t.status} <> 'voided' OR (${t.voidedBy} IS NOT NULL AND ${t.voidReason} IS NOT NULL)`,
-    ),
-  ],
-);
 
 /**
  * Every enrolment-handoff attempt of an admission (OPS-075, IR-OPS-03): one row
@@ -858,18 +736,23 @@ export const opsEnrolmentAttempts = ops.table(
       .notNull()
       .references(() => opsAdmissions.id, { onDelete: 'restrict' })
       .$type<AdmissionId>(),
+    /** Attempt number 1, 2, … for this admission. */
     attempt: integer('attempt').notNull(),
+    /** The enrolment request event sent for this attempt. */
     requestEventId: uuid('request_event_id')
       .notNull()
       .references(() => integrationEvents.id, { onDelete: 'restrict' })
       .$type<IntegrationEventId>(),
+    /** First attempt, after a rejection, or after a failed delivery. */
     kind: text('kind').notNull(),
     /** Why a new attempt was made (required after a failure). */
     reason: text('reason'),
     requestedBy: userRef('requested_by').notNull(),
-    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    requestedAt: instant('requested_at').notNull().defaultNow(),
+    /** Pending until Academic OS replies. */
     outcome: text('outcome').notNull().default('pending'),
-    outcomeAt: timestamp('outcome_at', { withTimezone: true }),
+    outcomeAt: instant('outcome_at'),
+    /** Academic OS reply event. */
     replyEventId: uuid('reply_event_id')
       .references(() => integrationEvents.id, { onDelete: 'set null' })
       .$type<IntegrationEventId>(),
@@ -906,14 +789,17 @@ export const opsContactPreferences = ops.table(
       .primaryKey()
       .references(() => opsLeads.id, { onDelete: 'restrict' })
       .$type<LeadId>(),
+    /** Consent to be contacted. */
     consentStatus: text('consent_status').notNull(),
     /** Who gave or refused consent (minors: the guardian). */
     consentBy: text('consent_by', { enum: ['student', 'guardian', 'both'] }).notNull(),
+    /** Channels the family allows. */
     allowedChannels: text('allowed_channels').array().notNull(),
+    /** Contact the student or the guardian first. */
     preferredContact: text('preferred_contact', { enum: ['student', 'guardian'] }),
     note: text('note'),
     recordedBy: userRef('recorded_by').notNull(),
-    recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+    recordedAt: instant('recorded_at').notNull().defaultNow(),
   },
   (t) => [
     check(
@@ -923,156 +809,12 @@ export const opsContactPreferences = ops.table(
     check('contact_preferences_by_check', sql`${t.consentBy} IN ('student', 'guardian', 'both')`),
     check(
       'contact_preferences_channels_check',
-      sql`${t.allowedChannels} <@ ARRAY['call', 'whatsapp', 'sms', 'email']::text[]`,
+      sql`${t.allowedChannels} <@ ${sql.raw(`ARRAY[${OPS_CONTACT_CHANNELS.map((c) => `'${c}'`).join(', ')}]::text[]`)}`,
     ),
     check(
       'contact_preferences_refused_no_channels',
       sql`${t.consentStatus} = 'given' OR cardinality(${t.allowedChannels}) = 0`,
     ),
-  ],
-);
-
-// --- tasks and escalation ---------------------------------------------------------------------
-
-/** Tasks (OPS-016) with owner, accountable owner and backup; status standard BR-OPS-10. */
-export const opsTasks = ops.table(
-  'tasks',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<TaskId>(),
-    code: text('code').notNull(),
-    title: text('title').notNull(),
-    description: text('description'),
-    departmentId: uuid('department_id')
-      .references(() => departments.id, { onDelete: 'set null' })
-      .$type<DepartmentId>(),
-    /** Responsible owner (does the work). Null → flagged `missing_owner`. */
-    ownerStaffId: staffRef('owner_staff_id'),
-    /** One accountable owner (BR-OPS-12). */
-    accountableStaffId: staffRef('accountable_staff_id'),
-    backupStaffId: staffRef('backup_staff_id'),
-    /** Asia/Kolkata calendar date. Null → flagged `missing_due`. */
-    dueDate: isoDate('due_date'),
-    priority: text('priority').notNull().default('medium'),
-    status: text('status').notNull().default('not_started'),
-    statusReason: text('status_reason'),
-    statusChangedAt: timestamp('status_changed_at', { withTimezone: true }).notNull().defaultNow(),
-    /** When the task last entered `blocked` (for the blocked-for-N-days escalation rule). */
-    blockedSince: timestamp('blocked_since', { withTimezone: true }),
-    /** Highest escalation level raised so far (1 = owner, BR-OPS-10). */
-    escalationLevel: integer('escalation_level').notNull().default(1),
-    completionNote: text('completion_note'),
-    evidenceLink: text('evidence_link'),
-    completedAt: timestamp('completed_at', { withTimezone: true }),
-    completedBy: uuid('completed_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    /** Reason given when completing despite open blockers (audited). */
-    blockerOverrideReason: text('blocker_override_reason'),
-    leadId: uuid('lead_id')
-      .references(() => opsLeads.id, { onDelete: 'set null' })
-      .$type<LeadId>(),
-    admissionId: uuid('admission_id')
-      .references(() => opsAdmissions.id, { onDelete: 'set null' })
-      .$type<AdmissionId>(),
-    sopId: uuid('sop_id')
-      .references((): AnyPgColumn => opsSops.id, { onDelete: 'set null' })
-      .$type<OpsSopId>(),
-    decisionId: uuid('decision_id')
-      .references((): AnyPgColumn => opsDecisions.id, { onDelete: 'set null' })
-      .$type<OpsDecisionId>(),
-    projectId: uuid('project_id')
-      .references((): AnyPgColumn => opsProjects.id, { onDelete: 'set null' })
-      .$type<OpsProjectId>(),
-    source: text('source', { enum: ['manual', 'rule', 'legacy_import'] })
-      .notNull()
-      .default('manual'),
-    createdBy: uuid('created_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    uniqueIndex('tasks_code_key').on(t.code),
-    index('tasks_status_due_idx').on(t.status, t.dueDate),
-    index('tasks_owner_idx').on(t.ownerStaffId),
-    index('tasks_accountable_idx').on(t.accountableStaffId),
-    index('tasks_project_idx').on(t.projectId),
-    check('tasks_code_format', sql`${t.code} ~ '^(TSK-[0-9]{5}|LEGACY-[A-Z0-9-]+)$'`),
-    check('tasks_status_check', sql`${t.status} IN ${inList(OPS_TASK_STATUSES)}`),
-    check('tasks_priority_check', sql`${t.priority} IN ${inList(OPS_TASK_PRIORITIES)}`),
-    check('tasks_escalation_level_check', sql`${t.escalationLevel} BETWEEN 1 AND 4`),
-    check(
-      'tasks_completed_needs_evidence',
-      sql`${t.status} <> 'completed' OR (${t.completedAt} IS NOT NULL AND (${t.completionNote} IS NOT NULL OR ${t.evidenceLink} IS NOT NULL))`,
-    ),
-  ],
-);
-
-/** "task is blocked by blockedByTask" edges; cycles are rejected by domain/graph.ts. */
-export const opsTaskDependencies = ops.table(
-  'task_dependencies',
-  {
-    taskId: uuid('task_id')
-      .notNull()
-      .references(() => opsTasks.id, { onDelete: 'cascade' })
-      .$type<TaskId>(),
-    blockedByTaskId: uuid('blocked_by_task_id')
-      .notNull()
-      .references(() => opsTasks.id, { onDelete: 'cascade' })
-      .$type<TaskId>(),
-    createdBy: userRef('created_by').notNull(),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    primaryKey({ name: 'task_dependencies_pkey', columns: [t.taskId, t.blockedByTaskId] }),
-    index('task_dependencies_blocked_by_idx').on(t.blockedByTaskId),
-    check('task_dependencies_not_self', sql`${t.taskId} <> ${t.blockedByTaskId}`),
-  ],
-);
-
-/** Escalations L2–L4 (OPS-017). The task owner keeps ownership. One record per task and level. */
-export const opsEscalations = ops.table(
-  'escalations',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsEscalationId>(),
-    taskId: uuid('task_id')
-      .notNull()
-      .references(() => opsTasks.id, { onDelete: 'restrict' })
-      .$type<TaskId>(),
-    level: integer('level').notNull(),
-    trigger: text('trigger', { enum: ['overdue', 'blocked', 'manual'] }).notNull(),
-    reason: text('reason').notNull(),
-    daysOverdue: integer('days_overdue'),
-    /** Threshold (days) that fired, copied from the escalation setting. */
-    thresholdDays: integer('threshold_days'),
-    /** From the owner's reporting line; null = no manager on record (routed to operations managers). */
-    recipientStaffId: staffRef('recipient_staff_id'),
-    status: text('status', { enum: ['open', 'acknowledged', 'resolved'] })
-      .notNull()
-      .default('open'),
-    respondBy: isoDate('respond_by'),
-    raisedAt: timestamp('raised_at', { withTimezone: true }).notNull().defaultNow(),
-    raisedBy: uuid('raised_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
-    acknowledgedBy: uuid('acknowledged_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
-    resolvedBy: uuid('resolved_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    resolutionNote: text('resolution_note'),
-  },
-  (t) => [
-    uniqueIndex('escalations_task_level_key').on(t.taskId, t.level),
-    index('escalations_status_idx').on(t.status, t.raisedAt),
-    index('escalations_recipient_idx').on(t.recipientStaffId),
-    check('escalations_level_check', sql`${t.level} BETWEEN 2 AND 4`),
-    check('escalations_status_check', sql`${t.status} IN ('open', 'acknowledged', 'resolved')`),
-    check('escalations_trigger_check', sql`${t.trigger} IN ('overdue', 'blocked', 'manual')`),
   ],
 );
 
@@ -1086,6 +828,7 @@ export const opsStaffProfiles = ops.table(
       .primaryKey()
       .references(() => staffMembers.id, { onDelete: 'cascade' })
       .$type<StaffMemberId>(),
+    /** Employment type; `not_recorded` until known. */
     employmentType: text('employment_type', {
       enum: ['full_time', 'part_time', 'contract', 'visiting', 'not_recorded'],
     })
@@ -1096,7 +839,22 @@ export const opsStaffProfiles = ops.table(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    /** Internal notes (never shown on public-facing text). */
     notes: text('notes'),
+    /** Name shown in the UI; null = use core full_name. */
+    displayName: text('display_name'),
+    /** Internal staff code, e.g. an HR number (unique when set). */
+    staffCode: text('staff_code'),
+    /** Identity (name) verification of an owner-supplied record. */
+    verificationStatus: text('verification_status', { enum: ['unverified', 'confirmed'] })
+      .notNull()
+      .default('unverified'),
+    /** Organisational role, kept apart from teaching (e.g. "CEO / director of coaching"). */
+    roleNote: text('role_note'),
+    /** Where the record came from (e.g. "owner-supplied 2026-10-20"). */
+    sourceNote: text('source_note'),
+    /** Sample staff member for development (D-036); removed by `npm run db:clear-samples`. */
+    isSample: boolean('is_sample').notNull().default(false),
     updatedBy: uuid('updated_by')
       .references(() => users.id, { onDelete: 'set null' })
       .$type<UserId>(),
@@ -1107,427 +865,12 @@ export const opsStaffProfiles = ops.table(
       'staff_profiles_employment_check',
       sql`${t.employmentType} IN ('full_time', 'part_time', 'contract', 'visiting', 'not_recorded')`,
     ),
-  ],
-);
-
-/** Responsibilities with accountable role, holder and backup (OPS-015, OD-009). */
-export const opsResponsibilities = ops.table(
-  'responsibilities',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsResponsibilityId>(),
-    code: text('code').notNull(),
-    title: text('title').notNull(),
-    description: text('description'),
-    departmentId: uuid('department_id')
-      .references(() => departments.id, { onDelete: 'set null' })
-      .$type<DepartmentId>(),
-    accountableRole: text('accountable_role'),
-    /** Named holder (accountable owner). Null until OD-009 names people. */
-    holderStaffId: staffRef('holder_staff_id'),
-    backupStaffId: staffRef('backup_staff_id'),
-    handOverToRole: text('hand_over_to_role'),
-    critical: boolean('critical').notNull().default(false),
-    status: text('status', { enum: ['active', 'retired'] })
-      .notNull()
-      .default('active'),
-    source: text('source'),
-    legacyRef: text('legacy_ref'),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    uniqueIndex('responsibilities_code_key').on(t.code),
-    index('responsibilities_holder_idx').on(t.holderStaffId),
-    check('responsibilities_status_check', sql`${t.status} IN ('active', 'retired')`),
-  ],
-);
-
-/** Staff onboarding checklist items — document REFERENCES only, never files or HR records. */
-export const opsOnboardingItems = ops.table(
-  'onboarding_items',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsOnboardingItemId>(),
-    staffId: uuid('staff_id')
-      .notNull()
-      .references(() => staffMembers.id, { onDelete: 'cascade' })
-      .$type<StaffMemberId>(),
-    seq: integer('seq').notNull(),
-    title: text('title').notNull(),
-    documentRef: text('document_ref'),
-    status: text('status', { enum: ['pending', 'done', 'not_applicable'] })
-      .notNull()
-      .default('pending'),
-    completedAt: timestamp('completed_at', { withTimezone: true }),
-    completedBy: uuid('completed_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    uniqueIndex('onboarding_items_staff_title_key').on(t.staffId, t.title),
     check(
-      'onboarding_items_status_check',
-      sql`${t.status} IN ('pending', 'done', 'not_applicable')`,
+      'staff_profiles_verification_check',
+      sql`${t.verificationStatus} IN ('unverified', 'confirmed')`,
     ),
-  ],
-);
-
-// --- SOPs ----------------------------------------------------------------------------------------
-
-/** SOP register (OPS-019). Legacy register rows keep their namespaced code and source status. */
-export const opsSops = ops.table(
-  'sops',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsSopId>(),
-    code: text('code').notNull(),
-    title: text('title').notNull(),
-    process: text('process'),
-    departmentId: uuid('department_id')
-      .references(() => departments.id, { onDelete: 'set null' })
-      .$type<DepartmentId>(),
-    ownerStaffId: staffRef('owner_staff_id'),
-    reviewerStaffId: staffRef('reviewer_staff_id'),
-    backupStaffId: staffRef('backup_staff_id'),
-    /** Owner role label from the legacy register (roles, not names). */
-    ownerRole: text('owner_role'),
-    riskLevel: text('risk_level'),
-    priority: text('priority'),
-    status: text('status').notNull().default('draft'),
-    currentVersionId: uuid('current_version_id')
-      .references((): AnyPgColumn => opsSopVersions.id, { onDelete: 'set null' })
-      .$type<OpsSopVersionId>(),
-    approvedVersionId: uuid('approved_version_id')
-      .references((): AnyPgColumn => opsSopVersions.id, { onDelete: 'set null' })
-      .$type<OpsSopVersionId>(),
-    nextReviewDate: isoDate('next_review_date'),
-    legacySource: text('legacy_source'),
-    legacyStatus: text('legacy_status'),
-    legacyRef: text('legacy_ref'),
-    retiredAt: timestamp('retired_at', { withTimezone: true }),
-    retiredReason: text('retired_reason'),
-    createdBy: uuid('created_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    uniqueIndex('sops_code_key').on(t.code),
-    index('sops_status_idx').on(t.status),
-    check('sops_code_format', sql`${t.code} ~ '^(SOP-[0-9]{4}|LEGACY-[A-Z0-9-]+)$'`),
-    check('sops_status_check', sql`${t.status} IN ${inList(OPS_SOP_STATUSES)}`),
-    check(
-      'sops_risk_check',
-      sql`${t.riskLevel} IS NULL OR ${t.riskLevel} IN ${inList(OPS_LEVELS)}`,
-    ),
-    check(
-      'sops_legacy_code_has_source',
-      sql`${t.code} NOT LIKE 'LEGACY-%' OR ${t.legacySource} IS NOT NULL`,
-    ),
-  ],
-);
-
-/** Immutable-once-submitted SOP versions; a new version never erases the previous one. */
-export const opsSopVersions = ops.table(
-  'sop_versions',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsSopVersionId>(),
-    sopId: uuid('sop_id')
-      .notNull()
-      .references((): AnyPgColumn => opsSops.id, { onDelete: 'restrict' })
-      .$type<OpsSopId>(),
-    versionNumber: integer('version_number').notNull(),
-    versionLabel: text('version_label').notNull(),
-    status: text('status').notNull().default('draft'),
-    content: text('content').notNull().default(''),
-    changeNote: text('change_note'),
-    documentRef: text('document_ref'),
-    /** sha256 of the content at submission; the approval binds to it (PLT-006). */
-    contentHash: text('content_hash'),
-    approvalId: uuid('approval_id')
-      .references(() => approvals.id, { onDelete: 'set null' })
-      .$type<ApprovalId>(),
-    reviewedBy: uuid('reviewed_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
-    reviewOutcome: text('review_outcome', { enum: ['recommend_approval', 'changes_requested'] }),
-    reviewNote: text('review_note'),
-    approvedBy: uuid('approved_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    approvedAt: timestamp('approved_at', { withTimezone: true }),
-    /** Source date for imported versions (e.g. 2026-09-18 for the coordinator SOP draft). */
-    sourceDate: isoDate('source_date'),
-    createdBy: uuid('created_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    uniqueIndex('sop_versions_number_key').on(t.sopId, t.versionNumber),
-    check('sop_versions_status_check', sql`${t.status} IN ${inList(OPS_SOP_VERSION_STATUSES)}`),
-    check('sop_versions_number_positive', sql`${t.versionNumber} >= 1`),
-    check(
-      'sop_versions_approved_consistency',
-      sql`${t.status} <> 'approved' OR (${t.approvedBy} IS NOT NULL AND ${t.approvedAt} IS NOT NULL)`,
-    ),
-  ],
-);
-
-/** Checklist steps of an SOP version (e.g. the coordinator SOP's daily checklist). */
-export const opsSopChecklistItems = ops.table(
-  'sop_checklist_items',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsSopChecklistItemId>(),
-    versionId: uuid('version_id')
-      .notNull()
-      .references(() => opsSopVersions.id, { onDelete: 'cascade' })
-      .$type<OpsSopVersionId>(),
-    seq: integer('seq').notNull(),
-    section: text('section').notNull(),
-    text: text('text').notNull(),
-  },
-  (t) => [uniqueIndex('sop_checklist_items_seq_key').on(t.versionId, t.seq)],
-);
-
-/** Operational exceptions and incidents (BR-OPS-15: exception approval limits pending OD-013). */
-export const opsIncidents = ops.table(
-  'incidents',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsIncidentId>(),
-    code: text('code').notNull(),
-    kind: text('kind', { enum: ['exception', 'incident'] }).notNull(),
-    category: text('category').notNull(),
-    title: text('title').notNull(),
-    description: text('description'),
-    severity: text('severity').notNull().default('medium'),
-    status: text('status', { enum: ['open', 'in_progress', 'resolved', 'closed'] })
-      .notNull()
-      .default('open'),
-    ownerStaffId: staffRef('owner_staff_id'),
-    departmentId: uuid('department_id')
-      .references(() => departments.id, { onDelete: 'set null' })
-      .$type<DepartmentId>(),
-    sopId: uuid('sop_id')
-      .references(() => opsSops.id, { onDelete: 'set null' })
-      .$type<OpsSopId>(),
-    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
-    /** Exceptions such as refunds or waivers need authorised approval; the limits are OD-013. */
-    needsAuthorisedApproval: boolean('needs_authorised_approval').notNull().default(false),
-    resolution: text('resolution'),
-    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
-    createdBy: userRef('created_by').notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    uniqueIndex('incidents_code_key').on(t.code),
-    index('incidents_status_idx').on(t.status, t.occurredAt),
-    check('incidents_code_format', sql`${t.code} ~ '^INC-[0-9]{5}$'`),
-    check('incidents_kind_check', sql`${t.kind} IN ('exception', 'incident')`),
-    check('incidents_severity_check', sql`${t.severity} IN ${inList(OPS_LEVELS)}`),
-    check(
-      'incidents_status_check',
-      sql`${t.status} IN ('open', 'in_progress', 'resolved', 'closed')`,
-    ),
-    check(
-      'incidents_resolved_has_resolution',
-      sql`${t.status} NOT IN ('resolved', 'closed') OR ${t.resolution} IS NOT NULL`,
-    ),
-  ],
-);
-
-// --- business planning -------------------------------------------------------------------------
-
-/** Decision log (OPS-021). Legacy decisions keep namespaced codes and their original status. */
-export const opsDecisions = ops.table(
-  'decisions',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsDecisionId>(),
-    code: text('code').notNull(),
-    area: text('area').notNull(),
-    statement: text('statement').notNull(),
-    state: text('state').notNull().default('proposed'),
-    decidedByStaffId: staffRef('decided_by_staff_id'),
-    decidedOn: isoDate('decided_on'),
-    source: text('source'),
-    /** Open owner decision this depends on, e.g. OD-012. */
-    ownerDecisionRef: text('owner_decision_ref'),
-    supersededById: uuid('superseded_by_id')
-      .references((): AnyPgColumn => opsDecisions.id, { onDelete: 'set null' })
-      .$type<OpsDecisionId>(),
-    legacyStatus: text('legacy_status'),
-    legacyRef: text('legacy_ref'),
-    createdBy: uuid('created_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    uniqueIndex('decisions_code_key').on(t.code),
-    index('decisions_state_idx').on(t.state),
-    check('decisions_code_format', sql`${t.code} ~ '^(DEC-[0-9]{4}|LEGACY-[A-Z0-9-]+)$'`),
-    check('decisions_state_check', sql`${t.state} IN ${inList(OPS_DECISION_LOG_STATES)}`),
-    check(
-      'decisions_superseded_link',
-      sql`${t.state} <> 'superseded' OR ${t.supersededById} IS NOT NULL`,
-    ),
-    check('decisions_not_self', sql`${t.supersededById} IS NULL OR ${t.supersededById} <> ${t.id}`),
-  ],
-);
-
-/** Risks, issues and blockers (OPS-023). */
-export const opsRisks = ops.table(
-  'risks',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsRiskId>(),
-    code: text('code').notNull(),
-    kind: text('kind', { enum: ['risk', 'issue', 'blocker'] }).notNull(),
-    title: text('title').notNull(),
-    description: text('description'),
-    likelihood: text('likelihood'),
-    impact: text('impact'),
-    ownerStaffId: staffRef('owner_staff_id'),
-    mitigation: text('mitigation'),
-    reviewDate: isoDate('review_date'),
-    targetDate: isoDate('target_date'),
-    status: text('status', { enum: ['open', 'mitigating', 'resolved', 'closed', 'accepted'] })
-      .notNull()
-      .default('open'),
-    taskId: uuid('task_id')
-      .references(() => opsTasks.id, { onDelete: 'set null' })
-      .$type<TaskId>(),
-    projectId: uuid('project_id')
-      .references((): AnyPgColumn => opsProjects.id, { onDelete: 'set null' })
-      .$type<OpsProjectId>(),
-    createdBy: userRef('created_by').notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    uniqueIndex('risks_code_key').on(t.code),
-    index('risks_status_idx').on(t.status),
-    check('risks_code_format', sql`${t.code} ~ '^RSK-[0-9]{4}$'`),
-    check('risks_kind_check', sql`${t.kind} IN ('risk', 'issue', 'blocker')`),
-    check(
-      'risks_status_check',
-      sql`${t.status} IN ('open', 'mitigating', 'resolved', 'closed', 'accepted')`,
-    ),
-    check(
-      'risks_likelihood_check',
-      sql`${t.likelihood} IS NULL OR ${t.likelihood} IN ${inList(OPS_LEVELS)}`,
-    ),
-    check('risks_impact_check', sql`${t.impact} IS NULL OR ${t.impact} IN ${inList(OPS_LEVELS)}`),
-  ],
-);
-
-/** Projects (OPS-025). */
-export const opsProjects = ops.table(
-  'projects',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsProjectId>(),
-    code: text('code').notNull(),
-    name: text('name').notNull(),
-    workstream: text('workstream'),
-    description: text('description'),
-    ownerStaffId: staffRef('owner_staff_id'),
-    startDate: isoDate('start_date'),
-    endDate: isoDate('end_date'),
-    status: text('status', { enum: ['planned', 'active', 'on_hold', 'completed', 'cancelled'] })
-      .notNull()
-      .default('planned'),
-    createdBy: userRef('created_by').notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    uniqueIndex('projects_code_key').on(t.code),
-    check('projects_code_format', sql`${t.code} ~ '^PRJ-[0-9]{4}$'`),
-    check(
-      'projects_status_check',
-      sql`${t.status} IN ('planned', 'active', 'on_hold', 'completed', 'cancelled')`,
-    ),
-    check(
-      'projects_dates_order',
-      sql`${t.startDate} IS NULL OR ${t.endDate} IS NULL OR ${t.endDate} >= ${t.startDate}`,
-    ),
-  ],
-);
-
-export const opsMilestones = ops.table(
-  'milestones',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsMilestoneId>(),
-    projectId: uuid('project_id')
-      .notNull()
-      .references(() => opsProjects.id, { onDelete: 'restrict' })
-      .$type<OpsProjectId>(),
-    title: text('title').notNull(),
-    dueDate: isoDate('due_date'),
-    ownerStaffId: staffRef('owner_staff_id'),
-    status: text('status', { enum: ['planned', 'done', 'missed', 'cancelled'] })
-      .notNull()
-      .default('planned'),
-    completedAt: timestamp('completed_at', { withTimezone: true }),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    index('milestones_project_idx').on(t.projectId),
-    check(
-      'milestones_status_check',
-      sql`${t.status} IN ('planned', 'done', 'missed', 'cancelled')`,
-    ),
-  ],
-);
-
-/** "milestone depends on dependsOnMilestone" edges; cycles rejected (domain/graph.ts). */
-export const opsMilestoneDependencies = ops.table(
-  'milestone_dependencies',
-  {
-    milestoneId: uuid('milestone_id')
-      .notNull()
-      .references(() => opsMilestones.id, { onDelete: 'cascade' })
-      .$type<OpsMilestoneId>(),
-    dependsOnMilestoneId: uuid('depends_on_milestone_id')
-      .notNull()
-      .references(() => opsMilestones.id, { onDelete: 'cascade' })
-      .$type<OpsMilestoneId>(),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    primaryKey({
-      name: 'milestone_dependencies_pkey',
-      columns: [t.milestoneId, t.dependsOnMilestoneId],
-    }),
-    check('milestone_dependencies_not_self', sql`${t.milestoneId} <> ${t.dependsOnMilestoneId}`),
-  ],
-);
-
-/** Work inventory (legacy `Work Inventory` sheet as processes), imported with its decision status. */
-export const opsWorkItems = ops.table(
-  'work_items',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<OpsWorkItemId>(),
-    code: text('code').notNull(),
-    function: text('function').notNull(),
-    process: text('process').notNull(),
-    scope: text('scope'),
-    proposedRole: text('proposed_role'),
-    /** Controlled vocabulary (approved, documented, planned, proposed, open). */
-    status: text('status').notNull(),
-    /** Verbatim legacy word (Confirmed, Discussed, Planned, Proposed, Open). */
-    legacyStatus: text('legacy_status'),
-    legacyRef: text('legacy_ref'),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    uniqueIndex('work_items_code_key').on(t.code),
-    check(
-      'work_items_status_check',
-      sql`${t.status} IN ('approved', 'documented', 'planned', 'proposed', 'open')`,
-    ),
+    uniqueIndex('staff_profiles_staff_code_key')
+      .on(t.staffCode)
+      .where(sql`${t.staffCode} IS NOT NULL`),
   ],
 );

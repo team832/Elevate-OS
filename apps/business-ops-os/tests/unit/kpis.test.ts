@@ -5,8 +5,6 @@ import {
   leadToAdmissionConversion,
   newLeads,
   overdueWork,
-  taskCompletionRate,
-  unresolvedBlockers,
   workloadPerStaff,
   type IsoDate,
   type KpiWindow,
@@ -115,58 +113,17 @@ describe('follow-up compliance', () => {
   });
 });
 
-describe('task completion rate', () => {
-  it('completed ÷ due in window (cancelled excluded, future due excluded)', () => {
-    const rows = [
-      {
-        status: 'completed' as const,
-        dueDate: d('2026-10-13'),
-        completedAt: new Date('2026-10-13'),
-      },
-      { status: 'in_progress' as const, dueDate: d('2026-10-14'), completedAt: null },
-      { status: 'cancelled' as const, dueDate: d('2026-10-14'), completedAt: null },
-      { status: 'not_started' as const, dueDate: null, completedAt: null },
-    ];
-    expect(taskCompletionRate(rows, week, asOf)).toMatchObject({ status: 'ok', value: 50 });
-  });
-  it('denominator zero → missing', () => {
-    expect(
-      taskCompletionRate(
-        [{ status: 'cancelled', dueDate: d('2026-10-14'), completedAt: null }],
-        week,
-        asOf,
-      ).status,
-    ).toBe('missing');
-  });
-});
-
-describe('overdue work and blockers (point in time)', () => {
-  it('counts open overdue tasks and follow-ups', () => {
-    const r = overdueWork(
+describe('overdue work (point in time)', () => {
+  it('counts open follow-ups due before today (IST); done and due-today ones are not overdue', () => {
+    const m = overdueWork(
       [
-        { status: 'in_progress', dueDate: d('2026-10-17'), completedAt: null },
-        { status: 'completed', dueDate: d('2026-10-01'), completedAt: new Date() },
-        { status: 'waiting', dueDate: d('2026-10-18'), completedAt: null },
+        { kind: 'general', dueDate: d('2026-10-10'), status: 'open', completedAt: null },
+        { kind: 'general', dueDate: d('2026-10-18'), status: 'open', completedAt: null },
+        { kind: 'general', dueDate: d('2026-10-01'), status: 'done', completedAt: new Date() },
       ],
-      [{ kind: 'general', dueDate: d('2026-10-10'), status: 'open', completedAt: null }],
       asOf,
     );
-    expect(r).toMatchObject({ tasks: 1, followUps: 1 });
-    expect(r.metric).toMatchObject({ status: 'ok', value: 2 });
-  });
-  it('unresolved blockers = open issues/blockers + blocked tasks; risks and resolved items excluded', () => {
-    const r = unresolvedBlockers(
-      [
-        { kind: 'blocker', status: 'open' },
-        { kind: 'issue', status: 'mitigating' },
-        { kind: 'risk', status: 'open' },
-        { kind: 'blocker', status: 'resolved' },
-      ],
-      [{ status: 'blocked', dueDate: null, completedAt: null }],
-      asOf,
-    );
-    expect(r).toMatchObject({ registerItems: 2, blockedTasks: 1 });
-    expect(r.metric.value).toBe(3);
+    expect(m).toMatchObject({ status: 'ok', value: 1 });
   });
 });
 
@@ -174,17 +131,16 @@ describe('workload per staff (not a score)', () => {
   it('counts assigned open items, sorts by name (never by load), skips inactive staff', () => {
     const w = workloadPerStaff({
       staff: [
-        { id: 's2', fullName: 'Zara (fictional)', status: 'active' },
-        { id: 's1', fullName: 'Asha (fictional)', status: 'active' },
-        { id: 's3', fullName: 'Inactive (fictional)', status: 'inactive' },
+        { id: 's2', fullName: 'Zara', status: 'active' },
+        { id: 's1', fullName: 'Asha', status: 'active' },
+        { id: 's3', fullName: 'Inactive', status: 'inactive' },
       ],
-      openTaskOwners: ['s2', 's2', 's2', null],
-      openFollowUpOwners: ['s1'],
-      openAdmissionCounsellors: ['s2', 's3'],
+      openFollowUpOwners: ['s1', 's2', null],
+      openAdmissionCounsellors: ['s2', 's2', 's3'],
     });
     expect(w.rows.map((r) => [r.fullName, r.totalOpenItems])).toEqual([
-      ['Asha (fictional)', 1],
-      ['Zara (fictional)', 4],
+      ['Asha', 1],
+      ['Zara', 3],
     ]);
     expect(w.unassigned).toBe(1);
   });

@@ -27,18 +27,58 @@ export const DECISION_STATE_LABELS: Record<DecisionState, string> = {
 };
 
 const days = z.int().min(0).max(365);
+const codeList = z
+  .array(
+    z
+      .object({
+        code: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+        label: z.string().min(1).max(120),
+      })
+      .strict(),
+  )
+  .max(40);
+/** KYC field keys (columns of ops.leads for the student, ops.guardians for a guardian). */
+export const KYC_STUDENT_FIELDS = [
+  'preferred_name',
+  'student_phone',
+  'student_email',
+  'date_of_birth',
+  'current_stage',
+  'school_board',
+  'previous_school',
+  'city',
+  'address',
+] as const;
+export const KYC_GUARDIAN_FIELDS = [
+  'full_name',
+  'relationship',
+  'phone',
+  'email',
+  'address',
+] as const;
+export const EVENT_POPULATIONS = ['lead', 'demo', 'active', 'past'] as const;
+export const REPORT_AUDIENCES = ['internal', 'guardian', 'student', 'admin_dossier'] as const;
 
 export const settingSchemas = {
   /** Demo terms recorded in the legacy decision log (D-003, D-004 "Confirmed"; BR-OPS-2). */
   'demo.terms': z
     .object({
-      days: z.int().min(1).max(7),
       separateFromMainBatch: z.literal(true),
       refundableIfNotJoining: z.boolean(),
       adjustedAgainstFeesOnJoining: z.boolean(),
     })
     .strict(),
-  /** Demo fee amount. Recorded as Confirmed in legacy, but fee-data scope is OD-013. */
+  /** Demo days per demo student, each with one or more classes (D-038; supersedes D-035's classes). */
+  'admissions.demo.day_count': z.object({ count: z.int().min(1).max(10) }).strict(),
+  /** Whether an authorised person may add demo days beyond the day count (brief §5). */
+  'admissions.demo.extension': z
+    .object({ allowed: z.boolean(), maxExtraDays: z.int().min(0).max(7) })
+    .strict(),
+  /** Whether every demo checklist item must be resolved before conversion (owner brief §6). */
+  'admissions.demo.checklist_required': z
+    .object({ requiredBeforeConversion: z.boolean() })
+    .strict(),
+  /** Demo fee amount in rupees (₹1,000, owner decision D-045); stored rows use this shape. */
   'demo.fee': z.object({ amountInr: z.number().min(0).max(1_000_000) }).strict(),
   /** Demo limits — OPEN (legacy D-005, OD-012). Null = not decided, not enforced. */
   'demo.limits': z
@@ -50,10 +90,8 @@ export const settingSchemas = {
     .strict(),
   /** Whether counselled → admission_pending (demo skipped) is allowed. Our proposal. */
   'pipeline.demo_skip': z.object({ allowed: z.boolean() }).strict(),
-  /** BR-OPS-6 parts of the confirmation gate (BR-OPS-7 parts are fixed). */
-  'admission.confirmation': z
-    .object({ requireDocuments: z.boolean(), requireDownPayment: z.boolean() })
-    .strict(),
+  /** BR-OPS-6: documents checklist item (payment before admission is `admission.payment_gate`). */
+  'admission.confirmation': z.object({ requireDocuments: z.boolean() }).strict(),
   /** Follow-up due rules (legacy OP-007 "Proposed"; service hours are OD-011). */
   'followups.due_rules': z
     .object({
@@ -64,115 +102,14 @@ export const settingSchemas = {
       closedWeekdays: z.array(z.int().min(0).max(6)).max(6),
     })
     .strict(),
-  /** Escalation thresholds in calendar days (BR-OPS-10 levels are a starting model). */
-  'tasks.escalation': z
-    .object({
-      overdueDaysL2: z.int().min(1).max(365),
-      overdueDaysL3: z.int().min(1).max(365),
-      overdueDaysL4: z.int().min(1).max(365),
-      blockedDaysL2: z.int().min(1).max(365),
-      responseDays: days,
-    })
-    .strict()
-    .refine((v) => v.overdueDaysL2 < v.overdueDaysL3 && v.overdueDaysL3 < v.overdueDaysL4, {
-      error: 'Thresholds must increase: L2 < L3 < L4',
-    }),
   /** Cohort window for lead → admission conversion (BR-OPS-8: 7/14/30 days). */
   'kpi.conversion': z
     .object({ windowDays: z.union([z.literal(7), z.literal(14), z.literal(30)]) })
     .strict(),
-  /** Online office hours (legacy Rules sheet "Locked"; conflict noted in data/legacy/README.md). */
-  'office.online_hours': z
-    .object({
-      weekdays: z.string(),
-      opens: z.string(),
-      closes: z.string(),
-      sundaySupport: z.boolean(),
-    })
-    .strict(),
-  /** HR lifecycle (OPS-041): how long closed unsuccessful candidates are kept. OPEN (D-028). */
-  'hr.candidate_retention': z
-    .object({ retainUnsuccessfulDays: z.int().min(30).max(3650).nullable() })
-    .strict(),
-  /** HR lifecycle (OPS-045): default onboarding checklist. Proposed (D-028). */
-  'hr.onboarding_template': z
-    .object({
-      items: z
-        .array(
-          z
-            .object({
-              key: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
-              title: z.string().min(1).max(200),
-              kind: z.enum([
-                'document',
-                'policy_ack',
-                'org_confirmation',
-                'asset_assignment',
-                'access_request',
-                'induction',
-                'custom',
-              ]),
-              required: z.boolean(),
-              dueOffsetDays: z.int().min(-30).max(90),
-              assignee: z.enum(['hr', 'manager', 'employee']),
-            })
-            .strict(),
-        )
-        .min(1)
-        .max(40),
-    })
-    .strict(),
-  /** HR lifecycle (OPS-047): fixed parts of the offboarding checklist. Proposed (D-028). */
-  'hr.offboarding_checklist': z
-    .object({
-      exitInterview: z.boolean(),
-      finalSettlementRequired: z.boolean(),
-      transferDueDaysBeforeLwd: z.int().min(0).max(60),
-    })
-    .strict(),
-  /** Staff attendance rules (OPS-050…052, OD-026). Proposed defaults, not company policy. */
-  'attendance.rules': z
-    .object({
-      multipleSessionsPerDay: z.boolean(),
-      lateGraceMinutes: z.int().min(0).max(240),
-      earlyDepartureGraceMinutes: z.int().min(0).max(240),
-      missingClockOutGraceMinutes: z.int().min(0).max(720),
-      maxSessionHours: z.int().min(1).max(24),
-    })
-    .strict(),
-  /** Shift scheduling rules (OPS-053, OD-026). */
-  'shifts.rules': z.object({ allowSplitShifts: z.boolean() }).strict(),
-  /** Leave counting rules (OPS-055, OD-026). */
-  'leave.rules': z
-    .object({
-      defaultWorkingWeekdays: z.array(z.int().min(0).max(6)).min(1).max(7),
-      countProposedHolidays: z.boolean(),
-    })
-    .strict(),
-  /** Leave entitlements — OPEN (OD-026). Recorded only; nothing is accrued or enforced. */
-  'leave.entitlements': z
-    .object({
-      leaveYear: z.string().max(200).nullable(),
-      entitlements: z.string().max(2000).nullable(),
-      accrual: z.string().max(1000).nullable(),
-      carryForward: z.string().max(1000).nullable(),
-      encashment: z.string().max(1000).nullable(),
-    })
-    .strict(),
   /** Admissions (OPS-070): closure reason codes for `→ lost`. Proposed list. */
   'admissions.closure_reasons': z
     .object({
-      codes: z
-        .array(
-          z
-            .object({
-              code: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
-              label: z.string().min(1).max(120),
-            })
-            .strict(),
-        )
-        .min(1)
-        .max(40),
+      codes: codeList.min(1),
       requireCode: z.boolean(),
     })
     .strict(),
@@ -180,28 +117,91 @@ export const settingSchemas = {
   'fees.recording': z.object({ requireReceiptReference: z.boolean() }).strict(),
   /** Admissions (OPS-072): approved fee schedule reference — OPEN; none is approved. */
   'fees.schedule': z.object({ scheduleReference: z.string().max(300).nullable() }).strict(),
-  /** Task reminders before the due date and on becoming overdue (OPS-063). Our proposal. */
-  'tasks.reminders': z
-    .object({ leadDays: z.int().min(0).max(30), notifyBackupWhenOverdue: z.boolean() })
+  /** Fee plans (owner brief §8E): how ledger money is applied to instalments. Proposed. */
+  'fees.allocation': z
+    .object({ rule: z.literal('oldest_due_first'), dueWindowDays: z.int().min(0).max(60) })
     .strict(),
-  /** Incident resolution targets in calendar days by severity (OPS-068). Our proposal. */
-  'incidents.resolution_sla': z
+  /** Appointments (brief §11): double-booking buffer and default length. Proposed. */
+  'appointments.scheduling': z
     .object({
-      lowDays: z.int().min(1).max(365),
-      mediumDays: z.int().min(1).max(365),
-      highDays: z.int().min(1).max(365),
+      bufferMinutes: z.int().min(0).max(120),
+      defaultDurationMinutes: z.int().min(5).max(480),
     })
     .strict(),
-  /** "Review due soon" window for SOPs and company policies (OPS-064, OPS-066). Our proposal. */
-  'registers.review_due': z.object({ dueSoonDays: z.int().min(0).max(365) }).strict(),
-  /** HR records (OPS-035): retention period per document class, in years. Open (D-028, OD-014). */
-  'hr.document_retention': z
+  /** Admission number format — approved by the owner: 001, 002, 003 … (D-037). */
+  'admissions.number.format': z
     .object({
-      employmentRecordYears: z.int().min(1).max(100).nullable(),
-      identityYears: z.int().min(1).max(100).nullable(),
-      trainingYears: z.int().min(1).max(100).nullable(),
-      generalYears: z.int().min(1).max(100).nullable(),
+      prefix: z.string().regex(/^[A-Z0-9]{0,8}$/),
+      separator: z.enum(['', '-', '/']),
+      includeYear: z.boolean(),
+      width: z.int().min(3).max(8),
     })
+    .strict(),
+  /** Annual tuition instalment shares in percent, remainder paise to the last (D-039). */
+  'fees.tuition_split': z
+    .object({
+      sharesPercent: z
+        .array(z.int().min(1).max(100))
+        .min(1)
+        .max(12)
+        .refine((a) => a.reduce((s, p) => s + p, 0) === 100, {
+          error: 'Shares must add up to 100.',
+        }),
+    })
+    .strict(),
+  /** Registration fee, a separate charge outside the tuition split; null = not set. */
+  'fees.registration': z
+    .object({ amountPaise: z.int().min(1).max(100_000_000).nullable() })
+    .strict(),
+  /** Whether a paid demo fee is credited against tuition on admission. */
+  'fees.demo_credit': z.object({ creditTowardTuition: z.boolean() }).strict(),
+  /** Payment required before final admission confirmation. */
+  'admission.payment_gate': z
+    .object({ rule: z.enum(['none', 'registration_fee', 'first_instalment']) })
+    .strict(),
+  /** KYC fields that must be filled before an application is ready (brief §5, §8). */
+  'admissions.kyc.required_fields': z
+    .object({
+      student: z.array(z.enum(KYC_STUDENT_FIELDS)).max(KYC_STUDENT_FIELDS.length),
+      guardian: z.array(z.enum(KYC_GUARDIAN_FIELDS)).max(KYC_GUARDIAN_FIELDS.length),
+    })
+    .strict(),
+  /** Identity document types staff may record (masked reference only) and which are mandatory. */
+  'admissions.kyc.id_document_types': z
+    .object({ types: codeList.min(1), mandatory: z.array(z.string()).max(40) })
+    .strict()
+    .refine((v) => v.mandatory.every((m) => v.types.some((t) => t.code === m)), {
+      error: 'A mandatory type must be in the list.',
+    }),
+  /** Approved declaration / consent text printed on the admission form; null = not set. */
+  'admissions.declarations': z
+    .object({
+      text: z.string().trim().min(20).max(5000).nullable(),
+      version: z
+        .string()
+        .regex(/^[A-Za-z0-9._-]{1,20}$/)
+        .nullable(),
+    })
+    .strict()
+    .refine((v) => (v.text === null) === (v.version === null), {
+      error: 'Text and version are set together.',
+    }),
+  /** Physical signatures required on the admission form. */
+  'admissions.signatures.required_signers': z
+    .object({ student: z.boolean(), guardian: z.enum(['always', 'if_under_18', 'never']) })
+    .strict(),
+  /** How the approver is re-verified when confirming an admission (D-041). */
+  'admissions.confirm.reauth': z.object({ method: z.literal('password') }).strict(),
+  /** Who may be invited to events and webinars. */
+  'events.eligibility': z
+    .object({
+      populations: z.array(z.enum(EVENT_POPULATIONS)).min(1),
+      includeGuardians: z.boolean(),
+    })
+    .strict(),
+  /** Report audiences offered and whether a report must be reviewed before it is final. */
+  'reports.audiences': z
+    .object({ enabled: z.array(z.enum(REPORT_AUDIENCES)).min(1), reviewBeforeFinal: z.boolean() })
     .strict(),
 } as const;
 
@@ -209,7 +209,6 @@ export type SettingKey = keyof typeof settingSchemas;
 export type SettingValue<K extends SettingKey> = z.output<(typeof settingSchemas)[K]>;
 
 export interface SettingDefinition<K extends SettingKey = SettingKey> {
-  key: K;
   label: string;
   description: string;
   defaultValue: SettingValue<K>;
@@ -222,36 +221,65 @@ export interface SettingDefinition<K extends SettingKey = SettingKey> {
 
 export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = {
   'demo.terms': {
-    key: 'demo.terms',
     label: 'Demo terms',
     description:
-      'Demo length and handling: separate demo classes (never the main batch), non-refundable if the student does not join, adjusted against fees on joining.',
+      'Demo handling: separate demo classes (never the main batch), non-refundable if the student does not join, adjusted against fees on joining (applied as a ledger credit through fees.demo_credit).',
     defaultValue: {
-      days: 2,
       separateFromMainBatch: true,
       refundableIfNotJoining: false,
       adjustedAgainstFeesOnJoining: true,
     },
     defaultState: 'approved',
     source:
-      'Legacy decisions LEGACY-OPSWB-D-003 and D-004 ("Confirmed"); data/legacy/ops/workflows.json WF-DEMO; the earlier 3-day demo is superseded.',
+      'Legacy decisions LEGACY-OPSWB-D-003 and D-004 ("Confirmed"); data/legacy/ops/workflows.json WF-DEMO. The legacy 2-day length moved to admissions.demo.day_count (D-038).',
     ownerDecision: null,
     editable: false,
   },
+  'admissions.demo.day_count': {
+    label: 'Demo days per student',
+    description:
+      'How many demo days each demo student gets; each day has one or more classes. Progress counts days attended (sessions attended are shown separately). A change applies to demos booked afterwards (each demo keeps the count it was booked with).',
+    defaultValue: { count: 3 },
+    defaultState: 'approved',
+    source:
+      'Owner, 21 Oct 2026: a demo is three demo days, each with one or more classes (supersedes the three classes of D-035 and the legacy 2-day demo).',
+    ownerDecision: 'D-038',
+    editable: true,
+  },
+  'admissions.demo.extension': {
+    label: 'Extra demo days',
+    description:
+      'Off: a demo never gets a day beyond the day count, and an absent day is never counted as attended. On: a person with demo rights may add up to the given number of extra days, with a reason (audited).',
+    defaultValue: { allowed: false, maxExtraDays: 1 },
+    defaultState: 'proposed',
+    source:
+      'owner brief 2026-10-21 §5 ("extensions need an explicit configured authorized process").',
+    ownerDecision: 'Owner to decide whether demos can be extended, and by how much',
+    editable: true,
+  },
+  'admissions.demo.checklist_required': {
+    label: 'Demo checklist required before conversion',
+    description:
+      'When on, every demo checklist item must be complete, waived with a reason or not applicable before a demo can be converted to an admission. Off: the checklist is shown as information only.',
+    defaultValue: { requiredBeforeConversion: false },
+    defaultState: 'proposed',
+    source:
+      'owner brief 2026-10-20 §6 ("don’t force all items unless management approves"); not enforced until approved.',
+    ownerDecision: null,
+    editable: true,
+  },
   'demo.fee': {
-    key: 'demo.fee',
     label: 'Demo fee amount',
     description:
       'Amount recorded on each demo booking. Elevate OS records only the fee status and a reference, never accounting entries.',
     defaultValue: { amountInr: 1000 },
-    defaultState: 'pending_verification',
+    defaultState: 'approved',
     source:
-      'Legacy D-003 and Work Inventory OP-006 record ₹1,000 as "Confirmed"; how Elevate OS handles fee data is open (OD-013), so the amount is configuration, not approved policy.',
-    ownerDecision: 'OD-013',
+      'Owner approved in session, 21 Oct 2026 (D-045): demo fee ₹1,000 (legacy D-003 / OP-006 had the same amount). Refund and waiver limits (rest of OD-013) stay open.',
+    ownerDecision: 'D-045',
     editable: true,
   },
   'demo.limits': {
-    key: 'demo.limits',
     label: 'Demo limits',
     description: 'Consecutive days, subject cap and missed-day treatment. Not enforced while open.',
     defaultValue: { maxConsecutiveDays: null, subjectCap: null, missedDayRule: null },
@@ -261,7 +289,6 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
     editable: true,
   },
   'pipeline.demo_skip': {
-    key: 'pipeline.demo_skip',
     label: 'Allow admission without a demo',
     description:
       'Whether a counselled lead may go straight to "admission pending" (a reason is always required). The legacy sources describe the demo step but do not say it is mandatory.',
@@ -273,11 +300,10 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
     editable: true,
   },
   'admission.confirmation': {
-    key: 'admission.confirmation',
     label: 'Admission confirmation requirements',
     description:
-      'Documents verified and down payment verified before "admitted" (BR-OPS-6). Two fee verifications by different people plus an authorised fee approval are always required (BR-OPS-7, approved) and cannot be switched off.',
-    defaultValue: { requireDocuments: true, requireDownPayment: true },
+      'Whether the "documents verified" checklist item is shown as required. Two fee verifications by different people plus an authorised fee approval are always required (approved). Payment before admission is the separate setting "Payment before admission"; an admission is confirmed only through "Confirm admission" with a password re-check.',
+    defaultValue: { requireDocuments: true },
     defaultState: 'proposed',
     source:
       'Marketing-Easy "Start Here" A31 (proposed definition); Work Inventory OP-008, OP-010 ("Confirmed").',
@@ -285,7 +311,6 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
     editable: true,
   },
   'followups.due_rules': {
-    key: 'followups.due_rules',
     label: 'Follow-up due rules',
     description:
       'Days after an event when the next follow-up is due (Asia/Kolkata calendar days), the "upcoming" window, and closed weekdays (0 = Sunday) that push a due date to the next open day.',
@@ -302,26 +327,7 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
     ownerDecision: 'OD-011',
     editable: true,
   },
-  'tasks.escalation': {
-    key: 'tasks.escalation',
-    label: 'Task escalation thresholds',
-    description:
-      'Overdue by N calendar days raises L2 (manager), L3 (manager’s manager / operations lead), L4 (leadership). Blocked for N days raises L2. The owner keeps the task.',
-    defaultValue: {
-      overdueDaysL2: 2,
-      overdueDaysL3: 5,
-      overdueDaysL4: 10,
-      blockedDaysL2: 3,
-      responseDays: 1,
-    },
-    defaultState: 'proposed',
-    source:
-      'Escalation levels L1–L4 from SYSTEM_ARCHITECTURE.md ("starting model"); thresholds are our proposal.',
-    ownerDecision: 'OD-011',
-    editable: true,
-  },
   'kpi.conversion': {
-    key: 'kpi.conversion',
     label: 'Lead → admission conversion window',
     description:
       'Days after receipt within which a cohort lead must be admitted to count (7, 14 or 30).',
@@ -331,172 +337,7 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
     ownerDecision: 'OD-027',
     editable: true,
   },
-  'office.online_hours': {
-    key: 'office.online_hours',
-    label: 'Online office hours',
-    description: 'Routine online support hours. Sunday events need an assigned event team.',
-    defaultValue: {
-      weekdays: 'Monday–Saturday',
-      opens: '11:00',
-      closes: '18:00',
-      sundaySupport: false,
-    },
-    defaultState: 'locked',
-    source:
-      'Elevate-Online-Easy Rules A5:C6 ("Locked"); note: handover Claude.md says the coordinator SOP timings still need management approval.',
-    ownerDecision: null,
-    editable: false,
-  },
-  'hr.candidate_retention': {
-    key: 'hr.candidate_retention',
-    label: 'Unsuccessful-candidate retention',
-    description:
-      'Days after the last application closed (rejected or withdrawn) after which an unsuccessful candidate is listed as due for anonymisation. Null = not decided: nothing is flagged and nothing is removed automatically; anonymisation is a manual, audited action.',
-    defaultValue: { retainUnsuccessfulDays: null },
-    defaultState: 'open',
-    source:
-      'D-028: retention periods stay open until the owner supplies the policy. No legacy source gives a period.',
-    ownerDecision: 'D-028',
-    editable: true,
-  },
-  'hr.onboarding_template': {
-    key: 'hr.onboarding_template',
-    label: 'Default onboarding checklist',
-    description:
-      'Items generated for every new onboarding case: key, title, kind, required, due offset in days from the start date (or the case date) and who it is assigned to (HR = the person who opened the case, manager, or the employee).',
-    defaultValue: {
-      items: [
-        {
-          key: 'documents',
-          title: 'Employment documents collected (references only)',
-          kind: 'document',
-          required: true,
-          dueOffsetDays: 0,
-          assignee: 'hr',
-        },
-        {
-          key: 'policy_ack',
-          title: 'Policy acknowledgements recorded (code of conduct, data protection)',
-          kind: 'policy_ack',
-          required: true,
-          dueOffsetDays: 3,
-          assignee: 'employee',
-        },
-        {
-          key: 'org_confirmation',
-          title: 'Department and reporting manager confirmed',
-          kind: 'org_confirmation',
-          required: true,
-          dueOffsetDays: 0,
-          assignee: 'hr',
-        },
-        {
-          key: 'assets',
-          title: 'Work assets assigned (recorded in the asset register)',
-          kind: 'asset_assignment',
-          required: false,
-          dueOffsetDays: 0,
-          assignee: 'hr',
-        },
-        {
-          key: 'system_access',
-          title: 'System access requested (request reference and status only — no credentials)',
-          kind: 'access_request',
-          required: true,
-          dueOffsetDays: 0,
-          assignee: 'hr',
-        },
-        {
-          key: 'induction',
-          title: 'Induction completed',
-          kind: 'induction',
-          required: true,
-          dueOffsetDays: 7,
-          assignee: 'manager',
-        },
-      ],
-    },
-    defaultState: 'proposed',
-    source:
-      'Proposal by the Business Ops team from the owner’s HR scope (D-028) and the wave 2 staff onboarding checklist; the owner has not approved a checklist.',
-    ownerDecision: 'D-028',
-    editable: true,
-  },
-  'hr.offboarding_checklist': {
-    key: 'hr.offboarding_checklist',
-    label: 'Offboarding checklist options',
-    description:
-      'Asset returns, access revocation and ownership transfers are always generated. These options add an exit interview item, make the final settlement reference item required, and set how many days before the last working day transfers are due.',
-    defaultValue: {
-      exitInterview: true,
-      finalSettlementRequired: true,
-      transferDueDaysBeforeLwd: 2,
-    },
-    defaultState: 'proposed',
-    source: 'Proposal by the Business Ops team (D-028); no owner-approved exit process exists.',
-    ownerDecision: 'D-028',
-    editable: true,
-  },
-  'attendance.rules': {
-    key: 'attendance.rules',
-    label: 'Staff attendance rules',
-    description:
-      'Whether an employee may record several sessions on one day; grace minutes before a clock-in counts as late or a clock-out as early (against the assigned shift); how long after shift end an open session counts as a missing clock-out; maximum session length. Staff attendance only, never a performance measure on its own.',
-    defaultValue: {
-      multipleSessionsPerDay: false,
-      lateGraceMinutes: 10,
-      earlyDepartureGraceMinutes: 10,
-      missingClockOutGraceMinutes: 60,
-      maxSessionHours: 16,
-    },
-    defaultState: 'proposed',
-    source:
-      'Proposal by the Business Ops team (D-028). No owner-approved attendance policy exists; OD-026 covers staff attendance and leave.',
-    ownerDecision: 'OD-026',
-    editable: true,
-  },
-  'shifts.rules': {
-    key: 'shifts.rules',
-    label: 'Shift scheduling rules',
-    description:
-      'Whether one employee may hold overlapping shift assignments (split shifts). When allowed, the shifts themselves must still not overlap in time.',
-    defaultValue: { allowSplitShifts: false },
-    defaultState: 'proposed',
-    source: 'Proposal by the Business Ops team (D-028); actual shift timings are owner decisions.',
-    ownerDecision: 'OD-026',
-    editable: true,
-  },
-  'leave.rules': {
-    key: 'leave.rules',
-    label: 'Leave day counting',
-    description:
-      'Working weekdays (0 = Sunday) used to count leave days for an employee without a shift assignment, and whether holidays still in "proposed" state are excluded from leave counts.',
-    defaultValue: { defaultWorkingWeekdays: [1, 2, 3, 4, 5, 6], countProposedHolidays: true },
-    defaultState: 'proposed',
-    source:
-      'Proposal by the Business Ops team: Monday–Saturday follows the recorded online office week (office.online_hours); OD-026 is open.',
-    ownerDecision: 'OD-026',
-    editable: true,
-  },
-  'leave.entitlements': {
-    key: 'leave.entitlements',
-    label: 'Leave entitlements, accrual, carry-forward, encashment',
-    description:
-      'Recorded for reference only and NOT enforced: no accrual job runs, nothing is carried forward or encashed, and requests are not blocked by balance. Balances exist only where HR records an allocation.',
-    defaultValue: {
-      leaveYear: null,
-      entitlements: null,
-      accrual: null,
-      carryForward: null,
-      encashment: null,
-    },
-    defaultState: 'open',
-    source: 'No source defines staff leave entitlements (D-028; OD-026 open).',
-    ownerDecision: 'OD-026',
-    editable: true,
-  },
   'admissions.closure_reasons': {
-    key: 'admissions.closure_reasons',
     label: 'Admission closure reason codes',
     description:
       'Coded reasons offered when a case is closed as lost/withdrawn (the free-text reason stays required). "Withdrew after admission" applies only to admitted cases; "duplicate merged" is set by the merge service. With requireCode off, an uncoded closure is reported as "not coded".',
@@ -523,7 +364,6 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
     editable: true,
   },
   'fees.recording': {
-    key: 'fees.recording',
     label: 'Manual fee records',
     description:
       'Fee records are typed in by authorised staff and are NOT verified payment transactions (no gateway, no card data). When on, amounts received and refunds need a receipt/transaction reference. A second, different person may mark a record as checked.',
@@ -535,7 +375,6 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
     editable: true,
   },
   'fees.schedule': {
-    key: 'fees.schedule',
     label: 'Approved fee schedule',
     description:
       'Reference to the approved fee schedule that fee records quote. None is approved: every fee record carries a free-text pricing reference instead, and no amount is computed from a schedule.',
@@ -545,54 +384,193 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
     ownerDecision: 'OD-013',
     editable: true,
   },
-  'tasks.reminders': {
-    key: 'tasks.reminders',
-    label: 'Task reminders',
+  'fees.allocation': {
+    label: 'Fee instalment allocation',
     description:
-      'Days before the due date (Asia/Kolkata) when the task owner is reminded (0 = on the due date only), and whether the backup owner is also told when a task becomes overdue. Each reminder is sent once per due date.',
-    defaultValue: { leadDays: 1, notifyBackupWhenOverdue: true },
+      'How manually recorded payments, discounts and waivers are applied to a fee plan’s instalments: oldest due date first. An unpaid instalment due within the window (days, Asia/Kolkata) shows as "Due soon", later ones as "Upcoming", past its due date as "Overdue".',
+    defaultValue: { rule: 'oldest_due_first', dueWindowDays: 7 },
     defaultState: 'proposed',
-    source: 'Proposal by the Business Ops team (OPS-063); no source sets reminder timings.',
-    ownerDecision: 'OD-011',
-    editable: true,
-  },
-  'incidents.resolution_sla': {
-    key: 'incidents.resolution_sla',
-    label: 'Incident resolution targets',
-    description:
-      'Calendar days from when an incident or exception occurred (IST) by which it should be resolved, by severity. Used only to flag "breached"; nothing is closed automatically.',
-    defaultValue: { lowDays: 14, mediumDays: 7, highDays: 2 },
-    defaultState: 'proposed',
-    source: 'Proposal by the Business Ops team (OPS-068); SLAs are owner decision OD-011.',
-    ownerDecision: 'OD-011',
-    editable: true,
-  },
-  'registers.review_due': {
-    key: 'registers.review_due',
-    label: 'Review-due window (SOPs and policies)',
-    description:
-      'An SOP version or company policy whose next review date is within this many days is flagged "review due soon"; after the date it is "review overdue".',
-    defaultValue: { dueSoonDays: 30 },
-    defaultState: 'proposed',
-    source: 'Proposal by the Business Ops team (OPS-064, OPS-066).',
-    ownerDecision: 'OD-027',
-    editable: true,
-  },
-  'hr.document_retention': {
-    key: 'hr.document_retention',
-    label: 'Employment document retention',
-    description:
-      'How many years document metadata of each retention class (employment record, identity, training, general) is kept after separation. Null = not decided: nothing is flagged or removed automatically; deletion is a manual request decided by a second HR manager, and the metadata row is always kept.',
-    defaultValue: {
-      employmentRecordYears: null,
-      identityYears: null,
-      trainingYears: null,
-      generalYears: null,
-    },
-    defaultState: 'open',
     source:
-      'D-028: retention periods stay open until the owner supplies the policy; identity documents follow OD-014. No legacy source gives a period.',
-    ownerDecision: 'OD-014',
+      'Proposal by the Business Ops team (fee plans build, 20 Oct 2026); no owner rule exists.',
+    ownerDecision: 'Owner to confirm the allocation order and the "due soon" window',
+    editable: true,
+  },
+  'admissions.number.format': {
+    label: 'Admission number format',
+    description:
+      'Admission numbers run 001, 002, 003 … (1000 follows 999). A number is given only at final admission confirmation, is never changed afterwards and is never reused. Proposed alternative, NOT active: ELEV-{YYYY}-{CC}-{DDMM}-{NNN} (year, class code, day and month, sequence); it needs an owner decision and a class-code mapping.',
+    defaultValue: { prefix: '', separator: '-', includeYear: false, width: 3 },
+    defaultState: 'approved',
+    source:
+      'Owner, 21 Oct 2026: admission numbers run 001, 002, 003 … (sequence only, three digits, no prefix or year; 1000 follows 999). Structured format from the owner brief 2026-10-21 §7, offered as a proposal only.',
+    ownerDecision: 'D-037, D-040',
+    editable: false,
+  },
+  'appointments.scheduling': {
+    label: 'Appointment scheduling',
+    description:
+      'Minutes kept free between two appointments of the same teacher or counsellor (0 = back-to-back allowed; touching times never clash), and the length used when no end time is given.',
+    defaultValue: { bufferMinutes: 0, defaultDurationMinutes: 60 },
+    defaultState: 'proposed',
+    source: 'owner brief 2026-10-20 §11 (double-booking prevention); values are our proposal.',
+    ownerDecision: 'Owner to confirm the buffer between appointments and the default length',
+    editable: true,
+  },
+  'fees.tuition_split': {
+    label: 'Annual tuition instalments',
+    description:
+      'Annual tuition is split into instalments of these percentages: 50 %, 25 %, 25 %. Each share is rounded down to the paisa and the remainder goes to the last instalment (₹1,00,000 → 50,000 / 25,000 / 25,000). Registration and demo fees are separate and never part of the split. Due dates are entered per student.',
+    defaultValue: { sharesPercent: [50, 25, 25] },
+    defaultState: 'approved',
+    source:
+      'owner brief 2026-10-21 §9 (annual tuition in three instalments of 50 %, 25 % and 25 %).',
+    ownerDecision: 'D-039',
+    editable: false,
+  },
+  'fees.registration': {
+    label: 'Registration fee',
+    description:
+      'One-time registration fee, charged once per student and separately from tuition. Not set: no registration charge is created and none is assumed.',
+    defaultValue: { amountPaise: 5_000_00 },
+    defaultState: 'approved',
+    source:
+      'Owner approved in session, 21 Oct 2026 (D-044): ₹5,000, charged once per student. Whether it is charged again each academic year is still open.',
+    ownerDecision: 'D-044',
+    editable: true,
+  },
+  'fees.demo_credit': {
+    label: 'Demo fee credit on admission',
+    description:
+      'On: a paid demo fee is credited against the first tuition instalment when the student is admitted (a linked ledger entry, never assumed without a recorded payment). Off: the demo fee stays a separate charge. Follows the approved demo terms ("adjusted against fees on joining").',
+    defaultValue: { creditTowardTuition: true },
+    defaultState: 'approved',
+    source:
+      'Legacy decisions LEGACY-OPSWB-D-003 and D-004 ("Confirmed"), recorded in demo.terms (adjustedAgainstFeesOnJoining); owner brief 2026-10-21 §5 keeps the credit configurable.',
+    ownerDecision: null,
+    editable: true,
+  },
+  'admission.payment_gate': {
+    label: 'Payment before admission',
+    description:
+      'Payment that must be recorded before an admission can be confirmed: none, the registration fee, or the first tuition instalment. Only the chosen rule is enforced.',
+    defaultValue: { rule: 'none' },
+    defaultState: 'proposed',
+    source: 'owner brief 2026-10-21 §6 ("first payment before admission is a policy decision").',
+    ownerDecision: 'Owner to decide whether a payment is required before confirmation',
+    editable: true,
+  },
+  'admissions.kyc.required_fields': {
+    label: 'Required KYC fields',
+    description:
+      'Student and guardian details that must be filled before an application is ready for review. A child does not need their own phone or email when a guardian contact is recorded.',
+    // The owner's paper form: what a counsellor can always fill (course, mode and start date are
+    // always required by the application itself); the rest prints as blank lines.
+    defaultValue: {
+      student: ['date_of_birth', 'student_phone', 'address'],
+      guardian: ['full_name', 'relationship', 'phone'],
+    },
+    defaultState: 'proposed',
+    source: 'owner brief 2026-10-21 §5, §8 (required KYC fields are a proposed choice).',
+    ownerDecision: 'Owner to confirm the required KYC fields',
+    editable: true,
+  },
+  'admissions.kyc.id_document_types': {
+    label: 'Identity document types',
+    description:
+      'Identity documents staff may record for a student or guardian: type, a masked reference (at most 4 digits shown) and verification. Full numbers and scans are never stored. None is mandatory.',
+    defaultValue: {
+      types: [
+        { code: 'aadhaar', label: 'Aadhaar' },
+        { code: 'pan', label: 'PAN card' },
+        { code: 'passport', label: 'Passport' },
+        { code: 'driving_licence', label: 'Driving licence' },
+        { code: 'voter_id', label: 'Voter ID' },
+        { code: 'school_id', label: 'School ID card' },
+        // The owner's paper form, section 05 "Document check".
+        { code: 'photograph', label: 'Photograph' },
+        { code: 'previous_marksheet', label: 'Previous marksheet / qualification' },
+        { code: 'address_proof', label: 'Address proof' },
+        { code: 'other', label: 'Other document' },
+      ],
+      mandatory: [],
+    },
+    defaultState: 'proposed',
+    source: 'owner brief 2026-10-21 §8 ("no mandatory government ID assumed").',
+    ownerDecision: 'Owner to confirm the document list and whether any is mandatory',
+    editable: true,
+  },
+  'admissions.declarations': {
+    label: 'Admission declarations',
+    description:
+      'Declaration and consent text printed on the admission form, with its version. Not set: forms print no declaration and admissions cannot be confirmed until the owner supplies approved text (Elevate OS never writes legal wording).',
+    // Version 2 = the owner's paper form (D-046); version 1 (a draft) was never printed.
+    defaultValue: {
+      text: [
+        'Student / parent declaration',
+        'I/We confirm that the information provided above is true and correct. I/We understand the applicable fee schedule and agree to follow the admission and fee policies communicated by Elevate Education.',
+        'Fee acknowledgement',
+        'I/We confirm that the fee amount, payment schedule and balance payable shown on this page have been explained to me/us. I/We acknowledge the payments recorded above and understand that official receipts will be issued for payments received.',
+        'Terms & Conditions — applicable to student admission, coaching services and fee payment',
+        '1. Fees are non-refundable. All admission, registration, course, material and other fees paid to Elevate Education are non-refundable, except where a written exception is expressly approved by Elevate Education.',
+        '2. Timely payment. The agreed fee and instalment schedule must be paid on or before the respective due dates. Outstanding amounts remain payable until fully settled.',
+        '3. Attendance and regularity. Students are expected to maintain regular attendance, attend classes on time, complete assigned work and participate sincerely. Irregular attendance may affect academic progress.',
+        '4. Discipline and conduct. Students must maintain respectful behaviour towards faculty, staff and other students and follow institute rules. Misconduct or disruption may lead to appropriate action.',
+        '5. Property damage or loss. Damage to furniture, equipment, premises, study material or other institute property caused by negligence, misuse or intentional action may attract applicable recovery or replacement charges payable by the student/parent/guardian.',
+        '6. Documents and information. All information and documents supplied at admission must be accurate and complete. Changes in contact details should be communicated promptly.',
+        '7. Result information and verification. After declaration of results, the student/parent/guardian agrees to provide relevant result details, marks, rank, scorecard or other reasonable information requested by Elevate Education for record and result verification.',
+        "8. Result publicity and consent. Where consent is provided, Elevate Education may use the student's name, course, achievement, rank or result details for genuine institute records, testimonials and promotional purposes. Sensitive personal information will not be published without appropriate consent.",
+        '9. Communication. Important academic, fee and administrative communication may be sent through the mobile number, WhatsApp, email or other details provided in the form. The student/parent/guardian is responsible for keeping these details updated.',
+        "10. Course material and institute property. Books, printed study material, notes, tests and other resources supplied are for the student's academic use. Unauthorised copying, distribution or commercial use is not permitted.",
+        '11. Schedule and batch changes. Class timings, faculty, batch arrangements or academic schedules may be changed by the institute when reasonably required for academic or administrative purposes.',
+        '12. Final acknowledgement. By signing this admission form, the student and parent/guardian confirm that they have read, understood and accepted these Terms & Conditions.',
+      ].join('\n'),
+      version: '2',
+    },
+    defaultState: 'approved',
+    source:
+      "Owner's admission form (Student Admission & Fee Record), approved in session 21 Oct 2026 (D-046).",
+    ownerDecision: 'D-046',
+    editable: true,
+  },
+  'admissions.signatures.required_signers': {
+    label: 'Required signatures',
+    description:
+      'Who must sign the printed admission form: the student, and a guardian always, only when the student is under 18 on the signing day, or never. With no date of birth on record a guardian signature is required.',
+    defaultValue: { student: true, guardian: 'if_under_18' },
+    defaultState: 'proposed',
+    source: 'owner brief 2026-10-21 §6 (signature rules by student age are a proposed choice).',
+    ownerDecision: 'Owner to confirm the signature rule',
+    editable: true,
+  },
+  'admissions.confirm.reauth': {
+    label: 'Re-check at admission confirmation',
+    description:
+      'The approver re-enters their account password in the confirmation request; it is checked on the server and never stored or logged. Accounts that sign in only with Google have no password and cannot confirm until a Google re-authentication is approved.',
+    defaultValue: { method: 'password' },
+    defaultState: 'approved',
+    source:
+      'owner brief 2026-10-21 §6 (account-password confirmation by an authorised staff member).',
+    ownerDecision: 'D-041 (open: Google re-authentication for admission confirmation)',
+    editable: false,
+  },
+  'events.eligibility': {
+    label: 'Event and webinar audience',
+    description:
+      'Which people may be added to events and webinars (leads, demo students, active or past students) and whether their guardians are invited too. Contact preferences always apply.',
+    defaultValue: { populations: ['demo', 'active'], includeGuardians: true },
+    defaultState: 'proposed',
+    source: 'owner brief 2026-10-21 §12 (event eligibility is a proposed choice).',
+    ownerDecision: 'Owner to confirm who may be invited to events',
+    editable: true,
+  },
+  'reports.audiences': {
+    label: 'Student report audiences',
+    description:
+      'Report versions staff may produce. Guardian and student reports never contain raw teacher remarks, identity documents, audit logs or private payment details; with review on, a second person must review a report before it is final.',
+    defaultValue: { enabled: ['internal', 'guardian', 'admin_dossier'], reviewBeforeFinal: true },
+    defaultState: 'proposed',
+    source: 'owner brief 2026-10-21 §10 (draft / reviewed / final reports; parent report content).',
+    ownerDecision: 'Owner to confirm report audiences and the review step',
     editable: true,
   },
 };
@@ -649,7 +627,8 @@ export function resolveSettings(stored: readonly StoredSetting[]): ResolvedSetti
       editable: def.editable,
       origin: 'default',
     };
-    if (row) {
+    // A non-editable value is an owner decision in code: a stored row never overrides it.
+    if (row && def.editable) {
       const parsed = (settingSchemas[key] as z.ZodType).safeParse(row.value);
       resolved =
         parsed.success && isDecisionState(row.decisionState)

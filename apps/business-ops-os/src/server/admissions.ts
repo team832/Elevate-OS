@@ -12,10 +12,11 @@ import {
   opsAdmissionChecks,
   opsAdmissions,
   opsAdmissionTransitions,
-  opsCounsellingSessions,
+  opsAppointments,
   opsDemos,
-  opsDemoTeachers,
+  opsDemoSessions,
   opsEnrolmentAttempts,
+  opsFeePlans,
   opsFeeRecords,
   opsFollowUps,
   opsLeads,
@@ -61,9 +62,10 @@ import {
   type CheckState,
   type FeeApprovalState,
 } from '../domain';
+import { demoAttendanceStatus, demoDaysAndSubjects } from '../domain/demos';
 import { summariseFees, type FeeRecordLike } from '../domain/fees';
 import { deriveHandoffView, retryDecision, type HandoffInput } from '../domain/students';
-import { feeArrangementPolicy } from './approval-policies';
+import { feeAgreementPolicy, feeArrangementPolicy } from './approval-policies';
 import {
   accessScope,
   activeStaff,
@@ -180,7 +182,7 @@ export function handoffInputOf(
   academicDelivery: HandoffInput['academicDelivery'],
 ): HandoffInput {
   return {
-    status: a.status as AdmissionStatus,
+    status: a.status,
     handoffStatus: a.handoffStatus,
     enrolmentAttempt: a.enrolmentAttempt,
     academicDelivery,
@@ -236,13 +238,47 @@ async function checksOf(db: Database, admissionId: string) {
     .where(eq(opsAdmissionChecks.admissionId, admissionId as AdmissionId));
 }
 
-async function readinessOf(db: Database, admission: AdmissionRow) {
+/**
+ * D-039: the fee approval is met when the admission's bundle (it, or its application's cases) has
+ * an ACTIVE agreement activated by that agreement's own approval. Admission-level fee-arrangement
+ * approvals (`fee`) stay readable but no longer count.
+ */
+async function agreementApproved(db: Database, admission: AdmissionRow) {
+  const [row] = await db
+    .select({ id: opsFeePlans.id })
+    .from(opsFeePlans)
+    .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsFeePlans.admissionId))
+    .innerJoin(
+      approvals,
+      and(
+        eq(approvals.id, opsFeePlans.approvalId),
+        eq(approvals.subjectId, opsFeePlans.id),
+        eq(approvals.policy, feeAgreementPolicy.key),
+        eq(approvals.status, 'approved'),
+      ),
+    )
+    .where(
+      and(
+        eq(opsFeePlans.status, 'active'),
+        admission.applicationId
+          ? or(
+              eq(opsAdmissions.id, admission.id),
+              eq(opsAdmissions.applicationId, admission.applicationId),
+            )
+          : eq(opsAdmissions.id, admission.id),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+export async function readinessOf(db: Database, admission: AdmissionRow) {
   const settings = await loadSettings(db);
   const checks = await checksOf(db, admission.id);
   const fee = await feeApprovalState(db, admission.id);
   const gaps = evaluateAdmissionReadiness({
     checks: checks as CheckState[],
-    feeApproval: fee.state,
+    feeApproval: (await agreementApproved(db, admission)) ? 'approved' : 'none',
     hasProgramme: Boolean(admission.programmeId),
     config: settings['admission.confirmation'].value,
   });
@@ -288,7 +324,7 @@ export async function listAdmissions(
     programmeCode: r.programmeCode,
     counsellorStaffId: a.counsellorStaffId,
     counsellorName: r.counsellorName,
-    status: a.status as AdmissionStatus,
+    status: a.status,
     statusReason: a.statusReason,
     statusChangedAt: a.statusChangedAt,
     handoffStatus: a.handoffStatus,
@@ -319,32 +355,34 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
     checks.map((c) => c.recordedBy),
   );
   const sessions = await db
-    .select({ s: opsCounsellingSessions, counsellorName: staffMembers.fullName })
-    .from(opsCounsellingSessions)
-    .innerJoin(staffMembers, eq(staffMembers.id, opsCounsellingSessions.counsellorStaffId))
-    .where(eq(opsCounsellingSessions.admissionId, admission.id))
-    .orderBy(desc(opsCounsellingSessions.scheduledAt));
+    .select({ s: opsAppointments, counsellorName: staffMembers.fullName })
+    .from(opsAppointments)
+    .innerJoin(staffMembers, eq(staffMembers.id, opsAppointments.staffId))
+    .where(eq(opsAppointments.admissionId, admission.id))
+    .orderBy(desc(opsAppointments.startsAt));
   const demos = await db
     .select()
     .from(opsDemos)
     .where(eq(opsDemos.admissionId, admission.id))
     .orderBy(desc(opsDemos.createdAt));
-  const demoTeachers = demos.length
+  const demoSessions = demos.length
     ? await db
         .select({
-          demoId: opsDemoTeachers.demoId,
-          staffId: opsDemoTeachers.staffId,
-          fullName: staffMembers.fullName,
-          notifiedAt: opsDemoTeachers.notifiedAt,
+          demoId: opsDemoSessions.demoId,
+          startsAt: opsDemoSessions.startsAt,
+          subject: opsDemoSessions.subject,
+          attendance: opsDemoSessions.attendance,
+          teacherName: staffMembers.fullName,
         })
-        .from(opsDemoTeachers)
-        .innerJoin(staffMembers, eq(staffMembers.id, opsDemoTeachers.staffId))
+        .from(opsDemoSessions)
+        .leftJoin(staffMembers, eq(staffMembers.id, opsDemoSessions.teacherStaffId))
         .where(
           inArray(
-            opsDemoTeachers.demoId,
+            opsDemoSessions.demoId,
             demos.map((d) => d.id),
           ),
         )
+        .orderBy(asc(opsDemoSessions.sessionNumber))
     : [];
   const [event] = admission.lastRequestEventId
     ? await db
@@ -360,7 +398,7 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
         academicDelivery: await academicDeliveryOf(db, admission.lastRequestEventId),
       }
     : null;
-  const status = admission.status as AdmissionStatus;
+  const status = admission.status;
   const handoffInput = handoffInputOf(admission, handoff?.academicDelivery ?? null);
   const feeRecords = can(actor, 'ops:fees:read')
     ? await db
@@ -398,7 +436,15 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
     },
     transitions: await transitionsOf(db, admission.id),
     counselling: sessions.map((s) => ({ ...s.s, counsellorName: s.counsellorName })),
-    demos: demos.map((d) => ({ ...d, teachers: demoTeachers.filter((t) => t.demoId === d.id) })),
+    demos: demos.map((d) => {
+      const sessions = demoSessions.filter((x) => x.demoId === d.id);
+      return {
+        ...d,
+        ...demoDaysAndSubjects(sessions),
+        status: demoAttendanceStatus(d.outcome, sessions),
+        teachers: [...new Set(sessions.flatMap((x) => (x.teacherName ? [x.teacherName] : [])))],
+      };
+    }),
     followUps: await db
       .select()
       .from(opsFollowUps)
@@ -452,7 +498,7 @@ export async function transitionAdmission(
       .where(eq(opsLeads.id, admission.leadId));
     const closure = settings['admissions.closure_reasons'].value;
     const coded = checkReasonCode({
-      from: admission.status as AdmissionStatus,
+      from: admission.status,
       to: input.to,
       code: input.reasonCode,
       heldFromStatus: admission.heldFromStatus as AdmissionStatus | null,
@@ -517,7 +563,7 @@ export async function updateAdmission(
     if (k in input) (patch as Record<string, unknown>)[k] = input[k] ?? null;
   return withTransaction(db, async (tx) => {
     const before = await lockAccessible(tx, access, id);
-    if (!isOpenStatus(before.status as AdmissionStatus) || before.status === 'enrolment_requested')
+    if (!isOpenStatus(before.status) || before.status === 'enrolment_requested')
       throw new ConflictError(`An admission that is ${before.status} cannot be edited.`);
     if (
       'programmeId' in patch &&
@@ -562,7 +608,7 @@ export async function recordAdmissionCheck(
       if (!separation.ok) throw new ConflictError(separation.message);
     }
     if (input.status === 'not_applicable' && input.itemKey.startsWith('fee_verification'))
-      throw new ValidationError('Fee verifications cannot be marked not applicable (BR-OPS-7).');
+      throw new ValidationError('Fee verifications cannot be marked not applicable.');
     const values = {
       admissionId: admission.id,
       itemKey: input.itemKey,
@@ -633,9 +679,7 @@ export async function feeApprovalAction(
         .filter((c) => c.status === 'done')
         .map((c) => c.itemKey);
       if (!done.includes('fee_verification_1') || !done.includes('fee_verification_2'))
-        throw new ValidationError(
-          'Record both fee verifications before asking for approval (BR-OPS-7).',
-        );
+        throw new ValidationError('Record both fee verifications before asking for approval.');
       return requestApproval(tx, {
         policy,
         subjectId: admission.id,

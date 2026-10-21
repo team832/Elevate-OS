@@ -1,6 +1,7 @@
+import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { Alert, ButtonLink, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
 import { getStudentProgress, getStudentRecord, listStaff } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
@@ -9,6 +10,7 @@ import { InterventionsTable } from '../../../ui/interventions';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Student progress' };
 
 const TRIGGERS = ['repeated_absence', 'declining_scores', 'low_scores', 'missed_assessments', 'overdue_catch_up', 'other'].map((v) => ({ value: v, label: v.replace(/_/g, ' ') }));
 
@@ -30,7 +32,12 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
   const s = record.student;
   return (
     <AcademicShell access={access} active="students">
-      <PageHeader title={`${s.fullName} (${s.code})`} description={<>{s.currentStage ?? 'stage not recorded'} · <StateBadge state={s.status} />{s.contactsHidden ? ' · contact details hidden for your role' : ''}</>} actions={<a href={MODULE_PATHS.students}>All students</a>} />
+      <PageHeader
+        title={s.fullName}
+        meta={<><StateBadge state={s.status} /> <span className="el-field-hint">{s.code}</span></>}
+        description={`${s.currentStage ?? 'Stage not recorded'}${s.contactsHidden ? ' · contact details hidden for your role' : ''}`}
+        actions={<ButtonLink href={MODULE_PATHS.students}>All students</ButtonLink>}
+      />
       <div className="el-stack">
         {!s.contactsHidden ? (
           <Card title="Contact (restricted)">
@@ -39,7 +46,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
           </Card>
         ) : null}
         <Card title="Enrolments">
-          <DataTable
+          <DataTable compact
             rows={record.enrolments}
             rowKey={(e) => e.id}
             empty={<EmptyState title="No enrolments" />}
@@ -66,7 +73,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
                     ? `${b.trend.direction} (${b.trend.slope > 0 ? '+' : ''}${b.trend.slope} percentage points per assessment over ${b.trend.pointsUsed} results; mean ${b.trend.mean}%)`
                     : `Insufficient data — ${b.trend.reason}`}
                 </p>
-                <DataTable
+                <DataTable compact
                   caption="Final results"
                   rows={b.results.map((r, i) => ({ ...r, key: `${r.code}-${i}` }))}
                   rowKey={(r) => r.key}
@@ -78,7 +85,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
                     { key: 'pct', header: 'Percentile', render: (r) => (r.percentile === null ? '—' : Number(r.percentile).toFixed(2)) },
                   ]}
                 />
-                <DataTable
+                <DataTable compact
                   caption={`Missed classes (${b.missed.unrecorded} held session(s) have no attendance mark and are not counted)`}
                   rows={b.missed.missed}
                   rowKey={(m) => m.sessionId}
@@ -94,7 +101,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
         {progress ? (
           <>
             <Card title="Catch-up tasks">
-              <DataTable
+              <DataTable compact
                 rows={progress.catchupTasks}
                 rowKey={(t) => t.id}
                 empty={<EmptyState title="No catch-up tasks" />}

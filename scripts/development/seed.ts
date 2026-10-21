@@ -1,7 +1,8 @@
 /**
  * `npm run db:seed` — load development data: core seeds (departments,
- * programmes, one fictional user per role, staff records) followed by every
- * module's `seeds` export (apps/<module>/seed/index.ts). Idempotent.
+ * programmes, one sample user per role, staff records) followed by every
+ * module's `seeds` export (apps/<module>/seed/index.ts), then the platform seeds
+ * (apps/platform/seed: the sample enrolment handoff across modules). Idempotent.
  * Development only: refuses NODE_ENV=production and non-local databases.
  */
 import { hashPassword } from '@elevate/authentication';
@@ -12,6 +13,7 @@ import { SEED_USERS, coreSeeds, runSeeds, type SeedDefinition } from '@elevate/d
 import { seeds as academicSeeds } from '@elevate/academic-os/seed';
 import { seeds as opsSeeds } from '@elevate/business-ops-os/seed';
 import { seeds as marketingSeeds } from '@elevate/marketing-os/seed';
+import { seeds as platformSeeds } from '@elevate/platform/seed';
 
 loadRootEnv();
 const env = loadEnv('seed');
@@ -26,7 +28,13 @@ if (!isLocalDatabaseUrl(env.DATABASE_URL)) {
   process.exit(1);
 }
 
-const all: SeedDefinition[] = [...coreSeeds, ...marketingSeeds, ...academicSeeds, ...opsSeeds];
+const all: SeedDefinition[] = [
+  ...coreSeeds,
+  ...marketingSeeds,
+  ...academicSeeds,
+  ...opsSeeds,
+  ...platformSeeds,
+];
 const handle = createDatabase(env.DATABASE_URL, { maxConnections: 2 });
 try {
   const results = await runSeeds(handle.db, all, {
@@ -37,7 +45,7 @@ try {
   console.log(
     `db:seed — ${results.length} seed(s) applied: ${results.map((r) => `${r.name} (${r.ms} ms)`).join(', ')}`,
   );
-  console.log('db:seed — fictional sign-ins (password = SEED_USER_PASSWORD):');
+  console.log('db:seed — sample sign-ins (password = SEED_USER_PASSWORD):');
   for (const u of SEED_USERS) console.log(`  ${u.role.padEnd(22)} ${u.email}`);
 } catch (error) {
   console.error('db:seed — failed:', error instanceof Error ? error.message : error);
