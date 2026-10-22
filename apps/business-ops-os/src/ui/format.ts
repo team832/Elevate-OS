@@ -2,6 +2,13 @@
 import type { Tone } from '@elevate/shared-ui';
 import { formatPaise } from '../domain/fees';
 
+/**
+ * Router path of a browser path: Next adds the app's basePath itself (D-022), and the shared
+ * task and lead screens run under /ops, /academic and /marketing (D-073).
+ */
+export const routerPath = (path: string) =>
+  path.replace(/^\/(?:ops|academic|marketing)(?=[/?]|$)/, '') || '/';
+
 /** Money on screens: "₹1,00,000" for whole rupees, "₹1,500.50" otherwise. PDFs keep `formatPaise` ("₹1,00,000.00"). */
 export const fmtPaise = (paise: number | null | undefined) =>
   formatPaise(paise).replace(/\.00$/, '');

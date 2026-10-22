@@ -1,6 +1,6 @@
 /**
- * Students and enrolments (ACD-019). Contact details (student and guardian
- * email/phone) are returned only to holders of academic:students:write (the
+ * Students and enrolments (ACD-019). Contact details (student email/phone, date of birth and
+ * every guardian field) are returned only to holders of academic:students:write (the
  * coordinator) — PLT-014 minimisation. Teachers see students of their batches only.
  */
 import { and, asc, eq, ilike, inArray, or } from 'drizzle-orm';
@@ -29,10 +29,10 @@ export function newStudentCode(): string {
 }
 
 export function presentStudent(row: StudentRow, showContacts: boolean) {
-  const { email, phone, guardianEmail, guardianPhone, dateOfBirth, ...rest } = row;
+  const { email, phone, guardianName, guardianRelationship, guardianEmail, guardianPhone, dateOfBirth, ...rest } = row;
   return showContacts
-    ? { ...rest, dateOfBirth, email, phone, guardianEmail, guardianPhone, contactsHidden: false }
-    : { ...rest, dateOfBirth: null, email: null, phone: null, guardianEmail: null, guardianPhone: null, contactsHidden: true };
+    ? { ...rest, dateOfBirth, email, phone, guardianName, guardianRelationship, guardianEmail, guardianPhone, contactsHidden: false }
+    : { ...rest, dateOfBirth: null, email: null, phone: null, guardianName: null, guardianRelationship: null, guardianEmail: null, guardianPhone: null, contactsHidden: true };
 }
 
 export async function listStudents(db: Database, actor: Actor, filter: { batchId?: string; q?: string } = {}) {

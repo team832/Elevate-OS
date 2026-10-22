@@ -29,15 +29,8 @@ describe('loadEnv', () => {
     expect(caught).toBeInstanceOf(ConfigurationError);
     const error = caught as ConfigurationError;
     const keys = error.problems.map((p) => p.key).sort();
-    expect(keys).toEqual(
-      [
-        'ACADEMIC_OS_URL',
-        'BUSINESS_OPS_OS_URL',
-        'INTERNAL_SERVICE_TOKEN',
-        'MARKETING_OS_URL',
-        'SESSION_SECRET',
-      ].sort(),
-    );
+    // Workspace URLs default to the local ports (D-072), so only the secrets are missing.
+    expect(keys).toEqual(['INTERNAL_SERVICE_TOKEN', 'SESSION_SECRET']);
     expect(error.message).toContain('SESSION_SECRET: missing');
     expect(error.message).toContain('.env.example');
   });

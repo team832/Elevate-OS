@@ -16,6 +16,8 @@ export interface AuthenticatedUser {
   readonly displayName: string;
   readonly roles: readonly RoleKey[];
   readonly sessionId: SessionId;
+  /** Remembered default workspace (D-072); trust it only while the roles still grant it. */
+  readonly preferredWorkspace?: string | null;
 }
 
 /** HMAC the raw token with SESSION_SECRET; only this digest is stored. */
@@ -94,6 +96,7 @@ export async function validateSession(
       email: users.email,
       displayName: users.displayName,
       status: users.status,
+      preferredWorkspace: users.preferredWorkspace,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
@@ -115,6 +118,7 @@ export async function validateSession(
     displayName: row.displayName,
     roles,
     sessionId: row.sessionId,
+    preferredWorkspace: row.preferredWorkspace,
   };
 }
 

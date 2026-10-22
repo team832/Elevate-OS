@@ -60,9 +60,16 @@ import {
   type Actor,
 } from './context';
 import { createRuleFollowUp } from './follow-ups';
-import { fieldError, notifyOthers, opsAudit, rowById } from './ops-common';
+import { fieldError, opsAudit, rowById } from './ops-common';
 import { applyTransition } from './pipeline';
 import { loadSettings } from './settings';
+import { notifyHosted } from './task-links';
+
+/**
+ * Meeting notifications open `/meetings` in the recipient's workspace: Ops (schedule and change)
+ * or Academic ("My meetings", read-only, D-073).
+ */
+export const MEETINGS = 'meetings';
 
 type Row = typeof appointments.$inferSelect;
 const audit = opsAudit('appointment');
@@ -295,11 +302,10 @@ export async function scheduleAppointment(
         role: 'guardian',
       })),
     ]);
-    await notifyOthers(tx, actor, notifyUsers, {
+    await notifyHosted(tx, actor, notifyUsers, MEETINGS, `/meetings?open=${row.id}`, {
       kind: 'appointment.scheduled',
       title: `${APPOINTMENT_TYPE_LABELS[row.type]} booked`,
       body: `${fmtDateTime(row.startsAt)}, ${row.mode === 'offline' ? (row.location ?? DEFAULT_OFFLINE_LOCATION) : 'online'}. Email/SMS reminder: simulated — not sent.`,
-      link: `/ops/meetings?open=${row.id}`,
       entityType: 'appointment',
       entityId: row.id,
     });
@@ -412,14 +418,20 @@ export async function changeAppointment(
       .insert(opsAppointmentChanges)
       .values(history.map((h) => ({ ...h, appointmentId: row.id, reason, actorUserId: actor.id })));
     if (change.action === 'reschedule' || change.action === 'cancel')
-      await notifyOthers(tx, actor, await userIdsForStaff(tx, [row.staffId]), {
-        kind: `appointment.${change.action}`,
-        title: `${APPOINTMENT_TYPE_LABELS[row.type]} ${change.action === 'cancel' ? 'cancelled' : 'moved'}`,
-        body: `${change.action === 'cancel' ? 'Was' : 'Now'} ${fmtDateTime(after?.startsAt)}. Reason: ${reason}. Email/SMS reminder: simulated — not sent.`,
-        link: `/ops/meetings?open=${row.id}`,
-        entityType: 'appointment',
-        entityId: row.id,
-      });
+      await notifyHosted(
+        tx,
+        actor,
+        await userIdsForStaff(tx, [row.staffId]),
+        MEETINGS,
+        `/meetings?open=${row.id}`,
+        {
+          kind: `appointment.${change.action}`,
+          title: `${APPOINTMENT_TYPE_LABELS[row.type]} ${change.action === 'cancel' ? 'cancelled' : 'moved'}`,
+          body: `${change.action === 'cancel' ? 'Was' : 'Now'} ${fmtDateTime(after?.startsAt)}. Reason: ${reason}. Email/SMS reminder: simulated — not sent.`,
+          entityType: 'appointment',
+          entityId: row.id,
+        },
+      );
     if (isPipeline(row))
       await pipelineAfterChange(tx, actor, row, change, programme, now, requestId, settings);
     await audit(
@@ -594,6 +606,20 @@ export async function listAppointments(
     db.select({ n: count() }).from(appointments).where(where),
   ]);
   return { rows: rows.map(flatten), total: total?.n ?? 0, page, pageSize };
+}
+
+/**
+ * "My meetings" (D-073): appointments and events the caller takes part in (assigned or as a
+ * participant), whatever their scope; null when their login has no staff record.
+ */
+export async function listMyMeetings(
+  db: Database,
+  actor: Actor,
+  filters: Partial<Pick<AppointmentFilters, 'from' | 'to' | 'page'>>,
+  pageSize = 25,
+) {
+  const staffId = await staffIdForUser(db, actor.id);
+  return staffId ? listAppointments(db, actor, { ...filters, staffId }, pageSize) : null;
 }
 
 export async function getAppointment(db: Database, actor: Actor, id: string) {

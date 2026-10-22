@@ -16,7 +16,7 @@ import {
 import { DATE_FORMATS, formatIst, modulePath } from '../../../domain';
 import { listAccounts, listMetricImports } from '../../../server';
 import { importMetricsAction } from '../../actions/placements';
-import { MarketingPage, Section, type SearchParams, METRICS_TABS } from '../../../ui/shell';
+import { MarketingPage, Section, type SearchParams } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Metrics import' };
@@ -26,9 +26,8 @@ export default async function MetricsImportPage({ searchParams }: { searchParams
     <MarketingPage
       permission="marketing:metrics:read"
       path={modulePath('metrics/import')}
-      active="metrics-import"
+      active="reports"
       title="Metrics import"
-      tabs={METRICS_TABS}
       description="Import an Instagram or YouTube Studio CSV export. Blank cells stay missing, never 0."
       searchParams={await searchParams}
     >

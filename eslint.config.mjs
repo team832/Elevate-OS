@@ -16,10 +16,31 @@ const MODULE_APPS = {
   'business-ops-os': '@elevate/business-ops-os',
 };
 
+/**
+ * D-073: the shared task/EOD and lead services stay in Business Ops' code; these workspaces
+ * may import exactly these entry points of it (a regex, since a gitignore-style "!" cannot
+ * re-include a path whose parent is excluded).
+ */
+const SHARED_ENTRIES = {
+  'academic-os': ['work'],
+  'marketing-os': ['work', 'leads'],
+};
+
 const crossModule = (selfDir) =>
   Object.entries(MODULE_APPS)
-    .filter(([dir]) => dir !== selfDir)
+    .filter(([dir]) => dir !== selfDir && !(SHARED_ENTRIES[selfDir] && dir === 'business-ops-os'))
     .flatMap(([dir, pkg]) => [pkg, `${pkg}/*`, `**/${dir}/**`, `**/${dir}`]);
+
+/** Everything that names business-ops-os except the allowed entry points. */
+const sharedEntryPattern = (selfDir) =>
+  SHARED_ENTRIES[selfDir]
+    ? [
+        {
+          regex: `^(?!@elevate/business-ops-os/(${SHARED_ENTRIES[selfDir].join('|')})$).*business-ops-os(/|$)`,
+          message: `Module boundary (D-011.3, D-073): only @elevate/business-ops-os/{${SHARED_ENTRIES[selfDir].join(',')}} may be imported here.`,
+        },
+      ]
+    : [];
 
 const BOUNDARY_MESSAGE =
   'Module boundary (D-011.3): never import another module. Use @elevate/shared-contracts (events, summaries) or an API.';
@@ -67,6 +88,7 @@ const moduleConfigs = Object.keys(MODULE_APPS).flatMap((dir) => [
               ],
               message: BOUNDARY_MESSAGE,
             },
+            ...sharedEntryPattern(dir),
             { group: TEST_ONLY, message: 'Test helpers belong in tests/ only.' },
           ],
         },

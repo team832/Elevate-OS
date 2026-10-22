@@ -2,7 +2,7 @@
  * Follow-ups (OPS-007, BR-OPS-9) and the reminder job (PLT-010).
  * Due rules, overdue and reminder selection are pure (domain/follow-ups.ts).
  */
-import { and, asc, eq, isNull, lte, ne, or, type SQL } from 'drizzle-orm';
+import { and, asc, between, eq, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import {
   opsAdmissions,
   opsFollowUps,
@@ -10,6 +10,7 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
+import { can } from '@elevate/authorization';
 import { notify } from '@elevate/notifications';
 import { recordAudit, withTransaction } from '@elevate/server-kit';
 import { InvalidStateTransitionError, ValidationError } from '@elevate/shared-contracts';
@@ -28,6 +29,7 @@ import {
 } from '../domain';
 import { accessScope, activeStaff, assertScope, staffIdForUser, type Actor } from './context';
 import { opsAudit, rowById } from './ops-common';
+import { linkFor } from './task-links';
 import { loadSettings } from './settings';
 
 export type FollowUpRow = typeof opsFollowUps.$inferSelect;
@@ -197,6 +199,8 @@ export async function listFollowUps(
     conditions.push(eq(opsFollowUps.status, 'open'), eq(opsFollowUps.dueDate, today));
   if (view === 'open') conditions.push(eq(opsFollowUps.status, 'open'));
   if (options.leadId) conditions.push(eq(opsFollowUps.leadId, options.leadId as LeadId));
+  // Admission follow-ups belong to the admissions case (D-073): Marketing sees lead ones only.
+  if (!can(actor, 'ops:admissions:read')) conditions.push(isNull(opsFollowUps.admissionId));
   const rows = await db
     .select({
       followUp: opsFollowUps,
@@ -222,6 +226,34 @@ export async function listFollowUps(
       window,
     ),
   }));
+}
+
+/**
+ * Overview figures for open follow-ups in the caller's scope (listFollowUps' rules): overdue, due
+ * today and upcoming (the settings' window after today), IST day. One aggregate query, no rows;
+ * null for own scope without a staff record.
+ */
+export async function followUpDaySummary(db: Database, actor: Actor, now = new Date()) {
+  const access = await accessScope(db, actor, 'ops:leads:read');
+  if (access.scope === 'own' && !access.staffId) return null;
+  const day = istToday(now);
+  const window = (await loadSettings(db))['followups.due_rules'].value.upcomingWindowDays;
+  const where = (cond: SQL) => sql<number>`count(*) filter (where ${cond})`.mapWith(Number);
+  const [c] = await db
+    .select({
+      overdue: where(lte(opsFollowUps.dueDate, addDays(day, -1))),
+      dueToday: where(eq(opsFollowUps.dueDate, day)),
+      upcoming: where(between(opsFollowUps.dueDate, addDays(day, 1), addDays(day, window))),
+    })
+    .from(opsFollowUps)
+    .where(
+      and(
+        eq(opsFollowUps.status, 'open'),
+        access.scope === 'own' ? eq(opsFollowUps.ownerStaffId, access.staffId!) : undefined,
+        can(actor, 'ops:admissions:read') ? undefined : isNull(opsFollowUps.admissionId),
+      ),
+    );
+  return { day, asOf: now, upcomingWindowDays: window, ...c! };
 }
 
 /**
@@ -290,7 +322,12 @@ export async function runFollowUpReminders(
               ? `Overdue by ${d.daysOverdue} day(s): ${r.title} — ${r.leadCode}`
               : `Due today: ${r.title} — ${r.leadCode}`,
           body: `${r.studentName} (${r.leadCode}). Due ${r.dueDate}.`,
-          link: `/ops/leads/${r.leadId}`,
+          link: await linkFor(
+            tx,
+            r.ownerUserId as NonNullable<typeof r.ownerUserId>,
+            'leads',
+            `/leads/${r.leadId}`,
+          ),
           entityType: 'follow_up',
           entityId: r.id,
         });

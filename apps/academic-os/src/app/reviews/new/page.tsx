@@ -16,14 +16,14 @@ const one = (v: string | string[] | undefined) => (typeof v === 'string' && v ? 
 /** Prefilled from a class roster: `?studentId&sessionId` (enrolled) or `?coreStudentId&opsDemoSessionId` (demo). */
 export default async function NewReviewPage({ searchParams }: { searchParams: Promise<Params> }) {
   const access = await gate('academic:reviews:write', MODULE_PATHS.newReview);
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="teaching">{null}</AcademicShell>;
+  if (access.status !== 'allowed') return <AcademicShell access={access} active="reviews">{null}</AcademicShell>;
   const p = await searchParams;
   const ref = { studentId: one(p.studentId), sessionId: one(p.sessionId), coreStudentId: one(p.coreStudentId), opsDemoSessionId: one(p.opsDemoSessionId) };
   const db = getDb();
   const actor = actorFor(access.user);
   const prefilled = Boolean(ref.studentId || ref.coreStudentId);
   const data = await load(async () => (prefilled ? { target: await reviewTarget(db, actor, ref), students: [] } : { target: null, students: await reviewableStudents(db, actor) }));
-  if (!data.ok) return <AcademicShell access={access} active="teaching"><LoadError error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError error={data.error} /></AcademicShell>;
   const { target, students } = data.data;
   const extra = target?.demo
     ? { coreStudentId: ref.coreStudentId, opsDemoSessionId: ref.opsDemoSessionId, sessionId: target.sessionId ?? undefined }
@@ -32,7 +32,7 @@ export default async function NewReviewPage({ searchParams }: { searchParams: Pr
       : {};
   const studentField = target ? [] : [{ name: 'academicStudentId', label: 'Student', type: 'select' as const, required: true, options: students.map((s) => ({ value: s.id, label: `${s.fullName} (${s.code})` })) }];
   return (
-    <AcademicShell access={access} active="teaching">
+    <AcademicShell access={access} active="reviews">
       <PageHeader
         title={target ? `Review — ${target.name}` : 'Write a review'}
         description="Write what you saw in class. A draft is visible only to you; once submitted it is shared with coordinators and authorised Business Ops staff, and it is never edited — you can revise it as a new version or withdraw it."

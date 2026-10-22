@@ -6,6 +6,7 @@ import { getDirectory, getStaffDetail } from '../../server/organisation';
 import { formOptions } from '../../server/options';
 import { ActionForm } from '../../ui/action-form';
 import { humanise } from '../../ui/format';
+import { PeopleNav } from '../../ui/admissions-nav';
 import { Frame, gate, load, Section } from '../../ui/frame';
 import { listHref, options, SearchPanel } from '../../ui/list-controls';
 import { FormModal, RecordModal } from '../../ui/record-modal';
@@ -27,6 +28,7 @@ export default async function StaffPage({ searchParams }: { searchParams: Promis
     <Frame access={access} active="staff">
       <PageHeader
         title="Staff directory"
+        tabs={<PeopleNav current="staff" user={access.user} />}
         description="Everyone on staff, their department and who they report to. Teachers and counsellors are staff."
         actions={
           can(access.user, 'ops:organisation:manage') ? (

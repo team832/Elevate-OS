@@ -7,10 +7,14 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { countUnread } from '@elevate/notifications';
+import { workspaceHrefs } from '@elevate/server-kit/next';
 import type { AppShellProps } from '@elevate/shared-ui';
 import { PLATFORM_PATHS } from '../lib/shell';
 
-type Extras = Pick<AppShellProps, 'nav' | 'search' | 'settings' | 'unreadNotifications'>;
+type Extras = Pick<
+  AppShellProps,
+  'nav' | 'search' | 'settings' | 'unreadNotifications' | 'moduleHrefs'
+>;
 
 /** Top-bar search: the first searchable list the user may open. */
 export function searchFor(user: AuthenticatedUser): AppShellProps['search'] {
@@ -53,5 +57,6 @@ export async function platformShell(
     search: searchFor(user),
     settings: canUsers ? { href: PLATFORM_PATHS.users } : undefined,
     unreadNotifications: unread,
+    moduleHrefs: workspaceHrefs(),
   };
 }

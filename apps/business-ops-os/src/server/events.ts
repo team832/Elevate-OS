@@ -36,7 +36,7 @@ import {
 import { ACTIVE_CASE_STATUSES } from '../domain/student-lifecycle';
 import { fmtDateTime } from '../ui/format';
 import { getMessagingAdapter } from './adapters/messaging';
-import { assertFree, ownStaff } from './appointments';
+import { assertFree, MEETINGS, ownStaff } from './appointments';
 import type {
   EventAudience,
   EventEdit,
@@ -51,8 +51,9 @@ import {
   type AccessScope,
   type Actor,
 } from './context';
-import { fieldError, notifyOthers, opsAudit, rowById } from './ops-common';
+import { fieldError, opsAudit, rowById } from './ops-common';
 import { loadSettings } from './settings';
+import { notifyHosted } from './task-links';
 import { activeCase, noOtherCase, ownCase, pastCase } from './students';
 
 const audit = opsAudit('appointment');
@@ -311,11 +312,10 @@ export async function scheduleEvent(
       'manual',
       eligibility.includeGuardians,
     );
-    await notifyOthers(tx, actor, notifyUsers, {
+    await notifyHosted(tx, actor, notifyUsers, MEETINGS, `/meetings?open=${row.id}`, {
       kind: 'appointment.scheduled',
       title: `${APPOINTMENT_TYPE_LABELS[row.type]} scheduled: ${row.title}`,
       body: `${fmtDateTime(row.startsAt)}. Nothing has been sent to participants; messages go out only from “Preview message”.`,
-      link: `/ops/meetings?open=${row.id}`,
       entityType: 'appointment',
       entityId: row.id,
     });

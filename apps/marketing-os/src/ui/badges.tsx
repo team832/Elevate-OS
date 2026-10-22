@@ -1,10 +1,12 @@
 import { StatusBadge, type Tone } from '@elevate/shared-ui';
-import type {
-  ContentState,
-  IntegrationStatus,
-  PlacementStatus,
-  PublicationMode,
-  RuleCheckResult,
+import {
+  coverageLabel,
+  type AggregatedMetric,
+  type ContentState,
+  type IntegrationStatus,
+  type PlacementStatus,
+  type PublicationMode,
+  type RuleCheckResult,
 } from '../domain';
 
 const CONTENT_TONES: Record<ContentState, Tone> = {
@@ -77,5 +79,25 @@ export function RuleCheckSummary({ check }: { check: RuleCheckResult }) {
         {check.assumedAllAccounts ? ' (no placements yet — every account’s rules applied)' : ''}
       </span>
     </p>
+  );
+}
+
+const nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
+
+/** One aggregated metric: missing is a badge, never 0; a partial sum shows its coverage. */
+export function MetricCell({ m }: { m: AggregatedMetric }) {
+  if (m.status === 'not_applicable') return <span className="el-field-hint">n/a</span>;
+  if (m.status === 'missing') return <StatusBadge tone="neutral">missing</StatusBadge>;
+  return (
+    <span title={coverageLabel(m)}>
+      {m.status === 'estimated' ? '≈ ' : ''}
+      {nf.format(m.value ?? 0)}
+      {m.status === 'partial' ? (
+        <span className="el-field-hint">
+          {' '}
+          ({m.withData}/{m.applicable} posts)
+        </span>
+      ) : null}
+    </span>
   );
 }

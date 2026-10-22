@@ -3,6 +3,7 @@ import path from 'node:path';
 import { parseEnv } from 'node:util';
 import type { NextConfig } from 'next';
 import { securityHeaders } from '@elevate/configuration/security-headers';
+import { appOrigin } from '@elevate/configuration/workspaces';
 
 /** Walk up from the app directory to the workspace root (the package.json with "workspaces"). */
 function findRepoRoot(start: string): string {
@@ -27,11 +28,15 @@ if (existsSync(rootEnvFile)) {
 }
 
 /** The browser-facing platform origin (D-004), for Server Actions arriving through its rewrites. */
-const platformHost = new URL(process.env.PLATFORM_URL || 'http://localhost:3000').host;
+const platformHost = new URL(appOrigin('platform')).host;
 
 const nextConfig: NextConfig = {
-  /** Marketing OS lives under /marketing — standalone on port 3001 and behind the platform's rewrite. */
+  /** Marketing OS lives under /marketing: on its own workspace origin (D-072) and behind the platform's rewrite. */
   basePath: '/marketing',
+  // The workspace origin's root opens the workspace (outside the basePath, so basePath: false).
+  async redirects() {
+    return [{ source: '/', destination: '/marketing', basePath: false, permanent: false }];
+  },
   reactStrictMode: true,
   poweredByHeader: false,
   // Static security headers on every response; the per-request CSP is set in src/proxy.ts.
@@ -52,6 +57,8 @@ const nextConfig: NextConfig = {
     '@elevate/shared-contracts',
     '@elevate/shared-types',
     '@elevate/shared-ui',
+    // Shared task/EOD (and, in Marketing, lead) screens from Business Ops' entry points (D-073).
+    '@elevate/business-ops-os',
   ],
   serverExternalPackages: ['@electric-sql/pglite', 'pg'],
   experimental: {

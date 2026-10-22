@@ -1,7 +1,13 @@
 import type { z } from 'zod';
 import { getUserFromRequest, type AuthenticatedUser } from '@elevate/authentication';
-import { requirePermission, type GrantScope, type Permission } from '@elevate/authorization';
-import { createLogger, type Logger } from '@elevate/configuration';
+import {
+  WORKSPACE_KEYS,
+  can,
+  requirePermission,
+  type GrantScope,
+  type Permission,
+} from '@elevate/authorization';
+import { createLogger, isAllowedRequestOrigin, type Logger } from '@elevate/configuration';
 import { getDb, type Database } from '@elevate/database';
 import {
   ForbiddenError,
@@ -12,7 +18,7 @@ import {
   successResponse,
   type ApiMeta,
 } from '@elevate/shared-contracts';
-import type { ModuleKey } from '@elevate/shared-types';
+import { MODULES, type ModuleKey } from '@elevate/shared-types';
 import { toAppError, zodIssues } from './errors';
 import { hashRequestBody, validateIdempotencyKey, withIdempotency } from './idempotency';
 
@@ -183,6 +189,10 @@ export function defineRoute<
     let userId: string | undefined;
     let response: Response;
     try {
+      // 0. CSRF: every localhost port shares the session cookie, so a state change must come
+      // from this origin or a configured app origin (D-072).
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && !isAllowedRequestOrigin(request))
+        throw new ForbiddenError('This request came from another site and was refused.');
       const db = (options.getDb ?? getDb)();
 
       // 1. Who is calling?
@@ -192,6 +202,13 @@ export function defineRoute<
         user = await getUserFromRequest(request, db);
         if (!user) throw new UnauthenticatedError();
         userId = user.id;
+        // A route served under a workspace's base path needs membership of that workspace
+        // (D-072), as its pages do: holding a permission never opens another workspace's API.
+        const workspace = WORKSPACE_KEYS.find((k) =>
+          `${url.pathname}/`.startsWith(`${MODULES[k].basePath}/`),
+        );
+        if (workspace && !can(user, `${workspace}:module:access` as Permission))
+          throw new ForbiddenError('Your roles do not include this workspace.');
         if (spec.permission !== 'authenticated') {
           if (typeof spec.permission === 'string') {
             scope = requirePermission(user, spec.permission);
@@ -239,8 +256,9 @@ export function defineRoute<
       let body: unknown = undefined;
       let rawBody: unknown = undefined;
       if (spec.body) {
-        const contentType = request.headers.get('content-type') ?? '';
-        if (!contentType.includes('application/json')) {
+        // The exact media type: `text/plain;application/json` is a "simple" cross-site request.
+        const mediaType = (request.headers.get('content-type') ?? '').split(';')[0]!.trim();
+        if (mediaType.toLowerCase() !== 'application/json') {
           throw new ValidationError(
             'Send the request body as JSON (Content-Type: application/json).',
           );

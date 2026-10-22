@@ -37,6 +37,11 @@ export interface AppShellProps {
   user: ShellUser;
   /** Modules the user can open (from `modulesFor(user)`); only these appear in the sidebar. */
   modules: readonly ModuleKey[];
+  /**
+   * Absolute workspace URLs (`workspaceHrefs()` from @elevate/server-kit/next, D-072): each
+   * workspace has its own origin. Default: the module's base path on this origin.
+   */
+  moduleHrefs?: Partial<Record<ModuleKey, string>>;
   /** The module this page belongs to. */
   current: ModuleKey;
   /** Form action that signs out, including the basePath, e.g. `/marketing/api/v1/auth/logout`. */
@@ -206,7 +211,7 @@ function ModuleSections({ nav, label }: { nav: readonly NavItem[]; label: string
 }
 
 function Sidebar(props: AppShellProps) {
-  const { user, modules, current, nav = [], myWorkHref, settings } = props;
+  const { user, modules, current, nav = [], myWorkHref, settings, moduleHrefs } = props;
   const overviewCurrent = current === 'platform' && !nav.some((n) => n.active);
   return (
     <div className="el-sidebar-inner">
@@ -215,14 +220,16 @@ function Sidebar(props: AppShellProps) {
       </a>
       <nav className="el-sidebar-nav" aria-label="Modules and sections">
         <ul className="el-nav-list el-nav-modules" aria-label="Modules">
-          <li>
-            <SidebarLink href="/" label="Overview" icon="overview" current={overviewCurrent} />
-          </li>
+          {current === 'platform' ? (
+            <li>
+              <SidebarLink href="/" label="Overview" icon="overview" current={overviewCurrent} />
+            </li>
+          ) : null}
           {MODULE_NAV.filter((m) => modules.includes(m.key)).map((m) => (
             <li key={m.key}>
               <a
                 className="el-nav-link el-nav-module"
-                href={moduleHref(m.key)}
+                href={moduleHrefs?.[m.key] ?? moduleHref(m.key)}
                 data-current={m.key === current ? 'true' : undefined}
                 aria-current={m.key === current || undefined}
               >
@@ -322,6 +329,11 @@ function TopBar(props: AppShellProps) {
             </p>
             <p className="el-field-hint">{user.email}</p>
             <p className="el-field-hint">Roles: {roleLabel(user.roles)}</p>
+            {props.modules.filter((m) => m !== 'platform').length > 1 ? (
+              <p>
+                <a href={`${MODULES[current].basePath}/workspaces`}>Choose default workspace</a>
+              </p>
+            ) : null}
             <form method="post" action={logoutAction}>
               <button className="el-button el-button-secondary el-button-block" type="submit">
                 Sign out

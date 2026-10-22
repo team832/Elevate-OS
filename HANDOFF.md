@@ -4,7 +4,49 @@ _Last updated 22 Oct 2026. Branch `feature/business-ops-hr-admissions`. Nothing 
 
 ## For the owner (plain language)
 
-**What it is.** Elevate OS is the internal system your staff sign in to. It has three parts — Marketing, Academic and Business Operations (enquiries, demos, admissions, students, fees, staff tasks) — and a home page with a leadership overview. Only `@elevateeducation.in` accounts can use it (D-030).
+**What it is.** Elevate OS is the internal system your staff sign in to. Since 22 Oct 2026 it has three **workspaces**, one per kind of work, each at its own address: Business Operations (enquiries, demos, admissions, students, fees, staff tasks), Academic (teachers and coordinators) and Marketing. A fourth address holds Users & roles. Only `@elevateeducation.in` accounts can use it (D-030).
+
+### Status report — 22 Oct 2026 (workspaces)
+
+```
+What's live now: nothing on the internet yet. On this computer each workspace has its own address:
+  Business Operations  http://localhost:3000
+  Academic             http://localhost:3001
+  Marketing            http://localhost:3002
+  Users & roles        http://localhost:3003
+What I did:
+- Each person opens only the workspaces their role allows. Teachers work only in Academic;
+  marketing staff only in Marketing; the owner, director and office staff in Business Operations.
+  Opening another address sends a person back to their own workspace.
+- One sign-in covers every workspace you are allowed into, and signing out anywhere signs you
+  out everywhere. People with more than one workspace pick one after signing in and can tick
+  "Open the one I pick by default next time".
+- Teachers now have their tasks, end-of-day report and meetings inside Academic, plus a list
+  of classes that still need student attendance.
+- Marketing now has leads, follow-ups, tasks and end-of-day reports inside its own menu, and
+  sees each lead's contact details but never documents, date of birth, address or fees.
+- The Business Operations home page is a new Overview for a chosen date range (this month by
+  default), with new pages for Collections, Outstanding fees, an Academic summary and a
+  Marketing summary.
+- Each workspace can be started on its own; a panel from a workspace that is not running says
+  "source unavailable", never 0.
+- Three demo sign-ins for trying it out on this computer only (see step 4 below).
+What I need from you: steps 4 and 5 below, then the new questions at the top of
+  "Decisions waiting for you".
+What's next:
+- You try each workspace with the demo sign-ins and tell me what feels wrong.
+- Choose where to host it, so it can go on the internet.
+Placeholders still to replace: see PLACEHOLDERS.md.
+```
+
+How to start a workspace (open a terminal in the `elevate-os` folder; each command also starts the database if it is not running):
+- Business Operations: `npm run dev:business`, then open http://localhost:3000
+- Academic: `npm run dev:academic`, then open http://localhost:3001
+- Marketing: `npm run dev:marketing`, then open http://localhost:3002
+- Users & roles and Google sign-in: `npm run dev:platform`, then open http://localhost:3003
+- All three workspaces at once: `npm run dev:all`
+
+Demo sign-ins (this computer only, all with the one password you choose in step 4): `business@elevateeducation.in` (operations manager, Business Operations), `teacher@elevateeducation.in` (teacher, Academic), `marketing@elevateeducation.in` (marketing manager, Marketing). The email decides nothing; the role stored for the account decides what it may open. The demo teacher has no classes until a coordinator places them on a batch.
 
 ### Status report — 21 Oct 2026
 
@@ -39,7 +81,7 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 ### Steps only you can do
 
 **1. Change the password of the shared look-around account.** The account `team@elevateeducation.in` exists on this computer only. It can look at everything and change nothing, and it can never confirm an admission. Its password was typed in our chat, so treat it as known to others. There is no "change password" screen yet, so:
-1. Open http://localhost:3000 and sign in with your own account.
+1. Start the admin app with `npm run dev:platform`, open http://localhost:3003 and sign in with your own account.
 2. Click **Users & roles** in the menu.
 3. Click **team@elevateeducation.in**, then **Disable account**, then confirm.
 4. Ask the developer to set a new password for it; turn it back on with **Enable account** once you have the new password. Do not send the new password in chat.
@@ -48,9 +90,23 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 
 **2a. Update the database for the 21 Oct teacher-workspace and task work (this computer only) — done on your computer on 21–22 Oct (migrations `0009`–`0011` applied, samples seeded).** On another computer: the new screens need database changes `0009`, `0010` and `0011`. With `npm run db:start` running, type `! npm run db:migrate` in the Claude Code chat (or run `npm run db:migrate` in a terminal in the `elevate-os` folder). It also fills in what can be known from existing records: each active enrolment's batch becomes a batch placement, and past end-of-day reports become version 1. Before you run it: the database must not have one student enrolled twice, both active, in the same course (the update adds a rule that forbids this). If it stops with an error that mentions `enrolments_active_student_course_key`, that is the cause: stop and tell the developer; nothing is changed. Then type `! npm run db:seed` to add the sample teachers and sample classes (all named "Sample …").
 
-**2b. If `npm run dev` stops with an Application Control error (this computer).** On this PC, Windows refuses to load one file that Next.js uses to compile pages faster: the error says an Application Control policy blocked `next-swc.win32-x64-msvc.node`. This is a Windows security setting on your computer, so only you (or whoever looks after this PC) control it; the developer does not change it. Meanwhile the apps work in the slower mode: start each one with `npm run dev -w @elevate/platform -- --webpack` (and the same with `@elevate/marketing-os`, `@elevate/academic-os`, `@elevate/business-ops-os`, one terminal each). The production build is blocked the same way; it works with `npm run build -w @elevate/platform -- --webpack` (and the same for the other three apps). Nothing else is needed now. If you later want the normal `npm run dev`, the choice is whether to allow that one file in your Windows security settings; do not turn Windows security off as a whole. The exact screens differ between Windows editions, so the steps are not written here; ask the developer to sit with you for it. On a hosting server this does not apply.
+**2b. If `npm run dev` stops with an Application Control error (this computer).** On this PC, Windows refuses to load one file that Next.js uses to compile pages faster: the error says an Application Control policy blocked `next-swc.win32-x64-msvc.node`. This is a Windows security setting on your computer, so only you (or whoever looks after this PC) control it; the developer does not change it. Since 22 Oct 2026 the start commands (`npm run dev:business`, `dev:academic`, `dev:marketing`, `dev:platform`, `dev:all`) always use the slower mode, so they work on this computer as they are. The production build is blocked the same way; it works with `npm run build -w @elevate/platform -- --webpack` (and the same for the other three apps). Nothing else is needed now. If you later want the normal `npm run dev`, the choice is whether to allow that one file in your Windows security settings; do not turn Windows security off as a whole. The exact screens differ between Windows editions, so the steps are not written here; ask the developer to sit with you for it. On a hosting server this does not apply.
 
 **3. When it goes on the internet.** The search page puts what was typed in the address bar (`/ops/search?q=…`), which can be a phone number. In the hosting account, set request logs to **not keep query strings** (D-056). The developer does this with you on go-live day.
+
+**4. Turn on the demo sign-ins (this computer only, optional).** The database change for workspaces (`0013`) is already applied on your computer.
+1. Open the file `.env` in the `elevate-os` folder (Notepad is fine).
+2. Find the line `LOCAL_DEMO_PASSWORD=replace-with-a-dev-only-password`. Replace the part after `=` with a password of at least 12 characters that you use nowhere else. Save the file.
+3. In the Claude Code chat type `! npm run db:seed-demo-accounts` (or run it in a terminal in the `elevate-os` folder). It prints "ready" and the three emails with the address each one opens; it never prints the password. Running it again is safe.
+4. Sign in on http://localhost:3000 as `business@elevateeducation.in`, on http://localhost:3001 as `teacher@elevateeducation.in`, or on http://localhost:3002 as `marketing@elevateeducation.in`, with that password.
+5. Before real staff use the system, type `! npm run db:clear-samples`: it removes the sample records and switches the three demo sign-ins off. Staff never share these accounts.
+
+**5. Google sign-in — only if you ever set it up.** The sign-in return address moved with the admin app to port 3003. If you created a Google sign-in client (`docs/GOOGLE_SIGN_IN_SETUP.md`):
+1. Open https://console.cloud.google.com and sign in with the Google account that owns the project.
+2. Choose the Elevate project at the top, then **APIs & Services** → **Credentials**.
+3. Click the OAuth client you made for Elevate OS.
+4. Under **Authorised redirect URIs**, change `http://localhost:3000/api/v1/auth/google/callback` to `http://localhost:3003/api/v1/auth/google/callback`. Click **Save**.
+5. Google sign-in now needs the admin app running (`npm run dev:platform`). If you never set up Google sign-in, skip this step.
 
 ### Decisions waiting for you
 
@@ -58,6 +114,15 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 
 | Question | Safe choice used today |
 |---|---|
+| **New 22 Oct (workspaces).** Who opens which workspace: teachers only Academic; academic coordinators Academic and Business Operations; marketing staff only Marketing, with leads, lead contact details and their own tasks (D-073)? | As stated (Proposed) |
+| **New 22 Oct.** Staff attendance (OD-026): should the system keep staff attendance? Until then teachers have no "My Attendance" page and the Overview says "no HR module" | Not built; hidden |
+| **New 22 Oct.** Should Marketing see Events and Webinars? It needs a new permission that covers only events, because today's meeting permission also covers private counselling | Hidden in Marketing |
+| **New 22 Oct.** An enquiry's campaign is typed as free text. Should it be chosen from the list of campaigns, so results by campaign (leads → demos → admissions) can be counted? | Free text; results by campaign not shown |
+| **New 22 Oct.** When a lead comes in several times from different sources, which source counts in "leads by source": the first enquiry, or every enquiry? | Not decided; shown as recorded |
+| **New 22 Oct.** Should teachers see approved feedback about themselves inside Academic? They saw it in Business Operations before | Not shown |
+| **New 22 Oct.** Keep a student's guardian name and relationship hidden from teachers, directors and auditors in Academic (phone and email were already hidden)? | Hidden |
+| **New 22 Oct.** Menu names and defaults: Business Operations groups "Teaching and work" and "Insight"; the Overview opens on this month to date; in Marketing, Ideas is a tab under Content Calendar and Accounts a tab under Campaigns | As built |
+| **New 22 Oct.** Google sign-in now returns to `http://localhost:3003/api/v1/auth/google/callback` (step 5 above), so the admin app must run for Google sign-in | As built |
 | May staff who sign in with Google confirm admissions by signing in with Google again? Today every real staff account is Google-only, so **nobody real can confirm an admission yet** (D-041) | Only an account password is accepted |
 | Who may confirm admissions? | Director and operations manager (Proposed) |
 | Is the ₹5,000 registration fee charged again each academic year? (D-044) | Once per student |
@@ -67,7 +132,7 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | Onboarding checklist items, due days and owners | A proposed standard list, marked "(proposed)" |
 | Who may add extra demo days, and who may correct demo attendance? | Extra days off |
 | Student or parent reports: which audiences, and should teacher names appear? | Staff-only reports |
-| The new menu grouping (Today, Admissions, Students, Money, People, Reports) (D-054) | As built |
+| The menu grouping (D-054; changed on 22 Oct to Overview, Admissions, Students, Money, Teaching and work, Insight — see the new question above) | As built |
 | The five draft syllabus courses and their codes; CA chapter weights (D-051) | Drafts, not used for teaching |
 | After a student moves to another batch, how long may the old teacher still write a review about them? | Only while the student is in a batch the teacher teaches that day |
 | The two review labels, "Staff only" and "May inform a reviewed parent summary": right words, right two choices? | As built |
@@ -111,7 +176,9 @@ Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), 
 | Business Ops task tracker: task lifecycle and history, work updates, dependencies, end-of-day versions and manager inbox, task and period reports, tracker import, teacher directory, reviews read from Academic | Implemented, Tested (API); screens checked in Chrome on 22 Oct at 1440 and 390 px | same section, `apps/business-ops-os/README.md`, `docs/task-tracker-implementation.md` |
 | Migrations `0000` … `0008` | Implemented; applied to the local database only | `docs/DATABASE_MIGRATION_PLAN.md` |
 | Migrations `0009_academic_teacher_workspace_tasks`, `0010_link_academic_students_to_core`, `0011_mark_sample_academic_students` | **Applied on the owner's computer** 21–22 Oct (all frozen) | `packages/database/migrations/` |
-| Migration `0012_missing_checks` (22 database rules the 22 Oct tests found missing; no data changed) | **Applied on the owner's computer** 22 Oct after a check found no rows breaking them (frozen; next change = `0013`) | `docs/DATABASE_MIGRATION_PLAN.md` |
+| Migration `0012_missing_checks` (22 database rules the 22 Oct tests found missing; no data changed) | **Applied on the owner's computer** 22 Oct after a check found no rows breaking them (frozen) | `docs/DATABASE_MIGRATION_PLAN.md` |
+| Role workspaces (D-072, D-073): Business Operations :3000, Academic :3001, Marketing :3002, platform :3003; one sign-in; chooser; demo sign-ins; teacher tasks/EOD/meetings in Academic; leads, follow-ups and tasks in Marketing; new Ops Overview, Collections, Outstanding, Academic and Marketing summaries | Implemented, Tested (rules and API); grants **Proposed** | `docs/WORKSPACES.md`, `IMPLEMENTATION_STATUS.md` "Role workspaces" |
+| Migration `0013_workspace_preference` (remembered workspace per person) | **Applied on the owner's computer** 22 Oct (`db:check` 19/19; next change = `0014`) | `docs/DATABASE_MIGRATION_PLAN.md` |
 | Security headers and CSP with per-request nonces (all four apps) | Implemented, Tested (unit test + production smoke, §6) | §5 below |
 | Deployment, hosting, domain, monitoring, backups schedule | **Not built** (Proposed only) | `infrastructure/deployment/README.md` |
 | Password reset / change screen, shared login rate limit, outbox scheduler, Google re-authentication for confirmation | **Not built** | `infrastructure/deployment/README.md`; `C:\OPENBOT\Elevate-Not-Working` |
@@ -123,7 +190,7 @@ Sections of `website-build-guidelines` judged **not applicable**, and why: §10 
 
 ## 2. Stack and why
 
-Node 24, npm workspaces, TypeScript (strict), Next.js 16.4.2 App Router as **four apps**: the platform on `/` plus one per module on `/marketing`, `/academic` and `/ops`. The platform rewrites the module paths, so staff see one site with one session cookie (D-004). The database is PostgreSQL with one schema per domain, through Drizzle ORM (D-005, D-006), with zod validation (D-007), vitest and ESLint module-boundary rules (D-023). Styling is plain CSS tokens with system fonts. No external CDN and no tracking scripts. Every version is pinned (D-018). The full reasoning is in `docs/DECISIONS.md` and README §3.
+Node 24, npm workspaces, TypeScript (strict), Next.js 16.4.2 App Router as **four apps**: one per workspace (`/ops` on :3000, `/academic` on :3001, `/marketing` on :3002) and the platform (:3003) for Users & roles and Google sign-in. One session cookie covers every port (D-072); the platform's rewrites of the module paths remain as an optional single-site gateway (D-004). The database is PostgreSQL with one schema per domain, through Drizzle ORM (D-005, D-006), with zod validation (D-007), vitest and ESLint module-boundary rules (D-023). Styling is plain CSS tokens with system fonts. No external CDN and no tracking scripts. Every version is pinned (D-018). The full reasoning is in `docs/DECISIONS.md` and README §3.
 
 ## 3. How to run locally
 
@@ -133,8 +200,10 @@ cp .env.example .env        # fill every "replace-with-…" value (README §5)
 npm run db:start            # terminal 1: local PostgreSQL 18 on 127.0.0.1:54320; leave running
 npm run db:migrate
 npm run db:seed             # local databases only (refuses others)
-npm run dev                 # terminal 2: all four apps; open http://localhost:3000
+npm run dev:all             # terminal 2: the three workspaces on :3000, :3001, :3002
 ```
+
+One workspace alone: `npm run dev:business`, `dev:academic`, `dev:marketing`; Users & roles and Google sign-in: `npm run dev:platform` (:3003). Each starts the database if it is not running. Demo sign-ins: step 4 above. Guide: `docs/WORKSPACES.md`.
 
 Production-like run: `npm run build`, then `npm run start -w @elevate/<module>-os` for each module, then `npm run start -w @elevate/platform`.
 
@@ -154,8 +223,8 @@ Never run `db:reset` or `db:seed` against a non-local database. `pg_dump` is not
 - Request logs on the host and any proxy keep the path **without the query string** (search addresses can hold phone numbers, D-056).
 - PDF fonts in `apps/business-ops-os/assets/fonts` must ship with the build (a `standalone` build needs `outputFileTracingIncludes`).
 
-Two settings are compiled in at **build** time, so set them before `npm run build`:
-- The module URLs, for the rewrites.
+Each workspace gets its own host name (D-072); keep them under one site and the session cookie host-only. Two settings are compiled in at **build** time, so set them before `npm run build`:
+- The workspace URLs (`BUSINESS_OPS_OS_URL`, `ACADEMIC_OS_URL`, `MARKETING_OS_URL`): they are the allowlist for sign-in redirects and cross-origin form posts, and the targets of the optional rewrites.
 - `PLATFORM_URL`. If it starts with `https://`, the build turns on HSTS and `upgrade-insecure-requests`.
 
 ## 5. Security headers (what was added 20 Oct 2026)
@@ -226,6 +295,7 @@ Real values live only in the git-ignored root `.env` (locally) or in the host's 
 | `DATABASE_URL` password | Change the password in PostgreSQL, update `DATABASE_URL`, restart |
 | `GOOGLE_CLIENT_SECRET` | Google Cloud console → the OAuth client → reset the secret, paste the new one, restart the platform |
 | `SEED_USER_PASSWORD` | Local development only; change it and re-run `db:seed` |
+| `LOCAL_DEMO_PASSWORD` | Local development only; change it and re-run `npm run db:seed-demo-accounts` |
 
 If a secret is ever committed, rotate it. Deleting the commit is not enough.
 
@@ -265,7 +335,8 @@ Limitations:
 - A demo class linked in Academic that Business Ops has not read yet can still be marked by a counsellor until Ops next reads Academic successfully. A teacher can start a demo review only once the student is on an Academic class roster. The job that moves demos forward from Academic marks (`demo-academic-marks`) runs only when someone starts it; there is no scheduler.
 - Tasks (D-069): a manager who did not create a task cannot remove its review step (the operations manager can); if work comes back to the person who created it, that person gets back the creator's rights.
 - The Task Tracker import is tested with made-up backups only; your real browser exports are still needed (`docs/task-tracker-import-guide.md`).
-- The prototype (`C:\OPENBOT\Elevate`) does not show the 21 Oct work.
+- The prototype (`C:\OPENBOT\Elevate`) does not show the 21 Oct work or the 22 Oct workspaces.
+- Workspaces (22 Oct): a panel that shows another workspace's figures says "source unavailable" while that workspace is not running; Google sign-in needs the admin app (:3003) running; on this computer the sign-in cookie is shared by every local port, so other local programs could see its name (use a separate browser profile if you run unknown local apps). Not built: staff attendance ("My Attendance"), teaching resources, Events and Webinars in Marketing, results by campaign.
 
 Next three improvements, in priority order:
 1. **Go-live basics.** The owner chooses hosting. Then build HTTPS, CI deploy, error monitoring, an uptime check and a tested backup and restore (§15.1).

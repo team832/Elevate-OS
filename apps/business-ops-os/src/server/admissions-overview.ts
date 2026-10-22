@@ -257,6 +257,12 @@ export async function buildAdmissionsOverview(
     onboarding: {
       ...onboarding,
       rows: onboarding.rows.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '')),
+      /** Current students' checklist items done (completed or not applicable) of all, right now. */
+      completion: {
+        done: checklist.filter((i) => i.status === 'completed' || i.status === 'not_applicable')
+          .length,
+        total: checklist.length,
+      },
     },
     fees:
       feeRecords && feePlans

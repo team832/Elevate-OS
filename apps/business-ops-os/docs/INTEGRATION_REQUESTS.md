@@ -60,3 +60,13 @@ Full text of each row lives in the file of the owner who must act; this table is
 | IR-OPS-17 | Shared contracts owner | `ops.admission.enrolment_requested` v2 without guardian contact details, and an `AcademicStudentSummaryV1` field for "attendance not recorded" (today in `extensions.attendanceNotRecorded`). | Needs a contract version change; not done this round. | Open |
 | IR-OPS-18 | Platform | Protected file storage for task evidence. | Evidence is text or a link today. | Open (not built) |
 | IR-OPS-19 | Prototype owner (`Elevate\`) | Port tasks / EOD / imports / teacher operations and the Academic review reading to `Elevate.html` (extends IR-OPS-14). | The prototype does not show this work. | Open |
+
+
+## Role workspaces (22 Oct 2026, D-072 / D-073)
+| ID | To | Request | Why | Status |
+|---|---|---|---|---|
+| IR-OPS-WS-1 | Academic OS (`AcademicDeliverySummaryV1`) | Add a `reviewsSubmitted` count for a date range to the internal delivery summary. | The Overview and Academic Summary count reviews published in the range with one `/reviews` call per teacher (shortcut in `src/server/overview.ts`); slow past about 50 teachers. | Open |
+| IR-OPS-WS-2 | Owner | Confirm the D-073 grants (teachers only in Academic OS; coordinators in Academic OS and Business Operations; marketing: leads, lead contacts and own tasks). | The grants are Proposed. | Open (owner decision) |
+| IR-OPS-WS-3 | Owner, then Marketing OS | An events-only permission so Marketing can open Events and Webinars (`ops:appointments:*` also covers private counselling). | Events and Webinars is hidden in Marketing until then. | Open (owner decision) |
+| IR-OPS-WS-4 | Owner, then Marketing OS / Ops | Make the enquiry's campaign a reference instead of free text (`campaignRef`), and choose the lead-source attribution rule (first enquiry or every enquiry). | Conversion outcomes by campaign and leads by source cannot be counted reliably until then. | Open (owner decision) |
+| IR-OPS-WS-5 | Owner, then Ops | Staff attendance (OD-026): a proposed `ops.staff_attendance` table would feed "My Attendance" in Academic OS and teacher attendance on the Overview. | Hidden / "no HR module" today. | Open (owner decision) |

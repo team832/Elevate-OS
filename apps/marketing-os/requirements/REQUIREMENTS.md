@@ -43,3 +43,17 @@ IDs and wording come from `docs/PRODUCT_REQUIREMENTS.md` §2 (MKT-001 … MKT-03
 | MKT-037 | Marketing summary contract | **Tested** (partial) | `GET /marketing/api/internal/v1/summary` → MarketingSummaryV1; per-week on-time/overdue figures are not in the v1 contract |
 
 Platform requirements used: PLT-002 (server-side permissions), PLT-004 (no sole self-approval), PLT-005 (audit), PLT-006 (approval bound to version hash), PLT-009 (summary), PLT-013 (IST, Monday weeks), PLT-017 (honest adapter status; mock → sandbox).
+
+
+## Role workspaces (owner brief 22 Oct 2026; D-072, D-073)
+| ID | Requirement (short) | Status | Evidence / notes |
+|---|---|---|---|
+| MKT-WS-1 | Marketing OS is the Marketing workspace (`:3002/marketing`); non-members are sent to their own workspace; `/marketing/api` refuses non-members with 403 | **Tested** | `packages/server-kit/tests/define-route.test.ts`, `packages/authorization/tests/workspaces.test.ts`, `packages/authentication/tests/workspace-login.test.ts` |
+| MKT-WS-2 | Sidebar filtered by permission, in work order (Overview, Leads, Follow-ups, Campaigns, Content Calendar, Tasks, EOD Reports, Reports; Rules & settings at the foot); tabs per permission, a lone tab hidden; no Events and Webinars | **Tested** (navigation) · Implemented (screens) | `tests/unit/navigation.test.ts` |
+| MKT-WS-3 | Overview "Today": own tasks, EOD status, follow-ups due today / overdue / upcoming as links with an as-of time; content due this week; awaiting approval; campaigns running; last metric import per account | **Tested** (follow-ups block, metric imports) · Implemented (page) | `tests/integration/overview-today.test.tsx`, `campaigns.test.ts` → "overview shows when numbers were last imported" |
+| MKT-WS-4 | Leads, lead detail and follow-ups inside Marketing (Business Ops `./leads` entry, same handlers): managers see every lead, contributors only their own; contact fields, never KYC, fees, admissions or reviews | **Tested** | `tests/integration/shared-entries.test.ts`; `apps/business-ops-os/tests/integration/shared-entries.test.tsx`, `lead-kyc-masking.test.ts` |
+| MKT-WS-5 | Own tasks and EOD reports inside Marketing (Business Ops `./work` entry) | **Tested** | `tests/integration/shared-entries.test.ts` → "task routes answer with the same permission checks" |
+| MKT-WS-6 | Campaign results from imported metrics only, with a campaign detail page `/marketing/campaigns/:id`; missing stays missing | **Tested** (results) · Implemented (detail page) | `tests/integration/campaigns.test.ts` → "campaign results (verified data only)" |
+| MKT-WS-7 | Marketing grants on leads, lead contacts and own tasks | **Proposed** (owner to confirm, D-073); in the code and tested | `packages/authorization/tests/workspaces.test.ts` |
+| MKT-WS-8 | Conversion outcomes (leads → demos → admissions) by campaign | Proposed — not built | enquiries carry only a free-text `campaignRef`; owner decision to make it a reference |
+| MKT-WS-9 | Events and Webinars in Marketing | Proposed — not built | needs a new events-only permission (owner decision) |

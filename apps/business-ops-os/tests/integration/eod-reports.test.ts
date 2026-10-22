@@ -53,7 +53,7 @@ beforeAll(async () => {
     name: 'Sample A',
   });
   b = await staffUser(ctx.db, ['admissions_counsellor'], { name: 'Sample B' });
-  outsider = await createTestUser(ctx.db, { roles: ['marketing_contributor'] });
+  outsider = await createTestUser(ctx.db, { roles: ['platform_admin'] }); // no Ops task access (marketing has its own tasks since D-073)
 });
 beforeEach(() =>
   vi.stubGlobal(

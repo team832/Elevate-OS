@@ -5,6 +5,7 @@
  * come from the Ops item. Marks are recorded with the roster (attendance.ts) and read back by
  * Ops through `GET /academic/api/internal/v1/demo-attendance?ids=` — no copy, no entitlement.
  */
+import { appOrigin } from '@elevate/configuration/workspaces';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import {
   academicClassSessions,
@@ -25,8 +26,7 @@ export type DemoLoader = (date: string) => Promise<SourceResult<OpsDemoSessionsF
 
 /** Ops demo sessions on a day; "unavailable" (never empty) when Business Ops cannot be reached. */
 export const loadOpsDemoSessions: DemoLoader = (date) => {
-  const origin = (process.env.BUSINESS_OPS_OS_URL ?? process.env.PLATFORM_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
-  return fetchInternal(`${origin}/ops/api/internal/v1/demo-sessions?date=${encodeURIComponent(date)}`, opsDemoSessionsForDayV1Schema, { caller: 'academic', timeoutMs: 3000 });
+  return fetchInternal(`${appOrigin('ops')}/ops/api/internal/v1/demo-sessions?date=${encodeURIComponent(date)}`, opsDemoSessionsForDayV1Schema, { caller: 'academic', timeoutMs: 3000 });
 };
 
 async function sessionFor(db: Database, actor: Actor, sessionId: string) {

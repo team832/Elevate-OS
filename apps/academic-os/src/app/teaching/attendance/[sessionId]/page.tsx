@@ -31,7 +31,7 @@ const ACTION_LABELS: Record<string, string> = {
 export default async function ClassPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params;
   const access = await gate('academic:attendance:read', MODULE_PATHS.attendance(sessionId));
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="teaching">{null}</AcademicShell>;
+  if (access.status !== 'allowed') return <AcademicShell access={access} active="attendance">{null}</AcademicShell>;
   const db = getDb();
   const user = access.user;
   const actor = actorFor(user);
@@ -47,7 +47,7 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
       staff: can(user, 'academic:timetable:publish') ? await listStaff(db) : [],
     };
   });
-  if (!data.ok) return <AcademicShell access={access} active="teaching"><LoadError error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="attendance"><LoadError error={data.error} /></AcademicShell>;
   const { session, info, roster, demoAttendees, counts, teachers, history, candidates, staff } = data.data;
   const live = session.status === 'scheduled' || session.status === 'held';
   const past = session.date <= todayIst();
@@ -55,7 +55,7 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
   const actual = teachers.filter((t) => t.participation === 'actual' && !t.removedAt);
   const where = info.roomCode ? `Room ${info.roomCode}` : session.onlineLink ? 'Online' : 'No room set';
   return (
-    <AcademicShell access={access} active="teaching" loading="Loading class…">
+    <AcademicShell access={access} active="attendance" loading="Loading class…">
       <PageHeader
         title={`${info.batchCode} · ${info.subjectName ?? 'Class'}`}
         meta={<StateBadge state={session.status === 'held' ? 'delivered' : session.status} />}

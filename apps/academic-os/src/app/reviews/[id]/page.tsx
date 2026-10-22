@@ -24,14 +24,14 @@ const SHOWN = [
 export default async function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const access = await gate('academic:reviews:read', MODULE_PATHS.review(id));
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="teaching">{null}</AcademicShell>;
+  if (access.status !== 'allowed') return <AcademicShell access={access} active="reviews">{null}</AcademicShell>;
   const data = await load(() => getReview(getDb(), actorFor(access.user), id));
-  if (!data.ok) return <AcademicShell access={access} active="teaching"><LoadError error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError error={data.error} /></AcademicShell>;
   const r = data.data;
   const canWrite = r.isAuthor && can(access.user, 'academic:reviews:write');
   const isLatest = r.versions.find((v) => v.status !== 'draft')?.id === r.id;
   return (
-    <AcademicShell access={access} active="teaching">
+    <AcademicShell access={access} active="reviews">
       <PageHeader
         title={`${TYPE_LABELS[r.reviewType]} — ${r.studentName}`}
         meta={<><StateBadge state={r.status} /> <span>Version {r.version}</span></>}

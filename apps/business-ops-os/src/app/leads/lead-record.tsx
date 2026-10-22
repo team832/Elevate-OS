@@ -1,7 +1,7 @@
 /**
- * One lead, shared by the list pop-up (`/ops/leads?open=<id>`) and the full route
- * (`/ops/leads/<id>`): bordered sections as tabs, plus the create/edit flows that
- * open in their own FormModal (`act=<key>`), never a modal on a modal.
+ * One lead, shared by the list pop-up (`<base>/leads?open=<id>`) and the full route
+ * (`<base>/leads/<id>`; base `/ops` or `/marketing`, D-073): bordered sections as tabs, plus
+ * the create/edit flows that open in their own FormModal (`act=<key>`), never a modal on a modal.
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
@@ -24,6 +24,7 @@ import { DetailTable, Segment } from '../../ui/sections';
 import { SampleBadge } from '../admissions/_components/demo-bits';
 
 export type LeadDetail = Awaited<ReturnType<typeof getLead>>;
+type CaseRow = LeadDetail['admissions'][number];
 type Options = Awaited<ReturnType<typeof formOptions>>;
 
 const RESTRICTED = 'Restricted (needs permission to see private details)';
@@ -82,10 +83,18 @@ export function LeadMeta({ d }: { d: LeadDetail }) {
   );
 }
 
-/** "Book a demo" opens the existing booking pop-up (it lists the cases ready for a demo). */
-export const BookDemoLink = ({ d, user }: { d: LeadDetail; user: AuthenticatedUser }) =>
-  can(user, 'ops:leads:write') && !d.lead.mergedIntoLeadId ? (
-    <ButtonLink variant="primary" href="/ops/admissions?new=1">
+/** "Book a demo" opens the existing booking pop-up (it lists the cases ready for a demo; Ops only). */
+export const BookDemoLink = ({
+  d,
+  user,
+  base,
+}: {
+  d: LeadDetail;
+  user: AuthenticatedUser;
+  base: string;
+}) =>
+  base === '/ops' && can(user, 'ops:leads:write') && !d.lead.mergedIntoLeadId ? (
+    <ButtonLink variant="primary" href={`${base}/admissions?new=1`}>
       Book a demo
     </ButtonLink>
   ) : null;
@@ -96,8 +105,11 @@ export function leadTabs(
   user: AuthenticatedUser,
   actHref: (act: LeadAct) => string,
   level: 2 | 3,
+  base: string,
 ): ModalTab[] {
   const { lead } = d;
+  // Without admissions access the server sends only each case's stage (getLead).
+  const cases = can(user, 'ops:admissions:read');
   const write = can(user, 'ops:leads:write');
   const contact = (v: string | null | undefined) => (d.privateVisible ? known(v) : RESTRICTED);
   const firstEnquiry = d.enquiries.at(-1);
@@ -113,7 +125,8 @@ export function leadTabs(
           {lead.mergedIntoLeadId ? (
             <Alert tone="info" title="Merged">
               This lead was merged into{' '}
-              <a href={`/ops/leads/${lead.mergedIntoLeadId}`}>another lead</a>. Its history is kept.
+              <a href={`${base}/leads/${lead.mergedIntoLeadId}`}>another lead</a>. Its history is
+              kept.
             </Alert>
           ) : null}
           {d.duplicates
@@ -126,7 +139,7 @@ export function leadTabs(
               >
                 Matches{' '}
                 {x.otherAccessible ? (
-                  <a href={`/ops/leads/${x.otherLeadId}`}>{x.otherCode}</a>
+                  <a href={`${base}/leads/${x.otherLeadId}`}>{x.otherCode}</a>
                 ) : (
                   x.otherCode
                 )}{' '}
@@ -134,7 +147,7 @@ export function leadTabs(
                 {can(user, 'ops:leads:merge') ? (
                   <div className="el-stack">
                     <ActionForm
-                      action={`/ops/api/v1/leads/${x.leadId}/merge`}
+                      action={`${base}/api/v1/leads/${x.leadId}/merge`}
                       submitLabel={`Merge ${x.leadId === lead.id ? 'this lead' : x.otherCode} into ${x.leadId === lead.id ? x.otherCode : 'this lead'}`}
                       extra={{ targetLeadId: x.matchedLeadId }}
                       fields={[{ name: 'note', label: 'Merge note', required: true }]}
@@ -142,7 +155,7 @@ export function leadTabs(
                       compact
                     />
                     <ActionForm
-                      action={`/ops/api/v1/leads/duplicates/${x.id}`}
+                      action={`${base}/api/v1/leads/duplicates/${x.id}`}
                       submitLabel="Not a duplicate: dismiss"
                       extra={{ decision: 'dismissed' }}
                       fields={[{ name: 'note', label: 'Why', required: true }]}
@@ -212,7 +225,7 @@ export function leadTabs(
                     label: 'Next step',
                     value: (
                       <ActionForm
-                        action={`/ops/api/v1/leads/${lead.id}/accept`}
+                        action={`${base}/api/v1/leads/${lead.id}/accept`}
                         submitLabel="Accept handoff"
                         compact
                       />
@@ -286,12 +299,16 @@ export function leadTabs(
           title="Admission cases"
           level={level}
           flush
-          description="One pipeline record per programme."
+          description={
+            cases
+              ? 'One pipeline record per programme.'
+              : 'Conversion stage per programme. Admission details stay in Business Operations.'
+          }
         >
           <RecordTable
             rows={d.admissions}
             rowKey={(a) => a.id}
-            rowHref={(a) => `/ops/admissions/${a.id}`}
+            rowHref={cases && base === '/ops' ? (a) => `${base}/admissions/${a.id}` : undefined}
             empty="No admission case yet. Log an enquiry with a programme to open one; a demo can be booked once that case is counselled."
             columns={[
               { key: 'code', header: 'Case' },
@@ -309,12 +326,21 @@ export function leadTabs(
                   </StatusBadge>
                 ),
               },
-              {
-                key: 'counsellorName',
-                header: 'Counsellor',
-                render: (a) => a.counsellorName ?? 'Not assigned',
-              },
-              { key: 'reason', header: 'Last reason', render: (a) => known(a.statusReason) },
+              ...(cases
+                ? [
+                    {
+                      key: 'counsellorName',
+                      header: 'Counsellor',
+                      render: (a: CaseRow) =>
+                        ('counsellorName' in a && a.counsellorName) || 'Not assigned',
+                    },
+                    {
+                      key: 'reason',
+                      header: 'Last reason',
+                      render: (a: CaseRow) => known('statusReason' in a ? a.statusReason : null),
+                    },
+                  ]
+                : []),
             ]}
           />
         </Segment>
@@ -358,7 +384,7 @@ export function leadTabs(
                 render: (f) =>
                   f.status === 'open' && write ? (
                     <ActionForm
-                      action={`/ops/api/v1/follow-ups/${f.id}`}
+                      action={`${base}/api/v1/follow-ups/${f.id}`}
                       submitLabel="Mark done"
                       extra={{ action: 'complete' }}
                       fields={[{ name: 'outcome', label: 'Outcome', required: true }]}
@@ -444,14 +470,16 @@ export function LeadActModal({
   options,
   user,
   closeHref,
+  base,
 }: {
   act: LeadAct;
   d: LeadDetail;
   options: Options;
   user: AuthenticatedUser;
   closeHref: string;
+  base: string;
 }) {
-  const api = `/ops/api/v1/leads/${d.lead.id}`;
+  const api = `${base}/api/v1/leads/${d.lead.id}`;
   const flows: Record<LeadAct, { title: string; allowed: boolean; form: ActionFormProps }> = {
     details: {
       title: 'Edit contact details',
@@ -488,7 +516,7 @@ export function LeadActModal({
       title: 'Add follow-up',
       allowed: can(user, 'ops:leads:write'),
       form: {
-        action: '/ops/api/v1/follow-ups',
+        action: `${base}/api/v1/follow-ups`,
         submitLabel: 'Add follow-up',
         extra: { leadId: d.lead.id },
         fields: [
@@ -585,8 +613,7 @@ export function LeadActModal({
     >
       <ActionForm
         {...flow.form}
-        // Router path: Next adds the /ops basePath itself (D-022).
-        redirectTo={closeHref.replace(/^\/ops/, '')}
+        redirectTo={closeHref}
         secondary={<a href={closeHref}>Cancel</a>}
       />
     </FormModal>

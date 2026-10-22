@@ -27,9 +27,10 @@ import { fmtDate } from '../ui/format';
 import { accessScope, managedStaffIds, notFound, staffIdForUser, type Actor } from './context';
 import { collectFacts, factsHash } from './eod-facts';
 import type { EodDraftInput } from './eod-schemas';
-import { fieldError, notifyOthers, opsAudit, rowById } from './ops-common';
+import { fieldError, opsAudit, rowById } from './ops-common';
 import { loadSettings } from './settings';
 import { ownStaffId } from './staff-tasks';
+import { notifyHosted } from './task-links';
 
 type Row = typeof reports.$inferSelect;
 export const audit = opsAudit('eod_report');
@@ -400,11 +401,10 @@ export async function submitReport(
       .where(eq(reports.id, row.id))
       .returning();
     const c = facts.counts;
-    await notifyOthers(tx, actor, [to.userId], {
+    await notifyHosted(tx, actor, [to.userId], 'work', `/tasks/inbox?open=${row.id}`, {
       kind: 'eod.submitted',
       title: `End-of-day report: ${recipient.staffName}, ${fmtDate(row.reportDate)}${version!.version > 1 ? ` (version ${version!.version})` : ''}`,
       body: `${c.completed} completed, ${c.backlog} open at cut-off (${c.overdue} overdue), ${c.blocked} blocked.`,
-      link: `/ops/tasks/inbox?open=${row.id}`,
       entityType: 'eod_report',
       entityId: row.id,
     });

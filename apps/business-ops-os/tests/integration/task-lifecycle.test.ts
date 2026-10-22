@@ -46,9 +46,9 @@ beforeAll(async () => {
     managerId: lead.staffId,
     name: 'Sample Mid',
   });
-  low = await staffUser(ctx.db, ['teacher'], { managerId: mid.staffId, name: 'Sample Low' });
+  low = await staffUser(ctx.db, ['finance_officer'], { managerId: mid.staffId, name: 'Sample Low' });
   peer = await staffUser(ctx.db, ['admissions_counsellor'], { name: 'Sample Peer' });
-  outsider = await createTestUser(ctx.db, { roles: ['marketing_contributor'] });
+  outsider = await createTestUser(ctx.db, { roles: ['platform_admin'] }); // no Ops task access (marketing has its own tasks since D-073)
 });
 
 type Task = {
@@ -108,8 +108,8 @@ describe('managedStaffIds (R3)', () => {
       [mid.staffId, low.staffId].sort(),
     );
     expect(await managedStaffIds(ctx.db, low.staffId)).toEqual([]);
-    const x = await staffUser(ctx.db, ['teacher']);
-    const y = await staffUser(ctx.db, ['teacher'], { managerId: x.staffId });
+    const x = await staffUser(ctx.db, ['finance_officer']);
+    const y = await staffUser(ctx.db, ['finance_officer'], { managerId: x.staffId });
     await ctx.db
       .update(staffMembers)
       .set({ managerId: y.staffId })

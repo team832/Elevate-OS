@@ -31,7 +31,7 @@ export default async function ContentItemPage({
     <MarketingPage
       permission="marketing:content:read"
       path={modulePath(`content/${id}`)}
-      active="ideas"
+      active="calendar"
       title="Content item"
       searchParams={await searchParams}
     >

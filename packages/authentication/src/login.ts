@@ -1,6 +1,17 @@
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { createLogger, loadEnvKeys } from '@elevate/configuration';
+import {
+  appOrigin,
+  createLogger,
+  isAllowedRequestOrigin,
+  loadEnvKeys,
+} from '@elevate/configuration';
+import {
+  isWorkspaceKey,
+  resolveLanding,
+  workspacesFor,
+  type Landing,
+} from '@elevate/authorization';
 import { getDb, insertAuditEvent, userRoles, users, type Database } from '@elevate/database';
 import {
   ForbiddenError,
@@ -12,7 +23,7 @@ import {
   seeOther,
   successResponse,
 } from '@elevate/shared-contracts';
-import type { ModuleKey, RoleKey, UserId } from '@elevate/shared-types';
+import { MODULES, type ModuleKey, type RoleKey, type UserId } from '@elevate/shared-types';
 import {
   SESSION_COOKIE,
   clearSessionCookie,
@@ -120,6 +131,44 @@ async function readBody(request: Request): Promise<unknown> {
   }
 }
 
+/**
+ * Browser location for a landing (D-072). Another workspace is its configured origin (an
+ * allowlist, never user input) and the URL never carries a token: the session cookie is
+ * shared by every localhost port. `hereOrigin` makes a same-app landing absolute.
+ */
+export function landingLocation(landing: Landing, current: ModuleKey, hereOrigin = ''): string {
+  if (landing.kind === 'workspace')
+    return `${appOrigin(landing.workspace)}${MODULES[landing.workspace].basePath}`;
+  return `${hereOrigin}${landing.kind === 'here' ? landing.path : `${MODULES[current].basePath}/workspaces`}`;
+}
+
+/** Where `userId` goes after signing in on app `current` (stored roles + remembered workspace). */
+export async function landingFor(
+  db: Database,
+  userId: UserId,
+  current: ModuleKey,
+  next: string | undefined,
+  hereOrigin = '',
+): Promise<string> {
+  const [row] = await db
+    .select({ preferred: users.preferredWorkspace })
+    .from(users)
+    .where(eq(users.id, userId));
+  const workspaces = workspacesFor({ id: userId, roles: await loadRoles(db, userId) });
+  const landing = resolveLanding({ workspaces, preferred: row?.preferred, current, next });
+  return landingLocation(landing, current, hereOrigin);
+}
+
+/** CSRF guard for the form-posting auth handlers (defineRoute routes have their own). */
+export function refuseCrossSite(request: Request, requestId: string): Response | null {
+  if (isAllowedRequestOrigin(request)) return null;
+  log.warn('cross-site auth request refused', { requestId, origin: request.headers.get('origin') });
+  return errorResponse(
+    new ForbiddenError('This request came from another site and was refused.'),
+    requestId,
+  );
+}
+
 /** Roles a BOOTSTRAP_OWNER_EMAILS address holds after signing in (first administrator, D-030). */
 export const BOOTSTRAP_ROLES = ['director', 'platform_admin'] as const satisfies readonly RoleKey[];
 
@@ -224,6 +273,8 @@ export function createLoginHandler(options: AuthHandlerOptions) {
   const ipThrottle = options.ipThrottle ?? new LoginThrottle({ maxFailures: 50 });
   return async function login(request: Request): Promise<Response> {
     const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
+    const crossSite = refuseCrossSite(request, requestId);
+    if (crossSite) return crossSite;
     const form = isFormPost(request);
     const ip = clientIp(request);
     let nextPath = options.defaultRedirect;
@@ -270,7 +321,10 @@ export function createLoginHandler(options: AuthHandlerOptions) {
         method: 'password',
       });
       const { cookie } = session;
-      if (form) return seeOther(nextPath, { 'set-cookie': cookie });
+      if (form)
+        return seeOther(await landingFor(db, user.userId, options.module, nextPath), {
+          'set-cookie': cookie,
+        });
       const roles = await loadRoles(db, user.userId);
       return successResponse(
         {
@@ -313,6 +367,8 @@ export function createLoginHandler(options: AuthHandlerOptions) {
 export function createLogoutHandler(options: AuthHandlerOptions) {
   return async function logout(request: Request): Promise<Response> {
     const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
+    const crossSite = refuseCrossSite(request, requestId);
+    if (crossSite) return crossSite;
     const clear = clearSessionCookie();
     try {
       const token = readSessionToken(request);
@@ -343,6 +399,57 @@ export function createLogoutHandler(options: AuthHandlerOptions) {
     } catch (error) {
       log.error('logout error', { requestId, error });
       return errorResponse(error, requestId, { headers: { 'set-cookie': clear } });
+    }
+  };
+}
+
+/**
+ * POST handler for `<base>/api/v1/auth/workspace` (the chooser form, D-072): opens a workspace
+ * the signed-in user belongs to and, with `remember=yes`, stores it as their default (audited).
+ * Anything else is refused; the redirect target is the workspace's configured origin.
+ */
+export function createWorkspaceChoiceHandler(options: AuthHandlerOptions) {
+  return async function chooseWorkspace(request: Request): Promise<Response> {
+    const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
+    const crossSite = refuseCrossSite(request, requestId);
+    if (crossSite) return crossSite;
+    try {
+      const db = (options.getDb ?? getDb)();
+      const user = await validateSession(
+        db,
+        readSessionToken(request),
+        (options.getSecret ?? getSessionSecret)(),
+      );
+      if (!user) return seeOther(options.loginPath);
+      const form = isFormPost(request) ? await request.formData() : new FormData();
+      const workspace = form.get('workspace');
+      if (!isWorkspaceKey(workspace) || !workspacesFor(user).includes(workspace)) {
+        throw new ForbiddenError('Your roles do not include that workspace.');
+      }
+      if (form.get('remember') === 'yes' && user.preferredWorkspace !== workspace) {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(users)
+            .set({ preferredWorkspace: workspace })
+            .where(eq(users.id, user.id));
+          await insertAuditEvent(tx as unknown as Database, {
+            actorType: 'user',
+            actorUserId: user.id,
+            module: options.module,
+            action: 'user.workspace_preference_set',
+            entityType: 'user',
+            entityId: user.id,
+            requestId,
+            before: { preferredWorkspace: user.preferredWorkspace ?? null },
+            after: { preferredWorkspace: workspace },
+          });
+        });
+      }
+      return seeOther(landingLocation({ kind: 'workspace', workspace }, options.module));
+    } catch (error) {
+      if (!(error instanceof ForbiddenError))
+        log.error('workspace choice error', { requestId, error });
+      return errorResponse(error, requestId);
     }
   };
 }

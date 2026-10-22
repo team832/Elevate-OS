@@ -16,7 +16,8 @@ import {
 } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { createLogger, loadEnv } from '@elevate/configuration';
+import { WORKSPACE_KEYS } from '@elevate/authorization';
+import { appOrigin, createLogger, loadEnv } from '@elevate/configuration';
 import { getDb, insertAuditEvent, users, type Database } from '@elevate/database';
 import {
   NotFoundError,
@@ -24,11 +25,13 @@ import {
   safeRelativePath,
   seeOther,
 } from '@elevate/shared-contracts';
+import { MODULES } from '@elevate/shared-types';
 import { parseCookieHeader, serializeCookie, sessionCookieOptions } from './cookies';
 import { ORGANISATION_EMAIL_DOMAIN, isAllowedEmail } from './email-domain';
 import {
   clientIp,
   getSessionSecret,
+  landingFor,
   openSession,
   withQuery,
   type AuthHandlerOptions,
@@ -370,7 +373,13 @@ export function createGoogleSignInHandlers(options: GoogleHandlerOptions) {
         requestId,
         method: 'google',
       });
-      return seeOther(next, [
+      // Module sign-in pages send their own path as `next`; land on that workspace's origin.
+      const owner =
+        WORKSPACE_KEYS.find(
+          (k) => next === MODULES[k].basePath || next.startsWith(`${MODULES[k].basePath}/`),
+        ) ?? options.module;
+      const hereOrigin = owner === options.module ? '' : appOrigin(owner);
+      return seeOther(await landingFor(db, user.id, owner, next, hereOrigin), [
         ['set-cookie', clear],
         ['set-cookie', cookie],
       ]);

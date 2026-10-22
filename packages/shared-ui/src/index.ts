@@ -9,3 +9,4 @@ export * from './components/tabs';
 export * from './components/dialog';
 export * from './components/shell-client';
 export * from './components/brand';
+export * from './components/workspaces';

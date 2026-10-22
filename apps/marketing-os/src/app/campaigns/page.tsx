@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Button, Card, DataTable, EmptyState, Field, Select, TextInput } from '@elevate/shared-ui';
+import { Button, Card, Field, Select, TextInput } from '@elevate/shared-ui';
 import { CAMPAIGN_STATUSES, modulePath } from '../../domain';
-import { listCampaigns } from '../../server';
+import { campaignResults, listCampaigns } from '../../server';
+import { CampaignResultsTable } from '../../ui/campaigns';
 import { createCampaignAction } from '../actions/placements';
 import { MarketingPage, Section, type SearchParams } from '../../ui/shell';
 
@@ -17,40 +18,24 @@ export default async function CampaignsPage({ searchParams }: { searchParams: Se
       path={modulePath('campaigns')}
       active="campaigns"
       title="Campaigns"
-      description="Organic campaigns that group posts. Paid campaigns and budgets are Proposed."
+      description="Organic campaigns that group posts, with results from imported numbers only. Paid campaigns and budgets are Proposed."
       searchParams={await searchParams}
     >
       {(user) => (
         <Section
           load={async () => {
-            const campaigns = await listCampaigns(getDb());
+            const db = getDb();
+            const campaigns = await campaignResults(db, await listCampaigns(db));
             return (
               <div className="el-stack">
-                <DataTable
-                  compact
-                  rows={campaigns}
-                  rowKey={(c) => c.id}
-                  empty={<EmptyState title="No campaigns yet" />}
-                  columns={[
-                    { key: 'code', header: 'Code', render: (c) => <strong>{c.code}</strong> },
-                    { key: 'name', header: 'Name', render: (c) => c.name },
-                    {
-                      key: 'dates',
-                      header: 'Dates',
-                      render: (c) => `${c.startsOn ?? '—'} to ${c.endsOn ?? '—'}`,
-                    },
-                    { key: 'status', header: 'Status', render: (c) => c.status },
-                    {
-                      key: 'report',
-                      header: 'Report',
-                      render: () => (
-                        <a href={modulePath('metrics/weekly?groupBy=campaign')}>
-                          weekly by campaign
-                        </a>
-                      ),
-                    },
-                  ]}
-                />
+                <details className="el-explain">
+                  <summary>How these results are counted</summary>
+                  Placements assigned to the campaign. Published counts only posts with a live link
+                  (sandbox and legacy-tracker posts are not counted). Views add up the latest
+                  imported CSV numbers of each campaign post; a post without numbers is missing, not
+                  zero. Leads, demos and admissions by campaign are not shown yet.
+                </details>
+                <CampaignResultsTable rows={campaigns} empty="No campaigns yet" />
                 {can(user, 'marketing:campaigns:write') ? (
                   <Card title="New campaign">
                     <form action={createCampaignAction} className="el-grid">

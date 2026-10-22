@@ -2,6 +2,7 @@ import {
   createGoogleSignInHandlers,
   createLoginHandler,
   createLogoutHandler,
+  createWorkspaceChoiceHandler,
   type AuthHandlerOptions,
 } from '@elevate/authentication';
 import { PLATFORM_PATHS } from '../lib/shell';
@@ -16,3 +17,4 @@ export const platformAuth: AuthHandlerOptions = {
 export const loginHandler = createLoginHandler(platformAuth);
 export const logoutHandler = createLogoutHandler(platformAuth);
 export const google = createGoogleSignInHandlers(platformAuth);
+export const workspaceHandler = createWorkspaceChoiceHandler(platformAuth);

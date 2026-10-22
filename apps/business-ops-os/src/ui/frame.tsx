@@ -9,57 +9,71 @@ import { can, type Permission } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { countUnread } from '@elevate/notifications';
 import { AppError } from '@elevate/shared-contracts';
-import { currentRequestId, requirePageAccess, type PageAccess } from '@elevate/server-kit/next';
+import {
+  currentRequestId,
+  requirePageAccess,
+  workspaceHrefs,
+  type PageAccess,
+} from '@elevate/server-kit/next';
 import { AppShell, ButtonLink, ErrorState, LoadingState, type Crumb } from '@elevate/shared-ui';
 import { MODULE } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
-import { hasInbox } from '../server/eod-review';
 import { searchable } from '../server/search';
 import { SearchShortcut } from './global-search';
 
-type NavRow = [key: string, label: string, href: string, permission: Permission];
+/** [key, label, href, permission, page keys (Frame `active`) that light this item up]. */
+type NavRow = [key: string, label: string, href: string, permission: Permission, also?: string[]];
 const section = (group: string | undefined, rows: NavRow[]) =>
-  rows.map(([key, label, href, permission]) => ({ key, label, href, permission, group }));
+  rows.map(([key, label, href, permission, also = []]) => ({
+    key,
+    label,
+    href,
+    permission,
+    group,
+    keys: new Set([key, ...also]),
+  }));
 
 /**
- * Module navigation (sidebar): always-open groups by the job staff came to do. Each
- * link shows only with its permission. Settings is reached from the link at the
- * bottom of the sidebar (see SETTINGS_KEYS).
+ * Module navigation (sidebar, owner brief 22 Oct 2026 §5): one item per area, each shown only
+ * with its permission. Pages inside an area (Leads, Applications, Approvals, Staff directory,
+ * Report inbox…) are reached from that area's tabs and light up its item. Settings is the link
+ * at the bottom of the sidebar.
  */
-const NAV = [
-  ...section('Today', [
-    ['home', 'Today', '/ops', 'ops:module:access'],
-    ['tasks', 'My day', '/ops/tasks', 'ops:tasks:read'],
-    // Shown only to EOD reviewers and managers with reports (hasInbox, below).
-    ['tasks-inbox', 'Report inbox', '/ops/tasks/inbox', 'ops:tasks:read'],
-    ['tasks-reports', 'Task reports', '/ops/tasks/reports', 'ops:tasks:read'],
-    ['tasks-imports', 'Tracker import', '/ops/tasks/imports', 'ops:tasks:import'],
-  ]),
+export const NAV = [
+  ...section(undefined, [['home', 'Overview', '/ops', 'ops:module:access']]),
   ...section('Admissions', [
-    ['overview', 'Overview', '/ops/admissions/overview', 'ops:admissions:read'],
-    ['admissions', 'Demo students', '/ops/admissions', 'ops:leads:read'],
-    ['applications', 'Applications', '/ops/admissions/applications', 'ops:admissions:read'],
-    ['leads', 'Leads', '/ops/leads', 'ops:leads:read'],
-    ['meetings', 'Events and counselling', '/ops/meetings', 'ops:appointments:read'],
+    [
+      'overview',
+      'Admissions',
+      '/ops/admissions/overview',
+      'ops:admissions:read',
+      ['applications', 'leads', 'meetings'],
+    ],
+    ['admissions', 'Demo Students', '/ops/admissions', 'ops:leads:read'],
   ]),
   ...section('Students', [
-    ['students', 'Active students', '/ops/students', 'ops:students:read'],
-    ['past', 'Past students', '/ops/students/past', 'ops:students:read'],
+    ['students', 'Active Students', '/ops/students', 'ops:students:read'],
+    ['past', 'Past Students', '/ops/students/past', 'ops:students:read'],
   ]),
   ...section('Money', [
-    ['fees', 'Fee structure', '/ops/fees', 'ops:fees:read'],
-    ['approvals', 'Approvals', '/ops/operations/approvals', 'ops:module:access'],
+    ['fees', 'Fees and Collections', '/ops/fees', 'ops:fees:read', ['approvals']],
   ]),
-  ...section('People', [
-    ['teachers', 'Teachers', '/ops/teachers', 'ops:teachers:read'],
-    ['staff', 'Staff directory', '/ops/staff', 'ops:organisation:read'],
+  ...section('Teaching and work', [
+    ['teachers', 'Teachers', '/ops/teachers', 'ops:teachers:read', ['staff']],
+    ['academic-summary', 'Academic Summary', '/ops/academic-summary', 'ops:dashboard:read'],
+    [
+      'tasks',
+      'Tasks and EOD Reports',
+      '/ops/tasks',
+      'ops:tasks:read',
+      ['tasks-inbox', 'tasks-reports', 'tasks-imports'],
+    ],
   ]),
-  ...section('Reports', [['reports', 'Reports', '/ops/reports', 'ops:module:access']]),
-  ...section('Settings', [['settings', 'Settings', '/ops/settings', 'ops:settings:read']]),
+  ...section('Insight', [
+    ['marketing-summary', 'Marketing Summary', '/ops/marketing-summary', 'ops:dashboard:read'],
+    ['reports', 'Reports', '/ops/reports', 'ops:module:access'],
+  ]),
 ];
-
-/** Nav keys whose pages are "Settings" (bottom of the sidebar, not in the module list). */
-const SETTINGS_KEYS = new Set(['settings']);
 
 /** Unread in-app notifications for the user; null (indicator hidden) when unknown. */
 async function unreadFor(access: PageAccess): Promise<number | null> {
@@ -76,6 +90,7 @@ export function gate(permission: Permission, returnTo: string): Promise<PageAcce
     loginPath: MODULE_PATHS.login,
     returnTo,
     basePath: MODULE.basePath,
+    workspace: MODULE.key,
   });
 }
 
@@ -93,12 +108,13 @@ export async function Frame({
 }) {
   const user = access.user;
   const canSearch = searchable(user);
-  const inbox = can(user, 'ops:tasks:read') && (await hasInbox(getDb(), user).catch(() => false));
-  const visible = NAV.filter((n) => can(user, n.permission) && (n.key !== 'tasks-inbox' || inbox));
-  const nav = visible
-    .filter((n) => !SETTINGS_KEYS.has(n.key))
-    .map((n) => ({ href: n.href, label: n.label, group: n.group, active: n.key === active }));
-  const settingsPage = visible.find((n) => n.key === active && SETTINGS_KEYS.has(n.key));
+  const nav = NAV.filter((n) => can(user, n.permission)).map((n) => ({
+    href: n.href,
+    label: n.label,
+    group: n.group,
+    active: n.keys.has(active),
+  }));
+  const settingsPage = active === 'settings' && can(user, 'ops:settings:read');
   const breadcrumbs: Crumb[] | undefined = settingsPage
     ? [
         { label: 'Business Operations', href: '/ops' },
@@ -109,6 +125,7 @@ export async function Frame({
     <AppShell
       user={user}
       modules={access.modules}
+      moduleHrefs={workspaceHrefs()}
       current="ops"
       logoutAction={MODULE_PATHS.logoutApi}
       nav={nav}
@@ -126,9 +143,7 @@ export async function Frame({
           : undefined
       }
       settings={
-        can(user, 'ops:settings:read')
-          ? { href: '/ops/settings', active: Boolean(settingsPage) }
-          : undefined
+        can(user, 'ops:settings:read') ? { href: '/ops/settings', active: settingsPage } : undefined
       }
       unreadNotifications={await unreadFor(access)}
     >

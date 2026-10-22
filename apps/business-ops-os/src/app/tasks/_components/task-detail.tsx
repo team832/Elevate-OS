@@ -13,7 +13,7 @@ import type { TaskDetail } from '../../../server/task-detail';
 import { ActionForm, type FieldSpec } from '../../../ui/action-form';
 import { fmtDate, fmtDateTime, humanise } from '../../../ui/format';
 import { DetailTable, Segment, Timeline } from '../../../ui/sections';
-import { API, dueText, PRIORITY_OPTIONS, TASK_LABEL } from './task-views';
+import { dueText, PRIORITY_OPTIONS, TASK_LABEL, taskPaths } from './task-views';
 
 type Option = { value: string; label: string };
 const PRIMARY: readonly TaskAction[] = [
@@ -30,7 +30,8 @@ export function AckBadge({ at }: { at: Date | null }) {
 }
 
 /** Requirement, people and dates (also the summary in the list's pop-up). */
-export function TaskFacts({ d, level = 2 }: { d: TaskDetail; level?: 2 | 3 }) {
+/** Related records link only where this workspace shows them (leads: Ops and Marketing; students: Ops). */
+export function TaskFacts({ d, base, level = 2 }: { d: TaskDetail; base: string; level?: 2 | 3 }) {
   const dueChanges = d.events.filter((e) => e.kind === 'due_changed').length;
   return (
     <Segment title="Requirement and people" level={level} flush>
@@ -70,11 +71,21 @@ export function TaskFacts({ d, level = 2 }: { d: TaskDetail; level?: 2 | 3 }) {
           d.linkedRef && { label: 'Linked record', value: d.linkedRef },
           d.leadId && {
             label: 'Related lead',
-            value: <a href={`/ops/leads/${d.leadId}`}>Open lead</a>,
+            value:
+              base === '/academic' ? (
+                'Recorded in Business Operations'
+              ) : (
+                <a href={`${base}/leads/${d.leadId}`}>Open lead</a>
+              ),
           },
           d.admissionId && {
             label: 'Related student',
-            value: <a href={`/ops/students/${d.admissionId}`}>Open student</a>,
+            value:
+              base === '/ops' ? (
+                <a href={`${base}/students/${d.admissionId}`}>Open student</a>
+              ) : (
+                'Recorded in Business Operations'
+              ),
           },
         ]}
       />
@@ -82,12 +93,12 @@ export function TaskFacts({ d, level = 2 }: { d: TaskDetail; level?: 2 | 3 }) {
   );
 }
 
-function ActionButton({ d, action }: { d: TaskDetail; action: TaskAction }) {
+function ActionButton({ d, action, api }: { d: TaskDetail; action: TaskAction; api: string }) {
   const rule = ACTION_RULES[action];
   const form = (
     <ActionForm
       compact
-      action={`${API}/${d.id}/${ACTION_SLUG[action]}`}
+      action={`${api}/${d.id}/${ACTION_SLUG[action]}`}
       submitLabel={rule.label}
       variant={action === 'cancel' ? 'danger' : PRIMARY.includes(action) ? 'primary' : 'secondary'}
       extra={{ expectedVersion: d.version }}
@@ -106,7 +117,8 @@ function ActionButton({ d, action }: { d: TaskDetail; action: TaskAction }) {
 }
 
 /** Only the actions the caller may take now; the reassign and edit forms when allowed. */
-export function TaskActions({ d, staff }: { d: TaskDetail; staff: Option[] }) {
+export function TaskActions({ d, staff, base }: { d: TaskDetail; staff: Option[]; base: string }) {
+  const { api } = taskPaths(base);
   const targets = staff.filter(
     (s) =>
       s.value !== d.staffId &&
@@ -126,19 +138,19 @@ export function TaskActions({ d, staff }: { d: TaskDetail; staff: Option[] }) {
           {d.allowed
             .filter((a) => !ACTION_RULES[a].reason)
             .map((a) => (
-              <ActionButton key={a} d={d} action={a} />
+              <ActionButton key={a} d={d} action={a} api={api} />
             ))}
         </div>
         {d.allowed
           .filter((a) => ACTION_RULES[a].reason)
           .map((a) => (
-            <ActionButton key={a} d={d} action={a} />
+            <ActionButton key={a} d={d} action={a} api={api} />
           ))}
         {d.canReassign && targets.length ? (
           <details className="el-explain">
             <summary>Hand over to someone else…</summary>
             <ActionForm
-              action={`${API}/${d.id}/reassign`}
+              action={`${api}/${d.id}/reassign`}
               submitLabel="Hand over task"
               extra={{ expectedVersion: d.version }}
               fields={[
@@ -158,7 +170,7 @@ export function TaskActions({ d, staff }: { d: TaskDetail; staff: Option[] }) {
           <details className="el-explain">
             <summary>Edit details, due date or priority…</summary>
             <ActionForm
-              action={`${API}/${d.id}`}
+              action={`${api}/${d.id}`}
               method="PATCH"
               submitLabel="Save changes"
               extra={{ expectedVersion: d.version }}
@@ -215,7 +227,16 @@ export function TaskActions({ d, staff }: { d: TaskDetail; staff: Option[] }) {
 
 const statusOf = (s: keyof typeof TASK_STATUS_LABELS) => TASK_STATUS_LABELS[s];
 
-export function TaskDependencies({ d, candidates }: { d: TaskDetail; candidates: Option[] }) {
+export function TaskDependencies({
+  d,
+  candidates,
+  base,
+}: {
+  d: TaskDetail;
+  candidates: Option[];
+  base: string;
+}) {
+  const { tasks, api } = taskPaths(base);
   const linked = new Set<string>(d.waitsOn.map((t) => t.id));
   const options = candidates.filter((c) => c.value !== d.id && !linked.has(c.value));
   const list = (items: TaskDetail['waitsOn']) =>
@@ -223,7 +244,7 @@ export function TaskDependencies({ d, candidates }: { d: TaskDetail; candidates:
       <ul>
         {items.map((t) => (
           <li key={t.id}>
-            {t.visible ? <a href={`/ops/tasks/${t.id}`}>{t.title}</a> : t.title} —{' '}
+            {t.visible ? <a href={`${tasks}/${t.id}`}>{t.title}</a> : t.title} —{' '}
             {statusOf(t.status)}
           </li>
         ))}
@@ -242,7 +263,7 @@ export function TaskDependencies({ d, candidates }: { d: TaskDetail; candidates:
       {d.canEdit && options.length ? (
         <ActionForm
           compact
-          action={`${API}/${d.id}/dependencies`}
+          action={`${api}/${d.id}/dependencies`}
           submitLabel="Add dependency"
           variant="secondary"
           extra={{ expectedVersion: d.version }}
@@ -289,7 +310,8 @@ const UPDATE_FIELDS: FieldSpec[] = [
 const local = (at: Date | null) =>
   at ? new Date(+at + 330 * 60000).toISOString().slice(0, 16) : '';
 
-export function WorkUpdates({ d }: { d: TaskDetail }) {
+export function WorkUpdates({ d, base }: { d: TaskDetail; base: string }) {
+  const { api } = taskPaths(base);
   const items = [...d.updates].reverse().map((u) => {
     const minutes = minutesOf(u);
     const late = istToday(u.recordedAt) > u.occurredOn;
@@ -309,7 +331,7 @@ export function WorkUpdates({ d }: { d: TaskDetail }) {
             <details className="el-explain">
               <summary>Correct this entry…</summary>
               <ActionForm
-                action={`${API}/${d.id}/updates`}
+                action={`${api}/${d.id}/updates`}
                 submitLabel="Save correction"
                 extra={{ correctsUpdateId: u.id }}
                 fields={[
@@ -344,7 +366,7 @@ export function WorkUpdates({ d }: { d: TaskDetail }) {
           <details className="el-explain" open={!d.updates.length}>
             <summary>Log work</summary>
             <ActionForm
-              action={`${API}/${d.id}/updates`}
+              action={`${api}/${d.id}/updates`}
               submitLabel="Log work"
               successText="Work logged."
               fields={UPDATE_FIELDS}
@@ -361,8 +383,8 @@ export function WorkUpdates({ d }: { d: TaskDetail }) {
   );
 }
 
-export function TaskReport({ d }: { d: TaskDetail }) {
-  const href = (f: string) => `${API}/${d.id}/report?format=${f}`;
+export function TaskReport({ d, base }: { d: TaskDetail; base: string }) {
+  const href = (f: string) => `${taskPaths(base).api}/${d.id}/report?format=${f}`;
   return (
     <Segment
       title="End-to-end report"

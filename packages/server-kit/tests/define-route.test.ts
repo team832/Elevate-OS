@@ -99,6 +99,40 @@ describe('defineRoute', () => {
     expect(notJson.status).toBe(400);
   });
 
+  it('refuses cross-site writes (D-072): other localhost ports share the cookie', async () => {
+    const coordinator = await createTestUser(ctx.db, { roles: ['academic_coordinator'] });
+    const post = (headers: Record<string, string>, body = JSON.stringify({ name: 'Batch A' })) =>
+      callRoute(
+        echo,
+        new Request(`http://localhost:3001/academic/api/v1/batches/${ID}`, {
+          method: 'POST',
+          headers: { ...headers, cookie: `elevate_session=${coordinator.token}` },
+          body,
+        }),
+        { id: ID },
+      );
+    const json = { 'content-type': 'application/json' };
+    expect((await post({ ...json, origin: 'http://localhost:5173' })).status).toBe(403);
+    expect((await post({ ...json, origin: 'https://evil.example' })).status).toBe(403);
+    expect((await post({ ...json, origin: 'http://localhost:3001' })).status).toBe(200);
+    expect((await post({ ...json, origin: 'http://localhost:3000' })).status).toBe(200);
+    expect((await post({ 'content-type': 'application/json; charset=utf-8' })).status).toBe(200);
+    // A "simple" request a foreign page could send without a CORS preflight.
+    expect((await post({ 'content-type': 'text/plain;application/json' })).status).toBe(400);
+  });
+
+  it('a route under a workspace path needs membership of that workspace (D-072)', async () => {
+    const leads = defineRoute({ permission: 'ops:leads:read' }, async () => ({ ok: true }));
+    const marketer = await createTestUser(ctx.db, { roles: ['marketing_manager'] });
+    const at = (path: string) => callRoute(leads, authedRequest(marketer, path));
+    // The same handler mounted in Marketing OS answers; Business Ops' own path refuses.
+    expect((await at('/marketing/api/v1/leads')).status).toBe(200);
+    const viaOps = await at('/ops/api/v1/demos/x');
+    expect(viaOps.status).toBe(403);
+    expect(viaOps.error?.message).toBe('Your roles do not include this workspace.');
+    expect((await at('/opsx/api/v1/leads')).status).toBe(200); // not the /ops base path
+  });
+
   it('200 with the { data } envelope when allowed and valid', async () => {
     const coordinator = await createTestUser(ctx.db, { roles: ['academic_coordinator'] });
     const res = await callRoute<{
@@ -156,7 +190,7 @@ describe('defineRoute', () => {
     );
     const teacher = await createTestUser(ctx.db, { roles: ['teacher'] });
     expect((await callRoute(either, authedRequest(teacher, '/x'))).data).toEqual({ scope: 'own' });
-    const marketer = await createTestUser(ctx.db, { roles: ['marketing_contributor'] });
+    const marketer = await createTestUser(ctx.db, { roles: ['platform_admin'] });
     expect((await callRoute(either, authedRequest(marketer, '/x'))).status).toBe(403);
   });
 

@@ -150,3 +150,17 @@ Map of brief 2's 19 required checks to tests: `docs/task-tracker-verification.md
 
 ## Not automated (21 Oct 2026)
 Full browser pass with axe on every redesigned screen (agents checked several at 1440 / 390 px); Google re-authentication (not built, D-041); real message delivery (mock adapter only); Devanagari in PDFs; a true concurrency proof of the demo booking lock under PGlite (single connection).
+
+
+## Added on 22 Oct 2026 (role workspaces, D-072 / D-073)
+| File | Rules | Covers |
+|---|---|---|
+| unit `overview.test.tsx` | OPS-143, OPS-144 | date range default, quick periods and fall-back; sidebar order with Settings at the foot; area tabs per permission; links into another workspace |
+| integration `overview.test.tsx` | OPS-144, OPS-146 | blocks follow permissions; Academic, Marketing and reviews down → "Source unavailable"; reviews published in the range; > 92-day range explained; links keep the range; Collections and Outstanding paging, filters, own scope, 403 |
+| integration `shared-entries.test.tsx` | OPS-147, OPS-148 | bodies render under `/academic` and `/marketing`; teacher sees own tasks/EOD only, no leads; marketing manager 200 on leads, 403 on students, KYC, fees, admissions and reviews; contributor sees own leads only; recipient links per workspace; `taskDaySummary` |
+| integration `meetings-body.test.tsx` | OPS-147 | `MeetingsBody` under `/academic`: own meetings only, names only; a second teacher sees none and cannot open one by id; meeting notification links |
+| integration `follow-up-summary.test.ts` | OPS-147 | `followUpDaySummary` counts; null for own scope without a staff record; refused without `ops:leads:read` |
+| integration `lead-kyc-masking.test.ts` | OPS-148 | marketing sees contact fields but no KYC columns or KYC history; the operations manager sees everything |
+| changed: integration `appointments.test.ts`, `eod-reports.test.ts`, `events.test.ts`, `feedback.test.ts`, `staff-tasks.test.ts`, `task-lifecycle.test.ts`, `task-reports.test.ts`; unit `screens.test.tsx`, `task-views.test.tsx` | — | updated for the new grants, the body components and workspace links |
+
+Workspace rules shared by all apps are tested in the packages: `packages/authorization/tests/workspaces.test.ts`, `packages/authentication/tests/workspace-login.test.ts`, `packages/configuration/tests/workspaces.test.ts`, `packages/server-kit/tests/define-route.test.ts`, `packages/database/tests/demo-accounts.test.ts`, `packages/shared-contracts/tests/safe-path.test.ts`.

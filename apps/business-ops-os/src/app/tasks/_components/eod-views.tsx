@@ -12,9 +12,7 @@ import { load } from '../../../ui/frame';
 import { DetailTable, Segment } from '../../../ui/sections';
 import { CopySummary } from './eod-copy';
 import { EodFactsView, EodHistory } from './eod-facts';
-import { BASE, type Params } from './task-views';
-
-export const EOD_API = '/ops/api/v1/eod-reports';
+import { taskPaths, type Params } from './task-views';
 
 export const EOD_TONES: Record<EodReportView['status'], Tone> = {
   draft: 'neutral',
@@ -36,10 +34,10 @@ export const EodStatus = ({ r }: { r: Pick<EodReportView, 'status' | 'late'> }) 
 );
 
 /** Download links for a report (the latest submitted version, else the draft). */
-export const EodDownloads = ({ id }: { id: string }) => (
+export const EodDownloads = ({ id, base }: { id: string; base: string }) => (
   <span className="el-inline-form">
-    <a href={`${EOD_API}/${id}/pdf`}>Download PDF</a>
-    <a href={`${EOD_API}/${id}/csv`}>Download CSV</a>
+    <a href={`${taskPaths(base).eodApi}/${id}/pdf`}>Download PDF</a>
+    <a href={`${taskPaths(base).eodApi}/${id}/csv`}>Download CSV</a>
   </span>
 );
 
@@ -47,9 +45,9 @@ export const EodDownloads = ({ id }: { id: string }) => (
 const dayFrom = (sp: Params, today: string) =>
   isIsoDate(sp.date) && sp.date <= today ? sp.date : today;
 
-function DayPicker({ day, today }: { day: string; today: string }) {
+function DayPicker({ day, today, base }: { day: string; today: string; base: string }) {
   return (
-    <form method="get" action={BASE} className="el-inline-form">
+    <form method="get" action={taskPaths(base).tasks} className="el-inline-form">
       <input type="hidden" name="tab" value="eod" />
       <div className="el-field">
         <label htmlFor="eod-date">Report day</label>
@@ -70,7 +68,16 @@ function DayPicker({ day, today }: { day: string; today: string }) {
 }
 
 /** The owner's end-of-day report: facts, narrative, recipient, submit, versions, exports. */
-export async function EodReport({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
+export async function EodReport({
+  user,
+  sp,
+  base,
+}: {
+  user: AuthenticatedUser;
+  sp: Params;
+  base: string;
+}) {
+  const EOD_API = taskPaths(base).eodApi;
   const today = istToday(new Date());
   const day = dayFrom(sp, today);
   const r = await load((db) => eodContext(db, user, day));
@@ -86,12 +93,12 @@ export async function EodReport({ user, sp }: { user: AuthenticatedUser; sp: Par
   const summary = report && report.current ? eodSummaryText(report) : null;
   return (
     <div className="el-stack">
-      <DayPicker day={day} today={today} />
+      <DayPicker day={day} today={today} base={base} />
       {report ? (
         <Segment
           title={`Report for ${fmtDate(day)}`}
           meta={<EodStatus r={report} />}
-          actions={<EodDownloads id={report.id} />}
+          actions={<EodDownloads id={report.id} base={base} />}
           flush
         >
           <DetailTable
@@ -122,7 +129,7 @@ export async function EodReport({ user, sp }: { user: AuthenticatedUser; sp: Par
           ? `Facts as of ${fmtDateTime(facts.asOf)}, rebuilt from your task history each time you save. To correct a fact, update the task or the Academic record.`
           : 'Showing the submitted version. To correct a fact, update the task or the Academic record.'}
       </p>
-      <EodFactsView f={editable ? facts : report!.facts} />
+      <EodFactsView f={editable ? facts : report!.facts} base={base} />
       {editable ? (
         <Segment
           title="Your notes for your manager"
@@ -229,7 +236,7 @@ export async function EodReport({ user, sp }: { user: AuthenticatedUser; sp: Par
           <CopySummary text={summary} />
         </Segment>
       ) : null}
-      {report ? <EodHistory r={report} /> : null}
+      {report ? <EodHistory r={report} base={base} /> : null}
     </div>
   );
 }

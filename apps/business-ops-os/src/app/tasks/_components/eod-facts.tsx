@@ -13,7 +13,7 @@ const metric = (v: number | null) => (v === null ? 'Not recorded' : String(v));
  * The facts of an EOD (draft or submitted version): built from task events and updates, not
  * editable here — corrections go to the task or to Academic OS. Rows open the task.
  */
-export function EodFactsView({ f, level = 2 }: { f: EodFacts; level?: 2 | 3 }) {
+export function EodFactsView({ f, base, level = 2 }: { f: EodFacts; base: string; level?: 2 | 3 }) {
   if (isImportedReport(f))
     return (
       <Alert tone="info" title="Imported — not sent">
@@ -47,7 +47,7 @@ export function EodFactsView({ f, level = 2 }: { f: EodFacts; level?: 2 | 3 }) {
           <RecordTable
             rows={s.rows}
             rowKey={(r) => `${r.taskId}-${r.cells.join('|')}`}
-            rowHref={(r) => `/ops/tasks/${r.taskId}`}
+            rowHref={(r) => `${base}/tasks/${r.taskId}`}
             linkColumn="task"
             empty="None recorded on this day."
             columns={[
@@ -103,7 +103,15 @@ export function EodFactsView({ f, level = 2 }: { f: EodFacts; level?: 2 | 3 }) {
 }
 
 /** Submitted versions and the manager's responses, newest first. */
-export function EodHistory({ r, level = 2 }: { r: EodReportView; level?: 2 | 3 }) {
+export function EodHistory({
+  r,
+  base,
+  level = 2,
+}: {
+  r: EodReportView;
+  base: string;
+  level?: 2 | 3;
+}) {
   const items = [
     ...r.versions.map((v) => ({
       key: v.id,
@@ -119,7 +127,7 @@ export function EodHistory({ r, level = 2 }: { r: EodReportView; level?: 2 | 3 }
       title: `${REVIEW_LABELS[t.kind]}${t.actorName ? ` by ${t.actorName}` : ''}`,
       detail:
         t.text ??
-        (t.taskId ? <a href={`/ops/tasks/${t.taskId}`}>Open the follow-up task</a> : undefined),
+        (t.taskId ? <a href={`${base}/tasks/${t.taskId}`}>Open the follow-up task</a> : undefined),
     })),
   ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   return (

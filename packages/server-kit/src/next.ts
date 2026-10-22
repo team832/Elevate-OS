@@ -9,10 +9,18 @@
  */
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import type { AuthenticatedUser } from '@elevate/authentication';
+import { landingLocation, type AuthenticatedUser } from '@elevate/authentication';
 import { getCurrentUser } from '@elevate/authentication/next';
-import { can, modulesFor, type Permission } from '@elevate/authorization';
-import type { ModuleKey } from '@elevate/shared-types';
+import {
+  can,
+  modulesFor,
+  resolveLanding,
+  workspacesFor,
+  type Permission,
+  type WorkspaceKey,
+} from '@elevate/authorization';
+import { appOrigin } from '@elevate/configuration/workspaces';
+import { MODULE_KEYS, MODULES, type ModuleKey } from '@elevate/shared-types';
 import { toAppPath } from './paths';
 
 export { getCurrentUser } from '@elevate/authentication/next';
@@ -29,6 +37,12 @@ export interface PageAccessOptions {
   returnTo: string;
   /** The app's basePath (`''` for the platform, `/marketing`, `/academic`, `/ops`). */
   basePath?: string;
+  /**
+   * The workspace this page belongs to (D-072). Someone whose roles do not grant
+   * `<workspace>:module:access` is sent to their own workspace (or the chooser) before any
+   * permission check, so opening another port never shows that workspace.
+   */
+  workspace?: WorkspaceKey;
 }
 
 /**
@@ -49,10 +63,26 @@ export async function requirePageAccess(
       `${toAppPath(options.loginPath, options.basePath)}?next=${encodeURIComponent(options.returnTo)}`,
     );
   }
+  if (options.workspace && !can(user, `${options.workspace}:module:access` as Permission)) {
+    const landing = resolveLanding({
+      workspaces: workspacesFor(user),
+      preferred: user.preferredWorkspace,
+      current: options.workspace,
+    });
+    const to = landingLocation(landing, options.workspace);
+    redirect(landing.kind === 'workspace' ? to : toAppPath(to, options.basePath));
+  }
   const modules = modulesFor(user);
   return can(user, permission)
     ? { status: 'allowed', user, modules }
     : { status: 'forbidden', user, modules };
+}
+
+/** Absolute URL of every app's home, for the shell's workspace switcher (D-072). */
+export function workspaceHrefs(): Record<ModuleKey, string> {
+  return Object.fromEntries(
+    MODULE_KEYS.map((k) => [k, `${appOrigin(k)}${MODULES[k].basePath}`]),
+  ) as Record<ModuleKey, string>;
 }
 
 /** Signed-in user or a redirect to the sign-in page (paths as in `requirePageAccess`). */

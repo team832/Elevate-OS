@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { APP_URL_DEFAULTS } from './workspaces';
 
 /**
  * Every environment variable Elevate OS reads, with its validation rule and a
@@ -46,22 +47,21 @@ export const ENV_FIELDS = {
       'Bearer token for /api/internal/* server-to-server routes (>= 32 chars, same in every app).',
   },
   PLATFORM_URL: {
-    schema: url('PLATFORM_URL').default('http://localhost:3000'),
+    schema: url('PLATFORM_URL').default(APP_URL_DEFAULTS.platform),
     description:
-      'Browser-facing origin of the platform app; module apps accept Server Actions from it.',
+      'Browser origin of the platform app (Users & roles, Google sign-in, single-origin gateway), e.g. http://localhost:3003.',
   },
   MARKETING_OS_URL: {
-    schema: url('MARKETING_OS_URL'),
-    description: 'Origin of the Marketing OS app, e.g. http://localhost:3001 (platform rewrites).',
+    schema: url('MARKETING_OS_URL').default(APP_URL_DEFAULTS.marketing),
+    description: 'Browser origin of the Marketing OS workspace, e.g. http://localhost:3002.',
   },
   ACADEMIC_OS_URL: {
-    schema: url('ACADEMIC_OS_URL'),
-    description: 'Origin of the Academic OS app, e.g. http://localhost:3002 (platform rewrites).',
+    schema: url('ACADEMIC_OS_URL').default(APP_URL_DEFAULTS.academic),
+    description: 'Browser origin of the Academic OS workspace, e.g. http://localhost:3001.',
   },
   BUSINESS_OPS_OS_URL: {
-    schema: url('BUSINESS_OPS_OS_URL'),
-    description:
-      'Origin of the Business Ops OS app, e.g. http://localhost:3003 (platform rewrites).',
+    schema: url('BUSINESS_OPS_OS_URL').default(APP_URL_DEFAULTS.ops),
+    description: 'Browser origin of the Business Operations workspace, e.g. http://localhost:3000.',
   },
   GOOGLE_CLIENT_ID: {
     schema: z.string().trim().min(1).optional(),

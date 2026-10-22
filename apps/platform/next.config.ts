@@ -3,6 +3,7 @@ import path from 'node:path';
 import { parseEnv } from 'node:util';
 import type { NextConfig } from 'next';
 import { securityHeaders } from '@elevate/configuration/security-headers';
+import { appOrigin } from '@elevate/configuration/workspaces';
 
 /** Walk up from the app directory to the workspace root (the package.json with "workspaces"). */
 function findRepoRoot(start: string): string {
@@ -26,10 +27,9 @@ if (existsSync(rootEnvFile)) {
   }
 }
 
-const zone = (name: string, fallback: string) => (process.env[name] || fallback).replace(/\/$/, '');
-const marketing = zone('MARKETING_OS_URL', 'http://localhost:3001');
-const academic = zone('ACADEMIC_OS_URL', 'http://localhost:3002');
-const ops = zone('BUSINESS_OPS_OS_URL', 'http://localhost:3003');
+const marketing = appOrigin('marketing');
+const academic = appOrigin('academic');
+const ops = appOrigin('ops');
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,

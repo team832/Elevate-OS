@@ -1,10 +1,12 @@
 # Academic OS — module manual
 
-Academic OS (`@elevate/academic-os`, port 3002, basePath `/academic`) plans and runs teaching at Elevate Education: programmes' course versions, curricula and their versioned baselines, batches, teacher assignments, timetables, class records, attendance, assessments and results, students and enrolments, catch-up and interventions. It stewards the programme catalogue (`core.programmes`) and owns every `academic.*` table.
+Academic OS (`@elevate/academic-os`, port 3001, basePath `/academic`) is the **Academic workspace** for teachers and academic coordinators at http://localhost:3001/academic (D-072; there is no separate teacher app; guide: `docs/WORKSPACES.md` at the repo root). It plans and runs teaching at Elevate Education: programmes' course versions, curricula and their versioned baselines, batches, teacher assignments, timetables, class records, attendance, assessments and results, students and enrolments, catch-up and interventions. It stewards the programme catalogue (`core.programmes`) and owns every `academic.*` table.
 
-> Status (21 Oct 2026, teacher workspace added): the slices below are **Implemented**; the ones with passing automated tests are **Tested** (see `requirements/REQUIREMENTS.md` §4 and the Academic section of `IMPLEMENTATION_STATUS.md`). The new screens are Implemented only (typecheck and build; no browser check by the implementers). The new tables reach a database with migration `0009_academic_teacher_workspace_tasks`, **generated, not applied**. Nothing is Deployed. No real student data, scores or deliveries exist in this system; the sample rows are marked SAMPLE DATA (D-061).
+> Status (21 Oct 2026, teacher workspace added): the slices below are **Implemented**; the ones with passing automated tests are **Tested** (see `requirements/REQUIREMENTS.md` §4 and the Academic section of `IMPLEMENTATION_STATUS.md`). The new screens are Implemented only (typecheck and build; no browser check by the implementers). Migrations `0000`–`0013` are applied to the owner's local database only (`docs/DATABASE_MIGRATION_PLAN.md`). Nothing is Deployed.
 >
-> Test count: 32 Academic test files (11 unit, 21 integration), all passing in the final `npm run validate` of 21 Oct 2026 (whole repo: 156 files, 2,056 tests passed, 1 todo; see `IMPLEMENTATION_STATUS.md`).
+> 22 Oct 2026 (role workspaces, D-072 / D-073): the sidebar, the student attendance worklist, My tasks / My EOD report, task detail, report inbox, task reports and My meetings (mounted from Business Ops' shared `./work` entry) and the workspace chooser were added; teachers no longer open Business Operations (grant **Proposed**). Evidence: `tests/integration/work-mount.test.tsx`, `teacher-privacy.test.ts`, `teachers-myday.test.ts`, `tests/unit/screens.test.tsx`. No real student data, scores or deliveries exist in this system; the sample rows are marked SAMPLE DATA (D-061).
+>
+> Test count: 36 Academic test files (12 unit, 24 integration) on 22 Oct 2026; whole-repo results: see `IMPLEMENTATION_STATUS.md`.
 
 ## Contents
 1. [Scope and boundaries](#1-scope-and-boundaries)
@@ -69,6 +71,8 @@ Declared in `packages/authorization/src/permissions/academic.ts`.
 | `auditor` | every `…:read` and `module:access` (read only; the catalogue refuses anything else) |
 | counsellors, operations manager, marketing roles, platform admin | none — no student academic records |
 
+Workspace (D-072): a person belongs to Academic OS when a role grants `academic:module:access` (teacher, academic coordinator, director, auditor). Every page calls `requirePageAccess(…, { workspace: 'academic' })` and every `/academic/api` route refuses non-members with 403. Inside Academic OS the teacher also uses Business Ops permissions held with **own** scope: `ops:tasks:read/write` (own tasks and EOD reports) and `ops:appointments:read` (own meetings). Since 22 Oct 2026 the teacher no longer holds `ops:module:access` (Proposed, D-073); the academic coordinator keeps it and belongs to both Academic OS and Business Operations.
+
 Permissions: `module:access`, `programmes:manage`, `courses:read|write`, `curriculum:approve`, `batches:read|write`, `students:read|write`, `enrolments:read|decide`, `assignments:read|write`, `timetable:read|write`, `classes:read|record|verify`, `attendance:read|record`, `assessments:read|write|finalise|mark|publish`, `progress:read|write`, `settings:manage`, `summary:read`, `reviews:read|write`, `timetable:publish` (all prefixed `academic:`). The last five are new on 21 Oct 2026.
 
 **Own scope** (`src/server/context.ts → resolveScope`): the teacher's `core.staff_members` row is found by `user_id`.
@@ -78,7 +82,7 @@ Permissions: `module:access`, `programmes:manage`, `courses:read|write`, `curric
 - Rules: `docs/ALGORITHMS.md` A18.
 - A user without a staff record has an empty scope (sees nothing), never "all".
 - Out-of-scope records answer **404** (existence is not leaked), not 403.
-- Student contact details (student/guardian email and phone, date of birth) are returned only to holders of `academic:students:write` (the coordinator); others get `contactsHidden: true` (PLT-014).
+- Student contact details (student email and phone, date of birth, and every guardian field: name, relationship, email, phone) are returned only to holders of `academic:students:write` (the coordinator); teachers, directors and auditors get `null` and `contactsHidden: true` (PLT-014; guardian name and relationship hidden since 22 Oct 2026, owner to confirm; test `teacher-privacy.test.ts`).
 
 Every route checks its permission on the server (`defineRoute`), every page with `requirePageAccess`; every business-state change runs in `withTransaction` with `recordAudit` (and `publishEvent` / `notify` where others must react).
 
@@ -91,7 +95,7 @@ Run from the repository root.
 | `npx eslint apps/academic-os packages/database/src/schema/academic*.ts packages/authorization/src/permissions/academic.ts packages/shared-contracts/src/modules/academic.ts --max-warnings=0` | Lint incl. module-boundary and domain-purity rules |
 | `npx vitest run apps/academic-os` (or `--project academic-os`) | Unit + integration tests (in-memory PGlite, no server needed) |
 | `npm run build -w @elevate/academic-os` | Production build |
-| `npm run dev:academic` | Run alone on http://localhost:3002/academic (needs `npm run db:start` and a migrated, seeded database; sign in at `/academic/login`) |
+| `npm run dev:academic` | Run alone on http://localhost:3001/academic (`/` redirects there). Starts the local database if nothing is listening, otherwise reuses it; the database must be migrated and seeded. Sign in at `/academic/login` (demo: `teacher@elevateeducation.in` after `npm run db:seed-demo-accounts`). Panels that read Business Operations still work: the shared task and meeting screens run inside this app |
 | `npm run db:seed` | Core + module seeds, including this module's (local databases only) |
 
 Do **not** run `npm run db:generate` in wave 2 — the baseline migration (including the academic tables) is generated by Integration in wave 3. Tests build the live schema with `createTestDb()`.
@@ -120,6 +124,14 @@ Server components inside `AppShell`, gated by `requirePageAccess(<permission>, {
 | Reports | `/academic/reports`, `/academic/reports/[kind]` | `module:access` (each report re-checks its own permission) | Batch attendance, coverage, assessment analysis, teacher week: print view (black on white) + CSV (audited) |
 | Academic settings | `/academic/settings` | `settings:manage` | Proposed and approved settings; approving needs a D-0xx / OD-0xx reference |
 | Enrolment intake | `/academic/intake` | `enrolments:read` | Waiting requests, processed outcomes (confirmed / rejected with reason), failed/dead deliveries; "Process intake" (coordinator) |
+| Student attendance (22 Oct 2026) | `/academic/attendance` (`?view=all`) | `attendance:read` | Worklist of own classes over two weeks, newest first: tabs "Needs marking" and "All classes"; placed students without a mark counted only for classes that have ended; each row opens the class page |
+| My tasks, My EOD report (22 Oct 2026) | `/academic/tasks` (`?tab=day\|all\|eod`), `/academic/tasks/[id]`, `/academic/tasks/inbox`, `/academic/tasks/reports` | `ops:tasks:read` (own) | Business Ops' task and EOD screens mounted from `@elevate/business-ops-os/work` (D-073): the same records and rules as `/ops/tasks`; links stay under `/academic`. The report inbox shows only for EOD recipients and reviewers (`hasInbox`) |
+| My meetings (22 Oct 2026) | `/academic/meetings` | `ops:appointments:read` (own) | Read-only list of the teacher's own meetings (`MeetingsBody`), participant names only |
+| Choose a workspace | `/academic/workspaces` | signed in | The chooser for people in several workspaces (D-072) |
+
+**Sidebar (22 Oct 2026, `src/ui/shell.tsx`):** Today (My day, My meetings) · Teaching (Timetable, My batches — "Batches" for coordinators, Students, Student attendance, Teaching logs, Curriculum, Assessments, Student reviews, My tasks, My EOD report) · Coordination (Teachers, Enrolments, Enrolment intake, Progress and support, Reports, Academic settings), shown only with all-scope permission. Each item needs its permission. Not shown: **My Attendance** (no staff-attendance data; a proposed `ops.staff_attendance` table waits for OD-026) and **Resources** (no teaching-material store; concept-book indices are a Curriculum tab). Links to another workspace are absolute and shown only to its members (`workspaceLink`).
+
+**My day (22 Oct 2026)** adds: Your batches, review drafts count, "Student attendance not recorded", a Tasks and EOD block (`taskDaySummary`: own open, overdue and blocked work, today's EOD status) and Meetings today.
 
 The exact page files are listed in `docs/TEST_PLAN.md` and `IMPLEMENTATION_STATUS.md`.
 
@@ -139,7 +151,8 @@ Browser-facing REST under `/academic/api/v1/…` built with `defineRoute` (401 �
 | Settings | `GET settings`; `PUT settings/:key` |
 | Reports | `GET reports/:kind` (`attendance`, `coverage`, `assessment`, `teacher-week`; `format=csv` audited) |
 | Internal | `GET /academic/api/internal/v1/summary` (bearer `INTERNAL_SERVICE_TOKEN` + `X-Elevate-Caller: ops|platform`) → `AcademicDeliverySummaryV1`; `GET /academic/api/internal/v1/students/{id}/summary` (caller `ops` only) → `AcademicStudentSummaryV1` (IR-OPS-STU-1); caller `ops` only: `GET …/internal/v1/reviews` → `AcademicStudentReviewsV1` (D-058), `GET …/internal/v1/teachers/{staffId}/activity` → `AcademicTeacherActivityV1`, `GET …/internal/v1/demo-attendance?ids=` → `AcademicDemoAttendanceV1` (D-060) |
-| Platform | `GET health`, `POST auth/login`, `POST auth/logout` (Foundation) |
+| Platform | `GET health`, `POST auth/login`, `POST auth/logout` (Foundation); `POST auth/workspace` (the chooser, D-072) |
+| Tasks and EOD (mounted, D-073) | 15 route files re-exporting Business Ops' `workRoutes`: `staff-tasks`, `staff-tasks/:id`, `staff-tasks/:id/:action`, `…/dependencies`, `…/reassign`, `…/report`, `…/updates`, `eod-reports`, `eod-reports/:id`, `…/csv`, `…/follow-up`, `…/pdf`, `…/review`, `…/submit`, `task-reports`. Same permissions and bodies as `/ops/api/v1/…` (`apps/business-ops-os/docs/API.md`) |
 
 ## 7. Events produced and consumed
 | Event | Direction | When | Idempotency |

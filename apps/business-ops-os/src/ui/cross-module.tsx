@@ -1,8 +1,7 @@
 /**
- * Academic delivery and Marketing panels on the Ops dashboard (D-011.2).
- * A source that could not be fetched shows "Source unavailable" with the
- * reason; individual metrics render through StatTile, so `missing` shows as
- * "Missing" and never as 0.
+ * Academic delivery and Marketing panels (D-011.2) for the Overview and the Academic/Marketing
+ * summary pages. A source that could not be fetched shows "Source unavailable (checked …)" with
+ * the reason; metrics render through StatTile, so `missing` shows as "Missing", never as 0.
  */
 import type {
   AcademicDeliverySummaryV1,
@@ -10,9 +9,11 @@ import type {
   Metric,
   SourceResult,
 } from '@elevate/shared-contracts';
+import type { ReactNode } from 'react';
 import { Alert, Card, StatTile } from '@elevate/shared-ui';
+import { fmtDateTime } from './format';
 
-const ACADEMIC_LABELS: Record<keyof AcademicDeliverySummaryV1['metrics'], string> = {
+export const ACADEMIC_LABELS: Record<keyof AcademicDeliverySummaryV1['metrics'], string> = {
   activeStudents: 'Active students',
   activeBatches: 'Active batches',
   classesPlanned: 'Classes planned',
@@ -25,7 +26,7 @@ const ACADEMIC_LABELS: Record<keyof AcademicDeliverySummaryV1['metrics'], string
   syllabusCompletionRate: 'Syllabus completion',
 };
 
-const MARKETING_LABELS: Record<keyof MarketingSummaryV1['metrics'], string> = {
+export const MARKETING_LABELS: Record<keyof MarketingSummaryV1['metrics'], string> = {
   ideasCaptured: 'Ideas captured',
   contentApproved: 'Content approved',
   postsScheduled: 'Posts scheduled',
@@ -36,18 +37,18 @@ const MARKETING_LABELS: Record<keyof MarketingSummaryV1['metrics'], string> = {
   leadsAttributed: 'Leads attributed',
 };
 
-function Unavailable({
+/** "Source unavailable (checked <time>)" with the reason; no numbers rather than zeros. */
+export function Unavailable({
   name,
-  reason,
-  fetchedAt,
+  result,
 }: {
   name: string;
-  reason: string;
-  fetchedAt: string;
+  result: { reason: string; fetchedAt: string };
 }) {
   return (
     <Alert tone="warning" title="Source unavailable">
-      {name} could not be read ({reason}) at {fetchedAt}. No numbers are shown rather than zeros.
+      {name} could not be read ({result.reason}); checked {fmtDateTime(result.fetchedAt)}. No
+      numbers are shown rather than zeros.
     </Alert>
   );
 }
@@ -68,6 +69,56 @@ function Tiles<K extends string>({
   );
 }
 
+/** One source's card: its tiles and freshness, or "source unavailable". */
+function SourcePanel<T extends { generatedAt: string }>({
+  title,
+  source,
+  result,
+  children,
+}: {
+  title: string;
+  source: string;
+  result: SourceResult<T>;
+  children: (data: T) => ReactNode;
+}) {
+  return (
+    <Card
+      title={title}
+      description={`From ${source}${result.status === 'available' ? `, as of ${fmtDateTime(result.data.generatedAt)}` : ''}.`}
+    >
+      {result.status === 'available' ? (
+        children(result.data)
+      ) : (
+        <Unavailable name={source} result={result} />
+      )}
+    </Card>
+  );
+}
+
+export const AcademicPanel = ({ result }: { result: SourceResult<AcademicDeliverySummaryV1> }) => (
+  <SourcePanel
+    title="Academic delivery"
+    source="Academic OS (academic.delivery_summary v1)"
+    result={result}
+  >
+    {(d) => <Tiles metrics={d.metrics} labels={ACADEMIC_LABELS} />}
+  </SourcePanel>
+);
+
+export const MarketingPanel = ({ result }: { result: SourceResult<MarketingSummaryV1> }) => (
+  <SourcePanel title="Marketing" source="Marketing OS (marketing.summary v1)" result={result}>
+    {(d) => (
+      <>
+        <Tiles metrics={d.metrics} labels={MARKETING_LABELS} />
+        <p className="el-field-hint">
+          Data sources:{' '}
+          {d.dataSources.map((s) => `${s.name} (${s.connection})`).join(', ') || 'none listed'}
+        </p>
+      </>
+    )}
+  </SourcePanel>
+);
+
 export function CrossModulePanels({
   summaries,
 }: {
@@ -76,41 +127,10 @@ export function CrossModulePanels({
     marketing: SourceResult<MarketingSummaryV1>;
   };
 }) {
-  const { academic, marketing } = summaries;
   return (
     <>
-      <Card
-        title="Academic delivery"
-        description="From Academic OS (academic.delivery_summary v1)."
-      >
-        {academic.status === 'available' ? (
-          <Tiles metrics={academic.data.metrics} labels={ACADEMIC_LABELS} />
-        ) : (
-          <Unavailable
-            name="Academic OS summary"
-            reason={academic.reason}
-            fetchedAt={academic.fetchedAt}
-          />
-        )}
-      </Card>
-      <Card title="Marketing" description="From Marketing OS (marketing.summary v1).">
-        {marketing.status === 'available' ? (
-          <>
-            <Tiles metrics={marketing.data.metrics} labels={MARKETING_LABELS} />
-            <p className="el-field-hint">
-              Data sources:{' '}
-              {marketing.data.dataSources.map((s) => `${s.name} (${s.connection})`).join(', ') ||
-                'none listed'}
-            </p>
-          </>
-        ) : (
-          <Unavailable
-            name="Marketing OS summary"
-            reason={marketing.reason}
-            fetchedAt={marketing.fetchedAt}
-          />
-        )}
-      </Card>
+      <AcademicPanel result={summaries.academic} />
+      <MarketingPanel result={summaries.marketing} />
     </>
   );
 }

@@ -19,7 +19,7 @@ import {
 } from '@elevate/database';
 import type { StaffMemberId } from '@elevate/shared-types';
 import { normalisePhone, PHONE_ERROR_MESSAGES } from '../domain';
-import { PRIVATE_STUDENT_FIELDS } from '../domain/students';
+import { KYC_FIELDS, PRIVATE_STUDENT_FIELDS } from '../domain/students';
 import { activeStaff, clean, type Actor } from './context';
 import type { DemoKycInput } from './demos-schemas';
 import { updateLead } from './leads';
@@ -29,14 +29,7 @@ import { loadSettings } from './settings';
 
 type DemoRef = Pick<typeof opsDemos.$inferSelect, 'id' | 'leadId' | 'admissionId'>;
 const LEAD_FIELDS = Object.keys(contactFields) as (keyof typeof contactFields)[];
-/** Private beyond PRIVATE_STUDENT_FIELDS: the newer KYC columns. */
-const PRIVATE = [
-  ...PRIVATE_STUDENT_FIELDS,
-  'emergencyContactName',
-  'emergencyContactPhone',
-  'dateOfBirth',
-  'address',
-] as const;
+const PRIVATE = [...PRIVATE_STUDENT_FIELDS, ...KYC_FIELDS] as const;
 const camel = (f: string) => f.replace(/_(.)/g, (_, c: string) => c.toUpperCase());
 
 /** Write the given KYC fields (absent = unchanged) inside the caller's transaction; audited. */

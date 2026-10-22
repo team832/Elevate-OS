@@ -1,6 +1,6 @@
 /**
  * Security headers for all four apps (website-build-guidelines §6.4, Appendix A).
- * No imports, so next.config.ts can load this file too.
+ * Imports only ./workspaces (itself import-free), so next.config.ts can load this file too.
  *
  * - `securityHeaders()` is static and goes in each app's next.config.ts `headers()`.
  * - The CSP needs a fresh nonce per request, so each app's `src/proxy.ts` sets it with
@@ -8,6 +8,8 @@
  *   and stamps it on its own scripts and inline styles (Next 16 CSP guide). Module pages
  *   reached through the platform's rewrites keep the CSP their own app set.
  */
+
+import { appOrigins } from './workspaces';
 
 export interface HeaderPair {
   key: string;
@@ -35,7 +37,10 @@ export function securityHeaders(mode: CspMode = cspModeFromEnv()): HeaderPair[] 
     { key: 'X-Content-Type-Options', value: 'nosniff' },
     { key: 'X-Frame-Options', value: 'DENY' },
     { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+    {
+      key: 'Permissions-Policy',
+      value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    },
     { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
     // Internal app behind a login: never indexed.
     { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
@@ -44,7 +49,11 @@ export function securityHeaders(mode: CspMode = cspModeFromEnv()): HeaderPair[] 
   ];
 }
 
-export function contentSecurityPolicy(nonce: string, mode: CspMode = cspModeFromEnv()): string {
+export function contentSecurityPolicy(
+  nonce: string,
+  mode: CspMode = cspModeFromEnv(),
+  workspaceOrigins: Iterable<string> = appOrigins(),
+): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${mode.dev ? " 'unsafe-eval'" : ''}`,
@@ -58,7 +67,9 @@ export function contentSecurityPolicy(nonce: string, mode: CspMode = cspModeFrom
     `connect-src 'self'${mode.dev ? ' ws: wss:' : ''}`,
     "object-src 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    // Sign-in and the workspace chooser answer a form post with a 303 to another workspace's
+    // origin (D-072); form-action also governs that redirect, so the app origins are listed.
+    `form-action 'self' ${[...workspaceOrigins].join(' ')}`,
     "frame-ancestors 'none'",
     ...(mode.https ? ['upgrade-insecure-requests'] : []),
   ].join('; ');

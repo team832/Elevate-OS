@@ -39,6 +39,11 @@ export const opsPermissionList = [
   },
   { key: 'ops:leads:assign', description: 'Assign or reassign the owner of any lead.' },
   {
+    key: 'ops:lead_contacts:read',
+    description:
+      "See the contact details recorded on a lead (student and parent phone/email, city, school, consent) to follow it up (own = leads you own). Never KYC documents, student records or fees.",
+  },
+  {
     key: 'ops:leads:merge',
     description: 'Review duplicate flags and merge duplicate leads (explicit, audited).',
   },
@@ -212,9 +217,10 @@ export type OpsPermission = (typeof opsPermissionList)[number]['key'];
 
 const keys: OpsPermission[] = opsPermissionList.map((p) => p.key);
 
-/** Read/access permissions except student/guardian contacts (director and auditor baseline). */
+/** Read/access permissions except contact details (director and auditor baseline). */
+const CONTACTS: readonly OpsPermission[] = ['ops:student_private:read', 'ops:lead_contacts:read'];
 const reads = keys.filter(
-  (k) => (k.endsWith(':read') || k.endsWith(':access')) && k !== 'ops:student_private:read',
+  (k) => (k.endsWith(':read') || k.endsWith(':access')) && !CONTACTS.includes(k),
 );
 
 /** Retired keys still referenced by code awaiting removal; no role may hold them. */
@@ -261,6 +267,9 @@ export const opsPermissions = definePermissions<OpsPermission>({
     ],
 
     auditor: reads,
+    // Workspaces (D-072/D-073, Proposed): coordinators belong to Academic OS and Business
+    // Operations (students, onboarding materials, feedback live in Ops); teachers only to
+    // Academic OS, where their own tasks/EOD and meetings are mounted from Ops' entries.
     // Admitted students + handoff status; teacher directory and feedback (read only).
     academic_coordinator: [
       'ops:module:access',
@@ -270,10 +279,25 @@ export const opsPermissions = definePermissions<OpsPermission>({
       ...ownTasks,
     ],
     teacher: [
-      'ops:module:access',
       own('ops:appointments:read'),
       own('ops:teachers:read'),
       own('ops:feedback:read'),
+      ...ownTasks,
+    ],
+    // PROPOSED (owner to confirm, D-073): Marketing OS works leads, sources and follow-ups on the
+    // one lead record, plus its own tasks/EOD. No ops:module:access, no student-private, KYC,
+    // fee or review permissions.
+    marketing_manager: [
+      'ops:leads:read',
+      'ops:leads:write',
+      'ops:leads:assign',
+      'ops:lead_contacts:read',
+      ...ownTasks,
+    ],
+    marketing_contributor: [
+      own('ops:leads:read'),
+      own('ops:leads:write'),
+      own('ops:lead_contacts:read'),
       ...ownTasks,
     ],
     finance_officer: [

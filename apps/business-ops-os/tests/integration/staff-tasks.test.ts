@@ -35,7 +35,7 @@ beforeAll(async () => {
   await staffUser(ctx.db, ['admissions_counsellor'], { managerId: lead.staffId });
   auditor = await staffUser(ctx.db, ['auditor']);
   teacher = await staffUser(ctx.db, ['teacher']);
-  outsider = await createTestUser(ctx.db, { roles: ['marketing_contributor'] });
+  outsider = await createTestUser(ctx.db, { roles: ['platform_admin'] }); // no Ops task access
 });
 
 type Task = {
@@ -109,7 +109,16 @@ describe('staff tasks: access and own scope', () => {
     expect((await list(manager, `?staffId=${a.staffId}`)).data!.total).toBe(2);
     expect((await list(auditor, `?staffId=${a.staffId}`)).data!.total).toBe(2);
     expect((await list(director)).status).toBe(200);
-    expect((await create(teacher, { title: 'Mark registers' })).status).toBe(201);
+    // D-072: a teacher logs work through Academic OS; Business Ops' own API refuses non-members.
+    expect((await create(teacher, { title: 'Mark registers' })).status).toBe(403);
+    const viaAcademic = await callRoute<Task>(
+      createRoute,
+      authedRequest(teacher, '/academic/api/v1/staff-tasks', {
+        method: 'POST',
+        json: { title: 'Mark registers' },
+      }),
+    );
+    expect(viaAcademic.status).toBe(201);
   });
 });
 

@@ -284,7 +284,7 @@ describe('tasks and end-of-day reports', () => {
   });
 
   it('EOD facts: Academic down and HR unknown are said, never shown as 0 or absence', () => {
-    const out = html(<EodFactsView f={facts()} />);
+    const out = html(<EodFactsView f={facts()} base="/ops" />);
     expect(out).toContain('No task activity recorded');
     expect(out).toContain('Academic OS unavailable');
     expect(out).toContain('HR attendance unavailable');
@@ -304,17 +304,18 @@ describe('tasks and end-of-day reports', () => {
       markingPending: null,
       reviewsSubmitted: 0,
     } as const;
-    const out = html(<EodFactsView f={facts({ academic })} />);
+    const out = html(<EodFactsView f={facts({ academic })} base="/ops" />);
     expect(out).toContain('2 of 3 planned classes delivered');
     expect(out).toContain('marking pending Not recorded');
   });
 
   it('EOD history: nothing yet says so; a request shows who asked', () => {
-    expect(html(<EodHistory r={{ versions: [], trail: [] } as never} />)).toContain(
+    expect(html(<EodHistory r={{ versions: [], trail: [] } as never} base="/ops" />)).toContain(
       'Not submitted yet.',
     );
     const out = html(
       <EodHistory
+        base="/ops"
         r={
           {
             versions: [],
@@ -355,7 +356,12 @@ describe('tasks and end-of-day reports', () => {
       canReview: false,
     };
     const out = html(
-      await ReviewPane({ user: as('director'), id: 'r1', closeHref: '/ops/tasks/inbox' }),
+      await ReviewPane({
+        user: as('director'),
+        id: 'r1',
+        closeHref: '/ops/tasks/inbox',
+        base: '/ops',
+      }),
     );
     expect(out).toContain(`${SAMPLE}SAMPLE DATA</span>`);
     expect(out).toContain('Not written');
@@ -365,7 +371,7 @@ describe('tasks and end-of-day reports', () => {
     ['teacher', false, []],
     ['operations_manager', true, ['Inbox', 'Imports']],
   ])('task tabs for %s: Inbox and Imports only when allowed', (role, inbox, extra) => {
-    const out = html(<TasksNav user={as(role)} current="day" inbox={inbox} />);
+    const out = html(<TasksNav user={as(role)} current="day" inbox={inbox} base="/ops" />);
     for (const t of ['Inbox', 'Imports']) expect(out.includes(`>${t}</a>`)).toBe(extra.includes(t));
     expect(out).toContain('>My day</a>');
   });
@@ -407,7 +413,7 @@ describe('tasks and end-of-day reports', () => {
   } as unknown as TaskDetail;
 
   it('task facts: missing people and text are named, progress is marked self-reported', () => {
-    const out = html(<TaskFacts d={task} />);
+    const out = html(<TaskFacts d={task} base="/ops" />);
     expect(out.match(/Not recorded/g)?.length).toBeGreaterThanOrEqual(4);
     for (const t of [
       'None recorded',

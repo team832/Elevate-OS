@@ -1,6 +1,6 @@
 # Marketing OS — API
 
-All browser routes live under `/marketing/api/v1/…` and are built with `defineRoute` (D-012): success `{ "data": … }`, failure `{ "error": { code, message, details?, requestId } }`. Check order: 401 `UNAUTHENTICATED` → 403 `FORBIDDEN` (before validation) → 400 `VALIDATION_FAILED` (`details: [{location, path, message}]`) → handler. Bodies are JSON (`Content-Type: application/json`). A PG unique violation is 409 `CONFLICT`; illegal state changes are 409 `INVALID_STATE_TRANSITION`. `:id` is a UUID. Every mutating service also re-checks its permission (`assertCan`) and writes `core.audit_events` in the same transaction.
+All browser routes live under `/marketing/api/v1/…` and are built with `defineRoute` (D-012): success `{ "data": … }`, failure `{ "error": { code, message, details?, requestId } }`. Check order (22 Oct 2026, D-072): 403 for a `POST`/`PUT`/`PATCH`/`DELETE` whose `Origin` is neither this origin nor a configured app origin → 401 `UNAUTHENTICATED` → 403 "Your roles do not include this workspace." without `marketing:module:access` → 403 `FORBIDDEN` (before validation) → 400 `VALIDATION_FAILED` (`details: [{location, path, message}]`) → handler. Bodies are JSON with the media type `application/json` exactly (`text/plain;application/json` is 400). A PG unique violation is 409 `CONFLICT`; illegal state changes are 409 `INVALID_STATE_TRANSITION`. `:id` is a UUID. Every mutating service also re-checks its permission (`assertCan`) and writes `core.audit_events` in the same transaction.
 
 Screens use server actions (`src/app/actions/*.ts`) that call the same services; the session is read on the server and the service enforces the permission.
 
@@ -61,7 +61,7 @@ Screens use server actions (`src/app/actions/*.ts`) that call the same services;
 | GET | `/metrics/weekly` | `marketing:metrics:read` | `?week=YYYY-MM-DD&groupBy=account|campaign` | `{window, asOf, aggregation, accounts[], accountsWithNoData[]}` |
 | GET | `/rules` | `marketing:content:read` | — | brand rules |
 | GET | `/settings` | `marketing:module:access` | — | `{policies[], conflicts[]}` |
-| GET | `/dashboard` | `marketing:content:read` | — | counts (items by state, awaiting approval, upcoming, overdue, accounts by integration, quarantine) |
+| GET | `/dashboard` | `marketing:content:read` | — | counts (items by state, awaiting approval, upcoming, overdue, accounts by integration, quarantine); since 22 Oct 2026 also `metricImports[]`: `{ accountCode, lastImportedAt, lastCapturedAt }` per Instagram/YouTube account (`null` when never imported) |
 
 ## Internal (server-to-server)
 | Method | Path | Auth | Response |
@@ -70,3 +70,17 @@ Screens use server actions (`src/app/actions/*.ts`) that call the same services;
 
 ## Unchanged from the skeleton
 `GET /marketing/api/v1/health` (public), `POST /marketing/api/v1/auth/login|logout`.
+
+## Sign-in and workspace chooser (changed and added 22 Oct 2026, D-072)
+| Method | Path | Permission | Request | Response / errors |
+|---|---|---|---|---|
+| POST | `/marketing/api/v1/auth/login` (changed) | public | form `email`, `password`, `next?` (relative path; control characters and backslashes refused) | form post: 303 to the landing: stay in Marketing OS (at `next`) if you belong here; else your remembered workspace; else your only one; else `/marketing/workspaces`; 403 cross-site `Origin`; 401 wrong email or password |
+| POST | `/marketing/api/v1/auth/logout` (changed) | session | — | 303 to sign-in; the session ends on every port; 403 cross-site `Origin` |
+| POST | `/marketing/api/v1/auth/workspace` (new) | signed in | form `workspace` (`ops` \| `academic` \| `marketing`), `remember=yes` (optional) | 303 to that workspace's home; `remember=yes` stores `core.users.preferred_workspace`, audited `user.workspace_preference_set`; 303 to sign-in when signed out; 403 a workspace you do not belong to; 403 cross-site `Origin` |
+
+## Leads, follow-ups, tasks and EOD reports mounted from Business Ops (22 Oct 2026, D-073)
+31 route files under `/marketing/api/v1/` re-export Business Ops' handlers (`leadsRoutes` from `@elevate/business-ops-os/leads`, `workRoutes` from `@elevate/business-ops-os/work`):
+- **Leads (16):** `leads`, `leads/:id`, `leads/:id/accept`, `…/activities`, `…/assign`, `…/enquiries`, `…/history`, `…/merge`, `leads/check-duplicates`, `leads/duplicates`, `leads/duplicates/:id`, `leads/handoffs`, `leads/handoffs/:id/retry`, `lead-sources`, `follow-ups`, `follow-ups/:id`.
+- **Tasks and EOD (15):** `staff-tasks`, `staff-tasks/:id`, `staff-tasks/:id/:action`, `…/dependencies`, `…/reassign`, `…/report`, `…/updates`, `eod-reports`, `eod-reports/:id`, `…/csv`, `…/follow-up`, `…/pdf`, `…/review`, `…/submit`, `task-reports`.
+
+Permissions, requests, responses and errors are those in `apps/business-ops-os/docs/API.md`; the workspace check here is `marketing:module:access`. Marketing roles hold (Proposed, D-073): manager `ops:leads:read/write/assign` and `ops:lead_contacts:read` on every lead, contributor the same on own leads only, both own `ops:tasks:read/write`. Routes that need other permissions (merge, handoff retry need `ops:leads:merge` / `ops:lead_handoffs:manage`) answer 403 to marketing roles. A lead read here returns contact fields but no KYC fields, no KYC history and only `{ id, code, status, createdAt, programmeCode }` for admission cases. Tests: `tests/integration/shared-entries.test.ts`; `apps/business-ops-os/tests/integration/shared-entries.test.tsx`, `lead-kyc-masking.test.ts`.

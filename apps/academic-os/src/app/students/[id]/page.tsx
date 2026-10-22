@@ -9,7 +9,7 @@ import { ApiForm } from '../../../ui/api-form';
 import { StateBadge } from '../../../ui/badges';
 import { placementNote } from '../../../ui/batch-tabs';
 import { InterventionsTable } from '../../../ui/interventions';
-import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
+import { AcademicShell, LoadError, actorFor, gate, load, workspaceLink } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Student progress' };
@@ -33,13 +33,14 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
   const { record, progress, staff } = data.data;
   const s = record.student;
   const opsRef = can(access.user, 'academic:enrolments:read') ? (s.coreStudentId ?? s.sourceAdmissionId) : null;
+  const opsHref = opsRef ? workspaceLink(access.user, 'ops', `/students/${opsRef}`) : null;
   return (
     <AcademicShell access={access} active="students">
       <PageHeader
         title={s.fullName}
         meta={<><StateBadge state={s.status} /> <SourceBadge source={s.isSample ? 'sample' : 'live'} /> <span className="el-field-hint">{s.code}</span></>}
         description={`${s.currentStage ?? 'Stage not recorded'}${s.contactsHidden ? ' · contact details hidden for your role' : ''}`}
-        actions={<>{opsRef ? <a href={`/ops/students/${opsRef}`}>Admission, KYC and fees in Business Ops</a> : null} <a href={`${modulePath('reviews')}?academicStudentId=${s.id}`}>Teacher reviews</a> <ButtonLink href={MODULE_PATHS.students}>All students</ButtonLink></>}
+        actions={<>{opsHref ? <a href={opsHref}>Admission, KYC and fees in Business Ops</a> : null} <a href={`${modulePath('reviews')}?academicStudentId=${s.id}`}>Teacher reviews</a> <ButtonLink href={MODULE_PATHS.students}>All students</ButtonLink></>}
       />
       <div className="el-stack">
         {!s.contactsHidden ? (

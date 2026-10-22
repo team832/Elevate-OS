@@ -30,7 +30,7 @@ const opts = new Map(
 describe('My day row forms (review M2)', () => {
   it('each row’s fields and Save button are named after its task', () => {
     const html = renderToStaticMarkup(
-      <DayTable rows={[row('a', 'Call Asha'), row('b', 'Print forms')]} edit={opts} />,
+      <DayTable base="/ops" rows={[row('a', 'Call Asha'), row('b', 'Print forms')]} edit={opts} />,
     );
     for (const title of ['Call Asha', 'Print forms'])
       expect(html.match(new RegExp(`for ${title}<`, 'g'))).toHaveLength(4); // 3 labels + Save

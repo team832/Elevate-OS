@@ -6,14 +6,18 @@ export function isModuleKey(value: unknown): value is ModuleKey {
   return typeof value === 'string' && (MODULE_KEYS as readonly string[]).includes(value);
 }
 
-/** Human labels and URL base paths for each module (D-004). */
+/**
+ * Human labels and URL base paths for each module (D-004). Each module app is also a
+ * workspace on its own origin (D-072); origins come from the *_URL variables, see
+ * `appOrigin` in @elevate/configuration.
+ */
 export const MODULES: Readonly<
-  Record<ModuleKey, { readonly label: string; readonly basePath: string; readonly port: number }>
+  Record<ModuleKey, { readonly label: string; readonly basePath: string }>
 > = {
-  platform: { label: 'Home', basePath: '', port: 3000 },
-  marketing: { label: 'Marketing OS', basePath: '/marketing', port: 3001 },
-  academic: { label: 'Academic OS', basePath: '/academic', port: 3002 },
-  ops: { label: 'Business Ops OS', basePath: '/ops', port: 3003 },
+  platform: { label: 'Home', basePath: '' },
+  marketing: { label: 'Marketing OS', basePath: '/marketing' },
+  academic: { label: 'Academic OS', basePath: '/academic' },
+  ops: { label: 'Business Ops OS', basePath: '/ops' },
 };
 
 /** Feature status vocabulary (D-013). Order matters: each step requires the previous. */

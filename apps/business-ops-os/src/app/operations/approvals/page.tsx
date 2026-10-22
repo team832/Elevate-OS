@@ -3,6 +3,7 @@ import { can } from '@elevate/authorization';
 import { Alert, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import { listApprovalInbox, type ApprovalInboxItem } from '../../../server/approvals';
 import { ActionForm } from '../../../ui/action-form';
+import { FeesNav } from '../../../ui/admissions-nav';
 import { StatCard } from '../../../ui/charts';
 import { fmtDateTime, fmtPaise } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
@@ -57,6 +58,7 @@ export default async function ApprovalsInboxPage({
       <PageHeader
         title="Approvals waiting for you"
         description="Fee changes you may decide. Someone else decides your own requests and the agreements you made."
+        tabs={<FeesNav current="approvals" user={access.user} />}
       />
       <Section label="Collecting your approvals…">
         <Inbox user={access.user} sp={sp} />

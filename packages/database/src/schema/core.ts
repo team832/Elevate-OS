@@ -73,6 +73,8 @@ export const users = core.table(
       .notNull()
       .default('active'),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+    /** Workspace this person chose to open by default (D-072); used only while still a member. */
+    preferredWorkspace: text('preferred_workspace', { enum: ['ops', 'academic', 'marketing'] }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -86,6 +88,10 @@ export const users = core.table(
       sql`${t.email} ~ '^[^@[:space:]]+@(elevateeducation\\.in|example\\.test)$'`,
     ),
     check('users_status_check', sql`${t.status} IN ('active', 'disabled')`),
+    check(
+      'users_preferred_workspace_check',
+      sql`${t.preferredWorkspace} IS NULL OR ${t.preferredWorkspace} IN ('ops', 'academic', 'marketing')`,
+    ),
   ],
 );
 

@@ -10,7 +10,7 @@ import { PLACEMENT_VIEWS } from '../../server/schemas-placements';
 import { ApiForm } from '../../ui/api-form';
 import { StateBadge } from '../../ui/badges';
 import { EndEnrolmentForm, placementNote } from '../../ui/batch-tabs';
-import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
+import { AcademicShell, LoadError, actorFor, gate, load, workspaceLink } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Enrolments' };
@@ -58,6 +58,10 @@ async function Body({ access, view }: { access: PageAccess; view: View }) {
   type Row = (typeof list.rows)[number];
   const batchOptions = batches.map((b) => ({ value: b.id, label: `${b.code}, ${b.programmeCode} / ${b.courseCode}${b.capacity ? ` (${b.activeEnrolments} of ${b.capacity} seats)` : ''}` }));
   const enrolmentOptions = list.rows.map((r) => ({ value: r.enrolmentId, label: `${r.studentName} · ${r.studentCode} · ${r.programmeName}${r.startDate ? ` · since ${r.startDate}` : ''}${r.placement ? ` (${r.placement.batchCode})` : ''}` }));
+  const opsCell = (ref: string | null) => {
+    const href = ref ? workspaceLink(access.user, 'ops', `/students/${ref}`) : null;
+    return href ? <a href={href}>Admission and fees</a> : ref ? 'In Business Ops' : 'Not linked';
+  };
   const placementText = (r: Row) => (r.placement ? `${r.placement.batchCode}, ${r.placement.startDate} to ${r.placement.endDate ?? 'now'}${r.placement.endedReason ? ` (${placementNote(r.placement)})` : ''}` : 'Awaiting batch');
   return (
     <>
@@ -94,7 +98,7 @@ async function Body({ access, view }: { access: PageAccess; view: View }) {
                     }]
                   : []),
                 { key: 'source', header: 'Source', render: (r) => (r.source === 'manual' ? `Manual: ${r.manualReason ?? ''}` : 'Business Ops admission') },
-                { key: 'ops', header: 'Business Ops', render: (r) => (r.coreStudentId ?? r.sourceAdmissionId ? <a href={`/ops/students/${r.coreStudentId ?? r.sourceAdmissionId}`}>Admission and fees</a> : 'Not linked') },
+                { key: 'ops', header: 'Business Ops', render: (r) => opsCell(r.coreStudentId ?? r.sourceAdmissionId) },
                 { key: 'status', header: 'Status', render: (r) => <StateBadge state={r.status} /> },
               ]}
             />

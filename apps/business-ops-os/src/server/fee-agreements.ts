@@ -608,7 +608,7 @@ export async function recordPlanEntry(
  * permission check). The ledger of a version is every row of its version chain; a row naming an
  * instalment of an earlier version counts for the instalment with the same number.
  */
-async function plansWithLedger(db: Database, plans: FeePlanRow[], now: Date) {
+export async function plansWithLedger(db: Database, plans: FeePlanRow[], now: Date) {
   if (!plans.length) return [];
   const family = await db
     .select()

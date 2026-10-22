@@ -16,7 +16,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
     <MarketingPage
       permission="marketing:accounts:read"
       path={modulePath('accounts')}
-      active="accounts"
+      active="campaigns"
       title="Social accounts"
       description="Elevate's social accounts. Handles appear only once confirmed, never guessed."
       searchParams={await searchParams}

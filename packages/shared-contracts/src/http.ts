@@ -51,6 +51,8 @@ export function safeRelativePath(candidate: unknown, fallback: string): string {
   if (typeof candidate !== 'string') return fallback;
   if (!candidate.startsWith('/') || candidate.startsWith('//') || candidate.startsWith('/\\'))
     return fallback;
-  if (/[\r\n]/.test(candidate)) return fallback;
+  // Browsers drop tabs/newlines and read "\" as "/", so "/\t/evil" would become "//evil".
+  if ([...candidate].some((c) => c === '\\' || c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127))
+    return fallback;
   return candidate;
 }

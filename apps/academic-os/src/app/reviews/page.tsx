@@ -10,7 +10,7 @@ import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 import { TYPE_LABELS } from './review-fields';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Teacher reviews' };
+export const metadata: Metadata = { title: 'Student reviews' };
 
 type Params = Record<string, string | string[] | undefined>;
 const TABS = [
@@ -22,20 +22,20 @@ const TABS = [
 
 export default async function ReviewsPage({ searchParams }: { searchParams: Promise<Params> }) {
   const access = await gate('academic:reviews:read', MODULE_PATHS.reviews);
-  if (access.status !== 'allowed') return <AcademicShell access={access} active="teaching">{null}</AcademicShell>;
+  if (access.status !== 'allowed') return <AcademicShell access={access} active="reviews">{null}</AcademicShell>;
   const p = await searchParams;
   const given = Object.entries(p).filter((e): e is [string, string] => typeof e[1] === 'string');
   const parsed = reviewsQuery.safeParse(Object.fromEntries(given));
   const query = parsed.success ? parsed.data : {};
   const data = await load(() => listReviews(getDb(), actorFor(access.user), query));
-  if (!data.ok) return <AcademicShell access={access} active="teaching"><LoadError error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError error={data.error} /></AcademicShell>;
   const qs = new URLSearchParams(given).toString();
   const current = `${MODULE_PATHS.reviews}${qs ? `?${qs}` : ''}`;
   const pendingStudent = query.academicStudentId && !data.data.some((r) => r.status === 'submitted');
   return (
-    <AcademicShell access={access} active="teaching">
+    <AcademicShell access={access} active="reviews">
       <PageHeader
-        title="Teacher reviews"
+        title="Student reviews"
         description="Structured feedback on students from their teachers. Submitted reviews are shared with coordinators and authorised Business Ops staff; drafts stay with their author."
         actions={can(access.user, 'academic:reviews:write') ? <ButtonLink href={MODULE_PATHS.newReview} variant="primary">Write a review</ButtonLink> : null}
         tabs={<Subnav label="Review lists" items={TABS.map(([q, text]) => [`${MODULE_PATHS.reviews}${q}`, text] as const)} current={current} />}

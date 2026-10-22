@@ -15,7 +15,7 @@ import {
 } from '../../../../domain/task-import';
 import { ActionForm } from '../../../../ui/action-form';
 
-export function ImportUpload({ staff }: { staff: StaffOption[] }) {
+export function ImportUpload({ staff, base }: { staff: StaffOption[]; base: string }) {
   const id = useId();
   const [file, setFile] = useState<{ name: string; content: string | null } | null>(null);
   const parsed = typeof file?.content === 'string' ? parseTrackerBackup(file.content) : null;
@@ -60,11 +60,11 @@ export function ImportUpload({ staff }: { staff: StaffOption[] }) {
           </p>
           <ActionForm
             key={`${file!.name}:${suggested?.id ?? ''}`}
-            action="/ops/api/v1/task-imports"
+            action={`${base}/api/v1/task-imports`}
             submitLabel="Preview import"
             successText="Preview ready."
             extra={{ filename: file!.name, content: file!.content }}
-            redirectTo="/ops/tasks/imports?batch={id}"
+            redirectTo={`${base}/tasks/imports?batch={id}`}
             fields={[
               {
                 name: 'staffId',

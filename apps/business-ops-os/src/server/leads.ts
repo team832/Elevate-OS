@@ -30,7 +30,13 @@ import {
   type AdmissionStatus,
   type IsoDate,
 } from '../domain';
-import { redactStudentPrivate, stripPrivateKeys } from '../domain/students';
+import {
+  CONTACT_AND_KYC_KEYS,
+  KYC_KEY_SET,
+  omitKyc,
+  redactStudentPrivate,
+  stripPrivateKeys,
+} from '../domain/students';
 import { programmeRef, staffRef } from './admissions';
 import {
   CONTACT_KEYS,
@@ -54,7 +60,8 @@ import {
   type AccessScope,
   type Actor,
 } from './context';
-import { notifyOthers, opsAudit, rowById } from './ops-common';
+import { opsAudit, rowById } from './ops-common';
+import { notifyHosted } from './task-links';
 import { createRuleFollowUp } from './follow-ups';
 import {
   applyTransition,
@@ -83,14 +90,19 @@ async function assertLeadAccess(
  * shown only to holders of `ops:student_private:read` — all records
  * (operations manager) or own scope (the counsellor who owns the lead or
  * counsels its admission). Director and auditor read leads without them.
- * Duplicate detection still reads contacts server-side.
+ * Duplicate detection still reads contacts server-side. Marketing: `ops:lead_contacts:read`.
  */
 async function canSeeLeadPrivate(
   db: Database,
   actor: Actor,
   lead: Pick<LeadRow, 'id' | 'ownerStaffId'>,
+  kyc = false,
 ): Promise<boolean> {
-  const scope = scopeFor(actor, 'ops:student_private:read');
+  // D-073 (Proposed): Marketing follows up on leads with ops:lead_contacts:read: the contact
+  // fields on the lead itself. KYC columns (`kyc`) always need ops:student_private:read.
+  const scope =
+    scopeFor(actor, 'ops:student_private:read') ??
+    (kyc ? null : scopeFor(actor, 'ops:lead_contacts:read'));
   if (scope === 'all') return true;
   if (scope !== 'own') return false;
   return leadCovered(db, { scope: 'own', staffId: await staffIdForUser(db, actor.id) }, lead);
@@ -98,7 +110,8 @@ async function canSeeLeadPrivate(
 
 /** The lead DTO: private fields removed unless the caller may see them. */
 async function maskedLead(db: Database, actor: Actor, lead: LeadRow) {
-  return redactStudentPrivate(lead, await canSeeLeadPrivate(db, actor, lead));
+  const masked = redactStudentPrivate(lead, await canSeeLeadPrivate(db, actor, lead));
+  return (await canSeeLeadPrivate(db, actor, lead, true)) ? masked : omitKyc(masked);
 }
 
 const getLeadRow = (db: Database, id: string, lock = false) =>
@@ -156,11 +169,10 @@ async function notifyAssigned(
   title: string,
   body: string,
 ) {
-  await notifyOthers(tx, actor, userIds, {
+  await notifyHosted(tx, actor, userIds, 'leads', `/leads/${lead.id}`, {
     kind: 'lead.assigned',
     title: `${title}: ${lead.studentName} (${lead.code})`,
     body,
-    link: `/ops/leads/${lead.id}`,
     entityType: 'lead',
     entityId: lead.id,
   });
@@ -454,6 +466,8 @@ export async function getLead(db: Database, actor: Actor, id: string) {
   const access = await accessScope(db, actor, 'ops:leads:read');
   const lead = await getLeadRow(db, id);
   await assertLeadAccess(db, access, lead);
+  // Without admissions access (Marketing) a case is only its conversion stage (D-073).
+  const cases = can(actor, 'ops:admissions:read');
   const [enquiries, activities, admissions, followUps, flagsOut, flagsIn, history] =
     await Promise.all([
       db
@@ -492,7 +506,7 @@ export async function getLead(db: Database, actor: Actor, id: string) {
         .orderBy(desc(opsFollowUps.dueDate)),
       flagsOf(db, lead.id, 'leadId'),
       flagsOf(db, lead.id, 'matchedLeadId'),
-      leadHistory(db, lead.id),
+      leadHistory(db, lead.id, cases),
     ]);
   const duplicates = await Promise.all(
     [...flagsOut, ...flagsIn].map(async (f) => ({
@@ -503,8 +517,9 @@ export async function getLead(db: Database, actor: Actor, id: string) {
     })),
   );
   const privateVisible = await canSeeLeadPrivate(db, actor, lead);
+  const kycVisible = await canSeeLeadPrivate(db, actor, lead, true);
   return {
-    lead: redactStudentPrivate(lead, privateVisible),
+    lead: await maskedLead(db, actor, lead),
     privateVisible,
     assignment: assignmentStatus(lead),
     owner: await staffRef(db, lead.ownerStaffId),
@@ -517,25 +532,42 @@ export async function getLead(db: Database, actor: Actor, id: string) {
       programmeCode: e.programmeCode,
     })),
     activities: activities.map((a) => ({ ...a.activity, staffName: a.staffName })),
-    admissions: admissions.map((a) => ({
-      ...a.admission,
-      programmeCode: a.programmeCode,
-      counsellorName: a.counsellorName,
-    })),
-    followUps: followUps.map((f) => ({ ...f.followUp, ownerName: f.ownerName })),
+    admissions: admissions.map(({ admission: a, programmeCode, counsellorName }) =>
+      cases
+        ? { ...a, programmeCode, counsellorName }
+        : { id: a.id, code: a.code, status: a.status, createdAt: a.createdAt, programmeCode },
+    ),
+    // Admission follow-ups belong to the admissions case (D-073): only with case access.
+    followUps: followUps
+      .filter((f) => cases || f.followUp.admissionId === null)
+      .map((f) => ({ ...f.followUp, ownerName: f.ownerName })),
     duplicates,
-    history: privateVisible
+    history: kycVisible
       ? history
-      : history.map((h) => ({
-          ...h,
-          before: stripPrivateKeys(h.before),
-          after: stripPrivateKeys(h.after),
-        })),
+      : history
+          .filter((h) => h.action !== 'lead.kyc_updated')
+          .map((h) => {
+            const keys = privateVisible ? KYC_KEY_SET : CONTACT_AND_KYC_KEYS;
+            return {
+              ...h,
+              before: stripPrivateKeys(h.before, keys),
+              after: stripPrivateKeys(h.after, keys),
+            };
+          }),
   };
 }
 
-/** Audit trail of a lead and everything linked to it (admissions, follow-ups, activities). */
-async function leadHistory(db: Database, leadId: string) {
+const LEAD_RECORDS = [
+  'lead',
+  'enquiry',
+  'lead_activity',
+  'follow_up',
+  'duplicate_flag',
+  'lead_handoff',
+];
+
+/** Audit trail of a lead and everything linked to it; cases, demos, fees… only with `all`. */
+async function leadHistory(db: Database, leadId: string, all: boolean) {
   return db
     .select({
       id: auditEvents.id,
@@ -557,6 +589,7 @@ async function leadHistory(db: Database, leadId: string) {
           and(eq(auditEvents.entityType, 'lead'), eq(auditEvents.entityId, leadId)),
           sql`${auditEvents.metadata}->>'leadId' = ${leadId}`,
         ),
+        all ? undefined : inArray(auditEvents.entityType, LEAD_RECORDS),
       ),
     )
     .orderBy(desc(auditEvents.at), desc(auditEvents.id))

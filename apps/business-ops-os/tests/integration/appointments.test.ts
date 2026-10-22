@@ -21,6 +21,8 @@ import { GET as list, POST as schedule } from '../../src/app/api/v1/appointments
 import { GET as getOne, PATCH as change } from '../../src/app/api/v1/appointments/[id]/route';
 import { GET as teachers } from '../../src/app/api/v1/teachers/route';
 import { OWNER_SUPPLIED_STAFF, seedTeachers } from '../../seed/teachers';
+import type { IsoDate } from '../../src/domain';
+import { listMyMeetings } from '../../src/server/appointments';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -217,12 +219,12 @@ describe('PATCH /ops/api/v1/appointments/:id', () => {
     const other = await staffUser(ctx.db, ['teacher']);
     const mine = (await book(manager)).data!;
     await book(manager, { staffId: other.staffId });
-    const res = await callRoute<{ rows: { id: string }[] }>(
-      list,
-      authedRequest(teacher, `/ops/api/v1/appointments?from=${dayOf()}&to=${dayOf()}`),
-    );
-    expect(res.status).toBe(200);
-    expect(res.data?.rows.map((r) => r.id)).toEqual([mine.id]);
+    // Teachers read their meetings in Academic OS ("My meetings"); the Ops API is not theirs (D-072).
+    const date = dayOf() as IsoDate;
+    const res = await listMyMeetings(ctx.db, teacher, { from: date, to: date });
+    expect(res?.rows.map((r) => r.id)).toEqual([mine.id]);
+    const viaOps = await callRoute(list, authedRequest(teacher, '/ops/api/v1/appointments'));
+    expect(viaOps.status).toBe(403);
     expect((await patch(teacher, mine.id, { action: 'confirm' })).status).toBe(403);
   });
 });

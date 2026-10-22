@@ -204,20 +204,40 @@ export function redactStudentPrivate<T extends Record<string, unknown>>(
   return { ...(copy as Redacted<T>), privateFields: 'hidden' as const };
 }
 
+/** KYC columns beyond the contact fields: only for `ops:student_private:read` (D-073). */
+export const KYC_FIELDS = [
+  'emergencyContactName',
+  'emergencyContactPhone',
+  'dateOfBirth',
+  'address',
+] as const;
+
 const PRIVATE_KEY_SET: ReadonlySet<string> = new Set(PRIVATE_STUDENT_FIELDS);
+export const KYC_KEY_SET: ReadonlySet<string> = new Set(KYC_FIELDS);
+
+/** Copy without the KYC columns. */
+export function omitKyc<T extends object>(record: T): T {
+  return Object.fromEntries(Object.entries(record).filter(([k]) => !KYC_KEY_SET.has(k))) as T;
+}
 
 /**
  * Deep copy of a JSON-like value with every private key removed (used for
  * audit `before`/`after` payloads shown in histories). Non-plain values are
  * returned unchanged.
  */
-export function stripPrivateKeys(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stripPrivateKeys);
+export function stripPrivateKeys(value: unknown, keys = PRIVATE_KEY_SET): unknown {
+  if (Array.isArray(value)) return value.map((v) => stripPrivateKeys(v, keys));
   if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>))
-      if (!PRIVATE_KEY_SET.has(k)) out[k] = stripPrivateKeys(v);
+      if (!keys.has(k)) out[k] = stripPrivateKeys(v, keys);
     return out;
   }
   return value;
 }
+
+/** Contact and KYC keys together, for histories shown without student-private access. */
+export const CONTACT_AND_KYC_KEYS: ReadonlySet<string> = new Set([
+  ...PRIVATE_STUDENT_FIELDS,
+  ...KYC_FIELDS,
+]);

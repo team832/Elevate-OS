@@ -32,7 +32,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
       permission="marketing:content:read"
       path={modulePath('calendar')}
       active="calendar"
-      title="Calendar"
+      title="Content calendar"
       description="Scheduled and published posts by date (IST) and account. Clashes block scheduling."
       searchParams={sp}
     >

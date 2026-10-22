@@ -1,10 +1,10 @@
 # Academic OS — API reference
 
-Base path `/academic/api/v1`. Every route is built with `defineRoute` (`src/app/api/**/route.ts`; schemas in `src/server/schemas.ts`, `schemas-placements.ts`, `schemas-sessions.ts`, `schemas-teaching.ts`, `schemas-assessment.ts`). Status of the 21 Oct 2026 teacher-workspace routes: **Tested** where a test file is named in `docs/TEST_PLAN.md`; nothing is Deployed; their tables arrive with migration `0009`, generated, not applied.
+Base path `/academic/api/v1`. Every route is built with `defineRoute` (`src/app/api/**/route.ts`; schemas in `src/server/schemas.ts`, `schemas-placements.ts`, `schemas-sessions.ts`, `schemas-teaching.ts`, `schemas-assessment.ts`). Status of the 21 Oct 2026 teacher-workspace routes: **Tested** where a test file is named in `docs/TEST_PLAN.md`; nothing is Deployed; their tables arrive with migration `0009` (applied to the owner's local database, like `0000`–`0013`).
 
 **Conventions**
-- Order of checks: no session → **401** `UNAUTHENTICATED`; missing permission → **403** `FORBIDDEN` (before validation); invalid params/query/body → **400** `VALIDATION_FAILED` with `details: [{ location, path, message }]`; then the handler.
-- Bodies are JSON (`Content-Type: application/json`). Success `{ "data": … }` (201 for creates); failure `{ "error": { code, message, details?, requestId } }`.
+- Order of checks (22 Oct 2026, D-072): a `POST`/`PUT`/`PATCH`/`DELETE` whose `Origin` is neither this origin nor a configured app origin → **403** `FORBIDDEN` ("This request came from another site and was refused."); no session → **401** `UNAUTHENTICATED`; no `academic:module:access` → **403** "Your roles do not include this workspace."; missing permission → **403** `FORBIDDEN` (before validation); invalid params/query/body → **400** `VALIDATION_FAILED` with `details: [{ location, path, message }]`; then the handler.
+- Bodies are JSON with the media type `application/json` exactly (`text/plain;application/json` is **400**). Success `{ "data": … }` (201 for creates); failure `{ "error": { code, message, details?, requestId } }`.
 - Handler errors: **404** `NOT_FOUND` (also for records outside a teacher's own scope), **409** `CONFLICT` (unique violations, timetable conflicts with `details.hard`/`details.preferences`, full batch), **409** `INVALID_STATE_TRANSITION`, **400** `VALIDATION_FAILED` (business validation, e.g. finalise issues in `details`).
 - "own" = teacher scope (README §3): sessions they teach (planned teacher or an active co-teacher/substitute row), batches where their assignment is open on the day, students placed in those batches during that window.
 - Writes that edit an existing row send the `version` (or `updatedAt` for review drafts) the form was opened with; a stale value is **409** `CONFLICT` ("changed since you opened it").
@@ -120,7 +120,7 @@ Validation codes: `NO_SECTIONS`, `RULE_INCOMPLETE`, `NO_ANSWER_KEY`, `KEY_INVALI
 ## 6. Students, enrolments, progress
 | Method & path | Permission | Request | Response |
 |---|---|---|---|
-| `GET /students?batchId=&q=` | `students:read` (own: students of their batches) | — | students + active `batches`; contacts and DOB only for `students:write` holders, else `contactsHidden: true` |
+| `GET /students?batchId=&q=` | `students:read` (own: students of their batches) | — | students + active `batches`; contacts, DOB and every guardian field (name, relationship, email, phone; name and relationship since 22 Oct 2026) only for `students:write` holders, else `null` with `contactsHidden: true` (test `teacher-privacy.test.ts`) |
 | `POST /students` | `students:write` | `fullName`, `preferredName?`, `dateOfBirth?`, `currentStage?`, `schoolBoard?`, `email?`, `phone?` (E.164), `city?`, guardian fields? | 201 student with generated `code` |
 | `GET /students/:id` | `students:read` (own) | — | `{ student, enrolments[] }` (404 outside scope) |
 | `GET /students/:id/progress` | `progress:read` (own) | — | `{ student, batches[{ attendance, missed { missed[], unrecorded }, results[], trend }], catchupTasks, interventions, trendOptions }` |
@@ -199,3 +199,13 @@ Response: `AcademicDeliverySummaryV1` (`contract: 'academic.delivery_summary'`, 
 
 ## 9. Foundation routes in this app
 `GET /academic/api/v1/health` (public), `POST /academic/api/v1/auth/login`, `POST /academic/api/v1/auth/logout`.
+
+Changed and added on 22 Oct 2026 (D-072):
+| Method | Path | Permission | Request | Response | Errors |
+|---|---|---|---|---|---|
+| POST | `/academic/api/v1/auth/login` (changed) | public | form `email`, `password`, `next?` (relative path; control characters and backslashes refused) | form post: **303** to the landing: stay in Academic OS (at `next`) if you belong here; else your remembered workspace; else your only one; else `/academic/workspaces`. Absolute redirects only to the configured origins | 403 cross-site `Origin`; 401 wrong email or password |
+| POST | `/academic/api/v1/auth/logout` (changed) | session | — | 303 to sign-in; the session ends on every port | 403 cross-site `Origin` |
+| POST | `/academic/api/v1/auth/workspace` (new) | signed in | form `workspace` (`ops` \| `academic` \| `marketing`), `remember=yes` (optional) | **303** to that workspace's home; `remember=yes` stores `core.users.preferred_workspace` and audits `user.workspace_preference_set` | 303 to sign-in when signed out; 403 a workspace you do not belong to; 403 cross-site `Origin` |
+
+## 10. Tasks and EOD reports mounted from Business Ops (22 Oct 2026, D-073)
+Fifteen route files under `/academic/api/v1/` re-export Business Ops' handlers (`workRoutes` from `@elevate/business-ops-os/work`): `staff-tasks`, `staff-tasks/:id`, `staff-tasks/:id/:action`, `staff-tasks/:id/dependencies`, `staff-tasks/:id/reassign`, `staff-tasks/:id/report`, `staff-tasks/:id/updates`, `eod-reports`, `eod-reports/:id`, `eod-reports/:id/csv`, `eod-reports/:id/follow-up`, `eod-reports/:id/pdf`, `eod-reports/:id/review`, `eod-reports/:id/submit`, `task-reports`. Permissions (`ops:tasks:read/write`, own scope for teachers; `ops:eod:review` for reviewers), requests, responses and errors are exactly those in `apps/business-ops-os/docs/API.md` ("Daily tasks, end-of-day reports, imports"); the workspace check here is `academic:module:access`. The records are the same `ops.staff_tasks` / `ops.eod_*` rows: nothing is copied. Tracker imports are not mounted. Test: `tests/integration/work-mount.test.tsx`.

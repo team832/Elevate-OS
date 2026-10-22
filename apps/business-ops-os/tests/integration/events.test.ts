@@ -28,7 +28,7 @@ import {
 } from '../../src/app/api/v1/appointments/[id]/participants/route';
 import { POST as draft } from '../../src/app/api/v1/appointments/[id]/messages/route';
 import { POST as send } from '../../src/app/api/v1/appointments/[id]/messages/[messageId]/route';
-import { listAppointments } from '../../src/server/appointments';
+import { getAppointment, listAppointments } from '../../src/server/appointments';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 import { caseOf, identity } from './lifecycle-fixtures';
 
@@ -344,15 +344,14 @@ describe('messages: preview, then an explicit send that is simulated without a p
 describe('participant privacy', () => {
   it('a teacher (owner, no private access) sees names only: no contacts, guardian names restricted', async () => {
     const id = (await schedule(manager)).data!.id;
-    const r = await read(teacher, id);
-    expect(r.status).toBe(200);
-    const json = JSON.stringify(r.data);
+    // The read behind Academic OS "My meetings" (teachers are not Business Ops members, D-072).
+    const r = await getAppointment(ctx.db, teacher, id);
+    const json = JSON.stringify(r);
     expect(json).not.toContain('@example.test');
     expect(json).not.toContain('Sample Guardian A');
-    expect(r.data!.participants.find((p) => p.kind === 'guardian')?.name).toBe(
-      'Guardian (restricted)',
-    );
+    expect(r.participants.find((p) => p.kind === 'guardian')?.name).toBe('Guardian (restricted)');
     const other = await staffUser(ctx.db, ['teacher']);
-    expect((await read(other, id)).status).toBe(403);
+    await expect(getAppointment(ctx.db, other, id)).rejects.toThrow(/assigned to you/);
+    expect((await read(teacher, id)).status).toBe(403);
   });
 });

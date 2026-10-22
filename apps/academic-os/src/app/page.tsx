@@ -3,9 +3,10 @@ import { getDb } from '@elevate/database';
 import { metric } from '@elevate/shared-contracts';
 import { Alert, Card, DataTable, MetricStrip, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import { addDays, type IsoDate } from '@elevate/shared-types';
+import { listMyMeetings, taskDaySummary } from '@elevate/business-ops-os/work';
 import { buildAcademicDeliverySummary, coordinatorOverview, getIntakeQueue, teacherDay, todayIst } from '../server';
 import { MODULE_PATHS } from '../server/paths';
-import { CoordinatorHome, TeacherHome } from '../ui/my-day';
+import { CoordinatorHome, MeetingsDay, TasksDay, TeacherHome } from '../ui/my-day';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../ui/shell';
 import '../ui/workspace.css';
 
@@ -44,6 +45,14 @@ export default async function HomePage() {
   const day = timetableScope === 'own' ? await load(() => teacherDay(db, actor)) : null;
   const overview = timetableScope === 'all' ? await load(() => coordinatorOverview(db, actor)) : null;
   const summary = can(user, 'academic:summary:read') ? await load(() => buildAcademicDeliverySummary(db, window)) : null;
+  const tasks = can(user, 'ops:tasks:read') ? await load(() => taskDaySummary(db, user)) : null;
+  const meetings = can(user, 'ops:appointments:read') ? await load(() => listMyMeetings(db, user, { from: today as IsoDate, to: today as IsoDate }, 1)) : null;
+  const tasksBlock = (
+    <>
+      {tasks ? tasks.ok ? <TasksDay summary={tasks.data} /> : <LoadError error={tasks.error} /> : null}
+      {meetings ? meetings.ok ? <MeetingsDay day={today} total={meetings.data?.total ?? null} /> : <LoadError error={meetings.error} /> : null}
+    </>
+  );
   const intake = can(user, 'academic:enrolments:read') ? await load(() => getIntakeQueue(db)) : null;
 
   return (
@@ -51,8 +60,9 @@ export default async function HomePage() {
       <PageHeader title={day ? 'My day' : 'Academic overview'} description={`Today is ${today} (IST). Every count names its dates; missing is never zero and planned is never delivered.`} />
       <div className="el-stack">
         {day ? (
-          !day.ok ? <LoadError error={day.error} /> : day.data.kind === 'teacher' ? <TeacherHome day={day.data} /> : <Alert tone="info" title="No staff record">Your sign-in is not linked to a staff record, so no classes can be shown. Ask an academic coordinator.</Alert>
+          !day.ok ? <LoadError error={day.error} /> : day.data.kind === 'teacher' ? <TeacherHome day={day.data} tasks={tasksBlock} /> : <Alert tone="info" title="No staff record">Your sign-in is not linked to a staff record, so no classes can be shown. Ask an academic coordinator.</Alert>
         ) : null}
+        {day?.ok && day.data.kind === 'teacher' ? null : tasksBlock}
         {overview ? overview.ok ? <CoordinatorHome o={overview.data} /> : <LoadError error={overview.error} /> : null}
         {intake ? (
           <Card title="Enrolment intake" description="Admissions confirmed in Business Operations, waiting to become enrolments.">

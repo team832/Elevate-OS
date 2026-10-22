@@ -115,7 +115,7 @@ describe('Business Ops approval and sensitive grants', () => {
 describe('modulesFor', () => {
   it('lists the modules a user can open', () => {
     expect(modulesFor(as('director'))).toEqual(['platform', 'marketing', 'academic', 'ops']);
-    expect(modulesFor(as('teacher'))).toEqual(['platform', 'academic', 'ops']);
+    expect(modulesFor(as('teacher'))).toEqual(['platform', 'academic']); // D-072: teachers work in Academic OS
     expect(modulesFor(as('admissions_counsellor'))).toEqual(['platform', 'ops']);
     expect(modulesFor(as('auditor'))).toEqual(['platform', 'marketing', 'academic', 'ops']);
   });

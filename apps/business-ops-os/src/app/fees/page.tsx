@@ -5,6 +5,7 @@ import { ALLOWED_PROGRAMME_COMBINATIONS, combinationLabel } from '../../domain/c
 import { listFeeStructures } from '../../server/fees';
 import { formOptions } from '../../server/options';
 import { ActionForm } from '../../ui/action-form';
+import { FeesNav } from '../../ui/admissions-nav';
 import { StatCard } from '../../ui/charts';
 import { fmtDateTime, fmtPaise } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
@@ -59,6 +60,7 @@ export default async function FeesPage({ searchParams }: { searchParams: Promise
       <PageHeader
         title="Fee structure"
         description="Course fees by programme and mode; sample figures until the owner approves them."
+        tabs={<FeesNav current="structure" user={access.user} />}
       />
       <Section label="Loading the fee structure…">
         <Fees user={access.user} sp={sp} />

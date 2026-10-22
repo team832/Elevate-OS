@@ -3,6 +3,7 @@ import path from 'node:path';
 import { parseEnv } from 'node:util';
 import type { NextConfig } from 'next';
 import { securityHeaders } from '@elevate/configuration/security-headers';
+import { appOrigin } from '@elevate/configuration/workspaces';
 
 /** Walk up from the app directory to the workspace root (the package.json with "workspaces"). */
 function findRepoRoot(start: string): string {
@@ -27,11 +28,15 @@ if (existsSync(rootEnvFile)) {
 }
 
 /** The browser-facing platform origin (D-004), for Server Actions arriving through its rewrites. */
-const platformHost = new URL(process.env.PLATFORM_URL || 'http://localhost:3000').host;
+const platformHost = new URL(appOrigin('platform')).host;
 
 const nextConfig: NextConfig = {
-  /** Business Ops OS lives under /ops — standalone on port 3003 and behind the platform's rewrite. */
+  /** Business Ops OS lives under /ops: on its own workspace origin (D-072) and behind the platform's rewrite. */
   basePath: '/ops',
+  // The workspace origin's root opens the workspace (outside the basePath, so basePath: false).
+  async redirects() {
+    return [{ source: '/', destination: '/ops', basePath: false, permanent: false }];
+  },
   reactStrictMode: true,
   poweredByHeader: false,
   // Static security headers on every response; the per-request CSP is set in src/proxy.ts.

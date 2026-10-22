@@ -7,12 +7,14 @@
   "exports": {
     "./domain": "./src/domain/index.ts",
     "./server": "./src/server/index.ts",
-    "./seed": "./seed/index.ts"
+    "./seed": "./seed/index.ts",
+    "./work": "./src/work.ts",
+    "./leads": "./src/leads.ts"
   },
   "scripts": {
-    "dev": "next dev --port 3003",
+    "dev": "next dev --port 3000",
     "build": "next build",
-    "start": "next start --port 3003",
+    "start": "next start --port 3000",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

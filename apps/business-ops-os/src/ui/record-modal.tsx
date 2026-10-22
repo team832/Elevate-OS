@@ -17,6 +17,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon, nextTabIndex } from '@elevate/shared-ui';
+import { routerPath } from './format';
 
 export interface ModalTab {
   key: string;
@@ -33,7 +34,7 @@ export interface RecordModalProps {
   meta?: ReactNode;
   /** Deep route of the record ("Open full record"). */
   fullHref?: string;
-  /** The list URL without `open` (browser path, with /ops). */
+  /** The list URL without `open` (browser path, with the basePath). */
   closeHref: string;
   /** Row id to focus after closing (matches `data-drawer-return` on the row link). */
   returnId?: string;
@@ -64,8 +65,7 @@ export function RecordModal({
     if (dialog && !dialog.open) dialog.showModal();
   }, []);
   const onClose = () => {
-    // Next adds the basePath itself (D-022): hand the router the path without /ops.
-    router.replace(closeHref.replace(/^\/ops(?=[/?]|$)/, '') || '/', { scroll: false });
+    router.replace(routerPath(closeHref), { scroll: false });
     if (returnId) {
       document
         .querySelector<HTMLElement>(`[data-drawer-return="${CSS.escape(returnId)}"]`)

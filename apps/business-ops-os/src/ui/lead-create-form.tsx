@@ -25,9 +25,12 @@ interface Match {
 export function LeadCreateForm({
   fields,
   cancelHref,
+  base,
 }: {
   fields: readonly FieldSpec[];
   cancelHref?: string;
+  /** Browser basePath of the host app (/ops, /marketing). */
+  base: string;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -42,7 +45,7 @@ export function LeadCreateForm({
     setMessage(null);
     const body = toBody(fields, new FormData(formRef.current));
     if (acknowledge) body.acknowledgeDuplicates = { reason };
-    const res = await fetch('/ops/api/v1/leads', {
+    const res = await fetch(`${base}/api/v1/leads`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
@@ -130,7 +133,7 @@ export function LeadCreateForm({
               <li key={m.leadId}>
                 <strong>{m.level === 'exact' ? 'Existing contact' : 'Possible duplicate'}</strong>{' '}
                 {m.accessible ? (
-                  <a href={`/ops/leads/${m.leadId}`}>
+                  <a href={`${base}/leads/${m.leadId}`}>
                     {m.code}
                     {m.studentName ? ` — ${m.studentName}` : ''}
                   </a>

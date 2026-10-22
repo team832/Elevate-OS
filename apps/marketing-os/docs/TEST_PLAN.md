@@ -28,3 +28,12 @@ Production build (`npm run build -w @elevate/marketing-os`) served with `next st
 
 ## Not covered (yet)
 Browser E2E (Playwright deferred, D-007); real PostgreSQL lock contention (PGlite is single-connection); screen rendering unit tests.
+
+
+## Added on 22 Oct 2026 (role workspaces, D-072 / D-073)
+| File | Covers |
+|---|---|
+| `tests/unit/navigation.test.ts` (new) | sections in work order with the mounted Business Ops screens and no Events; tabs filtered by permission, a lone tab hidden |
+| `tests/integration/overview-today.test.tsx` (new) | Overview follow-up counts: due today, overdue and upcoming as links with an as-of time |
+| `tests/integration/shared-entries.test.ts` (new) | managers list every lead, contributors only their own; task routes answer with the same permission checks |
+| `tests/integration/campaigns.test.ts` (changed) | campaign results count imported numbers of campaign posts and keep missing distinct from zero; overview shows the last import time, `null` when never; marketing privacy (brief §7) |

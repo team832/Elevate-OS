@@ -18,3 +18,4 @@ export {
   type AcademicPermission,
 } from './permissions/academic';
 export { opsPermissions, opsPermissionList, type OpsPermission } from './permissions/ops';
+export * from './workspaces';

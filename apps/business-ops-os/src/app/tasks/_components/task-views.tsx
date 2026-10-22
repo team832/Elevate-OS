@@ -31,8 +31,12 @@ import { QuickAdd } from './quick-add';
 import { AckBadge, TaskFacts } from './task-detail';
 
 export type Params = Record<string, string | undefined>;
-export const BASE = '/ops/tasks';
-export const API = '/ops/api/v1/staff-tasks';
+/** Task screens and APIs under the host app's basePath ('/ops', '/academic', '/marketing'; D-073). */
+export const taskPaths = (base: string) => ({
+  tasks: `${base}/tasks`,
+  api: `${base}/api/v1/staff-tasks`,
+  eodApi: `${base}/api/v1/eod-reports`,
+});
 const STATUS_OPTIONS = TASK_STATUSES.map((s) => ({ value: s, label: TASK_STATUS_LABELS[s] }));
 const TONES = {
   pending: 'neutral',
@@ -71,11 +75,11 @@ export function dueLabel(
  * Status, progress and reason in one row form (the reason is required for blocked / on hold).
  * Each label and the button carry the task title (hidden), so rows have distinct names.
  */
-function QuickUpdate({ t, opts }: { t: EodItem; opts: RowOptions }) {
+function QuickUpdate({ t, opts, api }: { t: EodItem; opts: RowOptions; api: string }) {
   return (
     <ActionForm
       compact
-      action={`${API}/${t.id}`}
+      action={`${api}/${t.id}`}
       method="PATCH"
       submitLabel="Save"
       variant="secondary"
@@ -108,11 +112,13 @@ function QuickUpdate({ t, opts }: { t: EodItem; opts: RowOptions }) {
 
 /** A day's tasks; `edit` (version and allowed statuses per task) adds the row form, `href` opens a task. */
 export function DayTable({
+  base,
   rows,
   href,
   edit,
   empty = 'Nothing here.',
 }: {
+  base: string;
   rows: EodItem[];
   href?: (t: EodItem) => string;
   edit?: ReadonlyMap<string, RowOptions>;
@@ -139,7 +145,11 @@ export function DayTable({
               header: 'Update',
               render: (t) => {
                 const opts = edit.get(t.id);
-                return opts ? <QuickUpdate t={t} opts={opts} /> : (t.reason ?? '');
+                return opts ? (
+                  <QuickUpdate t={t} opts={opts} api={taskPaths(base).api} />
+                ) : (
+                  (t.reason ?? '')
+                );
               },
             }
           : { key: 'reason', header: 'Reason', render: (t) => t.reason ?? '' },
@@ -221,6 +231,10 @@ async function relatedFields(
       : []),
   ];
 }
+
+/** Lead and student links need a reader of either (teachers and Marketing log tasks without them). */
+const relatable = (user: AuthenticatedUser) =>
+  can(user, 'ops:leads:read') || can(user, 'ops:students:read');
 
 type Option = { value: string; label: string };
 const ADVANCED = 'Assign, review and source (optional)';
@@ -348,7 +362,16 @@ function logTaskFields(
 /** Open work, grouped by where it stands; carried-forward tasks keep their earlier due date. */
 const OPEN_GROUPS = ['in_progress', 'pending', 'in_review', 'blocked', 'on_hold'] as const;
 
-export async function MyDay({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
+export async function MyDay({
+  user,
+  sp,
+  base,
+}: {
+  user: AuthenticatedUser;
+  sp: Params;
+  base: string;
+}) {
+  const { tasks: BASE, api: API } = taskPaths(base);
   const today = istToday(new Date());
   const write = can(user, 'ops:tasks:write');
   const adding = write && Boolean(sp.new);
@@ -368,7 +391,7 @@ export async function MyDay({ user, sp }: { user: AuthenticatedUser; sp: Params 
           },
       ),
       adding ? scopedStaff(db, user, 'ops:tasks:write') : null,
-      adding ? relatedFields(db, user, sp.rel?.trim() || undefined) : [],
+      adding && relatable(user) ? relatedFields(db, user, sp.rel?.trim() || undefined) : [],
     ]);
     return { day, people, related };
   });
@@ -402,7 +425,7 @@ export async function MyDay({ user, sp }: { user: AuthenticatedUser; sp: Params 
           const rows = todo.filter((t) => t.status === s);
           return rows.length ? (
             <Segment key={s} title={`${TASK_STATUS_LABELS[s]} (${rows.length})`} flush>
-              <DayTable rows={rows} href={open} edit={day.rowOptions} />
+              <DayTable base={base} rows={rows} href={open} edit={day.rowOptions} />
             </Segment>
           ) : null;
         })
@@ -413,7 +436,7 @@ export async function MyDay({ user, sp }: { user: AuthenticatedUser; sp: Params 
         />
       )}
       <Segment title={`Done today (${c.done})`} flush>
-        <DayTable rows={day.done} href={open} empty="Nothing completed yet today." />
+        <DayTable base={base} rows={day.done} href={open} empty="Nothing completed yet today." />
       </Segment>
       <Segment
         title="End of day"
@@ -432,12 +455,14 @@ export async function MyDay({ user, sp }: { user: AuthenticatedUser; sp: Params 
       </Segment>
       {adding && people ? (
         <FormModal id="log-task" title="Log a task" meta="Times are IST." closeHref={close}>
-          <SearchPanel
-            action={BASE}
-            hidden={{ new: '1' }}
-            search={{ name: 'rel', label: 'Link to a lead or student (optional)', value: sp.rel }}
-            submitLabel="Find"
-          />
+          {relatable(user) ? (
+            <SearchPanel
+              action={BASE}
+              hidden={{ new: '1' }}
+              search={{ name: 'rel', label: 'Link to a lead or student (optional)', value: sp.rel }}
+              submitLabel="Find"
+            />
+          ) : null}
           {sp.rel && related.length === 0 ? (
             <p className="el-field-hint">
               No lead or student you can see matches “{sp.rel}”. Log the task without a link, or
@@ -459,7 +484,7 @@ export async function MyDay({ user, sp }: { user: AuthenticatedUser; sp: Params 
           />
         </FormModal>
       ) : null}
-      {sp.open ? <TaskModal user={user} id={sp.open} sp={sp} /> : null}
+      {sp.open ? <TaskModal user={user} id={sp.open} sp={sp} base={base} /> : null}
     </div>
   );
 }
@@ -470,7 +495,16 @@ const VIEWS = [
   { key: 'overdue', label: 'Overdue' },
 ] as const;
 
-export async function AllTasks({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
+export async function AllTasks({
+  user,
+  sp,
+  base,
+}: {
+  user: AuthenticatedUser;
+  sp: Params;
+  base: string;
+}) {
+  const BASE = taskPaths(base).tasks;
   const view = VIEWS.find((v) => v.key === sp.view)?.key ?? 'all';
   const filters = {
     q: sp.q?.trim() || undefined,
@@ -616,13 +650,24 @@ export async function AllTasks({ user, sp }: { user: AuthenticatedUser; sp: Para
           total={list.total}
         />
       </Tabs>
-      {sp.open ? <TaskModal user={user} id={sp.open} sp={sp} /> : null}
+      {sp.open ? <TaskModal user={user} id={sp.open} sp={sp} base={base} /> : null}
     </div>
   );
 }
 
 /** The list's pop-up: the task's facts; actions, updates and history are on the full page. */
-async function TaskModal({ user, id, sp }: { user: AuthenticatedUser; id: string; sp: Params }) {
+async function TaskModal({
+  user,
+  id,
+  sp,
+  base,
+}: {
+  user: AuthenticatedUser;
+  id: string;
+  sp: Params;
+  base: string;
+}) {
+  const BASE = taskPaths(base).tasks;
   const r = await load((db) => taskDetail(db, user, id));
   if (!r.ok) return r.view;
   const t = r.data;
@@ -644,7 +689,7 @@ async function TaskModal({ user, id, sp }: { user: AuthenticatedUser; id: string
         <ButtonLink variant="primary" href={`${BASE}/${t.id}`}>
           Open the task to act, log work or see its history
         </ButtonLink>
-        <TaskFacts d={t} level={3} />
+        <TaskFacts d={t} base={base} level={3} />
       </div>
     </RecordModal>
   );

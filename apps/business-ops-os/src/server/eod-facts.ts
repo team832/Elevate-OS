@@ -5,6 +5,7 @@
  * "Academic OS unavailable"). `factsHash` ignores generation and fetch times, so the report page
  * can say "Source changed since submission" by comparing a fresh build with a submitted version.
  */
+import { appOrigin } from '@elevate/configuration/workspaces';
 import { createHash } from 'node:crypto';
 import { and, between, eq, inArray, lte, or } from 'drizzle-orm';
 import {
@@ -20,13 +21,8 @@ import { addDays, type IsoDate } from '../domain/dates';
 import { buildEodFacts, type EodFacts } from '../domain/eod';
 
 export function fetchTeacherActivity(staffId: string, from: string, to: string) {
-  const origin = (
-    process.env.ACADEMIC_OS_URL ??
-    process.env.PLATFORM_URL ??
-    'http://localhost:3000'
-  ).replace(/\/+$/, '');
   return fetchInternal(
-    `${origin}/academic/api/internal/v1/teachers/${encodeURIComponent(staffId)}/activity?${new URLSearchParams({ from, to })}`,
+    `${appOrigin('academic')}/academic/api/internal/v1/teachers/${encodeURIComponent(staffId)}/activity?${new URLSearchParams({ from, to })}`,
     academicTeacherActivityV1Schema,
     { caller: 'ops', timeoutMs: 3000 },
   );

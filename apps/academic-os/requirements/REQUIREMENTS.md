@@ -2,7 +2,7 @@
 
 IDs, text and priorities come from `docs/PRODUCT_REQUIREMENTS.md` §3.5 (never renumbered). Status follows D-013: **Proposed → Approved → Implemented → Tested → Deployed**. "Tested" means an automated test passes and is recorded in `IMPLEMENTATION_STATUS.md` (Academic section). "Partly" means the listed part is at that status and the rest is Proposed. Nothing is Deployed.
 
-Paths: schema = `packages/database/src/schema/academic.ts` plus `academic-delivery.ts` and `academic-reviews.ts` (table names without the `academic.` prefix; the 21 Oct 2026 tables arrive with migration 0009, generated, not applied); domain = `src/domain/*.ts`; services = `src/server/services/*.ts`; routes = `/academic/api/v1/…`; tests = `tests/unit/*.test.ts`, `tests/integration/*.test.ts`.
+Paths: schema = `packages/database/src/schema/academic.ts` plus `academic-delivery.ts` and `academic-reviews.ts` (table names without the `academic.` prefix; the 21 Oct 2026 tables arrive with migration 0009, applied to the owner's local database); domain = `src/domain/*.ts`; services = `src/server/services/*.ts`; routes = `/academic/api/v1/…`; tests = `tests/unit/*.test.ts`, `tests/integration/*.test.ts`.
 
 ## 1. Functional requirements
 
@@ -80,3 +80,19 @@ Statuses per D-013; evidence files are in `tests/`. Screens without automated te
 | 17 | Reports: print views + audited CSV (no PDFs, R7) | Tested (CSV and data) / Implemented (print pages) | `progress-reports.test.ts` |
 | — | Topics/learning objectives below chapter, homework submissions, log reminders/autosave, wording help, Academic PDFs | Proposed | not built |
 
+
+
+## Role workspaces (owner brief 22 Oct 2026; D-072, D-073)
+
+| Part | Status | Evidence / notes |
+|---|---|---|
+| Academic OS is the Academic workspace (`:3001/academic`) for teachers and coordinators; non-members are sent to their own workspace; `/academic/api` refuses non-members with 403 | Tested | `packages/server-kit/tests/define-route.test.ts`, `packages/authorization/tests/workspaces.test.ts`, `packages/authentication/tests/workspace-login.test.ts` |
+| Sidebar: My day, My meetings, Timetable, My batches, Students, Student attendance, Teaching logs, Curriculum, Assessments, Student reviews, My tasks, My EOD report; Coordination group only with all-scope permission; links never point at `/ops` for a teacher | Tested (navigation) / Implemented (screens) | `unit/screens.test.tsx` → "Academic navigation (brief §6)" |
+| Student attendance worklist `/academic/attendance` (Needs marking / All classes; unmarked placed students counted only for ended classes) | Tested (service) / Implemented (page) | `integration/teachers-myday.test.ts` |
+| My day: Your batches, review drafts, attendance not recorded, Tasks and EOD block, Meetings today | Tested (service) / Implemented (screen) | `integration/teachers-myday.test.ts`, `integration/work-mount.test.tsx` |
+| My tasks, My EOD report, task detail, report inbox, task reports inside Academic OS (Business Ops `./work` entry, same rules, links under `/academic`) | Tested | `integration/work-mount.test.tsx`; `apps/business-ops-os/tests/integration/shared-entries.test.tsx` |
+| My meetings (read-only, own meetings, names only) | Tested | `apps/business-ops-os/tests/integration/meetings-body.test.tsx` |
+| Guardian name and relationship hidden from teachers, directors and auditors (with student email/phone, DOB and guardian contacts) | Tested; keeping it is an owner decision | `integration/teacher-privacy.test.ts` |
+| Teacher holds no `ops:module:access` (only Academic OS) | Proposed (owner to confirm, D-073); in the code | `packages/authorization/tests/workspaces.test.ts` |
+| My Attendance (staff attendance) | Proposed — not built; needs OD-026 and a proposed `ops.staff_attendance` table | — |
+| Resources (teaching materials) | Proposed — not built; no material store | — |

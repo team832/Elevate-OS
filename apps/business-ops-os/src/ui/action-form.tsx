@@ -2,7 +2,7 @@
 
 /**
  * Generic JSON form for Business Ops actions. Builds the JSON body from the
- * fields (empty values omitted), calls the /ops/api/v1 route (the server checks
+ * fields (empty values omitted), calls the module's /api/v1 route (the server checks
  * permissions and validates), shows field errors, and refreshes on success.
  */
 import { useRouter } from 'next/navigation';
@@ -17,7 +17,7 @@ import {
   type Ref,
 } from 'react';
 import { parseRupeesToPaise } from '../domain/fees';
-import { fmtPaise } from './format';
+import { fmtPaise, routerPath } from './format';
 import { FormSection } from './sections';
 
 export interface FieldSpec {
@@ -285,10 +285,7 @@ export function ActionForm({
     startTransition(() => {
       if (redirectTo)
         router.push(
-          redirectTo
-            .replace('{id}', json.data?.id ?? json.data?.lead?.id ?? '')
-            // Next adds the basePath itself (D-022); callers may pass browser paths.
-            .replace(/^\/ops(?=[/?]|$)/, '') || '/',
+          routerPath(redirectTo.replace('{id}', json.data?.id ?? json.data?.lead?.id ?? '')),
         );
       else router.refresh();
     });

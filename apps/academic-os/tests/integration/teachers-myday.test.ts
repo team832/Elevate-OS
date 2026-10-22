@@ -7,7 +7,8 @@ import { authedRequest, buildRequest, callRoute, setupTestDatabase } from '@elev
 import { GET as teachersRoute } from '../../src/app/api/v1/teachers/route';
 import { GET as teacherRoute } from '../../src/app/api/v1/teachers/[staffId]/route';
 import { GET as activityRoute } from '../../src/app/api/internal/v1/teachers/[staffId]/activity/route';
-import { addDemoAttendee, coordinatorOverview, createSessions, createStudent, enrolManually, markDelivered, recordAttendance, teacherDay } from '../../src/server';
+import { addDemoAttendee, attendanceWorklist, coordinatorOverview, createReview, createSessions, createStudent, enrolManually, markDelivered, recordAttendance, teacherDay } from '../../src/server';
+import { createReviewBody } from '../../src/server/schemas-teaching';
 import { actor, users, world, type Users, type World } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -48,7 +49,21 @@ describe('teacher My day', () => {
     expect(day.demoAwaitingFeedback.map((d) => d.displayName)).toEqual(['Dev Sample Demo Student']);
     expect(day.support).toEqual([expect.objectContaining({ studentName: 'Asha Sample Student', due: true })]);
     expect(day.hrAttendance).toBe('HR attendance unavailable');
+    expect(day.batches.map((b) => b.id)).toEqual([w.batch.id]);
+    expect(day.draftReviews).toBe(0);
     expect(await teacherDay(ctx.db, actor(u.coordinator), now)).toMatchObject({ kind: 'no_staff' });
+
+    await createReview(ctx.db, actor(u.teacher), createReviewBody.parse({ reviewType: 'periodic_progress', academicStudentId: asha.id }), now);
+    expect(await teacherDay(ctx.db, actor(u.teacher), now)).toMatchObject({ draftReviews: 1 });
+  });
+
+  it('student attendance worklist: own classes newest first, unmarked placed students counted only for ended classes', async () => {
+    const list = await attendanceWorklist(ctx.db, actor(u.teacher), now);
+    expect(list.window).toEqual({ from: '2026-09-03', to: '2026-09-16' });
+    expect(list.rows.map((s) => [s.id, s.ended, s.unmarked])).toEqual([[ids.later, false, 1], [ids.now, false, 1], [ids.tuesday, true, 0], [ids.monday, true, 1]]);
+    expect((await attendanceWorklist(ctx.db, actor(u.teacher2), now)).rows).toEqual([]); // not their classes
+    expect((await attendanceWorklist(ctx.db, actor(u.coordinator), now)).rows).toHaveLength(4);
+    await expect(attendanceWorklist(ctx.db, actor(u.counsellor), now)).rejects.toMatchObject({ status: 403 });
   });
 
   it('coordinator: planned vs delivered vs not recorded per range, missing attendance/logs, awaiting batch', async () => {

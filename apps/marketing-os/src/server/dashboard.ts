@@ -1,10 +1,11 @@
 /** Dashboard counts — real counts of Elevate OS records; nothing is estimated or padded. */
-import { and, asc, eq, gte, inArray, lt } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lt, max } from 'drizzle-orm';
 import {
   approvals,
   marketingContentItems,
   marketingIdeas,
   marketingLegacyConflicts,
+  marketingMetricImports,
   marketingPlacements,
   marketingSocialAccounts,
   type Database,
@@ -103,8 +104,24 @@ export async function loadDashboard(db: Database, now: Date = new Date()) {
     .select()
     .from(marketingLegacyConflicts)
     .where(eq(marketingLegacyConflicts.status, 'unreconciled'));
+  // Metric numbers arrive only as manual CSV imports (no live adapter, D-014): show when.
+  const metricImports = await db
+    .select({
+      accountCode: marketingSocialAccounts.code,
+      lastImportedAt: max(marketingMetricImports.createdAt),
+      lastCapturedAt: max(marketingMetricImports.capturedAt),
+    })
+    .from(marketingSocialAccounts)
+    .leftJoin(
+      marketingMetricImports,
+      eq(marketingMetricImports.accountId, marketingSocialAccounts.id),
+    )
+    .where(inArray(marketingSocialAccounts.platform, ['instagram', 'youtube']))
+    .groupBy(marketingSocialAccounts.code)
+    .orderBy(asc(marketingSocialAccounts.code));
   return {
     asOf: now.toISOString(),
+    metricImports,
     totalItems: items.length,
     itemsByState: byState,
     legacyItemsByState: legacyByState,

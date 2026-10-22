@@ -56,7 +56,7 @@ describe('teacher → student reviews recorded in Ops before 21 Oct 2026 (read-o
     ).toBe(false);
   });
 
-  it('lists current and superseded versions; own scope = your own reviews', async () => {
+  it('lists current and superseded versions; teachers are refused (not Ops members)', async () => {
     const [v1] = await ctx.db
       .insert(opsTeacherStudentFeedback)
       .values({
@@ -91,9 +91,11 @@ describe('teacher → student reviews recorded in Ops before 21 Oct 2026 (read-o
       [2, false],
       [1, true],
     ]);
-    expect((await list(teacher)).data).toHaveLength(2);
-    expect((await list(otherTeacher)).data).toEqual([]);
-    // A draft stays with its author.
+    // Teachers are not Business Ops members (D-072); their reviews live in Academic OS (D-058).
+    const asTeacher = await list(teacher);
+    expect(asTeacher.status).toBe(403);
+    expect(asTeacher.error?.message).toBe('Your roles do not include this workspace.');
+    // A draft is never listed to anyone but its author.
     await ctx.db.insert(opsTeacherStudentFeedback).values({
       studentId: taught as never,
       teacherStaffId: otherTeacher.staffId as never,
@@ -103,7 +105,6 @@ describe('teacher → student reviews recorded in Ops before 21 Oct 2026 (read-o
       createdBy: otherTeacher.id,
     });
     expect((await list(manager)).data).toHaveLength(2);
-    expect((await list(otherTeacher)).data).toHaveLength(1);
   });
 });
 
@@ -137,12 +138,12 @@ describe('student/guardian → teacher feedback (opposite direction)', () => {
     const row = (await record(counsellor, teacher.staffId)).data!;
     expect(row.moderationStatus).toBe('pending');
     expect((await mod(teacher, row.id, { action: 'approve' })).status).toBe(403);
-    expect((await about(teacher, teacher.staffId)).data?.rows).toEqual([]);
+    expect((await about(teacher, teacher.staffId)).status).toBe(403);
     expect(
       (await mod(manager, row.id, { action: 'approve', visibility: 'teacher_and_staff' })).data
         ?.moderationStatus,
     ).toBe('approved');
-    const shared = await about(teacher, teacher.staffId);
+    const shared = await about(manager, teacher.staffId);
     expect(shared.data?.summary).toEqual({ approved: 1, rated: 1, averageRating: 4 });
     expect((await mod(manager, row.id, { action: 'reject' })).status).toBe(409);
   });

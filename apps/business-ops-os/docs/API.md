@@ -352,3 +352,37 @@ Teachers write and submit student reviews in Academic OS. Ops reads submitted ve
 ## Search
 
 `GET /ops/search?q=` is a page (no JSON route): leads, demo students, applications and students by name or reference, 10 hits per group, each group only with its module's read permission and own scope. A query that looks like an email or a phone (at least 4 digits) also searches contacts, only with `ops:student_private:read`, audited (`student.contact_search`, masked value); without it the page says contacts were not searched. Phones in results are masked. The student list's own search box (`/ops/students`) sends a query of 10 or more digits, or an email, to the audited `contact` filter when permitted; a 3-digit admission number stays a name/number search. **Host request logs must not keep query strings** (`q` can hold a phone number).
+
+
+# Routes added or changed on 22 Oct 2026 (role workspaces, D-072 / D-073)
+
+Business Operations is its own workspace at `http://localhost:3000/ops` (`BUSINESS_OPS_OS_URL`). Guide: `docs/WORKSPACES.md` (repo root).
+
+**Every route.** (0) A `POST`/`PUT`/`PATCH`/`DELETE` whose `Origin` header is neither this origin nor one of the four configured app origins is refused with 403 `FORBIDDEN` "This request came from another site and was refused." Requests without `Origin` (server-to-server, tests) are allowed: they carry no browser cookie. (1) After the sign-in check, a path under `/ops` needs `ops:module:access`; otherwise 403 "Your roles do not include this workspace.", even when the caller holds the route's own permission. (2) A JSON body needs the media type `application/json` exactly (a `; charset=utf-8` parameter is fine); `text/plain;application/json` is 400 `VALIDATION_FAILED`.
+
+## Sign-in and workspace chooser
+| Method | Path | Permission | Request | Response | Errors |
+|---|---|---|---|---|---|
+| POST | `/ops/api/v1/auth/login` (changed) | public | form `email`, `password`, `next?` (relative path; `safeRelativePath` refuses control characters and backslashes) | form post: **303** to the landing (`resolveLanding`): stay in Business Operations at `next` if you belong here; else your remembered workspace; else your only workspace; else `/ops/workspaces`. Absolute redirects go only to the configured origins and carry no token. JSON body: unchanged | 403 cross-site `Origin`; 401 wrong email or password (unchanged) |
+| POST | `/ops/api/v1/auth/logout` (changed) | session | — | 303 to sign-in; the server session ends for every port | 403 cross-site `Origin` |
+| POST | `/ops/api/v1/auth/workspace` (new) | signed in | form `workspace` (`ops` \| `academic` \| `marketing`), `remember=yes` (optional) | **303** to that workspace's home (`<origin><basePath>`). With `remember=yes` the choice is stored in `core.users.preferred_workspace` (migration 0013) and audited as `user.workspace_preference_set` (before/after) | 303 to sign-in when signed out; 403 "Your roles do not include that workspace." for a workspace you do not belong to or an unknown key; 403 cross-site `Origin` |
+
+## Leads and follow-ups (changed: contact and KYC fields, D-073)
+| Method | Path | Permission | Change |
+|---|---|---|---|
+| GET | `/ops/api/v1/leads/{id}` | `ops:leads:read` (own scope as before) | Contact fields need `ops:student_private:read` **or** the new `ops:lead_contacts:read` (own = leads you own). KYC fields (`dateOfBirth`, `address`, `emergencyContactName`, `emergencyContactPhone`) and `lead.kyc_updated` history need `ops:student_private:read`; without it they are left out. Without `ops:admissions:read` the lead's admission cases come back only as `{ id, code, status, createdAt, programmeCode }`, with lead-record history only. Director and auditor (no contact permission) also lose the KYC columns here (consistent with D-028). |
+| GET | `/ops/api/v1/follow-ups` | `ops:leads:read` | Follow-ups linked to an admission are left out without `ops:admissions:read`. |
+| — | lead, follow-up, task, EOD and meeting notifications | — | The stored link opens the recipient's own workspace (`linkFor` in `src/server/task-links.ts`). |
+
+## Pages (no JSON route; each calls `requirePageAccess(…, { workspace: 'ops' })`)
+| Path | Permission | Query | Notes |
+|---|---|---|---|
+| `/ops` (Overview) | `ops:module:access`; each block its own permission | `from`, `to` (IST `YYYY-MM-DD`) | Default this month to date. Invalid, reversed or longer than 366 days → this month plus a message. Task/EOD figures for a range over 92 days are explained, not computed. A source that fails says "Source unavailable" |
+| `/ops/academic-summary` | `ops:dashboard:read` | `from`, `to` | Academic delivery summary and reviews published in the range (one Academic call per teacher: IR-OPS-WS-1) |
+| `/ops/marketing-summary` | `ops:dashboard:read` | `from`, `to` | From the Marketing summary route |
+| `/ops/fees/collections` | `ops:fees:read` (own for counsellors) | `status`, `page` | 25 per page (`FEE_PAGE_SIZE`), net total |
+| `/ops/fees/outstanding` | `ops:fees:read` (own for counsellors) | `status` = `due` \| `overdue` \| `upcoming`, `from`, `to`, `page` | Count and amount owed per view; 25 per page |
+| `/ops/workspaces` | signed in | — | The chooser: only the workspaces your roles grant |
+
+## Mounted in other workspaces (D-073)
+The same handlers serve `/academic/api/v1/{staff-tasks…, eod-reports…, task-reports}` (15 route files) and `/marketing/api/v1/{staff-tasks…, eod-reports…, task-reports, leads…, lead-sources, follow-ups…}` (31 route files), from `workRoutes` and `leadsRoutes` in `src/work.ts` and `src/leads.ts`. Request, response, permission and errors are those documented above for `/ops/api/v1/…`; the membership check uses the host's base path (`academic:module:access`, `marketing:module:access`). Tracker imports (`/ops/api/v1/task-imports…`) stay in Ops only.

@@ -5,11 +5,12 @@
  */
 import { Suspense, type ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { can, type Permission } from '@elevate/authorization';
+import { can, scopeFor, workspacesFor, type Permission, type WorkspaceKey } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { countUnread } from '@elevate/notifications';
-import { requirePageAccess, type PageAccess } from '@elevate/server-kit/next';
+import { requirePageAccess, workspaceHrefs, type PageAccess } from '@elevate/server-kit/next';
 import { AppError } from '@elevate/shared-contracts';
+import { workNav } from '@elevate/business-ops-os/work';
 import { AppShell, ErrorState, LoadingState } from '@elevate/shared-ui';
 import { MODULE } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
@@ -21,6 +22,7 @@ export type Section =
   | 'batches'
   | 'timetable'
   | 'teaching'
+  | 'attendance'
   | 'assessments'
   | 'students'
   | 'progress'
@@ -28,25 +30,54 @@ export type Section =
   | 'teachers'
   | 'enrolments'
   | 'reviews'
+  | 'meetings'
+  | 'tasks'
+  | 'eod'
   | 'reports'
   | 'settings';
 
-const NAV: { key: Section; label: string; href: string; permission: Permission; group: string }[] = [
+const WORK = 'Teaching';
+/** Coordination items need the permission at `all` scope: a teacher's own-scope grant never shows them. */
+const COORDINATION = 'Coordination';
+
+/**
+ * Teacher order first (brief §6). Not listed, on purpose: "My attendance" (no HR attendance source
+ * exists, R2) and "Resources" (no teaching-material store; concept-book indices are a Curriculum tab).
+ * Tasks and the EOD report come from the shared Ops entry; its Inbox and Reports are tabs inside Tasks.
+ */
+const NAV: { key: Section; label: string; ownLabel?: string; href: string; permission: Permission; group: string }[] = [
   { key: 'home', label: 'My day', href: MODULE_PATHS.home, permission: 'academic:module:access', group: 'Today' },
-  { key: 'teachers', label: 'Teachers', href: MODULE_PATHS.teachers, permission: 'academic:assignments:read', group: 'Teaching' },
-  { key: 'batches', label: 'Batches', href: MODULE_PATHS.batches, permission: 'academic:batches:read', group: 'Teaching' },
-  { key: 'timetable', label: 'Timetable', href: MODULE_PATHS.timetable, permission: 'academic:timetable:read', group: 'Teaching' },
-  { key: 'teaching', label: 'Teaching logs', href: MODULE_PATHS.teaching, permission: 'academic:classes:read', group: 'Teaching' },
-  { key: 'reviews', label: 'Reviews', href: MODULE_PATHS.reviews, permission: 'academic:reviews:read', group: 'Teaching' },
-  { key: 'students', label: 'Students', href: MODULE_PATHS.students, permission: 'academic:students:read', group: 'Students' },
-  { key: 'enrolments', label: 'Enrolments', href: MODULE_PATHS.enrolments, permission: 'academic:enrolments:read', group: 'Students' },
-  { key: 'progress', label: 'Progress and support', href: MODULE_PATHS.progress, permission: 'academic:progress:read', group: 'Students' },
-  { key: 'intake', label: 'Enrolment intake', href: MODULE_PATHS.intake, permission: 'academic:enrolments:read', group: 'Students' },
-  { key: 'curriculum', label: 'Curriculum', href: MODULE_PATHS.curriculum, permission: 'academic:courses:read', group: 'Curriculum' },
-  { key: 'assessments', label: 'Assessments', href: MODULE_PATHS.assessments, permission: 'academic:assessments:read', group: 'Assessments' },
-  { key: 'reports', label: 'Reports', href: MODULE_PATHS.reports, permission: 'academic:summary:read', group: 'Oversight' },
-  { key: 'settings', label: 'Academic settings', href: MODULE_PATHS.settings, permission: 'academic:settings:manage', group: 'Oversight' },
+  { key: 'meetings', label: 'My meetings', href: MODULE_PATHS.meetings, permission: 'ops:appointments:read', group: 'Today' },
+  { key: 'timetable', label: 'Timetable', href: MODULE_PATHS.timetable, permission: 'academic:timetable:read', group: WORK },
+  { key: 'batches', label: 'Batches', ownLabel: 'My batches', href: MODULE_PATHS.batches, permission: 'academic:batches:read', group: WORK },
+  { key: 'students', label: 'Students', href: MODULE_PATHS.students, permission: 'academic:students:read', group: WORK },
+  { key: 'attendance', label: 'Student attendance', href: MODULE_PATHS.studentAttendance, permission: 'academic:attendance:read', group: WORK },
+  { key: 'teaching', label: 'Teaching logs', href: MODULE_PATHS.teaching, permission: 'academic:classes:read', group: WORK },
+  { key: 'curriculum', label: 'Curriculum', href: MODULE_PATHS.curriculum, permission: 'academic:courses:read', group: WORK },
+  { key: 'assessments', label: 'Assessments', href: MODULE_PATHS.assessments, permission: 'academic:assessments:read', group: WORK },
+  { key: 'reviews', label: 'Student reviews', href: MODULE_PATHS.reviews, permission: 'academic:reviews:read', group: WORK },
+  ...workNav(MODULE.basePath).flatMap((r) => (r.key === 'tasks' || r.key === 'eod' ? [{ ...r, key: r.key as Section, group: WORK }] : [])),
+  { key: 'teachers', label: 'Teachers', href: MODULE_PATHS.teachers, permission: 'academic:assignments:read', group: COORDINATION },
+  { key: 'enrolments', label: 'Enrolments', href: MODULE_PATHS.enrolments, permission: 'academic:enrolments:read', group: COORDINATION },
+  { key: 'intake', label: 'Enrolment intake', href: MODULE_PATHS.intake, permission: 'academic:enrolments:read', group: COORDINATION },
+  { key: 'progress', label: 'Progress and support', href: MODULE_PATHS.progress, permission: 'academic:progress:read', group: COORDINATION },
+  { key: 'reports', label: 'Reports', href: MODULE_PATHS.reports, permission: 'academic:summary:read', group: COORDINATION },
+  { key: 'settings', label: 'Academic settings', href: MODULE_PATHS.settings, permission: 'academic:settings:manage', group: COORDINATION },
 ];
+
+/** Sidebar items for this user (cosmetic: every page and route checks again on the server). */
+export function navFor(user: AuthenticatedUser, active?: Section) {
+  return NAV.flatMap((n) => {
+    const scope = scopeFor(user, n.permission);
+    if (!scope || (n.group === COORDINATION && scope !== 'all')) return [];
+    return [{ href: n.href, label: scope === 'own' && n.ownLabel ? n.ownLabel : n.label, group: n.group, active: n.key === active }];
+  });
+}
+
+/** Absolute link into another workspace (D-072), or null when the user is not a member and would be bounced. */
+export function workspaceLink(user: AuthenticatedUser, workspace: WorkspaceKey, path: string): string | null {
+  return workspacesFor(user).includes(workspace) ? `${workspaceHrefs()[workspace]}${path}` : null;
+}
 
 export const TIMETABLE_TABS = [
   [MODULE_PATHS.timetable, 'Agenda'],
@@ -61,7 +92,7 @@ export const CURRICULUM_TABS = [
 
 /** requirePageAccess with the module's login path and basePath (browser paths, D-022). */
 export function gate(permission: Permission, returnTo: string): Promise<PageAccess> {
-  return requirePageAccess(permission, { loginPath: MODULE_PATHS.login, returnTo, basePath: MODULE.basePath });
+  return requirePageAccess(permission, { loginPath: MODULE_PATHS.login, returnTo, basePath: MODULE.basePath, workspace: MODULE.key });
 }
 
 export function actorFor(user: AuthenticatedUser): Actor {
@@ -81,14 +112,14 @@ async function unreadFor(access: PageAccess): Promise<number | null> {
 /** Children render inside <Suspense> (fallback: loading). Call gate() before rendering this so the 307 is real (D-022). */
 export async function AcademicShell({ access, active, loading, children }: { access: PageAccess; active: Section; loading?: string; children: ReactNode }) {
   const user = access.user;
-  const nav = NAV.filter((n) => can(user, n.permission)).map((n) => ({ href: n.href, label: n.label, group: n.group, active: n.key === active }));
   return (
     <AppShell
       user={user}
       modules={access.modules}
+      moduleHrefs={workspaceHrefs()}
       current="academic"
       logoutAction={MODULE_PATHS.logoutApi}
-      nav={nav}
+      nav={navFor(user, active)}
       search={can(user, 'academic:students:read') ? { action: MODULE_PATHS.students, label: 'Search students' } : undefined}
       unreadNotifications={await unreadFor(access)}
     >

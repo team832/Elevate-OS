@@ -4,6 +4,7 @@
  * network, wrong shape) becomes `unavailable` and the UI says "source
  * unavailable" — never zeros.
  */
+import { appOrigin } from '@elevate/configuration/workspaces';
 import { fetchInternal } from '@elevate/server-kit';
 import {
   academicDeliverySummaryV1Schema,
@@ -27,37 +28,33 @@ export interface SummaryFetchOptions {
   timeoutMs?: number;
 }
 
-function base(explicit: string | undefined, envKey: string): string {
-  return (
-    explicit ??
-    process.env[envKey] ??
-    process.env.PLATFORM_URL ??
-    'http://localhost:3000'
-  ).replace(/\/+$/, '');
-}
+const base = (explicit: string | undefined, app: 'academic' | 'marketing') =>
+  explicit?.replace(/\/+$/, '') ?? appOrigin(app);
+
+const fetchSummary =
+  <S extends Parameters<typeof fetchInternal>[1]>(app: 'academic' | 'marketing', schema: S) =>
+  (window: { from: string; to: string }, options: SummaryFetchOptions = {}) =>
+    fetchInternal(
+      `${base(app === 'academic' ? options.academicBaseUrl : options.marketingBaseUrl, app)}/${app}/api/internal/v1/summary?${new URLSearchParams(window)}`,
+      schema,
+      {
+        caller: 'ops',
+        fetchImpl: options.fetchImpl,
+        token: options.token,
+        timeoutMs: options.timeoutMs ?? 4000,
+      },
+    );
+
+export const fetchAcademicSummary = fetchSummary('academic', academicDeliverySummaryV1Schema);
+export const fetchMarketingSummary = fetchSummary('marketing', marketingSummaryV1Schema);
 
 export async function fetchCrossModuleSummaries(
   window: { from: string; to: string },
   options: SummaryFetchOptions = {},
 ): Promise<CrossModuleSummaries> {
-  const qs = `from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`;
-  const common = {
-    caller: 'ops' as const,
-    fetchImpl: options.fetchImpl,
-    token: options.token,
-    timeoutMs: options.timeoutMs ?? 4000,
-  };
   const [academic, marketing] = await Promise.all([
-    fetchInternal(
-      `${base(options.academicBaseUrl, 'ACADEMIC_OS_URL')}/academic/api/internal/v1/summary?${qs}`,
-      academicDeliverySummaryV1Schema,
-      common,
-    ),
-    fetchInternal(
-      `${base(options.marketingBaseUrl, 'MARKETING_OS_URL')}/marketing/api/internal/v1/summary?${qs}`,
-      marketingSummaryV1Schema,
-      common,
-    ),
+    fetchAcademicSummary(window, options),
+    fetchMarketingSummary(window, options),
   ]);
   return { academic, marketing };
 }

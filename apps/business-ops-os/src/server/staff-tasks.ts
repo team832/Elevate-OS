@@ -23,7 +23,12 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { opsStaffTasks as tasks, staffMembers, type Database } from '@elevate/database';
+import {
+  opsEodReports as eodReports,
+  opsStaffTasks as tasks,
+  staffMembers,
+  type Database,
+} from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
 import { ForbiddenError } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
@@ -133,6 +138,36 @@ function dueFilter(due: TaskListQuery['due'], now: Date): SQL | undefined {
     );
   }
   return undefined;
+}
+
+/**
+ * Home-page figures for the caller's own tasks: open, overdue and due today (IST), and the status
+ * of today's EOD report ('not_started' when there is none). Two aggregate queries, no lists; null
+ * without a staff record.
+ */
+export async function taskDaySummary(db: Database, actor: Actor, now = new Date()) {
+  await accessScope(db, actor, 'ops:tasks:read');
+  const staffId = await staffIdForUser(db, actor.id);
+  if (!staffId) return null;
+  const day = istToday(now);
+  const where = (cond: SQL | undefined) =>
+    sql<number>`count(*) filter (where ${cond})`.mapWith(Number);
+  const [[c], [eod]] = await Promise.all([
+    db
+      .select({
+        open: count(),
+        overdue: where(dueFilter('overdue', now)),
+        dueToday: where(eq(tasks.dueOn, day)),
+      })
+      .from(tasks)
+      .where(and(eq(tasks.staffId, staffId), notInArray(tasks.status, CLOSED))),
+    db
+      .select({ status: eodReports.status })
+      .from(eodReports)
+      .where(and(eq(eodReports.staffId, staffId), eq(eodReports.reportDate, day)))
+      .limit(1),
+  ]);
+  return { day, asOf: now, ...c!, eod: eod?.status ?? ('not_started' as const) };
 }
 
 /** All tasks the caller may read, newest due day first. */

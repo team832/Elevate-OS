@@ -1,12 +1,54 @@
 /** Role home views (brief §4): teacher "My day" and the coordinator's exceptions. Server components. */
+import type { ReactNode } from 'react';
+import type { taskDaySummary } from '@elevate/business-ops-os/work';
 import { metric } from '@elevate/shared-contracts';
 import { ButtonLink, Card, DataTable, EmptyState, MetricStrip, StatusBadge } from '@elevate/shared-ui';
 import type { coordinatorOverview, SessionListRow, teacherDay } from '../server';
 import { MODULE_PATHS } from '../server/paths';
-import { StateBadge } from './badges';
+import { StateBadge, fmtDateTime } from './badges';
 
 type TeacherDay = Extract<Awaited<ReturnType<typeof teacherDay>>, { kind: 'teacher' }>;
 type Overview = Awaited<ReturnType<typeof coordinatorOverview>>;
+type TaskDay = Awaited<ReturnType<typeof taskDaySummary>>;
+
+const EOD: Record<NonNullable<TaskDay>['eod'], [string, 'neutral' | 'warning' | 'success']> = {
+  not_started: ['Not started', 'neutral'],
+  draft: ['Draft, not submitted', 'warning'],
+  submitted: ['Submitted', 'success'],
+  revision_requested: ['Changes requested', 'warning'],
+  acknowledged: ['Acknowledged', 'success'],
+};
+
+/** Open tasks and today's EOD report state (shared Ops task service, D-073). Counts are server aggregates. */
+export function TasksDay({ summary }: { summary: TaskDay }) {
+  if (!summary) {
+    return <Card title="Tasks and EOD"><p>No staff record linked to your account; ask an academic coordinator.</p></Card>;
+  }
+  const [eod, tone] = EOD[summary.eod];
+  return (
+    <Card title="Tasks and EOD" description={`Open tasks assigned to you, and your end-of-day report for ${summary.day}. As of ${fmtDateTime(summary.asOf)}.`}>
+      <p>
+        {`${summary.open} open · ${summary.overdue} overdue · ${summary.dueToday} due today. `}
+        <a href={MODULE_PATHS.tasks}>Open my tasks</a>
+      </p>
+      <p>
+        {'Today’s EOD report: '}<StatusBadge tone={tone}>{eod}</StatusBadge> <a href={`${MODULE_PATHS.tasks}?tab=eod`}>Open EOD report</a>
+      </p>
+    </Card>
+  );
+}
+
+/** Count of the caller's meetings starting today (shared Ops service, D-073); null = no staff record. */
+export function MeetingsDay({ day, total }: { day: string; total: number | null }) {
+  return (
+    <Card title="Meetings today" description={`Meetings and events you take part in that start on ${day} (IST), any status.`}>
+      <p>
+        {total === null ? 'No staff record linked to your account; ask an academic coordinator. ' : `${total} today. `}
+        <a href={MODULE_PATHS.meetings}>Open my meetings</a>
+      </p>
+    </Card>
+  );
+}
 
 const range = (r: { from: string; to: string }) => (r.from === r.to ? r.from : `${r.from} to ${r.to}`);
 const DAY = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -36,7 +78,8 @@ function ClassList({ rows, empty, action, showDate = true }: { rows: SessionList
   );
 }
 
-export function TeacherHome({ day }: { day: TeacherDay }) {
+/** `tasks`: the Tasks and EOD block (null when the user holds no task permission). */
+export function TeacherHome({ day, tasks = null }: { day: TeacherDay; tasks?: ReactNode }) {
   const recent = `Classes from ${range(day.window)} that have ended.`;
   return (
     <div className="el-stack">
@@ -60,8 +103,23 @@ export function TeacherHome({ day }: { day: TeacherDay }) {
       <Card title="Today's other classes" description={day.today}>
         <ClassList rows={day.todays} showDate={false} empty="No other classes today." action={(s) => ({ href: MODULE_PATHS.attendance(s.id), label: 'Open class' })} />
       </Card>
-      <Card title={`Attendance not recorded (${day.attendanceMissing.length})`} description={`${recent} At least one placed student has no mark.`}>
-        <ClassList rows={day.attendanceMissing} empty="Every ended class has a mark for each placed student." action={(s) => ({ href: MODULE_PATHS.attendance(s.id), label: 'Take attendance' })} />
+      <Card title={`Your batches (${day.batches.length})`} description={`Batches with a teaching assignment of yours open on ${day.today}.`}>
+        <DataTable
+          compact
+          rows={day.batches}
+          rowKey={(b) => b.id}
+          empty={<p>No batch is assigned to you today. An academic coordinator assigns teachers to batches.</p>}
+          columns={[
+            { key: 'code', header: 'Batch', render: (b) => <a href={MODULE_PATHS.batch(b.id)}><strong>{b.code}</strong></a> },
+            { key: 'course', header: 'Course', render: (b) => `${b.programmeCode} · ${b.courseName}` },
+            { key: 'placed', header: 'Students placed', numeric: true, render: (b) => b.activeEnrolments },
+          ]}
+        />
+      </Card>
+      {tasks}
+      <Card title={`Student attendance not recorded (${day.attendanceMissing.length})`} description={`${recent} At least one placed student has no mark.`}>
+        <ClassList rows={day.attendanceMissing} empty="Every ended class has a mark for each placed student." action={(s) => ({ href: MODULE_PATHS.attendance(s.id), label: 'Record attendance' })} />
+        {day.attendanceMissing.length ? <p><a href={MODULE_PATHS.studentAttendance}>All classes needing attendance</a></p> : null}
       </Card>
       <Card title={`Teaching logs not submitted (${day.logsMissing.length})`} description={`${recent} No submitted class record yet.`}>
         <ClassList rows={day.logsMissing} empty="All your ended classes have a submitted log." action={(s) => ({ href: MODULE_PATHS.teachingLog(s.id), label: 'Write log' })} />
@@ -78,6 +136,7 @@ export function TeacherHome({ day }: { day: TeacherDay }) {
             { key: 'go', header: '', render: (d) => <a href={`${MODULE_PATHS.newReview}?coreStudentId=${d.coreStudentId}&opsDemoSessionId=${d.opsDemoSessionId}`}>Write review<span className="el-visually-hidden"> for {d.displayName}</span></a> },
           ]}
         />
+        {day.draftReviews ? <p><a href={`${MODULE_PATHS.reviews}?mine=1&status=draft`}>{`${day.draftReviews} review draft${day.draftReviews === 1 ? '' : 's'} not submitted yet`}</a>. Drafts stay private to you until you submit them.</p> : null}
       </Card>
       <Card title={`Assessments to mark (${day.assessmentsToMark.length})`} description="Open now: conducted but not finalised, in batches you are assigned to.">
         <DataTable

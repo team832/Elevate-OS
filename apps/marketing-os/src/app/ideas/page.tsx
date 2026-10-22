@@ -28,7 +28,7 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
     <MarketingPage
       permission="marketing:ideas:read"
       path={modulePath('ideas')}
-      active="ideas"
+      active="calendar"
       title="Ideas"
       description="Every idea gets a code (COURSE-NNN) that is never reused."
       searchParams={sp}

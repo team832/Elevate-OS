@@ -1,6 +1,7 @@
 import {
   createLoginHandler,
   createLogoutHandler,
+  createWorkspaceChoiceHandler,
   type AuthHandlerOptions,
 } from '@elevate/authentication';
 import { MODULE_PATHS } from './paths';
@@ -14,3 +15,4 @@ export const authOptions: AuthHandlerOptions = {
 
 export const loginHandler = createLoginHandler(authOptions);
 export const logoutHandler = createLogoutHandler(authOptions);
+export const workspaceHandler = createWorkspaceChoiceHandler(authOptions);

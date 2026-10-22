@@ -12,7 +12,7 @@ export default async function NewIdeaPage({ searchParams }: { searchParams: Sear
     <MarketingPage
       permission="marketing:ideas:write"
       path={modulePath('ideas/new')}
-      active="ideas"
+      active="calendar"
       title="New idea"
       description="The code is given on save. Similar titles are saved with a warning; identical ones are refused."
       searchParams={await searchParams}

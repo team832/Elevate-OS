@@ -1,10 +1,10 @@
-# Marketing OS (`@elevate/marketing-os`, `/marketing`, port 3001)
+# Marketing OS (`@elevate/marketing-os`, `/marketing`, port 3002)
 
-Runs Elevate’s social content from idea to measured post under the brand rules, with an explicit, version-bound approval before anything is scheduled or published. Built in wave 2 by the Marketing team. **Status: Implemented and Tested in the repository; nothing is Deployed. No real platform is connected — publishing is a mock that says so.**
+Since 22 Oct 2026 this is the **Marketing workspace** at http://localhost:3002/marketing (D-072; guide: `docs/WORKSPACES.md` at the repo root): campaigns, content and metric imports, plus the lead and follow-up screens and each person's own tasks and EOD reports, mounted from Business Ops' shared entries (D-073). Runs Elevate’s social content from idea to measured post under the brand rules, with an explicit, version-bound approval before anything is scheduled or published. Built in wave 2 by the Marketing team. **Status: Implemented and Tested in the repository; nothing is Deployed. No real platform is connected — publishing is a mock that says so.**
 
 ## 1. Scope and boundaries
 - **Owns (D-010):** social accounts, ideas, content items, versions, assets (metadata), reviews, comments, assignments, placements, collab groups, publishing records/attempts, metric imports/snapshots/values, campaigns, brand rules, policy settings — all in the `marketing` schema.
-- **Does not own:** leads/enquiries (Business Ops), students/consent records (Academic/platform), users and roles (platform). No imports of other modules; output to others is `MarketingSummaryV1` only.
+- **Does not own:** leads/enquiries (Business Ops), students/consent records (Academic/platform), users and roles (platform). Output to others is `MarketingSummaryV1`. Since 22 Oct 2026 Marketing imports exactly two Business Ops entries, `@elevate/business-ops-os/work` and `@elevate/business-ops-os/leads` (ESLint `SHARED_ENTRIES`, D-073), to show the one lead record, follow-ups and own tasks in this workspace; the records stay in the `ops` schema.
 - **Out of scope:** AI content generation, media storage/uploads (file metadata only), video editing, posting to any real platform (D-014, D-015).
 
 ## 2. Business rules enforced
@@ -38,14 +38,16 @@ Open owner decisions are visible on **Rules & settings** as `proposed`: OD-001 a
 | accounts:manage, campaigns:write | ✓ | | | |
 | summary:read | ✓ | | ✓ | ✓ |
 
+Business Ops permissions used inside Marketing OS (22 Oct 2026, **Proposed**, D-073): marketing manager `ops:leads:read`, `ops:leads:write`, `ops:leads:assign`, `ops:lead_contacts:read` (all leads) and own `ops:tasks:read/write`; marketing contributor the same leads and lead-contact permissions with **own** scope (leads they own) and own tasks. No student-private, KYC, fee, admission or review permission: a lead opened here shows contact fields but no date of birth, address, emergency contact or KYC history, and no admission details. Marketing roles do not hold `ops:module:access`, so Business Operations stays closed to them.
+
 teacher, admissions_counsellor, academic_coordinator, operations_manager and platform_admin have no marketing access (academic fact-checking by teachers is Proposed). Every route checks on the server (`defineRoute`); every mutating service re-checks (`assertCan`); screens use `requirePageAccess`.
 
 ## 4. Commands
 ```bash
-npm run dev:marketing                       # http://localhost:3001/marketing (needs a database with the schema)
+npm run dev:marketing                       # http://localhost:3002/marketing (/ redirects there); starts or reuses the local database, which must be migrated
 npm run typecheck -w @elevate/marketing-os
 npx eslint apps/marketing-os packages/database/src/schema/marketing.ts packages/authorization/src/permissions/marketing.ts packages/shared-contracts/src/modules/marketing.ts --max-warnings=0
-npx vitest run apps/marketing-os            # 11 files, 105 tests (in-memory PGlite)
+npx vitest run apps/marketing-os            # 15 test files on 22 Oct 2026 (in-memory PGlite)
 npm run build -w @elevate/marketing-os
 npm run db:seed                             # runs seed `marketing.legacy` after the core seeds (idempotent)
 ```
@@ -54,7 +56,14 @@ Environment: root `.env`; `MARKETING_PUBLISHING_ADAPTER=mock|disabled`. The dev 
 ## 5. Screens (`AppShell`, loading / empty / error / success states)
 | Path | Permission | Shows |
 |---|---|---|
-| `/marketing` | module:access | items by state (legacy share), accounts by integration status, quarantine count, awaiting approval (flags imported items without a request), next 7 days, overdue scheduled, OD-001 alert |
+| `/marketing` | module:access | Overview (22 Oct 2026): **Today** (own tasks, EOD status, follow-ups due today / overdue / upcoming as links with an as-of time), Content due this week, Awaiting approval, Campaigns running (verified results only), Metric imports (last import per Instagram/YouTube account, "never" when none), then the pipeline cards: items by state, accounts by integration, ideas, OD-001 alert |
+| `/marketing/leads`, `/marketing/leads/:id` | `ops:leads:read` | Business Ops' lead list, pop-up and full lead (`LeadsBody`, `LeadBody`); contact fields only, no KYC |
+| `/marketing/follow-ups` | `ops:leads:read` | Follow-ups list (`FollowUpsBody`; new — Ops has no page of its own) |
+| `/marketing/campaigns/:id` | content:read | Campaign detail: placements and results from imported numbers only (missing stays missing); conversion outcomes are not shown (enquiries carry only a free-text `campaignRef`) |
+| `/marketing/tasks` (`?tab=eod`), `/tasks/:id`, `/tasks/inbox`, `/tasks/reports` | `ops:tasks:read` (own) | Own tasks and EOD report, mounted from Business Ops; report inbox only for EOD recipients and reviewers |
+| `/marketing/workspaces` | signed in | Workspace chooser (D-072) |
+
+**Sidebar (22 Oct 2026, `src/ui/shell.tsx`; every item filtered by permission — before this, everyone saw every item):** Overview, Leads, Follow-ups, Campaigns (tab Accounts), Content Calendar (tab Ideas), Tasks, EOD Reports, Reports (tabs Weekly report, Metrics import); Rules & settings at the foot. A lone tab is hidden. **Events and Webinars** is not shown: it needs a new events-only permission (`ops:appointments:*` also covers private counselling; owner decision).
 | `/marketing/accounts` | accounts:read | registry, unconfirmed names/handles labelled, cadence + status, integration badge, “Check adapter” (manage) |
 | `/marketing/ideas`, `/ideas/new`, `/ideas/:id` | ideas:read / ideas:write | filters, quarantine groups with proposed codes; create form; detail with live duplicate candidates, content items, placements, status change |
 | `/marketing/content/:id` | content:read | versions + assets, brand-rule check, approver checklist and decision, workflow actions, placements with schedule/publish/manual record/cancel, publishing records, approval history, assignees, comments |
@@ -64,7 +73,7 @@ Environment: root `.env`; `MARKETING_PUBLISHING_ADAPTER=mock|disabled`. The dev 
 | `/marketing/campaigns`, `/marketing/settings` | content:read / module:access | campaigns; policies (proposed) and brand rules |
 
 ## 6. Routes
-All in `docs/API.md` (38 route files — 35 added in wave 2 plus health, login, logout: accounts, ideas, content items, placements, collab groups, campaigns, metrics, rules, settings, dashboard, plus `GET /marketing/api/internal/v1/summary`).
+All in `docs/API.md`. 22 Oct 2026: 31 route files mounting Business Ops' task, EOD, lead, lead-source and follow-up handlers, plus `POST auth/workspace`; `GET dashboard` adds `metricImports[]`. Before that, 38 route files (35 added in wave 2 plus health, login, logout: accounts, ideas, content items, placements, collab groups, campaigns, metrics, rules, settings, dashboard, plus `GET /marketing/api/internal/v1/summary`).
 
 ## 7. Data model
 20 tables — `docs/DOMAIN_MODEL.md`. Algorithms — `docs/ALGORITHMS.md` (11, in the 10-point format). Layers — `docs/ARCHITECTURE.md`. Tests — `docs/TEST_PLAN.md`.

@@ -18,6 +18,7 @@ import {
   academicTeacherReviews,
   type Database,
 } from '@elevate/database';
+import { can } from '@elevate/authorization';
 import { addDays, type BatchId, type IsoDate } from '@elevate/shared-types';
 import { parseClock } from '../../domain';
 import { resolveScope, todayIst, type Actor } from '../context';
@@ -77,9 +78,11 @@ export async function teacherDay(db: Database, actor: Actor, now = new Date()) {
         .from(academicSessionDemoAttendees)
         .where(and(inArray(academicSessionDemoAttendees.sessionId, past.map((s) => s.id)), inArray(academicSessionDemoAttendees.status, ['present', 'late'])))
     : [];
-  const reviewed = new Set(
-    (await db.select({ id: academicTeacherReviews.opsDemoSessionId }).from(academicTeacherReviews).where(and(eq(academicTeacherReviews.authorStaffId, staffId), eq(academicTeacherReviews.status, 'submitted')))).map((r) => r.id),
-  );
+  const ownReviews = await db
+    .select({ id: academicTeacherReviews.opsDemoSessionId, status: academicTeacherReviews.status })
+    .from(academicTeacherReviews)
+    .where(and(eq(academicTeacherReviews.authorStaffId, staffId), inArray(academicTeacherReviews.status, ['submitted', 'draft'])));
+  const reviewed = new Set(ownReviews.filter((r) => r.status === 'submitted').map((r) => r.id));
   const assessments = scope.batchIds.length
     ? await db.select().from(academicAssessments).where(and(inArray(academicAssessments.batchId, scope.batchIds), eq(academicAssessments.status, 'conducted')))
     : [];
@@ -94,6 +97,8 @@ export async function teacherDay(db: Database, actor: Actor, now = new Date()) {
     today,
     window,
     next,
+    batches: can(actor.user, 'academic:batches:read') ? await listBatches(db, actor) : [],
+    draftReviews: ownReviews.filter((r) => r.status === 'draft').length,
     todays: todays.filter((s) => s.id !== next?.id),
     attendanceMissing: past.filter((s) => (work.get(s.id)?.attendanceMissing ?? 0) > 0).map((s) => ({ ...s, missing: work.get(s.id)!.attendanceMissing })),
     logsMissing: past.filter((s) => !work.get(s.id)?.logSubmitted),
@@ -102,6 +107,16 @@ export async function teacherDay(db: Database, actor: Actor, now = new Date()) {
     support: support.map((r) => ({ ...r.intervention, studentName: r.studentName, due: r.intervention.dueDate !== null && r.intervention.dueDate <= today })),
     hrAttendance: HR_UNAVAILABLE,
   };
+}
+
+/** Student class-attendance worklist (not staff attendance): classes in scope from the last two weeks to today, newest first. */
+export async function attendanceWorklist(db: Database, actor: Actor, now = new Date()) {
+  const today = todayIst(now);
+  const window = { from: addDays(today as IsoDate, -LOOKBACK_DAYS) as string, to: today };
+  const nowMin = istMinutes(now);
+  const sessions = (await listSessions(db, actor, window)).filter(isLive).reverse();
+  const work = await sessionWork(db, sessions);
+  return { today, window, rows: sessions.map((s) => ({ ...s, ended: hasEnded(s, today, nowMin), unmarked: work.get(s.id)!.attendanceMissing })) };
 }
 
 export async function coordinatorOverview(db: Database, actor: Actor, now = new Date()) {

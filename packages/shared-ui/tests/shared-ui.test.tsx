@@ -139,13 +139,25 @@ function shell(props: Partial<AppShellProps> = {}) {
 }
 
 describe('AppShell sidebar', () => {
-  it('shows the inline logo (named "Elevate Education") linking home, and Overview', () => {
+  it('shows the inline logo (named "Elevate Education") linking home; Overview only on the platform', () => {
     const html = shell();
     expect(html).toMatch(
       /<a class="el-sidebar-brand" href="\/"><svg class="el-brand-logo el-brand-logo-sm"[^>]*role="img" aria-label="Elevate Education"/,
     );
     expect(html).not.toContain('<img');
-    expect(html).toMatch(/href="\/"[^>]*><svg[^>]*>.*?<\/svg><span>Overview<\/span>/);
+    expect(html).not.toContain('<span>Overview</span>');
+    expect(shell({ current: 'platform' })).toMatch(
+      /href="\/"[^>]*><svg[^>]*>.*?<\/svg><span>Overview<\/span>/,
+    );
+  });
+
+  it('links each workspace to its own origin when given (D-072)', () => {
+    const html = shell({
+      moduleHrefs: { ops: 'http://localhost:3000/ops', academic: 'http://localhost:3001/academic' },
+    });
+    expect(html).toContain('href="http://localhost:3001/academic"');
+    expect(html).toContain('href="http://localhost:3000/ops" data-current="true"');
+    expect(html).toContain('href="/ops/workspaces"');
   });
 
   it('lists only the modules the user can open; other modules are entry links', () => {

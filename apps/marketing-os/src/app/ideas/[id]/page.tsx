@@ -35,7 +35,7 @@ export default async function IdeaDetailPage({
     <MarketingPage
       permission="marketing:ideas:read"
       path={modulePath(`ideas/${id}`)}
-      active="ideas"
+      active="calendar"
       title="Idea"
       searchParams={await searchParams}
     >

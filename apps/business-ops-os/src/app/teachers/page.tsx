@@ -2,6 +2,7 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { EmptyState, PageHeader } from '@elevate/shared-ui';
 import { getTeacherProfile, listTeachers, subjectCatalogue } from '../../server/teachers';
 import { humanise } from '../../ui/format';
+import { PeopleNav } from '../../ui/admissions-nav';
 import { Frame, gate, load, Section } from '../../ui/frame';
 import { listHref, options, SearchPanel } from '../../ui/list-controls';
 import { RecordModal } from '../../ui/record-modal';
@@ -22,6 +23,7 @@ export default async function TeachersPage({ searchParams }: { searchParams: Pro
     <Frame access={access} active="teachers">
       <PageHeader
         title="Teachers"
+        tabs={<PeopleNav current="teachers" user={access.user} />}
         description="Who teaches what, today's classes from Academic OS, and open tasks and EOD status where you may see them."
       />
       <Section>

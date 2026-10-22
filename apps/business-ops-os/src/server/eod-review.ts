@@ -27,7 +27,8 @@ import {
 } from './context';
 import { audit, canReviewReport, readerOf } from './eod-reports';
 import type { EodInboxQuery, EodReviewInput } from './eod-schemas';
-import { notifyOthers, rowById } from './ops-common';
+import { rowById } from './ops-common';
+import { notifyHosted } from './task-links';
 import { createTask } from './staff-tasks';
 import { taskBody } from './staff-tasks-schemas';
 
@@ -127,14 +128,20 @@ export async function reviewReport(
           .returning()
       : [row];
     if (input.kind !== 'viewed')
-      await notifyOthers(tx, actor, await userIdsForStaff(tx, [row.staffId]), {
-        kind: `eod.${input.kind}`,
-        title: `${REVIEW_LABELS[input.kind]}: your report for ${fmtDate(row.reportDate)}`,
-        body: input.text ?? null,
-        link: `/ops/tasks?tab=eod&date=${row.reportDate}`,
-        entityType: 'eod_report',
-        entityId: row.id,
-      });
+      await notifyHosted(
+        tx,
+        actor,
+        await userIdsForStaff(tx, [row.staffId]),
+        'work',
+        `/tasks?tab=eod&date=${row.reportDate}`,
+        {
+          kind: `eod.${input.kind}`,
+          title: `${REVIEW_LABELS[input.kind]}: your report for ${fmtDate(row.reportDate)}`,
+          body: input.text ?? null,
+          entityType: 'eod_report',
+          entityId: row.id,
+        },
+      );
     await audit(
       tx,
       actor,

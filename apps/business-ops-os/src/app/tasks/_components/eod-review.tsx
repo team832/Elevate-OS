@@ -8,7 +8,8 @@ import { load } from '../../../ui/frame';
 import { RecordModal } from '../../../ui/record-modal';
 import { DetailTable, Segment } from '../../../ui/sections';
 import { EodFactsView, EodHistory } from './eod-facts';
-import { EOD_API, EodDownloads, EodStatus } from './eod-views';
+import { EodDownloads, EodStatus } from './eod-views';
+import { taskPaths } from './task-views';
 
 const REQUESTS = [
   ['comment', 'Comment', 'Add comment', 'Your comment'],
@@ -26,11 +27,14 @@ export async function ReviewPane({
   user,
   id,
   closeHref,
+  base,
 }: {
   user: AuthenticatedUser;
   id: string;
   closeHref: string;
+  base: string;
 }) {
+  const EOD_API = taskPaths(base).eodApi;
   const r = await load((db) => getReport(db, user, id, { checkSource: true }));
   if (!r.ok) return r.view;
   const rep = r.data;
@@ -69,7 +73,7 @@ export async function ReviewPane({
                 title="What they wrote"
                 level={3}
                 flush
-                actions={<EodDownloads id={rep.id} />}
+                actions={<EodDownloads id={rep.id} base={base} />}
               >
                 <DetailTable
                   rows={[
@@ -86,7 +90,7 @@ export async function ReviewPane({
                   ]}
                 />
               </Segment>
-              <EodFactsView f={rep.facts} level={3} />
+              <EodFactsView f={rep.facts} base={base} level={3} />
             </div>
           ),
         },
@@ -94,7 +98,7 @@ export async function ReviewPane({
           key: 'history',
           label: 'Versions and responses',
           count: rep.trail.length,
-          content: <EodHistory r={rep} level={3} />,
+          content: <EodHistory r={rep} base={base} level={3} />,
         },
         {
           key: 'respond',

@@ -1,0 +1,2 @@
+ALTER TABLE "core"."users" ADD COLUMN "preferred_workspace" text;--> statement-breakpoint
+ALTER TABLE "core"."users" ADD CONSTRAINT "users_preferred_workspace_check" CHECK ("core"."users"."preferred_workspace" IS NULL OR "core"."users"."preferred_workspace" IN ('ops', 'academic', 'marketing'));

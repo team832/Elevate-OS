@@ -12,38 +12,15 @@ import {
   TextInput,
 } from '@elevate/shared-ui';
 import { isIsoDate, toIsoDate, type IsoDate } from '@elevate/shared-types';
-import {
-  METRIC_KEYS,
-  coverageLabel,
-  formatIst,
-  modulePath,
-  type AggregatedMetric,
-} from '../../../domain';
+import { METRIC_KEYS, formatIst, modulePath } from '../../../domain';
 import { weeklyReport } from '../../../server';
-import { IntegrationBadge } from '../../../ui/badges';
-import { MarketingPage, Section, param, type SearchParams, METRICS_TABS } from '../../../ui/shell';
+import { IntegrationBadge, MetricCell } from '../../../ui/badges';
+import { MarketingPage, Section, param, type SearchParams } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Weekly report' };
 
 const nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
-
-function MetricCell({ m }: { m: AggregatedMetric }) {
-  if (m.status === 'not_applicable') return <span className="el-field-hint">n/a</span>;
-  if (m.status === 'missing') return <StatusBadge tone="neutral">missing</StatusBadge>;
-  return (
-    <span title={coverageLabel(m)}>
-      {m.status === 'estimated' ? '≈ ' : ''}
-      {nf.format(m.value ?? 0)}
-      {m.status === 'partial' ? (
-        <span className="el-field-hint">
-          {' '}
-          ({m.withData}/{m.applicable} posts)
-        </span>
-      ) : null}
-    </span>
-  );
-}
 
 export default async function WeeklyReportPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
@@ -54,9 +31,8 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
     <MarketingPage
       permission="marketing:metrics:read"
       path={modulePath('metrics/weekly')}
-      active="weekly"
+      active="reports"
       title="Weekly report"
-      tabs={METRICS_TABS}
       description="Monday to Sunday (IST), from imported exports only. Missing values are never added as zero."
       searchParams={sp}
     >

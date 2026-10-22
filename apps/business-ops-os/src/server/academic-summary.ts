@@ -4,6 +4,7 @@
  * activity. Business Ops never writes Academic data. fetchInternal returns `unavailable` instead of throwing: screens and reports then say
  * "Source unavailable (checked <time>)", never zeros.
  */
+import { appOrigin } from '@elevate/configuration/workspaces';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   opsDemoSessions,
@@ -27,7 +28,7 @@ export { academicStudentSummaryV1Schema as academicStudentSummarySchema };
 
 /** Absolute URL of an Academic OS path (`/academic/...`) for server-to-server calls. */
 export const academicUrl = (path: string) =>
-  `${(process.env.ACADEMIC_OS_URL ?? process.env.PLATFORM_URL ?? 'http://localhost:3000').replace(/\/+$/, '')}${path}`;
+  `${appOrigin('academic')}${path}`;
 
 const fetchAcademic = <S extends Parameters<typeof fetchInternal>[1]>(path: string, schema: S) =>
   fetchInternal(academicUrl(path), schema, { caller: 'ops', timeoutMs: 3000 });

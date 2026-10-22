@@ -66,3 +66,14 @@ for audit rows where the rule matters.
 - The wave-3 cross-module flow (Ops publishes → Academic consumes → Ops consumes the reply) is
   simulated here by publishing the Ops event in the test; the Ops consumer is Business Ops' work.
 - PostgreSQL 18 (dev) vs PGlite 17 (tests) differences (D-025).
+
+
+## 4. Added on 22 Oct 2026 (role workspaces, D-072 / D-073)
+| File | Covers |
+|---|---|
+| `integration/work-mount.test.tsx` (new) | a teacher logs and lists own tasks through the `/academic/api/v1/staff-tasks` routes; another teacher does not see them; My day shows the counts |
+| `integration/teacher-privacy.test.ts` (new) | teacher A cannot open teacher B's student by page or API (404, no data); B can, without private fields (DOB, email, phone, guardian name, relationship, email, phone all `null`) |
+| `integration/teachers-myday.test.ts` (changed) | student attendance worklist: own classes newest first, unmarked placed students counted only for ended classes |
+| `unit/screens.test.tsx` (changed) | Academic navigation: teacher sidebar with Tasks and EOD under `/academic`, never `/ops`; links to another workspace only for its members, as an absolute URL |
+
+Shared tests for the mounted screens live in Business Ops: `apps/business-ops-os/tests/integration/shared-entries.test.tsx`, `meetings-body.test.tsx`.

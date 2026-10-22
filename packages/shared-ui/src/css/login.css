@@ -156,3 +156,54 @@
     padding: var(--el-space-6);
   }
 }
+
+/* --- workspace chooser (D-072): the sign-in frame, one column, one button per workspace --- */
+.el-login.el-workspaces {
+  max-width: 30rem;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'brand' 'card';
+}
+.el-workspace-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--el-space-3);
+}
+.el-workspace-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--el-space-2);
+}
+.el-workspace-option {
+  display: flex;
+  gap: var(--el-space-3);
+  align-items: flex-start;
+  width: 100%;
+  padding: var(--el-space-3) var(--el-space-4);
+  border: 1px solid var(--el-border-strong);
+  border-radius: var(--el-radius-sm);
+  background: var(--el-well);
+  color: var(--el-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.el-workspace-option:hover {
+  border-color: var(--el-accent);
+}
+.el-workspace-option > .el-icon {
+  margin-top: 0.125rem;
+  color: var(--el-accent-text);
+}
+.el-workspace-purpose {
+  display: block;
+  margin-top: var(--el-space-1);
+  color: var(--el-text-muted);
+  font-size: var(--el-text-sm);
+}
+.el-workspace-default {
+  color: var(--el-accent-text);
+  font-size: var(--el-text-sm);
+}

@@ -19,16 +19,22 @@ describe('contentSecurityPolicy', () => {
     expect(d.get('style-src-attr')).toBe("style-src-attr 'unsafe-inline'");
     expect(d.get('img-src')).toBe("img-src 'self' data:");
     expect(d.get('connect-src')).toBe("connect-src 'self'");
-    for (const fixed of ["object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"]) {
+    for (const fixed of ["object-src 'none'", "base-uri 'self'", "frame-ancestors 'none'"]) {
       expect(d.get(fixed.split(' ')[0])).toBe(fixed);
     }
     expect(d.has('upgrade-insecure-requests')).toBe(true);
+    // D-072: sign-in may redirect a form post to another workspace origin; nothing else.
+    expect(
+      contentSecurityPolicy('n', prod, ['http://localhost:3000', 'http://localhost:3001']),
+    ).toContain("form-action 'self' http://localhost:3000 http://localhost:3001;");
   });
 
   it('development relaxes only what next dev needs', () => {
     const csp = contentSecurityPolicy('n0nce', dev);
     const d = directives(csp);
-    expect(d.get('script-src')).toBe("script-src 'self' 'nonce-n0nce' 'strict-dynamic' 'unsafe-eval'");
+    expect(d.get('script-src')).toBe(
+      "script-src 'self' 'nonce-n0nce' 'strict-dynamic' 'unsafe-eval'",
+    );
     expect(d.get('style-src')).toBe("style-src 'self' 'unsafe-inline'");
     expect(d.get('connect-src')).toBe("connect-src 'self' ws: wss:");
     expect(d.has('upgrade-insecure-requests')).toBe(false);
@@ -36,7 +42,9 @@ describe('contentSecurityPolicy', () => {
   });
 
   it('plain-http production (local next start) does not upgrade requests', () => {
-    expect(contentSecurityPolicy('n', { dev: false, https: false })).not.toContain('upgrade-insecure-requests');
+    expect(contentSecurityPolicy('n', { dev: false, https: false })).not.toContain(
+      'upgrade-insecure-requests',
+    );
   });
 });
 
@@ -45,7 +53,9 @@ describe('securityHeaders', () => {
     const map = new Map(securityHeaders(prod).map((h) => [h.key, h.value]));
     expect(map.get('X-Content-Type-Options')).toBe('nosniff');
     expect(map.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
-    expect(map.get('Permissions-Policy')).toBe('camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+    expect(map.get('Permissions-Policy')).toBe(
+      'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    );
     expect(map.get('Cross-Origin-Opener-Policy')).toBe('same-origin');
     expect(map.get('X-Robots-Tag')).toBe('noindex, nofollow');
     expect(map.get('Strict-Transport-Security')).toBe('max-age=31536000');
@@ -55,9 +65,17 @@ describe('securityHeaders', () => {
 
 describe('cspModeFromEnv', () => {
   it('derives dev and https from NODE_ENV and PLATFORM_URL', () => {
-    expect(cspModeFromEnv({ NODE_ENV: 'development', PLATFORM_URL: 'https://x.test' })).toEqual({ dev: true, https: false });
-    expect(cspModeFromEnv({ NODE_ENV: 'production', PLATFORM_URL: 'https://x.test' })).toEqual({ dev: false, https: true });
-    expect(cspModeFromEnv({ NODE_ENV: 'production', PLATFORM_URL: 'http://localhost:3000' })).toEqual({ dev: false, https: false });
+    expect(cspModeFromEnv({ NODE_ENV: 'development', PLATFORM_URL: 'https://x.test' })).toEqual({
+      dev: true,
+      https: false,
+    });
+    expect(cspModeFromEnv({ NODE_ENV: 'production', PLATFORM_URL: 'https://x.test' })).toEqual({
+      dev: false,
+      https: true,
+    });
+    expect(
+      cspModeFromEnv({ NODE_ENV: 'production', PLATFORM_URL: 'http://localhost:3000' }),
+    ).toEqual({ dev: false, https: false });
     expect(cspModeFromEnv({ NODE_ENV: 'production' })).toEqual({ dev: false, https: false });
   });
 });

@@ -6,6 +6,8 @@ import { CoverageSection, FeasibilitySection } from '../../src/ui/batch-sections
 import { ConflictList } from '../../src/ui/conflicts';
 import { InterventionsTable } from '../../src/ui/interventions';
 import { TeacherHome } from '../../src/ui/my-day';
+import { AppShell } from '@elevate/shared-ui';
+import { navFor, workspaceLink } from '../../src/ui/shell';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push() {}, refresh() {} }) }));
 
@@ -179,6 +181,8 @@ describe('Batch, support and teacher views', () => {
       ],
       assessmentsToMark: [],
       support: [],
+      batches: [],
+      draftReviews: 2,
       hrAttendance: 'Not available',
     };
     const out = html(<TeacherHome day={day as never} />);
@@ -189,6 +193,34 @@ describe('Batch, support and teacher views', () => {
     );
     expect(out).toContain('No more classes today');
     expect(out).toContain('Marking a class delivered is not HR attendance.');
-    expect(out).toContain('Attendance not recorded (0)');
+    expect(out).toContain('Student attendance not recorded (0)');
+    expect(out).toContain('Your batches (0)');
+    expect(out).toContain('No batch is assigned to you today.');
+    expect(out).toContain('2 review drafts not submitted yet</a>');
+  });
+});
+
+describe('Academic navigation (brief §6)', () => {
+  const as = (...roles: string[]) => ({ id: 'u1', roles }) as never;
+  it.each([
+    ['teacher', ['My day', 'My meetings', 'Timetable', 'My batches', 'Students', 'Student attendance', 'Teaching logs', 'Curriculum', 'Assessments', 'Student reviews', 'My tasks', 'My EOD report']],
+    ['academic_coordinator', ['My day', 'Timetable', 'Batches', 'Students', 'Student attendance', 'Teaching logs', 'Curriculum', 'Assessments', 'Student reviews', 'My tasks', 'My EOD report', 'Teachers', 'Enrolments', 'Enrolment intake', 'Progress and support', 'Reports', 'Academic settings']],
+    ['marketing_manager', ['My tasks', 'My EOD report']], // own tasks only; the workspace gate keeps them out of this shell
+  ])('%s sees its items in order; Coordination only with all-scope permissions', (role, labels) => {
+    expect(navFor(as(role)).map((n) => n.label)).toEqual(labels);
+  });
+
+  it('renders the teacher sidebar with Tasks and EOD under /academic, never /ops', () => {
+    const teacher = { id: 'u1', roles: ['teacher'], email: 't@example.test', displayName: 'Sample Teacher' } as never;
+    const out = html(<AppShell user={teacher} modules={['academic']} current="academic" logoutAction="/academic/api/v1/auth/logout" nav={navFor(teacher)}>x</AppShell>);
+    for (const [href, label] of [['/academic/meetings', 'My meetings'], ['/academic/tasks', 'My tasks'], ['/academic/tasks?tab=eod', 'My EOD report']]) {
+      expect(out).toContain(`href="${href}"><span class="el-nav-mark" aria-hidden="true"></span><span>${label}</span>`);
+    }
+    expect(out).not.toContain('/ops');
+  });
+
+  it('links to another workspace only for its members, as an absolute URL', () => {
+    expect(workspaceLink(as('teacher'), 'ops', '/students/x')).toBeNull();
+    expect(workspaceLink(as('admissions_counsellor'), 'ops', '/students/x')).toMatch(/^https?:\/\/[^/]+\/ops\/students\/x$/);
   });
 });

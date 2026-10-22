@@ -14,6 +14,8 @@ export const MODULE_PATHS = {
   timetable: modulePath('timetable'),
   teaching: modulePath('teaching'),
   attendance: (sessionId: string) => modulePath(`teaching/attendance/${sessionId}`),
+  /** Student class-attendance worklist (not staff attendance). */
+  studentAttendance: modulePath('attendance'),
   assessments: modulePath('assessments'),
   assessment: (id: string) => modulePath(`assessments/${id}`),
   students: modulePath('students'),
@@ -22,6 +24,10 @@ export const MODULE_PATHS = {
   intake: modulePath('intake'),
   teachingLog: (sessionId: string) => modulePath(`teaching/log/${sessionId}`),
   reviews: modulePath('reviews'),
+  /** Shared task tracker and EOD report (`?tab=eod`), from @elevate/business-ops-os/work. */
+  tasks: modulePath('tasks'),
+  /** The caller's own meetings, read-only, from @elevate/business-ops-os/work. */
+  meetings: modulePath('meetings'),
   review: (id: string) => modulePath(`reviews/${id}`),
   /** Prefill with `?studentId=&sessionId=` (enrolled) or `?coreStudentId=&opsDemoSessionId=` (demo). */
   newReview: modulePath('reviews/new'),

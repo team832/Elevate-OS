@@ -58,9 +58,10 @@ const SIZES = {
 const LEAD = 1.35;
 const PAD = 4;
 
-// Next runs with cwd = the app folder; the root test runner with cwd = the repo root.
+// Next runs with cwd = the app folder (or another workspace app serving the shared work
+// entry, D-073); the root test runner with cwd = the repo root.
 const FONT_DIR =
-  ['assets/fonts', 'apps/business-ops-os/assets/fonts']
+  ['assets/fonts', 'apps/business-ops-os/assets/fonts', '../business-ops-os/assets/fonts']
     .map((p) => path.resolve(p))
     .find(existsSync) ?? 'assets/fonts';
 let fontBytes: [Buffer, Buffer] | undefined;

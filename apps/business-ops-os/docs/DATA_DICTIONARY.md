@@ -114,6 +114,7 @@ One login account. Written only by authentication and platform admin.
 | `password_hash` | text | no |  |  | Password hash. |
 | `status` | text | yes (default active) | `active`, `disabled` | active | Current state (allowed values listed). |
 | `last_login_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | Last sign-in (UTC). |
+| `preferred_workspace` | text | no | `ops`, `academic`, `marketing` | ops | Preferred workspace. |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
 | `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
 

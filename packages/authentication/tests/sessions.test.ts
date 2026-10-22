@@ -204,7 +204,9 @@ describe('login / logout handlers', () => {
       password: 'fictional-password-1',
       next: '//evil.example',
     });
-    expect(evil.headers.get('location')).toBe('/');
+    // Never the attacker's host: the platform resolves the teacher's workspace instead (D-072).
+    expect(evil.headers.get('location')).not.toContain('evil');
+    expect(evil.headers.get('location')).toMatch(/^(\/|http:\/\/localhost:300[0-3]\/)/);
     const bad = await form({
       email: 'tara.teacher@example.test',
       password: 'wrong-password',
