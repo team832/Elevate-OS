@@ -279,6 +279,66 @@ export class PdfBuilder {
     this.y -= this.p.body / 2;
   }
 
+  /**
+   * Horizontal bars with the value printed beside each (report charts). `max` is the value that
+   * fills a bar (100 for percentages); default: the largest value. A null value draws no bar and
+   * prints `missingText` (absent is never 0). Every label and value also lands in `lines`.
+   */
+  bars(
+    rows: { label: string; value: number | null; text?: string; note?: string }[],
+    { max, missingText = 'Not recorded' }: { max?: number; missingText?: string } = {},
+  ) {
+    const known = rows.map((r) => r.value).filter((v): v is number => v !== null);
+    const full = max ?? Math.max(1, ...known);
+    const size = this.p.body;
+    const rowH = size * LEAD + 5;
+    const labelW = this.width * 0.34;
+    const valueW = this.width * 0.16;
+    const trackX = this.p.margin + labelW + PAD;
+    const trackW = this.width - labelW - valueW - 2 * PAD;
+    for (const r of rows) {
+      const noteLines = r.note
+        ? this.wrap(this.clean(r.note), this.regular, size * 0.85, this.width - labelW)
+        : [];
+      this.ensure(rowH + noteLines.length * size * LEAD);
+      this.y -= rowH;
+      const base = this.y + 4;
+      const [label] = this.wrap(this.clean(r.label), this.regular, size, labelW - PAD);
+      this.text(label ?? '', this.p.margin, base, this.regular, size);
+      this.page.drawRectangle({
+        x: trackX,
+        y: base - 1,
+        width: trackW,
+        height: size * 0.7,
+        color: RULE,
+      });
+      if (r.value !== null) {
+        const w = Math.max(1, Math.min(1, r.value / full) * trackW);
+        this.page.drawRectangle({
+          x: trackX,
+          y: base - 1,
+          width: w,
+          height: size * 0.7,
+          color: ACCENT,
+        });
+      }
+      const value = r.value === null ? missingText : (r.text ?? String(r.value));
+      this.text(
+        this.clean(value),
+        trackX + trackW + PAD,
+        base,
+        this.bold,
+        size,
+        r.value === null ? MUTED : INK,
+      );
+      for (const line of noteLines) {
+        this.y -= size * LEAD * 0.9;
+        this.text(line, trackX, this.y + 4, this.regular, size * 0.85, MUTED);
+      }
+    }
+    this.y -= this.p.body / 2;
+  }
+
   /** Wrapping cells; the header row repeats on every page; a tall row continues on the next page. */
   table(columns: Column[], rows: Cell[][]) {
     const widths = columns.map((c) => c.width);

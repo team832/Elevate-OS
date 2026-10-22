@@ -16,17 +16,40 @@ import { toAppError, zodIssues } from './errors';
 
 /**
  * Server-to-server calls between zones use `/<zone>/api/internal/v1/...`
- * routes protected by a shared bearer token (INTERNAL_SERVICE_TOKEN) and a
- * caller header naming the calling module:
- *   Authorization: Bearer <INTERNAL_SERVICE_TOKEN>
+ * routes protected by a bearer token and a caller header naming the calling module:
+ *   Authorization: Bearer <token>
  *   X-Elevate-Caller: ops
+ * With one shared INTERNAL_SERVICE_TOKEN the caller header is self-declared. With
+ * INTERNAL_SERVICE_TOKENS (`ops:<token>,academic:<token>,…`) each module has its own token,
+ * the caller is the module whose token matched, and a header naming another module is refused.
  * Internal routes are never called from browsers.
  */
 export const CALLER_HEADER = 'x-elevate-caller';
 
+type ModuleTokens = Partial<Record<ModuleKey, string>>;
+
 export function getInternalServiceToken(): string {
   return loadEnvKeys(['INTERNAL_SERVICE_TOKEN'], process.env, 'internal-service')
     .INTERNAL_SERVICE_TOKEN;
+}
+
+/** Per-module tokens from INTERNAL_SERVICE_TOKENS, or undefined when the single token is in use. */
+export function getInternalServiceTokens(
+  raw = process.env.INTERNAL_SERVICE_TOKENS,
+): ModuleTokens | undefined {
+  if (!raw) return undefined;
+  const tokens: ModuleTokens = {};
+  for (const entry of raw.split(',')) {
+    const at = entry.indexOf(':');
+    const module = entry.slice(0, at).trim();
+    const token = entry.slice(at + 1).trim();
+    if (!isModuleKey(module) || token.length < 32)
+      throw new Error(
+        'INTERNAL_SERVICE_TOKENS must be <module>:<token> pairs (ops, academic, marketing, platform; tokens of 32+ characters).',
+      );
+    tokens[module] = token;
+  }
+  return tokens;
 }
 
 function constantTimeEquals(a: string, b: string): boolean {
@@ -39,14 +62,22 @@ function constantTimeEquals(a: string, b: string): boolean {
 export function verifyInternalRequest(
   request: Request,
   expectedToken: string = getInternalServiceToken(),
+  tokens: ModuleTokens | undefined = getInternalServiceTokens(),
 ): ModuleKey {
   const header = request.headers.get('authorization') ?? '';
-  const match = /^Bearer (.+)$/.exec(header);
-  if (!match || !constantTimeEquals(match[1] ?? '', expectedToken)) {
+  const bearer = /^Bearer (.+)$/.exec(header)?.[1] ?? '';
+  const owner = tokens
+    ? (Object.entries(tokens) as [ModuleKey, string][]).find(([, t]) =>
+        constantTimeEquals(bearer, t),
+      )?.[0]
+    : undefined;
+  if (tokens ? !owner : !constantTimeEquals(bearer, expectedToken)) {
     throw new UnauthenticatedError('Internal routes need a valid service token.');
   }
   const caller = request.headers.get(CALLER_HEADER);
   if (!isModuleKey(caller)) throw new ForbiddenError(`Missing or unknown ${CALLER_HEADER} header.`);
+  if (owner && caller !== owner)
+    throw new ForbiddenError(`The service token belongs to "${owner}", not "${caller}".`);
   return caller;
 }
 
@@ -153,7 +184,7 @@ export async function fetchInternal<S extends z.ZodType>(
   try {
     const response = await (options.fetchImpl ?? fetch)(url, {
       headers: {
-        authorization: `Bearer ${options.token ?? getInternalServiceToken()}`,
+        authorization: `Bearer ${options.token ?? getInternalServiceTokens()?.[options.caller] ?? getInternalServiceToken()}`,
         [CALLER_HEADER]: options.caller,
         accept: 'application/json',
       },

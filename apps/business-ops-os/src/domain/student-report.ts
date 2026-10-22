@@ -1,21 +1,25 @@
 /**
- * Student progress reports (owner brief §10, acceptance 17 + 21). Pure.
- * - Sections depend on the AUDIENCE and the author's permissions. Guardian and student reports
- *   never get raw teacher feedback, guardians, status history or private payments; a fee
- *   statement (totals only) appears only when explicitly requested by someone who may read fees.
+ * Student reports (owner brief §10, acceptance 17 + 21; two owner kinds, 23 Oct 2026, D-078). Pure.
+ * - A report KIND is its audience: the PTM report (`guardian`) and the internal report (`internal`)
+ *   are the owner's kinds; `student` and `admin_dossier` stay. Sections depend on the kind and the
+ *   author's permissions. Family kinds never get internal remarks, KYC, guardians, status history
+ *   or private payments; a fee statement (totals only) appears only when explicitly requested by
+ *   someone who may read fees.
  * - The snapshot is built once from structured records and rendered later without re-reading
  *   live data. Marks are copied as recorded: absent stays absent (never 0); comparisons only
  *   inside one assessment and its cohort; trends need 2+ scored results of the same exam type.
- * - The constructive summary is deterministic: measured evidence, the teacher's shareable
- *   strengths / areas / next steps (never the raw observation), and empty-state sentences
- *   instead of invented strengths. No AI rewriting.
+ * - The constructive summary is deterministic (no AI): measured evidence, the teacher's shareable
+ *   strengths / areas / next steps (never the raw observation), empty-state sentences instead of
+ *   invented strengths. The affirmative tone (PTM) leads with the strongest measured positive and
+ *   frames gaps as things to work on; the neutral tone (internal) states them plainly.
  */
 import type { AcademicStudentSummaryV1 } from '@elevate/shared-contracts';
 import { istToday } from './dates';
 
-export const REPORT_TEMPLATE_VERSION = 'progress-report/1';
+export const REPORT_TEMPLATE_VERSION = 'progress-report/2';
 export const REPORT_SECTIONS = [
   'overview',
+  'kyc',
   'programmes',
   'results',
   'attendance',
@@ -26,7 +30,37 @@ export const REPORT_SECTIONS = [
 ] as const;
 export type ReportSection = (typeof REPORT_SECTIONS)[number];
 export type ReportAudience = 'internal' | 'guardian' | 'student' | 'admin_dossier';
+export type ReportTone = 'affirmative' | 'neutral';
 export const NEXT_STEP_LABEL = 'Proposed next step — not yet agreed with the teacher';
+
+/** Kind labels (D-078), the owner's two kinds first: used on screens and as the PDF title. */
+export const REPORT_KIND_LABELS: Record<ReportAudience, string> = {
+  guardian: 'PTM report (for parents)',
+  internal: 'Internal report (KYC, student details, scores, reviews)',
+  student: 'Student report',
+  admin_dossier: 'Administration dossier',
+};
+/** Kinds offered on the screen: owner kinds first, limited to the enabled setting. */
+export const reportKinds = (enabled: readonly ReportAudience[]) =>
+  (Object.keys(REPORT_KIND_LABELS) as ReportAudience[]).filter((k) => enabled.includes(k));
+
+/** Headings per tone; the PTM report frames gaps as things to work on (owner, 23 Oct 2026). */
+export const REPORT_HEADINGS = {
+  neutral: {
+    strengths: 'Strengths',
+    areas: 'Areas for improvement',
+    nextSteps: NEXT_STEP_LABEL,
+    reviewAreas: 'Areas needing support',
+    reviewNext: 'Suggested next step',
+  },
+  affirmative: {
+    strengths: 'Strengths',
+    areas: 'Where to work on',
+    nextSteps: 'Next steps',
+    reviewAreas: 'Where to work on',
+    reviewNext: 'Next steps',
+  },
+} as const satisfies Record<ReportTone, Record<string, string>>;
 
 export interface ReportPermissions {
   fees: boolean;
@@ -34,41 +68,55 @@ export interface ReportPermissions {
   feedback: boolean;
 }
 
-const FAMILY: readonly ReportSection[] = [
-  'overview',
-  'programmes',
-  'results',
-  'attendance',
-  'summary',
-];
-const isFamily = (a: ReportAudience) => a === 'guardian' || a === 'student';
+export const isFamily = (a: ReportAudience) => a === 'guardian' || a === 'student';
+export const toneOf = (a: ReportAudience): ReportTone => (isFamily(a) ? 'affirmative' : 'neutral');
 
-/** Sections a report holds: by audience, author permissions and (optionally) the requested subset. */
+/** Sections each kind may hold (ruling 23 Oct 2026); programmes and KYC fold into the overview. */
+const KIND_SECTIONS: Record<ReportAudience, readonly ReportSection[]> = {
+  internal: ['overview', 'kyc', 'results', 'attendance', 'feedback', 'fees', 'summary'],
+  admin_dossier: [
+    'overview',
+    'programmes',
+    'results',
+    'attendance',
+    'feedback',
+    'fees',
+    'guardians',
+  ],
+  guardian: ['overview', 'results', 'attendance', 'feedback', 'fees', 'summary'],
+  student: ['overview', 'results', 'attendance', 'feedback', 'fees', 'summary'],
+};
+const NEEDS: Partial<Record<ReportSection, keyof ReportPermissions>> = {
+  fees: 'fees',
+  kyc: 'privateData',
+  guardians: 'privateData',
+  feedback: 'feedback',
+};
+const permitted = (s: ReportSection, can: ReportPermissions) => {
+  const need = NEEDS[s];
+  return !need || can[need];
+};
+
+/**
+ * Sections a report holds: by kind, author permissions and (optionally) the requested subset.
+ * A family fee statement must be asked for explicitly.
+ */
 export function reportSections(
   audience: ReportAudience,
   can: ReportPermissions,
   requested?: readonly ReportSection[],
 ): ReportSection[] {
-  const allowed = (s: ReportSection) =>
-    (s !== 'fees' || can.fees) &&
-    (s !== 'guardians' || can.privateData) &&
-    (s !== 'feedback' || can.feedback);
-  return REPORT_SECTIONS.filter((s) =>
-    isFamily(audience)
-      ? (FAMILY.includes(s) && (!requested || requested.includes(s))) ||
-        (s === 'fees' && can.fees && !!requested?.includes('fees'))
-      : s !== 'summary' && allowed(s) && (!requested || requested.includes(s)),
+  return REPORT_SECTIONS.filter(
+    (s) =>
+      KIND_SECTIONS[audience].includes(s) &&
+      permitted(s, can) &&
+      (requested ? requested.includes(s) : !(s === 'fees' && isFamily(audience))),
   );
 }
 
 /** Sections the CURRENT reader may still see (a report never shows more than their permissions). */
 export const readableSections = (sections: readonly ReportSection[], can: ReportPermissions) =>
-  sections.filter(
-    (s) =>
-      (s !== 'fees' || can.fees) &&
-      (s !== 'guardians' || can.privateData) &&
-      (s !== 'feedback' || can.feedback),
-  );
+  sections.filter((s) => permitted(s, can));
 
 export type ReportStatus = 'draft' | 'reviewed' | 'final';
 export type ReportMove =
@@ -112,20 +160,28 @@ type Summary = AcademicStudentSummaryV1;
 type Result = Summary['results'][number];
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
-/** Attended = present + late + partial; rate over recorded classes minus excused; null = nothing countable. */
-export function attendanceFacts(a: Summary['attendance']) {
+/** Attended = present + late + partial. The rate is Academic's own, under its `attendance.denominator` setting; Ops never recomputes it. */
+export function attendanceFacts(
+  // shortcut: ratePercent/definition typed here until the contract carries them (WP-A); drop the intersection then.
+  a: Summary['attendance'] & { ratePercent?: number | null; definition?: string },
+) {
   const recorded = a.present + a.partial + a.late + a.absent + a.excused;
-  const attended = a.present + a.partial + a.late;
-  const countable = recorded - a.excused;
   return {
     ...a,
     recorded,
     notRecorded: Math.max(a.held - recorded, 0),
-    attended,
-    ratePercent: countable > 0 ? round1((attended / countable) * 100) : null,
+    attended: a.present + a.partial + a.late,
+    ratePercent: a.ratePercent ?? null,
+    definition: a.definition ?? null,
   };
 }
 export type AttendanceFacts = ReturnType<typeof attendanceFacts>;
+
+/** Academic's rate with its definition; an absent rate is "Not recorded", never a figure Ops derives. */
+export const attendanceRateText = (a: Pick<AttendanceFacts, 'ratePercent' | 'definition'>) =>
+  a.ratePercent === null
+    ? 'Not recorded'
+    : `${a.ratePercent}%${a.definition ? ` (${a.definition})` : ''}`;
 
 /** Position within the SAME assessment and its cohort only; never across assessments. */
 export function cohortComparison(r: Result): string {
@@ -164,6 +220,7 @@ export function scoreTrends(results: readonly Result[]) {
       return {
         label,
         status: 'insufficient' as const,
+        delta: null,
         text: `insufficient data (${scored.length} scored result${scored.length === 1 ? '' : 's'})`,
       };
     const pct = scored.map((r) => round1((r.score! / r.maxScore) * 100));
@@ -177,6 +234,7 @@ export function scoreTrends(results: readonly Result[]) {
     return {
       label,
       status: 'ok' as const,
+      delta,
       text: `${scored.length} scored results, ${pct[0]}% to ${pct.at(-1)}% (${dir}${dir === 'level' ? '' : ' points'})${formats}`,
     };
   });
@@ -191,42 +249,79 @@ export interface ShareableFeedback {
   actionPlan: string | null;
 }
 
-export function constructiveSummary(input: {
-  attendance: AttendanceFacts | null;
-  results: readonly Result[] | null;
-  /** null = the reviews could not be read (Academic OS unreachable or no feedback access). */
-  feedback: readonly ShareableFeedback[] | null;
-}) {
+const WORDING = {
+  neutral: {
+    missed: 'missed (absent, not counted as zero)',
+    none: {
+      strengths: 'No strengths recorded for this period.',
+      areas: 'No areas for improvement recorded for this period.',
+      nextSteps: 'No next step recorded for this period.',
+    },
+  },
+  affirmative: {
+    missed: 'not attempted (not counted as zero)',
+    none: {
+      strengths: 'No strengths recorded yet.',
+      areas: 'Nothing to work on recorded yet.',
+      nextSteps: 'No next step recorded yet.',
+    },
+  },
+} as const;
+
+export function constructiveSummary(
+  input: {
+    attendance: AttendanceFacts | null;
+    results: readonly Result[] | null;
+    /** null = the reviews could not be read (Academic OS unreachable or no feedback access). */
+    feedback: readonly ShareableFeedback[] | null;
+  },
+  { tone = 'neutral' }: { tone?: ReportTone } = {},
+) {
   const a = input.attendance;
-  const evidence = [
+  const w = WORDING[tone];
+  const affirmative = tone === 'affirmative';
+  // Affirmative: measured positives (attendance ≥ 75%, rising trends) lead; absence counts are never listed.
+  const lines: { text: string; positive?: boolean }[] = [
     !a
-      ? 'Attendance: not available for this period.'
-      : a.ratePercent === null
-        ? 'Attendance: no classes recorded in this period.'
-        : `Attendance: ${a.attended} of ${a.recorded - a.excused} recorded classes attended (${a.ratePercent}%); ${a.excused} excused, ${a.notRecorded} not recorded.`,
+      ? { text: 'Attendance: not available for this period.' }
+      : !a.recorded
+        ? { text: 'Attendance: no classes recorded in this period.' }
+        : {
+            text: `Attendance rate: ${attendanceRateText(a)}. ${a.attended} of ${a.recorded} recorded classes attended${affirmative ? '' : `; ${a.excused} excused, ${a.notRecorded} held but not recorded`}.`,
+            positive: (a.ratePercent ?? 0) >= 75,
+          },
   ];
-  if (!input.results) evidence.push('Results: not available for this period.');
-  else if (!input.results.length) evidence.push('Results: no assessment results in this period.');
+  if (!input.results) lines.push({ text: 'Results: not available for this period.' });
+  else if (!input.results.length)
+    lines.push({ text: 'Results: no assessment results in this period.' });
   else {
     const absent = input.results.filter((r) => r.state === 'absent').length;
-    evidence.push(
-      `Results: ${input.results.length - absent} assessment${input.results.length - absent === 1 ? '' : 's'} scored${absent ? `, ${absent} missed (absent, not counted as zero)` : ''}.`,
-      ...scoreTrends(input.results).map((t) => `Trend — ${t.label}: ${t.text}.`),
+    const scored = input.results.length - absent;
+    lines.push({
+      text: `Results: ${scored} assessment${scored === 1 ? '' : 's'} scored${absent ? `, ${absent} ${w.missed}` : ''}.`,
+    });
+    const trends = scoreTrends(input.results);
+    if (affirmative) trends.sort((x, y) => (y.delta ?? -Infinity) - (x.delta ?? -Infinity));
+    lines.push(
+      ...trends.map((t) => ({
+        text: `Trend — ${t.label}: ${t.text}.`,
+        positive: (t.delta ?? 0) >= 1,
+      })),
     );
   }
-  if (!input.feedback) evidence.push('Teacher reviews: not available for this period.');
+  if (!input.feedback) lines.push({ text: 'Teacher reviews: not available for this period.' });
+  const ordered = affirmative
+    ? [...lines.filter((l) => l.positive), ...lines.filter((l) => !l.positive)]
+    : lines;
   const pick = (k: keyof Omit<ShareableFeedback, 'subject'>) =>
     (input.feedback ?? []).filter((f) => f[k]?.trim()).map((f) => `${f.subject}: ${f[k]!.trim()}`);
-  const strengths = pick('strengths');
-  const areas = pick('areasToImprove');
-  const nextSteps = pick('actionPlan');
   const or = (picked: string[], none: string) =>
     picked.length ? picked : [input.feedback ? none : 'Not available for this period.'];
   return {
-    evidence,
-    strengths: or(strengths, 'No strengths recorded for this period.'),
-    areas: or(areas, 'No areas for improvement recorded for this period.'),
-    nextSteps: or(nextSteps, 'No next step recorded for this period.'),
+    evidence: ordered.map((l) => l.text),
+    strengths: or(pick('strengths'), w.none.strengths),
+    areas: or(pick('areasToImprove'), w.none.areas),
+    nextSteps: or(pick('actionPlan'), w.none.nextSteps),
   };
 }
 export type ConstructiveSummary = ReturnType<typeof constructiveSummary>;

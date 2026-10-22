@@ -1,7 +1,8 @@
 /**
  * Teachers' submitted student reviews, read from Academic OS (owner answer 1, 21 Oct 2026; R4).
- * `ops:feedback:read` is checked before Academic is called; own scope keeps the reviews a reader
- * wrote and those about students they counsel (case counsellor, lead owner or demo counsellor).
+ * `ops:feedback:read` is checked before Academic is called; own scope keeps the reviews about
+ * students the reader counsels (case counsellor, lead owner or demo counsellor), and a reader with
+ * no linked staff record gets `unavailable`, never an empty list.
  * Withdrawn reviews are hidden (every version); superseded versions stay, marked. When Academic
  * cannot be reached the result says so — never "no reviews". Ops' acknowledgements and
  * follow-ups (server/review-acks.ts) are attached per version; the teacher's words are never edited.
@@ -66,10 +67,7 @@ async function inScope(db: Database, access: AccessScope, reviews: AcademicRevie
     access.staffId,
     reviews.map((r) => r.coreStudentId),
   );
-  return reviews.filter(
-    (r) =>
-      r.authorStaffId === access.staffId || (r.coreStudentId && counselled.has(r.coreStudentId)),
-  );
+  return reviews.filter((r) => r.coreStudentId && counselled.has(r.coreStudentId));
 }
 
 /** Acknowledgements per version; Ops' notes and follow-ups only for holders of the right (#11). */
@@ -120,7 +118,11 @@ async function readReviews(
 ): Promise<ReviewsResult> {
   const access = await accessScope(db, actor, 'ops:feedback:read');
   if (access.scope === 'own' && !access.staffId)
-    return { status: 'available', checkedAt: new Date().toISOString(), reviews: [] };
+    return {
+      status: 'unavailable',
+      reason: 'Your account is not linked to a staff record',
+      checkedAt: new Date().toISOString(),
+    };
   const r = await fetchAcademicReviews(query);
   if (r.status === 'unavailable')
     return { status: 'unavailable', reason: r.reason, checkedAt: r.fetchedAt };

@@ -13,29 +13,27 @@ import type { ReactNode } from 'react';
 import { Alert, Card, StatTile } from '@elevate/shared-ui';
 import { fmtDateTime } from './format';
 
-export const ACADEMIC_LABELS: Record<keyof AcademicDeliverySummaryV1['metrics'], string> = {
-  activeStudents: 'Active students',
-  activeBatches: 'Active batches',
+/** Tiles shown; `studentsAtRisk` has no source yet (ACD-022), so it gets no tile rather than "Missing". */
+export const ACADEMIC_LABELS = {
+  activeStudents: 'Active enrolments (now)',
+  activeBatches: 'Active batches (now)',
   classesPlanned: 'Classes planned',
   classesDelivered: 'Classes delivered',
   classesCancelled: 'Classes cancelled',
   attendanceRate: 'Attendance rate',
   assessmentsPlanned: 'Assessments planned',
   assessmentsConducted: 'Assessments conducted',
-  studentsAtRisk: 'Students at risk',
   syllabusCompletionRate: 'Syllabus completion',
-};
+} satisfies Partial<Record<keyof AcademicDeliverySummaryV1['metrics'], string>>;
 
-export const MARKETING_LABELS: Record<keyof MarketingSummaryV1['metrics'], string> = {
+/** Engagement, follower growth and attributed leads are measured by no source, so they get no tile. */
+export const MARKETING_LABELS = {
   ideasCaptured: 'Ideas captured',
   contentApproved: 'Content approved',
   postsScheduled: 'Posts scheduled',
   postsPublished: 'Posts published',
   totalReach: 'Total reach',
-  engagementRate: 'Engagement rate',
-  followerGrowth: 'Follower growth',
-  leadsAttributed: 'Leads attributed',
-};
+} satisfies Partial<Record<keyof MarketingSummaryV1['metrics'], string>>;
 
 /** "Source unavailable (checked <time>)" with the reason; no numbers rather than zeros. */
 export function Unavailable({
@@ -57,13 +55,13 @@ function Tiles<K extends string>({
   metrics,
   labels,
 }: {
-  metrics: Record<K, Metric>;
+  metrics: Record<NoInfer<K>, Metric>;
   labels: Record<K, string>;
 }) {
   return (
     <div className="el-grid">
-      {(Object.keys(labels) as K[]).map((k) => (
-        <StatTile key={k} label={labels[k]} metric={metrics[k]} />
+      {(Object.entries(labels) as [K, string][]).map(([k, label]) => (
+        <StatTile key={k} label={label} metric={metrics[k]} />
       ))}
     </div>
   );

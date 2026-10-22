@@ -6,7 +6,6 @@ import { definePermissions, type PermissionDefinition } from '../types';
 
 export const platformPermissionList = [
   { key: 'platform:module:access', description: 'Open the Elevate OS home.' },
-  { key: 'platform:dashboard:read', description: 'Read the consolidated leadership dashboard.' },
   { key: 'platform:users:read', description: 'List user accounts and their roles.' },
   { key: 'platform:users:manage', description: 'Create, disable and reset user accounts.' },
   { key: 'platform:roles:manage', description: 'Grant and revoke roles.' },
@@ -34,7 +33,6 @@ export const platformPermissions = definePermissions<PlatformPermission>({
     ],
     director: [
       'platform:module:access',
-      'platform:dashboard:read',
       'platform:users:read',
       'platform:audit:read',
       'platform:approvals:read',
@@ -62,13 +60,11 @@ export const platformPermissions = definePermissions<PlatformPermission>({
     ],
     operations_manager: [
       'platform:module:access',
-      'platform:dashboard:read',
       'platform:approvals:read',
       { permission: 'platform:notifications:read', scope: 'own' },
     ],
     auditor: [
       'platform:module:access',
-      'platform:dashboard:read',
       'platform:users:read',
       'platform:audit:read',
       'platform:approvals:read',

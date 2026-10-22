@@ -13,9 +13,11 @@ import {
 } from '../../src/app/admissions/applications/_components/application-detail';
 import {
   ConversionBreakdown,
+  Funnel,
   FunnelTable,
 } from '../../src/app/reports/_components/admissions-charts';
 import { AcademicEvidenceView } from '../../src/app/students/_components/academic-sections';
+import { ReportList } from '../../src/app/students/_components/report-list';
 import {
   FeeBadge,
   STUDENT_COLUMNS,
@@ -28,14 +30,17 @@ import { EodStatus } from '../../src/app/tasks/_components/eod-views';
 import { QuickAdd } from '../../src/app/tasks/_components/quick-add';
 import { AckBadge, TaskFacts, WaitingAlert } from '../../src/app/tasks/_components/task-detail';
 import type { TaskDetail } from '../../src/server/task-detail';
+import type { Overview } from '../../src/server/overview';
+import { OverviewBlocks } from '../../src/app/_components/overview-blocks';
+import { TeacherReports } from '../../src/app/teachers/teacher-reports';
 
-const loaded = vi.hoisted(() => ({ data: undefined as unknown }));
+const loaded = vi.hoisted(() => ({ data: undefined as unknown, fail: false }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace() {}, push() {}, refresh() {} }),
 }));
 vi.mock('../../src/ui/frame', async (orig) => ({
   ...(await orig<object>()),
-  load: async () => ({ ok: true, data: loaded.data }),
+  load: async () => (loaded.fail ? { ok: false, view: null } : { ok: true, data: loaded.data }),
 }));
 
 const html = (node: React.ReactNode) => renderToStaticMarkup(<>{node}</>);
@@ -176,6 +181,20 @@ describe('admissions pieces', () => {
     expect(out).not.toContain('0%');
   });
 
+  it('funnel chart leaves out "every planned day", so each share is of the stage the domain divides by', () => {
+    const lead = {
+      demoBooked: true,
+      attended: true,
+      completed: false,
+      converted: true,
+      enrolled: false,
+    };
+    const out = html(<Funnel report={{ funnel: admissionsFunnel([lead]) } as never} />);
+    expect(out).not.toContain('Attended every planned demo day');
+    expect(out).toContain('Converted to admission');
+    expect(out).toContain('100% of previous');
+  });
+
   it('conversion with no demos: an empty state with a reason, no bars', () => {
     const out = html(
       <ConversionBreakdown
@@ -210,8 +229,9 @@ describe('Academic evidence on the student profile', () => {
         evidence={{ status: 'unavailable', reason: 'timeout', checkedAt: NOW }}
       />,
     );
-    expect(out).toContain('Source unavailable (checked 21 Oct 2026');
-    expect(out).toContain('No results or attendance are shown rather than zeros.');
+    expect(out).toContain('Source unavailable');
+    expect(out).toContain('Academic OS could not be read (timeout); checked 21 Oct 2026');
+    expect(out).toContain('No numbers are shown rather than zeros.');
     expect(out).not.toMatch(/>0</);
   });
 
@@ -266,7 +286,7 @@ describe('Academic evidence on the student profile', () => {
     expect(out).toContain('30 / 40 (75%)');
     expect(out).toContain('re-scored v2');
     expect(out).toContain('Not recorded');
-    expect(out).toContain('No classes recorded in this period');
+    expect(out).toContain('0 of 0 recorded');
     expect(out).toContain('No classes held in this period.');
   });
 });
@@ -367,6 +387,19 @@ describe('tasks and end-of-day reports', () => {
     expect(out).toContain('Not written');
   });
 
+  it('teacher reports segment fails on its own: error inside it, the generate form still renders', async () => {
+    loaded.fail = true;
+    try {
+      const out = html(await TeacherReports({ user: as('director'), staffId: 's1' }));
+      expect(out).toContain('id="teacher-reports"');
+      expect(out).toContain('Stored reports could not be loaded');
+      expect(out).toContain('Generate teacher report');
+      expect(out).not.toContain('Download PDF');
+    } finally {
+      loaded.fail = false;
+    }
+  });
+
   it.each([
     ['teacher', false, []],
     ['operations_manager', true, ['Inbox', 'Imports']],
@@ -438,5 +471,97 @@ describe('tasks and end-of-day reports', () => {
         <WaitingAlert d={{ ...task, acknowledgedAt: new Date(NOW), waitingOn: ['Print forms'] }} />,
       ),
     ).toContain('Waiting on “Print forms”');
+  });
+});
+
+describe('Overview dashboard (missing is not zero; a sparkline only with a series)', () => {
+  const range = { from: '2026-10-01', to: '2026-10-21' };
+  const parts = {
+    funnel: null,
+    report: null,
+    pipeline: null,
+    collections: null,
+    outstanding: null,
+    crossModule: null,
+    reviews: null,
+    team: null,
+    kpis: null,
+    series: null,
+  };
+  const base = { asOf: NOW, range, ...parts } as Overview;
+  const funnel = {
+    ok: true,
+    data: {
+      scope: 'all',
+      window: range,
+      funnel: admissionsFunnel([]),
+      demoConversion: { total: 0, byOutcome: [] },
+    },
+  } as never;
+
+  it('no series: labelled tiles without a sparkline; an unrecorded total is words, not ₹0', () => {
+    const out = html(
+      <OverviewBlocks
+        o={{
+          ...base,
+          funnel,
+          collections: { ok: true, data: { collected: null } as never },
+          team: { ok: false, reason: 'Choose 92 days or fewer to see task and EOD figures.' },
+        }}
+      />,
+    );
+    for (const t of [
+      'Leads received',
+      'Demos converted',
+      'Collected in the period',
+      'EOD reports missing',
+    ])
+      expect(out).toContain(t);
+    expect(out).toContain('No payment recorded yet');
+    expect(out).toContain('Choose 92 days or fewer');
+    expect(out).not.toContain('₹0');
+    expect(out).not.toContain('el-spark');
+    expect(out).not.toContain('Leads received per day');
+  });
+
+  it('with a series: a sparkline on the tile and the per-day chart with its axis', () => {
+    const perDay = (counts: number[]) =>
+      counts.map((count, i) => ({ date: `2026-10-${19 + i}`, count }));
+    const series = {
+      ok: true,
+      data: { scope: 'all', leadsPerDay: perDay([1, 0, 2]), conversionsPerDay: perDay([0, 0, 1]) },
+    } as never;
+    const out = html(<OverviewBlocks o={{ ...base, funnel, series }} />);
+    expect(out).toContain('el-spark');
+    expect(out).toContain('Leads received per day');
+    expect(out).toContain('19 Oct');
+    expect(out).toContain('Not enough data'); // an empty funnel is never drawn as zero bars
+  });
+});
+
+describe('student report kinds (D-078)', () => {
+  it('the generated-reports list names the kind, period and status with a PDF link; empty says what to do', () => {
+    const row = {
+      id: 'r1',
+      referenceCode: 'SR-SAMPLE0001',
+      audience: 'guardian' as const,
+      status: 'draft' as const,
+      periodFrom: '2026-09-01',
+      periodTo: '2026-09-30',
+      at: new Date(NOW),
+    };
+    const out = html(
+      <ReportList
+        rows={[row, { ...row, id: 'r2', audience: 'internal', status: 'final' }]}
+        studentId="s1"
+      />,
+    );
+    expect(out).toContain('PTM report (for parents)');
+    expect(out).toContain('Internal report (KYC, student details, scores, reviews)');
+    expect(out).toContain('1 Sept 2026 to 30 Sept 2026');
+    expect(out).toContain('<span class="el-badge el-tone-neutral">Draft</span>');
+    expect(out).toContain('<span class="el-badge el-tone-success">Final</span>');
+    expect(out).toContain('href="/ops/api/v1/students/s1/report/SR-SAMPLE0001/pdf"');
+    expect(html(<ReportList rows={[]} studentId="s1" />)).toContain('No report generated yet');
   });
 });

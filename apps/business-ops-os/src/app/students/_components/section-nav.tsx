@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 
-/** The record's section tabs (underline, one row): keeps the current tab in view when the row scrolls. */
+/** The record's section tabs (the shared pill segmented control, one row): keeps the current tab in view when the row scrolls. */
 export function SectionNav({ label, children }: { label: string; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {

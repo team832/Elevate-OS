@@ -171,7 +171,10 @@ export const academicStudentSummaryV1Schema = z.object({
       batchId: batchIdSchema.nullable(),
       batchName: z.string().nullable(),
       status: z.string().min(1),
-      /** Teacher assignments of the batch in the window (staff ids are core.staff_members). */
+      /**
+       * Teacher assignments of the batch in the window. Ids only (core.staff_members); the
+       * reviews and demo-attendance contracts send display names. Consumers resolve ids.
+       */
       teachers: z.array(z.object({ staffId: staffMemberIdSchema, subject: z.string().min(1) })),
     }),
   ),
@@ -183,6 +186,13 @@ export const academicStudentSummaryV1Schema = z.object({
     late: count,
     absent: count,
     excused: count,
+    /**
+     * Rate per Academic's `attendance.denominator` setting (null when nothing was held) and the
+     * words for it. Optional since 22 Oct 2026: a consumer must accept their absence and never
+     * recompute the rate itself.
+     */
+    ratePercent: z.number().min(0).max(100).nullable().optional(),
+    definition: z.string().min(1).optional(),
   }),
   results: z.array(
     z

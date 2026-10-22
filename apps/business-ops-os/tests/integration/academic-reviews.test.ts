@@ -170,11 +170,21 @@ describe('reading submitted reviews from Academic (R4)', () => {
   it.each([
     ['the counsellor of the student sees every review', () => counsellor, 3],
     ['another counsellor sees none', () => stranger, 0],
-    ['a teacher sees only the reviews they wrote', () => teacher, 2],
   ])('own scope: %s', async (_n, who, count) => {
     academicUp();
     const r = await studentReviews(ctx.db, who(), studentId);
     expect(r.status === 'available' && r.reviews.length).toBe(count);
+  });
+
+  it('a teacher holds no Ops feedback right; a reader without a staff record sees unavailable, not an empty list', async () => {
+    const fetch = academicUp();
+    await expect(studentReviews(ctx.db, teacher, studentId)).rejects.toThrow();
+    const unlinked = await createTestUser(ctx.db, { roles: ['admissions_counsellor'] });
+    expect(await studentReviews(ctx.db, unlinked, studentId)).toMatchObject({
+      status: 'unavailable',
+      reason: 'Your account is not linked to a staff record',
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('Academic down is "source unavailable", never an empty list', async () => {
@@ -187,10 +197,8 @@ describe('reading submitted reviews from Academic (R4)', () => {
 
   it('reviews authored: by author, filtered to the reader’s students', async () => {
     academicUp();
-    const own = await reviewsAuthored(ctx.db, teacher, teacher.staffId);
-    expect(own.status === 'available' && own.reviews.length).toBe(2);
-    const other = await reviewsAuthored(ctx.db, otherTeacher, teacher.staffId);
-    expect(other.status === 'available' && other.reviews.length).toBe(0);
+    const counselled = await reviewsAuthored(ctx.db, counsellor, teacher.staffId);
+    expect(counselled.status === 'available' && counselled.reviews.length).toBe(2);
     const strangerView = await reviewsAuthored(ctx.db, stranger, teacher.staffId);
     expect(strangerView.status === 'available' && strangerView.reviews.length).toBe(0);
   });
@@ -255,9 +263,10 @@ describe('POST /ops/api/v1/review-acks', () => {
     ]);
     expect(v2?.academicConcerns).toBe(SENTINEL); // the teacher's words are untouched
     // Without ops:feedback:acknowledge a reader sees that it was acknowledged, not Ops' notes.
-    const byTeacher = await studentReviews(ctx.db, teacher, studentId);
+    const director = await createTestUser(ctx.db, { roles: ['director'] });
+    const byDirector = await studentReviews(ctx.db, director, studentId);
     const seen =
-      byTeacher.status === 'available' ? byTeacher.reviews.find((r) => r.version === 2) : null;
+      byDirector.status === 'available' ? byDirector.reviews.find((r) => r.version === 2) : null;
     expect(seen?.acknowledgements).toEqual([
       expect.objectContaining({ followUp: null, followUpOn: null, note: null }),
     ]);
@@ -538,8 +547,8 @@ describe('teacher operations (brief 2 §7–8)', () => {
     // A coordinator reads teachers but not other people's tasks: counts are withheld, not zero.
     const coordinator = await createTestUser(ctx.db, { roles: ['academic_coordinator'] });
     expect((await row(coordinator, teacher.staffId))!.tasks).toBeNull();
-    // Own scope: yourself, and the staff who report to you — not anyone else.
-    expect((await row(teacher, teacher.staffId))!.tasks).toMatchObject({ open: 2 });
+    // Own scope: the staff who report to you — not anyone else. Teachers are not in Business Ops (D-073).
+    await expect(row(teacher, teacher.staffId)).rejects.toThrow();
     expect((await row(counsellor, otherTeacher.staffId))!.tasks).toMatchObject({ open: 0 });
     expect((await row(counsellor, teacher.staffId))!.tasks).toBeNull();
   });

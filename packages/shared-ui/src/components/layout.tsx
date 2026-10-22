@@ -35,7 +35,7 @@ export interface ShellSearch {
 
 export interface AppShellProps {
   user: ShellUser;
-  /** Modules the user can open (from `modulesFor(user)`); only these appear in the sidebar. */
+  /** Modules the user can open (from `modulesFor(user)`); only these appear in the switcher. */
   modules: readonly ModuleKey[];
   /**
    * Absolute workspace URLs (`workspaceHrefs()` from @elevate/server-kit/next, D-072): each
@@ -61,7 +61,7 @@ export interface AppShellProps {
   children: ReactNode;
 }
 
-/** Sidebar names and icons of the modules (order = sidebar order). */
+/** Sidebar names and icons of the modules (order = switcher order). */
 export const MODULE_NAV: readonly {
   key: Exclude<ModuleKey, 'platform'>;
   label: string;
@@ -71,6 +71,13 @@ export const MODULE_NAV: readonly {
   { key: 'academic', label: 'Academic OS', icon: 'academic' },
   { key: 'marketing', label: 'Marketing OS', icon: 'marketing' },
 ];
+
+/** What each workspace is for, in the words of the people who use it. */
+export const WORKSPACE_PURPOSE: Record<Exclude<ModuleKey, 'platform'>, string> = {
+  ops: 'Admissions, students, fees, teachers, tasks and reports.',
+  academic: 'Your classes, batches, attendance, teaching logs and student reviews.',
+  marketing: 'Leads, follow-ups, campaigns and the content calendar.',
+};
 
 const moduleHref = (m: ModuleKey) => MODULES[m].basePath || '/';
 const moduleLabel = (m: ModuleKey) =>
@@ -183,6 +190,61 @@ function SidebarLink({
   );
 }
 
+/**
+ * The workspace switcher at the top of the rail: the current workspace's name, and (when the
+ * person belongs to more than one, or is on the platform overview) a popover with the others.
+ */
+function WorkspaceSwitcher({ modules, current, moduleHrefs }: AppShellProps) {
+  const options = MODULE_NAV.filter((m) => modules.includes(m.key));
+  const name = (
+    <span className="el-ws-text">
+      <span className="el-ws-label">Workspace</span>
+      <span className="el-ws-name">{moduleLabel(current)}</span>
+    </span>
+  );
+  if (options.length < 2 && current !== 'platform')
+    return <div className="el-ws-static">{name}</div>;
+  return (
+    <details className="el-ws">
+      <summary>
+        {name}
+        <Icon name="chevron-down" />
+      </summary>
+      <ul className="el-ws-panel el-glass" aria-label="Workspaces">
+        {current === 'platform' ? (
+          <li>
+            <a className="el-ws-option" href="/" aria-current="true">
+              <Icon name="overview" />
+              <span>Overview</span>
+            </a>
+          </li>
+        ) : null}
+        {options.map((m) => (
+          <li key={m.key}>
+            <a
+              className="el-ws-option"
+              href={moduleHrefs?.[m.key] ?? moduleHref(m.key)}
+              aria-current={m.key === current || undefined}
+            >
+              <Icon name={m.icon} />
+              <span>
+                {m.label}
+                <span className="el-ws-purpose">{WORKSPACE_PURPOSE[m.key]}</span>
+              </span>
+            </a>
+          </li>
+        ))}
+        {options.length > 1 ? (
+          <li className="el-ws-footer">
+            <a href={`${MODULES[current].basePath}/workspaces`}>Choose default workspace</a>
+          </li>
+        ) : null}
+      </ul>
+    </details>
+  );
+}
+
+/** The current module's sections; each group can be folded and starts open. */
 function ModuleSections({ nav, label }: { nav: readonly NavItem[]; label: string }) {
   return (
     <ul className="el-nav-list el-nav-sections" aria-label={label}>
@@ -192,17 +254,20 @@ function ModuleSections({ nav, label }: { nav: readonly NavItem[]; label: string
             <SidebarLink href={s.item.href} label={s.item.label} current={s.item.active} />
           </li>
         ) : (
-          <li key={`group-${s.name}`} className="el-nav-group">
-            <span className="el-nav-heading" id={`el-navgroup-${i}`}>
-              {s.name}
-            </span>
-            <ul className="el-nav-list" aria-labelledby={`el-navgroup-${i}`}>
-              {s.items.map((item) => (
-                <li key={item.href + item.label}>
-                  <SidebarLink href={item.href} label={item.label} current={item.active} />
-                </li>
-              ))}
-            </ul>
+          <li key={`group-${s.name}`}>
+            <details className="el-nav-group" open>
+              <summary id={`el-navgroup-${i}`} className="el-nav-heading">
+                <span>{s.name}</span>
+                <Icon name="chevron-down" size={14} />
+              </summary>
+              <ul className="el-nav-list" aria-labelledby={`el-navgroup-${i}`}>
+                {s.items.map((item) => (
+                  <li key={item.href + item.label}>
+                    <SidebarLink href={item.href} label={item.label} current={item.active} />
+                  </li>
+                ))}
+              </ul>
+            </details>
           </li>
         ),
       )}
@@ -211,39 +276,21 @@ function ModuleSections({ nav, label }: { nav: readonly NavItem[]; label: string
 }
 
 function Sidebar(props: AppShellProps) {
-  const { user, modules, current, nav = [], myWorkHref, settings, moduleHrefs } = props;
-  const overviewCurrent = current === 'platform' && !nav.some((n) => n.active);
+  const { user, current, nav = [], myWorkHref, settings } = props;
   return (
     <div className="el-sidebar-inner">
       <a className="el-sidebar-brand" href="/">
         <BrandLogo size="sm" />
       </a>
+      <WorkspaceSwitcher {...props} />
       <nav className="el-sidebar-nav" aria-label="Modules and sections">
-        <ul className="el-nav-list el-nav-modules" aria-label="Modules">
-          {current === 'platform' ? (
-            <li>
-              <SidebarLink href="/" label="Overview" icon="overview" current={overviewCurrent} />
-            </li>
-          ) : null}
-          {MODULE_NAV.filter((m) => modules.includes(m.key)).map((m) => (
-            <li key={m.key}>
-              <a
-                className="el-nav-link el-nav-module"
-                href={moduleHrefs?.[m.key] ?? moduleHref(m.key)}
-                data-current={m.key === current ? 'true' : undefined}
-                aria-current={m.key === current || undefined}
-              >
-                <Icon name={m.icon} />
-                <span>{m.label}</span>
-              </a>
-            </li>
-          ))}
-          {myWorkHref ? (
+        {myWorkHref ? (
+          <ul className="el-nav-list" aria-label="My work">
             <li>
               <SidebarLink href={myWorkHref} label="My work" icon="my-work" />
             </li>
-          ) : null}
-        </ul>
+          </ul>
+        ) : null}
         {nav.length > 0 ? (
           <ModuleSections nav={nav} label={`${moduleLabel(current)} sections`} />
         ) : null}
@@ -323,7 +370,7 @@ function TopBar(props: AppShellProps) {
             </span>
             <span className="el-visually-hidden">Account menu for {user.displayName}</span>
           </summary>
-          <div className="el-user-menu-panel">
+          <div className="el-user-menu-panel el-glass">
             <p>
               <strong>{user.displayName}</strong>
             </p>
@@ -347,11 +394,11 @@ function TopBar(props: AppShellProps) {
 }
 
 /**
- * Page frame used by all four apps: a black sidebar (logo, the module switcher, the
- * current module's sections in labelled groups, Settings and the profile) and a black
- * top bar (breadcrumbs, search, notifications, account menu with sign-out). Module
- * links are plain <a> because each module is a separate zone. On small screens the
- * sidebar sits behind a menu button (see ShellFrame).
+ * Page frame used by all four apps: a floating white rail (logo, workspace switcher, the
+ * current module's sections in foldable groups, Settings and the profile) and a frosted
+ * top bar (breadcrumbs, search, notifications, account popover with sign-out). Workspace
+ * links are plain <a> because each workspace is a separate zone. On small screens the rail
+ * sits behind a menu button (see ShellFrame).
  */
 export function AppShell(props: AppShellProps) {
   const sidebarId = `el-sidebar-${props.current}`;
@@ -378,7 +425,7 @@ export function PageHeader({
   actions?: ReactNode;
   /** Small labels next to the title (status, reference, "Sample data"). */
   meta?: ReactNode;
-  /** Area navigation shown along the bottom of the header (e.g. <AdmissionsNav />). */
+  /** Area navigation shown under the header (e.g. <AdmissionsNav />). */
   tabs?: ReactNode;
 }) {
   return (
@@ -398,7 +445,7 @@ export function PageHeader({
   );
 }
 
-/** Area tabs for a PageHeader (`tabs`): links; the current one is marked for screen readers. */
+/** Area tabs for a PageHeader (`tabs`): a pill segmented control; the current one is marked for screen readers. */
 export function Subnav({
   label,
   items,
@@ -427,6 +474,7 @@ export function Card({
   actions,
   meta,
   id,
+  className,
   children,
 }: {
   title?: string;
@@ -437,11 +485,17 @@ export function Card({
   /** Small label next to the title, e.g. <SourceBadge source="sample" />. */
   meta?: ReactNode;
   id?: string;
+  /** Layout hook for the page grid (e.g. a panel that spans the row). */
+  className?: string;
   children?: ReactNode;
 }) {
   const headingId = id && title ? `${id}-title` : undefined;
   return (
-    <section className="el-card" id={id} aria-labelledby={headingId}>
+    <section
+      className={['el-card', className].filter(Boolean).join(' ')}
+      id={id}
+      aria-labelledby={headingId}
+    >
       {title ? (
         <div className="el-card-header">
           <div className="el-card-heading">

@@ -113,7 +113,10 @@ export async function teacherActivity(db: Database, staffId: string, window: { f
   const marking = activeBatchIds.length ? (await db.select({ id: academicAssessments.id }).from(academicAssessments).where(and(inArray(academicAssessments.batchId, activeBatchIds), eq(academicAssessments.status, 'conducted')))).length : 0;
   const reviews = await db.select({ status: academicTeacherReviews.status, submittedAt: academicTeacherReviews.submittedAt }).from(academicTeacherReviews).where(eq(academicTeacherReviews.authorStaffId, staffId as StaffMemberId));
   const inWindow = (d: Date | null) => d !== null && d.toISOString().slice(0, 10) >= window.from && d.toISOString().slice(0, 10) <= window.to;
-  const m = (value: number, definition: string) => metric.ok(value, { definition, window, unit: 'count' });
+  // Non-teaching staff (an Ops EOD reader): nothing was there to measure, so the figures are missing, never 0.
+  const teaching = sessions.length > 0 || assignments.some((a) => (a.startDate ?? '') <= window.to && (a.endDate ?? '9999') >= window.from);
+  const meta = (definition: string) => ({ definition, window, unit: 'count' as const });
+  const m = (value: number, definition: string, measured = teaching) => (measured ? metric.ok(value, meta(definition)) : metric.missing('No teaching assignments', meta(definition)));
   const unavailability = await db
     .select({ from: academicTeacherUnavailability.fromDate, to: academicTeacherUnavailability.toDate })
     .from(academicTeacherUnavailability)
@@ -135,8 +138,8 @@ export async function teacherActivity(db: Database, staffId: string, window: { f
     attendancePending: m([...work.values()].filter((w) => w.attendanceMissing > 0).length, 'Delivered or past classes with at least one placed student not marked.'),
     markingPending: m(marking, 'Assessments conducted but not yet finalised in batches this teacher is assigned to (current, not windowed).'),
     reviews: {
-      submitted: m(reviews.filter((r) => r.status === 'submitted' && inWindow(r.submittedAt)).length, 'Teacher reviews submitted in the window.'),
-      draft: m(reviews.filter((r) => r.status === 'draft').length, 'Teacher reviews still in draft now (private to the author).'),
+      submitted: m(reviews.filter((r) => r.status === 'submitted' && inWindow(r.submittedAt)).length, 'Teacher reviews submitted in the window.', true),
+      draft: m(reviews.filter((r) => r.status === 'draft').length, 'Teacher reviews still in draft now (private to the author).', true),
     },
     unavailability,
   });

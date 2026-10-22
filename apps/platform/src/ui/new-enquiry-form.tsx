@@ -179,7 +179,7 @@ export function NewEnquiryForm({
   if (created) {
     return (
       <div className="el-stack" role="status">
-        <p className="el-enquiry-done">
+        <p>
           <strong>Saved as lead {created.code ?? ''}.</strong>{' '}
           {created.owned
             ? 'Open it to see the first follow-up and add notes from the call.'
@@ -208,10 +208,7 @@ export function NewEnquiryForm({
     opts: { required?: boolean; hint?: string } = {},
   ) => (
     <div className="el-field">
-      <label htmlFor={id(name)}>
-        {label}
-        {opts.required ? <span aria-hidden="true"> *</span> : null}
-      </label>
+      <label htmlFor={id(name)}>{label}</label>
       <input
         id={id(name)}
         name={name}

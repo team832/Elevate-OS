@@ -1,7 +1,7 @@
 /**
  * Student profile (owner brief §8): a header with the name, status, admission number, active
  * programmes and batches, primary contact (masked unless permitted), the journey and one next
- * step; the ten record sections are underline tabs kept in `?tab=` (deep links and refresh keep
+ * step; the ten record sections are pill tabs kept in `?tab=` (deep links and refresh keep
  * the section). Only the selected section loads.
  */
 import type { ReactNode } from 'react';

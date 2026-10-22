@@ -1,0 +1,421 @@
+/* Charts (components/charts.tsx). Marks: bars at most 24px thick with 4px rounded data ends,
+ * 2px lines with a 10% area wash, 8px end markers with a surface ring, values in text colours
+ * (never the series colour). Every chart has a hover tooltip and a text alternative. */
+.el-chart {
+  position: relative;
+  display: grid;
+  gap: var(--el-space-3);
+  min-width: 0;
+  margin: 0;
+}
+.el-chart-empty {
+  padding: var(--el-space-5) var(--el-space-4);
+  border-radius: var(--el-radius-sm);
+  background: var(--el-well);
+  box-shadow: var(--el-shadow-inset);
+  color: var(--el-text-muted);
+  font-size: var(--el-text-sm);
+  text-align: center;
+}
+.el-chart-empty p {
+  margin: 0;
+}
+.el-chart-empty-title {
+  margin-bottom: var(--el-space-1) !important;
+  color: var(--el-text);
+  font-weight: 650;
+}
+.el-chart-table > summary {
+  width: fit-content;
+  color: var(--el-text-muted);
+  font-size: var(--el-text-sm);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+.el-chart-table[open] > summary {
+  margin-bottom: var(--el-space-2);
+}
+.el-c1 {
+  --c: var(--el-chart-1);
+}
+.el-c2 {
+  --c: var(--el-chart-2);
+}
+.el-c3 {
+  --c: var(--el-chart-3);
+}
+.el-c4 {
+  --c: var(--el-chart-4);
+}
+.el-c5 {
+  --c: var(--el-chart-5);
+}
+.el-c6 {
+  --c: var(--el-chart-6);
+}
+.el-c-other {
+  --c: var(--el-chart-other);
+}
+
+/* Tooltip (ChartFigure, client): placed above the hovered mark. */
+.el-chart-tip {
+  position: absolute;
+  z-index: 3;
+  max-width: 16rem;
+  padding: var(--el-space-2) var(--el-space-3);
+  border-radius: var(--el-radius-sm);
+  background: var(--el-text);
+  color: var(--el-surface);
+  font-size: var(--el-text-xs);
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 0.5rem));
+  box-shadow: var(--el-shadow-overlay);
+}
+.el-chart-tip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -0.3125rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-left: -0.3125rem;
+  background: inherit;
+  transform: rotate(45deg);
+  border-radius: 0 0 2px;
+}
+.el-chart [data-tip] {
+  cursor: default;
+}
+
+/* horizontal bars */
+.el-hbars,
+.el-funnel,
+.el-legend {
+  display: grid;
+  gap: var(--el-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--el-text-sm);
+}
+.el-hbar {
+  display: grid;
+  grid-template-columns: minmax(6rem, 34%) minmax(0, 1fr) minmax(3.5rem, auto);
+  align-items: center;
+  gap: var(--el-space-3);
+  border-radius: var(--el-radius-sm);
+}
+.el-hbar:hover {
+  background: var(--el-accent-wash);
+}
+.el-hbar-label {
+  overflow-wrap: anywhere;
+}
+.el-hbar-track {
+  height: 0.875rem;
+  overflow: hidden;
+  border-radius: var(--el-radius-pill);
+  background: var(--el-chart-track);
+}
+.el-hbar-fill,
+.el-funnel-bar {
+  display: block;
+  height: 100%;
+  border-radius: 0 var(--el-radius-pill) var(--el-radius-pill) 0;
+  background: var(--el-chart-bar);
+  transition: width var(--el-dur) var(--el-ease);
+}
+.el-hbar-value,
+.el-funnel-count,
+.el-legend-value,
+.el-legend-share {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.el-hbar-value,
+.el-funnel-count {
+  font-weight: 650;
+}
+
+/* vertical bars (days, months) */
+.el-vbars {
+  display: flex;
+  gap: 2px;
+  height: 12rem;
+}
+.el-vbar {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  border-radius: var(--el-radius-sm) var(--el-radius-sm) 0 0;
+}
+.el-vbar:hover {
+  background: var(--el-accent-wash);
+}
+.el-vbar-plot {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 0;
+  padding-top: 1.25rem;
+  border-bottom: 1px solid var(--el-border-strong);
+}
+.el-vbar-value {
+  padding-bottom: 2px;
+  font-size: var(--el-text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.el-vbar-fill {
+  flex: none;
+  width: min(60%, 24px);
+  border-radius: 4px 4px 0 0;
+  background: var(--el-chart-bar);
+}
+.el-vbar-label {
+  min-height: 1.25rem;
+  padding-top: var(--el-space-1);
+  color: var(--el-text-muted);
+  font-size: var(--el-text-xs);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* donut */
+.el-donut {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--el-space-4);
+}
+.el-donut svg {
+  flex: none;
+  width: 9.5rem;
+  height: 9.5rem;
+}
+.el-donut-arc {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.el-donut-total {
+  fill: var(--el-text);
+  font-family: var(--el-font-display);
+  font-size: 7px;
+  font-weight: 650;
+  text-anchor: middle;
+}
+.el-donut-caption {
+  fill: var(--el-text-muted);
+  font-size: 3.2px;
+  text-anchor: middle;
+}
+.el-legend {
+  flex: 1 1 12rem;
+  gap: 0;
+}
+.el-legend li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto 3rem;
+  align-items: center;
+  gap: var(--el-space-2);
+  padding: var(--el-space-1) 0;
+  border-bottom: 1px solid var(--el-border);
+}
+.el-legend li:last-child {
+  border-bottom: 0;
+}
+.el-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--c);
+}
+.el-legend-share {
+  color: var(--el-text-muted);
+}
+
+/* line and sparkline */
+.el-line-plot {
+  position: relative;
+  padding: 0 3.5rem 0 3rem;
+}
+.el-line-area {
+  position: relative;
+  height: 9rem;
+  border-top: 1px solid var(--el-border);
+  border-bottom: 1px solid var(--el-border-strong);
+}
+.el-line-area svg,
+.el-spark {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.el-line-area svg {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+.el-spark {
+  height: 2rem;
+  margin-top: var(--el-space-2);
+}
+.el-line-path {
+  fill: none;
+  stroke: var(--el-chart-bar);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.el-line-wash {
+  fill: var(--el-chart-bar);
+  fill-opacity: 0.1;
+  stroke: none;
+}
+.el-line-tick {
+  position: absolute;
+  left: 0;
+  width: 2.5rem;
+  color: var(--el-text-muted);
+  font-size: var(--el-text-xs);
+  text-align: right;
+}
+.el-line-top {
+  top: 0;
+  transform: translateY(-50%);
+}
+.el-line-zero {
+  bottom: 0;
+  transform: translateY(50%);
+}
+.el-line-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: var(--el-chart-bar);
+  box-shadow: 0 0 0 2px var(--el-surface);
+}
+.el-line-end {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  transform: translateY(-50%);
+  font-size: var(--el-text-xs);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.el-line-x {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 3.5rem 0 3rem;
+  color: var(--el-text-muted);
+  font-size: var(--el-text-xs);
+}
+/* invisible hit columns over a line chart carry the tooltip text */
+.el-line-hits {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+.el-line-hit {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.el-line-hit:hover {
+  background: var(--el-accent-wash);
+}
+
+/* funnel */
+.el-funnel-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'label count' 'bar bar' 'rate rate';
+  align-items: center;
+  gap: var(--el-space-1) var(--el-space-3);
+  border-radius: var(--el-radius-sm);
+}
+.el-funnel-row:hover {
+  background: var(--el-accent-wash);
+}
+.el-funnel-label {
+  grid-area: label;
+}
+.el-funnel-track {
+  grid-area: bar;
+  display: flex;
+  justify-content: center;
+  height: 1.25rem;
+}
+.el-funnel-bar {
+  min-width: 2px;
+  border-radius: var(--el-radius-pill);
+}
+.el-funnel-count {
+  grid-area: count;
+}
+.el-funnel-rate {
+  grid-area: rate;
+  color: var(--el-text-muted);
+  font-size: var(--el-text-xs);
+}
+
+/* KPI tile that filters a list (StatCard with href): the selected one is underlined in orange. */
+.el-kpi {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform var(--el-dur) var(--el-ease),
+    box-shadow var(--el-dur) var(--el-ease);
+}
+.el-kpi:hover {
+  color: inherit;
+  transform: translateY(-1px);
+  box-shadow: var(--el-shadow-raised);
+}
+.el-kpi:hover .el-stat-label {
+  color: var(--el-text);
+}
+.el-kpi:focus-visible {
+  outline-offset: -3px;
+}
+.el-kpi[aria-pressed='true'],
+.el-kpi[aria-current='true'] {
+  background: var(--el-accent-soft);
+  box-shadow:
+    var(--el-shadow),
+    inset 0 -3px 0 var(--el-accent);
+}
+.el-kpi:is([aria-pressed='true'], [aria-current='true']) .el-stat-label {
+  color: var(--el-text);
+}
+
+@media (min-width: 720px) {
+  .el-funnel-row {
+    grid-template-columns: minmax(7rem, 24%) minmax(0, 1fr) 4rem 9rem;
+    grid-template-areas: 'label bar count rate';
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .el-hbar-fill,
+  .el-funnel-bar,
+  .el-kpi {
+    transition: none;
+  }
+  .el-kpi:hover {
+    transform: none;
+  }
+}

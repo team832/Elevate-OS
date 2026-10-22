@@ -66,11 +66,15 @@ beforeAll(async () => {
 });
 
 describe('Marketing Overview: follow-up counts', () => {
-  it('shows due today, overdue and upcoming as links with an as-of time', async () => {
+  it('shows due today and overdue as tiles that open the list, with an as-of time', async () => {
     const html = await render(manager);
-    expect(html).toContain('<a href="/marketing/follow-ups?view=due_today">1 due today</a>');
-    expect(html).toContain('<a href="/marketing/follow-ups?view=overdue">1 overdue</a>');
-    expect(html).toContain('<a href="/marketing/follow-ups">0 upcoming (next 2 days)</a> · as of ');
+    const tile = (href: string, label: string, value: string) =>
+      `<a href="${href}" class="el-stat el-kpi"><span class="el-stat-label">${label}</span><span class="el-stat-value">${value}</span>`;
+    expect(html).toContain(
+      tile('/marketing/follow-ups?view=due_today', 'Follow-ups due today', '1'),
+    );
+    expect(html).toContain(tile('/marketing/follow-ups?view=overdue', 'Follow-ups overdue', '1'));
+    expect(html).toContain('0 upcoming in the next 2 days · as of ');
   });
 
   it.each([
@@ -84,6 +88,6 @@ describe('Marketing Overview: follow-up counts', () => {
     const html = await render(user);
     state.failFollowUps = false;
     expect(html).toContain(text);
-    expect(html).not.toContain('view=due_today">');
+    expect(html).not.toContain('view=due_today');
   });
 });

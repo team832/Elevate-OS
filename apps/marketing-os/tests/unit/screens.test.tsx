@@ -8,7 +8,9 @@ import {
   RuleCheckSummary,
 } from '../../src/ui/badges';
 import { VersionsPanel } from '../../src/ui/content-panels';
-import type { RuleCheckResult } from '../../src/domain';
+import { OverviewTiles, PipelineCharts } from '../../src/ui/overview';
+import { CONTENT_STATES, type ContentState, type RuleCheckResult } from '../../src/domain';
+import type { IsoDate } from '@elevate/shared-types';
 
 vi.mock('../../src/app/actions/content', () => ({}));
 
@@ -121,5 +123,97 @@ describe('VersionsPanel', () => {
     expect(out).toContain('unknown · ');
     expect(out).toContain('(empty)');
     expect(out).toContain('Consent reference: none');
+  });
+});
+
+describe('OverviewTiles', () => {
+  const base = { due: 2, awaiting: 1, running: 0, ideas: 59, quarantined: 8 };
+  const label = (text: string) => `<span class="el-stat-label">${text}</span>`;
+
+  it('shows every figure with its label and links to the list behind it', () => {
+    const out = html(<OverviewTiles {...base} />);
+    for (const t of ['Content due this week', 'Awaiting approval', 'Campaigns running', 'Ideas'])
+      expect(out).toContain(label(t));
+    expect(out).toContain('href="/marketing/ideas"');
+    expect(out).toContain('<span class="el-stat-value">59</span>');
+    expect(out).toContain('8 quarantined');
+    expect(out).not.toContain('Follow-ups');
+    expect(out).not.toContain('tasks');
+  });
+
+  it.each([
+    ['failed', 'Follow-up counts could not be loaded.'],
+    [null, 'so your follow-ups cannot be shown'],
+  ] as const)('follow-ups %s: "Not available" with the reason, never 0', (state, text) => {
+    const out = html(<OverviewTiles {...base} followUps={state} />);
+    expect(out).toContain('el-stat-missing');
+    expect(out).toContain('Not available');
+    expect(out).toContain(text);
+    expect(out).not.toContain('follow-ups?view=');
+  });
+
+  it('tasks: the open count, due and overdue in the note, the EOD state in words', () => {
+    const out = html(
+      <OverviewTiles
+        {...base}
+        tasks={{
+          day: '2026-10-22' as IsoDate,
+          asOf: new Date('2026-10-22T04:00:00Z'),
+          open: 3,
+          overdue: 1,
+          dueToday: 2,
+          eod: 'not_started',
+        }}
+      />,
+    );
+    expect(out).toContain(`${label('Open tasks')}<span class="el-stat-value">3</span>`);
+    expect(out).toContain('2 due today · 1 overdue · as of 22 Oct 2026, 09:30 IST');
+    expect(out).toContain(`${label('EOD report')}<span class="el-stat-value">not started</span>`);
+  });
+});
+
+describe('PipelineCharts', () => {
+  const byState = (over: Partial<Record<ContentState, number>>) =>
+    Object.fromEntries(CONTENT_STATES.map((s) => [s, over[s] ?? 0])) as Record<
+      ContentState,
+      number
+    >;
+  const none = { not_configured: 0, sandbox: 0, connected: 0, error: 0 };
+
+  it('bars from the state counts (legacy in the note) and status bars from the integration counts', () => {
+    const out = html(
+      <PipelineCharts
+        d={{
+          totalItems: 5,
+          itemsByState: byState({ draft: 3, published: 2 }),
+          legacyItemsByState: byState({ published: 2 }),
+          accountsByIntegration: { ...none, not_configured: 9, sandbox: 1 },
+        }}
+      />,
+    );
+    expect(out).toContain(
+      '5 items. Imported from the legacy tracker, keeping its status: published 2.',
+    );
+    expect(out).toContain('data-tip="draft: 3"');
+    expect(out).toContain('<span class="el-hbar-value">3</span>');
+    expect(out).toContain('sandbox (mock only)');
+    expect(out).toContain('<span class="el-hbar-value">9</span>');
+    expect(out).toContain('data-tip="not configured: 9"');
+  });
+
+  it('with no accounts every status bar reads its counted 0 and keeps its name', () => {
+    const out = html(
+      <PipelineCharts
+        d={{
+          totalItems: 0,
+          itemsByState: byState({}),
+          legacyItemsByState: byState({}),
+          accountsByIntegration: none,
+        }}
+      />,
+    );
+    expect(out).toContain('data-tip="not configured: 0"');
+    expect(out).toContain('data-tip="sandbox (mock only): 0"');
+    expect(out).not.toContain('Not enough data');
   });
 });

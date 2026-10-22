@@ -41,9 +41,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Static security headers on every response; the per-request CSP is set in src/proxy.ts.
   async headers() {
-    return [
-      { source: '/:path*', headers: securityHeaders() },
-    ];
+    return [{ source: '/:path*', headers: securityHeaders() }];
   },
   turbopack: { root: repoRoot },
   outputFileTracingRoot: repoRoot,

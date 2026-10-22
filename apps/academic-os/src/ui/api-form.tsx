@@ -31,6 +31,7 @@ export interface FormField {
   hint?: string;
   defaultValue?: string | number | boolean;
   placeholder?: string;
+  maxLength?: number;
 }
 
 export interface ApiFormProps {
@@ -102,10 +103,16 @@ function collect(form: HTMLFormElement, fields: readonly FormField[]): Record<st
         }
         break;
       case 'csv-list':
-        body[f.name] = raw.split(',').map((s) => s.trim()).filter(Boolean);
+        body[f.name] = raw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
         break;
       case 'number-list':
-        body[f.name] = raw.split(',').map((s) => Number(s.trim())).filter((n) => !Number.isNaN(n));
+        body[f.name] = raw
+          .split(',')
+          .map((s) => Number(s.trim()))
+          .filter((n) => !Number.isNaN(n));
         break;
       default:
         body[f.name] = raw;
@@ -114,7 +121,11 @@ function collect(form: HTMLFormElement, fields: readonly FormField[]): Record<st
   return body;
 }
 
-async function send(action: string, method: string, body: unknown): Promise<{ ok: true; data: unknown } | { ok: false; error: ErrorView }> {
+async function send(
+  action: string,
+  method: string,
+  body: unknown,
+): Promise<{ ok: true; data: unknown } | { ok: false; error: ErrorView }> {
   const response = await fetch(action, {
     method,
     credentials: 'same-origin',
@@ -126,11 +137,20 @@ async function send(action: string, method: string, body: unknown): Promise<{ ok
   try {
     json = text ? JSON.parse(text) : {};
   } catch {
-    return { ok: false, error: { message: `Unexpected response (HTTP ${response.status}).`, details: [] } };
+    return {
+      ok: false,
+      error: { message: `Unexpected response (HTTP ${response.status}).`, details: [] },
+    };
   }
   if (!response.ok || json.error) {
     const ref = json.error?.requestId ? ` (reference ${json.error.requestId})` : '';
-    return { ok: false, error: { message: `${json.error?.message ?? `HTTP ${response.status}`}${ref}`, details: describeDetails(json.error?.details) } };
+    return {
+      ok: false,
+      error: {
+        message: `${json.error?.message ?? `HTTP ${response.status}`}${ref}`,
+        details: describeDetails(json.error?.details),
+      },
+    };
   }
   return { ok: true, data: json.data };
 }
@@ -149,19 +169,42 @@ function ErrorAlert({ error }: { error: ErrorView }) {
   );
 }
 
-const STICKY = { position: 'sticky', bottom: 0, zIndex: 1, display: 'flex', gap: 'var(--el-space-2)', flexWrap: 'wrap', padding: 'var(--el-space-3) 0', background: 'var(--el-bg)', borderTop: '1px solid var(--el-border)' } as const;
-
-export function ApiForm({ action, method = 'POST', fields, submitLabel, extra, wrapAs, successMessage = 'Saved.', refresh = true, variant = 'primary', idPrefix = 'f', draftLabel, stickyActions, goTo }: ApiFormProps) {
+export function ApiForm({
+  action,
+  method = 'POST',
+  fields,
+  submitLabel,
+  extra,
+  wrapAs,
+  successMessage = 'Saved.',
+  refresh = true,
+  variant = 'primary',
+  idPrefix = 'f',
+  draftLabel,
+  stickyActions,
+  goTo,
+}: ApiFormProps) {
   const router = useRouter();
-  const [state, setState] = useState<{ kind: 'idle' } | { kind: 'saving' } | { kind: 'error'; error: ErrorView } | { kind: 'done'; message: string }>({ kind: 'idle' });
+  const [state, setState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'saving' }
+    | { kind: 'error'; error: ErrorView }
+    | { kind: 'done'; message: string }
+  >({ kind: 'idle' });
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     let body: Record<string, unknown>;
-    const asDraft = draftLabel !== undefined && (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'draft';
+    const asDraft =
+      draftLabel !== undefined &&
+      (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'draft';
     try {
-      body = { ...collect(form, fields), ...extra, ...(draftLabel !== undefined ? { submit: !asDraft } : {}) };
+      body = {
+        ...collect(form, fields),
+        ...extra,
+        ...(draftLabel !== undefined ? { submit: !asDraft } : {}),
+      };
     } catch (e) {
       setState({ kind: 'error', error: { message: (e as Error).message, details: [] } });
       return;
@@ -173,12 +216,24 @@ export function ApiForm({ action, method = 'POST', fields, submitLabel, extra, w
         setState({ kind: 'error', error: result.error });
         return;
       }
-      setState({ kind: 'done', message: asDraft ? 'Draft saved. Only you can see it.' : successMessage });
+      setState({
+        kind: 'done',
+        message: asDraft ? 'Draft saved. Only you can see it.' : successMessage,
+      });
       if (method === 'POST') form.reset(); // a create form starts empty again for the next entry
-      if (goTo) router.push(goTo.replace('{id}', String((result.data as { id?: string } | null)?.id ?? '')));
+      if (goTo)
+        router.push(
+          goTo.replace('{id}', String((result.data as { id?: string } | null)?.id ?? '')),
+        );
       else if (refresh) router.refresh();
     } catch {
-      setState({ kind: 'error', error: { message: 'Could not reach Academic OS. Check your connection and try again.', details: [] } });
+      setState({
+        kind: 'error',
+        error: {
+          message: 'Could not reach Academic OS. Check your connection and try again.',
+          details: [],
+        },
+      });
     }
   }
 
@@ -188,13 +243,32 @@ export function ApiForm({ action, method = 'POST', fields, submitLabel, extra, w
         const id = `${idPrefix}-${f.name}`;
         const type = f.type ?? 'text';
         if (type === 'checkbox') {
-          return <Checkbox key={f.name} id={id} name={f.name} label={f.label} defaultChecked={Boolean(f.defaultValue)} />;
+          return (
+            <Checkbox
+              key={f.name}
+              id={id}
+              name={f.name}
+              label={f.label}
+              defaultChecked={Boolean(f.defaultValue)}
+            />
+          );
         }
-        const common = { id, name: f.name, required: f.required, defaultValue: f.defaultValue === undefined ? undefined : String(f.defaultValue), placeholder: f.placeholder, 'aria-describedby': f.hint ? `${id}-hint` : undefined };
+        const common = {
+          id,
+          name: f.name,
+          required: f.required,
+          defaultValue: f.defaultValue === undefined ? undefined : String(f.defaultValue),
+          placeholder: f.placeholder,
+          'aria-describedby': f.hint ? `${id}-hint` : undefined,
+        };
         return (
           <Field key={f.name} id={id} label={f.label} hint={f.hint}>
             {type === 'select' || type === 'multi-select' ? (
-              <Select {...common} multiple={type === 'multi-select'} size={type === 'multi-select' ? Math.min(8, f.options?.length ?? 0) : undefined}>
+              <Select
+                {...common}
+                multiple={type === 'multi-select'}
+                size={type === 'multi-select' ? Math.min(8, f.options?.length ?? 0) : undefined}
+              >
                 {!f.required && type === 'select' ? <option value="">—</option> : null}
                 {(f.options ?? []).map((o) => (
                   <option key={o.value} value={o.value}>
@@ -203,21 +277,43 @@ export function ApiForm({ action, method = 'POST', fields, submitLabel, extra, w
                 ))}
               </Select>
             ) : type === 'textarea' || type === 'json' ? (
-              <TextArea {...common} rows={type === 'json' ? 8 : 4} spellCheck={type === 'json' ? false : undefined} />
+              <TextArea
+                {...common}
+                rows={type === 'json' ? 8 : 4}
+                maxLength={f.maxLength}
+                spellCheck={type === 'json' ? false : undefined}
+              />
             ) : (
-              <TextInput {...common} type={type === 'number' ? 'number' : type === 'date' ? 'date' : type === 'time' ? 'time' : 'text'} step={type === 'number' ? 'any' : undefined} />
+              <TextInput
+                {...common}
+                type={
+                  type === 'number'
+                    ? 'number'
+                    : type === 'date'
+                      ? 'date'
+                      : type === 'time'
+                        ? 'time'
+                        : 'text'
+                }
+                step={type === 'number' ? 'any' : undefined}
+              />
             )}
           </Field>
         );
       })}
       {state.kind === 'error' ? <ErrorAlert error={state.error} /> : null}
       {state.kind === 'done' ? <Alert tone="success">{state.message}</Alert> : null}
-      <div style={stickyActions ? STICKY : undefined}>
+      <div className={stickyActions ? 'acd-sticky-actions el-glass' : 'el-form-actions'}>
         <Button type="submit" variant={variant} value="submit" disabled={state.kind === 'saving'}>
           {state.kind === 'saving' ? 'Saving…' : submitLabel}
         </Button>
         {draftLabel !== undefined ? (
-          <Button type="submit" variant="secondary" value="draft" disabled={state.kind === 'saving'}>
+          <Button
+            type="submit"
+            variant="secondary"
+            value="draft"
+            disabled={state.kind === 'saving'}
+          >
             {draftLabel}
           </Button>
         ) : null}
@@ -227,9 +323,30 @@ export function ApiForm({ action, method = 'POST', fields, submitLabel, extra, w
 }
 
 /** A button that sends a fixed body (or none) to a route. */
-export function ApiButton({ action, method = 'POST', body, label, successMessage = 'Done.', variant = 'secondary', showResult = false }: { action: string; method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: unknown; label: string; successMessage?: string; variant?: 'primary' | 'secondary' | 'danger'; showResult?: boolean }) {
+export function ApiButton({
+  action,
+  method = 'POST',
+  body,
+  label,
+  successMessage = 'Done.',
+  variant = 'secondary',
+  showResult = false,
+}: {
+  action: string;
+  method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body?: unknown;
+  label: string;
+  successMessage?: string;
+  variant?: 'primary' | 'secondary' | 'danger';
+  showResult?: boolean;
+}) {
   const router = useRouter();
-  const [state, setState] = useState<{ kind: 'idle' } | { kind: 'saving' } | { kind: 'error'; error: ErrorView } | { kind: 'done'; data: unknown }>({ kind: 'idle' });
+  const [state, setState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'saving' }
+    | { kind: 'error'; error: ErrorView }
+    | { kind: 'done'; data: unknown }
+  >({ kind: 'idle' });
   async function onClick() {
     setState({ kind: 'saving' });
     try {
@@ -251,7 +368,9 @@ export function ApiButton({ action, method = 'POST', body, label, successMessage
       {state.kind === 'error' ? <ErrorAlert error={state.error} /> : null}
       {state.kind === 'done' ? (
         <Alert tone="success" title={successMessage}>
-          {showResult ? <pre className="el-field-hint">{JSON.stringify(state.data, null, 2)}</pre> : null}
+          {showResult ? (
+            <pre className="el-field-hint">{JSON.stringify(state.data, null, 2)}</pre>
+          ) : null}
         </Alert>
       ) : null}
     </div>

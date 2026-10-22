@@ -5,10 +5,10 @@ import { Alert, Card, DataTable, EmptyState, StatusBadge } from '@elevate/shared
 import { addDays, toIsoDate } from '@elevate/shared-types';
 import { followUpDaySummary } from '@elevate/business-ops-os/leads';
 import { taskDaySummary } from '@elevate/business-ops-os/work';
-import { CONTENT_STATES, formatIst, modulePath } from '../domain';
+import { formatIst, modulePath } from '../domain';
 import { campaignResults, listCampaigns, loadDashboard } from '../server';
-import { ContentStateBadge, IntegrationBadge } from '../ui/badges';
 import { CampaignResultsTable } from '../ui/campaigns';
+import { OverviewTiles, PipelineCharts } from '../ui/overview';
 import { MarketingPage, Section, type SearchParams } from '../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -28,14 +28,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   );
 }
 
+const failed = () => 'failed' as const;
+
 async function Overview({ user }: { user: AuthenticatedUser }) {
   const db = getDb();
   const d = await loadDashboard(db);
-  const running = await campaignResults(
-    db,
-    (await listCampaigns(db)).filter((c) => c.status === 'active'),
-  );
-  const today = toIsoDate(new Date(d.asOf));
   if (d.totalItems === 0 && d.accountCount === 0) {
     return (
       <EmptyState
@@ -49,6 +46,16 @@ async function Overview({ user }: { user: AuthenticatedUser }) {
       />
     );
   }
+  const running = await campaignResults(
+    db,
+    (await listCampaigns(db)).filter((c) => c.status === 'active'),
+  );
+  // Shared Business Ops summaries in the user's scope; a failure is shown in words, never as 0.
+  const [followUps, tasks] = await Promise.all([
+    can(user, 'ops:leads:read') ? followUpDaySummary(db, user).catch(failed) : undefined,
+    can(user, 'ops:tasks:read') ? taskDaySummary(db, user).catch(failed) : undefined,
+  ]);
+  const today = toIsoDate(new Date(d.asOf));
   return (
     <div className="el-stack">
       {d.unreconciledConflicts.length ? (
@@ -59,76 +66,18 @@ async function Overview({ user }: { user: AuthenticatedUser }) {
           <a href={modulePath('accounts')}>See accounts</a>
         </Alert>
       ) : null}
-      <Today user={user} />
+      <OverviewTiles
+        due={d.upcomingScheduled.length}
+        awaiting={d.awaitingApproval.length}
+        running={running.length}
+        ideas={d.ideasTotal}
+        quarantined={d.ideasQuarantined}
+        followUps={followUps}
+        tasks={tasks}
+      />
+      <PipelineCharts d={d} />
       <Card
-        title={`Content due this week (${d.upcomingScheduled.length})`}
-        description={`Placements scheduled from now to ${addDays(today, 7)} (IST). Planned but unscheduled posts are on the calendar, not counted here.`}
-        actions={<a href={modulePath('calendar')}>Open the content calendar</a>}
-      >
-        <DataTable
-          compact
-          rows={d.upcomingScheduled}
-          rowKey={(r) => r.id}
-          empty={<EmptyState title="Nothing scheduled in the next 7 days" />}
-          columns={[
-            { key: 'when', header: 'When (IST)', render: (r) => formatIst(r.scheduledAt) },
-            { key: 'account', header: 'Account', render: (r) => r.accountCode },
-            {
-              key: 'code',
-              header: 'Placement',
-              render: (r) =>
-                r.contentItemId ? (
-                  <a href={modulePath(`content/${r.contentItemId}`)}>{r.code}</a>
-                ) : (
-                  r.code
-                ),
-            },
-            { key: 'title', header: 'Content', render: (r) => r.title ?? '—' },
-          ]}
-        />
-      </Card>
-      {d.overdueScheduled.length ? (
-        <Alert
-          tone="warning"
-          title={`${d.overdueScheduled.length} scheduled placement(s) are past their time without a publication record`}
-        >
-          {d.overdueScheduled.map((o) => o.code ?? o.id).join(', ')} — record the publication (with
-          its live link) or reschedule. Legacy rows keep their tracker status until someone confirms
-          them.
-        </Alert>
-      ) : null}
-      <Card
-        title={`Awaiting approval (${d.awaitingApproval.length})`}
-        description="Content items in review, oldest first. Open one to approve or request changes."
-      >
-        <DataTable
-          compact
-          rows={d.awaitingApproval}
-          rowKey={(r) => r.id}
-          empty={<EmptyState title="Nothing is waiting for approval" />}
-          columns={[
-            { key: 'idea', header: 'Idea', render: (r) => r.ideaCode ?? '—' },
-            {
-              key: 'title',
-              header: 'Content',
-              render: (r) => <a href={modulePath(`content/${r.id}`)}>{r.title}</a>,
-            },
-            {
-              key: 'request',
-              header: 'Approval request',
-              render: (r) =>
-                r.hasApprovalRequest ? (
-                  'open'
-                ) : (
-                  <StatusBadge tone="warning">none — imported state; resubmit</StatusBadge>
-                ),
-            },
-            { key: 'updated', header: 'Since', render: (r) => formatIst(r.updatedAt) },
-          ]}
-        />
-      </Card>
-      <Card
-        title={`Campaigns running (${running.length})`}
+        title="Campaigns running"
         description="Campaigns with status active. Published counts only posts with a live link; views come from imported CSV numbers (missing is not zero)."
         actions={<a href={modulePath('campaigns')}>All campaigns</a>}
       >
@@ -166,95 +115,75 @@ async function Overview({ user }: { user: AuthenticatedUser }) {
           />
         </Card>
       ) : null}
-      <div className="el-grid">
-        <Card
-          title="Content items by state"
-          description={`${d.totalItems} items (legacy-imported items carry their tracker status).`}
+      <Card
+        title="Content due this week"
+        description={`Placements scheduled from now to ${addDays(today, 7)} (IST). Planned but unscheduled posts are on the calendar, not counted here.`}
+        actions={<a href={modulePath('calendar')}>Open the content calendar</a>}
+      >
+        <DataTable
+          compact
+          rows={d.upcomingScheduled}
+          rowKey={(r) => r.id}
+          empty={<EmptyState title="Nothing scheduled in the next 7 days" />}
+          columns={[
+            { key: 'when', header: 'When (IST)', render: (r) => formatIst(r.scheduledAt) },
+            { key: 'account', header: 'Account', render: (r) => r.accountCode },
+            {
+              key: 'code',
+              header: 'Placement',
+              render: (r) =>
+                r.contentItemId ? (
+                  <a href={modulePath(`content/${r.contentItemId}`)}>{r.code}</a>
+                ) : (
+                  r.code
+                ),
+            },
+            { key: 'title', header: 'Content', render: (r) => r.title ?? '—' },
+          ]}
+        />
+      </Card>
+      {d.overdueScheduled.length ? (
+        <Alert
+          tone="warning"
+          title={`${d.overdueScheduled.length} scheduled placement(s) are past their time without a publication record`}
         >
-          <ul>
-            {CONTENT_STATES.map((s) => (
-              <li key={s}>
-                <ContentStateBadge state={s} /> {d.itemsByState[s]}
-                {d.legacyItemsByState[s] ? (
-                  <span className="el-field-hint"> ({d.legacyItemsByState[s]} from legacy)</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </Card>
-        <Card
-          title="Accounts by integration"
-          description="No live publishing adapter exists (D-014); sandbox means the mock adapter only."
-        >
-          <ul>
-            {(['not_configured', 'sandbox', 'connected', 'error'] as const).map((s) => (
-              <li key={s}>
-                <IntegrationBadge status={s} /> {d.accountsByIntegration[s]}
-              </li>
-            ))}
-          </ul>
-        </Card>
-        <Card title="Ideas" description="Quarantined rows share a legacy ID and wait for OD-003.">
-          <p>
-            {d.ideasTotal} ideas ·{' '}
-            <StatusBadge tone={d.ideasQuarantined ? 'warning' : 'neutral'}>
-              {d.ideasQuarantined} quarantined
-            </StatusBadge>
-          </p>
-          <a href={modulePath('ideas')}>Open the idea tracker</a>
-        </Card>
-      </div>
+          {d.overdueScheduled.map((o) => o.code ?? o.id).join(', ')} — record the publication (with
+          its live link) or reschedule. Legacy rows keep their tracker status until someone confirms
+          them.
+        </Alert>
+      ) : null}
+      <Card
+        id="awaiting"
+        title="Awaiting approval"
+        description="Content items in review, oldest first. Open one to approve or request changes."
+      >
+        <DataTable
+          compact
+          rows={d.awaitingApproval}
+          rowKey={(r) => r.id}
+          empty={<EmptyState title="Nothing is waiting for approval" />}
+          columns={[
+            { key: 'idea', header: 'Idea', render: (r) => r.ideaCode ?? '—' },
+            {
+              key: 'title',
+              header: 'Content',
+              render: (r) => <a href={modulePath(`content/${r.id}`)}>{r.title}</a>,
+            },
+            {
+              key: 'request',
+              header: 'Approval request',
+              render: (r) =>
+                r.hasApprovalRequest ? (
+                  'open'
+                ) : (
+                  <StatusBadge tone="warning">none — imported state; resubmit</StatusBadge>
+                ),
+            },
+            { key: 'updated', header: 'Since', render: (r) => formatIst(r.updatedAt) },
+          ]}
+        />
+      </Card>
       <p className="el-field-hint">As of {formatIst(d.asOf)}.</p>
     </div>
-  );
-}
-
-/** Follow-ups and the user's own tasks/EOD for today, from the shared Business Ops services. */
-async function Today({ user }: { user: AuthenticatedUser }) {
-  const leads = can(user, 'ops:leads:read');
-  const tasks = can(user, 'ops:tasks:read');
-  if (!leads && !tasks) return null;
-  // undefined = could not load (shown as such), null = no staff record linked to this account.
-  const [f, t] = await Promise.all([
-    leads ? followUpDaySummary(getDb(), user).catch(() => undefined) : undefined,
-    tasks ? taskDaySummary(getDb(), user).catch(() => undefined) : undefined,
-  ]);
-  const noStaff = (what: string) =>
-    `No staff record is linked to your account, so your ${what} cannot be shown.`;
-  return (
-    <Card
-      title="Today"
-      description="Open lead follow-ups in your scope (overdue = due before today) and your own tasks for today (IST)."
-    >
-      {leads ? (
-        f ? (
-          <p>
-            Follow-ups: <a href={modulePath('follow-ups?view=due_today')}>{f.dueToday} due today</a>{' '}
-            · <a href={modulePath('follow-ups?view=overdue')}>{f.overdue} overdue</a> ·{' '}
-            <a href={modulePath('follow-ups')}>
-              {f.upcoming} upcoming (next {f.upcomingWindowDays} days)
-            </a>{' '}
-            · as of {formatIst(f.asOf)}
-          </p>
-        ) : (
-          <p className="el-field-hint">
-            {f === null ? noStaff('follow-ups') : 'Follow-up counts could not be loaded.'}
-          </p>
-        )
-      ) : null}
-      {tasks ? (
-        t ? (
-          <p>
-            <a href={modulePath('tasks')}>My tasks</a>: {t.open} open, {t.dueToday} due today,{' '}
-            {t.overdue} overdue · <a href={modulePath('tasks?tab=eod')}>EOD report</a> {t.day}:{' '}
-            <StatusBadge>{t.eod.replace('_', ' ')}</StatusBadge> · as of {formatIst(t.asOf)}
-          </p>
-        ) : (
-          <p className="el-field-hint">
-            {t === null ? noStaff('tasks') : 'Your task status could not be loaded.'}
-          </p>
-        )
-      ) : null}
-    </Card>
   );
 }

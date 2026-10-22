@@ -7,6 +7,7 @@ import { load, Section } from '../../ui/frame';
 import { listHref, Pager } from '../../ui/list-controls';
 import { RecordTable } from '../../ui/record-table';
 import type { LeadsBodyProps } from './leads-body';
+import '../ops.css';
 
 const VIEWS = [
   ['open', 'Open'],
@@ -18,12 +19,13 @@ const VIEWS = [
 const PAGE_SIZE = 25;
 
 /** `<base>/follow-ups`: lead follow-ups in the caller's scope by view; a row opens its lead. */
-export function FollowUpsBody({ user, base, searchParams: sp }: LeadsBodyProps) {
+export function FollowUpsBody({ user, base, searchParams: sp, tabs }: LeadsBodyProps) {
   return (
     <>
       <PageHeader
         title="Follow-ups"
         description="Next actions on leads, each with an owner and an IST due date. Open the lead to record the outcome."
+        tabs={tabs}
       />
       <Section>
         <FollowUps user={user} sp={sp} base={base} />

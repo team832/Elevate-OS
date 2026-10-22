@@ -1,0 +1,115 @@
+/* Marketing OS: layout only. Colours, shapes and depth come from @elevate/shared-ui tokens. */
+
+/* Two chart panels side by side when there is room. */
+.mkt-panels {
+  display: grid;
+  gap: var(--el-space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+}
+
+/* Version copy reads as text, not code. */
+.mkt-copy {
+  margin: 0 0 var(--el-space-2);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The facts of one record: a label column and a value column. */
+.mkt-facts {
+  display: grid;
+  grid-template-columns: minmax(6rem, max-content) minmax(0, 1fr);
+  gap: var(--el-space-2) var(--el-space-4);
+  margin: 0;
+}
+.mkt-facts dt {
+  color: var(--el-text-muted);
+  font-size: var(--el-text-sm);
+  font-weight: 600;
+}
+.mkt-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Content calendar: one well per IST day, placements as raised blocks with their state in words.
+ * A list on phones, as many 10rem wells as fit from 720px, a 7-column week (Monday first) from 1440px. */
+.mkt-weekdays {
+  display: none;
+}
+.mkt-calendar {
+  display: grid;
+  gap: var(--el-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mkt-day {
+  min-width: 0;
+  padding: var(--el-space-3);
+  border-radius: var(--el-radius-sm);
+  background: var(--el-well);
+  box-shadow: var(--el-shadow-inset);
+}
+.mkt-day[aria-current='date'] {
+  outline: 2px solid var(--el-accent);
+  outline-offset: -2px;
+}
+.mkt-day-head {
+  margin: 0 0 var(--el-space-2);
+  font-family: var(--el-font-display);
+  font-size: var(--el-text-md);
+  font-weight: 650;
+}
+.mkt-day-empty {
+  margin: 0;
+  color: var(--el-text-muted);
+  font-size: var(--el-text-xs);
+}
+.mkt-day-list {
+  display: grid;
+  gap: var(--el-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mkt-slot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--el-space-1) var(--el-space-2);
+  padding: var(--el-space-2) var(--el-space-3);
+  border-radius: var(--el-radius-sm);
+  background: var(--el-surface);
+  box-shadow: var(--el-shadow);
+  font-size: var(--el-text-sm);
+  overflow-wrap: anywhere;
+}
+.mkt-slot-when {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+@media (min-width: 720px) {
+  .mkt-calendar {
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  }
+}
+@media (min-width: 1440px) {
+  .mkt-weekdays,
+  .mkt-calendar {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  .mkt-weekdays {
+    display: grid;
+    gap: var(--el-space-2);
+    color: var(--el-text-muted);
+    font-size: var(--el-text-xs);
+    font-weight: 650;
+  }
+  .mkt-weekdays > span {
+    padding-left: var(--el-space-3);
+  }
+  .mkt-day:first-child {
+    grid-column-start: var(--mkt-start, 1);
+  }
+}

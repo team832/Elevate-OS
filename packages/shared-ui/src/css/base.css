@@ -1,74 +1,101 @@
 /*
- * Elevate OS design tokens and component styles. Plain CSS, no build step.
- * Import once in each app's root layout:  import '@elevate/shared-ui/styles.css';
- * All classes are prefixed `el-`. Direction and decisions: owner, 21 Oct 2026
- * ("keep black + Elevate orange, redesign the layout").
+ * Elevate OS design tokens. Plain CSS, no build step. Redesign of 22 Oct 2026
+ * (owner brief: "a completely different UI/UX … curves, not edges … 3D with just enough
+ * blur … complete dashboards"; keep only the Elevate branding). Supersedes D-054/D-059.
  *
- * LAYOUT: a black frame (sidebar, top bar and each page's masthead with its area
- * tabs) around a warm-dark work tray. Neutrals are tinted toward the brand orange.
- * Depth is a step in lightness plus a hairline: frame #000 < well #0a0907 < canvas
- * #0d0b09 < card #16130f < overlay #1a1712 < raised #1f1b16.
- * Orange marks only action and position: primary buttons, the current nav item,
- * the current tab or KPI filter, the current journey stage.
+ * LIGHT, WARM, TANGIBLE. A linen canvas lit from the top-left; white surfaces float on it
+ * with a 1px top highlight and a warm shadow (one light source, never a coloured glow).
+ * Blur ("glass") only on floating layers: the top bar, popovers, sheets and dialog backdrops.
  *
- * CONTRAST (WCAG 2.2 AA, computed on every surface above): text #f5f1ea >= 15.2:1;
- * muted #b3a99b >= 7.4:1; orange text #ffa43d >= 8.7:1; black on the primary button
- * 8.7:1; status text on its own 14% tint >= 5.4:1; text on the orange tint >= 5.6:1;
- * control borders #7a6f62 >= 3.5:1; focus ring >= 8.7:1. Status colours sit next to a
- * word, never alone, and are hue-separated from the brand orange.
+ * SHAPE FAMILY (no square corners): pills for anything pressed or that labels state
+ * (buttons, badges, chips, tabs); 12px for things typed into and wells; 18px cards and
+ * tiles; 24px floating panels (sidebar rail, dialogs, sheets).
  *
- * TYPE: the platform's own UI face (Segoe UI Variable on the office Windows PCs,
- * SF Pro on Macs, Roboto on Android): no download, no CSP change, crisp at 13-15px.
- * Titles and figures use its Display optical size. Scale: 12 meta, 13 tables and
- * labels, 14 navigation, 15 body, 18 section titles, 24-30 page titles, 30 figures.
+ * COLOUR: orange marks only action and position (primary button, current place, current
+ * stage). Orange is a fill with ink on it (7.4:1); orange *text* uses the darker
+ * --el-accent-text (5.1:1 on the canvas). Status colours sit next to a word, never alone.
+ *
+ * CONTRAST (WCAG 2.2 AA, computed 22 Oct 2026 on canvas #f4f1eb / white / well / raised):
+ * ink #1b1714 >= 15:1; muted #625a51 >= 5.7:1; accent text #a84a08 >= 4.8:1; focus #c2520a
+ * >= 3.9:1; control border #857a6d >= 3.5:1; status text on its tint >= 4.6:1; single-series
+ * chart bar #e06400 3.5:1 on white (values are always printed beside bars).
+ *
+ * TYPE: Bricolage Grotesque (OFL, vendored latin subset) for titles, figures and the
+ * workspace name; the platform's own UI face for body, tables and forms (crisp at 13–15px,
+ * no download). Scale: 12 meta · 13 tables · 14 nav · 15 body · 18 section · 22 panel
+ * title · 28–34 page title · 30 figures.
  */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('../../fonts/BricolageGrotesque-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* frame: sidebar, top bar, page masthead */
-  --el-ink: #000000;
-  --el-ink-raised: #1a1713;
-  --el-ink-line: #231f1a;
-  --el-ink-text: #d9d2c7;
-  --el-ink-text-strong: #ffffff;
-  --el-ink-text-muted: #a39a8d;
+  /* surfaces, from the canvas up */
+  --el-bg: #f4f1eb; /* canvas */
+  --el-well: #f8f6f1; /* tables, inputs, detail values */
+  --el-surface: #ffffff; /* cards, tiles, the sidebar rail */
+  --el-surface-muted: #efebe4; /* raised rows, header bars, hover */
+  --el-overlay: #ffffff; /* dialogs and sheets (solid fallback under the glass) */
+  --el-border: #e6e0d6;
+  --el-border-strong: #d2cabd;
+  --el-control-border: #857a6d;
+  --el-text: #1b1714;
+  --el-text-muted: #625a51;
 
-  /* work tray */
-  --el-bg: #0d0b09;
-  --el-well: #0a0907; /* tables, inputs, detail values */
-  --el-surface: #16130f; /* cards */
-  --el-overlay: #1a1712; /* dialogs, menus */
-  --el-surface-muted: #1f1b16; /* raised: table heads, hover, header bars */
-  --el-border: #2b2621;
-  --el-border-strong: #40392f;
-  --el-control-border: #7a6f62;
-  --el-text: #f5f1ea;
-  --el-text-muted: #b3a99b;
+  /* Older names from the dark frame, now the same light surfaces (app CSS keeps working). */
+  --el-ink: var(--el-surface);
+  --el-ink-raised: var(--el-surface-muted);
+  --el-ink-line: var(--el-border);
+  --el-ink-text: var(--el-text);
+  --el-ink-text-strong: var(--el-text);
+  --el-ink-text-muted: var(--el-text-muted);
 
   --el-accent: #ff8623;
-  --el-accent-strong: #ffa43d;
-  --el-accent-contrast: #000000;
-  --el-accent-text: #ffa43d;
+  --el-accent-strong: #f07a12; /* hover */
+  --el-accent-contrast: #1b1714;
+  --el-accent-text: #a84a08;
   --el-accent-soft: rgb(255 134 35 / 0.14);
-  --el-focus: #ffa43d;
+  --el-accent-wash: rgb(255 134 35 / 0.08);
+  --el-focus: #c2520a;
 
-  --el-success-fg: #5fd38a;
-  --el-success-bg: rgb(95 211 138 / 0.14);
-  --el-warning-fg: #f0cf5a;
-  --el-warning-bg: rgb(240 207 90 / 0.14);
-  --el-danger-fg: #ff7b7b;
-  --el-danger-bg: rgb(255 123 123 / 0.14);
-  --el-info-fg: #7ab8ff;
-  --el-info-bg: rgb(122 184 255 / 0.14);
-  --el-neutral-fg: #d9d2c7;
-  --el-neutral-bg: rgb(255 255 255 / 0.08);
+  --el-success-fg: #176e42;
+  --el-success-bg: #e2f3e9;
+  --el-warning-fg: #875c00;
+  --el-warning-bg: #fcefcf;
+  --el-danger-fg: #b3261e;
+  --el-danger-bg: #fde7e5;
+  --el-info-fg: #1f5eaa;
+  --el-info-bg: #e4ecf9;
+  --el-neutral-fg: #4b443c;
+  --el-neutral-bg: #efebe4;
+
+  /* charts: one series = the brand bar; categorical slots in fixed order (never cycled),
+   * validated with the dataviz palette checker on white (22 Oct 2026). */
+  --el-chart-bar: #e06400;
+  --el-chart-track: #efebe4;
+  --el-chart-1: #2a78d6;
+  --el-chart-2: #eb6834;
+  --el-chart-3: #1baf7a;
+  --el-chart-4: #eda100;
+  --el-chart-5: #e87ba4;
+  --el-chart-6: #008300;
+  --el-chart-other: #6b6b6b;
 
   /* type */
+  --el-font-display:
+    'Bricolage Grotesque', 'Segoe UI Variable Display', 'Segoe UI', -apple-system,
+    BlinkMacSystemFont, 'Helvetica Neue', Roboto, 'Noto Sans', sans-serif;
   --el-font:
     'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue',
-    Roboto, 'Noto Sans', sans-serif;
-  --el-font-display:
-    'Segoe UI Variable Display', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue',
     Roboto, 'Noto Sans', sans-serif;
   --el-font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
   --el-text-xs: 0.75rem; /* 12 meta */
@@ -76,27 +103,59 @@
   --el-text-nav: 0.875rem; /* 14 navigation, tabs */
   --el-text-md: 0.9375rem; /* 15 body */
   --el-text-lg: 1.125rem; /* 18 section titles */
-  --el-text-xl: clamp(1.5rem, 1.15rem + 1vw, 1.875rem); /* 24-30 page titles */
+  --el-text-title: 1.375rem; /* 22 panel titles, modal titles */
+  --el-text-xl: clamp(1.75rem, 1.35rem + 1.1vw, 2.125rem); /* 28–34 page titles */
   --el-text-2xl: 1.875rem; /* 30 figures */
 
-  /* space, shape, depth */
+  /* space */
   --el-space-1: 0.25rem;
   --el-space-2: 0.5rem;
   --el-space-3: 0.75rem;
   --el-space-4: 1rem;
   --el-space-5: 1.5rem;
   --el-space-6: 2rem;
-  --el-radius: 10px; /* cards, dialogs, strips */
-  --el-radius-sm: 6px; /* controls, wells */
-  --el-radius-xs: 4px; /* badges, segments */
-  --el-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
-  --el-shadow-overlay: 0 24px 64px rgb(0 0 0 / 0.75), 0 2px 8px rgb(0 0 0 / 0.6);
-  --el-sidebar-width: 15.5rem;
-  --el-topbar-height: 3.5rem;
+  --el-space-7: 3rem;
+
+  /* shape */
+  --el-radius-pill: 999px;
+  --el-radius-xs: 999px; /* badges, chips, segments (older name) */
+  --el-radius-sm: 12px; /* inputs, wells, table wrappers */
+  --el-radius: 18px; /* cards, tiles */
+  --el-radius-lg: 24px; /* sidebar rail, dialogs, sheets */
+
+  /* depth: one warm light from the top-left */
+  --el-shadow-ink: 60 42 20;
+  --el-highlight: inset 0 1px 0 rgb(255 255 255 / 0.85);
+  --el-edge: 0 0 0 1px rgb(var(--el-shadow-ink) / 0.06);
+  --el-shadow:
+    var(--el-highlight), var(--el-edge), 0 1px 2px rgb(var(--el-shadow-ink) / 0.05),
+    0 10px 28px -10px rgb(var(--el-shadow-ink) / 0.14);
+  --el-shadow-raised:
+    var(--el-highlight), var(--el-edge), 0 2px 4px rgb(var(--el-shadow-ink) / 0.06),
+    0 18px 44px -14px rgb(var(--el-shadow-ink) / 0.22);
+  --el-shadow-overlay:
+    var(--el-highlight), 0 2px 8px rgb(var(--el-shadow-ink) / 0.08),
+    0 28px 72px -18px rgb(var(--el-shadow-ink) / 0.38);
+  --el-shadow-inset: inset 0 1px 2px rgb(var(--el-shadow-ink) / 0.06);
+  --el-shadow-button: 0 6px 14px -6px rgb(var(--el-shadow-ink) / 0.35);
+
+  /* glass: just enough blur, only on floating layers (.el-glass) */
+  --el-glass-bg: rgb(255 253 250 / 0.74);
+  --el-glass-blur: blur(16px) saturate(1.35);
+  --el-backdrop: rgb(40 28 16 / 0.32);
+  --el-backdrop-blur: blur(6px);
+
+  /* layout */
+  --el-gutter: 0.75rem; /* inset of the floating rail and top bar */
+  --el-sidebar-width: 17rem;
+  --el-topbar-height: 3.75rem;
   --el-content-width: 110rem;
-  /* page padding: the masthead bleeds to these edges */
   --el-main-px: var(--el-space-4);
   --el-main-pt: var(--el-space-4);
+
+  /* motion: one easing, short; off under prefers-reduced-motion */
+  --el-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --el-dur: 180ms;
 }
 
 *,
@@ -109,8 +168,15 @@ body {
   margin: 0;
   padding: 0;
 }
-body {
+html {
   background: var(--el-bg);
+}
+/* The canvas: warm linen with a soft light at the top-left (the same light the shadows fall from). */
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(80rem 36rem at -6% -12%, var(--el-accent-wash), transparent 62%), var(--el-bg);
   color: var(--el-text);
   font-family: var(--el-font);
   font-size: var(--el-text-md);
@@ -118,14 +184,14 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-/* Links read as links by their underline, not by colour: orange is kept for action. */
 a {
-  color: var(--el-text);
-  text-decoration-color: var(--el-control-border);
+  color: var(--el-accent-text);
+  text-decoration: underline;
+  text-decoration-color: rgb(168 74 8 / 0.4);
+  text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
 }
 a:hover {
-  color: var(--el-accent-text);
   text-decoration-color: currentColor;
 }
 :focus-visible {
@@ -151,4 +217,30 @@ a:hover {
 .el-num,
 .el-tabular {
   font-variant-numeric: tabular-nums;
+}
+/* Floating layers only: top bar, popovers, sheets, dialogs. Never cards or tables. */
+.el-glass {
+  background: var(--el-glass-bg);
+  -webkit-backdrop-filter: var(--el-glass-blur);
+  backdrop-filter: var(--el-glass-blur);
+}
+/* Without blur support, or when the person prefers less transparency, the glass tokens
+ * themselves turn solid, so app rules that use the tokens directly are covered too. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --el-glass-bg: var(--el-surface);
+    --el-glass-blur: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --el-glass-bg: var(--el-surface);
+    --el-glass-blur: none;
+    --el-backdrop-blur: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --el-dur: 0ms;
+  }
 }

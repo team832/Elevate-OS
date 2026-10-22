@@ -46,7 +46,10 @@ beforeAll(async () => {
     managerId: lead.staffId,
     name: 'Sample Mid',
   });
-  low = await staffUser(ctx.db, ['finance_officer'], { managerId: mid.staffId, name: 'Sample Low' });
+  low = await staffUser(ctx.db, ['finance_officer'], {
+    managerId: mid.staffId,
+    name: 'Sample Low',
+  });
   peer = await staffUser(ctx.db, ['admissions_counsellor'], { name: 'Sample Peer' });
   outsider = await createTestUser(ctx.db, { roles: ['platform_admin'] }); // no Ops task access (marketing has its own tasks since D-073)
 });

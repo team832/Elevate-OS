@@ -53,10 +53,10 @@ npm run db:seed                             # runs seed `marketing.legacy` after
 ```
 Environment: root `.env`; `MARKETING_PUBLISHING_ADAPTER=mock|disabled`. The dev database needs the wave-3 baseline migration (IR-MKT-02) before `db:seed`.
 
-## 5. Screens (`AppShell`, loading / empty / error / success states)
+## 5. Screens (`AppShell` on the shared light system since 22 Oct 2026, D-074 — `marketing.css` holds only the overview panels, facts lists and the calendar grid; loading / empty / error / success states)
 | Path | Permission | Shows |
 |---|---|---|
-| `/marketing` | module:access | Overview (22 Oct 2026): **Today** (own tasks, EOD status, follow-ups due today / overdue / upcoming as links with an as-of time), Content due this week, Awaiting approval, Campaigns running (verified results only), Metric imports (last import per Instagram/YouTube account, "never" when none), then the pipeline cards: items by state, accounts by integration, ideas, OD-001 alert |
+| `/marketing` | module:access | Overview dashboard (22 Oct 2026): KPI tiles — content due this week, awaiting approval, campaigns running, ideas (quarantined in the note), follow-ups due today and overdue, own open tasks and the EOD state (from the Business Ops summaries; "Not available" with the reason when a summary fails or no staff record is linked) — then content items by state as bars (legacy counts in the note), accounts by integration as a donut (sandbox = mock only), campaigns running (verified results only), metric imports (last import per Instagram/YouTube account, "no data imported yet"), the content-due and awaiting-approval lists and the OD-001 alert |
 | `/marketing/leads`, `/marketing/leads/:id` | `ops:leads:read` | Business Ops' lead list, pop-up and full lead (`LeadsBody`, `LeadBody`); contact fields only, no KYC |
 | `/marketing/follow-ups` | `ops:leads:read` | Follow-ups list (`FollowUpsBody`; new — Ops has no page of its own) |
 | `/marketing/campaigns/:id` | content:read | Campaign detail: placements and results from imported numbers only (missing stays missing); conversion outcomes are not shown (enquiries carry only a free-text `campaignRef`) |
@@ -67,13 +67,13 @@ Environment: root `.env`; `MARKETING_PUBLISHING_ADAPTER=mock|disabled`. The dev 
 | `/marketing/accounts` | accounts:read | registry, unconfirmed names/handles labelled, cadence + status, integration badge, “Check adapter” (manage) |
 | `/marketing/ideas`, `/ideas/new`, `/ideas/:id` | ideas:read / ideas:write | filters, quarantine groups with proposed codes; create form; detail with live duplicate candidates, content items, placements, status change |
 | `/marketing/content/:id` | content:read | versions + assets, brand-rule check, approver checklist and decision, workflow actions, placements with schedule/publish/manual record/cancel, publishing records, approval history, assignees, comments |
-| `/marketing/calendar` | content:read | scheduled/published by IST date and account with hard/warning conflicts; planned (not counted) |
+| `/marketing/calendar` | content:read | a day-by-day grid (one well per IST day, as many 10rem wells as fit from 720px, a 7-column week from 1440px, today marked) with each placement's time, account, state in words and clash/warning counts; conflicts listed under the grid; planned placements (not counted) |
 | `/marketing/metrics/import` | metrics:read (import: metrics:import) | CSV upload/paste, declared date format, capture time, dry run; recent imports with rejected rows |
 | `/marketing/metrics/weekly` | metrics:read | week by account/campaign with coverage, planned vs published (real / legacy-reported / sandbox), accounts with no data |
 | `/marketing/campaigns`, `/marketing/settings` | content:read / module:access | campaigns; policies (proposed) and brand rules |
 
 ## 6. Routes
-All in `docs/API.md`. 22 Oct 2026: 31 route files mounting Business Ops' task, EOD, lead, lead-source and follow-up handlers, plus `POST auth/workspace`; `GET dashboard` adds `metricImports[]`. Before that, 38 route files (35 added in wave 2 plus health, login, logout: accounts, ideas, content items, placements, collab groups, campaigns, metrics, rules, settings, dashboard, plus `GET /marketing/api/internal/v1/summary`).
+All in `docs/API.md`. 22 Oct 2026: 29 route files mounting Business Ops' task, EOD, lead, lead-source and follow-up handlers (31 until the two lead-handoff re-exports were removed, D-075), plus `POST auth/workspace`; `GET dashboard` adds `metricImports[]`. Before that, 38 route files (35 added in wave 2 plus health, login, logout: accounts, ideas, content items, placements, collab groups, campaigns, metrics, rules, settings, dashboard, plus `GET /marketing/api/internal/v1/summary`).
 
 ## 7. Data model
 20 tables — `docs/DOMAIN_MODEL.md`. Algorithms — `docs/ALGORITHMS.md` (11, in the 10-point format). Layers — `docs/ARCHITECTURE.md`. Tests — `docs/TEST_PLAN.md`.
@@ -85,4 +85,4 @@ Workspace packages only (no new npm dependencies): `@elevate/server-kit` (routes
 `marketing.legacy` (depends on core.users, core.staff_members): 9 proposed policy settings, 45 rules, 10 accounts + ACC-CONFLICT-001, 59 ideas (8 quarantined in 4 groups, proposed codes CLAT-028/GEN-014/CUET-006/COM-006 reserved, not applied), 34 content items + 36 placements (2 ambiguous) with legacy statuses preserved, 60 manual-audit snapshots. No people, no invented content, metrics or results. Re-running inserts nothing.
 
 ## 10. Status and outstanding work
-Requirement-level status: `requirements/REQUIREMENTS.md`. Not built (Proposed): idea inbox (MKT-005), pillar/series lists (006), fact register (013), repurposing (019), lead-time flags (027), post reviews (031), competitor scans (033), enquiry handoff event (036), paid campaigns, block override with reason, director-only approval for fees/offers, republish with reason, hold flag API, match confirmation UI, real publishing/metrics adapters (OD-006), browser E2E tests. Requests to other owners: `docs/INTEGRATION_REQUESTS.md`.
+Requirement-level status: `requirements/REQUIREMENTS.md`. Not built (Proposed): idea inbox (MKT-005), pillar/series lists (006), fact register (013), repurposing (019), lead-time flags (027), post reviews (031), competitor scans (033), enquiry handoff event (036; retired on 22 Oct 2026, D-075 — Marketing works the shared lead list and no other system sends leads yet), paid campaigns, block override with reason, director-only approval for fees/offers, republish with reason, hold flag API, match confirmation UI, real publishing/metrics adapters (OD-006), browser E2E tests. Requests to other owners: `docs/INTEGRATION_REQUESTS.md`.

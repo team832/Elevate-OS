@@ -16,6 +16,20 @@ export const fmtDay = (d: Date) => day.format(d);
 export const roleLabels = (roles: readonly string[]) =>
   roles.map((r) => ROLES[r as RoleKey]?.label ?? r).join(', ');
 
+/** One pill per role; none held = a warning in words. */
+export function RoleBadges({ roles }: { roles: readonly string[] }) {
+  if (!roles.length) return <StatusBadge tone="warning">No roles yet</StatusBadge>;
+  return (
+    <span className="ur-badges">
+      {roles.map((r) => (
+        <StatusBadge key={r} tone="neutral">
+          {roleLabels([r])}
+        </StatusBadge>
+      ))}
+    </span>
+  );
+}
+
 export function AccountStatus({ status }: { status: 'active' | 'disabled' }) {
   return status === 'active' ? (
     <StatusBadge tone="success">Active</StatusBadge>

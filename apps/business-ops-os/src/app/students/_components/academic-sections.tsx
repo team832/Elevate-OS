@@ -5,8 +5,9 @@
  * Academic cannot be read. Used by the profile (live; `show` picks the Attendance or Assessments
  * tab) and the report (frozen snapshot, everything).
  */
-import { Alert } from '@elevate/shared-ui';
+import { attendanceRateText } from '../../../domain/student-report';
 import { academicEvidence, type AcademicEvidence } from '../../../server/academic-summary';
+import { Unavailable } from '../../../ui/cross-module';
 import { fmtDate, fmtDateTime, humanise } from '../../../ui/format';
 import { load } from '../../../ui/frame';
 import { RecordTable } from '../../../ui/record-table';
@@ -32,10 +33,7 @@ export function AcademicEvidenceView({
     return (
       <Segment level={level} title="Results and attendance" description="From Academic OS.">
         {e.status === 'unavailable' ? (
-          <Alert tone="warning" title={`Source unavailable (checked ${fmtDateTime(e.checkedAt)})`}>
-            Academic OS could not be read ({e.reason}). No results or attendance are shown rather
-            than zeros.
-          </Alert>
+          <Unavailable name="Academic OS" result={{ reason: e.reason, fetchedAt: e.checkedAt }} />
         ) : (
           <p>Not enrolled in Academic OS yet, so there are no results or attendance to show.</p>
         )}
@@ -88,13 +86,8 @@ export function AcademicEvidenceView({
           <Segment level={level} flush title="Attendance" description={`Held classes, ${period}.`}>
             <DetailTable
               rows={[
-                {
-                  label: 'Classes attended',
-                  value:
-                    a.ratePercent === null
-                      ? 'No classes recorded in this period'
-                      : `${a.attended} of ${a.recorded - a.excused} recorded (${a.ratePercent}%)`,
-                },
+                { label: 'Attendance rate', value: attendanceRateText(a) },
+                { label: 'Attended', value: `${a.attended} of ${a.recorded} recorded` },
                 {
                   label: 'Recorded',
                   value: `${a.present} present, ${a.late} late, ${a.partial} partial, ${a.absent} absent, ${a.excused} excused`,

@@ -26,6 +26,7 @@ export default defineConfig({
     './src/schema/ops-eod.ts',
     './src/schema/ops-task-imports.ts',
     './src/schema/ops-review-acks.ts',
+    './src/schema/ops-teacher-reports.ts',
   ],
   out: './migrations',
   schemaFilter: ['core', 'marketing', 'academic', 'ops'],

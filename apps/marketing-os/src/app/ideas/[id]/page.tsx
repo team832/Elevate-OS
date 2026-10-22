@@ -64,7 +64,7 @@ export default async function IdeaDetailPage({
                         : ''}
                     </Alert>
                   ) : null}
-                  <dl>
+                  <dl className="mkt-facts">
                     <dt>Course</dt>
                     <dd>{idea.coursePrefix}</dd>
                     <dt>Status</dt>

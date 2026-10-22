@@ -37,7 +37,7 @@ export default async function MarketingSummaryPage({
     <Frame access={access} active="marketing-summary">
       <PageHeader
         title="Marketing summary"
-        description="Posts, reach and attributed leads from Marketing OS, and the leads Business Operations received by source, for the period. Read only."
+        description="Posts and reach from Marketing OS, and the leads Business Operations received by source, for the period. Read only."
         actions={
           <WorkspaceLink user={access.user} workspace="marketing">
             Open Marketing OS

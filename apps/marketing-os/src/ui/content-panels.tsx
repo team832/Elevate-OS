@@ -46,7 +46,7 @@ export function VersionsPanel({ d }: { d: D }) {
                 {v.contentHash.slice(0, 12)}
               </span>
             </summary>
-            <pre style={{ whiteSpace: 'pre-wrap' }}>{v.body || '(empty)'}</pre>
+            <pre className="mkt-copy">{v.body || '(empty)'}</pre>
             {v.changeNote ? <p className="el-field-hint">Change: {v.changeNote}</p> : null}
             <p className="el-field-hint">
               Shows students: {v.showsStudents ? 'yes' : 'no'} · Consent reference:{' '}

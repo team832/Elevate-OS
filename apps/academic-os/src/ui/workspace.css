@@ -1,89 +1,240 @@
-/* Academic teacher workspace: class page action bar, timetable agenda/week grid, print. Tokens only (D-054). */
+/*
+ * Academic workspace styles (imported once in app/layout.tsx). What the shared system does not
+ * cover: the day's hero tile and timeline, the week grid, one-tap attendance marks, the floating
+ * action bar, and print. Tokens only; mobile first.
+ */
 
-.acd-sticky-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--el-space-3);
-  align-items: end;
-  padding: var(--el-space-3);
-  background: var(--el-surface);
-  border-top: 1px solid var(--el-border);
+/* Two chart panels side by side from 1024px. */
+.acd-charts {
+  display: grid;
+  gap: var(--el-space-4);
+  grid-template-columns: minmax(0, 1fr);
 }
 
+/* Next class: the hero tile. The time is the figure; "Open class" is the one primary action. */
 .acd-next {
   display: grid;
-  gap: var(--el-space-2);
-  font-size: var(--el-text-lg);
+  gap: var(--el-space-3);
+  padding: var(--el-space-5);
+  background: var(--el-surface);
+  border-radius: var(--el-radius);
+  box-shadow: var(--el-shadow-raised);
 }
-.acd-next strong {
-  font-size: var(--el-text-xl);
+.acd-next p {
+  margin: 0;
+}
+.acd-next-time {
+  font-family: var(--el-font-display);
+  font-size: var(--el-text-2xl);
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.acd-next-title {
+  font-size: var(--el-text-lg);
+  font-weight: 650;
+}
+.acd-next-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--el-space-2);
+  color: var(--el-text-muted);
+}
+.acd-next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--el-space-3);
 }
 
+/* The day's classes as a timeline: a line with a stop per class, each class a rounded well. */
 .acd-day {
+  position: relative;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 var(--el-space-4);
   list-style: none;
   display: grid;
   gap: var(--el-space-2);
 }
+.acd-day::before {
+  content: '';
+  position: absolute;
+  left: 0.3125rem;
+  top: var(--el-space-3);
+  bottom: var(--el-space-3);
+  width: 2px;
+  border-radius: var(--el-radius-pill);
+  background: var(--el-border-strong);
+}
 .acd-day > li {
+  position: relative;
   display: grid;
-  grid-template-columns: 7rem 1fr auto;
-  gap: var(--el-space-3);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--el-space-1) var(--el-space-3);
   align-items: center;
-  padding: var(--el-space-2) var(--el-space-3);
+  padding: var(--el-space-3) var(--el-space-4);
   background: var(--el-well);
-  border: 1px solid var(--el-border);
   border-radius: var(--el-radius-sm);
+  box-shadow: var(--el-shadow-inset);
+}
+.acd-day > li::before {
+  content: '';
+  position: absolute;
+  left: calc(1px - var(--el-space-4));
+  top: 50%;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-top: -0.3125rem;
+  border-radius: 50%;
+  background: var(--el-surface);
+  border: 2px solid var(--el-control-border);
+}
+.acd-day-time {
+  font-family: var(--el-font-display);
+  font-size: var(--el-text-lg);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Week grid: 7 day columns, read-only; every block links to its class page. */
+/* Week grid: one column on phones, seven from 720px; every block links to its class page. */
 .acd-week {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: var(--el-space-2);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--el-space-3);
 }
 .acd-week-day {
-  min-height: 8rem;
-  padding: var(--el-space-2);
+  min-width: 0;
+  padding: var(--el-space-3);
   background: var(--el-well);
-  border: 1px solid var(--el-border);
-  border-radius: var(--el-radius-sm);
+  border-radius: var(--el-radius);
+  box-shadow: var(--el-shadow-inset);
 }
 .acd-week-day h3 {
   margin: 0 0 var(--el-space-2);
+  font-family: var(--el-font-display);
   font-size: var(--el-text-sm);
+  font-weight: 650;
   color: var(--el-text-muted);
 }
 .acd-week-block {
   display: block;
   margin-bottom: var(--el-space-2);
-  padding: var(--el-space-2);
+  padding: var(--el-space-2) var(--el-space-3);
   font-size: var(--el-text-sm);
   color: var(--el-text);
-  background: var(--el-surface-muted);
-  border: 1px solid var(--el-border-strong);
-  border-radius: var(--el-radius-xs);
   text-decoration: none;
+  background: var(--el-surface);
+  border-radius: var(--el-radius-sm);
+  box-shadow: var(--el-shadow);
+}
+.acd-week-block:hover {
+  color: var(--el-text);
+  box-shadow: var(--el-shadow-raised);
 }
 .acd-week-block[data-status='cancelled'],
 .acd-week-block[data-status='rescheduled'] {
   text-decoration: line-through;
   color: var(--el-text-muted);
+  box-shadow: var(--el-edge);
 }
 
-@media (max-width: 720px) {
-  .acd-week {
-    grid-template-columns: 1fr;
-  }
-  .acd-week-day {
-    min-height: 0;
+/* One-tap attendance marks: radio pills in a segmented control; the chosen one is the raised white pill. */
+.acd-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--el-space-1);
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--el-space-1);
+  border: 1px solid var(--el-border);
+  border-radius: var(--el-radius-pill);
+  background: var(--el-well);
+  box-shadow: var(--el-shadow-inset);
+}
+.acd-marks label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem; /* 44px on phones; 2.25rem from 720px */
+  padding: 0 var(--el-space-3);
+  border-radius: var(--el-radius-pill);
+  color: var(--el-text-muted);
+  font-size: var(--el-text-sm);
+  font-weight: 650;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+.acd-marks input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.acd-marks label:has(:checked) {
+  color: var(--el-text);
+  background: var(--el-surface);
+  box-shadow: var(--el-highlight), var(--el-edge);
+}
+.acd-marks label:has(:focus-visible) {
+  outline: 2px solid var(--el-focus);
+  outline-offset: 1px;
+}
+.acd-marks label:has(:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+/* On phones the marks take the whole row under their label. */
+.el-table-compact td.acd-marks-cell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Floating action bar at the bottom of long forms (frosted: the el-glass class goes on the element). */
+.acd-sticky-actions {
+  position: sticky;
+  bottom: var(--el-gutter);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--el-space-3);
+  align-items: flex-end;
+  padding: var(--el-space-3) var(--el-space-4);
+  border-radius: var(--el-radius-lg);
+  box-shadow: var(--el-shadow-overlay);
+}
+.acd-sticky-actions .el-field {
+  flex: 1 1 14rem;
+  margin: 0;
+}
+
+@media (min-width: 720px) {
+  .acd-next {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--el-space-5);
   }
   .acd-day > li {
-    grid-template-columns: 1fr;
+    grid-template-columns: 6rem minmax(0, 1fr) auto;
+  }
+  .acd-week {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  .acd-week-day {
+    min-height: 8rem;
+  }
+  .acd-marks label {
+    min-height: 2.25rem;
+  }
+}
+@media (min-width: 1024px) {
+  .acd-charts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -97,16 +248,23 @@
   .el-subnav,
   .el-page-actions,
   .acd-no-print,
+  .acd-sticky-actions,
   form {
     display: none !important;
   }
   body,
   .el-card,
+  .acd-next,
+  .acd-day > li,
   .acd-week-day,
   .acd-week-block {
-    background: #fff !important;
-    color: #000 !important;
-    border-color: #999 !important;
+    background: Canvas !important;
+    color: CanvasText !important;
+    box-shadow: none !important;
+  }
+  .acd-week-day,
+  .acd-week-block {
+    border: 1px solid CanvasText;
   }
   .acd-week {
     grid-template-columns: repeat(7, 1fr);

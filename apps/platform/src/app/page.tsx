@@ -36,7 +36,6 @@ import { JsonForm } from '../ui/json-form';
 import { NewEnquiryForm } from '../ui/new-enquiry-form';
 import { FrontPage } from './_components/front-page';
 import './overview.css';
-import './home.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,7 +158,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
               title="Follow-ups"
               description="Next contact due with each student, most overdue first."
               actions={
-                <form className="ov-filter" method="get" action="/" role="search">
+                <form className="el-inline-form ov-filter" method="get" action="/" role="search">
                   <label className="el-visually-hidden" htmlFor="ov-fq">
                     Search follow-ups
                   </label>
@@ -175,7 +174,11 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
                   <button className="el-button el-button-secondary" type="submit">
                     Search
                   </button>
-                  {fq ? <a href={hrefWith(params, 'fq')}>Clear</a> : null}
+                  {fq ? (
+                    <ButtonLink variant="ghost" href={hrefWith(params, 'fq')}>
+                      Clear
+                    </ButtonLink>
+                  ) : null}
                 </form>
               }
             >
@@ -329,7 +332,7 @@ async function FollowUps({
         {
           key: 'due',
           header: 'Due',
-          render: (r) => <span className="ov-due">{dueLabel(r.due, today, tomorrow)}</span>,
+          render: (r) => <span className="el-tabular">{dueLabel(r.due, today, tomorrow)}</span>,
         },
         ...(canClose
           ? [
@@ -349,7 +352,7 @@ async function FollowUps({
                     >
                       <input type="hidden" name="action" value="complete" />
                       <div className="el-field">
-                        <label htmlFor={`fu-${r.id}`}>What happened *</label>
+                        <label htmlFor={`fu-${r.id}`}>What happened</label>
                         <input
                           id={`fu-${r.id}`}
                           name="outcome"

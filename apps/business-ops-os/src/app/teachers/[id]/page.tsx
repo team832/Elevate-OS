@@ -1,8 +1,10 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { PageHeader } from '@elevate/shared-ui';
+import { can } from '@elevate/authorization';
+import { ButtonLink, PageHeader } from '@elevate/shared-ui';
 import { getTeacherProfile } from '../../../server/teachers';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { TEACHER_ACTS, TeacherActModal, teacherTabs, type TeacherAct } from '../teacher-record';
+import { TeacherReports } from '../teacher-reports';
 import { VerificationBadge } from '../verification-badge';
 
 export const dynamic = 'force-dynamic';
@@ -40,18 +42,29 @@ async function Profile({
   if (!r.ok) return r.view;
   const t = r.data;
   const self = `/ops/teachers/${t.staff.id}`;
+  const canReport = can(user, 'ops:teacher_reports:generate');
   return (
     <div className="el-stack">
       <PageHeader
         title={t.displayName}
         meta={<VerificationBadge status={t.profile?.verificationStatus} />}
         description={<a href="/ops/teachers">All teachers</a>}
+        actions={
+          canReport ? (
+            <ButtonLink href="#teacher-reports">Generate teacher report</ButtonLink>
+          ) : undefined
+        }
       />
       {teacherTabs(t, user, (a) => `${self}?act=${a}`, 2).map((x) => (
         <div key={x.key} className="el-stack">
           {x.content}
         </div>
       ))}
+      {canReport ? (
+        <Section label="Loading reports…">
+          <TeacherReports user={user} staffId={t.staff.id} />
+        </Section>
+      ) : null}
       {act ? <TeacherActModal act={act} t={t} user={user} closeHref={self} /> : null}
     </div>
   );

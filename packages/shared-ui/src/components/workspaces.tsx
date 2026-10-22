@@ -2,14 +2,7 @@ import type { ModuleKey } from '@elevate/shared-types';
 import { BrandLogo } from './brand';
 import { Icon } from './icons';
 import { Alert } from './states';
-import { MODULE_NAV } from './layout';
-
-/** What each workspace is for, in the words of the people who use it. */
-const PURPOSE: Record<Exclude<ModuleKey, 'platform'>, string> = {
-  ops: 'Admissions, students, fees, teachers, tasks and reports.',
-  academic: 'Your classes, batches, attendance, teaching logs and student reviews.',
-  marketing: 'Leads, follow-ups, campaigns and the content calendar.',
-};
+import { MODULE_NAV, WORKSPACE_PURPOSE } from './layout';
 
 /**
  * The workspace chooser (D-072): only the workspaces the person's roles grant. One plain form
@@ -68,7 +61,7 @@ export function WorkspaceChooser({
                       {preferred === m.key ? (
                         <span className="el-workspace-default"> · your default</span>
                       ) : null}
-                      <span className="el-workspace-purpose">{PURPOSE[m.key]}</span>
+                      <span className="el-workspace-purpose">{WORKSPACE_PURPOSE[m.key]}</span>
                     </span>
                   </button>
                 </li>

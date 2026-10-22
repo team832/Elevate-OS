@@ -1,5 +1,4 @@
-/* Brand logo and the sign-in page. */
-/* --- brand logo (inline SVG: height by size, width follows the artwork) ----------- */
+/* Brand logo, the sign-in page and the workspace chooser. */
 .el-brand-logo {
   display: block;
   flex: none;
@@ -39,7 +38,7 @@
   transform: rotate(45deg);
 }
 
-/* --- login: brand panel + card (phones: brand, card, facts in one column) ----------- */
+/* --- login: brand panel + floating card (phones: brand, card, facts in one column) --- */
 .el-login {
   min-height: 100vh;
   min-height: 100dvh;
@@ -74,7 +73,7 @@
   gap: var(--el-space-4);
   margin: 0;
   padding-top: var(--el-space-4);
-  border-top: 1px solid var(--el-border);
+  border-top: 1px solid var(--el-border-strong);
   font-size: var(--el-text-sm);
 }
 .el-login-facts dt {
@@ -92,15 +91,19 @@
   flex-direction: column;
   gap: var(--el-space-4);
   padding: var(--el-space-5) var(--el-space-4);
+  border-radius: var(--el-radius-lg);
+  box-shadow: var(--el-shadow-raised);
 }
 .el-login-card form .el-button {
   margin-top: var(--el-space-1);
 }
 .el-login-title {
   margin: 0;
+  font-family: var(--el-font-display);
   font-size: var(--el-text-xl);
   font-weight: 650;
-  line-height: 1.2;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
 }
 .el-login-module,
 .el-login-hint {
@@ -182,16 +185,18 @@
   align-items: flex-start;
   width: 100%;
   padding: var(--el-space-3) var(--el-space-4);
-  border: 1px solid var(--el-border-strong);
-  border-radius: var(--el-radius-sm);
+  border: 1px solid var(--el-border);
+  border-radius: var(--el-radius);
   background: var(--el-well);
   color: var(--el-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: box-shadow var(--el-dur) var(--el-ease);
 }
 .el-workspace-option:hover {
-  border-color: var(--el-accent);
+  background: var(--el-surface);
+  box-shadow: var(--el-shadow-raised);
 }
 .el-workspace-option > .el-icon {
   margin-top: 0.125rem;

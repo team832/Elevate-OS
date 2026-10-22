@@ -7,9 +7,9 @@ import { authedRequest, buildRequest, callRoute, setupTestDatabase } from '@elev
 import { GET as teachersRoute } from '../../src/app/api/v1/teachers/route';
 import { GET as teacherRoute } from '../../src/app/api/v1/teachers/[staffId]/route';
 import { GET as activityRoute } from '../../src/app/api/internal/v1/teachers/[staffId]/activity/route';
-import { addDemoAttendee, attendanceWorklist, coordinatorOverview, createReview, createSessions, createStudent, enrolManually, markDelivered, recordAttendance, teacherDay } from '../../src/server';
+import { addDemoAttendee, attendanceWorklist, coordinatorOverview, createReview, createSessions, createStudent, enrolManually, markDelivered, recordAttendance, teacherActivity, teacherDay } from '../../src/server';
 import { createReviewBody } from '../../src/server/schemas-teaching';
-import { actor, users, world, type Users, type World } from './fixtures';
+import { actor, staffFor, users, world, type Users, type World } from './fixtures';
 
 const ctx = setupTestDatabase();
 let u: Users;
@@ -106,5 +106,13 @@ describe('teachers directory and profile', () => {
     expect(data.sessions.delivered).toMatchObject({ status: 'ok', value: 1 });
     expect(data.sessions.planned).toMatchObject({ value: 3 });
     expect(data.logsPending).toMatchObject({ value: 4 }); // all four September classes are past by the real clock; none has a submitted log
+  });
+
+  it('a staff member with no teaching assignment or class in the window gets missing figures, never measured zeros', async () => {
+    const staffId = await staffFor(ctx.db, u.counsellor, 'Sample Counsellor (fictional)');
+    const data = await teacherActivity(ctx.db, staffId, { from: '2026-09-01', to: '2026-09-30' });
+    expect(data.sessions.delivered).toMatchObject({ status: 'missing', value: null, reason: 'No teaching assignments' });
+    expect([data.sessions.planned, data.logsPending, data.attendancePending, data.markingPending].map((x) => x.status)).toEqual(['missing', 'missing', 'missing', 'missing']);
+    expect(data.reviews.draft).toMatchObject({ status: 'ok', value: 0 }); // their own reviews are a measured fact
   });
 });

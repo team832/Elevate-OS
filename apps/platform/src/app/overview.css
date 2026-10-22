@@ -1,5 +1,5 @@
-/* Workspace overview layout (uses shared-ui tokens only; no new colours). */
-/* Mobile first: one column; side panel beside the main column from 1180px. */
+/* Workspace overview: the panel grid and the attention list (shared-ui tokens only).
+ * Mobile first: one column; the side panels sit beside the follow-ups from 1180px. */
 .ov-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -18,29 +18,18 @@
   min-width: 0;
 }
 
-/* Follow-ups filter */
+/* Follow-ups filter (an .el-inline-form in the panel header). */
 .ov-filter {
-  display: flex;
   align-items: center;
-  gap: var(--el-space-2);
-  flex-wrap: wrap;
   width: 100%;
-  font-size: var(--el-text-sm);
 }
 .ov-filter-input {
   flex: 1 1 12rem;
   width: auto;
   max-width: 100%;
-  padding-top: 0.3125rem;
-  padding-bottom: 0.3125rem;
-}
-.ov-due {
-  color: var(--el-text-muted);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
-/* Attention panel */
+/* Attention list: label and what is counted, the figure at the right in the display face. */
 .ov-attention {
   list-style: none;
   margin: 0;
@@ -70,10 +59,6 @@
   display: inline-block;
   padding: 0.125rem 0;
   font-weight: 600;
-  font-size: var(--el-text-md);
-  color: var(--el-text);
-}
-a.ov-attention-label {
   color: var(--el-text);
 }
 a.ov-attention-label:hover {
@@ -86,15 +71,19 @@ a.ov-attention-label:hover {
 .ov-attention-count {
   flex: none;
   min-width: 2rem;
-  font-size: var(--el-text-lg);
+  font-family: var(--el-font-display);
+  font-size: var(--el-text-title);
   font-weight: 650;
+  line-height: 1.2;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .ov-attention-count[data-pending='true'] {
   color: var(--el-accent-text);
 }
+/* Missing is not zero: "Not available" in words, in the body face. */
 .ov-attention li[data-status='unavailable'] .ov-attention-count {
+  font-family: var(--el-font);
   font-size: var(--el-text-xs);
   font-weight: 600;
   color: var(--el-text-muted);
@@ -102,18 +91,42 @@ a.ov-attention-label:hover {
   padding-top: 0.2rem;
 }
 
-/* Unavailable notes */
+/* A panel whose source is not available: a dashed well with the reason. */
 .ov-unavailable {
   margin: 0;
-  padding: var(--el-space-3);
-  border: 1px dashed var(--el-border-strong);
+  padding: var(--el-space-3) var(--el-space-4);
+  border: 1px dashed var(--el-control-border);
   border-radius: var(--el-radius-sm);
-  background: var(--el-surface-muted);
+  background: var(--el-well);
+  box-shadow: var(--el-shadow-inset);
   font-size: var(--el-text-sm);
   color: var(--el-text-muted);
 }
 .ov-unavailable strong {
   color: var(--el-text);
+}
+
+/* "Mark done" on a follow-up row: the outcome field unfolds under the button. */
+.pf-done {
+  position: relative; /* keeps its visually hidden label from widening the table */
+}
+.pf-done > summary {
+  white-space: nowrap;
+}
+.el-table-compact td:has(.pf-done[open]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.pf-done[open] > summary {
+  margin-bottom: var(--el-space-2);
+}
+
+/* New enquiry form (inside the shared Dialog). */
+.el-enquiry-required {
+  margin-bottom: var(--el-space-3);
+}
+.el-enquiry-contact-error {
+  margin: calc(-1 * var(--el-space-2)) 0 var(--el-space-4);
+  font-size: var(--el-text-sm);
 }
 .el-enquiry-dupes,
 .el-enquiry-error {
@@ -139,11 +152,4 @@ a.ov-attention-label:hover {
   .ov-side {
     order: 0;
   }
-}
-.el-enquiry-required {
-  margin-bottom: var(--el-space-3);
-}
-.el-enquiry-contact-error {
-  margin: calc(-1 * var(--el-space-2)) 0 var(--el-space-4);
-  font-size: var(--el-text-sm);
 }

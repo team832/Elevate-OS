@@ -442,9 +442,9 @@ function InstalmentBar({ p, today }: { p: PlanView; today: string }) {
           key={i.instalment.id}
           style={{ '--ops-fees-share': i.instalment.amountPaise } as CSSProperties}
         >
-          <span className="ops-hbar-track" aria-hidden="true">
+          <span className="el-hbar-track" aria-hidden="true">
             <span
-              className="ops-hbar-fill"
+              className="el-hbar-fill"
               style={{ width: `${(100 * i.allocatedPaise) / i.instalment.amountPaise}%` }}
             />
           </span>

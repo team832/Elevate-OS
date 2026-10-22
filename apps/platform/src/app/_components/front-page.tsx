@@ -1,6 +1,7 @@
 import {
   BrandLogo,
   ButtonLink,
+  Card,
   COMPANY_NAME,
   INSTITUTE,
   instituteTelHref,
@@ -18,7 +19,22 @@ const FACULTY = [
   ['CA Nikunj Bindal', ''],
 ] as const;
 
-function ProgrammeList({
+/** The institute's public facts (brand.tsx), shown in the footer band. */
+const FACTS = [
+  ['Classes', INSTITUTE.modes],
+  [
+    'Admissions',
+    <>
+      <a href={instituteTelHref}>{INSTITUTE.phone}</a>
+      <br />
+      <a href={`mailto:${INSTITUTE.email}`}>{INSTITUTE.email}</a>
+    </>,
+  ],
+  ['Address', INSTITUTE.address],
+  ['GSTIN', <span className="el-tabular">{INSTITUTE.gstin}</span>],
+] as const;
+
+function Programmes({
   id,
   title,
   items,
@@ -28,9 +44,8 @@ function ProgrammeList({
   items: typeof INSTITUTE.exams | typeof INSTITUTE.batches;
 }) {
   return (
-    <section className="fp-programmes" aria-labelledby={id}>
-      <h2 id={id}>{title}</h2>
-      <dl>
+    <Card id={id} title={title}>
+      <dl className="fp-dl">
         {items.map((p) => (
           <div key={p.name}>
             <dt>{p.name}</dt>
@@ -38,50 +53,35 @@ function ProgrammeList({
           </div>
         ))}
       </dl>
-    </section>
+    </Card>
   );
 }
 
 export function FrontPage() {
   return (
     <div className="fp">
-      <header className="fp-header">
+      <header className="fp-masthead">
         <BrandLogo size="md" />
         <ButtonLink href={PLATFORM_PATHS.login} variant="primary">
           Staff sign in
         </ButtonLink>
-      </header>
-
-      <main id="main" className="fp-main">
-        <section className="fp-intro" aria-labelledby="fp-title">
-          <h1 id="fp-title">Coaching for CLAT, IPMAT, CUET and CA&nbsp;Foundation</h1>
+        <div className="fp-intro el-page-header">
+          <h1>Coaching for CLAT, IPMAT, CUET and CA&nbsp;Foundation</h1>
           <p className="fp-lead">
             {COMPANY_NAME} runs complete Class 11 and Class 12 Commerce batches, entrance coaching
             that students take alongside them, and a dropper batch for each exam.
           </p>
-          <dl className="fp-facts">
-            <div>
-              <dt>Classes</dt>
-              <dd>{INSTITUTE.modes}</dd>
-            </div>
-            <div>
-              <dt>Admissions</dt>
-              <dd>
-                <a href={instituteTelHref}>{INSTITUTE.phone}</a>
-                <br />
-                <a href={`mailto:${INSTITUTE.email}`}>{INSTITUTE.email}</a>
-              </dd>
-            </div>
-          </dl>
-        </section>
+        </div>
+      </header>
 
+      <main id="main" className="fp-main">
         <div className="fp-catalogue">
-          <ProgrammeList id="fp-exams" title="Entrance exams" items={INSTITUTE.exams} />
-          <ProgrammeList id="fp-batches" title="Batches" items={INSTITUTE.batches} />
+          <Programmes id="fp-exams" title="Entrance exams" items={INSTITUTE.exams} />
+          <Programmes id="fp-batches" title="Batches" items={INSTITUTE.batches} />
         </div>
 
-        <section className="fp-faculty" aria-labelledby="fp-faculty-title">
-          <h2 id="fp-faculty-title">Mentors</h2>
+        <section className="fp-mentors" aria-labelledby="fp-mentors-title">
+          <h2 id="fp-mentors-title">Mentors</h2>
           <ul>
             {FACULTY.map(([name, note]) => (
               <li key={name}>
@@ -94,20 +94,30 @@ export function FrontPage() {
       </main>
 
       <footer className="fp-footer">
-        <p>
-          © {COMPANY_NAME}. {INSTITUTE.legalName}.
-        </p>
-        <ul>
-          <li>
-            <a href={INSTITUTE.site}>elevateeducation.in</a>
-          </li>
-          <li>
-            <a href={INSTITUTE.privacyPolicy}>Privacy policy</a>
-          </li>
-          <li>
-            <a href={PLATFORM_PATHS.login}>Staff sign in</a>
-          </li>
-        </ul>
+        <dl className="fp-facts">
+          {FACTS.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="fp-footer-line">
+          <p>
+            © {COMPANY_NAME}. {INSTITUTE.legalName}.
+          </p>
+          <ul>
+            <li>
+              <a href={INSTITUTE.site}>elevateeducation.in</a>
+            </li>
+            <li>
+              <a href={INSTITUTE.privacyPolicy}>Privacy policy</a>
+            </li>
+            <li>
+              <a href={PLATFORM_PATHS.login}>Staff sign in</a>
+            </li>
+          </ul>
+        </div>
       </footer>
     </div>
   );

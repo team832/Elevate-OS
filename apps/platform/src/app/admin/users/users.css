@@ -1,14 +1,6 @@
-/* Users & roles (shared-ui tokens only; no new colours). */
-.ur-filters,
-.ur-pager {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--el-space-3);
-  align-items: flex-end;
-}
-/* One toolbar row on wide screens: search grows, selects share the rest. */
+/* Users & roles (shared-ui tokens only). */
+/* Filters: one toolbar row on wide screens; the search grows, the selects share the rest. */
 .ur-filters .el-field {
-  margin: 0;
   flex: 1 1 9rem;
   min-width: min(100%, 9rem);
 }
@@ -16,7 +8,16 @@
   flex: 2 1 14rem;
 }
 .ur-pager {
-  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--el-space-3);
+  font-size: var(--el-text-sm);
+}
+.ur-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--el-space-1);
 }
 .ur-cell-email {
   overflow-wrap: anywhere;
@@ -37,12 +38,8 @@
 .ur-roles .el-field-hint {
   margin: var(--el-space-1) 0 0 1.6rem;
 }
-@media (min-width: 720px) {
-  .ur-roles {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 
+/* Account facts: label over value, two columns from 720px. */
 .ur-facts {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -56,7 +53,9 @@
 .ur-facts dd {
   margin: 0;
 }
+
 @media (min-width: 720px) {
+  .ur-roles,
   .ur-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

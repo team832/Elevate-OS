@@ -81,7 +81,7 @@ export function ShellFrame({
       </aside>
       {open ? <div className="el-sidebar-backdrop" aria-hidden="true" onClick={close} /> : null}
       <div className="el-shell-body" inert={open || undefined}>
-        <header className="el-topbar">
+        <header className="el-topbar el-glass">
           <button
             ref={menuButton}
             type="button"

@@ -1,5 +1,6 @@
 /** Report period from the URL (Asia/Kolkata calendar days) and its GET form with quick periods. */
 import type { ReactNode } from 'react';
+import { Subnav } from '@elevate/shared-ui';
 import { addDays, istToday, istWeekContaining } from '../../../domain';
 import { admissionsReportQuery } from '../../../server/admissions-schemas';
 import { fmtDate } from '../../../ui/format';
@@ -42,6 +43,7 @@ export function PeriodFilter({
   children?: ReactNode;
 }) {
   const { period, presets, rejected } = at;
+  const active = presets.find(([, p]) => p.from === period.from && p.to === period.to);
   return (
     <div className="ops-admissions-period">
       <form method="get" action={base} className="el-inline-form" aria-label="Report period">
@@ -62,21 +64,11 @@ export function PeriodFilter({
           Show this period
         </button>
       </form>
-      <ul
-        className="ops-presets"
-        aria-label={`Quick periods (showing ${fmtDate(period.from)} – ${fmtDate(period.to)})`}
-      >
-        {presets.map(([label, p]) => (
-          <li key={label}>
-            <a
-              href={listHref(base, keep, p)}
-              aria-current={p.from === period.from && p.to === period.to ? 'true' : undefined}
-            >
-              {label}
-            </a>
-          </li>
-        ))}
-      </ul>
+      <Subnav
+        label={`Quick periods (showing ${fmtDate(period.from)} – ${fmtDate(period.to)})`}
+        items={presets.map(([label, p]) => [listHref(base, keep, p), label] as const)}
+        current={active && listHref(base, keep, active[1])}
+      />
       {rejected ? (
         <p className="el-field-hint" role="status">
           Give both dates, with From on or before To. Showing the last 30 days instead.

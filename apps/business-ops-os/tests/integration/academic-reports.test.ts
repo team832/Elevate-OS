@@ -12,6 +12,7 @@ import {
   opsAdmissions,
   opsDemoSessions,
   opsDemos,
+  opsGuardians,
   opsReportExports,
   students,
 } from '@elevate/database';
@@ -39,6 +40,10 @@ import { setupReference, staffUser, type StaffUser } from './fixtures';
 
 const ctx = setupTestDatabase();
 const SENTINEL = 'SENTINEL-RAW-REMARK-7731';
+const GUARDIAN_PHONE = '+910000000001';
+const none = (text: string, ...forbidden: string[]) => {
+  for (const f of forbidden) expect(text).not.toContain(f);
+};
 let manager: StaffUser;
 let manager2: StaffUser;
 let counsellor: StaffUser;
@@ -240,27 +245,26 @@ describe('teacher reviews of a demo, from Academic OS (acceptance 4)', () => {
       [2, ['Sample Other Teacher:not_due:substitute']],
       [3, ['Sample Quant Teacher:not_due']],
     ]);
-    const due = await demoReviewsDue(ctx.db, teacher, teacher.staffId, SEPT_10);
+    const due = await demoReviewsDue(ctx.db, manager, teacher.staffId, SEPT_10);
     // Last 30 days only; not on an Academic roster, so no review link (the coordinator adds it).
     expect(due.rows.map((r) => [r.id, r.onRoster])).toEqual([[sessionIds[0], false]]);
-    expect((await demoReviewsDue(ctx.db, teacher, teacher.staffId)).rows).toEqual([]);
-    expect(await demoReviewsDue(ctx.db, teacher, otherTeacher.staffId, SEPT_10)).toMatchObject({
+    expect((await demoReviewsDue(ctx.db, manager, teacher.staffId)).rows).toEqual([]);
+    // Own scope reaches only the reader's own staff record; teachers hold no Ops feedback right (D-073).
+    expect(await demoReviewsDue(ctx.db, counsellor, teacher.staffId, SEPT_10)).toMatchObject({
       shared: false,
       rows: [],
     });
+    await expect(demoReviewsDue(ctx.db, teacher, teacher.staffId, SEPT_10)).rejects.toThrow();
   });
 
-  it('own-scope readers see review states only for demos they run or teach', async () => {
+  it('own-scope readers see review states only for demos they run', async () => {
     academicUp();
-    expect(await states(otherTeacher)).toHaveLength(3); // taught day 2 as a substitute
     expect(await states(counsellor)).toHaveLength(3);
-    const strangers = await Promise.all(
-      (['teacher', 'admissions_counsellor'] as const).map((role) => staffUser(ctx.db, [role])),
+    await expect(states(otherTeacher)).rejects.toThrow(/permission/); // not in Business Ops (D-073)
+    const stranger = await staffUser(ctx.db, ['admissions_counsellor']);
+    await expect(demoFeedbackByDay(ctx.db, stranger, demoId)).rejects.toThrow(
+      /demos you run or teach/,
     );
-    for (const user of strangers)
-      await expect(demoFeedbackByDay(ctx.db, user, demoId)).rejects.toThrow(
-        /demos you run or teach/,
-      );
   });
 
   it('a submitted Academic review of that day by the class teacher makes it submitted; another day or author does not', async () => {
@@ -282,7 +286,7 @@ describe('teacher reviews of a demo, from Academic OS (acceptance 4)', () => {
       reviewIds: [`${own.reviewKey}:1`],
     });
     await expect(demoFeedbackByDay(ctx.db, auditor, demoId)).resolves.toBeTruthy(); // read-only roles see states
-    expect((await demoReviewsDue(ctx.db, teacher, teacher.staffId, SEPT_10)).rows).toEqual([]);
+    expect((await demoReviewsDue(ctx.db, manager, teacher.staffId, SEPT_10)).rows).toEqual([]);
     submitted.length = 0;
   });
 
@@ -290,7 +294,7 @@ describe('teacher reviews of a demo, from Academic OS (acceptance 4)', () => {
     academicDown();
     expect((await states(manager))[0]).toEqual([1, ['Sample Quant Teacher:unknown']]);
     expect(
-      (await demoReviewsDue(ctx.db, teacher, teacher.staffId, SEPT_10)).unavailable,
+      (await demoReviewsDue(ctx.db, manager, teacher.staffId, SEPT_10)).unavailable,
     ).toMatchObject({
       status: 'unavailable',
     });
@@ -301,7 +305,16 @@ describe('student reports (acceptance 5, 17, 21)', () => {
   let guardianRef: string;
   let before: ReportSnapshot;
 
-  it('setup: one shareable and one internal submitted review, both carrying the raw-remark sentinel', () => {
+  it('setup: a guardian with a phone; one shareable and one internal submitted review, both carrying the raw-remark sentinel', async () => {
+    await ctx.db.insert(opsGuardians).values({
+      studentId: studentId as never,
+      fullName: 'Sample Guardian R',
+      relationship: 'mother',
+      phone: GUARDIAN_PHONE,
+      email: 'sample-guardian-r@example.test',
+      consentStatus: 'given',
+      createdBy: manager.id,
+    });
     submitted.push(
       quantReview({
         visibility: 'shareable',
@@ -326,31 +339,29 @@ describe('student reports (acceptance 5, 17, 21)', () => {
     );
   });
 
-  it('a guardian report never carries raw reviews (API payload and PDF text); facts and gaps stay honest', async () => {
+  it('PTM report: shareable notes only (API payload, stored snapshot and PDF text), affirmative wording, at most 2 pages', async () => {
     academicUp();
     const made = await report(manager, { audience: 'guardian', acknowledgement: true });
     expect(made.status).toBe(201);
-    expect(made.data!.fields).toEqual([
-      'overview',
-      'programmes',
-      'results',
-      'attendance',
-      'summary',
-    ]);
+    expect(made.data!.fields).toEqual(['overview', 'results', 'attendance', 'feedback', 'summary']);
     guardianRef = made.data!.referenceCode;
     const got = await open(manager, guardianRef);
-    expect(JSON.stringify(got.data)).not.toContain(SENTINEL);
+    none(JSON.stringify(got.data), SENTINEL, GUARDIAN_PHONE);
     const [row] = await ctx.db
       .select()
       .from(opsReportExports)
       .where(eq(opsReportExports.referenceCode, guardianRef));
-    expect(JSON.stringify(row!.snapshot)).not.toContain(SENTINEL);
+    none(JSON.stringify(row!.snapshot), SENTINEL, GUARDIAN_PHONE, 'academicConcerns', 'kyc');
     const s = got.data!.view!;
-    expect(s.feedback).toBeUndefined();
+    expect(s).toMatchObject({ kind: 'guardian', tone: 'affirmative' });
+    expect(s.kyc).toBeUndefined();
+    expect(s.feedback).toEqual([
+      expect.objectContaining({ visibility: 'shareable', strengths: 'Clear reasoning in class' }),
+    ]);
     expect(s.summary).toEqual({
       evidence: [
-        'Attendance: 8 of 9 recorded classes attended (88.9%); 0 excused, 1 not recorded.',
-        'Results: 1 assessment scored, 1 missed (absent, not counted as zero).',
+        'Attendance rate: Not recorded. 8 of 9 recorded classes attended.',
+        'Results: 1 assessment scored, 1 not attempted (not counted as zero).',
         'Trend — Quant sectional: insufficient data (1 scored result).',
       ],
       strengths: ['Quant: Clear reasoning in class'],
@@ -369,44 +380,89 @@ describe('student reports (acceptance 5, 17, 21)', () => {
       ],
     });
     const pdf = await progressReportPdf(s, got.data!.export);
-    const text = pdf.lines.join('\n');
-    expect(text).not.toContain(SENTINEL);
-    expect(text).toContain('Proposed next step — not yet agreed with the teacher');
-    expect(text).toContain('18 / 30 (60%)');
-    expect(text).toContain('Absent');
-    expect(text).toContain('Acknowledgement');
+    const text = pdf.lines.join(' ');
+    // Never a guardian phone (the lead's 098… number or the guardian row), an internal remark or a status-history line.
+    none(text, SENTINEL, GUARDIAN_PHONE, 'Status changes', 'KYC');
+    expect(text).not.toMatch(/098\d{8}/);
+    expect(pdf.lines).toEqual(
+      expect.arrayContaining([
+        'PTM report (for parents)',
+        'Where to work on',
+        'Next steps',
+        'Absent',
+        'Acknowledgement',
+      ]),
+    );
+    expect(text).toContain('60% (18/30)');
     const res = await reportPdf(req(manager, '/ops/api/v1/x'), {
       params: Promise.resolve({ id: studentId, reportId: guardianRef }),
     });
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/pdf');
+    expect(res.headers.get('cache-control')).toBe('no-store');
     expect(
       (await PDFDocument.load(new Uint8Array(await res.arrayBuffer()))).getPageCount(),
-    ).toBeGreaterThanOrEqual(1);
+    ).toBeLessThanOrEqual(2);
     before = s;
   });
 
-  it('an internal report holds the raw reviews (current, not withdrawn) for staff who may read feedback', async () => {
+  it('internal report: KYC with guardian contacts, every review field (current, not withdrawn), neutral summary', async () => {
     academicUp();
     const made = await report(manager, { audience: 'internal' });
-    const s = (await open(manager, made.data!.referenceCode)).data!.view!;
-    expect(s.feedback!.map((f) => f.observations)).toEqual(
-      expect.arrayContaining([expect.stringContaining(`${SENTINEL} often misses homework`)]),
+    expect(made.data!.fields).toEqual([
+      'overview',
+      'kyc',
+      'results',
+      'attendance',
+      'feedback',
+      'fees',
+      'summary',
+    ]);
+    const got = await open(manager, made.data!.referenceCode);
+    const s = got.data!.view!;
+    expect(s.feedback!.map((f) => f.academicConcerns)).toEqual(
+      expect.arrayContaining([`${SENTINEL} often misses homework`]),
     );
     expect(s.feedback!.some((f) => f.strengths?.includes('withdrawn'))).toBe(false);
-    expect(s.summary).toBeUndefined();
-    // The student's counsellor reads reviews of students they counsel (owner answer 1).
+    expect(s.summary!.evidence[1]).toBe(
+      'Results: 1 assessment scored, 1 missed (absent, not counted as zero).',
+    );
+    expect(s.kyc).toMatchObject({
+      class: 'class_12',
+      guardians: [{ name: 'Sample Guardian R', phone: GUARDIAN_PHONE, consent: 'given' }],
+    });
+    expect(s.kyc!.documents.map((d) => d.state)).toEqual(Array(5).fill('not_recorded'));
+    const pdf = await progressReportPdf(s, got.data!.export);
+    expect(pdf.lines).toEqual(
+      expect.arrayContaining([
+        'KYC and student details (private — internal use only)',
+        GUARDIAN_PHONE,
+        'Status changes in the period',
+        'Areas for improvement',
+      ]),
+    );
+    // The student's counsellor reads reviews and KYC of students they counsel (owner answer 1).
     const forCounsellor = await open(counsellor, made.data!.referenceCode);
-    expect(forCounsellor.data!.fields).toContain('feedback');
+    expect(forCounsellor.data!.fields).toEqual(expect.arrayContaining(['feedback', 'kyc']));
   });
 
-  it('audiences not enabled are refused; a student fee statement appears only when asked for', async () => {
+  it('403: a counsellor who does not counsel the student can neither generate, open nor print a report', async () => {
+    const stranger = await staffUser(ctx.db, ['admissions_counsellor']);
+    expect((await report(stranger, { audience: 'guardian' })).status).toBe(403);
+    expect((await open(stranger, guardianRef)).status).toBe(403);
+    const res = await reportPdf(req(stranger, '/ops/api/v1/x'), {
+      params: Promise.resolve({ id: studentId, reportId: guardianRef }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('kinds not enabled are refused; a family fee statement appears only when asked for', async () => {
     expect((await report(manager, { audience: 'student' })).status).toBe(400);
     const withFees = await report(manager, {
       audience: 'guardian',
-      sections: { overview: true, fees: true, feedback: true },
+      sections: { overview: true, fees: true, feedback: true, kyc: true },
     });
-    expect(withFees.data!.fields).toEqual(['overview', 'fees']);
+    expect(withFees.data!.fields).toEqual(['overview', 'feedback', 'fees']);
   });
 
   it('draft → reviewed (someone else) → final; final is immutable even after the records change', async () => {
@@ -429,7 +485,7 @@ describe('student reports (acceptance 5, 17, 21)', () => {
       status: 'final',
       reviewedBy: manager2.id,
       finalisedBy: manager.id,
-      templateVersion: 'progress-report/1',
+      templateVersion: 'progress-report/2',
     });
     const actions = (
       await ctx.db

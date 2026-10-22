@@ -583,13 +583,14 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
     editable: true,
   },
   'reports.audiences': {
-    label: 'Student report audiences',
+    label: 'Student report kinds',
     description:
-      'Report versions staff may produce. Guardian and student reports never contain raw teacher remarks, identity documents, audit logs or private payment details; with review on, a second person must review a report before it is final.',
-    defaultValue: { enabled: ['internal', 'guardian', 'admin_dossier'], reviewBeforeFinal: true },
-    defaultState: 'proposed',
-    source: 'owner brief 2026-10-21 §10 (draft / reviewed / final reports; parent report content).',
-    ownerDecision: 'Owner to confirm report audiences and the review step',
+      'Report kinds staff may produce: the PTM report (for parents: scores, attendance, the teachers’ shareable notes and an affirmative summary — never KYC, guardians, internal remarks, history or payment details) and the internal report (KYC, student details, every score and review). Student and administration-dossier kinds can be enabled too. With review on, a second person must review a report before it is final.',
+    defaultValue: { enabled: ['internal', 'guardian'], reviewBeforeFinal: true },
+    defaultState: 'approved',
+    source:
+      'Owner, 23 Oct 2026 (D-078): two kinds of student report, PTM and internal; owner brief 2026-10-21 §10 (draft / reviewed / final).',
+    ownerDecision: 'D-078',
     editable: true,
   },
   'tasks.completion_without_reviewer': {

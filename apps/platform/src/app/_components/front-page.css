@@ -1,148 +1,148 @@
+/* Public front page (signed-out /). Tokens only. Order: masthead (wordmark, sign-in, the
+ * statement), the programmes in two rounded panels, the mentors as a plain list, the
+ * institute's facts in a footer band. One column on phones (checked at 360px). */
 .fp {
   max-width: 72rem;
   margin: 0 auto;
-  padding: 0 var(--el-space-4);
+  padding: var(--el-space-4) var(--el-space-4) var(--el-space-6);
 }
-.fp-header {
-  display: flex;
+/* Masthead: wordmark left, the one button right, the title under the wordmark in the display face. */
+.fp-masthead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--el-space-4);
-  min-height: 4.5rem;
-  border-bottom: 1px solid var(--el-border);
-  color: var(--el-text);
+  gap: var(--el-space-5) var(--el-space-4);
+  padding: var(--el-space-2) 0 var(--el-space-6);
 }
-.fp-header .el-brand-logo {
-  height: 2rem;
+.fp-intro {
+  grid-column: 1 / -1;
+  max-width: 38rem;
+}
+.fp-lead {
+  margin: 0;
+  font-size: var(--el-text-lg);
+  color: var(--el-text-muted);
+}
+.fp-catalogue {
+  display: grid;
+  gap: var(--el-space-4);
 }
 .fp-main {
   display: grid;
   gap: var(--el-space-6);
-  padding: var(--el-space-6) 0;
 }
-.fp-intro h1 {
-  margin: 0 0 var(--el-space-4);
-  max-width: 13em;
-  font-size: clamp(2rem, 1.3rem + 2.6vw, 3.25rem);
-  font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: -0.01em;
-  color: var(--el-text);
-}
-.fp-lead {
-  margin: 0 0 var(--el-space-5);
-  max-width: 34rem;
-  font-size: var(--el-text-lg);
-  color: var(--el-text-muted);
-}
-.fp-facts {
-  display: grid;
-  gap: var(--el-space-4);
-  margin: 0;
-  padding-top: var(--el-space-4);
-  border-top: 1px solid var(--el-border);
-}
-.fp-facts dt,
-.fp-faculty .fp-note {
-  color: var(--el-text-muted);
-  font-size: var(--el-text-xs);
-  font-weight: 600;
-}
-.fp-facts dd {
-  margin: var(--el-space-1) 0 0;
-  overflow-wrap: anywhere;
-}
-.fp-catalogue {
-  display: grid;
-  gap: var(--el-space-6);
-}
-.fp-programmes h2,
-.fp-faculty h2 {
-  margin: 0 0 var(--el-space-2);
-  font-size: var(--el-text-lg);
-  font-weight: 650;
-}
-.fp-programmes dl {
+.fp-dl {
   margin: 0;
 }
-.fp-programmes dl > div {
+.fp-dl > div {
   display: grid;
   gap: var(--el-space-1);
   padding: var(--el-space-3) 0;
   border-top: 1px solid var(--el-border);
 }
-.fp-programmes dt {
-  font-weight: 650;
-  color: var(--el-text);
+.fp-dl > div:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
-.fp-programmes dd {
+.fp-dl dt {
+  font-weight: 650;
+}
+.fp-dl dd {
   margin: 0;
   color: var(--el-text-muted);
   font-size: var(--el-text-sm);
 }
-.fp-faculty ul {
+.fp-mentors h2 {
+  margin: 0 0 var(--el-space-2);
+  font-family: var(--el-font-display);
+  font-size: var(--el-text-lg);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.fp-mentors ul {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
-  border-top: 1px solid var(--el-border);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  column-gap: var(--el-space-5);
 }
-.fp-faculty li {
+.fp-mentors li {
   display: flex;
   flex-direction: column;
-  padding: var(--el-space-3) var(--el-space-3) var(--el-space-3) 0;
+  padding: var(--el-space-2) 0;
+  border-top: 1px solid var(--el-border);
 }
 .fp-name {
   font-weight: 600;
 }
-.fp-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--el-space-2) var(--el-space-5);
-  padding: var(--el-space-5) 0;
-  border-top: 1px solid var(--el-border);
+.fp-note,
+.fp-facts dt {
   color: var(--el-text-muted);
+  font-size: var(--el-text-xs);
+  font-weight: 600;
+}
+/* Footer band: the institute's facts, then the legal line and links. */
+.fp-footer {
+  display: grid;
+  gap: var(--el-space-5);
+  margin-top: var(--el-space-6);
+  padding: var(--el-space-5) var(--el-space-4);
+  border-radius: var(--el-radius);
+  background: var(--el-well);
+  box-shadow: var(--el-shadow-inset);
   font-size: var(--el-text-sm);
 }
-.fp-footer p {
+.fp-facts {
+  display: grid;
+  gap: var(--el-space-4);
   margin: 0;
 }
-.fp-footer ul {
-  list-style: none;
+.fp-facts dd {
+  margin: var(--el-space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+.fp-footer-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--el-space-2) var(--el-space-5);
+  padding-top: var(--el-space-4);
+  border-top: 1px solid var(--el-border-strong);
+  color: var(--el-text-muted);
+}
+.fp-footer-line p,
+.fp-footer-line ul {
   margin: 0;
+}
+.fp-footer-line ul {
+  list-style: none;
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--el-space-2) var(--el-space-5);
+  gap: var(--el-space-2) var(--el-space-4);
 }
 
 @media (min-width: 720px) {
   .fp {
-    padding: 0 var(--el-space-6);
+    padding: var(--el-space-5) var(--el-space-6) var(--el-space-7);
+  }
+  .fp-dl > div {
+    grid-template-columns: 9rem minmax(0, 1fr);
+    gap: var(--el-space-4);
   }
   .fp-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .fp-programmes dl > div {
-    grid-template-columns: 10rem minmax(0, 1fr);
-    gap: var(--el-space-4);
+  .fp-footer {
+    padding: var(--el-space-6);
   }
 }
 @media (min-width: 1024px) {
-  .fp-main {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    column-gap: calc(2 * var(--el-space-6));
-    padding: calc(2 * var(--el-space-6)) 0;
+  .fp-catalogue {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .fp-intro {
-    align-self: start;
-    position: sticky;
-    top: var(--el-space-6);
-  }
-  .fp-faculty {
-    grid-column: 1 / -1;
+  .fp-facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

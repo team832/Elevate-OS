@@ -4,6 +4,7 @@ import type { IsoDate } from '@elevate/shared-types';
 import { demoReviewGrid } from '../../src/domain/feedback';
 import {
   attendanceFacts,
+  attendanceRateText,
   cohortComparison,
   constructiveSummary,
   inIstPeriod,
@@ -39,13 +40,24 @@ describe('report sections by audience (acceptance 21)', () => {
       'internal',
       ALL,
       undefined,
+      ['overview', 'kyc', 'results', 'attendance', 'feedback', 'fees', 'summary'],
+    ],
+    ['internal', NONE, undefined, ['overview', 'results', 'attendance', 'summary']],
+    [
+      'admin_dossier',
+      ALL,
+      undefined,
       ['overview', 'programmes', 'results', 'attendance', 'feedback', 'fees', 'guardians'],
     ],
-    ['internal', NONE, undefined, ['overview', 'programmes', 'results', 'attendance']],
-    ['admin_dossier', ALL, ['overview', 'guardians', 'summary'], ['overview', 'guardians']],
-    ['guardian', ALL, undefined, ['overview', 'programmes', 'results', 'attendance', 'summary']],
-    ['guardian', ALL, ['overview', 'feedback', 'guardians', 'fees'], ['overview', 'fees']],
-    ['student', NONE, ['fees', 'results'], ['results']],
+    ['admin_dossier', ALL, ['overview', 'guardians', 'summary', 'kyc'], ['overview', 'guardians']],
+    ['guardian', ALL, undefined, ['overview', 'results', 'attendance', 'feedback', 'summary']],
+    [
+      'guardian',
+      ALL,
+      ['overview', 'kyc', 'feedback', 'guardians', 'fees'],
+      ['overview', 'feedback', 'fees'],
+    ],
+    ['student', NONE, ['fees', 'results', 'feedback'], ['results']],
   ])('%s %o requested %o → %o', (audience, can, requested, expected) => {
     expect(reportSections(audience, can, requested as never)).toEqual(expected);
   });
@@ -98,19 +110,13 @@ describe('IST period boundary (fixes the UTC-day bug)', () => {
 });
 
 describe('measured evidence: missing is not zero, comparisons only inside one assessment and cohort', () => {
-  it('attendance rate excludes excused and unrecorded; nothing countable → null', () => {
-    expect(
-      attendanceFacts({ held: 10, present: 5, partial: 1, late: 1, absent: 1, excused: 1 }),
-    ).toMatchObject({
-      recorded: 9,
-      notRecorded: 1,
-      attended: 7,
-      ratePercent: 87.5,
-    });
-    expect(
-      attendanceFacts({ held: 4, present: 0, partial: 0, late: 0, absent: 0, excused: 2 })
-        .ratePercent,
-    ).toBeNull();
+  it('attendance rate is Academic’s own, never recomputed; absent → "Not recorded"', () => {
+    const counts = { held: 10, present: 5, partial: 1, late: 1, absent: 1, excused: 1 };
+    const sent = attendanceFacts({ ...counts, ratePercent: 70, definition: 'held classes' });
+    expect(sent).toMatchObject({ recorded: 9, notRecorded: 1, attended: 7, ratePercent: 70 });
+    expect(attendanceRateText(sent)).toBe('70% (held classes)');
+    expect(attendanceFacts(counts)).toMatchObject({ ratePercent: null, definition: null });
+    expect(attendanceRateText(attendanceFacts(counts))).toBe('Not recorded');
   });
 
   it.each([
@@ -187,7 +193,7 @@ describe('constructive summary (acceptance 17)', () => {
       ],
     });
     expect(s.evidence).toEqual([
-      'Attendance: 3 of 4 recorded classes attended (75%); 0 excused, 0 not recorded.',
+      'Attendance rate: Not recorded. 3 of 4 recorded classes attended; 0 excused, 0 held but not recorded.',
       'Results: 1 assessment scored, 1 missed (absent, not counted as zero).',
       'Trend — Quant sectional: insufficient data (1 scored result).',
     ]);

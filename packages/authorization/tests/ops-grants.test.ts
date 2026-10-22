@@ -25,7 +25,6 @@ describe('Ops task-tracker and review grants', () => {
         director: 'all',
         auditor: 'all',
         academic_coordinator: 'all',
-        teacher: 'own',
       },
     ],
     ['ops:tasks:import', { operations_manager: 'all' }],

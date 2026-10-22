@@ -38,7 +38,10 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       // Module zones are excluded: their own app sets these headers and its CSP (src/proxy.ts).
-      { source: '/((?!marketing(?:/|$)|academic(?:/|$)|ops(?:/|$)).*)', headers: securityHeaders() },
+      {
+        source: '/((?!marketing(?:/|$)|academic(?:/|$)|ops(?:/|$)).*)',
+        headers: securityHeaders(),
+      },
     ];
   },
   turbopack: { root: repoRoot },

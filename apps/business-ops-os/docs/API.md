@@ -105,7 +105,6 @@ All idempotent; there is no scheduler yet (IR-OPS-02). Each is also exported fro
 | Job | Route | Permission |
 |---|---|---|
 | `follow-up-reminders`, `enrolment-replies` | `POST /ops/api/v1/jobs/{job}` | `ops:jobs:run` |
-| `lead-intake` (Marketing handoff events, then retries of failed receipts with fewer than 5 attempts) | `POST /ops/api/v1/jobs/lead-intake` | `ops:jobs:run`; the service also needs `ops:lead_handoffs:manage` |
 | `demo-academic-marks` (open, unfinished demos re-read Academic's marks for their started classes in one batched call, so a class the teacher marked in Academic moves the case to demo attended without an Ops edit; nothing moves while Academic cannot be read; D-066) | `POST /ops/api/v1/jobs/demo-academic-marks` | `ops:jobs:run`; the service also needs all-scope `ops:leads:write` |
 
 ## Pre-existing routes
@@ -138,8 +137,8 @@ Screens are type-checked and Implemented. The redesigned screens (21 Oct 2026: d
 | `/ops/students` | `ops:students:read` | Active students (enrolled only), search, filters, `?open=` drawer |
 | `/ops/students/past` | `ops:students:read` | Tabs On hold / Former / Past demos (`?tab=on_hold\|former\|demos`) |
 | `/ops/students/{id}` | `ops:students:read` | Student profile (canonical id; older admission-id links open too) |
-| `/ops/students/{id}/report` | `ops:student_reports:generate` | Generate or reopen (`?export=SR-…`) a student report: draft → reviewed → final, PDF download (template `progress-report/1`) |
-| `/ops/leads`, `/ops/leads/{id}` | `ops:leads:read` | Leads list (filters, merge-review queue, create with duplicate warnings, `?view=marketing` for Marketing handoffs); detail. `?act=details` = Edit contact details (student phone/email, school, class, guardian; `PATCH /leads/{id}`; needs `ops:leads:write` and private-detail access), `?act=assign` = Assign owner (the counsellor unless the case names one) |
+| `/ops/students/{id}/report` | `ops:student_reports:generate` | Generate or reopen (`?export=SR-…`) a student report: draft → reviewed → final, PDF download (template `progress-report/2`; kinds PTM = `guardian`, Internal = `internal`, D-078) |
+| `/ops/leads`, `/ops/leads/{id}` | `ops:leads:read` | Leads list (filters, merge-review queue, create with duplicate warnings); detail. `?act=details` = Edit contact details (student phone/email, school, class, guardian; `PATCH /leads/{id}`; needs `ops:leads:write` and private-detail access), `?act=assign` = Assign owner (the counsellor unless the case names one) |
 | `/ops/meetings`, `/ops/meetings/{id}` | `ops:appointments:read` | Counselling & meetings: list and week calendar (`?view=week`), schedule form with subject-filtered teacher picker, `?open=` drawer; full record |
 | `/ops/schedule` | — | Permanent redirect to `/ops/meetings` |
 | `/ops/teachers`, `/ops/teachers/{id}` | `ops:teachers:read` | Teacher directory (Academic today per teacher; tasks and EOD only within your task reach) and profile with tabs Overview, Attendance and leave, Academic activity, Tasks and updates, Upcoming appointments, Student reviews, Feedback from students and guardians, EOD reports, Documents, Change history |
@@ -196,7 +195,7 @@ Same check order (401 → 403 → 400 → handler), envelope and error codes as 
 | POST | `/ops/api/v1/students/{id}/report` | `ops:student_reports:generate` (own) | `{ from, to, audience = internal, sections?: list \| { section: boolean }, acknowledgement? }` (IST dates, from ≤ to) | 201 draft report with a frozen snapshot + `referenceCode` (`SR-…`), export row + audit | 400 (audience not enabled in `reports.audiences`), 403, 404 |
 | GET | `/ops/api/v1/students/{id}/report` | `ops:student_reports:generate` (own) | `?ref=SR-XXXXXXXXXX` | `{ export (no snapshot), fields, view, actions }`, sections cut to the reader's current permissions | 400, 403, 404 |
 | POST | `/ops/api/v1/students/{id}/report/{ref\|id}/status` | `ops:student_reports:generate` (+ `ops:student_reports:review` to review or finalise) | `{ to: reviewed \| final }` | report | 403 own report / no review permission, 409 illegal move or "review first" (A-RPT-2) |
-| GET | `/ops/api/v1/students/{id}/report/{ref\|id}/pdf` | `ops:student_reports:generate` (own) | — | `application/pdf` (template `progress-report/1`), audit `student.report_downloaded` | 400 report made before snapshots existed, 403, 404 |
+| GET | `/ops/api/v1/students/{id}/report/{ref\|id}/pdf` | `ops:student_reports:generate` (own) | — | `application/pdf` (template `progress-report/2`; `/1` snapshots print as before), audit `student.report_downloaded` | 400 report made before snapshots existed, 403, 404 |
 | GET | `/ops/api/v1/students/{id}/kyc` | `ops:student_private:read` (own) | — | identity documents (current + replaced), siblings, KYC history (masked), document-type setting | 403, 404 |
 | POST | `/ops/api/v1/students/{id}/kyc` | `ops:guardians:write` + `ops:student_private:read` | `{ subjectType, guardianId?, documentType, maskedReference }` (masked reference only, D-043) | 201 unverified document; supersedes the previous one of the same type and person | 400 unmasked reference, 403, 404 |
 | POST | `/ops/api/v1/students/{id}/kyc/{documentId}` | `ops:kyc:verify` + `ops:student_private:read` | `{ status: verified \| rejected, note }` (rejection needs the note) | document | 403, 404, 409 superseded or already decided |
@@ -241,16 +240,23 @@ Same check order (401 → 403 → 400 → handler), envelope and error codes as 
 
 `feeStatusForStudents(db, studentIds, now?)` in `src/server/fees.ts` returns `paid | due | overdue | not_configured` per student for lists; it does no permission check, so callers show it only to holders of `ops:fees:read`.
 
-## Marketing lead handoff and reports
+## Admissions report (and the retired Marketing lead-handoff routes)
 
 | Method | Path | Permission | Body / query | Response | Errors |
 |---|---|---|---|---|---|
-| GET | `/ops/api/v1/leads/handoffs` | `ops:leads:read` (own: handoffs whose lead you own) | `status` | receipts without contacts, `counts` per status; `attribution` null without `ops:lead_attribution:read` | 400, 403 |
-| POST | `/ops/api/v1/leads/handoffs/{id}/retry` | `ops:lead_handoffs:manage` | — | receipt; audited `lead_handoff.retry_requested` | 403, 404, 409 not failed |
-| POST | `/ops/api/v1/jobs/lead-intake` | `ops:jobs:run` (+ `ops:lead_handoffs:manage` in the service) | — | processed counts | 403 |
 | GET | `/ops/api/v1/admissions/report` (changed) | `ops:admissions:read` (own) | `from`, `to` | existing KPIs + `funnelReport { window, funnel[], demoConversion { total, byProgramme, byCounsellor, bySource \| null }, students { active, on_hold, former } }` | 400, 403 |
 
-Event consumed: `marketing.lead.handed_off` v1 (consumer `ops.lead-intake`; contract declared by Ops in `packages/shared-contracts`, producer not built, IR-MKT-OPS-HANDOFF).
+Retired on 22 Oct 2026 (D-075): `GET /ops/api/v1/leads/handoffs`, `POST /ops/api/v1/leads/handoffs/{id}/retry`, `POST /ops/api/v1/jobs/lead-intake`, the consumer `ops.lead-intake` for `marketing.lead.handed_off` v1 and the permission `ops:lead_handoffs:manage`. The table `ops.lead_handoff_receipts` stays.
+
+## Teacher report (D-078, 22–23 Oct 2026)
+
+| Method | Path | Permission | Body / query | Response | Errors |
+|---|---|---|---|---|---|
+| POST | `/ops/api/v1/teachers/{id}/report` | `ops:teacher_reports:generate` (operations manager, director; a teacher never reports on themselves) | `{ from, to }` (IST dates, `from` ≤ `to`) | 201 the stored report: `TR-` reference, period, `teacher-report/1`, snapshot cut to the generator's permissions, SHA-256, source references; audited | 400 bad period, 401, 403, 404 unknown teacher |
+| GET | `/ops/api/v1/teachers/{id}/report` | `ops:teacher_reports:generate` | — | stored reports, newest first, without snapshots | 401, 403, 404 |
+| GET | `/ops/api/v1/teachers/{id}/report/{reportId}/pdf` | `ops:teacher_reports:generate` | `reportId` = export id or `TR-` reference, always under its teacher | the stored PDF (`pdfResponse`, `cache-control: no-store`); audited | 403, 404 unknown reference or another teacher's report |
+
+Content (`src/domain/teacher-report.ts`): delivery facts from the Academic teacher-activity contract kept as reported (missing stays null with its reason, never 0; "Academic OS unavailable" is printed when it could not be read), "where to work on" (measured non-zero counts only), a deterministic summary that names every source it could not read; charts with `pdf.bars`; two A4 pages; "Sample data" banner; no contact data. Table `ops.teacher_report_exports` (migration 0014). Tests: `tests/unit/teacher-report.test.ts`, `tests/integration/teacher-report.test.ts`.
 
 ## Settings (20–21 Oct 2026; `PUT /ops/api/v1/settings/{key}`, `ops:settings:manage`, audited; approved keys are not editable here)
 | Key | Default | State | Used by |
@@ -377,7 +383,7 @@ Business Operations is its own workspace at `http://localhost:3000/ops` (`BUSINE
 ## Pages (no JSON route; each calls `requirePageAccess(…, { workspace: 'ops' })`)
 | Path | Permission | Query | Notes |
 |---|---|---|---|
-| `/ops` (Overview) | `ops:module:access`; each block its own permission | `from`, `to` (IST `YYYY-MM-DD`) | Default this month to date. Invalid, reversed or longer than 366 days → this month plus a message. Task/EOD figures for a range over 92 days are explained, not computed. A source that fails says "Source unavailable" |
+| `/ops` (Overview) | `ops:module:access`; each block its own permission | `from`, `to` (IST `YYYY-MM-DD`) | Default this month to date. Invalid, reversed or longer than 366 days → this month plus a message. Task/EOD figures for a range over 92 days are explained, not computed. A source that fails says "Source unavailable". Since 22 Oct 2026 (D-074) the overview also carries a `series` part — leads per day, funnel stages, demo outcomes, leads by source — only for holders of `ops:leads:read`, built by `activitySeries` from the same rows as the figures (own scope labelled); the four permanently-missing tiles are no longer rendered (D-076) |
 | `/ops/academic-summary` | `ops:dashboard:read` | `from`, `to` | Academic delivery summary and reviews published in the range (one Academic call per teacher: IR-OPS-WS-1) |
 | `/ops/marketing-summary` | `ops:dashboard:read` | `from`, `to` | From the Marketing summary route |
 | `/ops/fees/collections` | `ops:fees:read` (own for counsellors) | `status`, `page` | 25 per page (`FEE_PAGE_SIZE`), net total |

@@ -24,7 +24,11 @@ export function Funnel({ report }: { report: FunnelReport }) {
   return (
     <FunnelChart
       label="Admissions funnel: leads at each stage"
-      data={report.funnel.map((s) => ({ label: s.label, value: s.count }))}
+      // "Completed" and "Converted" both divide by "Attended" (FUNNEL_STAGES); skipping
+      // "Completed" keeps every chart "of previous" equal to the domain's denominator.
+      data={report.funnel
+        .filter((s) => s.key !== 'completed')
+        .map((s) => ({ label: s.label, value: s.count }))}
       emptyText="No leads were first received in this period."
     />
   );

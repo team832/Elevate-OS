@@ -15,20 +15,47 @@ describe('tasks and EOD inside Academic OS', () => {
     const u = await users(ctx.db);
     const staffId = await staffFor(ctx.db, u.teacher, 'Sample Teacher');
     await staffFor(ctx.db, u.teacher2, 'Sample Teacher Two');
-    const created = await callRoute<{ id: string }>(createRoute, authedRequest(u.teacher, '/academic/api/v1/staff-tasks', { method: 'POST', json: { title: 'Sample worksheet check', staffId, dueOn: today } }));
+    const created = await callRoute<{ id: string }>(
+      createRoute,
+      authedRequest(u.teacher, '/academic/api/v1/staff-tasks', {
+        method: 'POST',
+        json: { title: 'Sample worksheet check', staffId, dueOn: today },
+      }),
+    );
     expect(created.status).toBe(201);
 
-    const mine = await callRoute<{ rows: { id: string }[] }>(listRoute, authedRequest(u.teacher, '/academic/api/v1/staff-tasks'));
+    const mine = await callRoute<{ rows: { id: string }[] }>(
+      listRoute,
+      authedRequest(u.teacher, '/academic/api/v1/staff-tasks'),
+    );
     expect(mine.status).toBe(200);
     expect(mine.data!.rows.map((r) => r.id)).toEqual([created.data!.id]);
-    const other = await callRoute<{ rows: unknown[] }>(listRoute, authedRequest(u.teacher2, '/academic/api/v1/staff-tasks'));
+    const other = await callRoute<{ rows: unknown[] }>(
+      listRoute,
+      authedRequest(u.teacher2, '/academic/api/v1/staff-tasks'),
+    );
     expect(other.data!.rows).toEqual([]);
-    expect((await callRoute(listRoute, authedRequest(await createTestUser(ctx.db, { roles: ['platform_admin'] }), '/academic/api/v1/staff-tasks'))).status).toBe(403);
+    expect(
+      (
+        await callRoute(
+          listRoute,
+          authedRequest(
+            await createTestUser(ctx.db, { roles: ['platform_admin'] }),
+            '/academic/api/v1/staff-tasks',
+          ),
+        )
+      ).status,
+    ).toBe(403);
 
-    const block = renderToStaticMarkup(<TasksDay summary={await taskDaySummary(ctx.db, u.teacher)} />);
-    expect(block).toContain('1 open · 0 overdue · 1 due today.');
+    const block = renderToStaticMarkup(
+      <TasksDay summary={await taskDaySummary(ctx.db, u.teacher)} />,
+    );
+    expect(block).toContain('<span class="el-stat-value">1</span>');
+    expect(block).toContain('0 overdue · 1 due today');
     expect(block).toContain('Not started');
     expect(block).toContain('href="/academic/tasks?tab=eod"');
-    expect(renderToStaticMarkup(<TasksDay summary={await taskDaySummary(ctx.db, u.coordinator)} />)).toContain('No staff record linked to your account');
+    expect(
+      renderToStaticMarkup(<TasksDay summary={await taskDaySummary(ctx.db, u.coordinator)} />),
+    ).toContain('No staff record');
   });
 });

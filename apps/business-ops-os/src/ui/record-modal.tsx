@@ -5,7 +5,7 @@
  * the URL, so the record is shareable and closing it restores the list exactly
  * (filters stay in the URL). Native <dialog> + showModal(): focus stays inside,
  * Escape / the close button / a backdrop click close it, focus returns to the
- * row link (`data-drawer-return`). Full screen on phones.
+ * row link (`data-drawer-return`). A curved bottom sheet on phones, a centred panel from 641px.
  */
 import {
   useEffect,
@@ -87,12 +87,12 @@ export function RecordModal({
     <dialog
       ref={ref}
       id={id}
-      className={`ops-modal${size === 'form' ? ' ops-modal-form' : ''}`}
+      className={`el-dialog ops-modal${size === 'form' ? ' ops-modal-form' : ''}`}
       aria-labelledby={`${id}-title`}
       onClose={onClose}
       onClick={onBackdrop}
     >
-      <header className="ops-modal-head">
+      <header className="el-dialog-header ops-modal-head">
         <div className="ops-modal-titles">
           <h2 id={`${id}-title`}>{title}</h2>
           {meta ? <div className="ops-modal-meta">{meta}</div> : null}

@@ -38,7 +38,7 @@ Everything commits or nothing does.
 
 ## 3. Cross-module flows
 - **Commands** (admission → enrolment): producer writes `core.integration_events` in its transaction; the consumer runs `processEvents` (one transaction per event, guarded by the unique `core.event_deliveries` row) and replies with its own event. Failures retry; repeated failure → `dead`.
-- **Read-only summaries** (dashboards): `fetchInternal()` → `GET /<zone>/api/internal/v1/summary` (bearer token + caller header) → validated contract or `unavailable`. Never zeros in place of missing data.
+- **Read-only summaries** (dashboards): `fetchInternal()` → `GET /<zone>/api/internal/v1/summary` (bearer token + caller header; the optional per-module tokens of `INTERNAL_SERVICE_TOKENS` bind the caller to its token, D-077) → validated contract or `unavailable`. Never zeros in place of missing data.
 - **Approvals**: any module can open/decide approvals on its own subjects through the shared service; history is preserved in `core.approvals` and audited.
 
 ## 4. Environments

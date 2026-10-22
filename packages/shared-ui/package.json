@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Server-component-friendly React UI kit with a plain-CSS design-token stylesheet: AppShell, PageHeader, Card, DataTable, StatusBadge, Button, form fields, Alert, Empty/Error/Loading states, StatTile (missing ≠ zero).",
+  "description": "Server-component-friendly React UI kit with a plain-CSS design-token stylesheet (light, warm, curved; 22 Oct 2026): AppShell, PageHeader, Card, DataTable, StatusBadge, Button, form fields, Alert, Empty/Error/Loading states, StatTile and MetricStrip (missing is not zero), JourneyRail, charts.",
   "exports": {
     ".": "./src/index.ts",
-    "./styles.css": "./src/styles.css"
+    "./styles.css": "./src/styles.css",
+    "./chart-math": "./src/components/chart-math.ts"
   },
   "sideEffects": [
     "*.css"

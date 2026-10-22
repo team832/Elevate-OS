@@ -7,19 +7,10 @@ import { MODULE_PATHS } from '../../../server/paths';
 import { ApiButton, ApiForm } from '../../../ui/api-form';
 import { StateBadge, fmtDateTime } from '../../../ui/badges';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
-import { TYPE_LABELS, VISIBILITY_LABELS, reviewFields } from '../review-fields';
+import { EVIDENCE_FIELDS, TYPE_LABELS, VISIBILITY_LABELS, reviewFields } from '../review-fields';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Teacher review' };
-
-const SHOWN = [
-  ['strengths', 'Strengths seen in class'],
-  ['areasForSupport', 'Areas needing support'],
-  ['attendanceEvidence', 'Attendance and engagement evidence'],
-  ['homeworkEvidence', 'Homework and practice evidence'],
-  ['academicConcerns', 'Academic concerns'],
-  ['suggestedAction', 'Suggested action'],
-] as const;
 
 export default async function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -47,7 +38,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
         ) : (
           <Card title={r.status === 'draft' ? 'Draft' : `Submitted ${fmtDateTime(r.submittedAt)}`}>
             <dl className="el-stack">
-              {SHOWN.map(([k, label]) => (
+              {EVIDENCE_FIELDS.map(([k, label]) => (
                 <div key={k}>
                   <dt className="el-field-hint">{label}</dt>
                   <dd>{r[k] ?? 'Not written'}</dd>

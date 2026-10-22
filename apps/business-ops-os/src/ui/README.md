@@ -1,8 +1,8 @@
 # Business Ops UI kit (`src/ui`)
 
-Server components unless marked _client_. Reuse `@elevate/shared-ui` first (`PageHeader` with `meta`/`tabs`, `JourneyRail`, `StatusBadge`, `Tabs`, `Card`, `EmptyState`, `Field`, `Button`, `Alert`). Colours, type and the dark theme are tokens in `@elevate/shared-ui` (`styles.css` imports `css/base.css` tokens, `shell.css`, `components.css`, `login.css`; `--el-*`: frame `--el-ink`, canvas `--el-bg`, `--el-well`, card `--el-surface`, `--el-overlay`, raised `--el-surface-muted`). `src/app/ops.css` keeps the ops-only aliases `--ops-elev-0..3-*`, `--ops-line`, `--ops-chart-*`. Never hard-code colours.
+Server components unless marked _client_. Reuse `@elevate/shared-ui` first (`PageHeader` with `meta`/`tabs`, `JourneyRail`, `StatusBadge`, `Tabs`, `Card`, `EmptyState`, `Field`, `Button`, `Alert`, and the charts). Colours, type, shape and depth are tokens in `@elevate/shared-ui` (`styles.css` imports `css/base.css` tokens, `shell.css`, `components.css`, `charts.css`, `login.css`; `--el-*`: canvas `--el-bg`, well `--el-well`, card `--el-surface`, raised `--el-surface-muted`, overlay `--el-overlay`, radii `--el-radius-pill` / `-sm` / default / `-lg`, shadows `--el-shadow*`). `src/app/ops.css` holds only Ops-specific layout (KPI grid, record tables, detail table, the record pop-up, search toolbar, timeline). Tokens only: no hex, px radius, custom shadow or blur.
 
-Layout (owner, 21 Oct 2026): black frame (sidebar, top bar, page masthead) around a warm-dark work tray. A page is `PageHeader` (title, one-line description, primary action, area tabs via `tabs={<AdmissionsNav … />}`) → KPI strip (`<ul className="el-grid ops-kpis">` of `StatCard`s, one joined band) → `SearchPanel` toolbar → view `Tabs` (segmented) → `RecordTable` → `Pager`. Orange is only for primary buttons, the current nav item / tab / KPI filter and the current journey stage.
+Layout (owner, 22 Oct 2026): a light linen canvas with a floating white sidebar rail and a frosted top bar; each page is a display-face masthead followed by rounded panels. A page is `PageHeader` (title, meta pills, one-line description, primary action, area tabs via `tabs={<AdmissionsNav … />}`, a pill segmented control) → KPI tiles (`<ul className="el-grid ops-kpis">` of `StatCard`s, a grid of raised tiles) → `SearchPanel` toolbar (search pill, "Filters" pill, chips) → view `Tabs` (pill segmented control) → `RecordTable` (a rounded well) → `Pager`. Records open in a frosted centred panel from 641px and a curved bottom sheet with a grab handle below. Orange is only for primary buttons, the current nav item / tab / KPI filter and the current journey stage; orange text uses `--el-accent-text`.
 
 | Component | File | Use it for |
 |---|---|---|
@@ -16,16 +16,16 @@ Layout (owner, 21 Oct 2026): black frame (sidebar, top bar, page masthead) aroun
 | `FormSection` | `sections.tsx` | A titled group of fields in the 2-column form grid |
 | `ActionForm` _client_ | `action-form.tsx` | Every JSON form posting to `/ops/api/v1` (details below) |
 | `TaskList` | `sections.tsx` | "What is still needed" list (state in words, what is missing, link to fix it), built only from the server's own gap check |
-| `MetricStrip` | `@elevate/shared-ui` | A row of headline figures with fine dividers; a missing figure says "Not available", never 0 |
+| `MetricStrip` | `@elevate/shared-ui` | A grid of headline figure tiles from `Metric`s; a missing figure says "Not available", never 0 |
 | `SearchPanel` | `list-controls.tsx` | The list search section (one box + "Filters" disclosure + chips) |
 | `listHref`, `Pager`, `options` | `list-controls.tsx` | URLs that keep params, "Showing 1–25 of 112", select options |
-| `BarChart`, `DonutChart`, `LineChart`, `Sparkline`, `FunnelChart`, `StatCard` | `charts.tsx` | Charts and KPI cards (maths in `chart-math.ts`) |
+| `BarChart`, `DonutChart`, `LineChart`, `Sparkline`, `FunnelChart`, `StatCard` | `@elevate/shared-ui` (`charts.tsx` and `chart-math.ts` here re-export them) | Charts with hover tooltips and KPI tiles; `el-chart*`, `el-hbar*`, `el-vbar*`, `el-donut*`, `el-line*`, `el-funnel*`, `el-kpi` classes and `--el-chart-*` tokens (the old `ops-chart*` CSS is gone) |
 
 `FilterForm` (old inline filter row) is no longer used by any page; delete it when `list-controls.tsx` is next touched.
 
 ## RecordModal — `?open=<id>`
 
-Native `<dialog>` + `showModal()`: centred `min(56rem, 100vw − 2rem)`, max 90% of the screen height, scrolling body, sticky header; full screen at 640px and below. Escape, the close button and a backdrop click close it; closing does `router.replace(closeHref)` (strips `/ops`, D-022) and focuses the row link with `data-drawer-return={returnId}`. Page scroll is locked while open. Never open a modal from inside a modal: multi-step flows get their own route.
+Native `<dialog>` + `showModal()`: from 641px a centred frosted panel `min(56rem, 100vw − 2rem)`, max 90% of the screen height, with a dimmed and blurred backdrop; at 640px and below a curved bottom sheet (max 92% of the screen height) with a grab handle. Scrolling body, sticky header whose section tabs are the shared pill segmented control. Escape, the close button and a backdrop click close it; closing does `router.replace(closeHref)` (strips `/ops`, D-022) and focuses the row link with `data-drawer-return={returnId}`. Page scroll is locked while open. Never open a modal from inside a modal: multi-step flows get their own route.
 
 ```tsx
 import { RecordModal } from '../../ui/record-modal';
@@ -66,7 +66,7 @@ Pages still importing `RecordModal as Drawer` work unchanged; rename when you to
 </FormModal>
 ```
 
-Consecutive fields with the same `section` become one bordered `FormSection` (2 columns from 720px; text areas and checkboxes span both). Field errors show under each field. Inside a modal the footer (error, Cancel, submit) sticks to the bottom: put the form **last** in the modal body. Forms without `section` render exactly as before.
+Consecutive fields with the same `section` become one `FormSection` well with a header bar (2 columns from 720px; text areas and checkboxes span both). Field errors show under each field. Inside a modal the footer (error, Cancel, submit) sticks to the bottom as a frosted bar: put the form **last** in the modal body. Forms without `section` render exactly as before.
 
 ActionForm behaviour (21 Oct 2026):
 - **One request at a time.** The submit button is disabled before the request starts, so a double click sends one request.
@@ -137,15 +137,18 @@ All take `label` (what is plotted: the accessible name), `data: { label, value: 
 | `LineChart` | trend over days/weeks, one series | gaps where values are missing; needs 2+ known values |
 | `Sparkline` | tiny trend, `values: (number \| null)[]` | decorative unless given `label` |
 | `FunnelChart` | ordered stages | bar width vs first stage, "x% of previous", overall line |
-| `StatCard` | KPI on a raised card | `value: null` shows "Not recorded"; `href` + `current` make it the filter link; `trend` adds a sparkline |
+| `StatCard` | KPI tile (`.el-stat`) | `value: null` shows "Not recorded"; `href` + `current` make it the filter link (`.el-kpi`, selected = orange underline); `trend` adds a sparkline — only pass one where the service returns a real per-day series |
 
 ```tsx
 <ul className="el-grid ops-kpis">
   <li><StatCard label="Current demos" value={kpis.current} note="First class on or before today" href={listHref(BASE, params, { view: 'current' })} current={view === 'current'} /></li>
+  <li><StatCard label="Leads received" value={leads} note="First received in the period" trend={series?.leadsPerDay.map((d) => d.count)} /></li>
 </ul>
-<Segment title="Demo outcomes this month">
-  <DonutChart label="Demo outcomes this month" data={outcomes} totalLabel="Demos" />
-</Segment>
+<div className="ops-panels">
+  <Segment title="Demo outcomes this month">
+    <DonutChart label="Demo outcomes this month" data={outcomes} totalLabel="Demos" />
+  </Segment>
+</div>
 ```
 
-One series uses the brand orange; categories use `--ops-chart-1..6` (validated for colour-blind separation on the dark surface). Status colours stay for status badges only.
+Tiles inside a `Segment` sit in wells (a card never holds raised cards). One series uses `--el-chart-bar`; categories use `--el-chart-1..6` in fixed order (validated on white). Status colours stay for status badges only. The Overview (`src/app/page.tsx`, `_components/overview-blocks.tsx`) is the pattern: headline tiles → chart panels in `.ops-panels` → "Your work today".

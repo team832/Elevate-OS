@@ -1,5 +1,5 @@
 /**
- * Dashboard head of a student list: one strip of figures that filter the table, and (Active)
+ * Dashboard head of a student list: a row of figure tiles that filter the table, and (Active)
  * two charts whose rows link to the filtered list. Counts come from studentListSummary
  * (every student of the view in the caller's scope, search filters not applied).
  */
@@ -28,7 +28,7 @@ const toggle = (base: string, params: Params, key: string, value: string) =>
 /** The chart's values as a table, collapsed (the chart itself already labels each value). */
 function AsTable({ label, data }: { label: string; data: readonly Datum[] }) {
   return (
-    <details className="ops-chart-table">
+    <details className="el-chart-table">
       <summary>Show as table</summary>
       <div className="el-table-wrap">
         <table className="el-table">

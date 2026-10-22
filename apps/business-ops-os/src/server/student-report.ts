@@ -5,16 +5,22 @@
  * and PDF renders that snapshot and never re-reads live data. draft → reviewed (a reviewer who is
  * not the creator) → final; nothing changes after final. Teacher reviews come from Academic OS
  * (submitted, not withdrawn, frozen into the snapshot); results only as Academic publishes them.
- * Guardian/student reports hold only the deterministic constructive summary built from SHAREABLE
- * reviews (strengths / areas / next steps — never internal remarks); raw reviews, guardians, status history and fee totals
- * are internal sections. A reader sees only the sections their permissions allow today. Nothing
+ * Two owner kinds (D-078): the PTM report (guardian) holds the three SHAREABLE fields of the
+ * latest shareable reviews and the affirmative summary — never internal remarks, KYC, guardians,
+ * status history or fee totals; the internal report adds KYC (private-data readers only) and
+ * every review field. A reader sees only the sections their permissions allow today. Nothing
  * is emailed; generating, reviewing, finalising and downloading are audited.
  */
 import { randomBytes } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 import { can } from '@elevate/authorization';
-import { opsReportExports, type Database, type OpsReportExportId } from '@elevate/database';
+import {
+  opsLeads,
+  opsReportExports,
+  type Database,
+  type OpsReportExportId,
+} from '@elevate/database';
 import { recordAudit, withTransaction } from '@elevate/server-kit';
 import {
   InvalidStateTransitionError,
@@ -23,27 +29,27 @@ import {
   ValidationError,
 } from '@elevate/shared-contracts';
 import type { StudentIdentityId } from '@elevate/shared-types';
-import { ADMISSION_STATUS_LABELS, type AdmissionStatus } from '../domain';
+import { ADMISSION_STATUS_LABELS, istToday, type AdmissionStatus } from '../domain';
+import { documentChecklist } from '../domain/admission-form';
+import { ageOn } from '../domain/applications';
 import { FEE_BALANCE_LABELS } from '../domain/fees';
 import {
   constructiveSummary,
   inIstPeriod,
+  isFamily,
   readableSections,
   REPORT_TEMPLATE_VERSION,
   reportSections,
   reportTransition,
+  toneOf,
   type ReportAudience,
   type ReportPermissions,
   type ReportSection,
 } from '../domain/student-report';
-import {
-  reviewDate,
-  studentReviews,
-  visibleReviews,
-  type AcademicReview,
-} from './academic-reviews';
+import { reviewDate, studentReviews, visibleReviews } from './academic-reviews';
 import { academicEvidence, fetchAcademicReviews } from './academic-summary';
 import { accessScope, type Actor } from './context';
+import { getStudentKyc } from './kyc';
 import { progressReportPdf } from './pdf/progress-report';
 import type { reportBody } from './report-schemas';
 import { loadSettings } from './settings';
@@ -84,16 +90,43 @@ async function submittedReviews(
   return { source: r, reviews };
 }
 
-/** Internal evidence fields: only in internal views, never in family outputs (acceptance 15). */
-const internalRemarks = (r: AcademicReview) =>
-  [
-    ['Attendance and engagement', r.attendanceEvidence],
-    ['Homework and practice', r.homeworkEvidence],
-    ['Academic concerns', r.academicConcerns],
-  ]
-    .filter(([, v]) => v)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join(' · ') || null;
+/**
+ * KYC block of the internal kind (D-078): DOB and age, class, school, city, guardians with
+ * contacts, document checklist. Built only when the author may read private data; getStudentKyc
+ * re-checks `ops:student_private:read` and own scope on the server.
+ */
+async function kycFacts(db: Database, actor: Actor, profile: Profile) {
+  const p = profile.person;
+  const [[lead], kyc] = await Promise.all([
+    db
+      .select({ dateOfBirth: opsLeads.dateOfBirth })
+      .from(opsLeads)
+      .where(eq(opsLeads.id, p.leadId)),
+    getStudentKyc(db, actor, profile.identity!.id),
+  ]);
+  const dateOfBirth = lead?.dateOfBirth ?? null;
+  const guardians = profile.guardians === 'hidden' ? [] : profile.guardians;
+  return {
+    dateOfBirth,
+    age: ageOn(dateOfBirth, istToday(new Date())),
+    class: p.currentStage,
+    board: p.schoolBoard,
+    school: p.previousSchool ?? null,
+    city: p.city ?? null,
+    guardians: guardians
+      .filter((g) => !g.archivedAt)
+      .map((g) => ({
+        name: g.fullName,
+        relationship: g.relationship,
+        phone: g.phone,
+        email: g.email,
+        consent: g.consentStatus,
+      })),
+    documents: documentChecklist(
+      kyc.documents.filter((d) => d.current && d.subjectType === 'student'),
+    ),
+  };
+}
 
 async function buildSnapshot(
   db: Database,
@@ -114,11 +147,17 @@ async function buildSnapshot(
       ? submittedReviews(db, actor, studentId, input.from, input.to)
       : null,
   ]);
+  const family = isFamily(input.audience);
   const reviews = submitted?.reviews ?? [];
+  // Family kinds: shareable reviews only, the 3 most recent (every PTM list is capped at 3).
+  const shown = family ? reviews.filter((r) => r.visibility === 'shareable').slice(-3) : reviews;
   const available = academic?.status === 'available' ? academic : null;
   const snapshot = {
     template: REPORT_TEMPLATE_VERSION,
     audience: input.audience,
+    /** The report kind (= audience) and wording tone, stored so a report prints the same later. */
+    kind: input.audience,
+    tone: toneOf(input.audience),
     sections,
     period,
     acknowledgement: input.acknowledgement,
@@ -126,6 +165,7 @@ async function buildSnapshot(
       name: profile.person.fullName,
       admissionNumber: profile.admission.admissionNumber,
       isSample: profile.identity!.isSample,
+      counsellor: profile.owner?.fullName ?? null,
     },
     programmes: profile.cases.map((c) => ({
       programme: c.programme?.name ?? 'Not recorded',
@@ -166,38 +206,50 @@ async function buildSnapshot(
         }
       : undefined,
     feedback: has('feedback')
-      ? reviews.map((r) => ({
+      ? shown.map((r) => ({
           id: r.reviewKey,
           teacher: r.authorName,
           subject: r.subjectName ?? 'Subject not recorded',
           observedOn: reviewDate(r),
+          type: r.reviewType,
           version: r.version,
           visibility: r.visibility,
-          observations: internalRemarks(r),
           strengths: r.strengths,
           areasToImprove: r.areasForSupport,
           actionPlan: r.suggestedAction,
+          // Internal evidence fields: never in family kinds (acceptance 15).
+          ...(family
+            ? {}
+            : {
+                attendanceEvidence: r.attendanceEvidence,
+                homeworkEvidence: r.homeworkEvidence,
+                academicConcerns: r.academicConcerns,
+              }),
         }))
       : undefined,
     // Only the three shareable fields of shareable reviews; internal remarks are never read here.
     summary: has('summary')
-      ? constructiveSummary({
-          attendance: available?.attendance ?? null,
-          results: available
-            ? available.results.map(({ percent: _p, comparison: _c, rescored: _r, ...r }) => r)
-            : null,
-          feedback: submitted?.reviews
-            ? submitted.reviews
-                .filter((r) => r.visibility === 'shareable')
-                .map((r) => ({
-                  subject: r.subjectName ?? 'Subject not recorded',
-                  strengths: r.strengths,
-                  areasToImprove: r.areasForSupport,
-                  actionPlan: r.suggestedAction,
-                }))
-            : null,
-        })
+      ? constructiveSummary(
+          {
+            attendance: available?.attendance ?? null,
+            results: available
+              ? available.results.map(({ percent: _p, comparison: _c, rescored: _r, ...r }) => r)
+              : null,
+            feedback: submitted?.reviews
+              ? shown
+                  .filter((r) => r.visibility === 'shareable')
+                  .map((r) => ({
+                    subject: r.subjectName ?? 'Subject not recorded',
+                    strengths: r.strengths,
+                    areasToImprove: r.areasForSupport,
+                    actionPlan: r.suggestedAction,
+                  }))
+              : null,
+          },
+          { tone: toneOf(input.audience) },
+        )
       : undefined,
+    kyc: has('kyc') ? await kycFacts(db, actor, profile) : undefined,
     guardians:
       has('guardians') && profile.guardians !== 'hidden'
         ? profile.guardians
@@ -339,6 +391,22 @@ const findRow = (db: Database, identityId: string, reference: string) =>
       ),
     );
 
+/** The student's generated reports, newest first, for the report screen (after getStudent's access check). */
+export const reportsOf = (db: Database, identityId: string) =>
+  db
+    .select({
+      id: opsReportExports.id,
+      referenceCode: opsReportExports.referenceCode,
+      audience: opsReportExports.audience,
+      status: opsReportExports.status,
+      periodFrom: opsReportExports.periodFrom,
+      periodTo: opsReportExports.periodTo,
+      at: opsReportExports.at,
+    })
+    .from(opsReportExports)
+    .where(eq(opsReportExports.studentId, identityId as StudentIdentityId))
+    .orderBy(desc(opsReportExports.at));
+
 /**
  * The report behind a reference code (or export id), cut to the sections the reader may see now.
  * The stored snapshot is never returned whole: only `view` leaves this function.
@@ -366,6 +434,7 @@ export async function getStudentReport(
         ...s,
         sections: fields,
         feedback: fields.includes('feedback') ? s.feedback : undefined,
+        kyc: fields.includes('kyc') ? s.kyc : undefined,
         guardians: fields.includes('guardians') ? s.guardians : undefined,
         fees: fields.includes('fees') ? s.fees : undefined,
       };

@@ -13,7 +13,6 @@ import {
   opsFeeRecords,
   opsFeeStructures,
   opsFollowUps,
-  opsLeadHandoffReceipts,
   opsLeads,
   opsLeadSources,
   opsStaffProfiles,
@@ -61,7 +60,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     expect((await ctx.db.select().from(opsLeadSources)).map((s) => s.code)).toContain('UNKNOWN');
 
     const leads = await ctx.db.select().from(opsLeads);
-    expect(leads).toHaveLength(SAMPLE_LEAD_COUNT); // demo cases + mock Marketing handoffs
+    expect(leads).toHaveLength(SAMPLE_LEAD_COUNT);
     expect(new Set(leads.map((l) => l.studentName)).size).toBe(leads.length);
     for (const l of leads) {
       expect(l).toMatchObject({ isSample: true, studentPhone: null, guardianPhone: null });
@@ -108,7 +107,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
         s.subject === 'Mathematics' ? 'Sample Maths Teacher' : `Sample ${s.subject} Teacher`,
       );
 
-    // Cases: outcomes, applications, admission numbers (3 digits, D-037), fee plans, handoffs.
+    // Cases: outcomes, applications, admission numbers (3 digits, D-037), fee plans.
     const counts = async (rows: Promise<{ k: string | null; n: number }[]>) =>
       Object.fromEntries((await rows).map((r) => [r.k, r.n]));
     expect(
@@ -150,9 +149,6 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     expect(ledger.every((r) => r.status === 'recorded' && r.notes?.includes('not a payment'))).toBe(
       true,
     );
-    expect(
-      (await ctx.db.select().from(opsLeadHandoffReceipts)).map((r) => r.status).sort(),
-    ).toEqual(['accepted', 'duplicate_review']);
     // The only approval is Saanvi's agreement request; no inert admission-level approvals.
     expect((await ctx.db.select().from(approvals)).map((a) => [a.policy, a.status]).sort()).toEqual(
       [
@@ -298,13 +294,11 @@ describe('Business Ops seeds (D-036 sample set)', () => {
         createdBy: sample!.createdBy,
       })
       .returning();
-    await ctx.db
-      .insert(opsTaskDependencies)
-      .values({
-        taskId: real!.id,
-        dependsOnTaskId: sample!.id,
-        createdByUserId: sample!.createdBy,
-      });
+    await ctx.db.insert(opsTaskDependencies).values({
+      taskId: real!.id,
+      dependsOnTaskId: sample!.id,
+      createdByUserId: sample!.createdBy,
+    });
     await expect(clearSamples(ctx.db)).rejects.toThrow();
     expect(await ctx.db.$count(opsLeads)).toBe(SAMPLE_LEAD_COUNT);
     await ctx.db.delete(opsTaskDependencies).where(eq(opsTaskDependencies.taskId, real!.id));

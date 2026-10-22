@@ -52,7 +52,6 @@ export const ACADEMIC_ASSESSMENT_STATUSES = [
   'cancelled',
 ] as const;
 
-
 /** Marks as exact decimals (≤ 4 dp). Computed in integer 1/10 000-mark units in the domain. */
 const marks = (name: string) => numeric(name, { precision: 10, scale: 4 });
 
@@ -76,7 +75,10 @@ export const academicAssessments = academic.table(
       .references(() => academicSubjects.id, { onDelete: 'restrict' })
       .$type<AcademicSubjectId>(),
     /** Chapters the assessment covers (prerequisites for scheduling). */
-    chapterIds: uuid('chapter_ids').array().notNull().default(sql`'{}'::uuid[]`),
+    chapterIds: uuid('chapter_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
     scheduledDate: date('scheduled_date', { mode: 'string' }),
     startTime: text('start_time'),
     /** Minutes; null = unknown, never zero (BR-ACD-4). */
@@ -144,7 +146,10 @@ export const academicAssessmentSections = academic.table(
     answerFormat: text('answer_format', { enum: ['choice', 'numeric'] })
       .notNull()
       .default('choice'),
-    options: text('options').array().notNull().default(sql`'{A,B,C,D}'::text[]`),
+    options: text('options')
+      .array()
+      .notNull()
+      .default(sql`'{A,B,C,D}'::text[]`),
     timeLimitMinutes: integer('time_limit_minutes'),
     marksPerCorrect: marks('marks_per_correct'),
     marksPerWrong: marks('marks_per_wrong'),
@@ -307,7 +312,10 @@ export const academicResults = academic.table(
   (t) => [
     uniqueIndex('results_run_attempt_key').on(t.runId, t.attemptId),
     check('results_state_check', sql`${t.state} IN (${inList(ACADEMIC_RESULT_STATES)})`),
-    check('results_state_shape', sql`(${t.state} = 'scored') = (${t.totalScore} IS NOT NULL) AND ${t.absent} = (${t.state} <> 'scored')`),
+    check(
+      'results_state_shape',
+      sql`(${t.state} = 'scored') = (${t.totalScore} IS NOT NULL) AND ${t.absent} = (${t.state} <> 'scored')`,
+    ),
     index('results_student_idx').on(t.studentId),
     check(
       'results_percentile_range',

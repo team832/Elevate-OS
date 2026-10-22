@@ -13,6 +13,7 @@ import {
   finaliseAssessment,
   publishResults,
   recordClass,
+  updateSetting,
   upsertAttempts,
 } from '../../src/server';
 import { attemptsBody, createAssessmentBody } from '../../src/server/schemas';
@@ -152,13 +153,14 @@ describe('GET /academic/api/internal/v1/students/{id}/summary (IR-OPS-STU-1)', (
       studentId: asha.id,
       window: { from: '2026-09-01', to: '2026-09-30' },
     });
-    expect(d.attendance).toEqual({
+    expect(d.attendance).toMatchObject({
       held: 3,
       present: 1,
       partial: 0,
       late: 1,
       absent: 1,
       excused: 0,
+      ratePercent: 66.7,
     });
     expect(d.enrolments).toHaveLength(1);
     expect(d.enrolments[0]!.batchName).toBe('Test batch (fictional)');
@@ -213,7 +215,7 @@ describe('GET /academic/api/internal/v1/students/{id}/summary (IR-OPS-STU-1)', (
     await ctx.db.update(academicBatchPlacements).set({ endDate: '2026-09-10', endedReason: 'Transfer (fictional)', endedByUserId: u.coordinator.id }).where(eq(academicBatchPlacements.id, first!.id));
     await ctx.db.insert(academicBatchPlacements).values({ enrolmentId: enrolment.id, batchId: w2.batch.id, startDate: '2026-09-11', reason: 'Transfer (fictional)', transferFromPlacementId: first!.id, placedByUserId: u.coordinator.id });
     const d = (await call(mira.id, '?from=2026-09-01&to=2026-09-30')).data!;
-    expect(d.attendance).toEqual({ held: 2, present: 1, partial: 0, late: 0, absent: 0, excused: 0 }); // 7 Sep (A) + 22 Sep (B, not recorded)
+    expect(d.attendance).toMatchObject({ held: 2, present: 1, partial: 0, late: 0, absent: 0, excused: 0, ratePercent: 100 }); // 7 Sep (A) + 22 Sep (B, not recorded)
     expect(d.enrolments[0]!.teachers).toEqual(
       expect.arrayContaining([
         { staffId: w.teacherStaff, subject: 'Quant' },
@@ -239,5 +241,25 @@ describe('GET /academic/api/internal/v1/students/{id}/summary (IR-OPS-STU-1)', (
     const d = res.data! as AcademicStudentSummaryV1 & { extensions?: { attendanceNotRecorded: { enrolmentId: string; reason: string }[] } };
     expect(d.attendance.held).toBe(0);
     expect(d.extensions!.attendanceNotRecorded).toEqual([{ enrolmentId: e.id, reason: 'Not recorded — no batch history before 21 Oct 2026' }]);
+  });
+
+  it('the rate follows the attendance.denominator setting; nothing recorded is null, never 0', async () => {
+    const u = await users(ctx.db);
+    const w = await world(ctx.db, u);
+    const coord = actor(u.coordinator);
+    const lina = await createStudent(ctx.db, coord, { fullName: 'Sample Lina (fictional)' });
+    await enrolManually(ctx.db, coord, { studentId: lina.id, batchId: w.batch.id, startDate: '2026-09-01', reason: 'Test (fictional)' });
+    const at = (date: string) => ({ batchId: w.batch.id, subjectId: w.quant.id, teacherStaffId: w.teacherStaff, sessionType: 'teaching' as const, date, startTime: '09:00', durationMinutes: 75 });
+    const { sessions } = await createSessions(ctx.db, coord, [at('2026-09-07'), at('2026-09-08'), at('2026-09-09')]);
+    await markHeld(ctx.db, sessions.map((s) => s.id));
+    const attendance = async () => (await call(lina.id, '?from=2026-09-01&to=2026-09-30')).data!.attendance;
+    expect(await attendance()).toMatchObject({ held: 3, ratePercent: null, definition: expect.stringContaining('Attended = present, late or partial') });
+    await attend(ctx.db, actor(u.teacher), sessions[0]!.id, [{ studentId: lina.id, status: 'late' }]);
+    await attend(ctx.db, actor(u.teacher), sessions[1]!.id, [{ studentId: lina.id, status: 'absent' }]);
+    expect((await attendance()).ratePercent).toBe(50); // default rule: late attends; the unmarked third class is not recorded
+    const rule = (lateCountsAsAttended: boolean) => updateSetting(ctx.db, coord, 'attendance.denominator', { value: { lateCountsAsAttended, excludeExcused: true }, status: 'approved', decisionRef: 'D-900' });
+    await rule(false);
+    expect(await attendance()).toMatchObject({ ratePercent: 0, definition: expect.stringContaining('late is not attended') });
+    await rule(true);
   });
 });

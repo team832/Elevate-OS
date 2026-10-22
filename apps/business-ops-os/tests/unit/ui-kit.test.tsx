@@ -150,7 +150,7 @@ describe('charts render honestly', () => {
     expect(out).toContain('aria-label="Students by programme"');
     expect(out).toContain('href="/ops/students?programme=clat"');
     expect(out).toContain('Not recorded');
-    expect(out).not.toMatch(/ops-hbar-value">0</);
+    expect(out).not.toMatch(/el-hbar-value">0</);
   });
 
   it('vertical bars: image summary plus a table toggle', () => {
@@ -181,9 +181,9 @@ describe('charts render honestly', () => {
         ]}
       />,
     );
-    expect(out.match(/ops-donut-arc/g)).toHaveLength(2);
+    expect(out.match(/el-donut-arc/g)).toHaveLength(2);
     expect(out).toContain('Outcomes: Joined 3 (75%), Lost 1 (25%). Total 4.');
-    expect(out).toContain('ops-c2');
+    expect(out).toContain('el-c2');
   });
 
   it('line chart labels the last value; sparkline is decorative without a label', () => {
@@ -196,7 +196,7 @@ describe('charts render honestly', () => {
         ]}
       />,
     );
-    expect(out).toContain('ops-line-end">5<');
+    expect(out).toContain('el-line-end">5<');
     expect(html(<Sparkline values={[1, 2, 3]} />)).toContain('aria-hidden="true"');
     expect(html(<Sparkline values={[1]} />)).toBe('');
   });
@@ -361,13 +361,13 @@ describe('record modal and forms', () => {
         ]}
       />,
     );
-    expect(out).toContain('<dialog id="student-modal" class="ops-modal"');
+    expect(out).toContain('<dialog id="student-modal" class="el-dialog ops-modal"');
     expect(out).toContain('Open full record');
     expect(out).toContain('role="tablist"');
     expect(out).toContain('aria-selected="true"');
     expect(out).toMatch(/id="student-modal-panel-fees"[^>]*hidden/);
     expect(html(<FormModal id="f" title="Book a demo" closeHref="/ops/admissions" />)).toContain(
-      'ops-modal ops-modal-form',
+      'el-dialog ops-modal ops-modal-form',
     );
   });
 
@@ -386,7 +386,7 @@ describe('record modal and forms', () => {
     );
     expect(out.match(/<legend>/g)).toHaveLength(2);
     expect(out).toContain('el-field el-field-wide');
-    expect(out).toMatch(/ops-form-footer">Cancel<button type="submit"/);
+    expect(out).toMatch(/ops-form-footer el-glass">Cancel<button type="submit"/);
   });
 
   it('submit gate: one request at a time; a failed key is reused only for the same body', async () => {

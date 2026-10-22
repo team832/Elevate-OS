@@ -30,7 +30,7 @@ const INTEGRATION_TONES: Record<IntegrationStatus, Tone> = {
   error: 'danger',
 };
 
-const INTEGRATION_LABELS: Record<IntegrationStatus, string> = {
+export const INTEGRATION_LABELS: Record<IntegrationStatus, string> = {
   not_configured: 'not configured',
   sandbox: 'sandbox (mock only)',
   connected: 'connected',

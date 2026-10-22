@@ -16,6 +16,7 @@ import * as opsTasksSchema from './ops-tasks';
 import * as opsEodSchema from './ops-eod';
 import * as opsTaskImportsSchema from './ops-task-imports';
 import * as opsReviewAcksSchema from './ops-review-acks';
+import * as opsTeacherReportsSchema from './ops-teacher-reports';
 
 export * from './core';
 export * from './marketing';
@@ -35,6 +36,7 @@ export * from './ops-tasks';
 export * from './ops-eod';
 export * from './ops-task-imports';
 export * from './ops-review-acks';
+export * from './ops-teacher-reports';
 
 /**
  * The schema files in load order, keyed by file name.
@@ -58,6 +60,7 @@ export const SCHEMA_MODULES = {
   'ops-eod': opsEodSchema,
   'ops-task-imports': opsTaskImportsSchema,
   'ops-review-acks': opsReviewAcksSchema,
+  'ops-teacher-reports': opsTeacherReportsSchema,
 } as const;
 
 export const MANAGED_SCHEMAS = ['core', 'marketing', 'academic', 'ops'] as const;
@@ -102,6 +105,7 @@ export const schema = merged as typeof coreSchema &
   typeof opsTasksSchema &
   typeof opsEodSchema &
   typeof opsTaskImportsSchema &
-  typeof opsReviewAcksSchema;
+  typeof opsReviewAcksSchema &
+  typeof opsTeacherReportsSchema;
 
 export type Schema = typeof schema;

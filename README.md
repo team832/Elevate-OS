@@ -181,7 +181,7 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `INTEGRATION_CONTRACT.md` | Identities, IDs, ownership, permissions, API, events, summaries, versioning, failure behaviour |
 | `DATABASE_DESIGN.md` | Schemas, conventions, core tables |
 | `IMPLEMENTATION_STATUS.md` | What is built and the evidence |
-| `docs/DECISIONS.md` | Decision log (D-001 … D-073) |
+| `docs/DECISIONS.md` | Decision log (D-001 … D-078) |
 | `docs/WORKSPACES.md` | The three role workspaces: URLs, dev commands, demo sign-ins, sign-in and access rules, role × workspace matrix |
 | `docs/BUILD_PLAN.md` | Waves, ownership, module layout, definition of done |
 | `docs/EXISTING_PROJECT_AUDIT.md` | Audit of the legacy material |

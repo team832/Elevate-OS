@@ -1,6 +1,6 @@
 import { can } from '@elevate/authorization';
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { ButtonLink, PageHeader } from '@elevate/shared-ui';
+import { ButtonLink, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import type { KpiWindow } from '../domain';
 import { buildOverview, rangeOf } from '../server/overview';
 import { fmtDate } from '../ui/format';
@@ -15,8 +15,8 @@ export const metadata = { title: 'Overview' };
 type Params = { from?: string; to?: string };
 
 /**
- * /ops — Overview (owner brief 22 Oct 2026 §5): the period's figures for the blocks this person
- * may see (each checked on the server), then their own work today (OPS-024).
+ * /ops — Overview (owner brief 22 Oct 2026 §5): headline tiles, charts and figures for the period,
+ * each block only with its permission (checked on the server), then the person's own work today.
  */
 export default async function HomePage({ searchParams }: { searchParams: Promise<Params> }) {
   const access = await gate('ops:module:access', '/ops');
@@ -26,7 +26,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     <Frame access={access} active="home">
       <PageHeader
         title="Overview"
-        description={`Admissions, money, teaching and team figures for ${fmtDate(at.range.from)} – ${fmtDate(at.range.to)}, then your work today.`}
+        meta={
+          <StatusBadge tone="neutral">
+            {fmtDate(at.range.from)} – {fmtDate(at.range.to)}
+          </StatusBadge>
+        }
+        description="Admissions, money, teaching and team figures for the period, then your work today."
         actions={
           <>
             {can(user, 'ops:tasks:write') ? (

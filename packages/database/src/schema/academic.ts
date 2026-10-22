@@ -47,13 +47,7 @@ import type {
   StudentIdentityId,
   UserId,
 } from '@elevate/shared-types';
-import {
-  ACADEMIC_TEACHER_ROLES,
-  academic,
-  createdAt,
-  inList,
-  updatedAt,
-} from './academic-columns';
+import { ACADEMIC_TEACHER_ROLES, academic, createdAt, inList, updatedAt } from './academic-columns';
 import {
   ACADEMIC_LABEL_STATUSES,
   ACADEMIC_MODES,
@@ -92,12 +86,7 @@ export const ACADEMIC_SESSION_TYPES = [
   'discussion',
 ] as const;
 /** `held` = delivered: set only by an explicit "mark delivered" action (R12), never by attendance or a log. */
-export const ACADEMIC_SESSION_STATUSES = [
-  'scheduled',
-  'held',
-  'cancelled',
-  'rescheduled',
-] as const;
+export const ACADEMIC_SESSION_STATUSES = ['scheduled', 'held', 'cancelled', 'rescheduled'] as const;
 export const ACADEMIC_SESSION_KINDS = ['regular', 'makeup', 'doubt', 'extra'] as const;
 export const ACADEMIC_RECORD_STATES = ['draft', 'submitted', 'verified', 'superseded'] as const;
 /** `main` = first teaching (introduced); only `main` rows count as coverage (R11). */
@@ -118,7 +107,12 @@ export const ACADEMIC_ATTENDANCE_STATUSES = [
   'excused',
 ] as const;
 export const ACADEMIC_ENROLMENT_STATUSES = ['active', 'paused', 'withdrawn', 'completed'] as const;
-export const ACADEMIC_EXCLUSION_KINDS = ['holiday', 'school_exam', 'exam_blackout', 'other'] as const;
+export const ACADEMIC_EXCLUSION_KINDS = [
+  'holiday',
+  'school_exam',
+  'exam_blackout',
+  'other',
+] as const;
 
 /** A cohort that follows one course version (ACD-002). */
 export const academicBatches = academic.table(
@@ -280,7 +274,10 @@ export const academicCalendarExclusions = academic.table(
   },
   (t) => [
     index('calendar_exclusions_batch_date_idx').on(t.batchId, t.date),
-    check('calendar_exclusions_kind_check', sql`${t.kind} IN (${inList(ACADEMIC_EXCLUSION_KINDS)})`),
+    check(
+      'calendar_exclusions_kind_check',
+      sql`${t.kind} IN (${inList(ACADEMIC_EXCLUSION_KINDS)})`,
+    ),
     check(
       'calendar_exclusions_status_check',
       sql`${t.status} IN ('provisional', 'confirmed', 'locked', 'unverified')`,
@@ -323,10 +320,7 @@ export const academicCalendarRules = academic.table(
     check('calendar_rules_period_order', sql`${t.periodStart} <= ${t.periodEnd}`),
     check('calendar_rules_slots_positive', sql`${t.slotsPerDay} >= 1`),
     check('calendar_rules_kind_check', sql`${t.kind} IN ('regular', 'extra')`),
-    check(
-      'calendar_rules_status_check',
-      sql`${t.status} IN (${inList(ACADEMIC_LABEL_STATUSES)})`,
-    ),
+    check('calendar_rules_status_check', sql`${t.status} IN (${inList(ACADEMIC_LABEL_STATUSES)})`),
     check('calendar_rules_weekdays_range', sql`${t.weekdays} <@ ARRAY[1, 2, 3, 4, 5, 6, 7]`),
   ],
 );
@@ -408,9 +402,18 @@ export const academicClassSessions = academic.table(
     ),
     index('class_sessions_teacher_date_idx').on(t.teacherStaffId, t.date),
     index('class_sessions_room_date_idx').on(t.roomId, t.date),
-    check('class_sessions_type_check', sql`${t.sessionType} IN (${inList(ACADEMIC_SESSION_TYPES)})`),
-    check('class_sessions_status_check', sql`${t.status} IN (${inList(ACADEMIC_SESSION_STATUSES)})`),
-    check('class_sessions_start_time_format', sql`${t.startTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`),
+    check(
+      'class_sessions_type_check',
+      sql`${t.sessionType} IN (${inList(ACADEMIC_SESSION_TYPES)})`,
+    ),
+    check(
+      'class_sessions_status_check',
+      sql`${t.status} IN (${inList(ACADEMIC_SESSION_STATUSES)})`,
+    ),
+    check(
+      'class_sessions_start_time_format',
+      sql`${t.startTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,
+    ),
     check('class_sessions_duration_range', sql`${t.durationMinutes} BETWEEN 5 AND 600`),
     check(
       'class_sessions_reason_required',

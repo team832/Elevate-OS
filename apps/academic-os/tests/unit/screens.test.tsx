@@ -1,11 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { reviewFields } from '../../src/app/reviews/review-fields';
 import { ApiForm, describeDetails } from '../../src/ui/api-form';
+import { AttendanceForm } from '../../src/ui/attendance-form';
 import { fmtDateTime, fmtHours, Maybe, PlanBadge, StateBadge } from '../../src/ui/badges';
 import { CoverageSection, FeasibilitySection } from '../../src/ui/batch-sections';
 import { ConflictList } from '../../src/ui/conflicts';
 import { InterventionsTable } from '../../src/ui/interventions';
-import { TeacherHome } from '../../src/ui/my-day';
+import {
+  CoordinatorTiles,
+  DeliveryFigures,
+  FigureDefinitions,
+  MeetingsDay,
+  TasksDay,
+  TeacherHome,
+} from '../../src/ui/my-day';
+import { metric } from '@elevate/shared-contracts';
 import { AppShell } from '@elevate/shared-ui';
 import { navFor, workspaceLink } from '../../src/ui/shell';
 
@@ -196,7 +206,7 @@ describe('Batch, support and teacher views', () => {
     expect(out).toContain('Marking a class delivered is not HR attendance.');
     expect(out).toContain('Student attendance not recorded (0)');
     expect(out).toContain('Your batches (0)');
-    expect(out).toContain('No batch is assigned to you today.');
+    expect(out).toContain('No batch is assigned to you today');
     expect(out).toContain('2 review drafts not submitted yet</a>');
   });
 });
@@ -204,24 +214,303 @@ describe('Batch, support and teacher views', () => {
 describe('Academic navigation (brief §6)', () => {
   const as = (...roles: string[]) => ({ id: 'u1', roles }) as never;
   it.each([
-    ['teacher', ['My day', 'My meetings', 'Timetable', 'My batches', 'Students', 'Student attendance', 'Teaching logs', 'Curriculum', 'Assessments', 'Student reviews', 'My tasks', 'My EOD report']],
-    ['academic_coordinator', ['My day', 'Timetable', 'Batches', 'Students', 'Student attendance', 'Teaching logs', 'Curriculum', 'Assessments', 'Student reviews', 'My tasks', 'My EOD report', 'Teachers', 'Enrolments', 'Enrolment intake', 'Progress and support', 'Reports', 'Academic settings']],
+    [
+      'teacher',
+      [
+        'My day',
+        'My meetings',
+        'Timetable',
+        'My batches',
+        'Students',
+        'Student attendance',
+        'Teaching logs',
+        'Curriculum',
+        'Assessments',
+        'Student reviews',
+        'My tasks',
+        'My EOD report',
+      ],
+    ],
+    [
+      'academic_coordinator',
+      [
+        'My day',
+        'Timetable',
+        'Batches',
+        'Students',
+        'Student attendance',
+        'Teaching logs',
+        'Curriculum',
+        'Assessments',
+        'Student reviews',
+        'My tasks',
+        'My EOD report',
+        'Teachers',
+        'Enrolments',
+        'Enrolment intake',
+        'Progress and support',
+        'Reports',
+        'Academic settings',
+      ],
+    ],
     ['marketing_manager', ['My tasks', 'My EOD report']], // own tasks only; the workspace gate keeps them out of this shell
   ])('%s sees its items in order; Coordination only with all-scope permissions', (role, labels) => {
     expect(navFor(as(role)).map((n) => n.label)).toEqual(labels);
   });
 
   it('renders the teacher sidebar with Tasks and EOD under /academic, never /ops', () => {
-    const teacher = { id: 'u1', roles: ['teacher'], email: 't@example.test', displayName: 'Sample Teacher' } as never;
-    const out = html(<AppShell user={teacher} modules={['academic']} current="academic" logoutAction="/academic/api/v1/auth/logout" nav={navFor(teacher)}>x</AppShell>);
-    for (const [href, label] of [['/academic/meetings', 'My meetings'], ['/academic/tasks', 'My tasks'], ['/academic/tasks?tab=eod', 'My EOD report']]) {
-      expect(out).toContain(`href="${href}"><span class="el-nav-mark" aria-hidden="true"></span><span>${label}</span>`);
+    const teacher = {
+      id: 'u1',
+      roles: ['teacher'],
+      email: 't@example.test',
+      displayName: 'Sample Teacher',
+    } as never;
+    const out = html(
+      <AppShell
+        user={teacher}
+        modules={['academic']}
+        current="academic"
+        logoutAction="/academic/api/v1/auth/logout"
+        nav={navFor(teacher)}
+      >
+        x
+      </AppShell>,
+    );
+    for (const [href, label] of [
+      ['/academic/meetings', 'My meetings'],
+      ['/academic/tasks', 'My tasks'],
+      ['/academic/tasks?tab=eod', 'My EOD report'],
+    ]) {
+      expect(out).toContain(
+        `href="${href}"><span class="el-nav-mark" aria-hidden="true"></span><span>${label}</span>`,
+      );
     }
     expect(out).not.toContain('/ops');
   });
 
   it('links to another workspace only for its members, as an absolute URL', () => {
     expect(workspaceLink(as('teacher'), 'ops', '/students/x')).toBeNull();
-    expect(workspaceLink(as('admissions_counsellor'), 'ops', '/students/x')).toMatch(/^https?:\/\/[^/]+\/ops\/students\/x$/);
+    expect(workspaceLink(as('admissions_counsellor'), 'ops', '/students/x')).toMatch(
+      /^https?:\/\/[^/]+\/ops\/students\/x$/,
+    );
+  });
+});
+
+describe('Academic dashboards (22 Oct 2026 redesign)', () => {
+  const win = { from: '2026-10-15', to: '2026-10-22' };
+  const session = {
+    id: 's1',
+    date: '2026-10-22',
+    startTime: '11:00',
+    durationMinutes: 75,
+    batchCode: 'CLAT-26-A',
+    subjectName: 'Legal reasoning',
+    sessionType: 'teaching',
+    roomCode: 'R2',
+    onlineLink: null,
+    status: 'scheduled',
+  };
+  const day = {
+    today: '2026-10-22',
+    window: win,
+    next: null,
+    todays: [],
+    attendanceMissing: [],
+    logsMissing: [],
+    demoAwaitingFeedback: [],
+    assessmentsToMark: [],
+    support: [],
+    batches: [],
+    draftReviews: 0,
+    hrAttendance: 'Not available',
+  };
+
+  it('teacher hero: the next class shows its time, room and state with one primary "Open class" action', () => {
+    const out = html(
+      <TeacherHome
+        day={
+          { ...day, next: session, todays: [{ ...session, id: 's2', startTime: '14:00' }] } as never
+        }
+      />,
+    );
+    expect(out).toContain('<p class="acd-next-time">11:00</p>');
+    expect(out).toContain(
+      'el-button-primary" href="/academic/teaching/attendance/s1">Open class</a>',
+    );
+    expect(out).toContain('Room R2');
+    expect(out).toContain('<ul class="acd-day"><li><span class="acd-day-time">14:00</span>');
+    expect(out).not.toContain('No more classes today');
+  });
+
+  it('work tiles: no staff record is words, never 0; counts come through as figures', () => {
+    const none = html(
+      <>
+        <TasksDay summary={null} />
+        <MeetingsDay day="2026-10-22" total={null} />
+      </>,
+    );
+    expect(none.match(/No staff record/g)).toHaveLength(3);
+    expect(none).not.toMatch(/>0</);
+    const ok = html(
+      <TasksDay
+        summary={
+          {
+            day: '2026-10-22',
+            asOf: '2026-10-22T04:30:00Z',
+            open: 3,
+            overdue: 1,
+            dueToday: 2,
+            eod: 'draft',
+          } as never
+        }
+      />,
+    );
+    expect(ok).toContain('<span class="el-stat-value">3</span>');
+    expect(ok).toContain('<span class="el-stat-value">Draft</span>');
+    expect(ok).toContain('1 overdue · 2 due today');
+  });
+
+  const overview = {
+    today: '2026-10-22',
+    week: { from: '2026-10-19', to: '2026-10-25' },
+    todayFigures: {
+      range: { from: '2026-10-22', to: '2026-10-22' },
+      planned: 4,
+      delivered: 1,
+      cancelled: 0,
+      notRecorded: 2,
+    },
+    weekFigures: {
+      range: { from: '2026-10-19', to: '2026-10-25' },
+      planned: 20,
+      delivered: 9,
+      cancelled: 1,
+      notRecorded: 3,
+    },
+    uncovered: { range: { from: '2026-10-22', to: '2026-11-04' }, sessions: [] },
+    conflicts: { range: { from: '2026-10-19', to: '2026-10-25' }, hard: 0 },
+    attendanceMissing: { range: { from: '2026-10-19', to: '2026-10-22' }, count: 2 },
+    logsMissing: { range: { from: '2026-10-19', to: '2026-10-22' }, count: 1 },
+    awaitingBatch: 0,
+    pendingMarking: 1,
+    openSupport: 0,
+    coverage: [],
+  };
+
+  it('coordinator tiles: today and the week as tiles; no chart without batches; a batch without a plan is "Not recorded", never 0%', () => {
+    const none = html(<CoordinatorTiles o={overview as never} />);
+    expect(none).toContain('<h2 class="el-section-title">Today, 22 Oct 2026</h2>');
+    expect(none).toMatch(/This week, 19.{1,3}25 Oct 2026/);
+    expect(none).toContain('Delivery not recorded');
+    expect(none).toContain('Conflicts this week');
+    expect(none).not.toContain('el-hbars');
+    expect(none).toContain('No active batches');
+    const coverage = [
+      { batchId: 'b1', code: 'CLAT-26-A', hasPlan: true, chaptersPlanned: 10, chaptersTaught: 4 },
+      { batchId: 'b2', code: 'IPMAT-27', hasPlan: false, chaptersPlanned: 0, chaptersTaught: 0 },
+    ];
+    const some = html(<CoordinatorTiles o={{ ...overview, coverage } as never} />);
+    expect(some).toContain('class="el-hbars"');
+    expect(some).toContain('<a href="/academic/batches/b1">CLAT-26-A</a>');
+    expect(some).toContain('40%');
+    expect(some).toContain('Not recorded');
+    expect(some).not.toContain('>0%<');
+  });
+
+  it('delivery figures: missing figures are listed with their reason; programme charts only when programmes exist', () => {
+    const meta = (unit: 'count' | 'percent' = 'count') => ({
+      definition: 'Fixture definition.',
+      window: win,
+      unit,
+    });
+    const ok = (v: number, unit?: 'count' | 'percent') => metric.ok(v, meta(unit));
+    const metrics = {
+      activeStudents: ok(12),
+      activeBatches: ok(2),
+      classesPlanned: ok(30),
+      classesDelivered: ok(20),
+      classesCancelled: ok(1),
+      attendanceRate: metric.missing('No attendance has been recorded.', meta('percent')),
+      assessmentsPlanned: ok(3),
+      assessmentsConducted: ok(1),
+      studentsAtRisk: metric.missing('Rules not implemented.', meta()),
+      syllabusCompletionRate: ok(35, 'percent'),
+    };
+    const summary = {
+      window: win,
+      metrics,
+      programmes: [],
+      extensions: {
+        overall: { hoursPlanned: null, hoursDelivered: null, hoursDeliveredInWindow: 12.5 },
+      },
+    };
+    const none = html(<DeliveryFigures summary={summary as never} />);
+    expect(none).toContain('Not measured yet (4)');
+    expect(none).toContain('<strong>Attendance rate:</strong> No attendance has been recorded.');
+    expect(none).toContain('12.5 h');
+    expect(none).not.toContain('el-hbars');
+    const programmes = [
+      { programmeCode: 'CLAT', metrics: { ...metrics, attendanceRate: ok(78, 'percent') } },
+      { programmeCode: 'IPMAT', metrics },
+    ];
+    const some = html(<DeliveryFigures summary={{ ...summary, programmes } as never} />);
+    expect(some).toContain('Attendance rate by programme');
+    expect(some).toContain('78%');
+    expect(some).toContain('Not recorded');
+    expect(html(<FigureDefinitions summary={summary as never} />)).toContain(
+      'How each figure is counted',
+    );
+  });
+
+  it('attendance marks: the blank "not recorded" pill renders first and is the default for an unmarked student', () => {
+    const row = {
+      studentId: 's1',
+      code: 'STU-1',
+      fullName: 'Aarav Sample Student',
+      status: null,
+      minutesPresent: null,
+      onPlacement: true,
+      isSample: true,
+      reviewHref: null,
+    };
+    const out = html(
+      <AttendanceForm action="/a" bulkAction="/b" roster={[row]} demos={[]} canRecord />,
+    );
+    expect(out).toMatch(
+      /<fieldset class="acd-marks"><legend class="el-visually-hidden">Attendance for Aarav Sample Student<\/legend><label><input type="radio" name="status-s1" checked="" value=""\/><span>not recorded<\/span><\/label><label><input type="radio" name="status-s1" value="present"\/>/,
+    );
+    const marked = html(
+      <AttendanceForm
+        action="/a"
+        bulkAction="/b"
+        roster={[{ ...row, status: 'late' }]}
+        demos={[]}
+        canRecord
+      />,
+    );
+    expect(marked).toContain('checked="" value="late"');
+    expect(marked).not.toContain('checked="" value=""');
+  });
+});
+
+describe('Review form (D-058)', () => {
+  it('every evidence field carries the privacy hint and the proposed 1,500-character limit; the visibility hint names the readers', () => {
+    const out = html(
+      <ApiForm
+        action="/academic/api/v1/reviews"
+        submitLabel="Submit review"
+        idPrefix="review"
+        fields={reviewFields()}
+      />,
+    );
+    expect(out.match(/maxlength="1500"/gi)).toHaveLength(6); // React's static markup keeps the camel case
+    expect(
+      out.match(/Never family or contact details, fee remarks, personality labels/g),
+    ).toHaveLength(6);
+    expect(out).toMatch(
+      /<select[^>]*id="review-visibility"[^>]*aria-describedby="review-visibility-hint"/,
+    );
+    expect(out).toContain('Business Operations feedback readers');
+    expect(out).toContain('may use only strengths, areas needing support and suggested action');
   });
 });

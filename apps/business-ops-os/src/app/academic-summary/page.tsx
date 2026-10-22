@@ -91,7 +91,6 @@ async function Summary({
                   ['classesCancelled', 'Cancelled'],
                   ['attendanceRate', 'Attendance'],
                   ['syllabusCompletionRate', 'Syllabus'],
-                  ['studentsAtRisk', 'At risk'],
                 ] as const
               ).map(([key, header]) => ({
                 key,

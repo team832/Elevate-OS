@@ -434,7 +434,7 @@ export function ActionForm({
             ),
           )
         : fields.map(field)}
-      <div className="ops-form-footer">{footer}</div>
+      <div className="ops-form-footer el-glass">{footer}</div>
     </form>
   );
 }

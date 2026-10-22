@@ -3,6 +3,7 @@ import type { z } from 'zod';
 import {
   academicDemoAttendanceV1Schema,
   academicStudentReviewsV1Schema,
+  academicStudentSummaryV1Schema,
   academicTeacherActivityV1Schema,
   enrolmentRequestedV1Payload,
   opsDemoSessionsForDayV1Schema,
@@ -113,6 +114,20 @@ const request = {
 };
 
 const withReview = (o: object) => ({ ...reviews, reviews: [{ ...review, ...o }] });
+const studentSummary = {
+  contract: 'academic.student_summary',
+  version: 1,
+  generatedAt: AT,
+  studentId: uuid(3),
+  window,
+  enrolments: [],
+  attendance: { held: 4, present: 3, partial: 0, late: 0, absent: 1, excused: 0 },
+  results: [],
+};
+const withAttendance = (o: object) => ({
+  ...studentSummary,
+  attendance: { ...studentSummary.attendance, ...o },
+});
 
 describe('teacher workspace contracts', () => {
   it.each<[string, z.ZodType, unknown, boolean]>([
@@ -140,6 +155,30 @@ describe('teacher workspace contracts', () => {
       'reviews: needs a student ref',
       academicStudentReviewsV1Schema,
       { ...reviews, student: { coreStudentId: null, academicStudentId: null } },
+      false,
+    ],
+    [
+      'student summary: without the rate (older producer)',
+      academicStudentSummaryV1Schema,
+      studentSummary,
+      true,
+    ],
+    [
+      'student summary: with rate and definition',
+      academicStudentSummaryV1Schema,
+      withAttendance({ ratePercent: 75, definition: 'Present + partial over held' }),
+      true,
+    ],
+    [
+      'student summary: rate null when nothing held',
+      academicStudentSummaryV1Schema,
+      withAttendance({ held: 0, present: 0, absent: 0, ratePercent: null, definition: 'x' }),
+      true,
+    ],
+    [
+      'student summary: rate is a percentage',
+      academicStudentSummaryV1Schema,
+      withAttendance({ ratePercent: 101, definition: 'x' }),
       false,
     ],
     ['activity: valid', academicTeacherActivityV1Schema, activity, true],

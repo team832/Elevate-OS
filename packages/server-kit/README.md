@@ -64,7 +64,7 @@ await processEvents(db, {
 Payloads are validated against the registry on publish and on delivery. Each event is handled in its own transaction with a `core.event_deliveries` row (unique event+consumer): processing twice has one effect; a failing handler rolls back, is recorded `failed` with the error, retried next run, and becomes `dead` after `maxAttempts`. `getDelivery(db, eventId, consumer)` shows the state. **Nothing runs `processEvents` on a schedule yet** — the consumer module calls it (from a route, a script, or a cron added in wave 3).
 
 ## Internal service calls (D-011.2)
-- `defineInternalRoute({ callers?, query?, params? }, handler)` for `/<zone>/api/internal/v1/...`: requires `Authorization: Bearer <INTERNAL_SERVICE_TOKEN>` (constant-time compare) and `X-Elevate-Caller: <module>`.
+- `defineInternalRoute({ callers?, query?, params? }, handler)` for `/<zone>/api/internal/v1/...`: requires `Authorization: Bearer <token>` (constant-time compare) and `X-Elevate-Caller: <module>`. With the single `INTERNAL_SERVICE_TOKEN` the caller is self-declared; with `INTERNAL_SERVICE_TOKENS` (`ops:<t>,academic:<t>,marketing:<t>,platform:<t>`, 32+ characters each, the same in all four apps) the caller is the module whose token matched — 401 when none matches, 403 when the header names another module — and a malformed map fails closed (D-077). `fetchInternal` sends the calling module's token.
 - `fetchInternal(url, schema, { caller, timeoutMs? })` → `SourceResult<T>`: never throws, never substitutes zeros; returns `{ status: 'unavailable', reason }` on network error, timeout, non-2xx or contract mismatch.
 
 ## Idempotency

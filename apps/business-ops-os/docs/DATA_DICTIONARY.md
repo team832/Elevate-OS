@@ -411,7 +411,7 @@ Every enrolment-handoff attempt of an admission (OPS-075, IR-OPS-03): one row pe
 
 Contact consent and communication preferences of a student/family (OPS-077). Private (ops:student_private:read): never shown in the unrestricted student directory, never sent to Marketing. Absent row = not recorded (never "given").
 
-- **Written by:** `src/server/guardians.ts`, `src/server/lead-intake.ts`
+- **Written by:** `src/server/guardians.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `lead_id` → `ops.leads` (on delete restrict); `recorded_by` → `core.users` (on delete restrict)
 
@@ -1021,7 +1021,7 @@ The fee structure: one row per programme combination and mode (owner, 21 Oct 202
 
 One receipt per Marketing lead handed off (`marketing.lead.handed_off` v1, consumer `ops.lead-intake`). The unique Marketing lead id makes the intake idempotent: a second event for the same lead never creates a second Ops lead. Failed processing is kept here (last error, attempts) and retried by the `lead-intake` job or by hand.
 
-- **Written by:** `src/server/lead-intake.ts`
+- **Written by:** seeds / migrations only
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `event_id` → `core.integration_events` (on delete restrict); `lead_id` → `ops.leads` (on delete restrict)
 

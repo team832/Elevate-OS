@@ -10,3 +10,6 @@ export * from './components/dialog';
 export * from './components/shell-client';
 export * from './components/brand';
 export * from './components/workspaces';
+export * from './components/charts';
+export * from './components/chart-figure';
+export * from './components/chart-math';

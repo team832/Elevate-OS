@@ -16,6 +16,7 @@ export function Segment({
   actions,
   flush,
   id,
+  className,
   children,
 }: {
   title: string;
@@ -29,6 +30,8 @@ export function Segment({
   /** No body padding: a DetailTable or RecordTable meets the segment border. */
   flush?: boolean;
   id?: string;
+  /** Layout class, e.g. `ops-panel-wide` to span an `.ops-panels` row. */
+  className?: string;
   children: ReactNode;
 }) {
   const auto = useId();
@@ -37,7 +40,9 @@ export function Segment({
   return (
     <section
       id={id}
-      className={`el-card ops-segment${flush ? ' ops-segment-flush' : ''}`}
+      className={['el-card ops-segment', flush && 'ops-segment-flush', className]
+        .filter(Boolean)
+        .join(' ')}
       aria-labelledby={headingId}
     >
       <div className="el-card-header">

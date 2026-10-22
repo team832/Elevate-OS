@@ -16,7 +16,7 @@ Conventions apply to every zone (D-012). Module endpoints are specified by their
 | Idempotency | `Idempotency-Key` (8–200 chars `[\w.:-]`) on routes that declare it; replay within 24 h returns the stored response with `idempotency-replayed: true`; same key + different body → 409 |
 | Pagination | `?limit=1..200` (default 50) `&cursor=<opaque>` |
 | Dates | `YYYY-MM-DD` calendar dates (Asia/Kolkata); instants ISO 8601 UTC |
-| Internal routes | `/<base>/api/internal/v1/…`; `Authorization: Bearer <INTERNAL_SERVICE_TOKEN>` + `X-Elevate-Caller: platform\|marketing\|academic\|ops`; never from browsers |
+| Internal routes | `/<base>/api/internal/v1/…`; `Authorization: Bearer <INTERNAL_SERVICE_TOKEN>` (or the calling module's own token from `INTERNAL_SERVICE_TOKENS`, which binds the caller to its token: 401 no match, 403 header names another module, D-077) + `X-Elevate-Caller: platform\|marketing\|academic\|ops`; never from browsers |
 
 ### Error codes
 | Code | HTTP | When |
@@ -62,7 +62,7 @@ All JSON; errors are the standard envelope. Nobody may change their own roles or
 - `PUT /api/v1/admin/users/[id]/status` `{ status: "active" | "disabled" }` — `platform:users:manage`. Disabling revokes every session. 200 `{ data: { id, status, sessionsRevoked } }`; 403 own account; 404; 409 last admin.
 
 ### Pages
-`/login` (public), `/` (home; `platform:module:access`), `/dashboard` (`platform:dashboard:read`; states honestly that consolidated reporting arrives in wave 3 — no figures), `/admin/users` and `/admin/users/[id]` (Users & roles; `platform:users:read`, changes need the permissions above).
+`/login` (public), `/` (home; `platform:module:access`; the placeholder `/dashboard` page and `platform:dashboard:read` were removed on 22 Oct 2026, D-077), `/admin/users` and `/admin/users/[id]` (Users & roles; `platform:users:read`, changes need the permissions above).
 
 ## 3. Endpoints every module skeleton provides
 | Method | Path | Access | Notes |

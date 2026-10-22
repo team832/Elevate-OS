@@ -5,20 +5,21 @@ import { getDb } from '@elevate/database';
 import { currentRequestId, requirePageAccess } from '@elevate/server-kit/next';
 import {
   AppShell,
+  ButtonLink,
+  Card,
   DataTable,
   Dialog,
   EmptyState,
   ErrorState,
   LoadingState,
   PageHeader,
-  StatusBadge,
 } from '@elevate/shared-ui';
 import { ORGANISATION_EMAIL_DOMAIN } from '@elevate/authentication';
 import { PLATFORM_PATHS } from '../../../lib/shell';
 import { platformShell } from '../../../server/shell';
 import { listUsers, listUsersQuery, NO_ROLES, type ListUsersQuery } from '../../../server/users';
 import { JsonForm } from '../../../ui/json-form';
-import { AccountStatus, fmtDay, fmtWhen, roleLabels, RoleChecklist } from '../../../ui/users';
+import { AccountStatus, fmtDay, fmtWhen, RoleBadges, RoleChecklist } from '../../../ui/users';
 import './users.css';
 
 export const metadata: Metadata = { title: 'Users & roles' };
@@ -81,7 +82,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
                     cancelLabel="Cancel"
                   >
                     <div className="el-field">
-                      <label htmlFor="add-email">Work email *</label>
+                      <label htmlFor="add-email">Work email</label>
                       <input
                         id="add-email"
                         name="email"
@@ -99,7 +100,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
                       </p>
                     </div>
                     <div className="el-field">
-                      <label htmlFor="add-name">Name *</label>
+                      <label htmlFor="add-name">Name</label>
                       <input
                         id="add-name"
                         name="displayName"
@@ -143,124 +144,134 @@ async function UserList({ query, raw }: { query: ListUsersQuery; raw: Record<str
   const from = (list.page - 1) * list.pageSize + 1;
   const to = from + list.items.length - 1;
   return (
-    <div className="el-stack">
-      <form className="ur-filters" method="get" action={PLATFORM_PATHS.users} role="search">
-        <div className="el-field">
-          <label htmlFor="f-q">Name or email</label>
-          <input
-            id="f-q"
-            name="q"
-            type="search"
-            className="el-input"
-            defaultValue={query.q}
-            maxLength={100}
-          />
-        </div>
-        <div className="el-field">
-          <label htmlFor="f-role">Role</label>
-          <select id="f-role" name="role" className="el-select" defaultValue={query.role ?? ''}>
-            <option value="">Any role</option>
-            <option value={NO_ROLES}>No roles yet</option>
-            {ROLE_KEYS.map((k) => (
-              <option key={k} value={k}>
-                {ROLES[k].label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="el-field">
-          <label htmlFor="f-status">Status</label>
-          <select
-            id="f-status"
-            name="status"
-            className="el-select"
-            defaultValue={query.status ?? ''}
-          >
-            <option value="">Any status</option>
-            <option value="active">Active</option>
-            <option value="disabled">Disabled</option>
-          </select>
-        </div>
-        <div className="el-field">
-          <label htmlFor="f-sort">Sort by</label>
-          <select id="f-sort" name="sort" className="el-select" defaultValue={query.sort}>
-            {Object.entries(SORT_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="el-field">
-          <label htmlFor="f-dir">Order</label>
-          <select id="f-dir" name="dir" className="el-select" defaultValue={query.dir}>
-            <option value="asc">A to Z, oldest first</option>
-            <option value="desc">Z to A, newest first</option>
-          </select>
-        </div>
-        <button type="submit" className="el-button el-button-secondary">
-          Apply filters
-        </button>
-        {filtered ? <a href={PLATFORM_PATHS.users}>Clear filters</a> : null}
-      </form>
-      <DataTable
-        compact
-        caption={`${list.total} account${list.total === 1 ? '' : 's'}${filtered ? ' match these filters' : ''}`}
-        rows={list.items}
-        rowKey={(u) => u.id}
-        empty={
-          list.total > 0 ? (
-            <EmptyState
-              title="This page is past the last account"
-              action={<a href={pageHref(1)}>Go to the first page</a>}
+    <Card title="Accounts">
+      <div className="el-stack">
+        <form
+          className="el-inline-form ur-filters"
+          method="get"
+          action={PLATFORM_PATHS.users}
+          role="search"
+        >
+          <div className="el-field">
+            <label htmlFor="f-q">Name or email</label>
+            <input
+              id="f-q"
+              name="q"
+              type="search"
+              className="el-input"
+              defaultValue={query.q}
+              maxLength={100}
             />
-          ) : (
-            <EmptyState
-              title={filtered ? 'No account matches these filters' : 'No accounts yet'}
-              description={filtered ? 'Change or clear the filters.' : undefined}
-              action={filtered ? <a href={PLATFORM_PATHS.users}>Clear filters</a> : undefined}
-            />
-          )
-        }
-        columns={[
-          {
-            key: 'displayName',
-            header: 'Name',
-            render: (u) => (
-              <div>
-                <a href={`${PLATFORM_PATHS.users}/${u.id}`}>{u.displayName}</a>
-                <div className="el-field-hint ur-cell-email">{u.email}</div>
-              </div>
-            ),
-          },
-          { key: 'status', header: 'Status', render: (u) => <AccountStatus status={u.status} /> },
-          {
-            key: 'roles',
-            header: 'Roles',
-            render: (u) =>
-              u.roles.length ? (
-                roleLabels(u.roles)
-              ) : (
-                <StatusBadge tone="warning">No roles yet</StatusBadge>
+          </div>
+          <div className="el-field">
+            <label htmlFor="f-role">Role</label>
+            <select id="f-role" name="role" className="el-select" defaultValue={query.role ?? ''}>
+              <option value="">Any role</option>
+              <option value={NO_ROLES}>No roles yet</option>
+              {ROLE_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {ROLES[k].label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="el-field">
+            <label htmlFor="f-status">Status</label>
+            <select
+              id="f-status"
+              name="status"
+              className="el-select"
+              defaultValue={query.status ?? ''}
+            >
+              <option value="">Any status</option>
+              <option value="active">Active</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </div>
+          <div className="el-field">
+            <label htmlFor="f-sort">Sort by</label>
+            <select id="f-sort" name="sort" className="el-select" defaultValue={query.sort}>
+              {Object.entries(SORT_LABELS).map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="el-field">
+            <label htmlFor="f-dir">Order</label>
+            <select id="f-dir" name="dir" className="el-select" defaultValue={query.dir}>
+              <option value="asc">A to Z, oldest first</option>
+              <option value="desc">Z to A, newest first</option>
+            </select>
+          </div>
+          <button type="submit" className="el-button el-button-secondary">
+            Apply filters
+          </button>
+          {filtered ? (
+            <ButtonLink href={PLATFORM_PATHS.users} variant="ghost">
+              Clear filters
+            </ButtonLink>
+          ) : null}
+        </form>
+        <DataTable
+          compact
+          caption={`${list.total} account${list.total === 1 ? '' : 's'}${filtered ? ' match these filters' : ''}`}
+          rows={list.items}
+          rowKey={(u) => u.id}
+          empty={
+            list.total > 0 ? (
+              <EmptyState
+                title="This page is past the last account"
+                action={<a href={pageHref(1)}>Go to the first page</a>}
+              />
+            ) : (
+              <EmptyState
+                title={filtered ? 'No account matches these filters' : 'No accounts yet'}
+                description={filtered ? 'Change or clear the filters.' : undefined}
+                action={filtered ? <a href={PLATFORM_PATHS.users}>Clear filters</a> : undefined}
+              />
+            )
+          }
+          columns={[
+            {
+              key: 'displayName',
+              header: 'Name',
+              render: (u) => (
+                <div>
+                  <a href={`${PLATFORM_PATHS.users}/${u.id}`}>{u.displayName}</a>
+                  <div className="el-field-hint ur-cell-email">{u.email}</div>
+                </div>
               ),
-          },
-          { key: 'lastLoginAt', header: 'Last sign-in', render: (u) => fmtWhen(u.lastLoginAt) },
-          {
-            key: 'createdAt',
-            header: 'Created',
-            render: (u) => `${fmtDay(u.createdAt)}${u.viaGoogle ? ', via Google' : ''}`,
-          },
-        ]}
-      />
-      {list.items.length > 0 ? (
-        <nav className="ur-pager" aria-label="Pages">
-          <span>
-            Showing {from}–{to} of {list.total}
-          </span>
-          {list.page > 1 ? <a href={pageHref(list.page - 1)}>Previous page</a> : null}
-          {to < list.total ? <a href={pageHref(list.page + 1)}>Next page</a> : null}
-        </nav>
-      ) : null}
-    </div>
+            },
+            { key: 'status', header: 'Status', render: (u) => <AccountStatus status={u.status} /> },
+            {
+              key: 'roles',
+              header: 'Roles',
+              render: (u) => <RoleBadges roles={u.roles} />,
+            },
+            { key: 'lastLoginAt', header: 'Last sign-in', render: (u) => fmtWhen(u.lastLoginAt) },
+            {
+              key: 'createdAt',
+              header: 'Created',
+              render: (u) => `${fmtDay(u.createdAt)}${u.viaGoogle ? ', via Google' : ''}`,
+            },
+          ]}
+        />
+        {list.items.length > 0 ? (
+          <nav className="ur-pager" aria-label="Pages">
+            <span>
+              Showing {from}–{to} of {list.total}
+            </span>
+            {list.page > 1 ? (
+              <ButtonLink href={pageHref(list.page - 1)}>Previous page</ButtonLink>
+            ) : null}
+            {to < list.total ? (
+              <ButtonLink href={pageHref(list.page + 1)}>Next page</ButtonLink>
+            ) : null}
+          </nav>
+        ) : null}
+      </div>
+    </Card>
   );
 }

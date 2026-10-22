@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ROLE_KEYS, ROLES } from '@elevate/authorization';
-import { AccountStatus, fmtWhen, roleLabels, RoleChecklist } from '../../src/ui/users';
+import { AccountStatus, fmtWhen, RoleBadges, roleLabels, RoleChecklist } from '../../src/ui/users';
 import { JsonForm } from '../../src/ui/json-form';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push() {}, refresh() {} }) }));
@@ -16,6 +16,15 @@ describe('Users & roles screen pieces', () => {
     expect(html(<AccountStatus status={status} />)).toBe(
       `<span class="el-badge ${tone}">${word}</span>`,
     );
+  });
+
+  it('shows one pill per role, or "No roles yet" as a warning in words', () => {
+    expect(html(<RoleBadges roles={[]} />)).toBe(
+      '<span class="el-badge el-tone-warning">No roles yet</span>',
+    );
+    const out = html(<RoleBadges roles={['director', 'teacher']} />);
+    expect(out.match(/el-tone-neutral/g)).toHaveLength(2);
+    expect(out).toContain(`>${ROLES.director.label}</span>`);
   });
 
   it('names roles by label, keeping an unknown key visible instead of dropping it', () => {

@@ -1,10 +1,16 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { Alert, ButtonLink, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import { addDays, istToday } from '../../../../domain';
+import { DOCUMENT_STATE_LABELS } from '../../../../domain/admission-form';
 import { formatPaise } from '../../../../domain/fees';
-import { NEXT_STEP_LABEL, REPORT_SECTIONS } from '../../../../domain/student-report';
+import {
+  REPORT_HEADINGS,
+  REPORT_KIND_LABELS,
+  REPORT_SECTIONS,
+  reportKinds,
+} from '../../../../domain/student-report';
 import { loadSettings } from '../../../../server/settings';
-import { getStudentReport } from '../../../../server/student-report';
+import { getStudentReport, reportsOf } from '../../../../server/student-report';
 import { getStudent } from '../../../../server/students';
 import { ActionForm, type FieldSpec } from '../../../../ui/action-form';
 import { fmtDate, fmtDateTime, humanise } from '../../../../ui/format';
@@ -13,6 +19,7 @@ import { RecordTable } from '../../../../ui/record-table';
 import { DetailTable, Segment } from '../../../../ui/sections';
 import { AcademicEvidenceView } from '../../_components/academic-sections';
 import { PrintButton } from '../../_components/print-button';
+import { ReportList, REPORT_STATUS_TONES } from '../../_components/report-list';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Student report' };
@@ -28,25 +35,17 @@ const PRINT_CSS = `@media print {
   a { text-decoration: none !important; }
 }`;
 
-const AUDIENCE_LABELS = {
-  internal: 'Internal (staff)',
-  guardian: 'Parents and guardians',
-  student: 'Student',
-  admin_dossier: 'Administration dossier',
-} as const;
-
 const SECTION_LABELS: Record<(typeof REPORT_SECTIONS)[number], string> = {
-  overview: 'Overview and status history (status history: staff reports only)',
-  programmes: 'Programmes and batches',
-  results: 'Marks and trends',
+  overview: 'Overview (internal report: with status history)',
+  kyc: 'KYC and student details (internal report; needs private-data access)',
+  programmes: 'Programmes and batches (administration dossier)',
+  results: 'Marks as bars, with trends',
   attendance: 'Attendance',
-  feedback: 'Raw teacher reviews (staff reports only)',
-  fees: 'Fee totals (for parents/students only when ticked)',
-  guardians: 'Guardians (staff reports only)',
-  summary: 'Constructive summary (parent and student reports)',
+  feedback: 'Teacher reviews (PTM report: shareable notes only)',
+  fees: 'Fee totals (PTM report: only when ticked)',
+  guardians: 'Guardians (administration dossier)',
+  summary: 'Summary (PTM: affirmative wording; internal: neutral)',
 };
-
-const STATUS_TONES = { draft: 'neutral', reviewed: 'info', final: 'success' } as const;
 
 export default async function StudentReportPage({
   params,
@@ -72,16 +71,30 @@ export default async function StudentReportPage({
   );
 }
 
-/** Period, audience and sections; generating stores a draft snapshot and an audit row. */
+/** Kind, period and sections; generating stores a draft snapshot and an audit row. */
 async function Generate({ user, id }: { user: AuthenticatedUser; id: string }) {
-  const r = await load(async (db) => ({
-    student: await getStudent(db, user, id),
-    audiences: (await loadSettings(db))['reports.audiences'],
-  }));
+  const r = await load(async (db) => {
+    const student = await getStudent(db, user, id);
+    return {
+      student,
+      audiences: (await loadSettings(db))['reports.audiences'],
+      reports: student.identity ? await reportsOf(db, student.identity.id) : [],
+    };
+  });
   if (!r.ok) return r.view;
   const today = istToday(new Date());
-  const { enabled } = r.data.audiences.value;
+  const kinds = reportKinds(r.data.audiences.value.enabled);
   const fields: FieldSpec[] = [
+    {
+      name: 'audience',
+      label: 'Kind of report',
+      type: 'select',
+      required: true,
+      defaultValue: kinds[0],
+      options: kinds.map((a) => ({ value: a, label: REPORT_KIND_LABELS[a] })),
+      hint: `PTM: as little as possible, in affirmative words, never KYC or guardians. Internal: KYC, student details, every score and review. Kinds offered come from the setting “${r.data.audiences.label}” (${humanise(r.data.audiences.decisionState)}).`,
+      section: 'Kind',
+    },
     {
       name: 'from',
       label: 'From',
@@ -99,27 +112,17 @@ async function Generate({ user, id }: { user: AuthenticatedUser; id: string }) {
       section: 'Reporting period',
     },
     {
-      name: 'audience',
-      label: 'Who it is for',
-      type: 'select',
-      required: true,
-      defaultValue: enabled[0],
-      options: enabled.map((a) => ({ value: a, label: AUDIENCE_LABELS[a] })),
-      hint: `Audiences offered come from the setting “${r.data.audiences.label}” (${humanise(r.data.audiences.decisionState)}).`,
-      section: 'Audience',
-    },
-    {
       name: 'acknowledgement',
       label: 'Add an acknowledgement space for signature',
       type: 'checkbox',
-      section: 'Audience',
+      section: 'Sections (only those the kind and your role allow are kept)',
     },
     ...REPORT_SECTIONS.map((s) => ({
       name: `sections.${s}`,
       label: SECTION_LABELS[s],
       type: 'checkbox' as const,
       defaultValue: s === 'fees' ? 'false' : 'true',
-      section: 'Sections (only those your role may include are kept)',
+      section: 'Sections (only those the kind and your role allow are kept)',
     })),
   ];
   return (
@@ -134,18 +137,20 @@ async function Generate({ user, id }: { user: AuthenticatedUser; id: string }) {
           <summary>What goes into a report</summary>
           <p>
             A draft is built once from the records for the period and stored. A second person
-            reviews it, then it is made final and never changes. Parent and student reports never
-            contain raw teacher reviews, identity documents, history or payment details. Nothing is
-            emailed.
+            reviews it, then it is made final and never changes. The PTM report never contains KYC,
+            guardians, internal remarks, history or payment details. Nothing is emailed.
           </p>
         </details>
         <Segment title="Make a report">
           <ActionForm
             action={`/ops/api/v1/students/${id}/report`}
-            submitLabel="Create draft report"
+            submitLabel="Generate report"
             redirectTo={`/students/${id}/report?export={id}`}
             fields={fields}
           />
+        </Segment>
+        <Segment title="Generated reports" flush>
+          <ReportList rows={r.data.reports} studentId={id} />
         </Segment>
       </div>
     </>
@@ -177,7 +182,7 @@ async function Report({
     <>
       <PageHeader
         title={s ? `Student report: ${s.student.name}` : 'Student report'}
-        description={`Reference ${e.referenceCode} · ${AUDIENCE_LABELS[e.audience]} · ${fmtDate(e.periodFrom)} to ${fmtDate(e.periodTo)}`}
+        description={`Reference ${e.referenceCode} · ${REPORT_KIND_LABELS[e.audience]} · ${fmtDate(e.periodFrom)} to ${fmtDate(e.periodTo)}`}
         actions={
           <span className="ops-no-print el-inline-form">
             <a href={`/ops/students/${id}`}>Back to the student</a>
@@ -225,7 +230,9 @@ async function Report({
               {
                 label: 'Status',
                 value: (
-                  <StatusBadge tone={STATUS_TONES[e.status]}>{humanise(e.status)}</StatusBadge>
+                  <StatusBadge tone={REPORT_STATUS_TONES[e.status]}>
+                    {humanise(e.status)}
+                  </StatusBadge>
                 ),
               },
               { label: 'Created', value: fmtDateTime(e.at) },
@@ -258,6 +265,8 @@ async function Report({
 
 function Snapshot({ s }: { s: NonNullable<Awaited<ReturnType<typeof getStudentReport>>['view']> }) {
   const has = (x: (typeof s.sections)[number]) => s.sections.includes(x);
+  // progress-report/1 snapshots carry no tone: today's neutral wording.
+  const h = REPORT_HEADINGS[s.template === 'progress-report/1' ? 'neutral' : s.tone];
   const bullets = (items: readonly string[]) => (
     <ul>
       {items.map((i) => (
@@ -265,12 +274,14 @@ function Snapshot({ s }: { s: NonNullable<Awaited<ReturnType<typeof getStudentRe
       ))}
     </ul>
   );
+  const internalReview = s.feedback?.some((f) => 'academicConcerns' in f);
   return (
     <>
       <Segment title="Programmes and batches" flush>
         <DetailTable
           rows={[
             { label: 'Admission number', value: s.student.admissionNumber ?? 'Not assigned' },
+            s.student.counsellor ? { label: 'Counsellor', value: s.student.counsellor } : null,
             ...(has('programmes') || has('overview') ? s.programmes : []).map((p) => ({
               label: p.programme,
               value: `${p.batch} · ${p.status}`,
@@ -278,6 +289,54 @@ function Snapshot({ s }: { s: NonNullable<Awaited<ReturnType<typeof getStudentRe
           ]}
         />
       </Segment>
+      {s.kyc ? (
+        <Segment
+          title="KYC and student details"
+          description="Private — internal report only. Document references are never stored or printed."
+          flush
+        >
+          <DetailTable
+            rows={[
+              {
+                label: 'Date of birth',
+                value: s.kyc.dateOfBirth
+                  ? `${fmtDate(s.kyc.dateOfBirth)} (age ${s.kyc.age})`
+                  : 'Not recorded',
+              },
+              {
+                label: 'Class / board',
+                value:
+                  [s.kyc.class && humanise(s.kyc.class), s.kyc.board].filter(Boolean).join(' · ') ||
+                  'Not recorded',
+              },
+              { label: 'School', value: s.kyc.school ?? 'Not recorded' },
+              { label: 'City', value: s.kyc.city ?? 'Not recorded' },
+            ]}
+          />
+          <RecordTable
+            caption="Guardians"
+            rows={s.kyc.guardians}
+            rowKey={(g) => g.name}
+            empty="No guardians recorded."
+            columns={[
+              { key: 'name', header: 'Name', render: (g) => g.name },
+              { key: 'rel', header: 'Relationship', render: (g) => humanise(g.relationship) },
+              { key: 'phone', header: 'Phone', render: (g) => g.phone ?? 'Not recorded' },
+              { key: 'email', header: 'Email', render: (g) => g.email ?? 'Not recorded' },
+              { key: 'consent', header: 'Consent', render: (g) => humanise(g.consent) },
+            ]}
+          />
+          <RecordTable
+            caption="Documents"
+            rows={s.kyc.documents}
+            rowKey={(d) => d.key}
+            columns={[
+              { key: 'doc', header: 'Document', render: (d) => d.label },
+              { key: 'state', header: 'State', render: (d) => DOCUMENT_STATE_LABELS[d.state] },
+            ]}
+          />
+        </Segment>
+      ) : null}
       {s.academic && (has('results') || has('attendance')) ? (
         <div className="ops-panels">
           <AcademicEvidenceView
@@ -286,25 +345,14 @@ function Snapshot({ s }: { s: NonNullable<Awaited<ReturnType<typeof getStudentRe
           />
         </div>
       ) : null}
-      {s.summary ? (
-        <Segment
-          title="Summary"
-          description="Built from the records and the teachers’ shareable notes; marks are unchanged."
-        >
-          <DetailTable
-            rows={[
-              { label: 'What the records show', value: bullets(s.summary.evidence) },
-              { label: 'Strengths', value: bullets(s.summary.strengths) },
-              { label: 'Areas for improvement', value: bullets(s.summary.areas) },
-              { label: NEXT_STEP_LABEL, value: bullets(s.summary.nextSteps) },
-            ]}
-          />
-        </Segment>
-      ) : null}
       {s.feedback ? (
         <Segment
-          title="Teacher reviews"
-          description="Submitted in Academic OS, as they stood when this report was made. Internal: never shared with families."
+          title={internalReview ? 'Teacher reviews' : 'Teachers’ reviews (shareable notes)'}
+          description={
+            internalReview
+              ? 'Submitted in Academic OS, as they stood when this report was made. Internal: never shared with families.'
+              : 'The teachers’ shareable notes, as they stood when this report was made.'
+          }
           flush
         >
           <RecordTable
@@ -322,22 +370,50 @@ function Snapshot({ s }: { s: NonNullable<Awaited<ReturnType<typeof getStudentRe
                 render: (f) =>
                   `${f.teacher} · ${f.subject} · ${fmtDate(f.observedOn)} · v${f.version}`,
               },
-              {
-                key: 'obs',
-                header: 'Internal remarks',
-                render: (f) => f.observations ?? 'None recorded',
-              },
-              { key: 'str', header: 'Strengths', render: (f) => f.strengths ?? 'None recorded' },
+              ...(internalReview
+                ? [
+                    {
+                      key: 'att',
+                      header: 'Attendance and engagement',
+                      render: (f: NonNullable<typeof s.feedback>[number]) =>
+                        f.attendanceEvidence ?? 'None recorded',
+                    },
+                    {
+                      key: 'hw',
+                      header: 'Homework and practice',
+                      render: (f: NonNullable<typeof s.feedback>[number]) =>
+                        f.homeworkEvidence ?? 'None recorded',
+                    },
+                    {
+                      key: 'concerns',
+                      header: 'Academic concerns',
+                      render: (f: NonNullable<typeof s.feedback>[number]) =>
+                        f.academicConcerns ?? 'None recorded',
+                    },
+                  ]
+                : []),
+              { key: 'str', header: h.strengths, render: (f) => f.strengths ?? 'None recorded' },
               {
                 key: 'area',
-                header: 'Areas needing support',
+                header: h.reviewAreas,
                 render: (f) => f.areasToImprove ?? 'None recorded',
               },
-              {
-                key: 'next',
-                header: 'Suggested next step',
-                render: (f) => f.actionPlan ?? 'None recorded',
-              },
+              { key: 'next', header: h.reviewNext, render: (f) => f.actionPlan ?? 'None recorded' },
+            ]}
+          />
+        </Segment>
+      ) : null}
+      {s.summary ? (
+        <Segment
+          title="Summary"
+          description="Built from the records and the teachers’ shareable notes; marks are unchanged."
+        >
+          <DetailTable
+            rows={[
+              { label: 'What the records show', value: bullets(s.summary.evidence) },
+              { label: h.strengths, value: bullets(s.summary.strengths) },
+              { label: h.areas, value: bullets(s.summary.areas) },
+              { label: h.nextSteps, value: bullets(s.summary.nextSteps) },
             ]}
           />
         </Segment>

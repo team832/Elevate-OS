@@ -1,10 +1,58 @@
 # Elevate OS — handoff
 
-_Last updated 22 Oct 2026. Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
+_Last updated 23 Oct 2026. Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
 
 ## For the owner (plain language)
 
 **What it is.** Elevate OS is the internal system your staff sign in to. Since 22 Oct 2026 it has three **workspaces**, one per kind of work, each at its own address: Business Operations (enquiries, demos, admissions, students, fees, staff tasks), Academic (teachers and coordinators) and Marketing. A fourth address holds Users & roles. Only `@elevateeducation.in` accounts can use it (D-030).
+
+### Status report — 22–23 Oct 2026 (new look, dashboards, cross-workspace checks, reports)
+
+```
+What's live now: nothing on the internet yet. On this computer, the same four addresses as in the
+  report below (Business Operations :3000, Academic :3001, Marketing :3002, Users & roles :3003).
+What I did:
+- A new look for every screen, as you asked ("completely different", curves, a little blur,
+  charts): a light warm background, a white floating menu rail, rounded panels, pill-shaped
+  buttons and tabs, and records that open in a frosted panel (a bottom sheet on phones). Only
+  the Elevate name, logo and orange are kept. The old dark look is saved as a backup (git tag
+  `ui-v1-dark-2026-10-22` and a folder copy), so it can be brought back.
+- Dashboards with charts in all three workspaces: the Business Operations Overview (figure
+  tiles, leads per day, the admissions funnel, demo outcomes, leads by source), Academic My day
+  (a teacher's timeline and tiles; for coordinators, coverage per batch and attendance and
+  delivery per programme as bars) and the Marketing Overview (tiles, content by state as bars,
+  accounts by connection). Every chart can be shown as a table, and a figure that is not known
+  says "Not recorded" or "Not available", never 0.
+- Checked what each workspace shows of the others and removed what was never real: four
+  figure tiles that could only ever say "Missing" are gone; the attendance percentage is now
+  worked out once, in Academic, and printed with its definition beside it; a wrong "no reviews"
+  message (for staff with no staff record) now says why nothing can be shown; a placeholder
+  "Dashboard" page in Users & roles that showed nothing is gone; the never-finished
+  "leads sent from Marketing" connection is retired, because Marketing already works on the
+  same lead list since 22 Oct.
+- Teacher reviews: each of the six evidence boxes now says what belongs in it and what never
+  does (no family or contact details, fee remarks or personality labels), with a proposed limit
+  of 1,500 characters, and the "who may see it" choice names its readers.
+- Each workspace can now prove which workspace is calling it (one key per workspace instead of
+  one shared key), so a workspace cannot pretend to be another. On this computer nothing
+  changes until the separate keys are set, which is a go-live step.
+- New: an internal teacher report PDF from each teacher's page in Business Operations
+  ("Generate teacher report": the period, classes planned and delivered, attendance and marking
+  still pending, reviews written, where to work on, a short factual summary), kept in the
+  database with a reference number; only the operations manager and the director can make it,
+  and a teacher can never make one about themselves.
+- Also done: the student folio PDF in two kinds —
+  "PTM report (for parents)" and "Internal report (KYC, details, scores, reviews)", with
+  scores as bar charts, teachers' reviews, where to work on and a short factual summary; the PTM one is two pages and never carries KYC.
+What I need from you: the eight new rows at the top of "Decisions waiting for you" — the
+  first is whether the new light look is right. (The database update for the teacher report,
+  step 6, is already done on your computer.)
+What's next:
+- You open each workspace with the demo sign-ins (step 4) and tell me what looks or feels wrong.
+- The full checks have been run; the numbers are in IMPLEMENTATION_STATUS.md.
+- Choose where to host it, so it can go on the internet.
+Placeholders still to replace: see PLACEHOLDERS.md.
+```
 
 ### Status report — 22 Oct 2026 (workspaces)
 
@@ -60,7 +108,7 @@ What I did:
 - Fees: yearly fee split 50 / 25 / 25, registration ₹5,000 once per student, demo ₹1,000;
   every fee change needs a second person's approval.
 - Staff have "My day" tasks and a daily end-of-day report their manager can read.
-- The screens keep the dark look with a new, clearer layout and menu.
+- A clearer layout and menu (the dark look of that day was replaced on 22 Oct; see the newest report above).
 - Academic: teachers get "My day", class pages to mark attendance and "Mark delivered",
   a teaching log, marks entry and student reviews. Coordinators place students in batches,
   publish timetables, handle substitutes and see coverage and reports (print and CSV).
@@ -108,12 +156,22 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 4. Under **Authorised redirect URIs**, change `http://localhost:3000/api/v1/auth/google/callback` to `http://localhost:3003/api/v1/auth/google/callback`. Click **Save**.
 5. Google sign-in now needs the admin app running (`npm run dev:platform`). If you never set up Google sign-in, skip this step.
 
+**6. Database update for the teacher report — done on your computer on 23 Oct 2026** (database change `0014_teacher_reports`, which only adds the table that keeps generated teacher reports; `db:check` passed 19/19). On another computer: with `npm run db:start` running, type `! npm run db:migrate` in the Claude Code chat (or run `npm run db:migrate` in a terminal in the `elevate-os` folder).
+
 ### Decisions waiting for you
 
 Until you answer, the system uses the safe choice shown and marks it "Proposed".
 
 | Question | Safe choice used today |
 |---|---|
+| **New 23 Oct.** Is the new light look right? Open each workspace on your own screen and phone (D-074) | As built; the dark look is kept as a backup |
+| **New 23 Oct.** Users & roles still has an "Overview" page for signed-in people, left from before the workspaces. Keep it, or delete it and keep only Users & roles? | Kept |
+| **New 23 Oct.** May counsellors see the three staff-only parts of a teacher review (attendance evidence, homework evidence, academic concerns) for their own students? | Yes (Proposed) |
+| **New 23 Oct.** Teacher review boxes: is 1,500 characters each the right limit? | 1,500 (Proposed); older reviews up to 4,000 still open |
+| **New 23 Oct.** Should Business Operations see campaign results from Marketing? | No |
+| **New 23 Oct.** May the marketing manager see the contact details of every lead, or only the leads Marketing brought in? (D-073) | Every lead (Proposed) |
+| **New 23 Oct.** Will another system ever send leads into Elevate OS (a website form, a CRM, Meta lead ads)? The unfinished Marketing-to-Business-Operations lead connection was retired (D-075) | No connection; leads are typed in or worked on the shared lead list |
+| **New 23 Oct.** Who may generate and read the new internal teacher report, and should the auditor see it? | Operations manager and director (Proposed); the auditor cannot |
 | **New 22 Oct (workspaces).** Who opens which workspace: teachers only Academic; academic coordinators Academic and Business Operations; marketing staff only Marketing, with leads, lead contact details and their own tasks (D-073)? | As stated (Proposed) |
 | **New 22 Oct.** Staff attendance (OD-026): should the system keep staff attendance? Until then teachers have no "My Attendance" page and the Overview says "no HR module" | Not built; hidden |
 | **New 22 Oct.** Should Marketing see Events and Webinars? It needs a new permission that covers only events, because today's meeting permission also covers private counselling | Hidden in Marketing |
@@ -132,7 +190,7 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | Onboarding checklist items, due days and owners | A proposed standard list, marked "(proposed)" |
 | Who may add extra demo days, and who may correct demo attendance? | Extra days off |
 | Student or parent reports: which audiences, and should teacher names appear? | Staff-only reports |
-| The menu grouping (D-054; changed on 22 Oct to Overview, Admissions, Students, Money, Teaching and work, Insight — see the new question above) | As built |
+| The menu grouping (changed on 22 Oct to Overview, Admissions, Students, Money, Teaching and work, Insight — see the question above) | As built |
 | The five draft syllabus courses and their codes; CA chapter weights (D-051) | Drafts, not used for teaching |
 | After a student moves to another batch, how long may the old teacher still write a review about them? | Only while the student is in a batch the teacher teaches that day |
 | The two review labels, "Staff only" and "May inform a reviewed parent summary": right words, right two choices? | As built |
@@ -157,7 +215,7 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | A staff account cannot be deleted while it is the only person on a Marketing content assignment (writer, reviewer and so on). Keep refusing, or should the system first ask you to hand that work to someone else? | Refused; reassign the work first, then delete |
 | The audit history (who changed what) is never changed by the system, but the database itself does not forbid it. Add a database rule later so even a developer mistake cannot edit or delete it? | No database rule yet (the code only adds rows) |
 
-Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), keep the dark look with a new layout (D-054, confirmed again as D-059), teacher reviews written in Academic (D-058), demo attendance marked by the teacher in Academic (D-060), sample staff named "Sample …" with `@example.test` sign-ins (D-061).
+Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), a new layout (D-054, D-059; the dark look itself was replaced on 22 Oct, D-074), teacher reviews written in Academic (D-058), demo attendance marked by the teacher in Academic (D-060), sample staff named "Sample …" with `@example.test` sign-ins (D-061).
 
 **What is not connected yet.** Email and text messages, event invitations, the social-media publishing tool, document uploads, a biometric device and a CRM are "pretend" connections: they record what would happen and never claim it happened. Hindi (Devanagari) text does not print in PDFs yet; it shows as "?" with a note.
 
@@ -178,7 +236,12 @@ Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), 
 | Migrations `0009_academic_teacher_workspace_tasks`, `0010_link_academic_students_to_core`, `0011_mark_sample_academic_students` | **Applied on the owner's computer** 21–22 Oct (all frozen) | `packages/database/migrations/` |
 | Migration `0012_missing_checks` (22 database rules the 22 Oct tests found missing; no data changed) | **Applied on the owner's computer** 22 Oct after a check found no rows breaking them (frozen) | `docs/DATABASE_MIGRATION_PLAN.md` |
 | Role workspaces (D-072, D-073): Business Operations :3000, Academic :3001, Marketing :3002, platform :3003; one sign-in; chooser; demo sign-ins; teacher tasks/EOD/meetings in Academic; leads, follow-ups and tasks in Marketing; new Ops Overview, Collections, Outstanding, Academic and Marketing summaries | Implemented, Tested (rules and API); grants **Proposed** | `docs/WORKSPACES.md`, `IMPLEMENTATION_STATUS.md` "Role workspaces" |
-| Migration `0013_workspace_preference` (remembered workspace per person) | **Applied on the owner's computer** 22 Oct (`db:check` 19/19; next change = `0014`) | `docs/DATABASE_MIGRATION_PLAN.md` |
+| Migration `0013_workspace_preference` (remembered workspace per person) | **Applied on the owner's computer** 22 Oct (`db:check` 19/19) | `docs/DATABASE_MIGRATION_PLAN.md` |
+| New look (D-074): light theme, floating rail, pill tabs, frosted panels and bottom sheets, charts in `packages/shared-ui`; dashboards in all three workspaces | Implemented, Tested (UI contract tests per app); the coordinator's browser pass on the final apps is pending | `IMPLEMENTATION_STATUS.md` "Redesign and integrity", `apps/*/README.md` |
+| Cross-workspace integrity (D-075 … D-077): one attendance definition, dead tiles and the dead lead-handoff flow removed, unavailable-not-empty, per-workspace service keys, placeholder dashboard removed | Implemented, Tested | same section; `INTEGRATION_CONTRACT.md` §5, §7 |
+| Migration `0014_teacher_reports` (table for generated teacher reports) | **Applied on the owner's computer** 23 Oct (`db:check` 19/19) | `packages/database/migrations/` |
+| Teacher report PDF (D-078): generate, list and download from a teacher's page; stored snapshot with a `TR-` reference | Implemented, Tested (API; the page itself not yet browser-checked) | `apps/business-ops-os/README.md`, `docs/DECISIONS.md` D-078 |
+| Student folio PDF in two kinds (PTM / internal, D-078) | Implemented and tested (sample PDFs looked at; the screen was not opened in a browser) | `docs/DECISIONS.md` D-078 |
 | Security headers and CSP with per-request nonces (all four apps) | Implemented, Tested (unit test + production smoke, §6) | §5 below |
 | Deployment, hosting, domain, monitoring, backups schedule | **Not built** (Proposed only) | `infrastructure/deployment/README.md` |
 | Password reset / change screen, shared login rate limit, outbox scheduler, Google re-authentication for confirmation | **Not built** | `infrastructure/deployment/README.md`; `C:\OPENBOT\Elevate-Not-Working` |
@@ -190,7 +253,7 @@ Sections of `website-build-guidelines` judged **not applicable**, and why: §10 
 
 ## 2. Stack and why
 
-Node 24, npm workspaces, TypeScript (strict), Next.js 16.4.2 App Router as **four apps**: one per workspace (`/ops` on :3000, `/academic` on :3001, `/marketing` on :3002) and the platform (:3003) for Users & roles and Google sign-in. One session cookie covers every port (D-072); the platform's rewrites of the module paths remain as an optional single-site gateway (D-004). The database is PostgreSQL with one schema per domain, through Drizzle ORM (D-005, D-006), with zod validation (D-007), vitest and ESLint module-boundary rules (D-023). Styling is plain CSS tokens with system fonts. No external CDN and no tracking scripts. Every version is pinned (D-018). The full reasoning is in `docs/DECISIONS.md` and README §3.
+Node 24, npm workspaces, TypeScript (strict), Next.js 16.4.2 App Router as **four apps**: one per workspace (`/ops` on :3000, `/academic` on :3001, `/marketing` on :3002) and the platform (:3003) for Users & roles and Google sign-in. One session cookie covers every port (D-072); the platform's rewrites of the module paths remain as an optional single-site gateway (D-004). The database is PostgreSQL with one schema per domain, through Drizzle ORM (D-005, D-006), with zod validation (D-007), vitest and ESLint module-boundary rules (D-023). Styling is plain CSS tokens from `packages/shared-ui` (D-074): one vendored display font (Bricolage Grotesque, OFL) for titles and figures, the computer's own font for text; no CSS or chart library. No external CDN and no tracking scripts. Every version is pinned (D-018). The full reasoning is in `docs/DECISIONS.md` and README §3.
 
 ## 3. How to run locally
 
@@ -270,7 +333,7 @@ Run by the security agent on 20 Oct 2026 (Windows 11, Node 24.19.0):
 | `npm run typecheck` | exit 0 on the final run (an earlier run showed 3 errors in `apps/platform/tests/integration/overview.test.ts` from the Overview work in progress; they were fixed by the end) |
 | `npm run secret-scan` | `secret-scan — OK (974 files checked, no secrets or .env files found).` |
 | `npm run build` | exit 0; every route is dynamic (ƒ), including `/_not-found` |
-| Signed-out GET via platform `:3000` | `/`, `/dashboard` → 307 `/login`. `/ops`, `/marketing`, `/academic` and `/academic/{timetable,assessments,batches,curriculum,intake,progress,students,teaching}` → 307 to the zone's `/login`. `/ops/leads`, `/marketing/ideas` → 307 |
+| Signed-out GET via platform `:3000` | `/` (and the since-removed `/dashboard`, D-077) → 307 `/login`. `/ops`, `/marketing`, `/academic` and `/academic/{timetable,assessments,batches,curriculum,intake,progress,students,teaching}` → 307 to the zone's `/login`. `/ops/leads`, `/marketing/ideas` → 307 |
 | Missing pages | `/ops/no-such-page`, `/academic/no-such-page`, `/marketing/no-such-page` → 404. `/no-such-page` → 307 to login when signed out (by design), 404 with a session cookie |
 | `curl -sI` headers | All headers in §5 are present on platform and module pages, and through the rewrite. No `X-Powered-By`. Each response has a new nonce. Every `<script>` (12 on `/login`) carries the matching nonce |
 | Browser (Chrome) | Production `/login`, `/academic/login`, `/marketing/login`, `/ops/no-such-page`: no console errors (no CSP violations). Dev: `/academic/login` through the platform shows `[HMR] connected` and no CSP errors |
@@ -291,7 +354,7 @@ Real values live only in the git-ignored root `.env` (locally) or in the host's 
 | Secret | Rotate by |
 |---|---|
 | `SESSION_SECRET` | Set a new value (≥ 32 chars) in all four apps and restart them. Everyone is signed out |
-| `INTERNAL_SERVICE_TOKEN` | Set a new value, the same in all four apps, and restart them together |
+| `INTERNAL_SERVICE_TOKEN`, or `INTERNAL_SERVICE_TOKENS` (one key per workspace, D-077; recommended for go-live) | Set a new value, the same in all four apps, and restart them together |
 | `DATABASE_URL` password | Change the password in PostgreSQL, update `DATABASE_URL`, restart |
 | `GOOGLE_CLIENT_SECRET` | Google Cloud console → the OAuth client → reset the secret, paste the new one, restart the platform |
 | `SEED_USER_PASSWORD` | Local development only; change it and re-run `db:seed` |
@@ -335,7 +398,7 @@ Limitations:
 - A demo class linked in Academic that Business Ops has not read yet can still be marked by a counsellor until Ops next reads Academic successfully. A teacher can start a demo review only once the student is on an Academic class roster. The job that moves demos forward from Academic marks (`demo-academic-marks`) runs only when someone starts it; there is no scheduler.
 - Tasks (D-069): a manager who did not create a task cannot remove its review step (the operations manager can); if work comes back to the person who created it, that person gets back the creator's rights.
 - The Task Tracker import is tested with made-up backups only; your real browser exports are still needed (`docs/task-tracker-import-guide.md`).
-- The prototype (`C:\OPENBOT\Elevate`) does not show the 21 Oct work or the 22 Oct workspaces.
+- The prototype (`C:\OPENBOT\Elevate`) does not show the 21 Oct work or the 22 Oct workspaces, and keeps the old dark look (not redesigned, D-074).
 - Workspaces (22 Oct): a panel that shows another workspace's figures says "source unavailable" while that workspace is not running; Google sign-in needs the admin app (:3003) running; on this computer the sign-in cookie is shared by every local port, so other local programs could see its name (use a separate browser profile if you run unknown local apps). Not built: staff attendance ("My Attendance"), teaching resources, Events and Webinars in Marketing, results by campaign.
 
 Next three improvements, in priority order:
@@ -346,7 +409,7 @@ Next three improvements, in priority order:
 ## 11. Licences
 
 - **Logo:** `apps/*/public/brand/elevate-logo.png` and `favicon.ico` belong to the owner (Elevate Education).
-- **Fonts:** screens use system fonts. PDFs embed Noto Sans 2.015 Regular and Bold (SIL Open Font License 1.1; licence file `apps/business-ops-os/assets/fonts/OFL.txt`, D-042).
+- **Fonts:** screens use the computer's own font for text and Bricolage Grotesque for titles and figures (SIL Open Font License 1.1; `packages/shared-ui/fonts/OFL-BricolageGrotesque.txt`, D-074). PDFs embed Noto Sans 2.015 Regular and Bold (SIL Open Font License 1.1; licence file `apps/business-ops-os/assets/fonts/OFL.txt`, D-042).
 - **PDF library:** `pdf-lib` 1.17.1 and `@pdf-lib/fontkit` 1.1.1 (MIT), owner-approved 21 Oct 2026.
 - **No third-party images.**
 - **npm dependencies:** all come from the public npm registry, and the project itself is `UNLICENSED` (private). A census of installed packages on 20 Oct 2026 found:

@@ -4,7 +4,6 @@ import type { Actor } from '../../../../../server/context';
 import { syncDemosFromAcademic } from '../../../../../server/demos';
 import { processEnrolmentReplies } from '../../../../../server/enrolment';
 import { runFollowUpReminders } from '../../../../../server/follow-ups';
-import { processLeadIntake } from '../../../../../server/lead-intake';
 import { jobParams, type OPS_JOBS } from '../../../../../server/schemas';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +14,6 @@ type Run = (db: Database, actor: Actor, requestId: string) => Promise<unknown>;
 const JOBS: Record<(typeof OPS_JOBS)[number], Run> = {
   'follow-up-reminders': (db, actor, requestId) => runFollowUpReminders(db, { actor, requestId }),
   'enrolment-replies': (db, actor) => processEnrolmentReplies(db, { actor }),
-  'lead-intake': (db, actor, requestId) => processLeadIntake(db, { actor, requestId }),
   'demo-academic-marks': (db, actor, requestId) => syncDemosFromAcademic(db, actor, requestId),
 };
 

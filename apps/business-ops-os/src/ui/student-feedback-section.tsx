@@ -9,10 +9,11 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import type { StudentIdentityId } from '@elevate/shared-types';
-import { Alert, StatusBadge, type Column } from '@elevate/shared-ui';
+import { StatusBadge, type Column } from '@elevate/shared-ui';
 import { studentReviews, writeReviewHref, type ReviewsResult } from '../server/academic-reviews';
 import { listStudentFeedback } from '../server/feedback';
 import { ActionForm } from './action-form';
+import { Unavailable } from './cross-module';
 import { fmtDate, fmtDateTime, humanise } from './format';
 import { load } from './frame';
 import { RecordTable } from './record-table';
@@ -45,10 +46,10 @@ export function AcademicReviewList({
   if (!result) return <p className="el-field-hint">Needs permission ops:feedback:read.</p>;
   if (result.status === 'unavailable')
     return (
-      <Alert tone="warning" title="Source unavailable — Academic OS could not be reached">
-        Checked {fmtDateTime(result.checkedAt)} ({result.reason}). Reviews may exist; try again
-        later.
-      </Alert>
+      <Unavailable
+        name="Academic OS reviews"
+        result={{ reason: result.reason, fetchedAt: result.checkedAt }}
+      />
     );
   const current = result.reviews.filter((r) => !r.superseded);
   if (!current.length)

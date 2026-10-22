@@ -32,4 +32,10 @@ describe('public front page (signed-out /)', () => {
     expect(html).not.toMatch(/example\.test|fictional|Sample data/i);
     expect(html.match(/<h1/g)).toHaveLength(1);
   });
+
+  it('states the institute facts in the footer band and invents no figures or prices', () => {
+    for (const fact of ['214, Bhaskar Heights', '08AACC2204Q120', 'Zeromiles Digital'])
+      expect(html).toContain(fact);
+    expect(html).not.toMatch(/₹|%|\d+\+|students? (taught|placed)|rating/i);
+  });
 });

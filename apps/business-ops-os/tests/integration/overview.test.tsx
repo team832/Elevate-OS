@@ -5,6 +5,7 @@
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { prerender } from 'react-dom/static';
 import { eq } from 'drizzle-orm';
 import {
   opsAdmissions,
@@ -18,11 +19,19 @@ import { metric } from '@elevate/shared-contracts';
 import { createTestUser, setupTestDatabase, type TestUser } from '@elevate/testing';
 import { addDays, istToday } from '../../src/domain';
 import { OverviewBlocks } from '../../src/app/_components/overview-blocks';
+import MarketingSummaryPage from '../../src/app/marketing-summary/page';
 import { listCollections, listOutstanding } from '../../src/server/fee-collections';
 import { buildOverview } from '../../src/server/overview';
 import { review, reviewsPayload, stubAcademic } from './academic-stub';
 import { signedApplication, type People } from './application-fixtures';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
+
+// Pages check access through Next's request context; the page tests sign in by hand.
+const access = vi.hoisted(() => ({ user: null as unknown }));
+vi.mock('../../src/ui/frame', async (orig) => ({
+  ...(await orig<object>()),
+  gate: async () => ({ status: 'allowed', user: access.user, modules: ['ops'] }),
+}));
 
 const ctx = setupTestDatabase();
 const db = () => ctx.db as Database;
@@ -100,9 +109,11 @@ const BLOCKS = [
   'reviews',
   'team',
   'kpis',
+  'series',
 ] as const;
 
 const SECTIONS = [
+  'leads-per-day',
   'demos',
   'confirmations',
   'fees',
@@ -117,7 +128,7 @@ describe('overview blocks follow permissions', () => {
   it.each([
     ['operations_manager', () => manager, BLOCKS, SECTIONS],
     [
-      'finance_officer',
+      'finance_officer (no leads: no per-day chart)',
       () => finance,
       ['funnel', 'report', 'pipeline', 'collections', 'outstanding', 'team'],
       ['demos', 'confirmations', 'fees', 'onboarding', 'team', 'marketing'],
@@ -125,10 +136,24 @@ describe('overview blocks follow permissions', () => {
     [
       'admissions_counsellor',
       () => counsellor,
-      ['funnel', 'report', 'pipeline', 'collections', 'outstanding', 'reviews', 'team'],
-      ['demos', 'confirmations', 'fees', 'onboarding', 'teaching', 'team', 'marketing'],
+      ['funnel', 'report', 'pipeline', 'collections', 'outstanding', 'reviews', 'team', 'series'],
+      [
+        'demos',
+        'confirmations',
+        'fees',
+        'onboarding',
+        'teaching',
+        'team',
+        'marketing',
+        'leads-per-day',
+      ],
     ],
-    ['marketing_manager (no fees, admissions or dashboard)', () => marketing, ['team'], ['team']],
+    [
+      'marketing_manager (no fees, admissions or dashboard)',
+      () => marketing,
+      ['team', 'series'],
+      ['team', 'leads-per-day'],
+    ],
   ] as const)('%s', async (_, user, parts, sections) => {
     stubAcademic({ reviews: 'down' });
     const o = await buildOverview(db(), user(), range, { summaries: down });
@@ -136,6 +161,61 @@ describe('overview blocks follow permissions', () => {
     const out = renderToStaticMarkup(<OverviewBlocks o={o} />);
     for (const id of SECTIONS)
       expect(out.includes(`id="${id}"`), id).toBe((sections as readonly string[]).includes(id));
+  });
+});
+
+describe('/ops/marketing-summary page', () => {
+  const DEAD = ['engagementRate', 'followerGrowth', 'leadsAttributed'];
+  const marketingUp = (async (url: RequestInfo | URL) =>
+    String(url).includes('/marketing/')
+      ? Response.json({
+          data: {
+            contract: 'marketing.summary',
+            version: 1,
+            generatedAt: new Date().toISOString(),
+            window: range,
+            metrics: Object.fromEntries(
+              ['ideasCaptured', 'contentApproved', 'postsScheduled', 'postsPublished', 'totalReach']
+                .map((k) => [k, m(1)])
+                .concat(
+                  DEAD.map((k) => [
+                    k,
+                    metric.missing('Not measured', {
+                      definition: 'test',
+                      window: range,
+                      unit: 'count',
+                    }),
+                  ]),
+                ),
+            ),
+            accounts: [],
+            dataSources: [],
+          },
+        })
+      : new Response('nope', { status: 503 })) as typeof fetch;
+  const page = async () => {
+    access.user = manager;
+    const { prelude } = await prerender(
+      <MarketingSummaryPage searchParams={Promise.resolve({})} />,
+    );
+    return new Response(prelude).text();
+  };
+
+  it('tiles come from the contract; metrics no source measures get no tile, never "Missing"', async () => {
+    vi.stubGlobal('fetch', marketingUp);
+    const out = await page();
+    for (const shown of ['Posts published', 'Total reach', 'Leads received'])
+      expect(out).toContain(shown);
+    for (const dead of ['Missing', 'Engagement rate', 'Follower growth', 'Leads attributed'])
+      expect(out).not.toContain(dead);
+  });
+
+  it('Marketing down: "Source unavailable", never 0', async () => {
+    vi.stubGlobal('fetch', down.fetchImpl);
+    const out = await page();
+    expect(out).toContain('Source unavailable');
+    expect(out).toContain('HTTP 503');
+    expect(out).not.toContain('Posts published');
   });
 });
 
@@ -187,6 +267,18 @@ describe('sources that cannot be read', () => {
       },
     );
     expect(o.team).toMatchObject({ ok: false, reason: expect.stringContaining('92 days') });
+  });
+});
+
+describe('per-day series', () => {
+  it('covers exactly the range, one point per day, and draws the chart', async () => {
+    stubAcademic({ reviews: 'down' });
+    const o = await buildOverview(db(), manager, range, { summaries: down });
+    if (!o.series?.ok) throw new Error('series missing');
+    const days = o.series.data.leadsPerDay;
+    expect(days).toHaveLength(7);
+    expect([days[0]?.date, days.at(-1)?.date]).toEqual([range.from, range.to]);
+    expect(renderToStaticMarkup(<OverviewBlocks o={o} />)).toContain('Leads received per day');
   });
 });
 

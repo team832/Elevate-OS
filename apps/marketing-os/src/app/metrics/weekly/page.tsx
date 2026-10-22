@@ -42,7 +42,7 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
             const r = await weeklyReport(getDb(), { weekOf: week, groupBy });
             return (
               <div className="el-stack">
-                <form method="get" className="el-grid">
+                <form method="get" className="el-inline-form">
                   <Field id="week" label="Any day in the week">
                     <TextInput id="week" name="week" type="date" defaultValue={r.window.from} />
                   </Field>

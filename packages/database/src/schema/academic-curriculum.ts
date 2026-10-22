@@ -40,7 +40,6 @@ export const ACADEMIC_LABEL_STATUSES = [
 ] as const;
 export const ACADEMIC_MODES = ['offline', 'online', 'hybrid'] as const;
 
-
 /**
  * A course is one VERSION of a curriculum under a core programme, e.g.
  * `IPMAT-C12-2027` (IPMAT Class 12, 2027–28 cycle). Class length lives here
@@ -271,13 +270,18 @@ export const academicConceptBookChapters = academic.table(
     chapterNumber: integer('chapter_number'),
     section: text('section'),
     title: text('title').notNull(),
-    subtopics: text('subtopics').array().notNull().default(sql`'{}'::text[]`),
+    subtopics: text('subtopics')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     status: text('status', { enum: ['active', 'retired', 'moved', 'opening_unit'] })
       .notNull()
       .default('active'),
     /** For retired/moved ids: the code that now holds the content. */
     aliasOfCode: text('alias_of_code'),
-    indexStatus: text('index_status', { enum: ACADEMIC_LABEL_STATUSES }).notNull().default('locked'),
+    indexStatus: text('index_status', { enum: ACADEMIC_LABEL_STATUSES })
+      .notNull()
+      .default('locked'),
     contentStatus: text('content_status').notNull().default('not_started'),
     plannedConceptQuestions: integer('planned_concept_questions'),
     plannedPracticeQuestions: integer('planned_practice_questions'),

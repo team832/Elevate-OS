@@ -243,7 +243,7 @@ describe('AppShell landmarks and controls', () => {
   });
 
   it('the current module is announced, not shown by colour alone', () => {
-    expect(html).toMatch(/href="\/ops" data-current="true" aria-current="true"/);
+    expect(html).toMatch(/class="el-ws-option" href="\/ops" aria-current="true"/);
     expect(html.match(/aria-current="true"/g)).toHaveLength(1);
   });
 

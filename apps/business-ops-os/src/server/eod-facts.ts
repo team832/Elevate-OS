@@ -5,7 +5,6 @@
  * "Academic OS unavailable"). `factsHash` ignores generation and fetch times, so the report page
  * can say "Source changed since submission" by comparing a fresh build with a submitted version.
  */
-import { appOrigin } from '@elevate/configuration/workspaces';
 import { createHash } from 'node:crypto';
 import { and, between, eq, inArray, lte, or } from 'drizzle-orm';
 import {
@@ -14,19 +13,10 @@ import {
   opsTaskUpdates as updates,
   type Database,
 } from '@elevate/database';
-import { fetchInternal } from '@elevate/server-kit';
-import { academicTeacherActivityV1Schema } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import { addDays, type IsoDate } from '../domain/dates';
 import { buildEodFacts, type EodFacts } from '../domain/eod';
-
-export function fetchTeacherActivity(staffId: string, from: string, to: string) {
-  return fetchInternal(
-    `${appOrigin('academic')}/academic/api/internal/v1/teachers/${encodeURIComponent(staffId)}/activity?${new URLSearchParams({ from, to })}`,
-    academicTeacherActivityV1Schema,
-    { caller: 'ops', timeoutMs: 3000 },
-  );
-}
+import { fetchTeacherActivity } from './academic-summary';
 
 /** Tasks a staff member owns or owned, with their events up to `now` (for replaying state). */
 export async function taskHistory(
@@ -105,7 +95,7 @@ export async function collectFacts(
     tasks: history.tasks,
     events: history.events,
     updates: [...near, ...corrections.filter((c) => !near.some((u) => u.id === c.id))],
-    academic: await fetchTeacherActivity(staffId, day, day),
+    academic: await fetchTeacherActivity(staffId, { from: day, to: day }),
   });
 }
 

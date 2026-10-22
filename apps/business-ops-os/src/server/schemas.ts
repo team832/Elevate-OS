@@ -202,7 +202,6 @@ export const settingParams = z.object({ key: z.string().min(1).max(100) });
 export const OPS_JOBS = [
   'follow-up-reminders',
   'enrolment-replies',
-  'lead-intake',
   'demo-academic-marks',
 ] as const;
 export const jobParams = z.object({ job: z.enum(OPS_JOBS) });

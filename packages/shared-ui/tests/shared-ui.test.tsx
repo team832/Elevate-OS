@@ -156,7 +156,7 @@ describe('AppShell sidebar', () => {
       moduleHrefs: { ops: 'http://localhost:3000/ops', academic: 'http://localhost:3001/academic' },
     });
     expect(html).toContain('href="http://localhost:3001/academic"');
-    expect(html).toContain('href="http://localhost:3000/ops" data-current="true"');
+    expect(html).toContain('href="http://localhost:3000/ops" aria-current="true"');
     expect(html).toContain('href="/ops/workspaces"');
   });
 
@@ -171,12 +171,13 @@ describe('AppShell sidebar', () => {
 
   it('marks the current module and lists its sections in labelled groups; the page is marked', () => {
     const html = shell({ nav: opsNav.map((n, i) => ({ ...n, active: i === 2 })) });
-    expect(html).toMatch(/class="el-nav-link el-nav-module" href="\/ops" data-current="true"/);
+    expect(html).toMatch(/class="el-ws-name">Business Operations</);
+    expect(html).toMatch(/class="el-ws-option" href="\/ops" aria-current="true"/);
     expect(html).toContain('aria-label="Business Operations sections"');
     expect(html).toContain('href="/ops/students" aria-current="page"');
     // groups are always open and name their list
     expect(html).toMatch(
-      /<span class="el-nav-heading" id="(el-navgroup-\d+)">Admissions<\/span><ul class="el-nav-list" aria-labelledby="\1">/,
+      /<details class="el-nav-group" open=""><summary id="(el-navgroup-\d+)" class="el-nav-heading"><span>Admissions<\/span>.*?<\/summary><ul class="el-nav-list" aria-labelledby="\1">/,
     );
     expect(html).toContain('>Operations</span>');
     // a one-item group named like its item is a plain link

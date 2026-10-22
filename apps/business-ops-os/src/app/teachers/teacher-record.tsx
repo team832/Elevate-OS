@@ -15,6 +15,7 @@ import { demoReviewsDue, REVIEWS_DUE_DAYS } from '../../server/feedback';
 import { HR_UNAVAILABLE } from '../../server/teacher-ops';
 import type { getTeacherProfile } from '../../server/teachers';
 import { ActionForm, type ActionFormProps } from '../../ui/action-form';
+import { Unavailable } from '../../ui/cross-module';
 import { load } from '../../ui/frame';
 import { fmtDate, fmtDateTime, humanise } from '../../ui/format';
 import { FormModal, type ModalTab } from '../../ui/record-modal';
@@ -35,13 +36,6 @@ const MODERATION_TONE = {
 
 const needs = (permission: string) => (
   <p className="el-field-hint">Needs permission {permission}.</p>
-);
-
-const ACADEMIC_DOWN = 'Academic OS unavailable';
-const unavailable = (r: { reason: string; fetchedAt: string }) => (
-  <Alert tone="warning" title={`${ACADEMIC_DOWN} — it could not be reached`}>
-    Checked {fmtDateTime(r.fetchedAt)} ({r.reason}). Nothing here means zero.
-  </Alert>
 );
 
 /** A metric as a short cell value: missing stays "Not recorded", never 0. */
@@ -158,7 +152,7 @@ export function teacherTabs(
                 ]}
               />
             ) : t.activity.status === 'unavailable' ? (
-              unavailable(t.activity)
+              <Unavailable name="Academic OS" result={t.activity} />
             ) : null}
           </Segment>
           <Segment
@@ -228,7 +222,7 @@ export function teacherTabs(
               ]}
             />
           ) : t.activity.status === 'unavailable' ? (
-            unavailable(t.activity)
+            <Unavailable name="Academic OS" result={t.activity} />
           ) : null}
         </Segment>
       ),
@@ -679,7 +673,7 @@ async function DemoReviewsDue({
           {r.data.unavailable ? (
             <Alert
               tone="warning"
-              title={`${ACADEMIC_DOWN} — some of these may already be reviewed`}
+              title="Academic OS unavailable — some of these may already be reviewed"
             >
               Checked {fmtDateTime(r.data.unavailable.checkedAt)} ({r.data.unavailable.reason}).
             </Alert>

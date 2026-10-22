@@ -7,6 +7,8 @@
  * rewrite who taught. Results: final runs of PUBLISHED assessments only (draft and unpublished marks
  * never leave Academic); absent is never a score; exempt/withheld have no v1 state and are not sent;
  * rank/percentile are null unless setting progress.show_rank_percentile is approved with show = true.
+ * The attendance rate and its definition follow the `attendance.denominator` setting exactly as the
+ * institute summary does, so Ops never recomputes it; nothing recorded is null, never 0.
  */
 import { and, asc, eq, gte, inArray, isNotNull, lte } from 'drizzle-orm';
 import {
@@ -29,9 +31,10 @@ import {
   type AcademicStudentSummaryV1,
 } from '@elevate/shared-contracts';
 import type { StaffMemberId, StudentId } from '@elevate/shared-types';
-import { summariseAttendance } from '../../domain';
+import { attendanceDefinition, summariseAttendance, type AttendanceStatus } from '../../domain';
 import { NO_BATCH_HISTORY, inPlacement, placementsOf } from './progress';
 import { rankVisible } from './results';
+import { getSetting } from './settings';
 
 export async function buildStudentSummary(
   db: Database,
@@ -55,7 +58,9 @@ export async function buildStudentSummary(
     .where(eq(academicEnrolments.studentId, student.id))
     .orderBy(asc(academicEnrolments.createdAt));
 
-  const totals = { held: 0, present: 0, partial: 0, late: 0, absent: 0, excused: 0 };
+  const rule = (await getSetting(db, 'attendance.denominator')).value;
+  const heldIds: string[] = [];
+  const allMarks: { sessionId: string; status: AttendanceStatus }[] = [];
   const out: AcademicStudentSummaryV1['enrolments'] = [];
   const placements = await placementsOf(
     db,
@@ -118,12 +123,8 @@ export async function buildStudentSummary(
             ),
         ])
       : [[], []];
-    const a = summariseAttendance(
-      held.map((h) => h.id),
-      marks,
-    );
-    totals.held += a.heldSessions;
-    for (const k of ['present', 'partial', 'late', 'absent', 'excused'] as const) totals[k] += a[k];
+    heldIds.push(...ids);
+    allMarks.push(...marks);
     const recordedBy = new Map(records.map((r) => [r.sessionId as string, r.teacher]));
     const teachers = new Map<string, { staffId: StaffMemberId; subject: string }>();
     for (const h of held) {
@@ -169,6 +170,7 @@ export async function buildStudentSummary(
     .orderBy(asc(academicAssessments.scheduledDate), asc(academicAssessments.code));
   const showRank = await rankVisible(db);
   const sendable = results.filter(({ r }) => r.state === 'scored' || r.state === 'absent');
+  const a = summariseAttendance(heldIds, allMarks, rule);
 
   const summary = academicStudentSummaryV1Schema.parse({
     contract: 'academic.student_summary',
@@ -177,7 +179,16 @@ export async function buildStudentSummary(
     studentId: student.id,
     window,
     enrolments: out,
-    attendance: totals,
+    attendance: {
+      held: a.heldSessions,
+      present: a.present,
+      partial: a.partial,
+      late: a.late,
+      absent: a.absent,
+      excused: a.excused,
+      ratePercent: a.ratePercent,
+      definition: attendanceDefinition(rule),
+    },
     results: sendable.map(({ r, a, run, subject, cohort }) => ({
       assessmentId: a.id,
       code: a.code,

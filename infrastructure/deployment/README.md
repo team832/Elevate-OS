@@ -25,7 +25,7 @@ Internet ──HTTPS──▶ reverse proxy / load balancer (TLS)
 5. Smoke test: `/api/health`, `/<zone>/api/v1/health`, sign-in, one page per module.
 
 ## Configuration
-- Secrets (`SESSION_SECRET`, `INTERNAL_SERVICE_TOKEN`, `DATABASE_URL`) come from the host's secret store, identical across the four apps; never from a committed file.
+- Secrets (`SESSION_SECRET`, `INTERNAL_SERVICE_TOKEN` — for go-live prefer `INTERNAL_SERVICE_TOKENS` with one token per module, so a workspace cannot claim another's identity, D-077 — and `DATABASE_URL`) come from the host's secret store, identical across the four apps; never from a committed file.
 - `PLATFORM_URL` = the public HTTPS origin (module apps accept Server Actions from it).
 - `NODE_ENV=production` turns on the `Secure` cookie flag — HTTPS is mandatory.
 

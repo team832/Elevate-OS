@@ -14,13 +14,19 @@ import {
   ErrorState,
   LoadingState,
   PageHeader,
-  StatusBadge,
 } from '@elevate/shared-ui';
 import { PLATFORM_PATHS } from '../../../../lib/shell';
 import { platformShell } from '../../../../server/shell';
 import { auditLabel, getUserDetail, userIdParams } from '../../../../server/users';
 import { JsonForm } from '../../../../ui/json-form';
-import { AccountStatus, fmtDay, fmtWhen, roleLabels, RoleChecklist } from '../../../../ui/users';
+import {
+  AccountStatus,
+  fmtDay,
+  fmtWhen,
+  RoleBadges,
+  roleLabels,
+  RoleChecklist,
+} from '../../../../ui/users';
 import '../users.css';
 
 export const metadata: Metadata = { title: 'Account · Users & roles' };
@@ -56,6 +62,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
         />
       ) : !parsed.success ? (
         <ErrorState
+          level={1}
           title="Not found"
           description="There is no account at this address."
           action={<a href={PLATFORM_PATHS.users}>Back to Users & roles</a>}
@@ -77,6 +84,7 @@ async function Account({ viewer, id }: { viewer: AuthenticatedUser; id: Authenti
     if (isAppError(error) && error.status === 404)
       return (
         <ErrorState
+          level={1}
           title="Not found"
           description={error.message}
           action={<a href={PLATFORM_PATHS.users}>Back to Users & roles</a>}
@@ -98,15 +106,7 @@ async function Account({ viewer, id }: { viewer: AuthenticatedUser; id: Authenti
         meta={
           <>
             <AccountStatus status={user.status} />
-            {roles.length ? (
-              roles.map((r) => (
-                <StatusBadge key={r} tone="neutral">
-                  {roleLabels([r])}
-                </StatusBadge>
-              ))
-            ) : (
-              <StatusBadge tone="warning">No roles yet</StatusBadge>
-            )}
+            <RoleBadges roles={roles} />
           </>
         }
         actions={

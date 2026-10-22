@@ -27,8 +27,7 @@ import { attendanceFacts, resultFacts, scoreTrends } from '../domain/student-rep
 export { academicStudentSummaryV1Schema as academicStudentSummarySchema };
 
 /** Absolute URL of an Academic OS path (`/academic/...`) for server-to-server calls. */
-export const academicUrl = (path: string) =>
-  `${appOrigin('academic')}${path}`;
+export const academicUrl = (path: string) => `${appOrigin('academic')}${path}`;
 
 const fetchAcademic = <S extends Parameters<typeof fetchInternal>[1]>(path: string, schema: S) =>
   fetchInternal(academicUrl(path), schema, { caller: 'ops', timeoutMs: 3000 });

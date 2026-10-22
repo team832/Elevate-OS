@@ -50,7 +50,7 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
             const quarantine = await listQuarantine(db);
             return (
               <div className="el-stack">
-                <form method="get" className="el-grid">
+                <form method="get" className="el-inline-form">
                   <Field id="q" label="Search title or code">
                     <TextInput id="q" name="q" defaultValue={q} />
                   </Field>
@@ -151,7 +151,7 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
                             <span key={i.id}>
                               <a href={modulePath(`ideas/${i.id}`)}>“{i.title}”</a>
                               {i.proposedCode
-                                ? ` → proposed ${i.proposedCode} (${i.proposedCodeStatus})`
+                                ? ` to proposed ${i.proposedCode} (${i.proposedCodeStatus})`
                                 : ' (would keep the ID?)'}
                               ;{' '}
                             </span>

@@ -386,12 +386,12 @@ describe('student report', () => {
     expect(r.data?.referenceCode).toMatch(/^SR-[0-9A-Z]{10}$/);
     expect(r.data?.fields).toEqual([
       'overview',
-      'programmes',
+      'kyc',
       'results',
       'attendance',
       'feedback',
       'fees',
-      'guardians',
+      'summary',
     ]);
     const [row] = await ctx.db
       .select()

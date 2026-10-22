@@ -67,7 +67,6 @@ Generated from the code by `npm run docs:permissions` (check with `npm run docs:
 | Permission | platform_admin | director | marketing_manager | marketing_contributor | academic_coordinator | teacher | admissions_counsellor | operations_manager | auditor | finance_officer |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | `platform:module:access` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `platform:dashboard:read` |  | ✓ |  |  |  |  |  | ✓ | ✓ |  |
 | `platform:users:read` | ✓ | ✓ |  |  |  |  |  |  | ✓ |  |
 | `platform:users:manage` | ✓ |  |  |  |  |  |  |  |  |  |
 | `platform:roles:manage` | ✓ |  |  |  |  |  |  |  |  |  |
@@ -140,7 +139,6 @@ Generated from the code by `npm run docs:permissions` (check with `npm run docs:
 | `ops:students:read` |  | ✓ |  |  | ✓ |  | own | ✓ | ✓ |  |
 | `ops:student_private:read` |  |  |  |  |  |  | own | ✓ |  |  |
 | `ops:lead_attribution:read` |  | ✓ |  |  |  |  |  | ✓ | ✓ |  |
-| `ops:lead_handoffs:manage` |  |  |  |  |  |  |  | ✓ |  |  |
 | `ops:admissions:convert` |  |  |  |  |  |  | own | ✓ |  |  |
 | `ops:admission_number:override` |  |  |  |  |  |  |  | ✓ |  |  |
 | `ops:admissions:confirm` |  | ✓ |  |  |  |  |  | ✓ |  |  |
@@ -150,12 +148,13 @@ Generated from the code by `npm run docs:permissions` (check with `npm run docs:
 | `ops:guardians:write` |  |  |  |  |  |  | own | ✓ |  |  |
 | `ops:student_reports:generate` |  |  |  |  |  |  | own | ✓ |  |  |
 | `ops:student_reports:review` |  |  |  |  |  |  |  | ✓ |  |  |
+| `ops:teacher_reports:generate` |  | ✓ |  |  |  |  |  | ✓ |  |  |
 | `ops:appointments:read` |  | ✓ |  |  |  | own | own | ✓ | ✓ |  |
 | `ops:appointments:manage` |  |  |  |  |  |  | own | ✓ |  |  |
 | `ops:event_messages:send` |  |  |  |  |  |  |  | ✓ |  |  |
-| `ops:teachers:read` |  | ✓ |  |  | ✓ | own | ✓ | ✓ | ✓ |  |
+| `ops:teachers:read` |  | ✓ |  |  | ✓ |  | ✓ | ✓ | ✓ |  |
 | `ops:teachers:manage` |  |  |  |  |  |  |  | ✓ |  |  |
-| `ops:feedback:read` |  | ✓ |  |  | ✓ | own | own | ✓ | ✓ |  |
+| `ops:feedback:read` |  | ✓ |  |  | ✓ |  | own | ✓ | ✓ |  |
 | `ops:feedback:acknowledge` |  |  |  |  |  |  | own | ✓ |  |  |
 | `ops:feedback:write` |  |  |  |  |  |  |  |  |  |  |
 | `ops:feedback:manage` |  |  |  |  |  |  |  |  |  |  |

@@ -557,14 +557,7 @@ export async function getLead(db: Database, actor: Actor, id: string) {
   };
 }
 
-const LEAD_RECORDS = [
-  'lead',
-  'enquiry',
-  'lead_activity',
-  'follow_up',
-  'duplicate_flag',
-  'lead_handoff',
-];
+const LEAD_RECORDS = ['lead', 'enquiry', 'lead_activity', 'follow_up', 'duplicate_flag'];
 
 /** Audit trail of a lead and everything linked to it; cases, demos, fees… only with `all`. */
 async function leadHistory(db: Database, leadId: string, all: boolean) {

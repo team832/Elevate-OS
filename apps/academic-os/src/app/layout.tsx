@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import '@elevate/shared-ui/styles.css';
+import '../ui/workspace.css';
 
 export const metadata: Metadata = {
   title: { default: 'Academic OS · Elevate OS', template: '%s · Elevate OS' },
@@ -8,8 +9,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  colorScheme: 'dark',
-  themeColor: '#000000',
+  colorScheme: 'light',
+  themeColor: '#f4f1eb',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

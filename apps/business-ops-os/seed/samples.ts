@@ -13,7 +13,6 @@
  * Fee plans use the sample fee structure (./sample-placeholders.ts). Remove samples:
  * `npm run db:clear-samples`.
  */
-import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import {
   opsAdmissions,
@@ -21,7 +20,6 @@ import {
   opsDemos,
   opsFollowUps,
   opsGuardians,
-  opsLeadHandoffReceipts,
   opsLeads,
   staffMembers,
   userRoles,
@@ -34,7 +32,6 @@ import type { IsoDateTime, RoleKey, StaffMemberId, UserId } from '@elevate/share
 import { addDays, istToday, type ExitStatus, type IsoDate } from '../src/domain';
 import type { AppointmentType } from '../src/domain/appointments';
 import { combinationLabel } from '../src/domain/catalog';
-import { publishMockLeadHandoff } from '../src/server/adapters/marketing-intake';
 import { recordAdmissionCheck } from '../src/server/admissions';
 import { changeAppointment, scheduleAppointment } from '../src/server/appointments';
 import { assignAdmissionNumber, convertDemo } from '../src/server/conversion';
@@ -54,7 +51,6 @@ import {
 } from '../src/server/fees';
 import { createFollowUp } from '../src/server/follow-ups';
 import { publishEnrolmentRequest } from '../src/server/enrolment';
-import { processLeadIntake } from '../src/server/lead-intake';
 import { createLead, logActivity } from '../src/server/leads';
 import { applyTransition } from '../src/server/pipeline';
 import { loadSettings } from '../src/server/settings';
@@ -466,40 +462,7 @@ export const SAMPLE_STUDENTS: readonly SampleStudent[] = [
 
 const emailOf = (s: SampleStudent) => `${s.first.toLowerCase()}.sample@example.test`;
 
-/**
- * Leads handed off by MOCK Marketing events (live sync is not configured). Mira shares Meera's
- * parent email, so intake sends her to duplicate review. The Marketing lead id is new on every
- * run: the outbox keeps processed events, so a fixed id would be ignored after db:clear-samples.
- */
-const HANDOFFS = [
-  {
-    source: { code: 'META_ADS', channel: 'Instagram ads (sample)' },
-    campaign: { ref: 'SAMPLE-CMP-CLAT-01', name: 'CLAT foundation enquiries (sample)' },
-    contacts: {
-      studentName: 'Naina Sample Student',
-      studentEmail: 'naina.sample@example.test',
-      guardianName: 'Naina Sample Parent',
-      guardianRelationship: 'mother' as const,
-      guardianEmail: 'naina.parent@example.test',
-    },
-    courseInterest: 'CLAT',
-    capturedDay: -1,
-  },
-  {
-    source: { code: 'META_ADS', channel: 'Facebook ads (sample)' },
-    campaign: { ref: 'SAMPLE-CMP-CUET-01', name: 'CUET enquiries (sample)' },
-    contacts: {
-      studentName: 'Mira Sample Student',
-      studentEmail: 'mira.sample@example.test',
-      guardianName: 'Meera Sample Parent',
-      guardianRelationship: 'mother' as const,
-      guardianEmail: 'meera.parent@example.test',
-    },
-    courseInterest: 'CUET',
-    capturedDay: 0,
-  },
-];
-export const SAMPLE_LEAD_COUNT = SAMPLE_STUDENTS.length + HANDOFFS.length;
+export const SAMPLE_LEAD_COUNT = SAMPLE_STUDENTS.length;
 
 export async function seedActor(db: Database, email: string) {
   const [u] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
@@ -659,33 +622,7 @@ export async function seedSamples(db: Database, log: (m: string) => void = () =>
   }
   await seedMeetingsAndFollowUps(db, { manager, counsellor }, teachers, today);
   await seedSampleLifecycle(db, log);
-
-  const marketingLeadIds: string[] = [];
-  for (const { capturedDay, ...h } of HANDOFFS) {
-    if (await leadExists(db, h.contacts.studentEmail)) continue;
-    const marketingLeadId = randomUUID();
-    marketingLeadIds.push(marketingLeadId);
-    await publishMockLeadHandoff(db, {
-      ...h,
-      sourceReference: 'Sample landing-page form',
-      marketingLeadId,
-      consent: { status: 'given', by: 'guardian', allowedChannels: ['call', 'email'] },
-      capturedAt: at(capturedDay, 10),
-    } as never);
-  }
-  if (marketingLeadIds.length) {
-    await processLeadIntake(db, { actor: manager.actor });
-    const receipts = await db
-      .select({ leadId: opsLeadHandoffReceipts.leadId })
-      .from(opsLeadHandoffReceipts)
-      .where(inArray(opsLeadHandoffReceipts.marketingLeadId, marketingLeadIds));
-    const ids = receipts.flatMap((r) => (r.leadId ? [r.leadId] : []));
-    if (ids.length)
-      await db.update(opsLeads).set({ isSample: true }).where(inArray(opsLeads.id, ids));
-  }
-  log(
-    `ops.samples: ${added} demo case(s) and ${marketingLeadIds.length} Marketing handoff(s) added`,
-  );
+  log(`ops.samples: ${added} demo case(s) added`);
 }
 
 /**
@@ -947,7 +884,7 @@ export const sampleSeeds = [
       'ops.lead-sources',
       'ops.staff',
     ],
-    description: `The sample set (D-036): ${SAMPLE_STUDENTS.length} demo cases (demo, conversion, enrolment, hold and exit cases) and ${HANDOFFS.length} mock Marketing handoffs`,
+    description: `The sample set (D-036): ${SAMPLE_STUDENTS.length} demo cases (demo, conversion, enrolment, hold and exit cases)`,
     run: ({ db, log }) => seedSamples(db, log),
   }),
 ];

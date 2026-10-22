@@ -16,7 +16,7 @@
  * - operations_manager holds every Ops permission.
  * - director reads everything, approves fee arrangements and confirms admissions.
  * - auditor reads only.
- * - teacher reads own appointments and own profile; never moderates feedback about themselves.
+ * - teacher reads own appointments; never moderates feedback about themselves.
  *   Teachers write student reviews in Academic OS (owner answer 21 Oct 2026, supersedes D-043):
  *   Ops reads submitted versions and acknowledges them, and never edits a teacher's words, so
  *   `ops:feedback:write` and `ops:feedback:manage` are held by no role (kept until their routes go).
@@ -41,7 +41,7 @@ export const opsPermissionList = [
   {
     key: 'ops:lead_contacts:read',
     description:
-      "See the contact details recorded on a lead (student and parent phone/email, city, school, consent) to follow it up (own = leads you own). Never KYC documents, student records or fees.",
+      'See the contact details recorded on a lead (student and parent phone/email, city, school, consent) to follow it up (own = leads you own). Never KYC documents, student records or fees.',
   },
   {
     key: 'ops:leads:merge',
@@ -92,14 +92,10 @@ export const opsPermissionList = [
     key: 'ops:student_private:read',
     description: 'Student and guardian contact details, consent and administrative documents.',
   },
-  // --- Marketing lead handoff (owner brief §10) ----------------------------------------------
+  // --- Marketing attribution (owner brief §10; the lead handoff flow was retired, D-075) -------
   {
     key: 'ops:lead_attribution:read',
-    description: 'See Marketing attribution of handed-off leads (source reference, campaign).',
-  },
-  {
-    key: 'ops:lead_handoffs:manage',
-    description: 'Retry failed Marketing lead handoffs (audited).',
+    description: 'See Marketing attribution of leads (source reference, campaign).',
   },
   // --- conversion, admission numbers, student lifecycle, guardians, reports (brief §6–§9) ----
   {
@@ -142,6 +138,11 @@ export const opsPermissionList = [
     key: 'ops:student_reports:review',
     description:
       'Review and finalise a student report written by someone else. Holders are proposed (owner to confirm).',
+  },
+  {
+    key: 'ops:teacher_reports:generate',
+    description:
+      'Generate and download a teacher’s internal report (BDM meetings, analysis; stored snapshot, audited). Director and operations manager; teachers never report on themselves.',
   },
   // --- counselling & meetings, teachers, feedback (brief §8H, §11, §12) ----------------------
   {
@@ -262,6 +263,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       ...reads,
       'ops:admissions:approve',
       'ops:admissions:confirm',
+      'ops:teacher_reports:generate',
       own('ops:tasks:write'),
       'ops:eod:review',
     ],
@@ -278,12 +280,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       'ops:feedback:read',
       ...ownTasks,
     ],
-    teacher: [
-      own('ops:appointments:read'),
-      own('ops:teachers:read'),
-      own('ops:feedback:read'),
-      ...ownTasks,
-    ],
+    teacher: [own('ops:appointments:read'), ...ownTasks],
     // PROPOSED (owner to confirm, D-073): Marketing OS works leads, sources and follow-ups on the
     // one lead record, plus its own tasks/EOD. No ops:module:access, no student-private, KYC,
     // fee or review permissions.

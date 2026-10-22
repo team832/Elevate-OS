@@ -10,7 +10,7 @@ import { addDays, daysBetween, isIsoDate, istToday, type IsoDate, type KpiWindow
 import { reviewsAuthored } from './academic-reviews';
 import { buildAdmissionsOverview } from './admissions-overview';
 import type { Actor } from './context';
-import { buildDashboard } from './dashboard';
+import { activitySeries, buildDashboard } from './dashboard';
 import { listCollections, listOutstanding } from './fee-collections';
 import { buildAdmissionsFunnel, buildAdmissionsReport } from './reports/admissions';
 import { fetchCrossModuleSummaries, type SummaryFetchOptions } from './summaries';
@@ -102,24 +102,40 @@ export async function buildOverview(
   const admissions = has('ops:admissions:read');
   const fees = has('ops:fees:read');
   const dashboard = has('ops:dashboard:read');
-  const tooLong = daysBetween(range.from, range.to) >= MAX_PERIOD_DAYS;
-  const [funnel, report, pipeline, collections, outstanding, crossModule, reviews, team, kpis] =
-    await Promise.all([
-      part(admissions, () => buildAdmissionsFunnel(db, actor, { ...range, now })),
-      part(admissions, () => buildAdmissionsReport(db, actor, { ...range, now })),
-      part(admissions, () => buildAdmissionsOverview(db, actor, { ...range, now })),
-      part(fees, () => listCollections(db, actor, { ...range, page: 1 })),
-      part(fees, () => listOutstanding(db, actor, { page: 1 }, now)),
-      part(dashboard, () => fetchCrossModuleSummaries(range, summaries)),
-      part(has('ops:feedback:read', 'ops:teachers:read'), () => reviewsInRange(db, actor, range)),
-      has('ops:tasks:read') && tooLong
-        ? {
-            ok: false as const,
-            reason: `Choose ${MAX_PERIOD_DAYS} days or fewer to see task and EOD figures.`,
-          }
-        : part(has('ops:tasks:read'), () => periodReport(db, actor, range)),
-      part(dashboard, () => buildDashboard(db, actor, { now, window: range, summaries: false })),
-    ]);
+  const span = daysBetween(range.from, range.to);
+  const tooLong = span >= MAX_PERIOD_DAYS;
+  const [
+    funnel,
+    report,
+    pipeline,
+    collections,
+    outstanding,
+    crossModule,
+    reviews,
+    team,
+    kpis,
+    series,
+  ] = await Promise.all([
+    part(admissions, () => buildAdmissionsFunnel(db, actor, { ...range, now })),
+    part(admissions, () => buildAdmissionsReport(db, actor, { ...range, now })),
+    part(admissions, () => buildAdmissionsOverview(db, actor, { ...range, now })),
+    part(fees, () => listCollections(db, actor, { ...range, page: 1 })),
+    part(fees, () => listOutstanding(db, actor, { page: 1 }, now)),
+    part(dashboard, () => fetchCrossModuleSummaries(range, summaries)),
+    part(has('ops:feedback:read', 'ops:teachers:read'), () => reviewsInRange(db, actor, range)),
+    has('ops:tasks:read') && tooLong
+      ? {
+          ok: false as const,
+          reason: `Choose ${MAX_PERIOD_DAYS} days or fewer to see task and EOD figures.`,
+        }
+      : part(has('ops:tasks:read'), () => periodReport(db, actor, range)),
+    part(dashboard, () => buildDashboard(db, actor, { now, window: range, summaries: false })),
+    // Per-day leads and conversions: activitySeries counts back from "today", so a noon-IST instant
+    // on the range's last day makes its window exactly the range.
+    part(has('ops:leads:read'), () =>
+      activitySeries(db, actor, { now: new Date(`${range.to}T12:00:00+05:30`), days: span + 1 }),
+    ),
+  ]);
   return {
     asOf: now.toISOString(),
     range,
@@ -132,6 +148,7 @@ export async function buildOverview(
     reviews,
     team,
     kpis,
+    series,
   };
 }
 export type Overview = Awaited<ReturnType<typeof buildOverview>>;

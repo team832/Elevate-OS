@@ -28,7 +28,7 @@ export function searchFor(user: AuthenticatedUser): AppShellProps['search'] {
 
 export async function platformShell(
   user: AuthenticatedUser,
-  active: 'overview' | 'dashboard' | 'users',
+  active: 'overview' | 'users',
 ): Promise<Extras> {
   const canUsers = can(user, 'platform:users:read');
   let unread: number | null = null;
@@ -41,15 +41,6 @@ export async function platformShell(
   }
   return {
     nav: [
-      ...(can(user, 'platform:dashboard:read')
-        ? [
-            {
-              href: PLATFORM_PATHS.dashboard,
-              label: 'Leadership dashboard',
-              active: active === 'dashboard',
-            },
-          ]
-        : []),
       ...(canUsers
         ? [{ href: PLATFORM_PATHS.users, label: 'Users & roles', active: active === 'users' }]
         : []),

@@ -96,3 +96,14 @@ Statuses per D-013; evidence files are in `tests/`. Screens without automated te
 | Teacher holds no `ops:module:access` (only Academic OS) | Proposed (owner to confirm, D-073); in the code | `packages/authorization/tests/workspaces.test.ts` |
 | My Attendance (staff attendance) | Proposed — not built; needs OD-026 and a proposed `ops.staff_attendance` table | — |
 | Resources (teaching materials) | Proposed — not built; no material store | — |
+
+## 22 Oct 2026 — redesign and cross-workspace integrity (D-074, D-076)
+
+| Part | Status | Evidence / notes |
+|---|---|---|
+| Shared light system on every Academic screen (`workspace.css`, 287 lines on `--el-*` tokens, imported once in the layout); toolbars on `el-inline-form` with the `Filter` helper; print via `Canvas` / `CanvasText` | Tested (screens) / Implemented | `unit/screens.test.tsx` (+4 on 22 Oct) |
+| My day: teacher hero + timeline + tiles; coordinator tiles, coverage per batch as a bar chart, attendance and delivery per programme as bar charts (`max` 100, only when the summary has programmes), intake tiles, `EmptyState` everywhere | Tested (screens, service) / Implemented | `unit/screens.test.tsx`, `integration/teachers-myday.test.ts` |
+| Attendance marks as radio pills with the blank "not recorded" pill first (same field names and values as before) | Tested (screens) | `unit/screens.test.tsx` |
+| Per-student summary sends `attendance.ratePercent` (null when nothing countable) and `attendance.definition` per the `attendance.denominator` setting; Business Ops never recomputes | Tested | `integration/student-summary.test.ts` |
+| Teacher activity for staff with no assignment in the window: sessions, logs, attendance and marking `missing` "No teaching assignments" (reviews still measured) | Tested | `integration/teachers-myday.test.ts` |
+| Review form: privacy hint on all six evidence fields, `maxLength` 1,500 (**Proposed**; the contract keeps 4,000), visibility hint naming the readers, `aria-describedby` | Tested (screens) | `unit/screens.test.tsx`; D-076 |

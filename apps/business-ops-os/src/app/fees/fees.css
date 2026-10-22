@@ -14,7 +14,7 @@
   gap: var(--el-space-1);
   min-width: 0;
 }
-.ops-fees-bar .ops-hbar-track {
+.ops-fees-bar .el-hbar-track {
   justify-self: stretch;
 }
 .ops-fees-amount {

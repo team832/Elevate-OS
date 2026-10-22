@@ -1,4 +1,4 @@
-/* Admissions (tokens only): period toolbar, demo-day cards, follow-up cell, convert action bar. */
+/* Admissions (tokens only): period toolbar, demo-day tiles, follow-up cell, convert action bar. */
 .ops-admissions-period,
 .ops-admissions-followup,
 .ops-admissions-day-head {
@@ -10,13 +10,8 @@
 :not(.el-stack) > .ops-admissions-period {
   margin-bottom: var(--el-space-4); /* the admissions report places it outside an el-stack */
 }
-.ops-admissions-period .ops-presets {
+.ops-admissions-period .el-subnav {
   margin: 0;
-}
-.ops-admissions-period .ops-presets a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.5rem;
 }
 .ops-admissions-period select {
   max-width: 16rem;
@@ -47,9 +42,9 @@
   align-content: start;
   gap: var(--el-space-3);
   padding: var(--el-space-4);
-  background: var(--el-surface-muted);
-  border: 1px solid var(--el-border-strong);
-  border-radius: var(--el-radius-sm);
+  background: var(--el-surface);
+  border-radius: var(--el-radius);
+  box-shadow: var(--el-shadow);
 }
 .ops-admissions-day-head {
   align-items: baseline;
@@ -58,18 +53,12 @@
 .ops-admissions-day-head strong {
   font: 650 var(--el-text-lg) var(--el-font-display);
 }
+/* The convert form's action bar sticks to the page bottom (glass, like the pop-up footer in ops.css). */
 .ops-admissions-form .ops-form-footer {
-  position: sticky;
   bottom: 0;
-  z-index: 2;
-  flex-flow: row wrap;
-  justify-content: flex-end;
-  align-items: center;
+  margin: 0;
   padding: var(--el-space-3) 0;
-  border-top: 1px solid var(--el-border);
-  background: var(--el-bg);
 }
-.ops-admissions-period > [role='status'],
-.ops-admissions-form .ops-form-footer > :is(.el-alert, [role='status']) {
+.ops-admissions-period > [role='status'] {
   flex-basis: 100%;
 }

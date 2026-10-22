@@ -128,6 +128,61 @@ describe('cross-module summaries (stubbed fetch)', () => {
     expect(html).toContain('HTTP 503');
     expect(html).toContain('Missing');
   });
+
+  it('no "Missing" tile for metrics no source measures (at risk; engagement, followers, attributed leads)', () => {
+    const metrics = (keys: string[], missing: string[]) =>
+      Object.fromEntries(keys.map((k, i) => [k, m(missing.includes(k) ? null : i)]));
+    const at = '2026-10-18T06:00:00Z';
+    const html = renderToStaticMarkup(
+      CrossModulePanels({
+        summaries: {
+          academic: {
+            status: 'available',
+            fetchedAt: at,
+            data: {
+              ...academicPayload,
+              metrics: metrics(Object.keys(academicPayload.metrics), ['studentsAtRisk']),
+            } as never,
+          },
+          marketing: {
+            status: 'available',
+            fetchedAt: at,
+            data: {
+              contract: 'marketing.summary',
+              version: 1,
+              generatedAt: at,
+              window,
+              metrics: metrics(
+                [
+                  'ideasCaptured',
+                  'contentApproved',
+                  'postsScheduled',
+                  'postsPublished',
+                  'totalReach',
+                  'engagementRate',
+                  'followerGrowth',
+                  'leadsAttributed',
+                ],
+                ['engagementRate', 'followerGrowth', 'leadsAttributed'],
+              ),
+              accounts: [],
+              dataSources: [],
+            } as never,
+          },
+        },
+      }),
+    );
+    expect(html).toContain('Active enrolments (now)');
+    expect(html).toContain('Posts published');
+    for (const dead of [
+      'Missing',
+      'Students at risk',
+      'Engagement rate',
+      'Follower growth',
+      'Leads attributed',
+    ])
+      expect(html).not.toContain(dead);
+  });
 });
 
 describe('dashboard KPIs (live DB)', () => {

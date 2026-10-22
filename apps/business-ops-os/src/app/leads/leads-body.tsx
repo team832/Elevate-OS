@@ -1,20 +1,13 @@
 import type { ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { Alert, ButtonLink, EmptyState, PageHeader, StatusBadge, Tabs } from '@elevate/shared-ui';
+import { ButtonLink, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import { ADMISSION_STATUS_LABELS, type AdmissionStatus } from '../../domain';
-import { MARKETING_INTAKE_STATUS } from '../../server/adapters/marketing-intake';
-import {
-  LEAD_HANDOFF_STATUSES,
-  listLeadHandoffs,
-  type LeadHandoffStatus,
-} from '../../server/lead-intake';
 import { listDuplicateQueue } from '../../server/lead-duplicates';
 import { getLead, LEAD_LIST_FLAGS, listLeads } from '../../server/leads';
 import { formOptions } from '../../server/options';
-import { ActionForm } from '../../ui/action-form';
 import { StatCard } from '../../ui/charts';
-import { fmtDateTime, humanise, statusTone } from '../../ui/format';
+import { fmtDateTime, statusTone } from '../../ui/format';
 import { load, Section } from '../../ui/frame';
 import { LeadCreateForm } from '../../ui/lead-create-form';
 import { listHref, options, Pager, SearchPanel } from '../../ui/list-controls';
@@ -66,14 +59,7 @@ const STAGES = [
   'admission_pending',
 ] as const satisfies readonly AdmissionStatus[];
 
-const HANDOFF_TONE: Record<LeadHandoffStatus, 'success' | 'warning' | 'danger' | 'info'> = {
-  received: 'info',
-  accepted: 'success',
-  duplicate_review: 'warning',
-  failed: 'danger',
-};
-
-/** `<base>/leads`: the lead list with stage figures, Marketing handoffs, merge review and pop-ups. */
+/** `<base>/leads`: the lead list with stage figures, merge review and pop-ups. */
 export function LeadsBody({ user, base, searchParams: sp, tabs }: LeadsBodyProps) {
   return (
     <>
@@ -101,22 +87,18 @@ export function LeadsBody({ user, base, searchParams: sp, tabs }: LeadsBodyProps
 
 async function Body({ user, sp, base }: { user: AuthenticatedUser; sp: Params; base: string }) {
   const BASE = `${base}/leads`;
-  const marketing = sp.view === 'marketing';
-  const status = LEAD_HANDOFF_STATUSES.find((s) => s === sp.status);
   const act = LEAD_ACTS.find((a) => a === sp.act);
   const r = await load(async (db) => {
-    const [leads, handoffs, duplicates, open, opts] = await Promise.all([
-      listLeads(db, user, { q: marketing ? undefined : sp.q }),
-      listLeadHandoffs(db, user),
+    const [leads, duplicates, open, opts] = await Promise.all([
+      listLeads(db, user, { q: sp.q }),
       can(user, 'ops:leads:merge') ? listDuplicateQueue(db, user) : null,
       sp.open ? getLead(db, user, sp.open) : null,
       sp.new || act ? formOptions(db) : null,
     ]);
-    return { leads, handoffs, duplicates, open, opts };
+    return { leads, duplicates, open, opts };
   });
   if (!r.ok) return r.view;
-  const { leads, handoffs, duplicates, open, opts } = r.data;
-  const handoffTotal = LEAD_HANDOFF_STATUSES.reduce((n, s) => n + handoffs.counts[s], 0);
+  const { leads, duplicates, open, opts } = r.data;
   const closeHref = listHref(BASE, sp, { open: undefined, act: undefined });
   return (
     <div className="el-stack">
@@ -127,31 +109,12 @@ async function Body({ user, sp, base }: { user: AuthenticatedUser; sp: Params; b
               label={ADMISSION_STATUS_LABELS[stage]}
               value={leads.filter((l) => l.status === stage).length}
               href={listHref(BASE, { stage })}
-              current={!marketing && sp.stage === stage}
+              current={sp.stage === stage}
             />
           </li>
         ))}
       </ul>
-      <Tabs
-        idBase="lead-views"
-        label="Lead views"
-        selected={marketing ? 'marketing' : 'all'}
-        items={[
-          { key: 'all', label: 'All leads', href: BASE, count: leads.length },
-          {
-            key: 'marketing',
-            label: 'From Marketing',
-            href: listHref(BASE, { view: 'marketing' }),
-            count: handoffTotal,
-          },
-        ]}
-      >
-        {marketing ? (
-          <Handoffs user={user} sp={sp} status={status} data={handoffs} base={base} />
-        ) : (
-          <LeadList sp={sp} rows={leads} base={base} />
-        )}
-      </Tabs>
+      <LeadList sp={sp} rows={leads} base={base} />
       {duplicates ? (
         <Segment
           title="Merge review"
@@ -327,138 +290,6 @@ function LeadList({ sp, rows: all, base }: { sp: Params; rows: LeadRow[]; base: 
         ]}
       />
       <Pager basePath={BASE} params={sp} page={page} pageSize={PAGE_SIZE} total={rows.length} />
-    </div>
-  );
-}
-
-/** Leads handed off by Marketing OS (receipts of `marketing.lead.handed_off`). */
-function Handoffs({
-  user,
-  sp,
-  status,
-  data,
-  base,
-}: {
-  user: AuthenticatedUser;
-  sp: Params;
-  status?: LeadHandoffStatus;
-  data: Awaited<ReturnType<typeof listLeadHandoffs>>;
-  base: string;
-}) {
-  const BASE = `${base}/leads`;
-  // Jobs and demo booking are Business Operations screens.
-  const ops = base === '/ops';
-  const q = sp.q?.trim().toLowerCase();
-  const items = data.items.filter(
-    (h) => (!status || h.status === status) && (!q || h.studentName.toLowerCase().includes(q)),
-  );
-  const retry = can(user, 'ops:lead_handoffs:manage');
-  const book = ops && can(user, 'ops:leads:write');
-  return (
-    <div className="el-stack">
-      <Alert tone="info" title={MARKETING_INTAKE_STATUS.label}>
-        {MARKETING_INTAKE_STATUS.detail}
-      </Alert>
-      {ops && can(user, 'ops:jobs:run') ? (
-        <ActionForm
-          action={`${base}/api/v1/jobs/lead-intake`}
-          submitLabel="Process waiting handoffs now"
-          variant="secondary"
-          compact
-        />
-      ) : null}
-      <SearchPanel
-        action={BASE}
-        hidden={{ view: 'marketing' }}
-        search={{ name: 'q', label: 'Student name', value: sp.q }}
-        filters={[
-          {
-            name: 'status',
-            label: 'Handoff status',
-            type: 'select',
-            value: status,
-            options: options(LEAD_HANDOFF_STATUSES).map((o) => ({
-              ...o,
-              label: `${o.label} (${data.counts[o.value as LeadHandoffStatus]})`,
-            })),
-          },
-        ]}
-      />
-      <RecordTable
-        caption={`${items.length} handoff receipt${items.length === 1 ? '' : 's'}`}
-        rows={items}
-        rowKey={(h) => h.id}
-        empty={
-          <EmptyState
-            title="No handoffs here"
-            description="Leads appear here once Marketing OS sends them. Live sync is not configured yet."
-          />
-        }
-        columns={[
-          {
-            key: 'student',
-            header: 'Student',
-            render: (h) =>
-              h.leadId ? (
-                <a href={listHref(BASE, { open: h.leadId })}>{h.studentName}</a>
-              ) : (
-                h.studentName
-              ),
-          },
-          {
-            key: 'status',
-            header: 'Handoff',
-            render: (h) => (
-              <StatusBadge tone={HANDOFF_TONE[h.status]}>{humanise(h.status)}</StatusBadge>
-            ),
-          },
-          { key: 'source', header: 'Source', render: (h) => h.sourceCode },
-          {
-            key: 'interest',
-            header: 'Course interest',
-            render: (h) => h.courseInterest ?? 'Not given',
-          },
-          ...(data.attributionVisible
-            ? [
-                {
-                  key: 'campaign',
-                  header: 'Campaign',
-                  render: (h: (typeof items)[number]) =>
-                    h.attribution?.campaignName ?? h.attribution?.campaignRef ?? 'Not given',
-                },
-              ]
-            : []),
-          { key: 'captured', header: 'Captured', render: (h) => fmtDateTime(h.capturedAt) },
-          {
-            key: 'attempts',
-            header: 'Processing',
-            render: (h) =>
-              `${h.attempts} attempt${h.attempts === 1 ? '' : 's'}${h.duplicateDeliveries ? `, ${h.duplicateDeliveries} repeat(s) ignored` : ''}${h.lastError ? `: ${h.lastError}` : ''}`,
-          },
-          {
-            key: 'action',
-            header: 'Next step',
-            render: (h) =>
-              h.status === 'failed' ? (
-                retry ? (
-                  <ActionForm
-                    action={`${base}/api/v1/leads/handoffs/${h.id}/retry`}
-                    submitLabel="Retry handoff"
-                    compact
-                  />
-                ) : (
-                  'A manager can retry it'
-                )
-              ) : h.status === 'duplicate_review' ? (
-                <a href={listHref(BASE, { flag: 'duplicate' })}>Review the duplicate</a>
-              ) : h.leadId && book ? (
-                <a href={`${base}/admissions?new=1`}>Book a demo</a>
-              ) : (
-                'None'
-              ),
-          },
-        ]}
-      />
     </div>
   );
 }
