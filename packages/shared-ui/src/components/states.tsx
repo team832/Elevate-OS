@@ -22,14 +22,17 @@ export function EmptyState({
   title,
   description,
   action,
+  level = 2,
 }: {
   title: string;
   description?: ReactNode;
   action?: ReactNode;
+  /** 1 when the state is the whole page (e.g. "Page not found"), so the page keeps one h1. */
+  level?: 1 | 2;
 }) {
   return (
     <div className="el-state" data-state="empty">
-      <h2>{title}</h2>
+      {level === 1 ? <h1>{title}</h1> : <h2>{title}</h2>}
       {description ? <p>{description}</p> : null}
       {action ?? null}
     </div>

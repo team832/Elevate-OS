@@ -7,6 +7,7 @@ export default async function NotFound() {
   return (
     <main className="el-main">
       <EmptyState
+        level={1}
         title="Page not found"
         description="This address does not exist in Elevate OS."
         action={<ButtonLink href="/">Go home</ButtonLink>}

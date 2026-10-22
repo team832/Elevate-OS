@@ -8,6 +8,7 @@ export default async function NotFound() {
   return (
     <main className="el-main">
       <EmptyState
+        level={1}
         title="Page not found"
         description="This address does not exist in Marketing OS."
         action={<ButtonLink href={MODULE_PATHS.home}>Back to Marketing OS</ButtonLink>}

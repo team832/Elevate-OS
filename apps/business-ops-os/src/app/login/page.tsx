@@ -32,7 +32,7 @@ export default async function LoginPage({
       next={next}
       error={error}
       googleHref={googleSignInHref(next)}
-      subtitle="Sign in to Business Ops OS"
+      subtitle="Sign in to Business Operations"
     />
   );
 }

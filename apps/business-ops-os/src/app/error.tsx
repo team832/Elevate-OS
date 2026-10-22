@@ -17,7 +17,7 @@ export default function ErrorPage({ error, retry }: { error: unknown; retry: () 
             <Button variant="secondary" onClick={() => retry()}>
               Try again
             </Button>{' '}
-            <ButtonLink href="/ops">Back to Business Ops OS</ButtonLink>
+            <ButtonLink href="/ops">Back to Business Operations</ButtonLink>
           </>
         }
       />

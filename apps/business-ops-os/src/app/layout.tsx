@@ -4,7 +4,7 @@ import '@elevate/shared-ui/styles.css';
 import './ops.css';
 
 export const metadata: Metadata = {
-  title: { default: 'Business Ops · Elevate OS', template: '%s · Elevate OS' },
+  title: { default: 'Business Operations · Elevate OS', template: '%s · Elevate OS' },
   robots: { index: false, follow: false },
 };
 
