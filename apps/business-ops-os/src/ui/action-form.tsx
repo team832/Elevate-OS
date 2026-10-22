@@ -345,7 +345,6 @@ export function ActionForm({
         <label htmlFor={id}>
           {f.label}
           {suffix}
-          {f.required ? ' *' : ''}
         </label>
         {f.type === 'textarea' || f.type === 'json' ? (
           <textarea

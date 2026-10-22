@@ -192,7 +192,7 @@ export function ApiForm({ action, method = 'POST', fields, submitLabel, extra, w
         }
         const common = { id, name: f.name, required: f.required, defaultValue: f.defaultValue === undefined ? undefined : String(f.defaultValue), placeholder: f.placeholder, 'aria-describedby': f.hint ? `${id}-hint` : undefined };
         return (
-          <Field key={f.name} id={id} label={`${f.label}${f.required ? ' *' : ''}`} hint={f.hint}>
+          <Field key={f.name} id={id} label={f.label} hint={f.hint}>
             {type === 'select' || type === 'multi-select' ? (
               <Select {...common} multiple={type === 'multi-select'} size={type === 'multi-select' ? Math.min(8, f.options?.length ?? 0) : undefined}>
                 {!f.required && type === 'select' ? <option value="">—</option> : null}

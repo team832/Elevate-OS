@@ -55,7 +55,8 @@ describe('ApiForm', () => {
   );
 
   it('labels every field, marks required ones and links hints', () => {
-    expect(out).toContain('<label for="b-code">Batch code *</label>');
+    // The red "*" comes from the shared CSS on required controls; the label text has none.
+    expect(out).toContain('<label for="b-code">Batch code</label>');
     expect(out).toMatch(
       /<input[^>]*id="b-code"[^>]*required=""[^>]*aria-describedby="b-code-hint"/,
     );

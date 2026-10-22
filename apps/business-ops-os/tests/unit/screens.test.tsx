@@ -378,7 +378,7 @@ describe('tasks and end-of-day reports', () => {
 
   it('quick add: labelled, required marked, button names the action', () => {
     const out = html(<QuickAdd action="/ops/api/v1/staff-tasks" version="1" />);
-    expect(out).toMatch(/<label for="([^"]+)">Quick add: what came in\? \*<\/label>/);
+    expect(out).toMatch(/<label for="([^"]+)">Quick add: what came in\?<\/label>/); // "*" via CSS
     expect(out).toMatch(/<input[^>]*required=""/);
     expect(out).toContain('>Add task</button>');
   });

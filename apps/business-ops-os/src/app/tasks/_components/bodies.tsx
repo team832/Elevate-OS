@@ -58,7 +58,7 @@ export async function TasksHeader({
 }
 
 const VIEWS = { day: MyDay, all: AllTasks, eod: EodReport };
-const LABELS = { day: 'My day', all: 'Task tracker', eod: 'End-of-day report' };
+const LABELS = { day: 'My tasks', all: 'Task tracker', eod: 'End-of-day report' };
 const DESCRIPTIONS = {
   day: 'Log work as it comes in and keep each task up to date.',
   all: 'Every task you may see, with filters.',
