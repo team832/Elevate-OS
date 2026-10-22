@@ -19,8 +19,17 @@ What I did:
   every fee change needs a second person's approval.
 - Staff have "My day" tasks and a daily end-of-day report their manager can read.
 - The screens keep the dark look with a new, clearer layout and menu.
-What I need from you: change the password of the team@ account (steps below), then the
-  decisions in the table below, one at a time.
+- Academic: teachers get "My day", class pages to mark attendance and "Mark delivered",
+  a teaching log, marks entry and student reviews. Coordinators place students in batches,
+  publish timetables, handle substitutes and see coverage and reports (print and CSV).
+- Teacher reviews are now written in Academic; Business Ops reads them and can acknowledge
+  them, but cannot change them. Demo attendance for a linked class is marked by its teacher.
+- Tasks: acknowledge, review, block and reassign with full history; end-of-day reports are
+  built from what happened that day, with versions and a manager inbox; old Task Tracker
+  backups can be imported.
+- 12 fictional "Sample" teachers and sample classes for trying it out.
+What I need from you: change the password of the team@ account, update the database (step 2a
+  below), then the decisions in the table below, one at a time.
 What's next:
 - Final checks on every screen, then you try a full admission with sample data.
 - Choose where to host it, so it can go on the internet.
@@ -36,6 +45,8 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 4. Ask the developer to set a new password for it; turn it back on with **Enable account** once you have the new password. Do not send the new password in chat.
 
 **2. After pulling new code (on this computer only).** Open a terminal in the `elevate-os` folder and run, one at a time: `npm run db:start` (leave it open), then in a second terminal `npm run db:migrate`, then `npm run db:seed`. Never run these against a live database.
+
+**2a. Update the database for the 21 Oct teacher-workspace and task work (this computer only) — done on your computer on 21–22 Oct (migrations `0009`–`0011` applied, samples seeded).** On another computer: the new screens need database changes `0009`, `0010` and `0011`. With `npm run db:start` running, type `! npm run db:migrate` in the Claude Code chat (or run `npm run db:migrate` in a terminal in the `elevate-os` folder). It also fills in what can be known from existing records: each active enrolment's batch becomes a batch placement, and past end-of-day reports become version 1. Before you run it: the database must not have one student enrolled twice, both active, in the same course (the update adds a rule that forbids this). If it stops with an error that mentions `enrolments_active_student_course_key`, that is the cause: stop and tell the developer; nothing is changed. Then type `! npm run db:seed` to add the sample teachers and sample classes (all named "Sample …").
 
 **3. When it goes on the internet.** The search page puts what was typed in the address bar (`/ops/search?q=…`), which can be a phone number. In the hosting account, set request logs to **not keep query strings** (D-056). The developer does this with you on go-live day.
 
@@ -56,8 +67,28 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | Student or parent reports: which audiences, and should teacher names appear? | Staff-only reports |
 | The new menu grouping (Today, Admissions, Students, Money, People, Reports) (D-054) | As built |
 | The five draft syllabus courses and their codes; CA chapter weights (D-051) | Drafts, not used for teaching |
+| After a student moves to another batch, how long may the old teacher still write a review about them? | Only while the student is in a batch the teacher teaches that day |
+| The two review labels, "Staff only" and "May inform a reviewed parent summary": right words, right two choices? | As built |
+| May a teacher see a student before the teacher's assignment or the student's batch place starts? | No |
+| May coordinators link any class to a review, or only classes the writer taught? | Only classes the writer taught |
+| Who may read and acknowledge teacher reviews in Business Ops: counsellors (their own students) and the operations manager? | As stated (Proposed) |
+| Does a manager see only the end-of-day reports sent to them, or also older reports sent to someone else? | Only reports sent to them (Proposed) |
+| Must staff give a reason for every unfinished task when they send the end-of-day report? | No |
+| Who may cancel work that someone else assigned? | The person who created the task, or the operations manager |
+| When a task needs a review but no reviewer is named, who reviews it? | Only the operations manager can approve it |
+| Is there a time by which the end-of-day report must be sent? | No deadline (open) |
+| If Academic cannot be reached, may counsellors mark demo attendance for a class that is linked to an Academic class? | No; they wait until Academic is back |
+| Should staff with nobody reporting to them see the report "Inbox"? | Shown to managers and to everyone who may review reports |
+| Who should see the Reports item in the tasks menu? | Everyone who can open Tasks (they see only tasks they may see) |
+| Six sample teachers have no Academic classes because their subjects exist only in draft syllabus courses. Add sample batches on those draft courses? | No |
+| Academic attendance: does "late" count as attended, and are "excused" classes left out of the percentage? | Late counts; excused left out (Proposed) |
+| Show rank and percentile on Academic progress? | Hidden |
+| Academic trends: which results may be compared? | Same kind of test, same subject and same maximum marks (Proposed) |
+| Do tasks imported from the old Task Tracker count when measuring how often end-of-day reports were sent? | No; shown as "Imported — not sent" |
+| Who may close a task that has no reviewer? | The task owner (Proposed) |
+| Should end-of-day reports be sent outside the system (email or WhatsApp)? | Not connected; "Copy summary" and PDF only |
 
-Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), keep the dark look with a new layout (D-054).
+Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), keep the dark look with a new layout (D-054, confirmed again as D-059), teacher reviews written in Academic (D-058), demo attendance marked by the teacher in Academic (D-060), sample staff named "Sample …" with `@example.test` sign-ins (D-061).
 
 **What is not connected yet.** Email and text messages, event invitations, the social-media publishing tool, document uploads, a biometric device and a CRM are "pretend" connections: they record what would happen and never claim it happened. Hindi (Devanagari) text does not print in PDFs yet; it shows as "?" with a note.
 
@@ -72,7 +103,10 @@ Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), 
 | Foundation (sign-in, Google sign-in, Users & roles, sessions, roles, audit, outbox, approvals, shared UI) | Implemented, Tested | `IMPLEMENTATION_STATUS.md` |
 | Marketing OS, Academic OS | Implemented, Tested | `IMPLEMENTATION_STATUS.md`, `apps/*/README.md` |
 | Business Ops: admissions lifecycle, fees, students, events, exits, reports, search, daily tasks & EOD, new layout (D-038 … D-057) | Implemented, Tested (API); screens checked in Chrome by the coordinator | `IMPLEMENTATION_STATUS.md` "admissions lifecycle" section |
+| Academic teacher workspace: placements, classes and attendance, delivery, substitutes, timetable patterns, teaching log, coverage, reviews, marks and publication, progress, reports (D-058 … D-071) | Implemented, Tested (API); screens not yet browser-checked | `IMPLEMENTATION_STATUS.md` "teacher workspace" section, `apps/academic-os/README.md` |
+| Business Ops task tracker: task lifecycle and history, work updates, dependencies, end-of-day versions and manager inbox, task and period reports, tracker import, teacher directory, reviews read from Academic | Implemented, Tested (API); screens not yet browser-checked | same section, `apps/business-ops-os/README.md`, `docs/task-tracker-implementation.md` |
 | Migrations `0000` … `0008` | Implemented; applied to the local database only | `docs/DATABASE_MIGRATION_PLAN.md` |
+| Migrations `0009_academic_teacher_workspace_tasks`, `0010_link_academic_students_to_core`, `0011_mark_sample_academic_students` | **Applied on the owner's computer** 21–22 Oct (all frozen; next change = `0012`) | `packages/database/migrations/` |
 | Security headers and CSP with per-request nonces (all four apps) | Implemented, Tested (unit test + production smoke, §6) | §5 below |
 | Deployment, hosting, domain, monitoring, backups schedule | **Not built** (Proposed only) | `infrastructure/deployment/README.md` |
 | Password reset / change screen, shared login rate limit, outbox scheduler, Google re-authentication for confirmation | **Not built** | `infrastructure/deployment/README.md`; `C:\OPENBOT\Elevate-Not-Working` |
@@ -99,7 +133,7 @@ npm run dev                 # terminal 2: all four apps; open http://localhost:3
 
 Production-like run: `npm run build`, then `npm run start -w @elevate/<module>-os` for each module, then `npm run start -w @elevate/platform`.
 
-The seed users are fictional `@example.test` accounts. Since D-030 they cannot sign in, so a local sign-in needs a local `@elevateeducation.in` user or Google sign-in.
+The seed users are fictional `@example.test` accounts. They sign in on your own computer (password: `SEED_USER_PASSWORD` in the root `.env`); a production build refuses them (D-030), so a live site needs real `@elevateeducation.in` accounts.
 
 Checks: `npm run validate` runs typecheck, lint, tests and the secret scan. `npm run build` builds all four apps.
 
@@ -197,7 +231,7 @@ If a secret is ever committed, rotate it. Deleting the commit is not enough.
 | Publishing / metrics tool (e.g. Metricool, YouTube) | Marketing posting and numbers | Mock adapter: "SANDBOX: nothing was posted" | — |
 | CRM | Lead sync | Mock adapter (`apps/business-ops-os/src/server/adapters/crm.ts`) | — |
 | Document storage | Admission documents | Not connected: identity documents keep a masked reference only, no files | — |
-| Messaging (SMS / WhatsApp / email) | Event invitations, EOD "share" | Simulated and audited; a message is never marked sent without a provider reference | Owner (to choose) |
+| Messaging (SMS / WhatsApp / email) | Event invitations, sending EOD reports | Event messages simulated and audited (never marked sent without a provider reference); EOD reports: "Copy summary" and PDF, "External delivery not configured" | Owner (to choose) |
 | Attendance device / provider | Staff attendance | Mock adapter; manual entry and CSV import work | — |
 | Hosting, managed PostgreSQL, domain | Going live | Not chosen (owner decision) | Owner |
 
@@ -217,6 +251,14 @@ Limitations:
 - Module services often `select()` whole module rows. None are secret, but §6.6 prefers named columns, so that is a follow-up.
 - Error and 404 pages use an `h2` with no `h1`.
 - Signed-in screens were not browser-checked against the CSP.
+- No HR module: staff attendance and leave show "HR attendance unavailable". Teacher unavailability in Academic is a planning note, not HR leave.
+- Academic reports print from the browser and download as CSV; Academic makes no PDFs.
+- Not built: topics below chapter level, homework submissions, teaching-log reminders, bulk task changes, file uploads for evidence (links only).
+- Students who left or finished before 21 Oct 2026 have no batch history, so their attendance shows "Not recorded — no batch history before 21 Oct 2026".
+- A demo class linked in Academic that Business Ops has not read yet can still be marked by a counsellor until Ops next reads Academic successfully. A teacher can start a demo review only once the student is on an Academic class roster. The job that moves demos forward from Academic marks (`demo-academic-marks`) runs only when someone starts it; there is no scheduler.
+- Tasks (D-069): a manager who did not create a task cannot remove its review step (the operations manager can); if work comes back to the person who created it, that person gets back the creator's rights.
+- The Task Tracker import is tested with made-up backups only; your real browser exports are still needed (`docs/task-tracker-import-guide.md`).
+- The prototype (`C:\OPENBOT\Elevate`) does not show the 21 Oct work.
 
 Next three improvements, in priority order:
 1. **Go-live basics.** The owner chooses hosting. Then build HTTPS, CI deploy, error monitoring, an uptime check and a tested backup and restore (§15.1).

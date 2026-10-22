@@ -1,5 +1,7 @@
 # Business Ops OS — counselling & meetings, teachers, feedback (part for merging)
 
+> **Changed 21 Oct 2026 (D-058, supersedes D-043 for reviews):** teachers write student reviews in Academic OS. The Ops write paths for teacher → student feedback described below (POST/PATCH `/feedback/about-students`, `ops:feedback:write` / `:manage` grants) are removed; the old rows are read-only history; Ops reads submitted reviews from Academic and acknowledges them (`POST /review-acks`). Current routes: `../API.md`; rules: `../ALGORITHMS.md` A-75, A-MTG-4, A-MTG-5.
+
 > **Renamed on 21 Oct 2026 by migration `0005_clear_names` (D-036):** this note describes the 20 Oct build. `ops.counselling_sessions` is now `ops.appointments` (`starts_at`, `staff_id`; `attendees` dropped), the legacy demo columns `subjects`/`day_dates`/`status`/`is_sample` and `ops.demo_teachers` are gone, `student_identity_id` is `student_id`, `admissions.student_id` is `academic_student_id`, `guardian_ref` is `guardian_id`, `staff_ref` is `staff_code`. Current columns: [../DATA_DICTIONARY.md](../DATA_DICTIONARY.md).
 
 > **Merged on 21 Oct 2026.** Kept as a detailed appendix. Final ids: OPS-101 … OPS-108 (OPS-MTG-1 … 4 are OPS-105 … 108); rules A-MTG-1 … 3 are now A-73 … A-75. Canonical docs: `../../README.md`, `../../requirements/REQUIREMENTS.md`, `../DATA_MODEL.md`, `../WORKFLOWS.md`, `../API.md`, `../PERMISSIONS.md`, `../ALGORITHMS.md`, `../TEST_PLAN.md`, `../INTEGRATION_REQUESTS.md`. The migration it asks for exists: `packages/database/migrations/0003_admissions_workspace.sql`. Where this file and the canonical docs differ, the canonical docs win.
@@ -15,7 +17,7 @@ Owner brief 20 Oct 2026, chunks 6–7 (§8H, §11, §12). Built by build agent C
 | OPS-008 (ext.) | Teacher notified in-app on schedule/reschedule/cancel; email/SMS labelled "simulated — not sent" | **Tested** | integration → "201: persists…" |
 | OPS-008 (ext.) | Counselling linked to an admission still drives the pipeline (contacted → counselling_scheduled → counselled; last cancelled → contacted; rule follow-up) | **Tested** (existing admissions/seed tests use the legacy `/counselling` routes, now adapters) | `scheduleCounselling` / `updateCounselling` in `src/server/appointments.ts` |
 | OPS-MTG-1 | Teacher directory + profile: one `core.staff_members` row + `ops.staff_profiles` (display name, staff ref, name verification, role note kept apart from teaching, source note) + subject capabilities; picker by subject; workload = booked appointments + scheduled demo classes (capacity, not a score); batches "not available" (no Academic contract) | **Tested** (API, seed) · **Implemented** (screens) | integration → "teacher seed…" |
-| OPS-MTG-2 | Teacher → student feedback: structured, draft/final, final edits create a new version (`supersedes_id`), teacher writes only as self and only for students met in an appointment or demo class, managers for anyone; shown on the student profile | **Tested** | `tests/integration/feedback.test.ts` |
+| OPS-MTG-2 | Teacher → student feedback: **moved to Academic OS on 21 Oct 2026 (D-058).** Rows written in Ops before then are shown read-only (current and superseded versions); no Ops route writes them | **Tested** (read-only history) | `tests/integration/feedback.test.ts` "teacher → student reviews recorded in Ops before 21 Oct 2026"; Academic `apps/academic-os/tests/integration/reviews.test.ts` |
 | OPS-MTG-3 | Student/guardian → teacher feedback: recorded by staff on their behalf, moderated (pending → approved/rejected/hidden), teacher can never edit or moderate it, shown on the teacher profile only, teacher sees approved rows shared with them | **Tested** | `feedback.test.ts` |
 | OPS-MTG-4 | Owner-supplied teachers seeded (7 people, no contacts/logins/permissions) + Accountancy/CA as a subject with no teacher | **Tested** | integration → "teacher seed…" |
 
@@ -48,8 +50,8 @@ New in `packages/database/src/schema/ops-meetings.ts`: `opsAppointmentParticipan
 | `POST /counselling`, `POST /counselling/:id` | `ops:leads:write` + manage | legacy bodies, adapted to the service above |
 | `GET /teachers?subject&programmeCode` | `ops:teachers:read` (own = self) | directory + picker + unassigned subjects |
 | `GET/PATCH /teachers/:id` | read / `ops:teachers:manage` | PATCH replaces the subject list |
-| `GET /feedback/about-students?studentId`, `POST` | read / `anyOf(write, manage)` | teacher → student |
-| `PATCH /feedback/about-students/:id` | `anyOf(write, manage)` | in place or new version |
+| `GET /feedback/about-students?studentId` | read | teacher → student, read-only history (POST removed 21 Oct 2026, D-058) |
+| `PATCH /feedback/about-students/:id` | — | removed 21 Oct 2026 (D-058) |
 | `GET /feedback/about-teachers?teacherStaffId`, `POST` | read / `ops:feedback:record` | student/guardian → teacher |
 | `PATCH /feedback/about-teachers/:id` | `ops:feedback:moderate` | the only change allowed |
 

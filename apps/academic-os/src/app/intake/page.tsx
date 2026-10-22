@@ -68,7 +68,7 @@ async function Body({ access }: { access: PageAccess }) {
                   { key: 'programme', header: 'Programme', render: (p) => p.programmeCode },
                   { key: 'attempt', header: 'Attempt', numeric: true, render: (p) => p.attempt },
                   { key: 'outcome', header: 'Outcome', render: (p) => <StateBadge state={p.outcome} /> },
-                  { key: 'reason', header: 'Reason', render: (p) => (p.reasonCode ? `${p.reasonCode}: ${p.reason}` : p.existingStudent ? 'existing student reused' : 'new student') },
+                  { key: 'reason', header: 'Reason', render: (p) => (p.reasonCode ? `${p.reasonCode}: ${p.reason}` : `${p.existingStudent ? 'Existing student reused' : 'New student'}${p.reason ? `. ${p.reason}` : ''}`) },
                 ]}
               />
             </Card>

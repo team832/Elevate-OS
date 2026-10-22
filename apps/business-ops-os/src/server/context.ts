@@ -10,6 +10,7 @@ import { departments, programmes, staffMembers, userRoles, type Database } from 
 import { ForbiddenError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import type { DepartmentId, ProgrammeId, StaffMemberId, UserId } from '@elevate/shared-types';
 import { CODE_FORMATS, formatCode, type CodeKind } from '../domain';
+import { ancestorChain } from '../domain/graph';
 
 export type Actor = Principal;
 
@@ -21,6 +22,23 @@ export async function staffIdForUser(db: Database, userId: UserId): Promise<Staf
     .where(eq(staffMembers.userId, userId))
     .limit(1);
   return row?.id ?? null;
+}
+
+/**
+ * Every staff member whose `manager_id` chain leads to `staffId` (direct and indirect reports,
+ * R3), any status. A looping chain stops at the repeat (A-07).
+ * shortcut: loads every staff row (a few hundred at most); use a recursive CTE if staff grows large.
+ */
+export async function managedStaffIds(db: Database, staffId: string): Promise<StaffMemberId[]> {
+  const rows = await db
+    .select({ id: staffMembers.id, managerId: staffMembers.managerId })
+    .from(staffMembers);
+  const parent = new Map(rows.map((r) => [r.id as string, r.managerId]));
+  return rows
+    .filter(
+      (r) => r.id !== staffId && ancestorChain(r.id, (n) => parent.get(n)).chain.includes(staffId),
+    )
+    .map((r) => r.id);
 }
 
 export type AccessScope = { scope: 'all' } | { scope: 'own'; staffId: StaffMemberId | null };

@@ -14,6 +14,7 @@ import {
   studentIdSchema,
   userIdSchema,
 } from '../ids';
+import { coreStudentIdSchema } from '../summaries';
 import { defineEvent } from './define';
 
 /**
@@ -92,6 +93,12 @@ export const enrolmentRequestedV1Payload = z
      * reuse that student instead of creating a second one. Omitted when unknown.
      */
     existingStudentId: studentIdSchema.optional(),
+    /**
+     * Optional, additive (21 Oct 2026, R6): the canonical person (core.students.id) and the
+     * academic-year label (e.g. `2026-27`). Academic links its student to this person.
+     */
+    coreStudentId: coreStudentIdSchema.optional(),
+    academicYear: z.string().trim().min(1).max(20).optional(),
     notes: z.string().trim().max(2000).optional(),
   })
   .strict()

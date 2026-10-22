@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
 import { hashPassword } from '@elevate/authentication';
 import {
@@ -32,12 +32,12 @@ import { POST as checklist } from '../../src/app/api/v1/demos/[id]/checklist/rou
 import { POST as addSession } from '../../src/app/api/v1/demos/[id]/sessions/route';
 import { POST as mergeLead } from '../../src/app/api/v1/leads/[id]/merge/route';
 import { istToday } from '../../src/domain';
-import { createTeacherFeedback } from '../../src/server/feedback';
 import { feeRecordAction, recordFee } from '../../src/server/fees';
 import { POST as schedule } from '../../src/app/api/v1/appointments/route';
 import { getDemo as loadDemo } from '../../src/server/demos';
 import { sampleSeeds, TANISHA_EMAIL } from '../../seed/samples';
 import { referenceSeeds } from '../../seed/reference';
+import { review, reviewsPayload, stubAcademic } from './academic-stub';
 import { phone, setupReference, staffUser, type StaffUser } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -547,11 +547,16 @@ describe('demo days with several classes (acceptance 2)', () => {
     expect(teacherRows.every((c) => c.reason === 'Planned teacher was ill')).toBe(true);
     expect(d.teacherNames[t1.staffId]).toBe('Sample Maths Teacher');
     // Day 1's review is due from the substitute who taught the attended class (no teacher on the other).
-    expect(d.feedback.find((f) => f.dayNumber === 1)?.teachers).toEqual([
+    stubAcademic({ reviews: reviewsPayload([]), 'demo-attendance': { items: [] } });
+    const withReviews = await loadDemo(ctx.db, counsellor, demo.id);
+    vi.unstubAllGlobals();
+    expect(withReviews.feedback.find((f) => f.dayNumber === 1)?.teachers).toEqual([
       expect.objectContaining({ staffId: sub.staffId, isSubstitute: true, state: 'pending' }),
     ]);
   });
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 const caseOf = async (id: string) =>
   (
@@ -621,7 +626,7 @@ describe('canonical identity from booking (acceptance 1, brief §3)', () => {
     expect(ids[1]).toBe(ids[0]);
   });
 
-  it('a teacher can store a review of a demo class for a demo student (one feedback store)', async () => {
+  it('a review the class teacher submitted in Academic OS shows on the demo (owner answer 1)', async () => {
     const t = await staffUser(ctx.db, ['teacher'], { name: 'Sample Review Teacher' });
     const res = await callRoute<Demo>(
       createDemo,
@@ -646,21 +651,22 @@ describe('canonical identity from booking (acceptance 1, brief §3)', () => {
       },
     );
     const { studentId } = await caseOf(demo.admissionId);
-    await createTeacherFeedback(ctx.db, t, {
-      studentId: studentId!,
-      scope: 'demo_session',
-      demoSessionId: s1,
-      subject: 'Logic',
-      observedOn: istToday(new Date(Date.now() - 30 * 86_400_000)),
-      observations: 'Followed the argument structure well.',
-      status: 'final',
-      visibility: 'internal',
-    } as never);
+    const written = review({
+      authorStaffId: t.staffId as never,
+      coreStudentId: studentId as never,
+      reviewType: 'demo_session',
+      sessionDate: istToday(new Date(Date.now() - 30 * 86_400_000)) as never,
+      strengths: 'Followed the argument structure well.',
+    });
+    stubAcademic({
+      reviews: reviewsPayload([written], studentId),
+      'demo-attendance': { items: [] },
+    });
     const d = await loadDemo(ctx.db, manager, demo.id);
     expect(d.feedback[0]?.teachers).toEqual([
       expect.objectContaining({ staffId: t.staffId, state: 'submitted' }),
     ]);
-    expect(d.reviewTexts.map((r) => r.observations)).toEqual([
+    expect(d.reviews?.status === 'available' && d.reviews.reviews.map((r) => r.strengths)).toEqual([
       'Followed the argument structure well.',
     ]);
   });

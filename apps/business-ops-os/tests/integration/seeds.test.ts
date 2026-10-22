@@ -20,6 +20,19 @@ import {
   staffMembers,
   students,
   opsTeacherStudentFeedback,
+  notifications,
+  opsEodReports,
+  opsStaffTasks,
+  opsTaskEvents,
+  opsTaskUpdates,
+  userRoles,
+  users,
+  academicBatches,
+  academicCourses,
+  academicStudents,
+  opsEodReportVersions,
+  opsTaskDependencies,
+  programmes,
 } from '@elevate/database';
 import { coreSeeds, runSeeds } from '@elevate/database/seed';
 import { setupTestDatabase } from '@elevate/testing';
@@ -28,6 +41,13 @@ import { SAMPLE_LEAD_COUNT, SAMPLE_STUDENTS } from '../../seed/samples';
 import { ALLOWED_PROGRAMME_COMBINATIONS } from '../../src/domain/catalog';
 import { istToday } from '../../src/domain';
 import { OWNER_SUPPLIED_STAFF } from '../../seed/teachers';
+import {
+  NO_MANAGER_CODE,
+  SAMPLE_MANAGER,
+  SAMPLE_STAFF_LABEL,
+  SAMPLE_TEACHER_STAFF,
+} from '../../seed/sample-staff';
+import { SAMPLE_EODS, SAMPLE_TASKS } from '../../seed/sample-work';
 
 const ctx = setupTestDatabase();
 const context = { seedUserPassword: 'test-only-seed-password', hashPassword, log: () => {} };
@@ -157,7 +177,8 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     expect(await ctx.db.$count(opsAppointments)).toBe(
       SAMPLE_STUDENTS.reduce((n, s) => n + 1 + (s.meetings?.length ?? 0), 0),
     );
-    expect(await ctx.db.$count(opsTeacherStudentFeedback)).toBe(2);
+    // Teacher reviews of students are Academic's now (owner answer 1): Ops seeds none.
+    expect(await ctx.db.$count(opsTeacherStudentFeedback)).toBe(0);
     const today = istToday(new Date());
     const open = await ctx.db.select().from(opsFollowUps).where(eq(opsFollowUps.status, 'open'));
     expect(open.some((f) => f.dueDate === today)).toBe(true);
@@ -179,8 +200,142 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     expect(structures.every((r) => r.status === 'draft')).toBe(true);
   });
 
+  it('holds 12 distinct linked sample teachers with their sample work, sending nothing (brief 2 test 14)', async () => {
+    const teachers = await ctx.db
+      .select({
+        code: opsStaffProfiles.staffCode,
+        staffId: staffMembers.id,
+        name: staffMembers.fullName,
+        managerId: staffMembers.managerId,
+        email: users.email,
+        userId: users.id,
+        role: userRoles.role,
+        isSample: opsStaffProfiles.isSample,
+        note: opsStaffProfiles.sourceNote,
+      })
+      .from(opsStaffProfiles)
+      .innerJoin(staffMembers, eq(staffMembers.id, opsStaffProfiles.staffId))
+      .innerJoin(users, eq(users.id, staffMembers.userId))
+      .innerJoin(userRoles, eq(userRoles.userId, users.id))
+      .where(
+        inArray(
+          opsStaffProfiles.staffCode,
+          SAMPLE_TEACHER_STAFF.map(([c]) => c),
+        ),
+      );
+    expect(teachers.map((t) => t.code).sort()).toEqual(SAMPLE_TEACHER_STAFF.map(([c]) => c));
+    expect(new Set(teachers.map((t) => t.userId)).size).toBe(12);
+    const [manager] = await ctx.db
+      .select({ staffId: staffMembers.id, role: userRoles.role })
+      .from(users)
+      .innerJoin(staffMembers, eq(staffMembers.userId, users.id))
+      .innerJoin(userRoles, eq(userRoles.userId, users.id))
+      .where(eq(users.email, SAMPLE_MANAGER.email));
+    expect(manager!.role).toBe('academic_coordinator');
+    for (const t of teachers) {
+      expect(t).toMatchObject({ role: 'teacher', isSample: true, note: SAMPLE_STAFF_LABEL });
+      expect(t.name).toMatch(/^Sample /);
+      expect(t.email).toMatch(/^[a-z]+\.[a-z]+@example\.test$/);
+      expect(t.managerId).toBe(t.code === NO_MANAGER_CODE ? null : manager!.staffId);
+    }
+
+    const tasks = await ctx.db.select().from(opsStaffTasks);
+    expect(tasks).toHaveLength(SAMPLE_TASKS.length); // not doubled by the second run
+    expect(tasks.every((t) => t.isSample)).toBe(true);
+    expect(new Set(tasks.map((t) => t.status))).toEqual(
+      new Set(['pending', 'in_progress', 'blocked', 'in_review', 'done', 'cancelled']),
+    );
+    expect(tasks.filter((t) => t.status === 'pending' && !t.acknowledgedAt)).toHaveLength(1);
+    const events = await ctx.db.select().from(opsTaskEvents);
+    const kinds = events.map((e) => e.kind);
+    // Same shapes as the task services: `created` names owner and status; no separate `assigned`.
+    expect(kinds).not.toContain('assigned');
+    for (const e of events.filter((x) => x.kind === 'created'))
+      expect(e.toStatus === 'pending' && e.toStaffId !== null).toBe(true);
+    for (const e of events.filter((x) => x.kind === 'status_changed'))
+      expect(e.fromStatus !== null && e.toStatus !== null).toBe(true);
+    for (const k of ['reassigned', 'reopened', 'cancelled', 'submitted_for_review'] as const)
+      expect(kinds).toContain(k);
+    const updates = await ctx.db.select().from(opsTaskUpdates);
+    const ist = (d: Date | null) => (d ? istToday(d) : null);
+    expect(updates.some((u) => u.startedAt && ist(u.startedAt) !== ist(u.endedAt))).toBe(true); // across midnight
+    expect(updates.some((u) => ist(u.recordedAt)! > u.occurredOn)).toBe(true); // late entry
+    expect(
+      (await ctx.db.select({ s: opsEodReports.status }).from(opsEodReports)).map((r) => r.s).sort(),
+    ).toEqual(['acknowledged', 'draft', 'revision_requested', 'submitted']);
+    expect(SAMPLE_EODS).toHaveLength(4);
+    // Built with O2's event-based facts (Academic marked unavailable), versions too.
+    for (const r of await ctx.db.select().from(opsEodReports))
+      expect(r.snapshot).toMatchObject({
+        format: 'eod-facts/1',
+        academic: { status: 'unavailable' },
+      });
+    expect(
+      (await ctx.db.select().from(opsEodReportVersions)).every(
+        (v) => (v.snapshot as { format?: string }).format === 'eod-facts/1',
+      ),
+    ).toBe(true);
+    // Nothing was sent or notified to the sample staff.
+    expect(
+      await ctx.db.$count(
+        notifications,
+        inArray(
+          notifications.userId,
+          teachers.map((t) => t.userId),
+        ),
+      ),
+    ).toBe(0);
+  });
+
+  it('db:clear-samples refuses while a real task waits on a sample task (nothing deleted)', async () => {
+    const [sample] = await ctx.db.select().from(opsStaffTasks).limit(1);
+    const [real] = await ctx.db
+      .insert(opsStaffTasks)
+      .values({
+        staffId: sample!.staffId,
+        title: 'Real task',
+        dueOn: sample!.dueOn,
+        createdBy: sample!.createdBy,
+      })
+      .returning();
+    await ctx.db
+      .insert(opsTaskDependencies)
+      .values({
+        taskId: real!.id,
+        dependsOnTaskId: sample!.id,
+        createdByUserId: sample!.createdBy,
+      });
+    await expect(clearSamples(ctx.db)).rejects.toThrow();
+    expect(await ctx.db.$count(opsLeads)).toBe(SAMPLE_LEAD_COUNT);
+    await ctx.db.delete(opsTaskDependencies).where(eq(opsTaskDependencies.taskId, real!.id));
+    await ctx.db.delete(opsStaffTasks).where(eq(opsStaffTasks.id, real!.id));
+  });
+
   it('db:clear-samples removes every sample row and keeps the owner-supplied staff', async () => {
+    // An Academic sample batch and student (normally from the Academic seed) go too.
+    const [programme] = await ctx.db.select().from(programmes).limit(1);
+    const [course] = await ctx.db
+      .insert(academicCourses)
+      .values({
+        programmeId: programme!.id,
+        code: 'ZZ-SAMPLE',
+        familyCode: 'ZZ',
+        name: 'Sample course',
+      })
+      .returning();
+    await ctx.db.insert(academicBatches).values({
+      code: 'SAMPLE-ZZ',
+      name: 'Sample batch',
+      courseId: course!.id,
+      programmeId: programme!.id,
+      isSample: true,
+    });
+    await ctx.db
+      .insert(academicStudents)
+      .values({ code: 'STU-ZZ', fullName: 'Zed Sample Student', isSample: true });
     const counts = await clearSamples(ctx.db);
+    expect(counts['academic.batches']).toBe(1);
+    expect(counts['academic.students']).toBe(1);
     expect(counts['ops.leads']).toBe(SAMPLE_LEAD_COUNT);
     expect(counts['core.staff_members']).toBe(6); // the sample teachers without logins
     expect(counts['ops.fee_structures']).toBe(ALLOWED_PROGRAMME_COMBINATIONS.length);
@@ -195,6 +350,9 @@ describe('Business Ops seeds (D-036 sample set)', () => {
       opsTeacherStudentFeedback,
       approvals,
       students,
+      opsStaffTasks,
+      opsTaskEvents,
+      opsEodReports,
     ])
       expect(await ctx.db.$count(table)).toBe(0);
     // Website-stated prices are not sample data and stay.

@@ -26,7 +26,8 @@ export const GET = defineRoute(
       fields,
       view,
       actions,
+      notice,
     } = await getStudentReport(db, user, params.id, query.ref);
-    return { export: e, fields, view, actions };
+    return { export: e, fields, view, actions, notice };
   },
 );

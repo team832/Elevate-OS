@@ -14,6 +14,7 @@
 import { and, desc, eq, inArray, isNotNull, ne, or } from 'drizzle-orm';
 import {
   opsAdmissions,
+  opsApplications,
   opsEnrolmentAttempts,
   opsLeads,
   programmes,
@@ -124,6 +125,10 @@ async function buildPayload(
     .select({ code: programmes.code })
     .from(programmes)
     .where(eq(programmes.id, admission.programmeId));
+  const [application] = await tx
+    .select({ academicYear: opsApplications.academicYear })
+    .from(opsApplications)
+    .where(eq(opsApplications.admissionId, admission.id));
   const counsellorStaffId = (admission.counsellorStaffId ??
     lead.ownerStaffId) as StaffMemberId | null;
   if (!counsellorStaffId)
@@ -164,6 +169,8 @@ async function buildPayload(
     ...present({
       notes,
       existingStudentId: await knownStudentIdForPerson(tx, lead.id, admission.id),
+      coreStudentId: admission.studentId,
+      academicYear: application?.academicYear,
     }),
   };
   const parsed = enrolmentRequestedV1Payload.safeParse(payload);

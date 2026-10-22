@@ -2,7 +2,7 @@
 
 Elevate OS is the internal operating system for **Elevate Education**, a coaching institute (Sikar + online) preparing students for **CLAT, IPMAT, CUET, Class 11–12 Commerce and CA Foundation**. It replaces scattered spreadsheets, Markdown trackers and chat memory with one system that staff sign in to once.
 
-> Status (2026-10-18): the **Foundation** (wave 1) and the **three modules** (wave 2: Marketing OS, Academic OS, Business Ops OS) are built and tested — `npm run validate` passed 58 files / 506 tests at that point. On 19 Oct 2026 Business Ops gained HR, admissions administration and operations work (D-028; `npm test` at commit ce7589c: 86 files, 896 tests passed, 1 todo; screens type-checked, not yet built; no migration). The **integration pass** (wave 3: baseline migration, seeded dev database, cross-module E2E on PostgreSQL, dashboard wiring) has not run yet. Nothing is deployed. Exact evidence: `IMPLEMENTATION_STATUS.md`; next steps: the `elevate-next-steps` skill in `C:\OPENBOT\.claude\skills`.
+> Status (22 Oct 2026): Foundation, Marketing OS, Academic OS and Business Ops OS are built and tested; nothing is deployed. The latest work added the Academic teacher workspace (placements, classes and attendance, delivery, timetable patterns, teaching log, reviews, marks, progress, reports) and the Business Ops task tracker, end-of-day versions and teacher operations (D-058 … D-071). `npm run validate` passed: 158 test files, 2,069 tests, secret scan 1,166 files; `npm run build` passed for all four apps. Migrations `0009`–`0011` are applied on the owner's computer; both milestones were checked live over HTTP and in Chrome (1440 px). Details: `IMPLEMENTATION_STATUS.md`.
 
 ## Contents
 1. [The three modules and their boundaries](#1-the-three-modules-and-their-boundaries)
@@ -140,7 +140,7 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 - Seeds are idempotent and **fictional** (D-016): 9 users (one per role), 8 staff, 13 provisional departments from the legacy model, 5 programmes. Modules add seeds in `apps/<module>/seed/index.ts`.
 
 ## 9. Tests
-`npm test` runs 58 files / 506 tests (foundation + all three modules, 2026-10-18). Strategy, layers and inventory: `docs/TESTING_STRATEGY.md`. Write module tests with `@elevate/testing` (`setupTestDatabase`, `createTestUser`, `authedRequest`, `callRoute`). One project: `npx vitest run --project academic-os`.
+`npm test` runs 158 files / 2,069 tests as of 22 Oct 2026 (foundation + all three modules + platform). Strategy, layers and inventory: `docs/TESTING_STRATEGY.md`. Write module tests with `@elevate/testing` (`setupTestDatabase`, `createTestUser`, `authedRequest`, `callRoute`). One project: `npx vitest run --project academic-os`.
 
 ## 10. Adding a feature without breaking boundaries
 1. Find or add the requirement ID in your module's `requirements/REQUIREMENTS.md` (from `docs/PRODUCT_REQUIREMENTS.md`).
@@ -171,7 +171,7 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `INTEGRATION_CONTRACT.md` | Identities, IDs, ownership, permissions, API, events, summaries, versioning, failure behaviour |
 | `DATABASE_DESIGN.md` | Schemas, conventions, core tables |
 | `IMPLEMENTATION_STATUS.md` | What is built and the evidence |
-| `docs/DECISIONS.md` | Decision log (D-001 … D-057) |
+| `docs/DECISIONS.md` | Decision log (D-001 … D-071) |
 | `docs/BUILD_PLAN.md` | Waves, ownership, module layout, definition of done |
 | `docs/EXISTING_PROJECT_AUDIT.md` | Audit of the legacy material |
 | `docs/PRODUCT_REQUIREMENTS.md` | Product requirements |
@@ -184,5 +184,6 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `infrastructure/*/README.md` | Dev environment, database operations, deployment outline (Proposed) |
 | `packages/*/README.md` | Package APIs |
 | `data/legacy/README.md` | Legacy data extracts |
-#   E l e v a t e - O S  
+#   E l e v a t e - O S 
+ 
  

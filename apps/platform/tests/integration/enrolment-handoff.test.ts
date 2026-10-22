@@ -253,9 +253,16 @@ describe('admission → enrolment handoff across Business Ops and Academic OS', 
     expect(event?.payload).toMatchObject({ existingStudentId: knownStudentId });
   });
 
-  // IR-OPS-ADM-1 (Academic OS): intake dedupes only by source_admission_id, so it
-  // still creates a second academic.students row for the second programme. When
-  // Academic honours `existingStudentId`, turn this into a real assertion:
-  // one academic.students row for both admissions, existingStudent = true.
-  it.todo('Academic reuses existingStudentId for a second programme (pending IR-OPS-ADM-1)');
+  it('second programme: Academic reuses the student and links the canonical core student', async () => {
+    const first = await admitted();
+    await requestEnrolment(ctx.db, counsellor, first.admissionId);
+    await settle();
+    const second = await admitted({ leadId: first.leadId, programme: 'CLAT' });
+    await requestEnrolment(ctx.db, counsellor, second.admissionId);
+    await settle();
+    const [student] = await studentsFor(first.admissionId);
+    const [enrolment] = await enrolmentsFor(second.admissionId);
+    expect(enrolment?.studentId).toBe(student!.id);
+    expect(student!.coreStudentId).toBe((await admissionRow(first.admissionId)).studentId);
+  });
 });

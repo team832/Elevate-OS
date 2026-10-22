@@ -3,8 +3,12 @@
  * minutes and hours per chapter, subject and course, from class records.
  *
  * - Planned comes from the plan's items (never overwritten by actuals).
- * - Completed counts ONLY `verified` records (completed or partial) —
- *   recorded-but-unverified minutes are reported separately, never as delivered.
+ * - Coverage counts ONLY submitted/verified first-teaching (`main`) records (R11). A chapter
+ *   counts once however many sessions it took; partial vs completed comes only from the
+ *   records' `completion` field. Revision, practice, test, doubt and other rows are counted
+ *   as separate evidence and never add coverage. Drafts and superseded rows count for nothing.
+ * - Verified minutes are delivered; submitted-but-unverified minutes are reported separately.
+ * - Coverage is what the batch was taught, never what a student has mastered.
  * - Planned-to-date uses the items' planned dates ≤ asOf; when a chapter has
  *   undated items the planned-to-date figure is null (unknown), not zero.
  * - Records for chapters that are not in the plan are listed as `unplanned`.
@@ -30,10 +34,14 @@ export interface CoverageSubject {
   name: string;
 }
 
+export type LogActivity = 'main' | 'practice' | 'catch_up' | 'test' | 'discussion' | 'revision' | 'doubt_solving';
+
 export interface CoverageRecord {
   chapterId: string;
   actualMinutes: number;
-  state: 'submitted' | 'verified' | 'superseded';
+  state: 'draft' | 'submitted' | 'verified' | 'superseded';
+  activity: LogActivity;
+  completion: 'completed' | 'partial';
 }
 
 export interface CoverageInput {
@@ -58,6 +66,11 @@ export interface CoverageFigures {
   completionPercent: number | null;
   /** verified − planned-to-date; null when planned-to-date is unknown. */
   varianceMinutes: number | null;
+  chaptersPlanned: number;
+  /** Planned chapters with at least one submitted/verified first-teaching record. */
+  chaptersTaught: number;
+  /** …of which at least one record says `completed`. */
+  chaptersCompleted: number;
 }
 
 export interface ChapterCoverage extends CoverageFigures {
@@ -65,6 +78,9 @@ export interface ChapterCoverage extends CoverageFigures {
   code: string;
   title: string;
   subjectId: string;
+  taught: 'not_taught' | 'partial' | 'completed';
+  /** Submitted/verified non-first-teaching records by activity (practised, revised, assessed…). */
+  evidence: Partial<Record<Exclude<LogActivity, 'main'>, number>>;
 }
 
 export interface SubjectCoverage extends CoverageFigures {
@@ -113,6 +129,9 @@ function figures(
     unverifiedMinutes,
     completionPercent: plannedMinutes === 0 ? null : round((verifiedMinutes / plannedMinutes) * 100, 1),
     varianceMinutes: plannedToDateMinutes === null ? null : verifiedMinutes - plannedToDateMinutes,
+    chaptersPlanned: new Set(items.map((i) => i.chapterId)).size,
+    chaptersTaught: new Set(records.map((r) => r.chapterId)).size,
+    chaptersCompleted: new Set(records.filter((r) => r.completion === 'completed').map((r) => r.chapterId)).size,
   };
 }
 
@@ -125,8 +144,15 @@ export function computeCoverage(input: CoverageInput): CoverageResult {
     itemsByChapter.set(item.chapterId, list);
   }
   const recordsByChapter = new Map<string, CoverageRecord[]>();
+  const evidenceByChapter = new Map<string, ChapterCoverage['evidence']>();
   for (const r of input.records) {
-    if (r.state === 'superseded') continue;
+    if (r.state !== 'submitted' && r.state !== 'verified') continue;
+    if (r.activity !== 'main') {
+      const evidence = evidenceByChapter.get(r.chapterId) ?? {};
+      evidence[r.activity] = (evidence[r.activity] ?? 0) + 1;
+      evidenceByChapter.set(r.chapterId, evidence);
+      continue;
+    }
     const list = recordsByChapter.get(r.chapterId) ?? [];
     list.push(r);
     recordsByChapter.set(r.chapterId, list);
@@ -135,12 +161,15 @@ export function computeCoverage(input: CoverageInput): CoverageResult {
   const chapters: ChapterCoverage[] = [];
   for (const [chapterId, items] of itemsByChapter) {
     const ch = chapterById.get(chapterId);
+    const f = figures(items, recordsByChapter.get(chapterId) ?? [], input.asOf);
     chapters.push({
       chapterId,
       code: ch?.code ?? chapterId,
       title: ch?.title ?? '(unknown chapter)',
       subjectId: ch?.subjectId ?? '',
-      ...figures(items, recordsByChapter.get(chapterId) ?? [], input.asOf),
+      ...f,
+      taught: f.chaptersCompleted ? 'completed' : f.chaptersTaught ? 'partial' : 'not_taught',
+      evidence: evidenceByChapter.get(chapterId) ?? {},
     });
   }
   chapters.sort((a, b) => a.code.localeCompare(b.code, 'en', { numeric: true }));

@@ -1,6 +1,6 @@
 # Integration Contract
 
-The rules every module (Marketing OS, Academic OS, Business Ops OS) and the platform follow so they can be built in parallel and still fit together. Code is the source of truth; this document points to it. Decisions: `docs/DECISIONS.md` (D-004, D-005, D-009–D-012, D-019–D-025).
+The rules every module (Marketing OS, Academic OS, Business Ops OS) and the platform follow so they can be built in parallel and still fit together. Code is the source of truth; this document points to it. Decisions: `docs/DECISIONS.md` (D-004, D-005, D-009–D-012, D-019–D-025; teacher workspace and tasks D-058–D-071).
 
 ## 1. Identities
 - **One user identity** for everyone: `core.users` (`UserId`). Sign-in, sessions and roles are platform services (`@elevate/authentication`, `@elevate/authorization`). Modules never create their own user/login tables.
@@ -26,8 +26,8 @@ The rules every module (Marketing OS, Academic OS, Business Ops OS) and the plat
 | Integration events, deliveries | server-kit outbox | `core.integration_events`, `core.event_deliveries` | `publishEvent` / `processEvents` only |
 | Idempotency keys | server-kit | `core.idempotency_keys` | via `defineRoute({ idempotency })` |
 | Social accounts, ideas, content, versions, placements, publishing records, metrics, campaigns | Marketing OS | `marketing.*` | — |
-| Courses, curriculum, batches, assignments, timetable, class records, attendance, assessments, students, enrolments, results, catch-up, interventions | Academic OS | `academic.*` | — |
-| Leads, enquiries, counselling, demos, admissions, tasks, SOPs, decisions, risks, projects, responsibilities | Business Ops OS | `ops.*` | — |
+| Courses, curriculum, batches, assignments, timetable, class records, attendance, assessments, students, enrolments, results, catch-up, interventions; batch placements, timetable patterns, session teachers, teacher unavailability, demo attendees on classes, teacher reviews of students (D-058) | Academic OS | `academic.*` | Ops reads reviews, teacher activity and demo marks through §7 internal routes only |
+| Leads, enquiries, counselling, demos, admissions, staff tasks (events, updates, dependencies, imports), EOD reports and versions, review acknowledgements, older teacher feedback (read-only history) | Business Ops OS | `ops.*` | Academic reads the day's demo classes through §7; Academic never writes `ops.*` |
 
 File ownership during parallel work: `docs/BUILD_PLAN.md`. Need a change in a file you do not own? Write it in your module's `docs/INTEGRATION_REQUESTS.md`.
 
@@ -70,9 +70,12 @@ Published in the same transaction that moves an admission to "enrolment requeste
 | `guardian?` | `{ fullName, relationship: mother\|father\|guardian\|other, email?, phone? }` | needed for minors |
 | `counsellorStaffId` | `StaffMemberId` | owning counsellor |
 | `requestedByUserId` | `UserId` | who triggered it |
+| `existingStudentId?` | `StudentId` | Academic student to reuse (re-admission) |
+| `coreStudentId?` | `StudentIdentityId` | optional, additive (21 Oct 2026): the person in `core.students` |
+| `academicYear?` | string 1–20 | optional, additive (21 Oct 2026), e.g. `2026-27` |
 | `notes?` | string ≤ 2000 | |
 
-Rules: strict object (unknown fields rejected); at least one contact (student or guardian email/phone). Fees and payments are **not** in this contract.
+Rules: strict object (unknown fields rejected); at least one contact (student or guardian email/phone). Fees and payments are **not** in this contract. Academic intake matches the student by `existingStudentId`, then `coreStudentId`, then the source admission, and links `coreStudentId` onto a matched student that has none (audit `student.linked`); a conflicting core id rejects the request (`INVALID_REQUEST`, "linked to a different person") (`apps/academic-os/src/server/services/intake.ts`). Business Ops sends `coreStudentId` = `ops.admissions.student_id` and `academicYear` from the admission's application (`buildPayload` in `apps/business-ops-os/src/server/enrolment.ts`; IR-OPS-STU-2 done, `apps/platform/tests/integration/enrolment-handoff.test.ts` › *second programme: Academic reuses the student and links the canonical core student*). Removing the guardian contact from this event needs a v2 (open).
 
 ### `academic.enrolment.confirmed` v1 — producer `academic`, consumer `ops`
 `{ requestEventId, admissionId, leadId, enrolmentId, studentId, existingStudent, programmeCode, courseId?, batchId?, confirmedAt, confirmedByUserId | null }`. `idempotencyKey = enrolmentKeys.reply(requestEventId)`; `correlationId = requestEventId`.
@@ -97,6 +100,17 @@ Endpoint `GET /<zone>/api/internal/v1/summary?from=YYYY-MM-DD&to=YYYY-MM-DD`, bu
 Per-student contract (IR-OPS-STU-1, 21 Oct 2026):
 - `AcademicStudentSummaryV1` (`academicStudentSummaryV1Schema`, `packages/shared-contracts/src/summaries.ts`) at `GET /academic/api/internal/v1/students/{academicStudentId}/summary?from&to` (caller `ops` only; 401 bad token, 403 other caller, 400 bad window or more than three years, 404 unknown student; default window the last 365 days, IST; teachers come from the sessions actually held: class record teacher, else the session teacher): `contract: 'academic.student_summary'`, `version: 1`, `generatedAt`, `studentId`, `window`, `enrolments[] { enrolmentId, programmeCode, batchId, batchName, status, teachers[] { staffId, subject } }`, `attendance { held, present, partial, late, absent, excused }` (unrecorded = held − the sum), `results[] { assessmentId, code, subject, examType, heldOn, state: scored | absent, score, maxScore, percentile, rank, cohort { label, scored }, resultVersion }`. Only final result runs; an absent result has no score, percentile or rank (never 0). Ops uses it for the student profile and progress reports; the Ops report keeps a snapshot taken at draft time.
 
+Teacher workspace contracts (21 Oct 2026, `packages/shared-contracts/src/summaries.ts`; all `defineInternalRoute`, bearer `INTERNAL_SERVICE_TOKEN` + `X-Elevate-Caller`; 401 bad token, 403 other caller, 400 bad query):
+
+| Route | Caller | Contract | Content |
+|---|---|---|---|
+| `GET /academic/api/internal/v1/reviews?coreStudentId=\|authorStaffId=&from&to` | `ops` | `AcademicStudentReviewsV1` (`academicStudentReviewsV1Schema`) | `contract: 'academic.student_reviews'`, `version: 1`, `generatedAt`, `student` (null when queried by author), `reviews[] { reviewKey, version, coreStudentId, academicStudentId, studentName, status: submitted \| withdrawn, superseded, authorStaffId, authorName, subjectName, reviewType, sessionDate, opsDemoSessionId, periodFrom, periodTo, strengths, areasForSupport, attendanceEvidence, homeworkEvidence, academicConcerns, suggestedAction, followUpOn, visibility: internal \| shareable, submittedAt, withdrawnAt, sourcePath }`. One of the two ids is required; `from`/`to` filter the IST submission date; at most 1,000 rows. Drafts are never returned; a withdrawn version keeps its marker and `withdrawnAt` but its text fields and `followUpOn` are null; `superseded` = a later submitted version exists. |
+| `GET /academic/api/internal/v1/teachers/{staffId}/activity?from&to` | `ops` | `AcademicTeacherActivityV1` | assignments (batch, subject, role, dates), sessions planned / delivered / cancelled / substituted, logs, attendance and marking pending, reviews submitted / draft, Academic unavailability ranges (not HR leave). Default window the last 30 days (IST), at most one year. Counts only: no payroll, HR attendance or ratings. |
+| `GET /academic/api/internal/v1/demo-attendance?ids=` | `ops` | `AcademicDemoAttendanceV1` | up to 200 Ops demo-session ids (comma-separated); `items[] { opsDemoSessionId, academicSessionId, status: not_recorded \| present \| absent \| late \| excused, recordedAt, teacherStaffIds, teacherNames }` for linked classes only. |
+| `GET /ops/api/internal/v1/demo-sessions?date=YYYY-MM-DD` | `academic` | `OpsDemoSessionsForDayV1` | `items[] { demoSessionId, coreStudentId, displayName, dayNumber, subject, startsAt, isSample }`; minimal fields so a coordinator can add a demo student to a class. |
+
+Rules for these contracts: Ops checks the user's own permission (`ops:feedback:read`, own = students they counsel) **before** calling the reviews route and filters what it shows by scope and `visibility` (family-audience reports use `shareable` reviews only); Ops never edits a review and records its acknowledgement in `ops.review_acknowledgements` (keyed by review key and version). Academic serves internal routes to the module, not to a user, so the calling module is responsible for the user check.
+
 Every metric is `{ status: 'ok' | 'estimated' | 'missing', value: number | null, definition, window: { from, to, label? }, unit }` (+ `basis` for estimated, `reason` for missing). **Missing is not zero**: a metric without trustworthy data is `missing` with `value: null`; planned counts are never reported as delivered (D-016). Connection status values: `not_configured | sandbox | connected | error` (D-014). Consumers call `fetchInternal(url, schema, { caller })` and render `SourceResult.status === 'unavailable'` as "source unavailable", never as zeros. UI: `StatTile` renders the three statuses distinctly.
 
 ## 8. Versioning
@@ -113,6 +127,10 @@ Every metric is `{ status: 'ok' | 'estimated' | 'missing', value: number | null,
 | Producer transaction fails | No event exists (outbox row rolled back with the business change) |
 | Publish retried with same key | Returns the existing event id (`created: false`) |
 | Summary source down / slow / wrong shape | `fetchInternal` → `unavailable` + reason; UI says "source unavailable" |
+| Academic reviews or teacher activity unavailable | Ops shows "source unavailable" with the reason; never an empty list or zeros; acknowledgements already stored stay visible |
+| Academic demo marks unavailable | **Fail closed for known-linked demo classes** (D-066): counsellor marking and dependent demo transitions on a class with `ops.demo_sessions.academic_session_ref` are refused ("Waiting for Academic OS … Try again later"); unlinked classes stay counsellor-marked |
+| Ops demo-session list unavailable (Academic side) | the demo-attendee picker shows "unavailable" (never an empty list); adding a demo attendee is refused with 409 "Business Ops unavailable … try again later"; existing demo attendees stay on the roster |
+| Review withdrawn after an Ops report used it | non-final report blocked until regenerated; final report frozen with a notice (D-067) |
 | Partial data | Metric `missing` (with reason) or `estimated` (with basis) — never 0 |
 | HTTP create retried | Same `Idempotency-Key` + same body → stored response replayed; different body → 409 |
 | External system (Metricool, Instagram, YouTube, LinkedIn, CRM, Vacademy) | Adapter interface, mock by default, honest connection status (D-014) |

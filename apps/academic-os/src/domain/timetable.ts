@@ -2,7 +2,9 @@
  * Timetable conflict detection (ACD-012) — pure, reports only, never auto-fixes.
  *
  * HARD constraints (any one makes the timetable infeasible):
- *   TEACHER_OVERLAP, BATCH_OVERLAP, ROOM_OVERLAP, ON_EXCLUSION, CROSSES_MIDNIGHT,
+ *   TEACHER_OVERLAP (incl. co-teachers and substitutes), BATCH_OVERLAP, ROOM_OVERLAP,
+ *   STUDENT_OVERLAP (a student placed in both batches), TEACHER_UNAVAILABLE (academic
+ *   availability record, not HR leave), ON_EXCLUSION, CROSSES_MIDNIGHT,
  *   DURATION_MISMATCH when the class length is locked/approved,
  *   TEACHER_WORKLOAD when the configured cap says `enforcement: 'hard'`.
  * PREFERENCES (warnings; never block):
@@ -12,7 +14,7 @@
  * The result is `feasible` (no hard conflicts) or `infeasible` with reasons.
  * It never claims a timetable is optimal.
  */
-import { intervalsOverlap, parseClock, weekStart } from './time';
+import { eachDate, intervalsOverlap, isoWeekday, parseClock, weekStart } from './time';
 
 export interface TimetableSession {
   id: string;
@@ -24,6 +26,23 @@ export interface TimetableSession {
   durationMinutes: number;
   status: 'scheduled' | 'held' | 'cancelled' | 'rescheduled';
   sessionType: 'teaching' | 'practice' | 'catch_up' | 'test' | 'discussion';
+  /** Everyone teaching it (planned teacher unless replaced, co-teachers, substitutes); default [teacherStaffId]. */
+  teacherStaffIds?: readonly string[];
+}
+
+/** Academic availability record (R2: not HR leave). */
+export interface Unavailability {
+  staffId: string;
+  from: string;
+  to: string;
+}
+
+/** Effective-dated batch placement of a student (`to` null = open). */
+export interface PlacementSpan {
+  studentId: string;
+  batchId: string;
+  from: string;
+  to: string | null;
 }
 
 export interface DatedExclusion {
@@ -50,6 +69,8 @@ export type ConflictCode =
   | 'TEACHER_OVERLAP'
   | 'BATCH_OVERLAP'
   | 'ROOM_OVERLAP'
+  | 'STUDENT_OVERLAP'
+  | 'TEACHER_UNAVAILABLE'
   | 'ON_EXCLUSION'
   | 'CROSSES_MIDNIGHT'
   | 'INVALID_TIME'
@@ -71,6 +92,8 @@ export interface TimetableCheckInput {
   /** Class length per batch (batch override → course). Missing batch = unknown. */
   classLengthByBatch: Readonly<Record<string, ClassLength>>;
   workloadCap: WorkloadCap | null;
+  unavailability?: readonly Unavailability[];
+  placements?: readonly PlacementSpan[];
   /** Report only conflicts that involve at least one of these sessions (e.g. new candidates). */
   onlyInvolving?: readonly string[];
 }
@@ -86,6 +109,12 @@ export interface TimetableCheckResult {
 const ACTIVE = new Set(['scheduled', 'held']);
 const LENGTH_BOUND_TYPES = new Set(['teaching', 'practice']);
 const FIRM_STATUSES = new Set(['locked', 'approved']);
+
+export const teachersOf = (s: TimetableSession): readonly string[] => s.teacherStaffIds ?? (s.teacherStaffId ? [s.teacherStaffId] : []);
+
+function studentsPlaced(placements: readonly PlacementSpan[], batchId: string, date: string): Set<string> {
+  return new Set(placements.filter((p) => p.batchId === batchId && p.from <= date && (p.to === null || p.to >= date)).map((p) => p.studentId));
+}
 
 export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult {
   const conflicts: Conflict[] = [];
@@ -137,7 +166,8 @@ export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult
         if (sb.start >= sa.end) break; // sorted by start: nothing later can overlap a
         if (!intervalsOverlap(sa.start, sa.end, sb.start, sb.end)) continue;
         const pair = [a.id, b.id];
-        if (a.teacherStaffId && a.teacherStaffId === b.teacherStaffId) {
+        const bTeachers = teachersOf(b);
+        if (teachersOf(a).some((t) => bTeachers.includes(t))) {
           conflicts.push({
             code: 'TEACHER_OVERLAP',
             severity: 'hard',
@@ -155,6 +185,18 @@ export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult
             message: 'The same batch has two overlapping sessions.',
           });
         }
+        if (a.batchId !== b.batchId && input.placements?.length) {
+          const inA = studentsPlaced(input.placements, a.batchId, date);
+          if ([...studentsPlaced(input.placements, b.batchId, date)].some((id) => inA.has(id))) {
+            conflicts.push({
+              code: 'STUDENT_OVERLAP',
+              severity: 'hard',
+              sessionIds: pair,
+              date,
+              message: 'A student placed in both batches would have two overlapping classes.',
+            });
+          }
+        }
         if (a.roomId && a.roomId === b.roomId) {
           conflicts.push({
             code: 'ROOM_OVERLAP',
@@ -165,6 +207,19 @@ export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult
           });
         }
       }
+    }
+  }
+
+  for (const s of sessions) {
+    for (const u of input.unavailability ?? []) {
+      if (!teachersOf(s).includes(u.staffId) || s.date < u.from || s.date > u.to) continue;
+      conflicts.push({
+        code: 'TEACHER_UNAVAILABLE',
+        severity: 'hard',
+        sessionIds: [s.id],
+        date: s.date,
+        message: `A teacher has an academic unavailability record from ${u.from} to ${u.to} (not HR leave).`,
+      });
     }
   }
 
@@ -227,9 +282,10 @@ export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult
       totals.set(key, t);
     };
     for (const s of sessions) {
-      if (!s.teacherStaffId) continue;
-      if (cap.maxMinutesPerDay !== null) add(`day|${s.teacherStaffId}|${s.date}`, s);
-      if (cap.maxMinutesPerWeek !== null) add(`week|${s.teacherStaffId}|${weekStart(s.date)}`, s);
+      for (const t of teachersOf(s)) {
+        if (cap.maxMinutesPerDay !== null) add(`day|${t}|${s.date}`, s);
+        if (cap.maxMinutesPerWeek !== null) add(`week|${t}|${weekStart(s.date)}`, s);
+      }
     }
     for (const [key, t] of totals) {
       const [period, , when] = key.split('|') as [string, string, string];
@@ -257,4 +313,21 @@ export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult
     checkedSessions: sessions.length,
     notes,
   };
+}
+
+/**
+ * Dates a weekly pattern generates between `from` and `to`: every matching weekday, with
+ * `skipped` = the closure label when a centre-wide or batch closure falls on it (exam
+ * blackouts restrict assessments, not classes).
+ */
+export function patternDates(
+  p: { weekday: number; from: string; to: string; batchId: string },
+  exclusions: readonly DatedExclusion[],
+): { date: string; skipped: string | null }[] {
+  return eachDate(p.from, p.to)
+    .filter((d) => isoWeekday(d) === p.weekday)
+    .map((date) => {
+      const closure = exclusions.find((x) => x.date === date && x.kind !== 'exam_blackout' && (x.batchId === null || x.batchId === p.batchId));
+      return { date, skipped: closure?.label ?? null };
+    });
 }

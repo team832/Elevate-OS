@@ -3,23 +3,18 @@
  * once (plain JSON: Academic evidence, feedback, fee totals …) and stores it on the export row
  * with the audience, sections, period, template version and source references; every later view
  * and PDF renders that snapshot and never re-reads live data. draft → reviewed (a reviewer who is
- * not the creator) → final; nothing changes after final. Guardian/student reports hold only the
- * deterministic constructive summary built from SHAREABLE, SUBMITTED reviews (strengths / areas /
- * next steps — never the raw observation); raw reviews, guardians, status history and fee totals
+ * not the creator) → final; nothing changes after final. Teacher reviews come from Academic OS
+ * (submitted, not withdrawn, frozen into the snapshot); results only as Academic publishes them.
+ * Guardian/student reports hold only the deterministic constructive summary built from SHAREABLE
+ * reviews (strengths / areas / next steps — never internal remarks); raw reviews, guardians, status history and fee totals
  * are internal sections. A reader sees only the sections their permissions allow today. Nothing
  * is emailed; generating, reviewing, finalising and downloading are audited.
  */
 import { randomBytes } from 'node:crypto';
-import { and, asc, eq, gte, lte } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 import { can } from '@elevate/authorization';
-import {
-  opsReportExports,
-  opsTeacherStudentFeedback as reviews,
-  staffMembers,
-  type Database,
-  type OpsReportExportId,
-} from '@elevate/database';
+import { opsReportExports, type Database, type OpsReportExportId } from '@elevate/database';
 import { recordAudit, withTransaction } from '@elevate/server-kit';
 import {
   InvalidStateTransitionError,
@@ -27,7 +22,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '@elevate/shared-contracts';
-import type { IsoDate, StudentIdentityId } from '@elevate/shared-types';
+import type { StudentIdentityId } from '@elevate/shared-types';
 import { ADMISSION_STATUS_LABELS, type AdmissionStatus } from '../domain';
 import { FEE_BALANCE_LABELS } from '../domain/fees';
 import {
@@ -41,7 +36,13 @@ import {
   type ReportPermissions,
   type ReportSection,
 } from '../domain/student-report';
-import { academicEvidence } from './academic-summary';
+import {
+  reviewDate,
+  studentReviews,
+  visibleReviews,
+  type AcademicReview,
+} from './academic-reviews';
+import { academicEvidence, fetchAcademicReviews } from './academic-summary';
 import { accessScope, type Actor } from './context';
 import { progressReportPdf } from './pdf/progress-report';
 import type { reportBody } from './report-schemas';
@@ -59,36 +60,44 @@ function permissionsOf(actor: Actor, profile: Profile): ReportPermissions {
   return {
     fees: can(actor, 'ops:fees:read'),
     privateData: profile.guardians !== 'hidden',
-    // Assumes no own-scope feedback reader can generate reports (teachers cannot today).
+    // Own-scope readers (counsellors) get only the reviews their scope allows (academic-reviews.ts).
     feedback: can(actor, 'ops:feedback:read'),
   };
 }
 
-/** Submitted (final), current reviews observed in the period, oldest first. */
+/**
+ * Current submitted Academic reviews about the period, oldest first (withdrawn hidden, reader's
+ * scope applied by studentReviews). `null` when Academic could not be read.
+ */
 async function submittedReviews(
   db: Database,
+  actor: Actor,
   studentId: StudentIdentityId,
   from: string,
   to: string,
 ) {
-  const rows = await db
-    .select({ r: reviews, teacherName: staffMembers.fullName })
-    .from(reviews)
-    .innerJoin(staffMembers, eq(staffMembers.id, reviews.teacherStaffId))
-    .where(
-      and(
-        eq(reviews.studentId, studentId),
-        gte(reviews.observedOn, from as IsoDate),
-        lte(reviews.observedOn, to as IsoDate),
-      ),
-    )
-    .orderBy(asc(reviews.observedOn), asc(reviews.version));
-  const superseded = new Set(rows.map((x) => x.r.supersedesId).filter(Boolean));
-  return rows.filter((x) => x.r.status === 'final' && !superseded.has(x.r.id));
+  const r = await studentReviews(db, actor, studentId);
+  if (r.status === 'unavailable') return { source: r, reviews: null };
+  const reviews = r.reviews
+    .filter((x) => !x.superseded && reviewDate(x) >= from && reviewDate(x) <= to)
+    .sort((x, y) => reviewDate(x).localeCompare(reviewDate(y)));
+  return { source: r, reviews };
 }
+
+/** Internal evidence fields: only in internal views, never in family outputs (acceptance 15). */
+const internalRemarks = (r: AcademicReview) =>
+  [
+    ['Attendance and engagement', r.attendanceEvidence],
+    ['Homework and practice', r.homeworkEvidence],
+    ['Academic concerns', r.academicConcerns],
+  ]
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(' · ') || null;
 
 async function buildSnapshot(
   db: Database,
+  actor: Actor,
   profile: Profile,
   input: z.output<typeof reportBody>,
   sections: ReportSection[],
@@ -100,8 +109,12 @@ async function buildSnapshot(
     has('results') || has('attendance') || has('summary')
       ? academicEvidence(db, profile.academic.studentId, period)
       : null,
-    has('feedback') || has('summary') ? submittedReviews(db, studentId, input.from, input.to) : [],
+    // Needs ops:feedback:read; the reader's scope is applied again in studentReviews.
+    (has('feedback') || has('summary')) && can(actor, 'ops:feedback:read')
+      ? submittedReviews(db, actor, studentId, input.from, input.to)
+      : null,
   ]);
+  const reviews = submitted?.reviews ?? [];
   const available = academic?.status === 'available' ? academic : null;
   const snapshot = {
     template: REPORT_TEMPLATE_VERSION,
@@ -144,35 +157,45 @@ async function buildSnapshot(
               })),
           }
         : undefined,
+    /** Where the reviews came from (Academic OS) and when; `unavailable` is never "no reviews". */
+    reviewsSource: submitted
+      ? {
+          status: submitted.source.status,
+          checkedAt: submitted.source.checkedAt,
+          ...(submitted.source.status === 'unavailable' ? { reason: submitted.source.reason } : {}),
+        }
+      : undefined,
     feedback: has('feedback')
-      ? submitted.map(({ r, teacherName }) => ({
-          id: r.id,
-          teacher: teacherName,
-          subject: r.subject,
-          observedOn: r.observedOn,
+      ? reviews.map((r) => ({
+          id: r.reviewKey,
+          teacher: r.authorName,
+          subject: r.subjectName ?? 'Subject not recorded',
+          observedOn: reviewDate(r),
           version: r.version,
           visibility: r.visibility,
-          observations: r.observations,
+          observations: internalRemarks(r),
           strengths: r.strengths,
-          areasToImprove: r.areasToImprove,
-          actionPlan: r.actionPlan,
+          areasToImprove: r.areasForSupport,
+          actionPlan: r.suggestedAction,
         }))
       : undefined,
-    // Only the three shareable fields of shareable reviews; the observation is never read here.
+    // Only the three shareable fields of shareable reviews; internal remarks are never read here.
     summary: has('summary')
       ? constructiveSummary({
           attendance: available?.attendance ?? null,
           results: available
             ? available.results.map(({ percent: _p, comparison: _c, rescored: _r, ...r }) => r)
             : null,
-          feedback: submitted
-            .filter(({ r }) => r.visibility === 'shareable')
-            .map(({ r }) => ({
-              subject: r.subject,
-              strengths: r.strengths,
-              areasToImprove: r.areasToImprove,
-              actionPlan: r.actionPlan,
-            })),
+          feedback: submitted?.reviews
+            ? submitted.reviews
+                .filter((r) => r.visibility === 'shareable')
+                .map((r) => ({
+                  subject: r.subjectName ?? 'Subject not recorded',
+                  strengths: r.strengths,
+                  areasToImprove: r.areasForSupport,
+                  actionPlan: r.suggestedAction,
+                }))
+            : null,
         })
       : undefined,
     guardians:
@@ -206,7 +229,7 @@ async function buildSnapshot(
           assessmentIds: available?.results.map((r) => r.assessmentId) ?? [],
         }
       : null,
-    reviewIds: submitted.map(({ r }) => r.id),
+    reviews: reviews.map((r) => ({ reviewKey: r.reviewKey, version: r.version })),
     admissionIds: profile.cases.map((c) => c.id),
   };
   return { snapshot, sourceRefs };
@@ -237,7 +260,7 @@ export async function generateStudentReport(
     permissionsOf(actor, profile),
     input.sections,
   );
-  const { snapshot, sourceRefs } = await buildSnapshot(db, profile, input, sections);
+  const { snapshot, sourceRefs } = await buildSnapshot(db, actor, profile, input, sections);
   const identityId = profile.identity.id;
   const period = { from: input.from, to: input.to };
   return withTransaction(db, async (tx) => {
@@ -282,6 +305,26 @@ export async function generateStudentReport(
     };
   });
 }
+
+/**
+ * R16: has a teacher withdrawn a review this report was built from? `null` = Academic could not
+ * be asked. Reports without Academic reviews never ask.
+ */
+async function withdrawnSource(row: typeof opsReportExports.$inferSelect) {
+  const refs = (row.sourceRefs as { reviews?: { reviewKey: string }[] } | null)?.reviews ?? [];
+  if (!refs.length) return false;
+  const r = await fetchAcademicReviews({ coreStudentId: row.studentId });
+  if (r.status === 'unavailable') return null;
+  const live = new Set(visibleReviews(r.data.reviews).map((x) => x.reviewKey));
+  return refs.some((x) => !live.has(x.reviewKey));
+}
+
+const SOURCE_NOTICES = {
+  withdrawn: 'A source review was withdrawn — generate the report again.',
+  unchecked:
+    'Academic OS could not be reached to re-check the source reviews; try again before finalising or printing.',
+  withdrawnAfterFinal: 'A source review was withdrawn after this report was finalised.',
+};
 
 const findRow = (db: Database, identityId: string, reference: string) =>
   db
@@ -332,12 +375,25 @@ export async function getStudentReport(
     canReview: can(actor, 'ops:student_reports:review'),
     reviewBeforeFinal,
   };
+  const withdrawn = legacy ? false : await withdrawnSource(row);
+  const final = row.status === 'final';
+  /** R16: a non-final report whose sources changed (or cannot be checked) is blocked. */
+  const blocked = !final && withdrawn !== false;
+  const notice = final
+    ? withdrawn
+      ? SOURCE_NOTICES.withdrawnAfterFinal
+      : null
+    : withdrawn
+      ? SOURCE_NOTICES.withdrawn
+      : withdrawn === null
+        ? SOURCE_NOTICES.unchecked
+        : null;
   /** Moves this reader may make now (the status route re-checks them under a row lock). */
   const actions = {
-    review: !legacy && reportTransition(row.status, 'reviewed', ctx).ok,
-    finalise: !legacy && reportTransition(row.status, 'final', ctx).ok,
+    review: !legacy && !blocked && reportTransition(row.status, 'reviewed', ctx).ok,
+    finalise: !legacy && !blocked && reportTransition(row.status, 'final', ctx).ok,
   };
-  return { export: meta, fields, view, actions, ctx };
+  return { export: meta, fields, view, actions, ctx, blocked, notice };
 }
 
 const MOVE_ERRORS = {
@@ -359,7 +415,13 @@ export async function setStudentReportStatus(
   to: 'reviewed' | 'final',
   requestId?: string,
 ) {
-  const { export: meta, ctx } = await getStudentReport(db, actor, studentId, reference);
+  const {
+    export: meta,
+    ctx,
+    blocked,
+    notice,
+  } = await getStudentReport(db, actor, studentId, reference);
+  if (blocked) throw new InvalidStateTransitionError(notice!);
   return withTransaction(db, async (tx) => {
     const [row] = await tx
       .select()
@@ -408,6 +470,7 @@ export async function studentReportPdf(
     throw new ValidationError(
       'This report was made before report snapshots existed, so it has no stored content to print.',
     );
+  if (r.blocked) throw new InvalidStateTransitionError(r.notice!);
   const pdf = await progressReportPdf(r.view, r.export);
   await recordAudit(db, {
     actorUserId: actor.id,

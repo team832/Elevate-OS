@@ -39,13 +39,13 @@ import {
   type AdmissionNumberFormat,
 } from '../domain/admission-numbers';
 import { ALLOWED_PROGRAMME_COMBINATIONS, isAllowedCombination } from '../domain/catalog';
-import { demoWithChecklist } from './demos';
+import { demoWithChecklist, marksForDemo } from './demos';
 import { decideIdentity, maskPhone } from '../domain/student-lifecycle';
 import { feeArrangementPolicy } from './approval-policies';
 import { admissionRow, assertAdmissionAccess, lockAccessible } from './admissions';
 import { createApplication } from './applications';
 import { accessScope, type Actor } from './context';
-import { fieldError, inOrder, opsAudit } from './ops-common';
+import { fieldError, inOrder, opsAudit, rowById } from './ops-common';
 import {
   applyTransition,
   createAdmissionRecord,
@@ -292,9 +292,10 @@ const CONVERTIBLE: readonly AdmissionStatus[] = [
 /** GET /demos/{id}/convert — everything the wizard shows before converting (nothing is written). */
 export async function previewConversion(db: Database, actor: Actor, demoId: string) {
   const access = await accessScope(db, actor, 'ops:admissions:convert');
+  const found = await rowById(db, opsDemos, demoId, 'Demo');
+  const admission = await admissionRow(db, found.admissionId);
+  await assertAdmissionAccess(db, access, admission); // before Academic is asked
   const { demo, checklist } = await demoWithChecklist(db, demoId);
-  const admission = await admissionRow(db, demo.admissionId);
-  await assertAdmissionAccess(db, access, admission);
   const [[lead], sameLead, settings, programmeRows] = await Promise.all([
     db.select().from(opsLeads).where(eq(opsLeads.id, admission.leadId)),
     sameLeadIdentity(db, admission.leadId),
@@ -374,8 +375,12 @@ export async function convertDemo(
       'Enrolment is requested when the admission is confirmed, not at conversion.',
     );
   const settings = await loadSettings(db);
+  const found = await rowById(db, opsDemos, demoId, 'Demo');
+  await assertAdmissionAccess(db, access, await admissionRow(db, found.admissionId));
+  // Academic's marks are read before the transaction: no network call while rows are locked.
+  const marks = await marksForDemo(db, demoId);
   return withTransaction(db, async (tx) => {
-    const { demo, checklist } = await demoWithChecklist(tx, demoId, true);
+    const { demo, checklist } = await demoWithChecklist(tx, demoId, true, marks);
     let admission = await lockAccessible(tx, access, demo.admissionId);
     if (demo.outcome !== 'open')
       throw new ConflictError(

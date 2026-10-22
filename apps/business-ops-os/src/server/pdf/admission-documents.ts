@@ -18,6 +18,7 @@ import {
 import { DELIVERY_MODE_LABELS, type ApplicationSnapshot } from '../../domain/applications';
 import { CLASS_CATEGORY_LABELS } from '../../domain/demos';
 import { formatPaise } from '../../domain/fees';
+import { humanise } from '../../ui/format';
 import { createPdf, type PdfBuilder } from './document';
 
 export const FORM_TEMPLATE_VERSION = 'admission-form/2';
@@ -116,7 +117,7 @@ function feeTables(pdf: PdfBuilder, r: AdmissionRecord) {
       cellMoney(t.duePaise),
       cellMoney(t.receivedPaise),
       cell(day(t.lastReceiptDate)),
-      cell(t.mode),
+      cell(t.mode && t.mode.split(', ').map(humanise).join(', ')),
       cellMoney(t.balancePaise),
     ]),
   );

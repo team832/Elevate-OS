@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { academicClassSessions, academicEnrolments } from '@elevate/database';
+import { academicBatchPlacements, academicClassSessions, academicEnrolments } from '@elevate/database';
 import type { AcademicStudentSummaryV1 } from '@elevate/shared-contracts';
-import { buildRequest, callRoute, setupTestDatabase } from '@elevate/testing';
+import { buildRequest, callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import { GET as summaryRoute } from '../../src/app/api/internal/v1/students/[id]/summary/route';
 import {
   addAnswerKey,
@@ -11,11 +11,12 @@ import {
   createStudent,
   enrolManually,
   finaliseAssessment,
-  recordAttendance,
+  publishResults,
   recordClass,
   upsertAttempts,
 } from '../../src/server';
 import { attemptsBody, createAssessmentBody } from '../../src/server/schemas';
+import { attend, markHeld } from './a4-helpers';
 import { actor, uniq, users, world } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -83,25 +84,21 @@ describe('GET /academic/api/internal/v1/students/{id}/summary (IR-OPS-STU-1)', (
       },
     ]);
     const [s1, s2, s3] = sessions.map((s) => s.id as string) as [string, string, string];
+    await markHeld(ctx.db, [s1, s2, s3]);
     await recordClass(ctx.db, actor(u.teacher), {
       sessionId: s1,
       chapterId: w.ch1.id,
       completion: 'completed',
       actualMinutes: 75,
       activity: 'main',
+      submit: true,
     });
-    await recordAttendance(ctx.db, actor(u.teacher), s1, {
-      marks: [
+    await attend(ctx.db, actor(u.teacher), s1, [
         { studentId: asha.id, status: 'present' },
         { studentId: ravi.id, status: 'present' },
-      ],
-    });
-    await recordAttendance(ctx.db, actor(u.teacher), s2, {
-      marks: [{ studentId: asha.id, status: 'absent' }],
-    });
-    await recordAttendance(ctx.db, actor(u.teacher2), s3, {
-      marks: [{ studentId: asha.id, status: 'late' }],
-    });
+      ]);
+    await attend(ctx.db, actor(u.teacher), s2, [{ studentId: asha.id, status: 'absent' }]);
+    await attend(ctx.db, actor(u.teacher2), s3, [{ studentId: asha.id, status: 'late' }]);
     // A later timetable change names another teacher on the logged session: history keeps the class record's teacher.
     await ctx.db
       .update(academicClassSessions)
@@ -143,6 +140,8 @@ describe('GET /academic/api/internal/v1/students/{id}/summary (IR-OPS-STU-1)', (
       }),
     );
     await finaliseAssessment(ctx.db, coord, assessment.id);
+    expect((await call(asha.id, '?from=2026-09-01&to=2026-09-30')).data!.results).toEqual([]); // unpublished never leaves Academic
+    await publishResults(ctx.db, coord, assessment.id);
 
     const res = await call(asha.id, '?from=2026-09-01&to=2026-09-30');
     expect(res.status).toBe(200);
@@ -188,68 +187,57 @@ describe('GET /academic/api/internal/v1/students/{id}/summary (IR-OPS-STU-1)', (
       }),
     ]);
     const other = (await call(ravi.id, '?from=2026-09-01&to=2026-09-30')).data!;
-    expect(other.results[0]).toMatchObject({ state: 'scored', score: 3, maxScore: 4, rank: 1 });
+    expect(other.results[0]).toMatchObject({ state: 'scored', score: 3, maxScore: 4, rank: null }); // rank policy not approved
 
     const outside = (await call(asha.id, '?from=2026-10-01&to=2026-10-31')).data!;
     expect(outside.attendance.held).toBe(0);
     expect(outside.results).toEqual([]);
   });
-  it('a batch change: the old batch counts only sessions the student was marked in; its later teachers are not listed', async () => {
+  it('a transfer: each batch counts only sessions inside its placement; later teachers of the old batch are not listed', async () => {
+    const u = await users(ctx.db);
+    const w = await world(ctx.db, u);
+    const w2 = await world(ctx.db, u, { teacher: await createTestUser(ctx.db, { roles: ['teacher'] }), teacher2: await createTestUser(ctx.db, { roles: ['teacher'] }) });
+    const coord = actor(u.coordinator);
+    const mira = await createStudent(ctx.db, coord, { fullName: 'Sample Mira (fictional)' });
+    const enrolment = await enrolManually(ctx.db, coord, { studentId: mira.id, batchId: w.batch.id, startDate: '2026-09-01', reason: 'Test (fictional)' });
+    const at = (batchId: string, subjectId: string, teacherStaffId: string, date: string) => ({ batchId, subjectId, teacherStaffId, sessionType: 'teaching' as const, date, startTime: '09:00', durationMinutes: 75 });
+    const { sessions } = await createSessions(ctx.db, coord, [
+      at(w.batch.id, w.quant.id, w.teacherStaff, '2026-09-07'),
+      at(w.batch.id, w.verbal.id, w.teacher2Staff, '2026-09-21'),
+      at(w2.batch.id, w2.quant.id, w2.teacherStaff, '2026-09-22'),
+    ]);
+    await markHeld(ctx.db, sessions.map((s) => s.id));
+    await attend(ctx.db, actor(u.teacher), sessions[0]!.id, [{ studentId: mira.id, status: 'present' }]);
+    // Mira moves to the second batch from 11 Sep (same enrolment, new placement).
+    const [first] = await ctx.db.select().from(academicBatchPlacements).where(eq(academicBatchPlacements.enrolmentId, enrolment.id));
+    await ctx.db.update(academicBatchPlacements).set({ endDate: '2026-09-10', endedReason: 'Transfer (fictional)', endedByUserId: u.coordinator.id }).where(eq(academicBatchPlacements.id, first!.id));
+    await ctx.db.insert(academicBatchPlacements).values({ enrolmentId: enrolment.id, batchId: w2.batch.id, startDate: '2026-09-11', reason: 'Transfer (fictional)', transferFromPlacementId: first!.id, placedByUserId: u.coordinator.id });
+    const d = (await call(mira.id, '?from=2026-09-01&to=2026-09-30')).data!;
+    expect(d.attendance).toEqual({ held: 2, present: 1, partial: 0, late: 0, absent: 0, excused: 0 }); // 7 Sep (A) + 22 Sep (B, not recorded)
+    expect(d.enrolments[0]!.teachers).toEqual(
+      expect.arrayContaining([
+        { staffId: w.teacherStaff, subject: 'Quant' },
+        { staffId: w2.teacherStaff, subject: 'Quant' },
+      ]),
+    );
+    expect(d.enrolments[0]!.teachers.find((t) => t.staffId === w.teacher2Staff)).toBeUndefined();
+    expect((await call(mira.id, '?from=2020-01-01&to=2026-09-30')).status).toBe(400); // window > 3 years
+  });
+
+  it('a closed enrolment with no placement history is reported as not recorded, never as 0 held', async () => {
     const u = await users(ctx.db);
     const w = await world(ctx.db, u);
     const coord = actor(u.coordinator);
-    const mira = await createStudent(ctx.db, coord, { fullName: 'Mira Example (fictional)' });
-    const old = await enrolManually(ctx.db, coord, {
-      studentId: mira.id,
-      batchId: w.batch.id,
-      startDate: '2026-09-01',
-      reason: 'Test (fictional)',
-    });
-    const { sessions } = await createSessions(ctx.db, coord, [
-      {
-        batchId: w.batch.id,
-        subjectId: w.quant.id,
-        teacherStaffId: w.teacherStaff,
-        sessionType: 'teaching',
-        date: '2026-09-07',
-        startTime: '09:00',
-        durationMinutes: 75,
-      },
-      {
-        batchId: w.batch.id,
-        subjectId: w.verbal.id,
-        teacherStaffId: w.teacher2Staff,
-        sessionType: 'teaching',
-        date: '2026-09-21',
-        startTime: '09:00',
-        durationMinutes: 75,
-      },
-    ]);
-    await recordAttendance(ctx.db, actor(u.teacher), sessions[0]!.id, {
-      marks: [{ studentId: mira.id, status: 'present' }],
-    });
-    // Mira moves batch: the old enrolment closes; the old batch keeps holding classes.
-    await ctx.db
-      .update(academicEnrolments)
-      .set({ status: 'withdrawn' })
-      .where(eq(academicEnrolments.id, old.id));
-    await ctx.db
-      .update(academicClassSessions)
-      .set({ status: 'held' })
-      .where(eq(academicClassSessions.id, sessions[1]!.id));
-    const d = (await call(mira.id, '?from=2026-09-01&to=2026-09-30')).data!;
-    expect(d.attendance).toEqual({
-      held: 1,
-      present: 1,
-      partial: 0,
-      late: 0,
-      absent: 0,
-      excused: 0,
-    });
-    expect(d.enrolments[0]).toMatchObject({
-      status: 'withdrawn',
-      teachers: [{ staffId: w.teacherStaff, subject: 'Quant' }],
-    });
-    expect((await call(mira.id, '?from=2020-01-01&to=2026-09-30')).status).toBe(400); // window > 3 years
+    const old = await createStudent(ctx.db, coord, { fullName: 'Sample Ola (fictional)' });
+    const e = await enrolManually(ctx.db, coord, { studentId: old.id, batchId: w.batch.id, startDate: '2026-09-01', reason: 'Test (fictional)' });
+    const { sessions } = await createSessions(ctx.db, coord, [{ batchId: w.batch.id, subjectId: w.quant.id, teacherStaffId: w.teacherStaff, sessionType: 'teaching', date: '2026-09-07', startTime: '09:00', durationMinutes: 75 }]);
+    await markHeld(ctx.db, [sessions[0]!.id]);
+    // Pre-0009 shape: a closed enrolment whose batch history was never recorded.
+    await ctx.db.delete(academicBatchPlacements).where(eq(academicBatchPlacements.enrolmentId, e.id));
+    await ctx.db.update(academicEnrolments).set({ status: 'withdrawn' }).where(eq(academicEnrolments.id, e.id));
+    const res = await call(old.id, '?from=2026-09-01&to=2026-09-30');
+    const d = res.data! as AcademicStudentSummaryV1 & { extensions?: { attendanceNotRecorded: { enrolmentId: string; reason: string }[] } };
+    expect(d.attendance.held).toBe(0);
+    expect(d.extensions!.attendanceNotRecorded).toEqual([{ enrolmentId: e.id, reason: 'Not recorded — no batch history before 21 Oct 2026' }]);
   });
 });

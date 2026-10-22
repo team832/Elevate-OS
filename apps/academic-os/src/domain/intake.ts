@@ -8,8 +8,9 @@
  *   2 COURSE_NOT_FOUND       intended course unknown or under another programme
  *   3 BATCH_NOT_FOUND        intended batch unknown, under another programme/course,
  *                            or not open (completed / cancelled)
- *   4 INVALID_REQUEST        a minor without a guardian contact (PLT-014)
- *   5 DUPLICATE_ENROLMENT    the student already has an active enrolment in the batch
+ *   4 INVALID_REQUEST        a minor without a guardian contact (PLT-014), or the matched
+ *                            Academic student is linked to a different person (core student id)
+ *   5 DUPLICATE_ENROLMENT    the student already has an active enrolment in the batch or course
  *   6 BATCH_FULL             the batch's seat limit is reached
  * Otherwise confirm (a batch is optional: without one the enrolment waits for allocation).
  */
@@ -38,8 +39,10 @@ export interface IntakeRefs {
     capacity: number | null;
     activeEnrolments: number;
   } | null;
-  /** The student already has an active enrolment in the intended batch. */
-  duplicateInBatch: boolean;
+  /** The matched student already has an active enrolment in the intended batch or course. */
+  duplicateEnrolment: boolean;
+  /** The matched student (or another one) is already linked to a different core student id. */
+  identityConflict?: boolean;
 }
 
 export type IntakeDecision =
@@ -104,8 +107,11 @@ export function decideIntake(request: IntakeRequest, refs: IntakeRefs, today: st
   if (isMinor(request.student, today) && !(request.guardian?.email || request.guardian?.phone)) {
     return reject('INVALID_REQUEST', 'The student is a minor; a guardian with an email or phone is required.');
   }
-  if (batch && refs.duplicateInBatch) {
-    return reject('DUPLICATE_ENROLMENT', 'The student already has an active enrolment in this batch.');
+  if (refs.identityConflict) {
+    return reject('INVALID_REQUEST', 'The matching Academic student is linked to a different person; check the student link in Business Ops.');
+  }
+  if (refs.duplicateEnrolment) {
+    return reject('DUPLICATE_ENROLMENT', 'The student already has an active enrolment in this batch or course.');
   }
   if (batch && batch.capacity !== null && batch.activeEnrolments >= batch.capacity) {
     return reject('BATCH_FULL', `The batch is full (${batch.activeEnrolments}/${batch.capacity}).`);

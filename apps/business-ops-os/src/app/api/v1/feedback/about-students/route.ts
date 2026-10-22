@@ -1,22 +1,14 @@
-import { created, defineRoute } from '@elevate/server-kit';
-import { createTeacherFeedback, listStudentFeedback } from '../../../../../server/feedback';
+import { defineRoute } from '@elevate/server-kit';
+import { listStudentFeedback } from '../../../../../server/feedback';
 import { studentFeedbackQuery } from '../../../../../server/appointments-schemas';
-import { teacherFeedbackBody } from '../../../../../server/report-schemas';
 
 export const dynamic = 'force-dynamic';
 
-/** GET /ops/api/v1/feedback/about-students?studentId= — Teacher → student feedback (all versions). */
+/**
+ * GET /ops/api/v1/feedback/about-students?studentId= — reviews recorded in Business Ops before
+ * 21 Oct 2026 (read-only history; teachers now write reviews in Academic OS).
+ */
 export const GET = defineRoute(
   { permission: 'ops:feedback:read', query: studentFeedbackQuery },
   async ({ user, db, query }) => listStudentFeedback(db, user, query.studentId),
-);
-
-/** POST — A teacher writes feedback about a student (or a manager on their behalf). */
-export const POST = defineRoute(
-  {
-    permission: { anyOf: ['ops:feedback:write', 'ops:feedback:manage'] },
-    body: teacherFeedbackBody,
-  },
-  async ({ user, db, body, requestId }) =>
-    created(await createTeacherFeedback(db, user, body, requestId)),
 );

@@ -1,13 +1,14 @@
 /**
- * Teacher feedback tab (brief §5): review state per demo day per teacher from the single
- * teacher-feedback store (server/feedback.ts demoFeedbackByDay; teachers write in their module).
- * Pending, draft and submitted differ; "No review submitted" says nothing about the student. Review text only for staff with ops:feedback:read.
- * Student and guardian feedback after the demo stay checklist items.
+ * Teacher feedback tab (brief §5; owner answers 1 and 3, 21 Oct 2026): review state per demo day
+ * per teacher (server/feedback.ts demoFeedbackByDay). Teachers write reviews in Academic OS; this
+ * tab shows the submitted ones, the older Ops records as read-only history, and "Source
+ * unavailable" when Academic cannot be read. "No review submitted" says nothing about the
+ * student. Student and guardian feedback after the demo stay checklist items.
  */
 import { can } from '@elevate/authorization';
-import { fmtDateTime } from '../../../ui/format';
 import { RecordTable } from '../../../ui/record-table';
 import { Segment } from '../../../ui/sections';
+import { AcademicReviewList } from '../../../ui/student-feedback-section';
 import { ChecklistForm, ChecklistTable } from './demo-activity';
 import { ReviewBadge } from './demo-bits';
 import type { DemoTabProps } from './demo-record';
@@ -23,7 +24,7 @@ export function DemoFeedback({ d, user, level }: DemoTabProps) {
         title="Teacher reviews"
         level={level}
         flush
-        description="One review per teacher per demo day, about the classes they took. A teacher whose class the student did not attend has no review due."
+        description="One review per teacher per demo day, about the classes they took (for a class linked to Academic OS, its actual teachers). A teacher whose class the student did not attend has no review due."
       >
         <RecordTable
           rows={rows}
@@ -37,30 +38,37 @@ export function DemoFeedback({ d, user, level }: DemoTabProps) {
               render: (t) => `${t.teacherName}${t.isSubstitute ? ' (substitute)' : ''}`,
             },
             { key: 'state', header: 'Review', render: (t) => <ReviewBadge state={t.state} /> },
-            {
-              key: 'text',
-              header: 'Observation, strengths, support, next step',
-              render: (t) => {
-                const own = d.reviewTexts.filter((r) => t.reviewIds.includes(r.id));
-                if (own.length === 0)
-                  return t.state === 'submitted' || t.state === 'draft'
-                    ? 'Shown to staff with feedback access'
-                    : '—';
-                return own.map((r) => (
-                  <p key={r.id}>
-                    <strong>
-                      v{r.version} ({r.status}, {fmtDateTime(r.updatedAt)}):
-                    </strong>{' '}
-                    {[r.observations, r.strengths, r.areasToImprove, r.actionPlan]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                ));
-              },
-            },
           ]}
         />
       </Segment>
+      <Segment title="Submitted reviews (Academic OS)" level={level}>
+        <AcademicReviewList result={d.reviews} user={user} heading={level === 3 ? 'h4' : 'h3'} />
+      </Segment>
+      {d.legacyReviews.length ? (
+        <Segment
+          title="Earlier reviews — recorded in Business Ops before 21 Oct 2026"
+          level={level}
+          flush
+          description="Read-only history."
+        >
+          <RecordTable
+            rows={d.legacyReviews}
+            rowKey={(r) => r.id}
+            columns={[
+              { key: 'subject', header: 'Subject' },
+              { key: 'v', header: 'Version', numeric: true, render: (r) => r.version },
+              {
+                key: 'text',
+                header: 'Observation, strengths, support, next step',
+                render: (r) =>
+                  [r.observations, r.strengths, r.areasToImprove, r.actionPlan]
+                    .filter(Boolean)
+                    .join(' · '),
+              },
+            ]}
+          />
+        </Segment>
+      ) : null}
       <Segment
         title="Student and guardian feedback"
         level={level}

@@ -24,21 +24,38 @@ export type Section =
   | 'assessments'
   | 'students'
   | 'progress'
-  | 'intake';
+  | 'intake'
+  | 'teachers'
+  | 'enrolments'
+  | 'reviews'
+  | 'reports'
+  | 'settings';
 
 const NAV: { key: Section; label: string; href: string; permission: Permission; group: string }[] = [
-  { key: 'home', label: 'Dashboard', href: MODULE_PATHS.home, permission: 'academic:module:access', group: 'Today' },
+  { key: 'home', label: 'My day', href: MODULE_PATHS.home, permission: 'academic:module:access', group: 'Today' },
+  { key: 'teachers', label: 'Teachers', href: MODULE_PATHS.teachers, permission: 'academic:assignments:read', group: 'Teaching' },
   { key: 'batches', label: 'Batches', href: MODULE_PATHS.batches, permission: 'academic:batches:read', group: 'Teaching' },
   { key: 'timetable', label: 'Timetable', href: MODULE_PATHS.timetable, permission: 'academic:timetable:read', group: 'Teaching' },
-  { key: 'teaching', label: 'Teaching log', href: MODULE_PATHS.teaching, permission: 'academic:classes:read', group: 'Teaching' },
+  { key: 'teaching', label: 'Teaching logs', href: MODULE_PATHS.teaching, permission: 'academic:classes:read', group: 'Teaching' },
+  { key: 'reviews', label: 'Reviews', href: MODULE_PATHS.reviews, permission: 'academic:reviews:read', group: 'Teaching' },
   { key: 'students', label: 'Students', href: MODULE_PATHS.students, permission: 'academic:students:read', group: 'Students' },
-  { key: 'progress', label: 'Progress', href: MODULE_PATHS.progress, permission: 'academic:progress:read', group: 'Students' },
+  { key: 'enrolments', label: 'Enrolments', href: MODULE_PATHS.enrolments, permission: 'academic:enrolments:read', group: 'Students' },
+  { key: 'progress', label: 'Progress and support', href: MODULE_PATHS.progress, permission: 'academic:progress:read', group: 'Students' },
   { key: 'intake', label: 'Enrolment intake', href: MODULE_PATHS.intake, permission: 'academic:enrolments:read', group: 'Students' },
   { key: 'curriculum', label: 'Curriculum', href: MODULE_PATHS.curriculum, permission: 'academic:courses:read', group: 'Curriculum' },
   { key: 'assessments', label: 'Assessments', href: MODULE_PATHS.assessments, permission: 'academic:assessments:read', group: 'Assessments' },
+  { key: 'reports', label: 'Reports', href: MODULE_PATHS.reports, permission: 'academic:summary:read', group: 'Oversight' },
+  { key: 'settings', label: 'Academic settings', href: MODULE_PATHS.settings, permission: 'academic:settings:manage', group: 'Oversight' },
 ];
 
 /** Curriculum area tabs (courses and plans, concept-book indices). */
+/** Timetable area tabs. */
+export const TIMETABLE_TABS = [
+  [MODULE_PATHS.timetable, 'Agenda'],
+  [`${MODULE_PATHS.timetable}?view=week`, 'Week'],
+  [MODULE_PATHS.patterns, 'Patterns'],
+] as const;
+
 export const CURRICULUM_TABS = [
   [MODULE_PATHS.curriculum, 'Courses and plans'],
   [MODULE_PATHS.conceptBooks, 'Concept-book indices'],

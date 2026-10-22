@@ -1,13 +1,18 @@
 /**
- * One teacher, shared by the directory pop-up (`/ops/teachers?open=<id>`) and the
- * profile route (`/ops/teachers/<id>`): bordered sections as tabs, and the edit /
- * record-feedback flows in their own FormModal (`act=<key>`).
+ * One teacher, shared by the directory pop-up (`/ops/teachers?open=<id>`) and the profile route
+ * (`/ops/teachers/<id>`): bordered sections as tabs, and the edit / record-feedback flows in their
+ * own FormModal (`act=<key>`). Each fact names its source (brief 2 §7–8): HR attendance has none
+ * (D-032), class delivery and logs come from Academic OS, tasks and EOD from Business Ops. No
+ * salary, identity documents, private notes, ratings or productivity scores.
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { StatusBadge } from '@elevate/shared-ui';
+import type { Metric } from '@elevate/shared-contracts';
+import { Alert, MetricStrip, StatusBadge } from '@elevate/shared-ui';
 import { REVIEW_STATE_LABELS } from '../../domain/feedback';
-import { demoReviewsDue } from '../../server/feedback';
+import { writeReviewHref } from '../../server/academic-reviews';
+import { demoReviewsDue, REVIEWS_DUE_DAYS } from '../../server/feedback';
+import { HR_UNAVAILABLE } from '../../server/teacher-ops';
 import type { getTeacherProfile } from '../../server/teachers';
 import { ActionForm, type ActionFormProps } from '../../ui/action-form';
 import { load } from '../../ui/frame';
@@ -15,6 +20,7 @@ import { fmtDate, fmtDateTime, humanise } from '../../ui/format';
 import { FormModal, type ModalTab } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
 import { DetailTable, Segment } from '../../ui/sections';
+import { AcademicReviewList, isTeacher } from '../../ui/student-feedback-section';
 import { ApptStatus, SampleBadge, TypeBadge } from '../meetings/appointment-view';
 import { VerificationBadge } from './verification-badge';
 
@@ -31,6 +37,17 @@ const needs = (permission: string) => (
   <p className="el-field-hint">Needs permission {permission}.</p>
 );
 
+const ACADEMIC_DOWN = 'Academic OS unavailable';
+const unavailable = (r: { reason: string; fetchedAt: string }) => (
+  <Alert tone="warning" title={`${ACADEMIC_DOWN} — it could not be reached`}>
+    Checked {fmtDateTime(r.fetchedAt)} ({r.reason}). Nothing here means zero.
+  </Alert>
+);
+
+/** A metric as a short cell value: missing stays "Not recorded", never 0. */
+export const metricText = (m: Metric) =>
+  m.status === 'missing' ? 'Not recorded' : String(m.value);
+
 export function teacherTabs(
   t: TeacherProfile,
   user: AuthenticatedUser,
@@ -39,14 +56,37 @@ export function teacherTabs(
 ): ModalTab[] {
   const moderate = can(user, 'ops:feedback:moderate');
   const about = t.feedbackAbout;
+  const a = t.activity.status === 'available' ? t.activity.data : null;
+  const sources = [
+    { source: 'HR attendance and leave', state: 'Source unavailable (no HR module, D-032)' },
+    {
+      source: 'Academic OS — assignments, classes, logs, marking',
+      state:
+        t.activity.status === 'available'
+          ? `Fresh — generated ${fmtDateTime(t.activity.data.generatedAt)}`
+          : `Source unavailable (${t.activity.reason}), checked ${fmtDateTime(t.activity.fetchedAt)}`,
+    },
+    {
+      source: 'Academic OS — student reviews',
+      state: !t.reviewsAuthored
+        ? 'Not shared with you'
+        : t.reviewsAuthored.status === 'available'
+          ? `Fresh — checked ${fmtDateTime(t.reviewsAuthored.checkedAt)}`
+          : `Source unavailable (${t.reviewsAuthored.reason}), checked ${fmtDateTime(t.reviewsAuthored.checkedAt)}`,
+    },
+    {
+      source: 'Business Ops — tasks and EOD reports',
+      state: t.tasks ? 'Fresh — read now' : 'Not shared with you',
+    },
+  ];
   return [
     {
-      key: 'profile',
-      label: 'Profile',
+      key: 'overview',
+      label: 'Overview',
       content: (
         <>
           <Segment
-            title="Subjects and role"
+            title="Role and professional details"
             level={level}
             flush
             actions={
@@ -57,6 +97,10 @@ export function teacherTabs(
           >
             <DetailTable
               rows={[
+                { label: 'Staff code', value: t.profile?.staffCode ?? 'Not assigned' },
+                { label: 'Department', value: t.department ?? 'Not recorded' },
+                { label: 'Manager', value: t.manager ?? 'Not recorded' },
+                { label: 'Staff status', value: humanise(t.staff.status) },
                 {
                   label: 'Subjects',
                   value: t.subjects.length ? (
@@ -82,21 +126,43 @@ export function teacherTabs(
                       <VerificationBadge status={t.profile?.verificationStatus} />
                     ),
                 },
-                { label: 'Staff status', value: humanise(t.staff.status) },
-                { label: 'Staff code', value: t.profile?.staffCode ?? 'Not assigned' },
                 { label: 'Source', value: t.profile?.sourceNote ?? 'Not recorded' },
-                !!t.profile?.notes &&
-                  can(user, 'ops:teachers:manage') && {
-                    label: 'Internal note',
-                    value: t.profile.notes,
-                  },
-                { label: 'Batches', value: `Not available: ${t.batches.reason}` },
-                { label: 'Staff record', value: <a href={`/ops/staff/${t.staff.id}`}>Open</a> },
+                {
+                  label: 'Contacts',
+                  value: <a href={`/ops/staff/${t.staff.id}`}>On the staff record</a>,
+                },
               ]}
             />
           </Segment>
           <Segment
-            title="Workload"
+            title="Academic assignments"
+            level={level}
+            flush
+            description="From Academic OS: the batches and subjects this teacher is assigned to."
+          >
+            {a ? (
+              <RecordTable
+                rows={a.assignments}
+                rowKey={(x) => `${x.batchCode}-${x.subjectName}-${x.role}`}
+                empty="No assignment in Academic OS."
+                columns={[
+                  { key: 'batch', header: 'Batch', render: (x) => x.batchCode },
+                  { key: 'subject', header: 'Subject', render: (x) => x.subjectName },
+                  { key: 'role', header: 'Role', render: (x) => humanise(x.role) },
+                  {
+                    key: 'dates',
+                    header: 'Dates',
+                    render: (x) =>
+                      `${fmtDate(x.startDate)} to ${x.endDate ? fmtDate(x.endDate) : 'open'}`,
+                  },
+                ]}
+              />
+            ) : t.activity.status === 'unavailable' ? (
+              unavailable(t.activity)
+            ) : null}
+          </Segment>
+          <Segment
+            title="Workload in Business Ops"
             level={level}
             flush
             description="Booked appointments and scheduled demo classes: a capacity view, not a performance score."
@@ -112,6 +178,91 @@ export function teacherTabs(
       ),
     },
     {
+      key: 'attendance',
+      label: 'Attendance and leave',
+      content: (
+        <Segment title="Attendance and leave" level={level}>
+          <div className="el-stack">
+            <p>
+              <StatusBadge tone="neutral">{HR_UNAVAILABLE}</StatusBadge>
+            </p>
+            <p className="el-field-hint">
+              Elevate OS has no HR attendance or leave records, so nobody is shown present or absent
+              here. Class delivery (Academic OS) and EOD reports are not attendance.
+            </p>
+            {a?.unavailability.length ? (
+              <RecordTable
+                caption="Academic availability records — not HR leave"
+                rows={a.unavailability}
+                rowKey={(u) => `${u.from}-${u.to}`}
+                columns={[
+                  { key: 'from', header: 'From', render: (u) => fmtDate(u.from) },
+                  { key: 'to', header: 'To', render: (u) => fmtDate(u.to) },
+                ]}
+              />
+            ) : null}
+          </div>
+        </Segment>
+      ),
+    },
+    {
+      key: 'academic',
+      label: 'Academic activity',
+      content: (
+        <Segment
+          title="Academic activity"
+          level={level}
+          description={`From Academic OS, ${fmtDate(t.activityWindow.from)} to ${fmtDate(t.activityWindow.to)}. Planned is not delivered; delivered counts classes marked delivered with this teacher as an actual teacher.`}
+        >
+          {a ? (
+            <MetricStrip
+              label="Academic activity"
+              items={[
+                { label: 'Planned classes', metric: a.sessions.planned },
+                { label: 'Delivered', metric: a.sessions.delivered },
+                { label: 'Cancelled', metric: a.sessions.cancelled },
+                { label: 'Substituted', metric: a.sessions.substituted },
+                { label: 'Teaching logs pending', metric: a.logsPending },
+                { label: 'Attendance not recorded', metric: a.attendancePending },
+                { label: 'Marking pending', metric: a.markingPending },
+              ]}
+            />
+          ) : t.activity.status === 'unavailable' ? (
+            unavailable(t.activity)
+          ) : null}
+        </Segment>
+      ),
+    },
+    {
+      key: 'tasks',
+      label: 'Tasks and updates',
+      content: (
+        <Segment
+          title="Tasks and updates"
+          level={level}
+          flush
+          description="Operational tasks in Business Ops. A task update is not attendance and does not prove a class was taught."
+          actions={
+            t.tasks ? (
+              <a href={`/ops/tasks?tab=all&staffId=${t.staff.id}`}>Open tasks</a>
+            ) : undefined
+          }
+        >
+          {t.tasks ? (
+            <DetailTable
+              rows={[
+                { label: 'Open tasks', value: String(t.tasks.open) },
+                { label: 'Overdue', value: String(t.tasks.overdue) },
+                { label: 'Today’s EOD report', value: humanise(t.tasks.eodToday) },
+              ]}
+            />
+          ) : (
+            needs('ops:tasks:read for this teacher (yourself or your reports)')
+          )}
+        </Segment>
+      ),
+    },
+    {
       key: 'appointments',
       label: 'Appointments',
       count: t.upcoming?.length ?? null,
@@ -122,25 +273,25 @@ export function teacherTabs(
           ) : (
             <RecordTable
               rows={t.upcoming}
-              rowKey={(a) => a.id}
-              rowHref={(a) => `/ops/meetings?open=${a.id}`}
+              rowKey={(x) => x.id}
+              rowHref={(x) => `/ops/meetings?open=${x.id}`}
               empty="Nothing booked from today."
               columns={[
-                { key: 'when', header: 'When', render: (a) => fmtDateTime(a.startsAt) },
-                { key: 'type', header: 'Type', render: (a) => <TypeBadge type={a.type} /> },
+                { key: 'when', header: 'When', render: (x) => fmtDateTime(x.startsAt) },
+                { key: 'type', header: 'Type', render: (x) => <TypeBadge type={x.type} /> },
                 {
                   key: 'who',
                   header: 'Student',
-                  render: (a) => (
+                  render: (x) => (
                     <>
-                      {a.personName} <SampleBadge show={a.studentSample} />
+                      {x.personName} <SampleBadge show={x.studentSample} />
                     </>
                   ),
                 },
                 {
                   key: 'status',
                   header: 'Status',
-                  render: (a) => <ApptStatus status={a.status} />,
+                  render: (x) => <ApptStatus status={x.status} />,
                 },
               ]}
             />
@@ -149,116 +300,39 @@ export function teacherTabs(
       ),
     },
     {
-      key: 'feedback',
-      label: 'Feedback',
-      count: about?.rows.length ?? null,
+      key: 'reviews',
+      label: 'Student reviews authored',
+      count:
+        t.reviewsAuthored?.status === 'available'
+          ? t.reviewsAuthored.reviews.filter((r) => !r.superseded).length
+          : null,
       content: (
         <>
           <Segment
-            title="Feedback from students and guardians"
+            title="Student reviews this teacher wrote"
             level={level}
-            flush
-            description="Recorded by staff on their behalf and moderated. The teacher cannot edit it."
-            actions={
-              can(user, 'ops:feedback:record') ? (
-                <a href={actHref('feedback')}>Record feedback</a>
-              ) : undefined
-            }
+            description="Submitted in Academic OS; you see those about students in your scope. These are a teacher's reviews of students. There is no manager appraisal of teachers in Elevate OS, and nothing here rates the teacher."
           >
-            {about === null ? (
-              needs('ops:feedback:read')
-            ) : (
-              <>
-                <DetailTable
-                  caption="Feedback summary"
-                  rows={[
-                    { label: 'Approved', value: String(about.summary.approved) },
-                    {
-                      label: 'Average rating',
-                      value:
-                        about.summary.averageRating === null
-                          ? 'No ratings given'
-                          : `${about.summary.averageRating.toFixed(1)} of 5 (${about.summary.rated} rated)`,
-                    },
-                  ]}
-                />
-                <RecordTable
-                  rows={about.rows}
-                  rowKey={(f) => f.id}
-                  empty="No feedback to show."
-                  columns={[
-                    { key: 'on', header: 'Date', render: (f) => fmtDate(f.feedbackOn) },
-                    { key: 'by', header: 'From', render: (f) => humanise(f.submittedByKind) },
-                    {
-                      key: 'rating',
-                      header: 'Rating',
-                      render: (f) => (f.rating === null ? 'Not rated' : `${f.rating} of 5`),
-                    },
-                    { key: 'comment', header: 'Comment' },
-                    {
-                      key: 'state',
-                      header: 'Moderation',
-                      render: (f) => (
-                        <div className="el-stack">
-                          <StatusBadge tone={MODERATION_TONE[f.moderationStatus]}>
-                            {humanise(f.moderationStatus)}
-                          </StatusBadge>
-                          {moderate && f.moderationStatus !== 'rejected' ? (
-                            <ActionForm
-                              action={`/ops/api/v1/feedback/about-teachers/${f.id}`}
-                              method="PATCH"
-                              submitLabel="Save decision"
-                              labelSuffix={` for the ${fmtDate(f.feedbackOn)} feedback`}
-                              compact
-                              variant="secondary"
-                              fields={[
-                                {
-                                  name: 'action',
-                                  label: 'Decision',
-                                  type: 'select',
-                                  required: true,
-                                  options: [
-                                    { value: 'approve', label: 'Approve' },
-                                    { value: 'reject', label: 'Reject' },
-                                    { value: 'hide', label: 'Hide' },
-                                  ],
-                                },
-                                {
-                                  name: 'visibility',
-                                  label: 'Visible to',
-                                  type: 'select',
-                                  options: [
-                                    { value: 'staff_only', label: 'Staff only' },
-                                    { value: 'teacher_and_staff', label: 'Teacher and staff' },
-                                  ],
-                                },
-                              ]}
-                            />
-                          ) : null}
-                        </div>
-                      ),
-                    },
-                  ]}
-                />
-              </>
-            )}
+            <AcademicReviewList
+              result={t.reviewsAuthored}
+              user={user}
+              showStudent
+              heading={level === 3 ? 'h4' : 'h3'}
+            />
           </Segment>
-          {t.feedbackWritten === null ? null : (
+          {t.reviewsAuthored ? (
             <DemoReviewsDue staffId={t.staff.id} user={user} level={level} />
-          )}
-          <Segment
-            title="Feedback this teacher wrote about students"
-            level={level}
-            flush
-            description="Latest version of each note."
-          >
-            {t.feedbackWritten === null ? (
-              needs('ops:feedback:read')
-            ) : (
+          ) : null}
+          {t.feedbackWritten?.length ? (
+            <Segment
+              title="Earlier reviews — recorded in Business Ops before 21 Oct 2026"
+              level={level}
+              flush
+              description="Read-only history; latest version of each."
+            >
               <RecordTable
                 rows={t.feedbackWritten}
                 rowKey={(f) => f.id}
-                empty="None written yet."
                 columns={[
                   { key: 'on', header: 'Date', render: (f) => fmtDate(f.observedOn) },
                   {
@@ -279,32 +353,182 @@ export function teacherTabs(
                   },
                 ]}
               />
-            )}
-          </Segment>
+            </Segment>
+          ) : null}
         </>
       ),
     },
     {
+      key: 'feedback',
+      label: 'Feedback about the teacher',
+      count: about?.rows.length ?? null,
+      content: (
+        <Segment
+          title="Feedback from students and guardians"
+          level={level}
+          flush
+          description="Recorded by staff on their behalf and moderated. The teacher cannot edit it."
+          actions={
+            can(user, 'ops:feedback:record') ? (
+              <a href={actHref('feedback')}>Record feedback</a>
+            ) : undefined
+          }
+        >
+          {about === null ? (
+            needs('ops:feedback:read')
+          ) : (
+            <>
+              <DetailTable
+                caption="Feedback summary"
+                rows={[
+                  { label: 'Approved', value: String(about.summary.approved) },
+                  {
+                    label: 'Average rating',
+                    value:
+                      about.summary.averageRating === null
+                        ? 'No ratings given'
+                        : `${about.summary.averageRating.toFixed(1)} of 5 (${about.summary.rated} rated)`,
+                  },
+                ]}
+              />
+              <RecordTable
+                rows={about.rows}
+                rowKey={(f) => f.id}
+                empty="No feedback to show."
+                columns={[
+                  { key: 'on', header: 'Date', render: (f) => fmtDate(f.feedbackOn) },
+                  { key: 'by', header: 'From', render: (f) => humanise(f.submittedByKind) },
+                  {
+                    key: 'rating',
+                    header: 'Rating',
+                    render: (f) => (f.rating === null ? 'Not rated' : `${f.rating} of 5`),
+                  },
+                  { key: 'comment', header: 'Comment' },
+                  {
+                    key: 'state',
+                    header: 'Moderation',
+                    render: (f) => (
+                      <div className="el-stack">
+                        <StatusBadge tone={MODERATION_TONE[f.moderationStatus]}>
+                          {humanise(f.moderationStatus)}
+                        </StatusBadge>
+                        {moderate && f.moderationStatus !== 'rejected' ? (
+                          <ActionForm
+                            action={`/ops/api/v1/feedback/about-teachers/${f.id}`}
+                            method="PATCH"
+                            submitLabel="Save decision"
+                            labelSuffix={` for the ${fmtDate(f.feedbackOn)} feedback`}
+                            compact
+                            variant="secondary"
+                            fields={[
+                              {
+                                name: 'action',
+                                label: 'Decision',
+                                type: 'select',
+                                required: true,
+                                options: [
+                                  { value: 'approve', label: 'Approve' },
+                                  { value: 'reject', label: 'Reject' },
+                                  { value: 'hide', label: 'Hide' },
+                                ],
+                              },
+                              {
+                                name: 'visibility',
+                                label: 'Visible to',
+                                type: 'select',
+                                options: [
+                                  { value: 'staff_only', label: 'Staff only' },
+                                  { value: 'teacher_and_staff', label: 'Teacher and staff' },
+                                ],
+                              },
+                            ]}
+                          />
+                        ) : null}
+                      </div>
+                    ),
+                  },
+                ]}
+              />
+            </>
+          )}
+        </Segment>
+      ),
+    },
+    {
+      key: 'eod',
+      label: 'EOD history',
+      count: t.eods?.length ?? null,
+      content: (
+        <Segment
+          title="EOD reports and manager responses"
+          level={level}
+          flush
+          description="The teacher's own end-of-day summaries; a manager sees the ones sent to them."
+          actions={t.eods ? <a href={`/ops/tasks/inbox`}>Open in the manager inbox</a> : undefined}
+        >
+          {t.eods === null ? (
+            needs('ops:tasks:read for this teacher (yourself or your reports)')
+          ) : (
+            <RecordTable
+              rows={t.eods}
+              rowKey={(e) => e.id}
+              empty="No EOD report yet."
+              columns={[
+                { key: 'date', header: 'Day', render: (e) => fmtDate(e.reportDate) },
+                { key: 'status', header: 'Status', render: (e) => humanise(e.status) },
+                { key: 'sent', header: 'Submitted', render: (e) => fmtDateTime(e.submittedAt) },
+                { key: 'reviewed', header: 'Reviewed', render: (e) => fmtDateTime(e.reviewedAt) },
+              ]}
+            />
+          )}
+        </Segment>
+      ),
+    },
+    {
+      key: 'documents',
+      label: 'Documents',
+      content: (
+        <Segment title="Documents" level={level}>
+          <p>
+            No protected file storage yet: employment and operational documents are not kept in
+            Elevate OS. Identity documents and salary are never shown here.
+          </p>
+        </Segment>
+      ),
+    },
+    {
       key: 'history',
-      label: 'History',
+      label: 'Timeline and sources',
       count: t.history.length,
       content: (
-        <Segment title="Change history" level={level} flush>
-          <RecordTable
-            rows={t.history}
-            rowKey={(h) => h.id}
-            empty="No changes recorded in Elevate OS."
-            columns={[
-              { key: 'at', header: 'When', render: (h) => fmtDateTime(h.at) },
-              {
-                key: 'action',
-                header: 'Change',
-                render: (h) => humanise(h.action.replace('.', ' ')),
-              },
-              { key: 'by', header: 'By', render: (h) => h.actorName ?? 'System' },
-            ]}
-          />
-        </Segment>
+        <>
+          <Segment title="Where each fact comes from" level={level} flush>
+            <RecordTable
+              rows={sources}
+              rowKey={(x) => x.source}
+              columns={[
+                { key: 'source', header: 'Source', render: (x) => x.source },
+                { key: 'state', header: 'Status', render: (x) => x.state },
+              ]}
+            />
+          </Segment>
+          <Segment title="Change history" level={level} flush>
+            <RecordTable
+              rows={t.history}
+              rowKey={(h) => h.id}
+              empty="No changes recorded in Elevate OS."
+              columns={[
+                { key: 'at', header: 'When', render: (h) => fmtDateTime(h.at) },
+                {
+                  key: 'action',
+                  header: 'Change',
+                  render: (h) => humanise(h.action.replace('.', ' ')),
+                },
+                { key: 'by', header: 'By', render: (h) => h.actorName ?? 'System' },
+              ]}
+            />
+          </Segment>
+        </>
       ),
     },
   ];
@@ -429,7 +653,7 @@ export function TeacherActModal({
   );
 }
 
-/** Demo classes this teacher took where the student attended and no review exists yet. */
+/** Demo classes this teacher took where the student attended and no review is submitted yet. */
 async function DemoReviewsDue({
   staffId,
   user,
@@ -440,35 +664,68 @@ async function DemoReviewsDue({
   level: 2 | 3;
 }) {
   const r = await load((db) => demoReviewsDue(db, user, staffId));
+  const write = isTeacher(user);
   return (
     <Segment
       title="Demo classes waiting for a review"
       level={level}
       flush
-      description="Pending is not a mark against anyone: it only means no review is written yet. Open the student to write it."
+      description={`Demo classes in the last ${REVIEWS_DUE_DAYS} days. Pending is not a mark against anyone: it only means no review is submitted yet. Teachers write reviews in Academic OS.`}
     >
-      {r.ok ? (
-        <RecordTable
-          rows={r.data}
-          rowKey={(x) => x.sessionId}
-          rowHref={(x) => `/ops/students/${x.studentId}`}
-          empty="No demo class is waiting for a review."
-          columns={[
-            {
-              key: 'student',
-              header: 'Student',
-              render: (x) => (
-                <>
-                  {x.studentName} <SampleBadge show={x.isSample} />
-                </>
-              ),
-            },
-            { key: 'day', header: 'Demo day', numeric: true, render: (x) => x.dayNumber },
-            { key: 'when', header: 'Class', render: (x) => fmtDateTime(x.startsAt) },
-            { key: 'subject', header: 'Subject', render: (x) => x.subject ?? 'Not recorded' },
-            { key: 'state', header: 'Review', render: () => REVIEW_STATE_LABELS.pending },
-          ]}
-        />
+      {r.ok && !r.data.shared ? (
+        <p className="el-field-hint">Not shared with you.</p>
+      ) : r.ok ? (
+        <>
+          {r.data.unavailable ? (
+            <Alert
+              tone="warning"
+              title={`${ACADEMIC_DOWN} — some of these may already be reviewed`}
+            >
+              Checked {fmtDateTime(r.data.unavailable.checkedAt)} ({r.data.unavailable.reason}).
+            </Alert>
+          ) : null}
+          <RecordTable
+            rows={r.data.rows}
+            rowKey={(x) => `${x.id}-${x.teacherStaffId}`}
+            empty="No demo class is waiting for a review."
+            columns={[
+              {
+                key: 'student',
+                header: 'Student',
+                render: (x) => (
+                  <>
+                    {x.studentName} <SampleBadge show={x.isSample} />
+                  </>
+                ),
+              },
+              { key: 'day', header: 'Demo day', numeric: true, render: (x) => x.dayNumber },
+              { key: 'when', header: 'Class', render: (x) => fmtDateTime(x.startsAt) },
+              { key: 'subject', header: 'Subject', render: (x) => x.subject ?? 'Not recorded' },
+              {
+                key: 'state',
+                header: 'Review',
+                render: (x) =>
+                  x.onRoster === null ? (
+                    'Source unavailable'
+                  ) : !x.onRoster ? (
+                    'Not on an Academic class roster — ask the academic coordinator to add the student.'
+                  ) : write ? (
+                    <a
+                      href={writeReviewHref({ coreStudentId: x.studentId, opsDemoSessionId: x.id })}
+                    >
+                      Write review in Academic OS
+                      <span className="el-visually-hidden">
+                        {' '}
+                        for {x.studentName}, day {x.dayNumber}
+                      </span>
+                    </a>
+                  ) : (
+                    REVIEW_STATE_LABELS.pending
+                  ),
+              },
+            ]}
+          />
+        </>
       ) : (
         r.view
       )}

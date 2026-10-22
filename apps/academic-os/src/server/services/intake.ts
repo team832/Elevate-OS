@@ -4,8 +4,11 @@
  *
  * For each request, in ONE transaction (the delivery row, our writes and the reply):
  *   validate programme / course / batch (domain/intake.ts) →
- *   create or reuse the student (idempotent by source admission id) →
- *   create the enrolment (unique per request event) →
+ *   match the student by existingStudentId, then coreStudentId, then source admission id
+ *   (one academic student per person; a second programme reuses it) →
+ *   create the enrolment (unique per request event) and, with an intended batch, its open
+ *   placement (seat-checked on the locked batch row; on a timetable clash the enrolment waits
+ *   for a batch and the intake log says why) →
  *   publish `academic.enrolment.confirmed` v1, or `academic.enrolment.rejected` v1 with a reason.
  * Duplicate delivery is a no-op (core.event_deliveries is unique per event and
  * consumer; the intake log is unique per request event as a second guard).
@@ -14,7 +17,7 @@
  * presses "Process intake" (POST /academic/api/v1/enrolment-intake/run) or when
  * code calls `runEnrolmentIntake(db)`.
  */
-import { and, asc, count, desc, eq, inArray, notExists, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, notExists, or, sql } from 'drizzle-orm';
 import {
   academicBatches,
   academicCourses,
@@ -24,13 +27,15 @@ import {
   eventDeliveries,
   integrationEvents,
   programmes,
+  students as coreStudents,
   type Database,
 } from '@elevate/database';
 import { processEvents, publishEvent, type ConsumerContext, type ProcessResult } from '@elevate/server-kit';
 import { ACADEMIC_CONSUMERS, enrolmentKeys, type IntegrationEvent } from '@elevate/shared-contracts';
-import type { BatchId, CourseId, UserId } from '@elevate/shared-types';
+import type { BatchId, CourseId, StudentId, StudentIdentityId, UserId } from '@elevate/shared-types';
 import { decideIntake } from '../../domain';
 import { audit, todayIst } from '../context';
+import { clashMessages, seatsTaken, startPlacement } from './placements';
 import { newStudentCode } from './students';
 
 export const INTAKE_CONSUMER = ACADEMIC_CONSUMERS.enrolmentIntake;
@@ -47,17 +52,28 @@ async function handleRequest(event: RequestEvent, { db: tx }: ConsumerContext, n
   const [programme] = await tx.select().from(programmes).where(eq(programmes.code, p.programmeCode));
   const [course] = p.intendedCourseId ? await tx.select().from(academicCourses).where(eq(academicCourses.id, p.intendedCourseId as CourseId)) : [];
   const [batch] = p.intendedBatchId ? await tx.select().from(academicBatches).where(eq(academicBatches.id, p.intendedBatchId as BatchId)).for('update') : [];
-  let activeEnrolments = 0;
-  if (batch) {
-    const [{ n } = { n: 0 }] = await tx.select({ n: count() }).from(academicEnrolments).where(and(eq(academicEnrolments.batchId, batch.id), eq(academicEnrolments.status, 'active')));
-    activeEnrolments = Number(n);
-  }
-  const [existingStudent] = await tx.select().from(academicStudents).where(eq(academicStudents.sourceAdmissionId, p.admissionId));
-  let duplicateInBatch = false;
-  if (existingStudent && batch) {
-    const [dup] = await tx.select({ id: academicEnrolments.id }).from(academicEnrolments).where(and(eq(academicEnrolments.studentId, existingStudent.id), eq(academicEnrolments.batchId, batch.id), eq(academicEnrolments.status, 'active')));
-    duplicateInBatch = Boolean(dup);
-  }
+  const activeEnrolments = batch ? await seatsTaken(tx, batch.id, p.intendedStartDate ?? today) : 0;
+  const studentWhere = async (where: ReturnType<typeof eq>) => (await tx.select().from(academicStudents).where(where).limit(1))[0];
+  const byId = p.existingStudentId ? await studentWhere(eq(academicStudents.id, p.existingStudentId as StudentId)) : undefined;
+  const byCore = p.coreStudentId ? await studentWhere(eq(academicStudents.coreStudentId, p.coreStudentId as StudentIdentityId)) : undefined;
+  const existingStudent = byId ?? byCore ?? (await studentWhere(eq(academicStudents.sourceAdmissionId, p.admissionId)));
+  const identityConflict = Boolean(
+    existingStudent && p.coreStudentId && ((existingStudent.coreStudentId && existingStudent.coreStudentId !== p.coreStudentId) || (byCore && byCore.id !== existingStudent.id)),
+  );
+  // Duplicate = an ACTIVE enrolment for the same admission + programme, or for the same student in
+  // the same batch, the same course, or the same programme where either side has no course yet.
+  const dupCourseId = batch?.courseId ?? course?.id;
+  const e = academicEnrolments;
+  const sameStudent = existingStudent ? eq(e.studentId, existingStudent.id) : undefined;
+  const dupWhen = [
+    programme ? and(eq(e.sourceAdmissionId, p.admissionId), eq(e.programmeId, programme.id)) : undefined,
+    sameStudent && batch ? and(sameStudent, eq(e.batchId, batch.id)) : undefined,
+    sameStudent && dupCourseId ? and(sameStudent, eq(e.courseId, dupCourseId)) : undefined,
+    sameStudent && programme ? and(sameStudent, eq(e.programmeId, programme.id), dupCourseId ? isNull(e.courseId) : undefined) : undefined,
+  ].filter(Boolean);
+  const [duplicate] = dupWhen.length ? await tx.select({ id: e.id }).from(e).where(and(eq(e.status, 'active'), or(...dupWhen))) : [];
+  const notes: string[] = [];
+  if (p.existingStudentId && !byId) notes.push('existingStudentId was not found in Academic OS; matched by core student id or admission instead.');
 
   const decision = decideIntake(
     {
@@ -72,7 +88,8 @@ async function handleRequest(event: RequestEvent, { db: tx }: ConsumerContext, n
       programme: programme ? { id: programme.id, code: programme.code, status: programme.status } : null,
       course: course ? { id: course.id, programmeId: course.programmeId, status: course.status } : null,
       batch: batch ? { id: batch.id, programmeId: batch.programmeId, courseId: batch.courseId, status: batch.status, startDate: batch.startDate, capacity: batch.capacity, activeEnrolments } : null,
-      duplicateInBatch,
+      duplicateEnrolment: Boolean(duplicate),
+      identityConflict,
     },
     today,
   );
@@ -91,7 +108,14 @@ async function handleRequest(event: RequestEvent, { db: tx }: ConsumerContext, n
     return;
   }
 
+  // D-036: the event carries no sample flag, so it comes from the canonical person.
+  const [core] = p.coreStudentId ? await tx.select({ isSample: coreStudents.isSample }).from(coreStudents).where(eq(coreStudents.id, p.coreStudentId as StudentIdentityId)) : [];
+  const isSample = core?.isSample ?? false;
   let student = existingStudent;
+  if (student && p.coreStudentId && !student.coreStudentId) {
+    [student] = await tx.update(academicStudents).set({ coreStudentId: p.coreStudentId as StudentIdentityId, isSample: student.isSample || isSample }).where(eq(academicStudents.id, student.id)).returning();
+    await audit(tx, null, { action: 'student.linked', entityType: 'student', entityId: student!.id, after: { coreStudentId: p.coreStudentId, isSample: student!.isSample }, metadata: { requestEventId: event.id, triggeredBy } });
+  }
   if (!student) {
     [student] = await tx
       .insert(academicStudents)
@@ -111,6 +135,8 @@ async function handleRequest(event: RequestEvent, { db: tx }: ConsumerContext, n
         guardianPhone: p.guardian?.phone ?? null,
         sourceAdmissionId: p.admissionId,
         sourceLeadId: p.leadId,
+        coreStudentId: (p.coreStudentId as StudentIdentityId | undefined) ?? null,
+        isSample,
       })
       .returning();
     await audit(tx, null, { action: 'student.created', entityType: 'student', entityId: student!.id, after: { id: student!.id, code: student!.code, source: 'admission_event' }, metadata: { requestEventId: event.id, triggeredBy } });
@@ -121,8 +147,9 @@ async function handleRequest(event: RequestEvent, { db: tx }: ConsumerContext, n
       studentId: student!.id,
       programmeId: decision.programmeId as never,
       courseId: (decision.courseId as CourseId | null) ?? null,
-      batchId: (decision.batchId as BatchId | null) ?? null,
+      batchId: null, // set by startPlacement when the student is placed
       startDate: decision.startDate,
+      academicYear: p.academicYear ?? null,
       lateJoiner: decision.lateJoiner,
       source: 'admission_event',
       sourceAdmissionId: p.admissionId,
@@ -131,6 +158,15 @@ async function handleRequest(event: RequestEvent, { db: tx }: ConsumerContext, n
       createdByUserId: triggeredBy,
     })
     .returning();
+  const startDate = decision.startDate ?? today;
+  const clashes = batch ? await clashMessages(tx, enrolment!, batch, startDate) : [];
+  if (batch && clashes.length) {
+    notes.push(`Not placed in ${batch.code} because of a timetable clash (${clashes.join('; ')}). Allocate a batch from Enrolments, Awaiting batch.`);
+  } else if (batch) {
+    // Who placed: the coordinator who ran the intake, else the Ops user whose confirmed admission asked for this batch.
+    await startPlacement(tx, null, { enrolment: enrolment!, batch, startDate, placedByUserId: triggeredBy ?? (p.requestedByUserId as UserId), checkClash: false, action: 'placement.started' });
+  }
+  const placedBatchId = batch && !clashes.length ? batch.id : null;
   const reply = await publishEvent(tx, {
     type: 'academic.enrolment.confirmed',
     version: 1,
@@ -144,12 +180,12 @@ async function handleRequest(event: RequestEvent, { db: tx }: ConsumerContext, n
       existingStudent: Boolean(existingStudent),
       programmeCode: p.programmeCode,
       ...(decision.courseId ? { courseId: decision.courseId } : {}),
-      ...(decision.batchId ? { batchId: decision.batchId } : {}),
+      ...(placedBatchId ? { batchId: placedBatchId } : {}),
       confirmedAt: now.toISOString(),
       confirmedByUserId: null,
     } as never,
   });
-  await tx.insert(academicEnrolmentIntakeLog).values({ ...base, outcome: 'confirmed', studentId: student!.id, enrolmentId: enrolment!.id, existingStudent: Boolean(existingStudent), replyEventId: reply.id, processedAt: now });
+  await tx.insert(academicEnrolmentIntakeLog).values({ ...base, outcome: 'confirmed', reason: notes.join(' ') || null, studentId: student!.id, enrolmentId: enrolment!.id, existingStudent: Boolean(existingStudent), replyEventId: reply.id, processedAt: now });
   await audit(tx, null, { action: 'enrolment.created', entityType: 'enrolment', entityId: enrolment!.id, after: enrolment, metadata: { source: 'admission_event', requestEventId: event.id, triggeredBy } });
 }
 

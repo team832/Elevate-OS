@@ -6,7 +6,8 @@
  *   optional section cap. Nothing here knows any particular exam.
  * - A rule value that is null is UNKNOWN; scoring refuses to finalise with unknowns.
  * - Arithmetic is in integer units (1 mark = 10 000 units, see marks.ts).
- * - Absent students are not scored as zero; they get no score and no percentile.
+ * - Only `submitted` attempts are scored (responses, else the manual total). Absent, exempt
+ *   and withheld attempts get no score, rank or percentile — never zero.
  */
 import { canonicalNumber, formatMarks, parseMarks, type MarkUnits } from './marks';
 
@@ -204,6 +205,48 @@ export function scoreAttempt(
   return { sections: out, totalUnits, maxUnits, total: formatMarks(totalUnits), max: formatMarks(maxUnits) };
 }
 
+export interface ScoreBounds {
+  minUnits: MarkUnits;
+  maxUnits: MarkUnits;
+  /** The scheme can produce a total below zero (negative marking). */
+  negativeAllowed: boolean;
+}
+
+/**
+ * Lowest and highest total the scheme can produce: per section, n = questions − dropped
+ * (null key entries); max = n × perCorrect (capped), min = n × the lower of perWrong and
+ * perUnattempted, so min < 0 only when the scheme has negative marking.
+ */
+export function scoreBounds(sections: readonly SectionSpec[], rules: readonly ResolvedSectionRule[], key: Responses | null): ScoreBounds {
+  let minUnits = 0;
+  let maxUnits = 0;
+  for (const s of sections) {
+    const rule = rules.find((r) => r.code === s.code);
+    if (!rule) throw new Error(`No resolved rule for section ${s.code}`);
+    const dropped = key ? (key[s.code] ?? []).slice(0, s.questionCount).filter((k) => k === null).length : 0;
+    const n = s.questionCount - dropped;
+    const max = n * rule.perCorrect;
+    maxUnits += rule.cap !== null ? Math.min(max, rule.cap) : max;
+    minUnits += n * Math.min(rule.perWrong, rule.perUnattempted, 0);
+  }
+  return { minUnits, maxUnits, negativeAllowed: minUnits < 0 };
+}
+
+/** Why a manually entered total is not acceptable under the scheme, or null when it is. */
+export function manualScoreProblem(value: string, bounds: ScoreBounds): string | null {
+  let units: MarkUnits | null;
+  try {
+    units = parseMarks(value);
+  } catch {
+    return `"${value}" is not an exact mark (a decimal with at most 4 places).`;
+  }
+  if (units === null) return 'Enter a score.';
+  if (units < 0 && !bounds.negativeAllowed) return 'The score cannot be negative: this scheme has no negative marking.';
+  if (units < bounds.minUnits) return `The score must be at least ${formatMarks(bounds.minUnits)}.`;
+  if (units > bounds.maxUnits) return `The score must be at most ${formatMarks(bounds.maxUnits)} (the maximum).`;
+  return null;
+}
+
 // --- validation before finalising -----------------------------------------------------
 
 export type ValidationCode =
@@ -227,12 +270,17 @@ export interface ValidationIssue {
   questionNo?: number;
 }
 
+export type AttemptStatus = 'submitted' | 'absent' | 'exempt' | 'withheld';
+export type ResultState = 'scored' | Exclude<AttemptStatus, 'submitted'>;
+
 export interface AttemptInput {
   attemptId: string;
   studentId: string;
-  status: 'submitted' | 'absent';
+  status: AttemptStatus;
   responses: Responses | null;
   keyVersion: number | null;
+  /** Directly entered total; used only when there are no responses. */
+  manualScore?: string | null;
 }
 
 export interface FinaliseInput {
@@ -268,8 +316,10 @@ export function validateForFinalise(input: FinaliseInput): FinaliseValidation {
     issues.push({ code: 'RULE_INCOMPLETE', message: p.message, sectionCode: p.sectionCode });
   }
 
+  const submitted = input.attempts.filter((a) => a.status === 'submitted');
+  const manualOnly = submitted.length > 0 && submitted.every((a) => a.responses === null && a.manualScore);
   if (!input.key) {
-    issues.push({ code: 'NO_ANSWER_KEY', message: 'No answer key has been entered.' });
+    if (!manualOnly) issues.push({ code: 'NO_ANSWER_KEY', message: 'No answer key has been entered.' });
   } else {
     for (const s of input.sections) {
       const row = input.key.answers[s.code];
@@ -301,6 +351,10 @@ export function validateForFinalise(input: FinaliseInput): FinaliseValidation {
     }
   }
 
+  const bounds =
+    problems.length === 0 && rules.length === input.sections.length
+      ? scoreBounds(input.sections, rules, input.key?.answers ?? null)
+      : null;
   const enrolled = new Set(input.enrolledStudentIds);
   const seen = new Map<string, number>();
   for (const a of input.attempts) seen.set(a.studentId, (seen.get(a.studentId) ?? 0) + 1);
@@ -319,10 +373,15 @@ export function validateForFinalise(input: FinaliseInput): FinaliseValidation {
       issues.push({
         code: 'NOT_ENROLLED',
         studentId: a.studentId,
-        message: 'Attempt by a student without an active enrolment in this batch.',
+        message: 'Attempt by a student not placed in the batch on the assessment date.',
       });
     }
-    if (a.status === 'absent') continue;
+    if (a.status !== 'submitted') continue;
+    if (a.responses === null && a.manualScore) {
+      const problem = bounds ? manualScoreProblem(a.manualScore, bounds) : null;
+      if (problem) issues.push({ code: 'OUT_OF_RANGE', studentId: a.studentId, message: problem });
+      continue;
+    }
     if (input.key && a.keyVersion !== input.key.version) {
       issues.push({
         code: 'KEY_VERSION_MISMATCH',
@@ -392,6 +451,8 @@ export function validateForFinalise(input: FinaliseInput): FinaliseValidation {
 export interface StudentResult {
   attemptId: string;
   studentId: string;
+  state: ResultState;
+  /** No score (absent, exempt or withheld) — the `results.absent` column. */
   absent: boolean;
   score: AttemptScore | null;
   /** Competition rank (1, 2, 2, 4); null when absent. */
@@ -412,6 +473,8 @@ export interface AggregatedResults {
   results: StudentResult[];
   scored: number;
   absent: number;
+  exempt: number;
+  withheld: number;
   sectionStats: SectionStats[];
 }
 
@@ -432,22 +495,30 @@ export function percentileRank(below: number, equal: number, n: number): string 
   return `${whole}.${frac}`;
 }
 
-/** Score every attempt, then rank and compute percentiles within the cohort. */
+/** Score every submitted attempt, then rank and compute percentiles within the scored cohort. */
 export function aggregateResults(
   sections: readonly SectionSpec[],
   rules: readonly ResolvedSectionRule[],
-  key: Responses,
+  /** null only when every submitted attempt is a manual total. */
+  key: Responses | null,
   attempts: readonly AttemptInput[],
 ): AggregatedResults {
-  const scoredRows = attempts.map((a) => ({
-    attempt: a,
-    score: a.status === 'absent' ? null : scoreAttempt(sections, rules, key, a.responses ?? {}),
-  }));
+  const bounds = scoreBounds(sections, rules, key);
+  const scoreOf = (a: AttemptInput): AttemptScore | null => {
+    if (a.status !== 'submitted') return null;
+    if (a.responses === null && a.manualScore) {
+      const totalUnits = parseMarks(a.manualScore)!;
+      return { sections: [], totalUnits, maxUnits: bounds.maxUnits, total: formatMarks(totalUnits), max: formatMarks(bounds.maxUnits) };
+    }
+    return scoreAttempt(sections, rules, key ?? {}, a.responses ?? {});
+  };
+  const scoredRows = attempts.map((a) => ({ attempt: a, score: scoreOf(a) }));
   const totals = scoredRows.filter((r) => r.score).map((r) => r.score!.totalUnits);
   const n = totals.length;
   const results: StudentResult[] = scoredRows.map(({ attempt, score }) => {
     if (!score) {
-      return { attemptId: attempt.attemptId, studentId: attempt.studentId, absent: true, score: null, rank: null, percentile: null };
+      const state = attempt.status === 'submitted' ? 'absent' : attempt.status;
+      return { attemptId: attempt.attemptId, studentId: attempt.studentId, state, absent: true, score: null, rank: null, percentile: null };
     }
     const below = totals.filter((t) => t < score.totalUnits).length;
     const equal = totals.filter((t) => t === score.totalUnits).length;
@@ -455,6 +526,7 @@ export function aggregateResults(
     return {
       attemptId: attempt.attemptId,
       studentId: attempt.studentId,
+      state: 'scored',
       absent: false,
       score,
       rank: above + 1,
@@ -462,9 +534,8 @@ export function aggregateResults(
     };
   });
   const sectionStats: SectionStats[] = sections.map((s) => {
-    const values = scoredRows
-      .filter((r) => r.score)
-      .map((r) => r.score!.sections.find((x) => x.sectionCode === s.code)!.scoreUnits);
+    // Manual totals have no section breakdown, so they are not section points.
+    const values = scoredRows.flatMap((r) => r.score?.sections.filter((x) => x.sectionCode === s.code).map((x) => x.scoreUnits) ?? []);
     if (values.length === 0) return { sectionCode: s.code, mean: '', highest: '', lowest: '' };
     const sum = values.reduce((acc, v) => acc + v, 0);
     const mean = Math.sign(sum) * Math.floor((2 * Math.abs(sum) + values.length) / (2 * values.length));
@@ -475,5 +546,6 @@ export function aggregateResults(
       lowest: formatMarks(Math.min(...values)),
     };
   });
-  return { results, scored: n, absent: attempts.length - n, sectionStats };
+  const count = (state: ResultState) => results.filter((r) => r.state === state).length;
+  return { results, scored: n, absent: count('absent'), exempt: count('exempt'), withheld: count('withheld'), sectionStats };
 }

@@ -131,11 +131,15 @@ export async function progressReportPdf(
 
   if (s.feedback) {
     pdf.heading('Teacher reviews (internal — never shared with families)');
-    if (!s.feedback.length) pdf.paragraph('No submitted reviews in this period.');
+    if (s.reviewsSource?.status === 'unavailable')
+      pdf.paragraph(
+        `Source unavailable — Academic OS could not be reached (checked ${s.reviewsSource.checkedAt}).`,
+      );
+    else if (!s.feedback.length) pdf.paragraph('No submitted reviews in this period.');
     for (const f of s.feedback) {
       pdf.keyValues([
         ['Teacher / subject', `${f.teacher} · ${f.subject} · ${f.observedOn} · v${f.version}`],
-        ['Observation', f.observations],
+        ['Internal remarks', f.observations],
         ['Strengths', f.strengths],
         ['Areas needing support', f.areasToImprove],
         ['Suggested next step', f.actionPlan],

@@ -6,7 +6,7 @@ import { Frame, gate, load, Section } from '../../ui/frame';
 import { listHref, options, SearchPanel } from '../../ui/list-controls';
 import { RecordModal } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
-import { TEACHER_ACTS, TeacherActModal, teacherTabs } from './teacher-record';
+import { metricText, TEACHER_ACTS, TeacherActModal, teacherTabs } from './teacher-record';
 import { VerificationBadge } from './verification-badge';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +22,7 @@ export default async function TeachersPage({ searchParams }: { searchParams: Pro
     <Frame access={access} active="teachers">
       <PageHeader
         title="Teachers"
-        description="Who teaches which subject, and how many sessions each has booked in the next 30 days."
+        description="Who teaches what, today's classes from Academic OS, and open tasks and EOD status where you may see them."
       />
       <Section>
         <Directory user={access.user} sp={sp} />
@@ -39,7 +39,7 @@ export default async function TeachersPage({ searchParams }: { searchParams: Pro
 async function Directory({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
   const r = await load(async (db) => {
     const [d, subjects] = await Promise.all([
-      listTeachers(db, user, { subject: sp.subject }),
+      listTeachers(db, user, { subject: sp.subject, withActivity: true }),
       subjectCatalogue(db),
     ]);
     return { d, subjects };
@@ -86,29 +86,57 @@ async function Directory({ user, sp }: { user: AuthenticatedUser; sp: Params }) 
           />
         }
         columns={[
-          { key: 'name', header: 'Teacher', render: (t) => t.displayName },
           {
-            key: 'verified',
-            header: 'Name check',
-            render: (t) =>
-              t.verificationStatus === 'confirmed' ? (
-                'Confirmed'
-              ) : (
-                <VerificationBadge status={t.verificationStatus} />
-              ),
+            key: 'name',
+            header: 'Teacher',
+            render: (t) => (
+              <>
+                {t.displayName}
+                {t.staffCode ? ` · ${t.staffCode}` : ''}
+                {t.verificationStatus === 'confirmed' ? null : (
+                  <>
+                    {' '}
+                    <VerificationBadge status={t.verificationStatus} />
+                  </>
+                )}
+              </>
+            ),
           },
+          { key: 'dept', header: 'Department', render: (t) => t.department ?? 'Not recorded' },
           {
             key: 'subjects',
             header: 'Subjects',
             render: (t) => t.subjects.map((s) => s.subject).join(', '),
           },
-          { key: 'role', header: 'Other role', render: (t) => t.roleNote ?? 'None' },
-          { key: 'status', header: 'Status', render: (t) => humanise(t.status) },
+          { key: 'manager', header: 'Manager', render: (t) => t.manager ?? 'Not recorded' },
+          { key: 'status', header: 'Staff status', render: (t) => humanise(t.status) },
+          { key: 'hr', header: 'HR attendance today', render: () => 'HR attendance unavailable' },
           {
-            key: 'upcoming',
-            header: 'Booked, next 30 days',
-            numeric: true,
-            render: (t) => t.upcoming30Days,
+            key: 'classes',
+            header: 'Classes today (scheduled / delivered)',
+            render: (t) =>
+              t.academicToday?.status === 'available'
+                ? `${metricText(t.academicToday.data.sessions.planned)} / ${metricText(t.academicToday.data.sessions.delivered)}`
+                : 'Academic OS unavailable',
+          },
+          {
+            key: 'logs',
+            header: 'Logs pending today',
+            render: (t) =>
+              t.academicToday?.status === 'available'
+                ? metricText(t.academicToday.data.logsPending)
+                : 'Academic OS unavailable',
+          },
+          {
+            key: 'tasks',
+            header: 'Tasks open / overdue',
+            render: (t) =>
+              t.tasks ? `${t.tasks.open} / ${t.tasks.overdue}` : 'Not shared with you',
+          },
+          {
+            key: 'eod',
+            header: 'EOD today',
+            render: (t) => (t.tasks ? humanise(t.tasks.eodToday) : 'Not shared with you'),
           },
         ]}
       />

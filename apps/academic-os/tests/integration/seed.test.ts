@@ -22,6 +22,7 @@ import { createTestUser, setupTestDatabase } from '@elevate/testing';
 import { seeds } from '../../seed';
 import { readSyllabus } from '../../seed/syllabus';
 import { getBatchFeasibility } from '../../src/server';
+import { opsSeedStubs } from './sample-seed-stubs';
 
 const ctx = setupTestDatabase();
 
@@ -44,7 +45,9 @@ const TABLES = [
 async function counts(db: Database) {
   const out: Record<string, number> = {};
   for (const t of TABLES) {
-    const r = (await db.execute(sql.raw(`select count(*)::int as n from academic.${t}`))) as unknown as {
+    const r = (await db.execute(
+      sql.raw(`select count(*)::int as n from academic.${t}`),
+    )) as unknown as {
       rows: { n: number }[];
     };
     out[t] = Number(r.rows[0]!.n);
@@ -53,7 +56,7 @@ async function counts(db: Database) {
 }
 
 async function seedAll(db: Database) {
-  await runSeeds(db, [...coreSeeds, ...seeds], {
+  await runSeeds(db, [...coreSeeds, ...opsSeedStubs(), ...seeds], {
     seedUserPassword: 'test-only-seed-password',
     hashPassword,
     log: () => {},
@@ -61,9 +64,16 @@ async function seedAll(db: Database) {
 }
 
 async function planTotals(db: Database, code: string) {
-  const [plan] = await db.select().from(academicCurriculumPlans).where(eq(academicCurriculumPlans.code, code));
+  const [plan] = await db
+    .select()
+    .from(academicCurriculumPlans)
+    .where(eq(academicCurriculumPlans.code, code));
   const rows = await db
-    .select({ subject: academicSubjects.code, classes: academicPlanItems.plannedClasses, minutes: academicPlanItems.plannedMinutes })
+    .select({
+      subject: academicSubjects.code,
+      classes: academicPlanItems.plannedClasses,
+      minutes: academicPlanItems.plannedMinutes,
+    })
     .from(academicPlanItems)
     .innerJoin(academicChapters, eq(academicChapters.id, academicPlanItems.chapterId))
     .innerJoin(academicSubjects, eq(academicSubjects.id, academicChapters.subjectId))
@@ -85,14 +95,19 @@ describe('Academic OS seeds (legacy planning data, fictional people)', () => {
     await seedAll(ctx.db);
     expect(await counts(ctx.db)).toEqual(first);
     expect(first.settings).toBe(0); // defaults stay proposed; no settings rows seeded
-    expect(first.batches).toBe(2);
+    expect(first.batches).toBe(5); // 2 planning batches + 3 sample batches
     expect(first.students).toBe(6);
     expect(first.enrolments).toBe(6);
   });
 
   it('IPMAT locked baseline: 253 teaching classes, 316.25 h', async () => {
     const t = await planTotals(ctx.db, 'IPMAT-BASELINE-253');
-    expect(t.plan).toMatchObject({ status: 'locked', countsStatus: 'locked', legacyApprovedOn: '2026-09-10', approvedByUserId: null });
+    expect(t.plan).toMatchObject({
+      status: 'locked',
+      countsStatus: 'locked',
+      legacyApprovedOn: '2026-09-10',
+      approvedByUserId: null,
+    });
     expect(t.classes).toBe(253);
     expect(t.minutes / 60).toBe(316.25);
     expect(t.bySubject).toEqual({ QUANT: 151, VERBAL: 57, LR: 32, DI: 13 });
@@ -103,11 +118,21 @@ describe('Academic OS seeds (legacy planning data, fictional people)', () => {
     expect(t.classes).toBe(305);
     expect(t.minutes / 60).toBe(381.25);
     expect(t.bySubject).toEqual({ QUANT: 178, VERBAL: 70, LR: 39, DI: 18 });
-    expect(t.plan).toMatchObject({ status: 'locked', countsStatus: 'locked', datesStatus: 'provisional' });
-    const [old] = await ctx.db.select().from(academicCurriculumPlans).where(eq(academicCurriculumPlans.code, 'IPMAT-C12-313'));
+    expect(t.plan).toMatchObject({
+      status: 'locked',
+      countsStatus: 'locked',
+      datesStatus: 'provisional',
+    });
+    const [old] = await ctx.db
+      .select()
+      .from(academicCurriculumPlans)
+      .where(eq(academicCurriculumPlans.code, 'IPMAT-C12-313'));
     expect(old!.status).toBe('superseded');
     expect(t.plan.supersedesPlanId).toBe(old!.id);
-    const chapters = await ctx.db.select().from(academicChapters).where(eq(academicChapters.courseId, t.plan.courseId));
+    const chapters = await ctx.db
+      .select()
+      .from(academicChapters)
+      .where(eq(academicChapters.courseId, t.plan.courseId));
     expect(chapters).toHaveLength(104);
   });
 
@@ -124,53 +149,129 @@ describe('Academic OS seeds (legacy planning data, fictional people)', () => {
   it('concept books: 133 numbered chapters, planned (not written) question counts only', async () => {
     const rows = await ctx.db.select().from(academicConceptBookChapters);
     expect(rows.filter((r) => r.status === 'active' && r.chapterNumber !== null)).toHaveLength(133);
-    expect(rows.filter((r) => r.status === 'opening_unit').map((r) => r.chapterCode)).toEqual(['B2-OPEN']);
-    expect(rows.find((r) => r.chapterCode === 'B4-11')).toMatchObject({ status: 'retired', aliasOfCode: 'B4-10' });
+    expect(rows.filter((r) => r.status === 'opening_unit').map((r) => r.chapterCode)).toEqual([
+      'B2-OPEN',
+    ]);
+    expect(rows.find((r) => r.chapterCode === 'B4-11')).toMatchObject({
+      status: 'retired',
+      aliasOfCode: 'B4-10',
+    });
     const cr = rows.filter((r) => r.questionCountStatus === 'planned');
-    expect(cr.reduce((a, r) => a + r.plannedConceptQuestions! + r.plannedPracticeQuestions! + r.plannedRankerQuestions!, 0)).toBe(1150);
+    expect(
+      cr.reduce(
+        (a, r) =>
+          a + r.plannedConceptQuestions! + r.plannedPracticeQuestions! + r.plannedRankerQuestions!,
+        0,
+      ),
+    ).toBe(1150);
     expect(rows.every((r) => r.contentStatus === 'not_started')).toBe(true);
   });
 
-  it('seeds nothing as delivered and only fictional students', async () => {
-    for (const table of [academicClassRecords, academicAttendance, academicAttempts, academicResults]) {
+  it('seeds nothing as delivered and only sample students (D-036: no phones, is_sample)', async () => {
+    for (const table of [
+      academicClassRecords,
+      academicAttendance,
+      academicAttempts,
+      academicResults,
+    ]) {
       const [{ n } = { n: 0 }] = await ctx.db.select({ n: sql<number>`count(*)::int` }).from(table);
       expect(n).toBe(0);
     }
     const students = await ctx.db.select().from(academicStudents);
-    expect(students.every((s) => s.fullName.includes('(fictional)') && (s.email ?? '').endsWith('@example.test'))).toBe(true);
+    for (const s of students) {
+      expect(s).toMatchObject({ isSample: true, phone: null, guardianPhone: null });
+      expect(s.fullName).toMatch(/^\w+ Sample Student$/);
+      expect(s.email).toMatch(/@example\.test$/);
+    }
+    const batches = await ctx.db.select().from(academicBatches);
+    expect(
+      batches
+        .filter((b) => b.isSample)
+        .map((b) => b.code)
+        .sort(),
+    ).toEqual(['SAMPLE-CAF', 'SAMPLE-IPMAT-A', 'SAMPLE-IPMAT-B']);
+    expect(
+      batches
+        .filter((b) => !b.isSample)
+        .map((b) => b.code)
+        .sort(),
+    ).toEqual(['CAF-SEP27-REG', 'IPMAT-C12-APR27']);
   });
 
   it('draft syllabus courses match the reviewed distribution; IPMAT-BASE gets weights only', async () => {
     const byCourse = new Map(readSyllabus().programmes.map((p) => [p.courseCode, p]));
-    const courses = await ctx.db.select().from(academicCourses).where(inArray(academicCourses.code, [...byCourse.keys()]));
+    const courses = await ctx.db
+      .select()
+      .from(academicCourses)
+      .where(inArray(academicCourses.code, [...byCourse.keys()]));
     expect(courses).toHaveLength(6);
     for (const c of courses) {
       const p = byCourse.get(c.code)!;
-      if (c.code === 'IPMAT-BASE') expect(c.status).toBe('active'); // set by academic.ipmat-baseline, not by this seed
-      else expect(c).toMatchObject({ status: 'draft', mode: null, classMinutes: null, description: expect.stringMatching(/^Draft syllabus — pending owner verification\..*retrieved 2026-10-21/) });
+      if (c.code === 'IPMAT-BASE')
+        expect(c.status).toBe('active'); // set by academic.ipmat-baseline, not by this seed
+      else
+        expect(c).toMatchObject({
+          status: 'draft',
+          mode: null,
+          classMinutes: null,
+          description: expect.stringMatching(
+            /^Draft syllabus — pending owner verification\..*retrieved 2026-10-21/,
+          ),
+        });
       const rows = await ctx.db
-        .select({ subject: academicSubjects.code, code: academicChapters.code, title: academicChapters.title, sortOrder: academicChapters.sortOrder, weight: academicChapters.weight })
+        .select({
+          subject: academicSubjects.code,
+          code: academicChapters.code,
+          title: academicChapters.title,
+          sortOrder: academicChapters.sortOrder,
+          weight: academicChapters.weight,
+        })
         .from(academicChapters)
         .innerJoin(academicSubjects, eq(academicSubjects.id, academicChapters.subjectId))
         .where(eq(academicChapters.courseId, c.id));
-      const expected = p.subjects.flatMap((s) => s.chapters.map((ch) => ({ subject: s.code, code: ch.code, title: ch.title, sortOrder: ch.sortOrder, weight: ch.weight })));
-      expect(rows.sort((a, b) => a.code.localeCompare(b.code))).toEqual(expected.sort((a, b) => a.code.localeCompare(b.code)));
+      const expected = p.subjects.flatMap((s) =>
+        s.chapters.map((ch) => ({
+          subject: s.code,
+          code: ch.code,
+          title: ch.title,
+          sortOrder: ch.sortOrder,
+          weight: ch.weight,
+        })),
+      );
+      expect(rows.sort((a, b) => a.code.localeCompare(b.code))).toEqual(
+        expected.sort((a, b) => a.code.localeCompare(b.code)),
+      );
     }
     const subjects = await ctx.db
-      .select({ course: academicCourses.code, code: academicSubjects.code, name: academicSubjects.name })
+      .select({
+        course: academicCourses.code,
+        code: academicSubjects.code,
+        name: academicSubjects.name,
+      })
       .from(academicSubjects)
       .innerJoin(academicCourses, eq(academicCourses.id, academicSubjects.courseId))
       .where(inArray(academicSubjects.code, ['MATH', 'AMATH']));
     for (const course of ['COM-C11-2627', 'COM-C12-2627']) {
-      expect(subjects.filter((s) => s.course === course).map((s) => s.name).sort()).toEqual(['Applied Mathematics (241)', 'Mathematics (041)']);
+      expect(
+        subjects
+          .filter((s) => s.course === course)
+          .map((s) => s.name)
+          .sort(),
+      ).toEqual(['Applied Mathematics (241)', 'Mathematics (041)']);
     }
     expect(courses.find((c) => c.code === 'CUET-SYL-2026')!.description).toMatch(/pick five/);
   });
 
   it('CA Foundation CAF-ACC-SEP27 converges to active on re-run (D-037); no teachers on syllabus drafts', async () => {
-    await ctx.db.update(academicCourses).set({ status: 'paused' }).where(eq(academicCourses.code, 'CAF-ACC-SEP27'));
+    await ctx.db
+      .update(academicCourses)
+      .set({ status: 'paused' })
+      .where(eq(academicCourses.code, 'CAF-ACC-SEP27'));
     await seedAll(ctx.db);
-    const [ca] = await ctx.db.select().from(academicCourses).where(eq(academicCourses.code, 'CAF-ACC-SEP27'));
+    const [ca] = await ctx.db
+      .select()
+      .from(academicCourses)
+      .where(eq(academicCourses.code, 'CAF-ACC-SEP27'));
     expect(ca!.status).toBe('active');
     expect((await planTotals(ctx.db, 'IPMAT-BASELINE-253')).classes).toBe(253);
     const onSyllabus = await ctx.db
@@ -184,9 +285,19 @@ describe('Academic OS seeds (legacy planning data, fictional people)', () => {
 
   it('the seeded Class 12 calendar reproduces 345 − 28 = 317 net vs 305 required (headroom 12)', async () => {
     const coordinator = await createTestUser(ctx.db, { roles: ['academic_coordinator'] });
-    const [batch] = await ctx.db.select().from(academicBatches).where(eq(academicBatches.code, 'IPMAT-C12-APR27'));
+    const [batch] = await ctx.db
+      .select()
+      .from(academicBatches)
+      .where(eq(academicBatches.code, 'IPMAT-C12-APR27'));
     const f = await getBatchFeasibility(ctx.db, { user: coordinator }, batch!.id, {});
     expect(f.plan?.code).toBe('IPMAT-C12-305');
-    expect(f.result).toMatchObject({ grossSlots: 345, excludedSlots: 28, netSlots: 317, requiredClasses: 305, headroom: 12, verdict: 'feasible' });
+    expect(f.result).toMatchObject({
+      grossSlots: 345,
+      excludedSlots: 28,
+      netSlots: 317,
+      requiredClasses: 305,
+      headroom: 12,
+      verdict: 'feasible',
+    });
   });
 });

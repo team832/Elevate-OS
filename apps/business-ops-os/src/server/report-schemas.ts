@@ -1,53 +1,27 @@
-/** Request bodies: teacher reviews of students (single store) and reviewed student reports. */
+/** Request bodies: acknowledging Academic teacher reviews and reviewed student reports. */
 import { z } from 'zod';
-import {
-  OPS_FEEDBACK_SCOPES,
-  OPS_FEEDBACK_VISIBILITY,
-  OPS_REPORT_AUDIENCES,
-} from '@elevate/database';
+import { OPS_REPORT_AUDIENCES } from '@elevate/database';
 import { isoDateSchema } from '@elevate/shared-contracts';
 import { REPORT_SECTIONS } from '../domain/student-report';
 
 const text = (max: number) => z.string().trim().max(max);
 const optText = (max: number) => text(max).nullish();
 
-/** Observation / strengths / areas needing support / suggested next step (brief §5). */
-const feedbackFields = {
-  subject: text(100).min(1, 'Required'),
-  observedOn: isoDateSchema,
-  relatedRef: optText(200),
-  observations: text(4000).min(1, 'Required'),
-  strengths: optText(2000),
-  areasToImprove: optText(2000),
-  actionPlan: optText(2000),
-  status: z.enum(['draft', 'final']).default('draft'),
-  visibility: z.enum(OPS_FEEDBACK_VISIBILITY).default('internal'),
-};
-
-/** What the review is about: demo_session ⇔ demoSessionId, enrolment ⇔ enrolmentId. */
-export const teacherFeedbackBody = z
+/** Ops acknowledges one submitted review version and may add its own follow-up (never edits it). */
+export const reviewAckBody = z
   .object({
-    studentId: z.uuid(),
-    /** Only holders of ops:feedback:manage may write as another teacher. */
-    teacherStaffId: z.uuid().nullish(),
-    scope: z.enum(OPS_FEEDBACK_SCOPES).default('general'),
-    demoSessionId: z.uuid().nullish(),
-    enrolmentId: z.uuid().nullish(),
-    ...feedbackFields,
+    coreStudentId: z.uuid(),
+    reviewKey: z.uuid(),
+    version: z.coerce.number().int().min(1),
+    note: optText(2000),
+    followUp: optText(2000),
+    followUpOn: isoDateSchema.nullish(),
   })
-  .refine((b) => (b.scope === 'demo_session') === Boolean(b.demoSessionId), {
-    error: 'Choose the demo class this review is about (and only for a demo-class review).',
-    path: ['demoSessionId'],
-  })
-  .refine((b) => (b.scope === 'enrolment') === Boolean(b.enrolmentId), {
-    error: 'Choose the enrolment this review is about (and only for an enrolment review).',
-    path: ['enrolmentId'],
+  .strict()
+  .refine((b) => !b.followUpOn || b.followUp, {
+    error: 'Describe the follow-up that is due on this date.',
+    path: ['followUp'],
   });
-/** An edit keeps the current visibility unless it is sent. */
-export const teacherFeedbackUpdateBody = z.object({
-  ...feedbackFields,
-  visibility: z.enum(OPS_FEEDBACK_VISIBILITY).optional(),
-});
 
 export const reportBody = z
   .object({

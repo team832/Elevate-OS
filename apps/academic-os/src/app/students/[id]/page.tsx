@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, ButtonLink, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { Alert, ButtonLink, Card, DataTable, EmptyState, PageHeader, SourceBadge } from '@elevate/shared-ui';
 import { getStudentProgress, getStudentRecord, listStaff } from '../../../server';
+import { modulePath } from '../../../domain';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
 import { StateBadge } from '../../../ui/badges';
+import { placementNote } from '../../../ui/batch-tabs';
 import { InterventionsTable } from '../../../ui/interventions';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 
@@ -30,13 +32,14 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
   if (!data.ok) return <AcademicShell access={access} active="students"><LoadError error={data.error} /></AcademicShell>;
   const { record, progress, staff } = data.data;
   const s = record.student;
+  const opsRef = can(access.user, 'academic:enrolments:read') ? (s.coreStudentId ?? s.sourceAdmissionId) : null;
   return (
     <AcademicShell access={access} active="students">
       <PageHeader
         title={s.fullName}
-        meta={<><StateBadge state={s.status} /> <span className="el-field-hint">{s.code}</span></>}
+        meta={<><StateBadge state={s.status} /> <SourceBadge source={s.isSample ? 'sample' : 'live'} /> <span className="el-field-hint">{s.code}</span></>}
         description={`${s.currentStage ?? 'Stage not recorded'}${s.contactsHidden ? ' · contact details hidden for your role' : ''}`}
-        actions={<ButtonLink href={MODULE_PATHS.students}>All students</ButtonLink>}
+        actions={<>{opsRef ? <a href={`/ops/students/${opsRef}`}>Admission, KYC and fees in Business Ops</a> : null} <a href={`${modulePath('reviews')}?academicStudentId=${s.id}`}>Teacher reviews</a> <ButtonLink href={MODULE_PATHS.students}>All students</ButtonLink></>}
       />
       <div className="el-stack">
         {!s.contactsHidden ? (
@@ -52,11 +55,26 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
             empty={<EmptyState title="No enrolments" />}
             columns={[
               { key: 'programme', header: 'Programme', render: (e) => e.programmeCode },
+              { key: 'year', header: 'Academic year', render: (e) => e.academicYear ?? 'Not recorded' },
               { key: 'batch', header: 'Batch', render: (e) => (e.batchId ? <a href={MODULE_PATHS.batch(e.batchId)}>{e.batchCode}</a> : 'awaiting batch allocation') },
               { key: 'start', header: 'Start', render: (e) => e.startDate ?? '—' },
               { key: 'late', header: 'Late joiner', render: (e) => (e.lateJoiner ? 'yes' : 'no') },
               { key: 'source', header: 'Source', render: (e) => (e.source === 'manual' ? `manual: ${e.manualReason}` : 'Business Ops admission') },
               { key: 'status', header: 'Status', render: (e) => <StateBadge state={e.status} /> },
+            ]}
+          />
+        </Card>
+        <Card title="Batch placements" description="Which batch the student was in, and when. Transfers end one placement and start the next; nothing is deleted.">
+          <DataTable compact
+            rows={record.placements}
+            rowKey={(p) => p.id}
+            empty={<EmptyState title="Not placed in a batch" description="Allocate a batch from the Enrolments page (Awaiting batch tab)." />}
+            columns={[
+              { key: 'batch', header: 'Batch', render: (p) => <a href={MODULE_PATHS.batch(p.batchId)}>{p.batchCode}</a> },
+              { key: 'from', header: 'From', render: (p) => p.startDate },
+              { key: 'to', header: 'To', render: (p) => p.endDate ?? 'Current' },
+              { key: 'note', header: 'Note', render: placementNote },
+              { key: 'status', header: 'Enrolment', render: (p) => <StateBadge state={p.enrolmentStatus} /> },
             ]}
           />
         </Card>
@@ -81,7 +99,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
                   columns={[
                     { key: 'code', header: 'Assessment' },
                     { key: 'date', header: 'Date', render: (r) => r.date ?? '—' },
-                    { key: 'score', header: 'Score', render: (r) => (r.absent ? 'absent' : `${Number(r.total)} / ${Number(r.max)}`) },
+                    { key: 'score', header: 'Score', render: (r) => (r.state === 'scored' ? `${Number(r.total)} / ${Number(r.max)}` : <StateBadge state={r.state} />) },
                     { key: 'pct', header: 'Percentile', render: (r) => (r.percentile === null ? '—' : Number(r.percentile).toFixed(2)) },
                   ]}
                 />

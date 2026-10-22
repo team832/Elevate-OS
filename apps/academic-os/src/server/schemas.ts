@@ -9,12 +9,12 @@ import { isIsoDate } from '@elevate/shared-types';
 import { isExactMark } from '../domain';
 
 /** A real calendar date `YYYY-MM-DD` (Asia/Kolkata day), kept as a plain string for services. */
-const isoDateSchema = z.string().refine((v: string): boolean => Boolean(isIsoDate(v)), { error: 'Expected a calendar date in YYYY-MM-DD form' });
+export const isoDateSchema = z.string().refine((v: string): boolean => Boolean(isIsoDate(v)), { error: 'Expected a calendar date in YYYY-MM-DD form' });
 const code = z.string().trim().min(1).max(80).regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/, {
   error: 'Codes use letters, digits and - _ . :',
 });
-const text = (max = 200) => z.string().trim().min(1).max(max);
-const optionalText = (max = 2000) => z.string().trim().max(max).optional();
+export const text = (max = 200) => z.string().trim().min(1).max(max);
+export const optionalText = (max = 2000) => z.string().trim().max(max).optional();
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: 'Use HH:MM (24 h)' });
 const mark = z
   .union([z.string(), z.number()])
@@ -138,6 +138,9 @@ export const updateBatchBody = z
     capacity: z.int().min(1).max(10_000).nullable().optional(),
     startDate: isoDateSchema.nullable().optional(),
     endDate: isoDateSchema.nullable().optional(),
+    mode: mode.nullable().optional(),
+    campus: z.string().trim().min(1).max(120).nullable().optional(),
+    coordinatorStaffId: z.uuid().nullable().optional(),
   })
   .strict();
 
@@ -147,9 +150,12 @@ export const createAssignmentBody = z
     subjectId: z.uuid(),
     staffMemberId: z.uuid(),
     employmentType: z.enum(['full_time', 'part_time']).optional(),
+    role: z.enum(['primary', 'co_teacher', 'substitute']).default('primary'),
     startDate: isoDateSchema.optional(),
+    endDate: isoDateSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine((a) => !a.startDate || !a.endDate || a.startDate <= a.endDate, { error: 'The end date cannot be before the start date.', path: ['endDate'] });
 
 export const createRoomBody = z
   .object({ code, name: text(), capacity: z.int().min(1).max(10_000).optional() })
@@ -242,6 +248,9 @@ export const timetableQuery = z.object({
   batchId: z.uuid().optional(),
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
+  teacherId: z.uuid().optional(),
+  roomId: z.uuid().optional(),
+  status: z.enum(['scheduled', 'held', 'cancelled', 'rescheduled']).optional(),
 });
 
 export const feasibilityQuery = z.object({
@@ -250,35 +259,7 @@ export const feasibilityQuery = z.object({
 });
 
 // --- teaching operations ---------------------------------------------------------------------
-const activity = z.enum(['main', 'practice', 'catch_up', 'test', 'discussion']);
-export const recordClassBody = z
-  .object({
-    sessionId: z.uuid(),
-    chapterId: z.uuid(),
-    completion: z.enum(['completed', 'partial']),
-    actualMinutes: z.int().min(1).max(600),
-    activity: activity.default('main'),
-    notes: optionalText(),
-    evidence: optionalText(1000),
-  })
-  .strict();
-
-export const correctClassBody = z
-  .object({
-    chapterId: z.uuid().optional(),
-    completion: z.enum(['completed', 'partial']).optional(),
-    actualMinutes: z.int().min(1).max(600).optional(),
-    activity: activity.optional(),
-    notes: optionalText(),
-    reason: text(1000),
-  })
-  .strict();
-
-export const classRecordsQuery = z.object({
-  batchId: z.uuid().optional(),
-  state: z.enum(['submitted', 'verified', 'superseded']).optional(),
-});
-
+/** Marks for enrolled students and demo attendees; changing an existing mark needs `reason` (audited). */
 export const attendanceBody = z
   .object({
     marks: z
@@ -292,10 +273,16 @@ export const attendanceBody = z
           })
           .strict(),
       )
-      .min(1)
-      .max(500),
+      .max(500)
+      .default([]),
+    demoMarks: z
+      .array(z.object({ attendeeId: z.uuid(), status: z.enum(['present', 'late', 'absent', 'excused']), note: optionalText(500) }).strict())
+      .max(200)
+      .default([]),
+    reason: optionalText(500),
   })
-  .strict();
+  .strict()
+  .refine((b) => b.marks.length + b.demoMarks.length > 0, { error: 'Mark at least one student.', path: ['marks'] });
 
 // --- assessments --------------------------------------------------------------------------------
 export const assessmentKind = z.enum(['chapter_test', 'sectional', 'full_mock', 'practice']);
@@ -451,6 +438,9 @@ export const createInterventionBody = z
     responsibleStaffId: z.uuid(),
     action: text(2000),
     dueDate: isoDateSchema.optional(),
+    evidence: optionalText(2000),
+    goal: optionalText(2000),
+    reviewOn: isoDateSchema.optional(),
   })
   .strict();
 
@@ -460,10 +450,22 @@ export const updateInterventionBody = z
     outcome: optionalText(2000),
     parentContactStatus: z.enum(['not_contacted', 'contacted', 'unreachable', 'not_required']).optional(),
     action: optionalText(2000),
+    evidence: optionalText(2000),
+    goal: optionalText(2000),
+    responsibleStaffId: z.uuid().optional(),
+    dueDate: isoDateSchema.nullable().optional(),
+    reviewOn: isoDateSchema.nullable().optional(),
   })
   .strict();
 
-export const settingBody = z.object({ value: z.unknown(), status: z.enum(['proposed', 'approved']) }).strict();
+export const settingBody = z
+  .object({
+    value: z.unknown(),
+    status: z.enum(['proposed', 'approved']),
+    /** The owner's recorded decision (D-0xx / OD-0xx); required to approve a new value. */
+    decisionRef: z.string().trim().regex(/^(D|OD)-\d{3}$/, { error: 'Use the decision reference, e.g. D-061 or OD-012' }).optional(),
+  })
+  .strict();
 export const settingParams = z.object({ key: z.string().min(1).max(100) });
 
 export const summaryQuery = z.object({ from: isoDateSchema.optional(), to: isoDateSchema.optional() });
@@ -473,4 +475,4 @@ export const exclusionsQuery = z.object({ batchId: z.uuid().optional() });
 export const assessmentsQuery = z.object({ batchId: z.uuid().optional() });
 export const resultsQuery = z.object({ version: z.coerce.number().int().min(1).optional() });
 export const enrolmentsQuery = z.object({ batchId: z.uuid().optional() });
-export const interventionsQuery = z.object({ studentId: z.uuid().optional() });
+export const interventionsQuery = z.object({ studentId: z.uuid().optional(), responsible: z.literal('me').optional() });

@@ -436,6 +436,7 @@ export async function getStudent(db: Database, actor: Actor, id: string) {
         population: s.population,
         admissionDate: c.admissionDate,
         intendedBatchId: c.intendedBatchId,
+        enrolmentId: c.enrolmentId,
         enrolledBatchId: c.enrolledBatchId,
         enrolledCourseId: c.enrolledCourseId,
         enrolledAt: c.enrolledAt,

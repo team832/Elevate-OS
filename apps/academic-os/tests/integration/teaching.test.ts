@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { academicClassRecords, auditEvents } from '@elevate/database';
+import { academicClassRecords, academicClassSessions, auditEvents } from '@elevate/database';
 import { authedRequest, callRoute, setupTestDatabase } from '@elevate/testing';
 import { GET as listRecordsRoute, POST as recordRoute } from '../../src/app/api/v1/class-records/route';
 import { POST as verifyRoute } from '../../src/app/api/v1/class-records/[id]/verify/route';
@@ -18,7 +18,7 @@ let future: string;
 let students: string[];
 
 const log = (user: typeof u.teacher, sessionId: string, over: Record<string, unknown> = {}) =>
-  callRoute<{ id: string; state: string }>(recordRoute, authedRequest(user, '/academic/api/v1/class-records', { json: { sessionId, chapterId: w.ch1.id, completion: 'completed', actualMinutes: 75, ...over } }));
+  callRoute<{ id: string; state: string }>(recordRoute, authedRequest(user, '/academic/api/v1/class-records', { json: { sessionId, chapterId: w.ch1.id, completion: 'completed', actualMinutes: 75, activity: 'main', submit: true, ...over } }));
 
 describe('teaching log (class records)', () => {
   it('a teacher logs only their own past sessions', async () => {
@@ -31,6 +31,7 @@ describe('teaching log (class records)', () => {
       { batchId: w.batch.id, teacherStaffId: w.teacherStaff, sessionType: 'teaching', date: '2099-01-05', startTime: '09:00', durationMinutes: 75 },
     ]);
     [mine, theirs, future] = sessions.map((s) => s.id as string) as [string, string, string];
+    await ctx.db.update(academicClassSessions).set({ status: 'held', deliveredAt: new Date(), deliveredByUserId: u.coordinator.id }).where(inArray(academicClassSessions.id, [mine, theirs] as never[]));
     expect((await log(u.teacher, theirs)).status).toBe(404);
     expect((await log(u.auditor, mine)).status).toBe(403);
     expect((await log(u.teacher, future)).status).toBe(400);
@@ -96,17 +97,19 @@ describe('attendance', () => {
     expect(roster.data!.notRecorded).toBe(2);
     expect((await callRoute(getAttendanceRoute, authedRequest(u.teacher, `/academic/api/v1/sessions/${theirs}/attendance`), { id: theirs })).status).toBe(404);
 
-    const put = (user: typeof u.teacher, sessionId: string, marks: unknown[]) =>
-      callRoute<{ recorded: number }>(putAttendanceRoute, authedRequest(user, `/academic/api/v1/sessions/${sessionId}/attendance`, { method: 'PUT', json: { marks } }), { id: sessionId });
+    const put = (user: typeof u.teacher, sessionId: string, marks: unknown[], reason?: string) =>
+      callRoute<{ recorded: number }>(putAttendanceRoute, authedRequest(user, `/academic/api/v1/sessions/${sessionId}/attendance`, { method: 'PUT', json: { marks, reason } }), { id: sessionId });
     expect((await put(u.teacher, theirs, [{ studentId: s1.id, status: 'present' }])).status).toBe(404);
     expect((await put(u.auditor, mine, [{ studentId: s1.id, status: 'present' }])).status).toBe(403);
     expect((await put(u.teacher, mine, [{ studentId: late.id, status: 'present' }])).status).toBe(400); // not on the roster yet
     expect((await put(u.teacher, mine, [{ studentId: s1.id, status: 'present' }, { studentId: s1.id, status: 'absent' }])).status).toBe(400);
     expect((await put(u.teacher, mine, [{ studentId: s1.id, status: 'present' }, { studentId: s2.id, status: 'absent' }])).data!.recorded).toBe(2);
-    const corrected = await put(u.teacher, mine, [{ studentId: s2.id, status: 'excused', note: 'Medical (fictional)' }]);
+    expect((await put(u.teacher, mine, [{ studentId: s2.id, status: 'excused' }])).status).toBe(400); // a change needs a reason
+    const corrected = await put(u.teacher, mine, [{ studentId: s2.id, status: 'excused', note: 'Medical (fictional)' }], 'Medical note arrived (fictional)');
     expect(corrected.status).toBe(200);
     const audit = await ctx.db.select().from(auditEvents).where(and(eq(auditEvents.entityId, mine), eq(auditEvents.action, 'attendance.corrected')));
     expect(audit).toHaveLength(1);
+    expect(audit[0]!.metadata).toMatchObject({ reason: 'Medical note arrived (fictional)', changes: [{ studentId: s2.id, from: 'absent', to: 'excused' }] });
     expect(students).toHaveLength(3);
   });
 });

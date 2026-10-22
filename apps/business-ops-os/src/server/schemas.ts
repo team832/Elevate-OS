@@ -223,7 +223,7 @@ export const createDepartmentBody = z.object({
 
 export const settingBody = z.object({ value: z.unknown(), note: optText(1000) });
 export const settingParams = z.object({ key: z.string().min(1).max(100) });
-export const OPS_JOBS = ['follow-up-reminders', 'enrolment-replies', 'lead-intake'] as const;
+export const OPS_JOBS = ['follow-up-reminders', 'enrolment-replies', 'lead-intake', 'demo-academic-marks'] as const;
 export const jobParams = z.object({ job: z.enum(OPS_JOBS) });
 export const dashboardQuery = z.object({
   from: isoDateSchema.optional(),

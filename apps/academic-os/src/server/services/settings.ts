@@ -1,6 +1,7 @@
 /**
- * Configurable academic rules (academic.settings). Defaults are `proposed`;
- * a coordinator can change a value and mark it `approved` (audited).
+ * Configurable academic rules (academic.settings). Defaults are `proposed`. Approving a value
+ * needs the owner's decision reference (D-0xx / OD-0xx), kept in the audit row; changing a value
+ * without a new reference makes it `proposed` again.
  */
 import { eq } from 'drizzle-orm';
 import { academicSettings, type Database } from '@elevate/database';
@@ -43,7 +44,7 @@ export async function updateSetting(
   db: Database,
   actor: Actor,
   key: string,
-  input: { value: unknown; status: 'proposed' | 'approved' },
+  input: { value: unknown; status: 'proposed' | 'approved'; decisionRef?: string },
 ) {
   if (!isSettingKey(key)) throw new NotFoundError(`Unknown setting "${key}".`);
   const parsed = SETTING_DEFINITIONS[key].schema.safeParse(input.value);
@@ -54,6 +55,12 @@ export async function updateSetting(
   }
   return withTransaction(db, async (tx) => {
     const [before] = await tx.select().from(academicSettings).where(eq(academicSettings.key, key));
+    const unchanged = before?.status === 'approved' && JSON.stringify(before.value) === JSON.stringify(parsed.data);
+    if (input.status === 'approved' && !input.decisionRef && !unchanged) {
+      throw new ValidationError('Approving needs the owner’s decision reference (e.g. D-061); without one the value stays proposed.', {
+        details: [{ location: 'body', path: ['decisionRef'], message: 'Required to approve' }],
+      });
+    }
     const [row] = await tx
       .insert(academicSettings)
       .values({
@@ -68,7 +75,7 @@ export async function updateSetting(
         set: { value: parsed.data as object, status: input.status, updatedByUserId: actor.user.id },
       })
       .returning();
-    await audit(tx, actor, { action: 'setting.updated', entityType: 'setting', entityId: key, before: before ?? null, after: row });
+    await audit(tx, actor, { action: 'setting.updated', entityType: 'setting', entityId: key, before: before ?? null, after: row, metadata: { decisionRef: input.decisionRef ?? null } });
     return row!;
   });
 }

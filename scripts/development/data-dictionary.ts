@@ -27,6 +27,9 @@ const FILES = [
   'ops-applications',
   'ops-onboarding',
   'ops-tasks',
+  'ops-eod',
+  'ops-task-imports',
+  'ops-review-acks',
 ] as const;
 
 /** Core tables Ops reads or writes (core.ts belongs to the platform; meanings kept here). */

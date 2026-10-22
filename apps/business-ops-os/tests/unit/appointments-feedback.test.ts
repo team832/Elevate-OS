@@ -13,7 +13,7 @@ import {
   findClash,
   slotsOverlap,
 } from '../../src/domain/appointments';
-import { MODERATION_STATUSES, canModerate, teacherFeedbackEdit } from '../../src/domain/feedback';
+import { MODERATION_STATUSES, canModerate } from '../../src/domain/feedback';
 
 const t = (hhmm: string) => new Date(`2026-10-21T${hhmm}:00+05:30`);
 const slot = (from: string, to: string) => ({ startsAt: t(from), endsAt: t(to) });
@@ -80,42 +80,6 @@ describe('A-MTG-2 appointment status transitions', () => {
 });
 
 describe('A-MTG-3 feedback rules', () => {
-  const row = (status: string, superseded = false) => ({ teacherStaffId: 'T', status, superseded });
-  it.each([
-    [
-      'author edits own draft in place',
-      row('draft'),
-      { staffId: 'T', canManage: false },
-      { ok: true, mode: 'in_place' },
-    ],
-    [
-      'author edit of a final row becomes a new version',
-      row('final'),
-      { staffId: 'T', canManage: false },
-      { ok: true, mode: 'new_version' },
-    ],
-    [
-      'another teacher cannot edit',
-      row('draft'),
-      { staffId: 'U', canManage: false },
-      { ok: false, reason: 'not_author' },
-    ],
-    [
-      'a manager may correct',
-      row('final'),
-      { staffId: null, canManage: true },
-      { ok: true, mode: 'new_version' },
-    ],
-    [
-      'a superseded version is read-only',
-      row('final', true),
-      { staffId: 'T', canManage: false },
-      { ok: false, reason: 'superseded' },
-    ],
-  ])('%s', (_n, r, actor, expected) => {
-    expect(teacherFeedbackEdit(r, actor)).toEqual(expected);
-  });
-
   it.each([
     ['pending', 'approve', 'M', { ok: true, to: 'approved' }],
     ['pending', 'reject', 'M', { ok: true, to: 'rejected' }],

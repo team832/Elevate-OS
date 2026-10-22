@@ -484,7 +484,7 @@ A demo: N demo days of separate trial classes for one admission case (OPS-009, B
 
 One class of a demo, on one of its demo days. Instants are UTC; `timezone` is how they are shown.
 
-- **Written by:** `src/server/demos.ts`
+- **Written by:** `src/server/academic-summary.ts`, `src/server/demos.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `demo_id` → `ops.demos` (on delete restrict); `programme_id` → `core.programmes` (on delete restrict); `teacher_staff_id` → `core.staff_members` (on delete restrict); `recorded_by` → `core.users` (on delete restrict); `updated_by` → `core.users` (on delete restrict)
 
@@ -684,7 +684,7 @@ Subjects / programmes a staff member teaches. A row with no staff member is a ca
 
 Teacher → student feedback: the ONE store of teacher reviews (demo classes included). A final row is never edited: an edit inserts a new version that `supersedes_id` the previous one (each version superseded once). No row = "No review submitted" (pending), never a negative.
 
-- **Written by:** `src/server/feedback.ts`
+- **Written by:** seeds / migrations only
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `teacher_staff_id` → `core.staff_members` (on delete restrict); `student_id` → `core.students` (on delete restrict); `demo_session_id` → `ops.demo_sessions` (on delete restrict); `supersedes_id` → `ops.teacher_student_feedback` (on delete restrict); `created_by` → `core.users` (on delete restrict)
 
@@ -1227,42 +1227,128 @@ Books and materials issued, returned or replaced (several sets for multi-program
 
 ### `ops.staff_tasks`
 
-Work a staff member received (call, WhatsApp, in person) and logs for one IST day. Blocked and on-hold tasks carry a reason; a done task is 100% with its completion time. Completing a recurring task creates its next occurrence once (`recurrence_parent_id` is unique).
+Work a staff member received (manager, self, verbal request, another module, import) and logs by IST day. One accountable owner (`staff_id`); the backup owner is not accountable unless reassigned. Blocked, on-hold and cancelled tasks carry a reason; a done task is 100% with its completion time. Completing a recurring task creates its next occurrence once (`recurrence_parent_id` is unique). `version` is bumped on every write (optimistic concurrency).
 
-- **Written by:** `src/server/staff-tasks.ts`
-- **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
-- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `assigned_by_staff_id` → `core.staff_members` (on delete set null); `lead_id` → `ops.leads` (on delete restrict); `admission_id` → `ops.admissions` (on delete restrict); `student_id` → `core.students` (on delete restrict); `recurrence_parent_id` → `ops.staff_tasks` (on delete restrict); `created_by` → `core.users` (on delete restrict); `updated_by` → `core.users` (on delete restrict)
+- **Written by:** `src/server/task-store.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `assigned_by_staff_id` → `core.staff_members` (on delete set null); `requester_staff_id` → `core.staff_members` (on delete set null); `department_id` → `core.departments` (on delete restrict); `backup_staff_id` → `core.staff_members` (on delete set null); `reviewer_staff_id` → `core.staff_members` (on delete set null); `lead_id` → `ops.leads` (on delete restrict); `admission_id` → `ops.admissions` (on delete restrict); `student_id` → `core.students` (on delete restrict); `acknowledged_by_user_id` → `core.users` (on delete restrict); `recurrence_parent_id` → `ops.staff_tasks` (on delete restrict); `import_batch_id` → `ops.task_import_batches` (on delete restrict); `created_by` → `core.users` (on delete restrict); `updated_by` → `core.users` (on delete restrict)
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
 |---|---|---|---|---|---|
 | `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
-| `staff_id` | uuid | yes |  | (id) | Whose task it is. → `core.staff_members` |
+| `staff_id` | uuid | yes |  | (id) | Whose task it is (the one accountable owner). → `core.staff_members` |
 | `title` | text | yes |  |  | Title. |
 | `details` | text | no |  |  | Details. |
 | `assigned_by_staff_id` | uuid | no |  | (id) | Who gave the work, when recorded. → `core.staff_members` |
+| `source` | text | yes (default self) | `manager`, `self`, `verbal`, `academic`, `import`, `recurring` | manager | Source. |
+| `requester_staff_id` | uuid | no |  | (id) | Who asked for the work, when it is not the assigner (e.g. a verbal request). → `core.staff_members` |
+| `requester_note` | text | no |  |  | Requester name/channel for a verbal or outside request (no ingestion is claimed). |
+| `department_id` | uuid | no |  | (id) | Department id. → `core.departments` |
+| `backup_staff_id` | uuid | no |  | (id) | Stand-in owner; not accountable unless the task is reassigned. → `core.staff_members` |
+| `reviewer_staff_id` | uuid | no |  | (id) | Who closes the task when review is required (null = resolved by the service). → `core.staff_members` |
+| `review_required` | boolean | yes (default false) |  | false | Review required. |
+| `acceptance_criteria` | text | no |  |  | Acceptance criteria. |
 | `lead_id` | uuid | no |  | (id) | What the task is about (at most one). → `ops.leads` |
 | `admission_id` | uuid | no |  | (id) | The admission case this belongs to. → `ops.admissions` |
 | `student_id` | uuid | no |  | (id) | The student (canonical identity, core.students). → `core.students` |
+| `linked_ref` | text | no |  |  | Plain reference to a record in another module (e.g. an Academic support case); no FK (R8). |
 | `priority` | text | yes (default medium) | `high`, `medium`, `low` | high | Priority. |
+| `received_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the work was received (UTC). |
+| `planned_start_on` | date | no |  | 2026-10-21 | Planned start day (Asia/Kolkata calendar day). |
 | `due_on` | date | yes |  | 2026-10-21 | IST due day, and optional IST time on that day. |
 | `due_time` | time | no |  |  | Due time. |
-| `status` | text | yes (default pending) | `pending`, `in_progress`, `done`, `blocked`, `on_hold` | pending | Current state (allowed values listed). |
-| `progress_percent` | integer | yes (default 0) |  | 1 | Progress percent. |
-| `reason` | text | no |  |  | Why it is blocked, on hold or not done (shown in the EOD report). |
+| `status` | text | yes (default pending) | `pending`, `in_progress`, `done`, `blocked`, `on_hold`, `in_review`, `cancelled` | pending | Current state (allowed values listed). |
+| `progress_percent` | integer | yes (default 0) |  | 1 | Self-reported progress; never derived from elapsed time. |
+| `reason` | text | no |  |  | Why it is blocked, on hold, cancelled or not done (shown in the EOD report). |
+| `acknowledged_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was acknowledged (UTC). |
+| `acknowledged_by_user_id` | uuid | no |  | (id) | Acknowledged by user id. → `core.users` |
 | `recurrence` | text | yes (default none) | `none`, `daily`, `weekly`, `monthly` | none | Recurrence. |
 | `recurrence_parent_id` | uuid | no |  | (id) | The completed task this occurrence follows. → `ops.staff_tasks` |
 | `completed_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was completed (UTC). |
+| `legacy_ref` | text | no |  |  | Tracker identity `<source kind>:<source staff id>:<legacy id>`, composed by the importer. |
+| `import_batch_id` | uuid | no |  | (id) | Import batch id. → `ops.task_import_batches` |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+| `version` | integer | yes (default 1) |  | 1 | Version. |
 | `created_by` | uuid | yes |  | (id) | User who created the row. → `core.users` |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
 | `updated_by` | uuid | no |  | (id) | User who last changed the row. → `core.users` |
 | `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
 
+### `ops.task_events`
+
+Append-only, date-aware history of a task: what happened, when, by whom and why. EOD drafts and end-to-end reports read it (never the task's current status). `occurred_at` is the original time (kept on import); `created_at` is when the row was written.
+
+- **Written by:** `src/server/task-store.ts`
+- **Sample or real:** Reference or configuration data (not person data).
+- **Links to:** `task_id` → `ops.staff_tasks` (on delete restrict); `from_staff_id` → `core.staff_members` (on delete restrict); `to_staff_id` → `core.staff_members` (on delete restrict); `actor_user_id` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `task_id` | uuid | yes |  | (id) | Task id. → `ops.staff_tasks` |
+| `kind` | text | yes | `created`, `assigned`, `reassigned`, `acknowledged`, `clarification_requested`, `status_changed`, `submitted_for_review`, `review_approved`, `changes_requested`, `reopened`, `cancelled`, `due_changed`, `priority_changed`, `comment`, `imported`, `dependency_added`, `edited` | created | What kind of row this is (allowed values listed). |
+| `from_status` | text | no | `pending`, `in_progress`, `done`, `blocked`, `on_hold`, `in_review`, `cancelled` | pending | From status. |
+| `to_status` | text | no | `pending`, `in_progress`, `done`, `blocked`, `on_hold`, `in_review`, `cancelled` | pending | To status. |
+| `from_staff_id` | uuid | no |  | (id) | Owner before/after (assigned, reassigned). → `core.staff_members` |
+| `to_staff_id` | uuid | no |  | (id) | Staff member who is the to. → `core.staff_members` |
+| `actor_user_id` | uuid | yes |  | (id) | User who made the change. → `core.users` |
+| `occurred_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When it happened (UTC). |
+| `reason` | text | no |  |  | Why (free text). |
+| `data` | jsonb | no |  |  | Changed values (e.g. due day before/after, priority before/after). |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+
+### `ops.task_updates`
+
+A work update on a task (separate from comments and decisions). Append-only: a correction is a new row pointing at the update it corrects, with a reason (one correction per update, no forks). `occurred_on` is the IST work day; a late entry keeps it and records `recorded_at`. Time is either a recorded duration or explicit start/stop.
+
+- **Written by:** `src/server/task-updates.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `task_id` → `ops.staff_tasks` (on delete restrict); `author_user_id` → `core.users` (on delete restrict); `author_staff_id` → `core.staff_members` (on delete restrict); `corrects_update_id` → `ops.task_updates` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `task_id` | uuid | yes |  | (id) | Task id. → `ops.staff_tasks` |
+| `author_user_id` | uuid | yes |  | (id) | Author user id. → `core.users` |
+| `author_staff_id` | uuid | yes |  | (id) | Staff member who is the author. → `core.staff_members` |
+| `occurred_on` | date | yes |  | 2026-10-21 | Occurred day (Asia/Kolkata calendar day). |
+| `occurred_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it happened (UTC). |
+| `recorded_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When it was recorded (UTC). |
+| `work_performed` | text | yes |  |  | Work performed. |
+| `result` | text | no |  |  | Result. |
+| `evidence` | text | no |  |  | Evidence. |
+| `remaining_work` | text | no |  |  | Remaining work. |
+| `blocker` | text | no |  |  | Blocker. |
+| `next_step` | text | no |  |  | Next step. |
+| `duration_minutes` | integer | no |  | 1 | Actual minutes, self-reported (not shift hours). |
+| `started_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was started (UTC). |
+| `ended_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was ended (UTC). |
+| `corrects_update_id` | uuid | no |  | (id) | Corrects update id. → `ops.task_updates` |
+| `correction_reason` | text | no |  |  | Why it was correction (free text). |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+
+### `ops.task_dependencies`
+
+Task A waits on task B. Self-links are refused here; cycles are refused by the service.
+
+- **Written by:** `src/server/task-store.ts`
+- **Sample or real:** Reference or configuration data (not person data).
+- **Links to:** `task_id` → `ops.staff_tasks` (on delete restrict); `depends_on_task_id` → `ops.staff_tasks` (on delete restrict); `created_by_user_id` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `task_id` | uuid | yes |  | (id) | Task id. → `ops.staff_tasks` |
+| `depends_on_task_id` | uuid | yes |  | (id) | Depends on task id. → `ops.staff_tasks` |
+| `created_by_user_id` | uuid | yes |  | (id) | Created by user id. → `core.users` |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+
 ### `ops.eod_reports`
 
-One staff member's end-of-day report for one IST day. `snapshot` is the day's tasks (done, open with reasons, overdue, carried forward) as built by domain/staff-tasks.ts; it is frozen when submitted. Submitted to the reporting manager (`submitted_to_staff_id`).
+One staff member's end-of-day report for one IST day — the report identity (one per staff member and day). The row holds the working draft; each submission freezes a version in `eod_report_versions` (`current_version` = latest submitted, 0 = never submitted). `submitted_at` is the latest submission. `version` is bumped on every write (concurrency).
 
-- **Written by:** `src/server/eod-reports.ts`
-- **Sample or real:** Reference or configuration data (not person data).
+- **Written by:** `src/server/eod-reports.ts`, `src/server/eod-review.ts`, `src/server/task-import.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
 - **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `submitted_to_staff_id` → `core.staff_members` (on delete set null); `reviewed_by` → `core.users` (on delete restrict); `created_by` → `core.users` (on delete restrict)
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
@@ -1270,13 +1356,125 @@ One staff member's end-of-day report for one IST day. `snapshot` is the day's ta
 | `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
 | `staff_id` | uuid | yes |  | (id) | Staff member. → `core.staff_members` |
 | `report_date` | date | yes |  | 2026-10-21 | Report day (Asia/Kolkata calendar day). |
-| `status` | text | yes (default draft) | `draft`, `submitted` | draft | Current state (allowed values listed). |
-| `snapshot` | jsonb | yes |  |  | Snapshot. |
+| `status` | text | yes (default draft) | `draft`, `submitted`, `revision_requested`, `acknowledged` | draft | Current state (allowed values listed). |
+| `snapshot` | jsonb | yes |  |  | Shape: EodSnapshot (business-ops domain/staff-tasks.ts); packages cannot import app types. |
 | `summary` | text | no |  |  | Summary. |
+| `next_day_plan` | text | no |  |  | Next day plan. |
+| `notes` | text | no |  |  | Free-text notes. |
+| `current_version` | integer | yes (default 0) |  | 1 | Current version. |
 | `submitted_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was submitted (UTC). |
 | `submitted_to_staff_id` | uuid | no |  | (id) | Reporting manager at submit time; null = sent to the EOD reviewers. → `core.staff_members` |
 | `reviewed_by` | uuid | no |  | (id) | User who reviewed it. → `core.users` |
 | `reviewed_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was reviewed (UTC). |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+| `version` | integer | yes (default 1) |  | 1 | Version. |
 | `created_by` | uuid | yes |  | (id) | User who created the row. → `core.users` |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
 | `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
+
+### `ops.eod_report_versions`
+
+A submitted EOD version: an immutable snapshot of the facts at `source_cutoff_at` plus the employee's narrative. A revision is a new version linked to the one it revises; later source corrections never rewrite a sent version.
+
+- **Written by:** `src/server/eod-reports.ts`, `src/server/task-import.ts`
+- **Sample or real:** Reference or configuration data (not person data).
+- **Links to:** `report_id` → `ops.eod_reports` (on delete restrict); `submitted_by_user_id` → `core.users` (on delete restrict); `submitted_to_staff_id` → `core.staff_members` (on delete set null); `revision_of_version_id` → `ops.eod_report_versions` (on delete restrict); `revision_request_event_id` → `ops.eod_review_events` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `report_id` | uuid | yes |  | (id) | Report id. → `ops.eod_reports` |
+| `version` | integer | yes |  | 1 | Version. |
+| `snapshot` | jsonb | yes |  |  | Snapshot. |
+| `narrative` | jsonb | yes |  |  | Narrative. |
+| `source_cutoff_at` | timestamp with time zone | yes |  | 2026-10-21T10:30:00Z | Events and updates up to this instant are in the snapshot. |
+| `submitted_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When it was submitted (UTC). |
+| `submitted_by_user_id` | uuid | yes |  | (id) | Submitted by user id. → `core.users` |
+| `submitted_to_staff_id` | uuid | no |  | (id) | Resolved recipient; null = sent to the EOD reviewers. → `core.staff_members` |
+| `revision_of_version_id` | uuid | no |  | (id) | Revision of version id. → `ops.eod_report_versions` |
+| `revision_request_event_id` | uuid | no |  | (id) | The revision request this version answers. → `ops.eod_review_events` |
+
+### `ops.eod_review_events`
+
+The manager side of an EOD: views, comments, requests, acknowledgement, follow-up tasks.
+
+- **Written by:** `src/server/eod-review.ts`
+- **Sample or real:** Reference or configuration data (not person data).
+- **Links to:** `report_id` → `ops.eod_reports` (on delete restrict); `version_id` → `ops.eod_report_versions` (on delete restrict); `actor_user_id` → `core.users` (on delete restrict); `task_id` → `ops.staff_tasks` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `report_id` | uuid | yes |  | (id) | Report id. → `ops.eod_reports` |
+| `version_id` | uuid | no |  | (id) | Version id. → `ops.eod_report_versions` |
+| `kind` | text | yes | `viewed`, `comment`, `clarification_requested`, `revision_requested`, `acknowledged`, `follow_up_task_created` | viewed | What kind of row this is (allowed values listed). |
+| `actor_user_id` | uuid | yes |  | (id) | User who made the change. → `core.users` |
+| `text` | text | no |  |  | Text. |
+| `task_id` | uuid | no |  | (id) | The follow-up task created from the report. → `ops.staff_tasks` |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+
+### `ops.task_import_batches`
+
+(No description yet.)
+
+- **Written by:** `src/server/task-import.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `created_by_user_id` → `core.users` (on delete restrict); `committed_by_user_id` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `source_filename` | text | yes |  |  | Source filename. |
+| `source_sha256` | text | yes | `^[0-9a-f]{64}$` | A | Source sha256. |
+| `source_kind` | text | yes (default deskday_backup_json) | `deskday_backup_json` | deskday_backup_json | Source kind. |
+| `source_version` | text | no |  |  | Version or export date stated by the source, when it states one (never guessed). |
+| `staff_id` | uuid | yes |  | (id) | The staff member the file belongs to (a reviewed mapping). → `core.staff_members` |
+| `status` | text | yes (default previewed) | `previewed`, `committed`, `failed` | previewed | Current state (allowed values listed). |
+| `counts` | jsonb | yes (default {}::jsonb) |  |  | Parsed and per-outcome counts. |
+| `raw` | jsonb | yes |  |  | Protected copy of the parsed source file (read only with ops:tasks:import). |
+| `is_sample` | boolean | yes (default false) |  | false | A fictional fixture import (D-036), removed with the sample data. |
+| `created_by_user_id` | uuid | yes |  | (id) | Created by user id. → `core.users` |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+| `committed_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was committed (UTC). |
+| `committed_by_user_id` | uuid | no |  | (id) | Committed by user id. → `core.users` |
+
+### `ops.task_import_rows`
+
+One legacy record of a batch and its outcome (the reconciliation report reads these).
+
+- **Written by:** `src/server/task-import.ts`
+- **Sample or real:** Reference or configuration data (not person data).
+- **Links to:** `batch_id` → `ops.task_import_batches` (on delete restrict); `task_id` → `ops.staff_tasks` (on delete restrict); `eod_report_id` → `ops.eod_reports` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `batch_id` | uuid | yes |  | (id) | Batch id. → `ops.task_import_batches` |
+| `kind` | text | yes | `task`, `report` | task | What kind of row this is (allowed values listed). |
+| `legacy_id` | text | yes |  |  | Legacy id. |
+| `content_hash` | text | yes |  |  | Hash of the legacy record, to tell an unchanged record from a changed one. |
+| `outcome` | text | yes | `accepted`, `skipped`, `changed`, `duplicate`, `unresolved`, `failed` | accepted | Result, in words or as a listed value. |
+| `task_id` | uuid | no |  | (id) | Task id. → `ops.staff_tasks` |
+| `eod_report_id` | uuid | no |  | (id) | Eod report id. → `ops.eod_reports` |
+| `message` | text | no |  |  | Message. |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+
+### `ops.review_acknowledgements`
+
+(No description yet.)
+
+- **Written by:** `src/server/review-acks.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `acknowledged_by_user_id` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `review_key` | uuid | yes |  | (id) | Review key. |
+| `review_version` | integer | yes |  | 1 | Review version. |
+| `acknowledged_by_user_id` | uuid | yes |  | (id) | Acknowledged by user id. → `core.users` |
+| `note` | text | no |  |  | Free-text notes. |
+| `follow_up` | text | no |  |  | Ops' own follow-up (Ops words, never the teacher's). |
+| `follow_up_on` | date | no |  | 2026-10-21 | Follow up day (Asia/Kolkata calendar day). |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |

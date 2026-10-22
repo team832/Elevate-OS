@@ -12,7 +12,7 @@ import { POST as finaliseRoute } from '../../src/app/api/v1/assessments/[id]/fin
 import { POST as rescoreRoute } from '../../src/app/api/v1/assessments/[id]/rescore/route';
 import { GET as resultsRoute } from '../../src/app/api/v1/assessments/[id]/results/route';
 import { POST as scheduleRoute } from '../../src/app/api/v1/assessments/schedule-check/route';
-import { createSessions, createStudent, enrolManually, updateBatch } from '../../src/server';
+import { createSessions, createStudent, enrolManually, updateBatch, updateSetting } from '../../src/server';
 import { actor, uniq, users, world, type Users, type World } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -71,6 +71,7 @@ describe('assessment lifecycle with exact negative marking', () => {
     expect(res.status).toBe(201);
     expect(res.data).toMatchObject({ run: { version: 1 }, scored: 3, absent: 1 });
     expect((await post(finaliseRoute, `/academic/api/v1/assessments/${id}/finalise`)).status).toBe(409);
+    await updateSetting(ctx.db, actor(u.coordinator), 'progress.show_rank_percentile', { value: { show: true }, status: 'approved', decisionRef: 'D-900' }); // ranks are shown only under an approved policy
     const results = await callRoute<{ results: { studentCode: string; totalScore: string | null; rank: number | null; percentile: string | null; absent: boolean }[] }>(resultsRoute, authedRequest(u.teacher, `/academic/api/v1/assessments/${id}/results`), { id });
     expect(results.status).toBe(200);
     const by = Object.fromEntries(results.data!.results.map((r) => [r.studentCode, r]));

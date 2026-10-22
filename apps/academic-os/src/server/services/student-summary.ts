@@ -1,12 +1,14 @@
 /**
  * One student's evidence for Business Ops (IR-OPS-STU-1): contract `academic.student_summary` v1,
  * served by the internal route only (system scope, caller `ops`). Attendance counts held class
- * sessions in the window from each enrolment's start (closed enrolments: only sessions with the
- * student's mark); teachers come from the sessions actually
+ * sessions in the window within the student's batch placements (a transfer moves the window to
+ * the new batch); teachers come from the sessions actually
  * held (class record teacher, else the session's teacher), so later timetable changes never
- * rewrite who taught. Results are final runs only; absent is never a score.
+ * rewrite who taught. Results: final runs of PUBLISHED assessments only (draft and unpublished marks
+ * never leave Academic); absent is never a score; exempt/withheld have no v1 state and are not sent;
+ * rank/percentile are null unless setting progress.show_rank_percentile is approved with show = true.
  */
-import { and, asc, eq, gte, inArray, isNotNull, lte, ne } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNotNull, lte } from 'drizzle-orm';
 import {
   academicAssessments,
   academicAttendance,
@@ -28,12 +30,14 @@ import {
 } from '@elevate/shared-contracts';
 import type { StaffMemberId, StudentId } from '@elevate/shared-types';
 import { summariseAttendance } from '../../domain';
+import { NO_BATCH_HISTORY, inPlacement, placementsOf } from './progress';
+import { rankVisible } from './results';
 
 export async function buildStudentSummary(
   db: Database,
   studentId: string,
   window: { from: string; to: string },
-): Promise<AcademicStudentSummaryV1> {
+): Promise<AcademicStudentSummaryV1 & { extensions?: { attendanceNotRecorded: { enrolmentId: string; reason: string }[] } }> {
   const [student] = await db
     .select({ id: academicStudents.id })
     .from(academicStudents)
@@ -53,11 +57,21 @@ export async function buildStudentSummary(
 
   const totals = { held: 0, present: 0, partial: 0, late: 0, absent: 0, excused: 0 };
   const out: AcademicStudentSummaryV1['enrolments'] = [];
+  const placements = await placementsOf(
+    db,
+    enrolments.map(({ e }) => e.id),
+  );
+  const attendanceNotRecorded: { enrolmentId: string; reason: string }[] = [];
   for (const { e, programmeCode, batchName } of enrolments) {
-    const held = e.batchId
+    const windows = placements.filter((p) => p.enrolmentId === e.id);
+    if (e.batchId && windows.length === 0) attendanceNotRecorded.push({ enrolmentId: e.id, reason: NO_BATCH_HISTORY });
+    const batchIds = [...new Set(windows.map((w) => w.batchId))];
+    const sessions = batchIds.length
       ? await db
           .select({
             id: academicClassSessions.id,
+            batchId: academicClassSessions.batchId,
+            date: academicClassSessions.date,
             teacher: academicClassSessions.teacherStaffId,
             subject: academicSubjects.name,
           })
@@ -65,16 +79,19 @@ export async function buildStudentSummary(
           .leftJoin(academicSubjects, eq(academicSubjects.id, academicClassSessions.subjectId))
           .where(
             and(
-              eq(academicClassSessions.batchId, e.batchId),
+              inArray(academicClassSessions.batchId, batchIds),
               eq(academicClassSessions.status, 'held'),
-              gte(
-                academicClassSessions.date,
-                e.startDate && e.startDate > window.from ? e.startDate : window.from,
-              ),
+              gte(academicClassSessions.date, window.from),
               lte(academicClassSessions.date, window.to),
             ),
           )
       : [];
+    const held = sessions.filter((s) =>
+      inPlacement(
+        s.date,
+        windows.filter((w) => w.batchId === s.batchId),
+      ),
+    );
     const ids = held.map((h) => h.id);
     const [marks, records] = ids.length
       ? await Promise.all([
@@ -96,25 +113,20 @@ export async function buildStudentSummary(
             .where(
               and(
                 inArray(academicClassRecords.sessionId, ids),
-                ne(academicClassRecords.state, 'superseded'),
+                inArray(academicClassRecords.state, ['submitted', 'verified']),
               ),
             ),
         ])
       : [[], []];
-    // shortcut: enrolments have no end date — a closed enrolment (withdrawn/completed, e.g. a batch
-    // change) counts only sessions with this student's mark; upgrade when enrolments get end_date.
-    const marked = new Set(marks.map((m) => m.sessionId as string));
-    const open = e.status === 'active' || e.status === 'paused';
-    const taken = open ? held : held.filter((h) => marked.has(h.id));
     const a = summariseAttendance(
-      taken.map((h) => h.id),
+      held.map((h) => h.id),
       marks,
     );
     totals.held += a.heldSessions;
     for (const k of ['present', 'partial', 'late', 'absent', 'excused'] as const) totals[k] += a[k];
     const recordedBy = new Map(records.map((r) => [r.sessionId as string, r.teacher]));
     const teachers = new Map<string, { staffId: StaffMemberId; subject: string }>();
-    for (const h of taken) {
+    for (const h of held) {
       const staffId = recordedBy.get(h.id) ?? h.teacher;
       const subject = h.subject ?? 'Subject not recorded';
       if (staffId) teachers.set(`${staffId}|${subject}`, { staffId, subject });
@@ -149,13 +161,16 @@ export async function buildStudentSummary(
       and(
         eq(academicResults.studentId, student.id),
         isNotNull(academicAssessments.scheduledDate),
+        isNotNull(academicAssessments.publishedAt),
         gte(academicAssessments.scheduledDate, window.from),
         lte(academicAssessments.scheduledDate, window.to),
       ),
     )
     .orderBy(asc(academicAssessments.scheduledDate), asc(academicAssessments.code));
+  const showRank = await rankVisible(db);
+  const sendable = results.filter(({ r }) => r.state === 'scored' || r.state === 'absent');
 
-  return academicStudentSummaryV1Schema.parse({
+  const summary = academicStudentSummaryV1Schema.parse({
     contract: 'academic.student_summary',
     version: 1,
     generatedAt: new Date().toISOString(),
@@ -163,19 +178,21 @@ export async function buildStudentSummary(
     window,
     enrolments: out,
     attendance: totals,
-    results: results.map(({ r, a, run, subject, cohort }) => ({
+    results: sendable.map(({ r, a, run, subject, cohort }) => ({
       assessmentId: a.id,
       code: a.code,
       subject,
       examType: a.kind,
       heldOn: a.scheduledDate,
-      state: r.absent ? 'absent' : 'scored',
-      score: r.absent ? null : Number(r.totalScore),
+      state: r.state,
+      score: r.state === 'scored' ? Number(r.totalScore) : null,
       maxScore: Number(r.maxScore),
-      percentile: r.percentile === null ? null : Number(r.percentile),
-      rank: r.rank,
+      percentile: !showRank || r.percentile === null ? null : Number(r.percentile),
+      rank: showRank ? r.rank : null,
       cohort: { label: cohort, scored: run.studentsScored },
       resultVersion: run.version,
     })),
   });
+  // Contract v1 cannot say "missing" for attendance, so those enrolments add nothing to the counts and are named here.
+  return attendanceNotRecorded.length ? { ...summary, extensions: { attendanceNotRecorded } } : summary;
 }

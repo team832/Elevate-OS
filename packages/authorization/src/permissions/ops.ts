@@ -16,8 +16,10 @@
  * - operations_manager holds every Ops permission.
  * - director reads everything, approves fee arrangements and confirms admissions.
  * - auditor reads only.
- * - teacher reads own appointments and own profile and writes feedback about the
- *   students they teach (own scope); never moderates feedback about themselves.
+ * - teacher reads own appointments and own profile; never moderates feedback about themselves.
+ *   Teachers write student reviews in Academic OS (owner answer 21 Oct 2026, supersedes D-043):
+ *   Ops reads submitted versions and acknowledges them, and never edits a teacher's words, so
+ *   `ops:feedback:write` and `ops:feedback:manage` are held by no role (kept until their routes go).
  * - every staff role that opens Ops logs its own daily tasks and EOD report (own scope);
  *   operations_manager, director and auditor read everyone's; EOD review = manager + director.
  */
@@ -160,15 +162,21 @@ export const opsPermissionList = [
   },
   {
     key: 'ops:feedback:read',
-    description: 'Read teacher→student feedback and moderated student/guardian→teacher feedback.',
+    description:
+      'Read teachers’ submitted student reviews (from Academic OS; older Ops records read-only) and moderated student/guardian→teacher feedback (own = students you counsel).',
+  },
+  {
+    key: 'ops:feedback:acknowledge',
+    description:
+      'Acknowledge a teacher’s submitted student review and add an Ops follow-up (own = students you counsel). Holders are proposed (owner to confirm).',
   },
   {
     key: 'ops:feedback:write',
-    description: 'Write teacher→student feedback as the teacher (own = assigned students only).',
+    description: 'Retired 21 Oct 2026 (reviews are written in Academic OS); held by no role.',
   },
   {
     key: 'ops:feedback:manage',
-    description: 'Write or correct teacher→student feedback for any teacher and student.',
+    description: 'Retired 21 Oct 2026 (Ops never edits a teacher’s words); held by no role.',
   },
   {
     key: 'ops:feedback:record',
@@ -187,11 +195,16 @@ export const opsPermissionList = [
   {
     key: 'ops:tasks:write',
     description:
-      'Log and update daily tasks; build, submit and share the end-of-day report (own = own tasks).',
+      'Log and update daily tasks; build and submit the end-of-day report (own = own tasks).',
   },
   {
     key: 'ops:eod:review',
     description: 'See every staff member’s end-of-day report for a day and mark it reviewed.',
+  },
+  {
+    key: 'ops:tasks:import',
+    description:
+      'Preview and commit imports of the original task tracker’s backup files, and read the protected source copy.',
   },
 ] as const satisfies readonly PermissionDefinition[];
 
@@ -204,6 +217,9 @@ const reads = keys.filter(
   (k) => (k.endsWith(':read') || k.endsWith(':access')) && k !== 'ops:student_private:read',
 );
 
+/** Retired keys still referenced by code awaiting removal; no role may hold them. */
+const RETIRED: readonly OpsPermission[] = ['ops:feedback:write', 'ops:feedback:manage'];
+
 const own = (permission: OpsPermission) => ({ permission, scope: 'own' as const });
 const ownTasks = [own('ops:tasks:read'), own('ops:tasks:write')];
 
@@ -211,7 +227,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
   module: 'ops',
   permissions: opsPermissionList,
   grants: {
-    operations_manager: keys,
+    operations_manager: keys.filter((k) => !RETIRED.includes(k)),
     admissions_counsellor: [
       'ops:module:access',
       own('ops:leads:read'),
@@ -230,6 +246,9 @@ export const opsPermissions = definePermissions<OpsPermission>({
       own('ops:appointments:manage'),
       'ops:teachers:read',
       'ops:feedback:record',
+      // Proposed holders (owner answer 21 Oct 2026): reviews of the students the counsellor counsels.
+      own('ops:feedback:read'),
+      own('ops:feedback:acknowledge'),
       ...ownTasks,
     ],
     // ops:admissions:confirm holders are PROPOSED (brief §1: "who may finalize admissions"; D-041).
@@ -255,7 +274,6 @@ export const opsPermissions = definePermissions<OpsPermission>({
       own('ops:appointments:read'),
       own('ops:teachers:read'),
       own('ops:feedback:read'),
-      own('ops:feedback:write'),
       ...ownTasks,
     ],
     finance_officer: [

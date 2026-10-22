@@ -1,17 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  authedRequest,
-  buildRequest,
-  callRoute,
-  createTestUser,
-  setupTestDatabase,
-} from '@elevate/testing';
-import { students } from '@elevate/database';
-import {
-  GET as listAboutStudent,
-  POST as writeAboutStudent,
-} from '../../src/app/api/v1/feedback/about-students/route';
-import { PATCH as editAboutStudent } from '../../src/app/api/v1/feedback/about-students/[id]/route';
+import { authedRequest, buildRequest, callRoute, setupTestDatabase } from '@elevate/testing';
+import { existsSync } from 'node:fs';
+import { opsTeacherStudentFeedback, students } from '@elevate/database';
+import * as aboutStudentRoutes from '../../src/app/api/v1/feedback/about-students/route';
 import {
   GET as listAboutTeacher,
   POST as recordAboutTeacher,
@@ -26,33 +17,10 @@ let counsellor: StaffUser;
 let teacher: StaffUser;
 let otherTeacher: StaffUser;
 let taught: string;
-let notTaught: string;
 
 const req = (user: StaffUser | null, path: string, method = 'GET', json?: unknown) =>
   user ? authedRequest(user, path, { method, json }) : buildRequest(path, { method, json });
-type Row = { id: string; version: number; status: string; supersedesId: string | null };
-const write = (user: StaffUser | null, over: Record<string, unknown> = {}) =>
-  callRoute<Row>(
-    writeAboutStudent,
-    req(user, '/ops/api/v1/feedback/about-students', 'POST', {
-      studentId: taught,
-      subject: 'Mathematics',
-      observedOn: '2026-10-20',
-      observations: 'Solves ratio problems quickly.',
-      ...over,
-    }),
-  );
-const edit = (user: StaffUser, id: string, over: Record<string, unknown> = {}) =>
-  callRoute<Row>(
-    editAboutStudent,
-    req(user, `/ops/api/v1/feedback/about-students/${id}`, 'PATCH', {
-      subject: 'Mathematics',
-      observedOn: '2026-10-20',
-      observations: 'Updated observation.',
-      ...over,
-    }),
-    { id },
-  );
+const listAboutStudent = aboutStudentRoutes.GET;
 
 beforeAll(async () => {
   await setupReference(ctx.db);
@@ -64,7 +32,7 @@ beforeAll(async () => {
     .insert(students)
     .values([{ fullName: 'Taught Student' }, { fullName: 'Other Student' }])
     .returning();
-  [taught = '', notTaught = ''] = rows.map((r) => r.id);
+  [taught = ''] = rows.map((r) => r.id);
   const booked = await callRoute(
     schedule,
     req(manager, '/ops/api/v1/appointments', 'POST', {
@@ -78,60 +46,64 @@ beforeAll(async () => {
   expect(booked.status).toBe(201);
 });
 
-describe('teacher → student feedback', () => {
-  it('401 / 403 / 400', async () => {
-    expect((await write(null)).status).toBe(401);
-    const auditor = await createTestUser(ctx.db, { roles: ['auditor'] });
+describe('teacher → student reviews recorded in Ops before 21 Oct 2026 (read-only history)', () => {
+  it('no Ops route writes or edits them any more (reviews are written in Academic OS)', () => {
+    expect('POST' in aboutStudentRoutes).toBe(false);
     expect(
-      (
-        await callRoute(
-          writeAboutStudent,
-          authedRequest(auditor, '/ops/api/v1/feedback/about-students', {
-            method: 'POST',
-            json: {},
-          }),
-        )
-      ).status,
-    ).toBe(403);
-    expect((await write(teacher, { observations: '' })).status).toBe(400);
-    expect((await write(teacher, { studentId: notTaught })).status).toBe(403);
-    expect((await write(teacher, { teacherStaffId: otherTeacher.staffId })).status).toBe(403);
+      existsSync(
+        new URL('../../src/app/api/v1/feedback/about-students/[id]/route.ts', import.meta.url),
+      ),
+    ).toBe(false);
   });
 
-  it('a draft is edited in place; a final edit creates version 2; old versions and other teachers are refused', async () => {
-    const draft = (await write(teacher)).data!;
-    expect(draft).toMatchObject({ version: 1, status: 'draft' });
-    const sameRow = await edit(teacher, draft.id, { status: 'final' });
-    expect(sameRow.data).toMatchObject({ id: draft.id, version: 1, status: 'final' });
-    const v2 = await edit(teacher, draft.id, {
+  it('lists current and superseded versions; own scope = your own reviews', async () => {
+    const [v1] = await ctx.db
+      .insert(opsTeacherStudentFeedback)
+      .values({
+        studentId: taught as never,
+        teacherStaffId: teacher.staffId as never,
+        subject: 'Mathematics',
+        observedOn: '2026-10-01' as never,
+        observations: 'Solves ratio problems quickly.',
+        status: 'final',
+        createdBy: teacher.id,
+      })
+      .returning();
+    await ctx.db.insert(opsTeacherStudentFeedback).values({
+      studentId: taught as never,
+      teacherStaffId: teacher.staffId as never,
+      subject: 'Mathematics',
+      observedOn: '2026-10-02' as never,
       observations: 'Correction.',
       status: 'final',
+      version: 2,
+      supersedesId: v1!.id,
+      createdBy: teacher.id,
     });
-    expect(v2.data).toMatchObject({ version: 2, supersedesId: draft.id });
-    expect(v2.data!.id).not.toBe(draft.id);
-    expect((await edit(teacher, draft.id)).status).toBe(409);
-    expect((await edit(otherTeacher, v2.data!.id)).status).toBe(403);
-    const listed = await callRoute<(Row & { superseded: boolean })[]>(
-      listAboutStudent,
-      req(manager, `/ops/api/v1/feedback/about-students?studentId=${taught}`),
-    );
-    expect(listed.data?.map((r) => [r.version, r.superseded])).toEqual([
+    type Row = { version: number; superseded: boolean };
+    const list = (user: StaffUser | null) =>
+      callRoute<Row[]>(
+        listAboutStudent,
+        req(user, `/ops/api/v1/feedback/about-students?studentId=${taught}`),
+      );
+    expect((await list(null)).status).toBe(401);
+    expect((await list(manager)).data?.map((r) => [r.version, r.superseded])).toEqual([
       [2, false],
       [1, true],
     ]);
-    const ownView = await callRoute<Row[]>(
-      listAboutStudent,
-      req(otherTeacher, `/ops/api/v1/feedback/about-students?studentId=${taught}`),
-    );
-    expect(ownView.data).toEqual([]);
-  });
-
-  it('a feedback manager may write for any teacher and student', async () => {
-    const res = await write(manager, {
-      teacherStaffId: otherTeacher.staffId,
-      studentId: notTaught,
+    expect((await list(teacher)).data).toHaveLength(2);
+    expect((await list(otherTeacher)).data).toEqual([]);
+    // A draft stays with its author.
+    await ctx.db.insert(opsTeacherStudentFeedback).values({
+      studentId: taught as never,
+      teacherStaffId: otherTeacher.staffId as never,
+      subject: 'Logic',
+      observedOn: '2026-10-03' as never,
+      observations: 'Draft never submitted.',
+      createdBy: otherTeacher.id,
     });
-    expect(res.status).toBe(201);
+    expect((await list(manager)).data).toHaveLength(2);
+    expect((await list(otherTeacher)).data).toHaveLength(1);
   });
 });
 

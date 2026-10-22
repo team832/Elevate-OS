@@ -106,6 +106,7 @@ All idempotent; there is no scheduler yet (IR-OPS-02). Each is also exported fro
 |---|---|---|
 | `follow-up-reminders`, `enrolment-replies` | `POST /ops/api/v1/jobs/{job}` | `ops:jobs:run` |
 | `lead-intake` (Marketing handoff events, then retries of failed receipts with fewer than 5 attempts) | `POST /ops/api/v1/jobs/lead-intake` | `ops:jobs:run`; the service also needs `ops:lead_handoffs:manage` |
+| `demo-academic-marks` (open, unfinished demos re-read Academic's marks for their started classes in one batched call, so a class the teacher marked in Academic moves the case to demo attended without an Ops edit; nothing moves while Academic cannot be read; D-066) | `POST /ops/api/v1/jobs/demo-academic-marks` | `ops:jobs:run`; the service also needs all-scope `ops:leads:write` |
 
 ## Pre-existing routes
 
@@ -117,7 +118,11 @@ All idempotent; there is no scheduler yet (IR-OPS-02). Each is also exported fro
 
 ## Internal (server-to-server)
 
-Business Ops **calls** `GET /academic/api/internal/v1/summary` and `GET /marketing/api/internal/v1/summary` with `fetchInternal` (`src/server/summaries.ts`). Its own `GET /ops/api/internal/v1/summary` is **Proposed** (P2, not built).
+Business Ops **calls** `GET /academic/api/internal/v1/summary` and `GET /marketing/api/internal/v1/summary` with `fetchInternal` (`src/server/summaries.ts`) and, from `src/server/academic-summary.ts`, `/academic/api/internal/v1/students/{id}/summary`, `/reviews?coreStudentId=|authorStaffId=` (D-058), `/teachers/{staffId}/activity?from=&to=` and `/demo-attendance?ids=` (200 ids per call; D-060). Contracts: `INTEGRATION_CONTRACT.md`. Its own `GET /ops/api/internal/v1/summary` is **Proposed** (P2, not built).
+
+| Method | Path | Caller | Query | Response |
+|---|---|---|---|---|
+| GET | `/ops/api/internal/v1/demo-sessions` | `academic` only (bearer `INTERNAL_SERVICE_TOKEN` + `X-Elevate-Caller`) | `date` (IST, required; 400 otherwise) | `OpsDemoSessionsForDayV1`: the day's demo classes with minimal fields (demo class id, core student id, display name, day number, subject, start) so Academic can put demo students on a class roster (R5) |
 
 ## Screens (pages)
 
@@ -137,7 +142,7 @@ Screens are type-checked and Implemented. The redesigned screens (21 Oct 2026: d
 | `/ops/leads`, `/ops/leads/{id}` | `ops:leads:read` | Leads list (filters, merge-review queue, create with duplicate warnings, `?view=marketing` for Marketing handoffs); detail. `?act=details` = Edit contact details (student phone/email, school, class, guardian; `PATCH /leads/{id}`; needs `ops:leads:write` and private-detail access), `?act=assign` = Assign owner (the counsellor unless the case names one) |
 | `/ops/meetings`, `/ops/meetings/{id}` | `ops:appointments:read` | Counselling & meetings: list and week calendar (`?view=week`), schedule form with subject-filtered teacher picker, `?open=` drawer; full record |
 | `/ops/schedule` | — | Permanent redirect to `/ops/meetings` |
-| `/ops/teachers`, `/ops/teachers/{id}` | `ops:teachers:read` | Teacher directory and profile |
+| `/ops/teachers`, `/ops/teachers/{id}` | `ops:teachers:read` | Teacher directory (Academic today per teacher; tasks and EOD only within your task reach) and profile with tabs Overview, Attendance and leave, Academic activity, Tasks and updates, Upcoming appointments, Student reviews, Feedback from students and guardians, EOD reports, Documents, Change history |
 | `/ops/staff`, `/ops/staff/{id}` | `ops:organisation:read` | Staff directory and departments; staff detail and edit |
 | `/ops/settings` | `ops:settings:read` | Configuration with decision states; CRM adapter status (mock) |
 | `/ops/reports`, `/ops/reports/admissions` | `ops:module:access` / `ops:admissions:read` | Reports index; admissions report with `#funnel`, `#demo-conversion`, `#students` |
@@ -146,7 +151,11 @@ Screens are type-checked and Implemented. The redesigned screens (21 Oct 2026: d
 | `/ops/admissions/applications`, `/ops/admissions/applications/{id}` | `ops:admissions:read` | Applications list (search, status, programme, sort, 25 per page, `?open=`); application record with "check your answers", form PDF, signatures and the password confirmation |
 | `/ops/search` | `ops:module:access` | One search box: leads, demo students, applications, students (each group needs its own read permission) |
 | `/ops/fees` | `ops:fees:read` | Fee records list |
-| `/ops/tasks` | `ops:tasks:read` | Daily tasks and end-of-day reports: `?tab=` day (My day) · all · eod · team (Team reports, `ops:eod:review` only) |
+| `/ops/tasks` | `ops:tasks:read` | `?tab=` day (My day) · all (Task tracker) · eod (End-of-day report editor). Task areas: My day, Tracker, Inbox, Reports, Imports, End-of-day report |
+| `/ops/tasks/{id}` | `ops:tasks:read` | Task detail: people, criteria, timeline, work updates, dependencies, the actions you may take, report PDF/CSV |
+| `/ops/tasks/inbox` | `ops:tasks:read` (tab shown to EOD reviewers, managers and anyone a report was sent to) | Manager inbox with review pane |
+| `/ops/tasks/reports` | `ops:tasks:read` | Team / period report with definitions, PDF, CSV |
+| `/ops/tasks/imports` | `ops:tasks:import` | Tracker backup upload, preview, commit |
 
 ---
 
@@ -206,11 +215,11 @@ Same check order (401 → 403 → 400 → handler), envelope and error codes as 
 | GET | `/ops/api/v1/appointments/{id}` | `ops:appointments:read` (own) | — | appointment, participants, change history | 403, 404 |
 | PATCH | `/ops/api/v1/appointments/{id}` | `ops:appointments:manage` (own) | `{ action: 'confirm' }`, `{ action: 'reschedule', startsAt, endsAt?, reason }`, `{ action: 'cancel', reason }`, `{ action: 'complete', outcome, objections?, nextStep?, followUpOn?, recommendedProgrammeCode? }` | appointment | 400 reason / outcome before start, 403, 404, 409 illegal move or clash |
 | GET | `/ops/api/v1/teachers` | `ops:teachers:read` (teacher: own) | `subject`, `programmeCode` | directory, picker list, subjects with no teacher | 400, 403 |
-| GET | `/ops/api/v1/teachers/{id}` | `ops:teachers:read` (own) | — | profile; sections by permission; batches "not available" | 403, 404 |
+| GET | `/ops/api/v1/teachers/{id}` | `ops:teachers:read` (own) | — | profile; sections by permission. Assignments, classes, logs and unavailability come from Academic's teacher activity contract ("Academic OS unavailable" on failure); HR attendance is always "HR attendance unavailable" (no HR module) | 403, 404 |
 | PATCH | `/ops/api/v1/teachers/{id}` | `ops:teachers:manage` | `{ displayName?, staffCode? (A–Z, 0–9, hyphen; renamed from `staffRef`, D-036), verificationStatus?, roleNote?, subjects?[≤20] (replaces the list) }` | profile | 400, 403, 404 (staff ref is unique by index; a duplicate is refused) |
-| GET | `/ops/api/v1/feedback/about-students` | `ops:feedback:read` (teacher: own) | `studentId` | teacher → student feedback | 400, 403 |
-| POST | `/ops/api/v1/feedback/about-students` | any of `ops:feedback:write` (own), `ops:feedback:manage` | `{ studentId, teacherStaffId? (manage only), subject, observedOn, relatedRef?, observations, strengths?, areasToImprove?, actionPlan?, status = draft, scope: general \| demo_session \| enrolment, demoSessionId? (scope demo_session), enrolmentId? (scope enrolment), visibility: internal \| shareable = internal }` | 201 | 400, 403 (student not taught by the teacher, writing as someone else) |
-| PATCH | `/ops/api/v1/feedback/about-students/{id}` | as POST | same fields without `studentId` | row edited in place (draft) or version n+1 (final) | 400, 403 other teacher, 404, 409 superseded version |
+| GET | `/ops/api/v1/feedback/about-students` | `ops:feedback:read` (own = your own rows) | `studentId` | teacher → student reviews recorded in Ops **before 21 Oct 2026**: read-only history (current and superseded versions; drafts only for their author; own scope = rows you wrote, or all rows of a student you counsel). New reviews are written in Academic OS (D-058) | 400, 403 |
+| POST | `/ops/api/v1/feedback/about-students` | — | **Removed 21 Oct 2026** (D-058). `ops:feedback:write` and `ops:feedback:manage` are still defined but held by no role | — | — |
+| PATCH | `/ops/api/v1/feedback/about-students/{id}` | — | **Removed 21 Oct 2026** (D-058); the route file is deleted | — | — |
 | GET | `/ops/api/v1/feedback/about-teachers` | `ops:feedback:read` (teacher: approved rows shared with them) | `teacherStaffId` | student/guardian → teacher feedback + rating summary with denominator | 400, 403 |
 | POST | `/ops/api/v1/feedback/about-teachers` | `ops:feedback:record` | `{ teacherStaffId, studentId?, submittedByKind: student\|guardian, subjectRef?, feedbackOn, rating? (1–5), comment }` | 201, status `pending` | 400, 403 |
 | PATCH | `/ops/api/v1/feedback/about-teachers/{id}` | `ops:feedback:moderate` | `{ action: approve\|reject\|hide, note?, visibility? }` (approve also un-hides) | row | 400, 403 (moderating feedback about yourself), 404, 409 illegal move |
@@ -301,20 +310,44 @@ PDF downloads never use `idempotency` (an idempotent route cannot return a raw `
 | POST | `/ops/api/v1/appointments/{id}/messages` | `ops:appointments:manage` | `{ channel: email \| sms \| whatsapp, body }` | 201 draft with a preview of who it can reach (A-EVT-2) | 400, 403 |
 | POST | `/ops/api/v1/appointments/{id}/messages/{messageId}` | `ops:event_messages:send` | — | message `simulated` (no provider is connected); `sent` only with a provider reference (A-EVT-3) | 403, 404, 409 already sent |
 
-## Daily tasks and end-of-day reports (owner decision 21 Oct 2026; A-TSK-1 … A-TSK-4)
+## Daily tasks, end-of-day reports, imports (owner decision 21 Oct 2026; owner brief 2; A-TSK-1 … A-TSK-8)
+
+Zod schemas: `src/server/staff-tasks-schemas.ts` (tasks), `src/server/eod-schemas.ts` (EOD, inbox, period report), `src/server/task-import.ts` (`importBody`). Own scope for `ops:tasks:*` = your tasks, the tasks of the staff who report to you directly or indirectly (`core.staff_members.manager_id` chain, ruling R3), and tasks where you are the reviewer, backup or assigner. Naming someone as requester gives them nothing. Out of scope → **404**. Task writes take `expectedVersion`; a stale one is **409**. Every write appends `ops.task_events` and an audit row (`staff_task.*`). Rules: `ALGORITHMS.md` A-TSK-1 … A-TSK-8; brief 2 checks and their tests: `docs/task-tracker-verification.md` (repo root).
 
 | Method | Path | Permission | Body / query | Response | Errors |
 |---|---|---|---|---|---|
-| GET | `/ops/api/v1/staff-tasks` | `ops:tasks:read` (own = your tasks) | `q, staffId, status, priority, from, to, page` | page of tasks | 400, 403 |
-| POST | `/ops/api/v1/staff-tasks` | `ops:tasks:write` | `{ title, details?, assignedByStaffId?, priority = medium, dueOn = today, dueTime? (HH:MM IST), status = pending, progressPercent = 0, reason?, recurrence = none \| daily \| weekly \| monthly, staffId? (someone else: all-scope write), leadId? \| admissionId? \| studentId? (one at most) }` | 201 task, audit `staff_task.created` | 400 blocked / on hold without a reason, 403 |
-| GET, PATCH | `/ops/api/v1/staff-tasks/{id}` | GET `ops:tasks:read`; PATCH `ops:tasks:write` | any editable field | task; marking a recurring task done creates the next occurrence (A-TSK-3) | 400, 403, 404 |
-| GET | `/ops/api/v1/eod-reports` | `ops:eod:review` | `?date=` (default today IST) | team day: who submitted, late, not submitted | 403 |
-| POST | `/ops/api/v1/eod-reports` | `ops:tasks:write` | `{ reportDate, summary? }` | draft for the day built from your tasks (A-TSK-4), refreshed while it is a draft | 403, 409 already submitted |
-| GET | `/ops/api/v1/eod-reports/{id}` | `ops:tasks:read` (own, addressed to you, or all scope) | — | report with staff, manager and shares | 404 out of scope |
-| POST | `/ops/api/v1/eod-reports/{id}/submit` | `ops:tasks:write` | — | snapshot frozen; sent to `core.staff_members.manager_id` (in-app notice); no active manager with a login → every `ops:eod:review` holder | 400 a not-done task without a reason, 409 already submitted |
-| POST | `/ops/api/v1/eod-reports/{id}/review` | `ops:tasks:read` + (`ops:eod:review` or being the manager it was sent to) | — | `reviewed`, audit `eod_report.reviewed` | 403 your own report or not addressed to you, 409 not submitted |
-| POST | `/ops/api/v1/eod-reports/{id}/share` | `ops:tasks:write` | `{ channel: email \| whatsapp }` | "Simulated — not sent. No WhatsApp or email provider is connected." (audited) | 409 not submitted |
-| GET | `/ops/api/v1/eod-reports/{id}/pdf` | `ops:tasks:read` (as GET) | — | `application/pdf` | 404 |
+| GET | `/ops/api/v1/staff-tasks` | `ops:tasks:read` | `q, staffId, departmentId, due = overdue \| today \| week, ack = pending, status, priority, from, to, page` (`staffId` only narrows the list; it never widens scope) | page of tasks in your scope | 400, 403 |
+| POST | `/ops/api/v1/staff-tasks` | `ops:tasks:write`; `Idempotency-Key` optional | `{ title, details?, staffId? (yourself or your reports; all scope: anyone), source? = manager \| self \| verbal \| academic (omitted: manager when for someone else, else self), receivedAt?, requesterStaffId?, requesterNote? (verbal needs one), departmentId?, backupStaffId?, reviewerStaffId?, reviewRequired = false, acceptanceCriteria?, linkedRef?, plannedStartOn?, priority = medium, dueOn = today, dueTime?, status = pending, progressPercent = 0, reason?, recurrence = none, leadId? \| admissionId? \| studentId? (one at most), dependsOn?[≤20] }`. The server records you as `assignedByStaffId`; only all scope may name someone else | 201 task + `created` event; your own work is acknowledged by logging it, assigned work is not | 400 (blocked / on hold without a reason; `in_review` or `cancelled` at creation; `done` at creation unless you log it for yourself, without review, while `tasks.completion_without_reviewer` = owner), 403 owner outside your reach |
+| GET | `/ops/api/v1/staff-tasks/{id}` | `ops:tasks:read` | — | task with people, dated events (oldest first), work updates, dependencies, time summary and the actions you may take | 404 out of scope |
+| PATCH | `/ops/api/v1/staff-tasks/{id}` | `ops:tasks:write` | strict: editable fields + `expectedVersion` (required) + `changeReason?` (kept on `due_changed` / `priority_changed`). A status change is mapped to its lifecycle action (A-TSK-5); `in_review` and `cancelled` need their own actions | task; done on a recurring task creates the next occurrence once | 400 unknown field or nothing to change, 403 (reviewer alone; changing `reviewRequired` / `reviewerStaffId` unless you created the task or hold all scope, R18), 404, 409 stale version or impossible move |
+| POST | `/ops/api/v1/staff-tasks/{id}/{action}` | `ops:tasks:write`; `Idempotency-Key` optional | `action` = `acknowledge`, `request-clarification`, `start`, `block`, `hold`, `resume`, `submit-for-review`, `approve`, `request-changes`, `complete`, `cancel`, `reopen`; body `{ expectedVersion, reason? }` (clarification, block, hold, request changes, cancel and reopen need a reason) | task + `warnings` (open tasks it waits on; never enforced) | 400 reason, 403 role (A-TSK-5 table), 404, 409 stale or not possible in this status |
+| POST | `/ops/api/v1/staff-tasks/{id}/reassign` | `ops:tasks:write`; `Idempotency-Key` optional | `{ expectedVersion, toStaffId, reason? }` | task + `reassigned` event (from → to); the new owner must acknowledge unless they took it themselves | 400 already the owner, the reviewer ("The reviewer cannot also own the task."), inactive staff; 403 (only the creator, a manager of the owner, all scope, or the owner of self-logged work may reassign, R18; target outside your reach), 404, 409 closed task or stale |
+| POST | `/ops/api/v1/staff-tasks/{id}/dependencies` | `ops:tasks:write`; `Idempotency-Key` optional | `{ expectedVersion, dependsOnTaskId }` | 201 link + `dependency_added` event | 400 self link, loop (A-TSK-6), task you cannot see; 403, 404, 409 |
+| POST | `/ops/api/v1/staff-tasks/{id}/updates` | `ops:tasks:write`; `Idempotency-Key` optional | `{ occurredOn? (IST work day), workPerformed, result?, evidence? (text or link; there is no file storage), remainingWork?, blocker?, nextStep?, durationMinutes? (1–1440) \| startedAt + endedAt, correctsUpdateId?, correctionReason? }` | 201 update + overlap / midnight `warnings` (A-TSK-7); the task's version is not bumped | 400 (future work date or stop time, both minutes and stop, stop before start, work date ≠ the start's IST day, correcting someone else's entry, correction without a reason), 403 (only owner, backup or manager log work), 404 |
+| GET | `/ops/api/v1/staff-tasks/{id}/report` | `ops:tasks:read` | `format = pdf \| csv` | end-to-end task report (events, updates, time); audited | 404 out of scope |
+| GET | `/ops/api/v1/eod-reports` | `ops:tasks:read` | `q, from, to, staffId, departmentId, status (not draft), blockers = 1, page` | inbox: submitted reports sent to you (EOD reviewers: everyone's); counts from the latest submitted version; imported tracker reports flagged | 400, 403 |
+| POST | `/ops/api/v1/eod-reports` | `ops:tasks:write` | `{ reportDate (today or earlier), summary?, nextDayPlan?, notes?, version? }` | your draft for the day; facts rebuilt (A-TSK-8), narrative saved when given | 400 future day; 409 stale `version` or report already submitted (and not sent back) |
+| GET | `/ops/api/v1/eod-reports/{id}` | `ops:tasks:read` | — | report with versions, review trail, names; "Source changed since submission" flag | 404 unless you are the owner, hold all scope, a version was sent to you, or (only when `eod.manager_history` = `current_team_all`) you are in the owner's current manager chain |
+| POST | `/ops/api/v1/eod-reports/{id}/submit` | `ops:tasks:write` | `{ recipientStaffId? (only when no active manager with a login resolves; must hold `ops:eod:review`), expectedVersion? }` | version n+1 frozen in `ops.eod_report_versions`, addressed to the manager (in-app notice); submitting an already submitted report returns its current version | 400 an open task due by the report day without a reason, recipient missing or not allowed; 404 not yours; 409 stale |
+| POST | `/ops/api/v1/eod-reports/{id}/review` | `ops:tasks:read` + (`ops:eod:review` or a version was sent to you) | `{ kind: viewed \| comment \| clarification_requested \| revision_requested \| acknowledged, text? }` (comment, clarification and revision need text) | review event; `revision_requested` reopens the draft; viewing and a second acknowledgement are recorded once; acknowledging never completes tasks | 403 your own report or not sent to you, 404, 409 not submitted or an imported report |
+| POST | `/ops/api/v1/eod-reports/{id}/follow-up` | `ops:tasks:write` + the review right above | `{ title, details?, dueOn? }` | 201 new task for the report's owner + `follow_up_task_created` event | 400, 403, 404, 409 |
+| GET | `/ops/api/v1/eod-reports/{id}/pdf` | `ops:tasks:read` (same read rule) | `version?` (default latest submitted, else the draft with a banner) | `application/pdf`; audited `eod_report.exported` | 404 |
+| GET | `/ops/api/v1/eod-reports/{id}/csv` | `ops:tasks:read` (same read rule) | `version?` | CSV of the fact sections (shared `toCsv`, formula cells neutralised, D-071); audited | 404, also for reports stored in the older "My day" format |
+| GET | `/ops/api/v1/task-reports` | `ops:tasks:read` | `from, to (92 days or fewer), staffId?, departmentId?, format = json \| csv \| pdf` | team / period report from dated events: assigned and completed in the period, open and overdue at the cut-off, EOD coverage per person and calendar day, blockers; definitions included; downloads audited | 400 reversed or too-long period, 403 |
+| GET | `/ops/api/v1/task-imports` | `ops:tasks:import` (all scope) | — | import batches, newest first (no source copy) | 403 |
+| POST | `/ops/api/v1/task-imports` | `ops:tasks:import` | `{ filename, staffId, content (≤ 5,000,000 characters) }` | 201 previewed batch + every record's outcome; nothing imported. The same file for the same person returns the stored batch | 400 not a backup (the tracker HTML is refused), 403, 409 concurrent upload |
+| GET | `/ops/api/v1/task-imports/{id}` | `ops:tasks:import` | — | batch with rows (stored outcomes once committed, else a fresh dry run) | 403, 404 |
+| POST | `/ops/api/v1/task-imports/{id}/commit` | `ops:tasks:import` | — | one transaction: accepted tasks (one `imported` event each, dated at commit, D-068) and historical EOD reports (one legacy version, never sent); no notifications | 403, 404, 409 already committed or the mapping is no longer valid |
+
+**Removed on 21 Oct 2026:** `POST /ops/api/v1/eod-reports/{id}/share` (the simulated WhatsApp/email share). No external channel is configured (`eod.external_delivery`, proposed, not editable); the report page offers "Copy summary", PDF and CSV and says "External delivery not configured". The old team-day view behind `GET /eod-reports?date=` is replaced by the inbox above.
+
+## Teacher reviews from Academic OS (owner decision D-058, 21 Oct 2026)
+
+Teachers write and submit student reviews in Academic OS. Ops reads submitted versions through `GET /academic/api/internal/v1/reviews?coreStudentId=|authorStaffId=` after checking `ops:feedback:read` (own = students you counsel, plus reviews you wrote). Withdrawn reviews are hidden; superseded versions stay, marked. When Academic cannot be reached the screen says "source unavailable", never "no reviews".
+
+| Method | Path | Permission | Body | Response | Errors |
+|---|---|---|---|---|---|
+| POST | `/ops/api/v1/review-acks` | `ops:feedback:acknowledge` (own = students you counsel; holders proposed) | strict `{ coreStudentId, reviewKey, version, note?, followUp?, followUpOn? (needs followUp) }` | 201 acknowledgement (one per review, version and person), audited `feedback.review_acknowledged`; the teacher's words are never copied or edited | 400, 403 (not your student), 404 unknown or withdrawn version, 409 (superseded version, already acknowledged, Academic unreachable) |
 
 ## Search
 

@@ -244,6 +244,11 @@ export class PdfBuilder {
     this.y -= 2;
   }
 
+  /** Start a new page unless `height` points still fit (keep a block together). */
+  keep(height: number) {
+    this.ensure(height);
+  }
+
   heading(value: string) {
     const size = this.p.body * 1.25;
     this.ensure(size * LEAD + 10 + this.p.body * LEAD * 3); // keep a heading with its first lines

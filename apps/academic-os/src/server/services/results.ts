@@ -10,7 +10,6 @@ import {
   academicAssessments,
   academicAttempts,
   academicBatches,
-  academicEnrolments,
   academicPlanItems,
   academicResultRuns,
   academicResults,
@@ -19,11 +18,17 @@ import {
   type Database,
 } from '@elevate/database';
 import { publishEvent, withTransaction } from '@elevate/server-kit';
-import { InvalidStateTransitionError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
+import { ConflictError, InvalidStateTransitionError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import type { z } from 'zod';
 import {
   aggregateResults,
+  analyseAssessment,
+  assessmentTrend,
   checkAssessmentSchedule,
+  formatMarks,
+  parseMarks,
+  scoreBounds,
+  splitComparable,
   toNumericString,
   validateForFinalise,
   type AssessmentCandidate,
@@ -33,10 +38,16 @@ import {
 } from '../../domain';
 import { assertBatchInScope, audit, getBatchOrThrow, resolveScope, studentIdsInScope, type Actor } from '../context';
 import type { scheduleCheckBody } from '../schemas';
-import { getAssessmentOrThrow } from './assessments';
+import { eligibleStudentIds, getAssessmentOrThrow } from './assessments';
 import { currentPlanForBatch } from './curriculum';
 import { getSetting } from './settings';
 import { batchClassesBetween, datedExclusionsFor } from './timetable';
+
+/** Rank and percentile are shown only when setting progress.show_rank_percentile is approved with show = true. */
+export async function rankVisible(db: Database): Promise<boolean> {
+  const s = await getSetting(db, 'progress.show_rank_percentile');
+  return s.status === 'approved' && s.value.show;
+}
 
 /** Load everything validateForFinalise needs (latest answer key = current key). */
 async function finaliseInput(db: Database, assessmentId: string) {
@@ -44,10 +55,7 @@ async function finaliseInput(db: Database, assessmentId: string) {
   const sectionRows = await db.select().from(academicAssessmentSections).where(eq(academicAssessmentSections.assessmentId, assessment.id)).orderBy(asc(academicAssessmentSections.sortOrder));
   const [key] = await db.select().from(academicAnswerKeys).where(eq(academicAnswerKeys.assessmentId, assessment.id)).orderBy(desc(academicAnswerKeys.version)).limit(1);
   const attempts = await db.select().from(academicAttempts).where(eq(academicAttempts.assessmentId, assessment.id));
-  const enrolled = await db
-    .select({ id: academicEnrolments.studentId })
-    .from(academicEnrolments)
-    .where(and(eq(academicEnrolments.batchId, assessment.batchId), eq(academicEnrolments.status, 'active')));
+  const enrolled = await eligibleStudentIds(db, assessment);
   const sections: SectionSpec[] = sectionRows.map((s) => ({
     code: s.code,
     name: s.name,
@@ -63,8 +71,8 @@ async function finaliseInput(db: Database, assessmentId: string) {
     assessmentRule: { marksPerCorrect: assessment.marksPerCorrect, marksPerWrong: assessment.marksPerWrong, marksUnattempted: assessment.marksUnattempted },
     sections,
     key: key ? { version: key.version, answers: key.answers } : null,
-    attempts: attempts.map((a) => ({ attemptId: a.id, studentId: a.studentId, status: a.status, responses: a.responses, keyVersion: a.keyVersion })),
-    enrolledStudentIds: [...new Set(enrolled.map((e) => e.id as string))],
+    attempts: attempts.map((a) => ({ attemptId: a.id, studentId: a.studentId, status: a.status, responses: a.responses, keyVersion: a.keyVersion, manualScore: a.manualScore })),
+    enrolledStudentIds: enrolled,
   };
   return { assessment, input, keyId: key?.id ?? null };
 }
@@ -82,13 +90,14 @@ async function writeRun(tx: Database, actor: Actor, assessmentId: string, versio
   const { assessment, input, keyId } = await finaliseInput(tx, assessmentId);
   const v = validateForFinalise(input);
   if (!v.ok) throw new ValidationError('The assessment is not ready to finalise; fix every issue first.', { details: v.issues });
-  const agg = aggregateResults(input.sections, v.rules, input.key!.answers, input.attempts);
-  const snapshot = { assessmentRule: input.assessmentRule, sections: input.sections, keyVersion: input.key!.version };
+  // No key only when every submitted attempt is a manual total (validateForFinalise).
+  const agg = aggregateResults(input.sections, v.rules, input.key?.answers ?? null, input.attempts);
+  const snapshot = { assessmentRule: input.assessmentRule, sections: input.sections, keyVersion: input.key?.version ?? null };
   const [run] = await tx
     .insert(academicResultRuns)
-    .values({ assessmentId: assessment.id, version, answerKeyId: keyId!, status: 'final', ruleSnapshot: snapshot, reason, studentsScored: agg.scored, studentsAbsent: agg.absent, finalisedByUserId: actor.user.id })
+    .values({ assessmentId: assessment.id, version, answerKeyId: keyId, status: 'final', ruleSnapshot: snapshot, reason, studentsScored: agg.scored, studentsAbsent: agg.absent, finalisedByUserId: actor.user.id })
     .returning();
-  const maxUnits = agg.results.find((r) => r.score)?.score?.maxUnits ?? 0;
+  const maxUnits = scoreBounds(input.sections, v.rules, input.key?.answers ?? null).maxUnits;
   if (agg.results.length > 0) {
     await tx.insert(academicResults).values(
       agg.results.map((r) => ({
@@ -102,6 +111,7 @@ async function writeRun(tx: Database, actor: Actor, assessmentId: string, versio
         rank: r.rank,
         sectionScores: r.score?.sections ?? [],
         absent: r.absent,
+        state: r.state,
       })),
     );
   }
@@ -170,18 +180,94 @@ export async function getResults(db: Database, actor: Actor, assessmentId: strin
   const run = version ? runs.find((r) => r.version === version) : runs.find((r) => r.status === 'final');
   if (!run) return { assessment, run: null, versions: runs.map((r) => ({ version: r.version, status: r.status, reason: r.reason, finalisedAt: r.finalisedAt })), results: [] };
   const visible = await studentIdsInScope(db, scope);
+  const showRank = await rankVisible(db);
   const rows = await db
     .select({ result: academicResults, code: academicStudents.code, fullName: academicStudents.fullName })
     .from(academicResults)
     .innerJoin(academicStudents, eq(academicStudents.id, academicResults.studentId))
     .where(and(eq(academicResults.runId, run.id), visible ? inArray(academicResults.studentId, visible.length ? visible : ['00000000-0000-4000-8000-000000000000' as never]) : undefined))
-    .orderBy(asc(academicResults.rank), asc(academicStudents.fullName));
+    .orderBy(...(showRank ? [asc(academicResults.rank)] : []), asc(academicStudents.fullName));
   return {
     assessment,
+    showRank,
     run: { id: run.id, version: run.version, status: run.status, reason: run.reason, finalisedAt: run.finalisedAt, studentsScored: run.studentsScored, studentsAbsent: run.studentsAbsent },
     versions: runs.map((r) => ({ version: r.version, status: r.status, reason: r.reason, finalisedAt: r.finalisedAt })),
-    results: rows.map((r) => ({ ...r.result, studentCode: r.code, studentName: r.fullName })),
+    results: rows.map((r) => ({
+      ...r.result,
+      rank: showRank ? r.result.rank : null,
+      percentile: showRank ? r.result.percentile : null,
+      studentCode: r.code,
+      studentName: r.fullName,
+    })),
   };
+}
+
+/** Publish final results to students and parents (separate from finalising; coordinator). */
+export async function publishResults(db: Database, actor: Actor, assessmentId: string) {
+  return withTransaction(db, async (tx) => {
+    await resolveScope(tx, actor, 'academic:assessments:publish');
+    const [a] = await tx.select().from(academicAssessments).where(eq(academicAssessments.id, assessmentId as never)).for('update');
+    if (!a) throw new NotFoundError('Assessment not found.');
+    if (a.status !== 'finalised') throw new InvalidStateTransitionError('Finalise the results before publishing them.');
+    if (a.publishedAt) throw new ConflictError('These results are already published; a regrade publishes its new result version automatically.');
+    const [row] = await tx.update(academicAssessments).set({ publishedAt: new Date(), publishedByUserId: actor.user.id }).where(eq(academicAssessments.id, a.id)).returning();
+    await audit(tx, actor, { action: 'assessment.published', entityType: 'assessment', entityId: a.id, before: { publishedAt: null }, after: { publishedAt: row!.publishedAt } });
+    return { id: a.id, publishedAt: row!.publishedAt, publishedByUserId: actor.user.id };
+  });
+}
+
+const percentOf = (total: number, max: number) => Math.round((total / max) * 1000) / 10;
+
+/**
+ * Analysis of the final result version: average of scored students only (scored n of eligible m),
+ * section figures, a topic note (questions are not mapped to chapters), and comparison with the
+ * batch's other final assessments; a trend only across the same kind, subject and maximum.
+ */
+export async function getAssessmentAnalysis(db: Database, actor: Actor, assessmentId: string) {
+  const scope = await resolveScope(db, actor, 'academic:assessments:read');
+  const a = await getAssessmentOrThrow(db, assessmentId);
+  assertBatchInScope(scope, a.batchId);
+  const finals = await db
+    .select({ r: academicResults, kind: academicAssessments.kind, subjectId: academicAssessments.subjectId, code: academicAssessments.code, date: academicAssessments.scheduledDate })
+    .from(academicResults)
+    .innerJoin(academicResultRuns, and(eq(academicResultRuns.id, academicResults.runId), eq(academicResultRuns.status, 'final')))
+    .innerJoin(academicAssessments, eq(academicAssessments.id, academicResults.assessmentId))
+    .where(eq(academicAssessments.batchId, a.batchId));
+  const mine = finals.filter((f) => f.r.assessmentId === a.id);
+  const topics = { mapped: false, chapterIds: a.chapterIds, note: 'Questions are not mapped to chapters, so marks cannot be split by topic.' };
+  if (mine.length === 0) return { assessmentId: a.id, analysis: null, sections: [], topics, comparison: null };
+  const eligible = new Set([...(await eligibleStudentIds(db, a)), ...mine.map((m) => m.r.studentId as string)]).size;
+  const units = (v: string | null) => (v === null ? null : parseMarks(v)!);
+  const analysis = analyseAssessment(
+    mine.map((m) => ({ state: m.r.state, totalUnits: units(m.r.totalScore), maxUnits: units(m.r.maxScore)! })),
+    eligible,
+  );
+  const sectionRows = mine.flatMap((m) => m.r.sectionScores as { sectionCode: string; scoreUnits: number; maxUnits: number }[]);
+  const sections = [...new Set(sectionRows.map((x) => x.sectionCode))].map((code) => {
+    const values = sectionRows.filter((x) => x.sectionCode === code);
+    const mean = values.reduce((acc, x) => acc + x.scoreUnits, 0) / values.length;
+    const max = values[0]!.maxUnits;
+    return { sectionCode: code, scored: values.length, mean: formatMarks(Math.round(mean)), max: formatMarks(max), meanPercent: max > 0 ? percentOf(mean, max) : null };
+  });
+  const byAssessment = new Map<string, { id: string; code: string; date: string | null; kind: string; subjectId: string | null; maxUnits: number; totals: number[] }>();
+  for (const f of finals) {
+    const entry = byAssessment.get(f.r.assessmentId) ?? { id: f.r.assessmentId, code: f.code, date: f.date, kind: f.kind, subjectId: f.subjectId, maxUnits: units(f.r.maxScore)!, totals: [] };
+    if (f.r.state === 'scored') entry.totals.push(units(f.r.totalScore)!);
+    byAssessment.set(f.r.assessmentId, entry);
+  }
+  const series = [...byAssessment.values()].map(({ totals, ...x }) => ({
+    ...x,
+    max: formatMarks(x.maxUnits),
+    scored: totals.length,
+    meanPercent: totals.length && x.maxUnits > 0 ? percentOf(totals.reduce((p, t) => p + t, 0) / totals.length, x.maxUnits) : null,
+  }));
+  const { comparable, notComparable } = splitComparable(series.find((x) => x.id === a.id)!, series);
+  const trendSetting = await getSetting(db, 'progress.trend');
+  const trend = assessmentTrend(
+    comparable.filter((x) => x.date && x.meanPercent !== null).map((x) => ({ date: x.date!, percent: x.meanPercent! })),
+    trendSetting.value,
+  );
+  return { assessmentId: a.id, analysis, sections, topics, comparison: { comparable, notComparable, trend, trendSetting: trendSetting.status } };
 }
 
 /**

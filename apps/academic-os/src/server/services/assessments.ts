@@ -3,7 +3,7 @@
  * rules (per assessment, overridable per section), answer-key versions and
  * student attempts (responses). Finalisation and results: ./results.ts.
  */
-import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import {
   academicAnswerKeys,
   academicAssessmentSections,
@@ -11,6 +11,7 @@ import {
   academicAttempts,
   academicBatches,
   academicChapters,
+  academicBatchPlacements,
   academicEnrolments,
   academicResultRuns,
   academicStudents,
@@ -27,6 +28,22 @@ import { assertBatchInScope, audit, getBatchOrThrow, resolveScope, type Actor } 
 import type { answerKeyBody, attemptsBody, createAssessmentBody, scoringBody, sectionBody } from '../schemas';
 
 const dbMark = (v: string | null | undefined) => (v === null || v === undefined ? null : toNumericString(parseMarks(v)!));
+
+/**
+ * Students expected to sit an assessment (R13): a placement in its batch covering the scheduled
+ * date; with no date, an open placement. A student who sat and then transferred still counts;
+ * one who joined after the date does not.
+ */
+export async function eligibleStudentIds(db: Database, a: { batchId: string; scheduledDate: string | null }): Promise<string[]> {
+  const p = academicBatchPlacements;
+  const covers = a.scheduledDate ? and(lte(p.startDate, a.scheduledDate), or(isNull(p.endDate), gte(p.endDate, a.scheduledDate))) : isNull(p.endDate);
+  const rows = await db
+    .selectDistinct({ id: academicEnrolments.studentId })
+    .from(p)
+    .innerJoin(academicEnrolments, eq(academicEnrolments.id, p.enrolmentId))
+    .where(and(eq(p.batchId, a.batchId as BatchId), covers));
+  return rows.map((r) => r.id as string);
+}
 
 export async function getAssessmentOrThrow(db: Database, id: string) {
   const [row] = await db.select().from(academicAssessments).where(eq(academicAssessments.id, id as AcademicAssessmentId));
@@ -127,7 +144,7 @@ export async function getAssessment(db: Database, actor: Actor, id: string) {
     batchCode: batch!.code,
     sections,
     answerKeys: keys,
-    attempts: Object.fromEntries(attemptCounts.map((a) => [a.status, Number(a.n)])) as Partial<Record<'submitted' | 'absent', number>>,
+    attempts: Object.fromEntries(attemptCounts.map((a) => [a.status, Number(a.n)])) as Partial<Record<(typeof attemptCounts)[number]['status'], number>>,
     resultRuns: runs.map(({ ruleSnapshot: _r, ...run }) => run),
   };
 }
@@ -216,10 +233,10 @@ export async function upsertAttempts(db: Database, actor: Actor, id: string, inp
     const dupes = ids.filter((v, i) => ids.indexOf(v) !== i);
     if (dupes.length > 0) throw new ValidationError('Duplicate attempts in this import; nothing was saved.', { details: { studentIds: [...new Set(dupes)] } });
     const enrolled = new Set(
-      (await tx.select({ id: academicEnrolments.studentId }).from(academicEnrolments).where(and(eq(academicEnrolments.batchId, assessment.batchId), eq(academicEnrolments.status, 'active')))).map((e) => e.id as string),
+      await eligibleStudentIds(tx, assessment),
     );
     const outsiders = ids.filter((s) => !enrolled.has(s));
-    if (outsiders.length > 0) throw new ValidationError('Some students are not enrolled in the assessment’s batch; nothing was saved.', { details: { studentIds: outsiders } });
+    if (outsiders.length > 0) throw new ValidationError('Some students were not placed in the batch on the assessment date; nothing was saved.', { details: { studentIds: outsiders } });
     const before = await tx.select().from(academicAttempts).where(and(eq(academicAttempts.assessmentId, assessment.id), inArray(academicAttempts.studentId, ids as StudentId[])));
     for (const r of rows) {
       await tx
@@ -227,7 +244,7 @@ export async function upsertAttempts(db: Database, actor: Actor, id: string, inp
         .values({ assessmentId: assessment.id, studentId: r.studentId as StudentId, status: r.status, responses: r.responses, keyVersion: r.status === 'absent' ? null : r.keyVersion, enteredByUserId: actor.user.id })
         .onConflictDoUpdate({
           target: [academicAttempts.assessmentId, academicAttempts.studentId],
-          set: { status: r.status, responses: r.responses, keyVersion: r.status === 'absent' ? null : r.keyVersion, enteredByUserId: actor.user.id },
+          set: { status: r.status, responses: r.responses, manualScore: null, keyVersion: r.status === 'absent' ? null : r.keyVersion, enteredByUserId: actor.user.id, version: sql`${academicAttempts.version} + 1` },
         });
     }
     if (assessment.status === 'draft' || assessment.status === 'scheduled') {

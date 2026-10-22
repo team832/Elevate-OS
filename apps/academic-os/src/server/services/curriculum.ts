@@ -441,9 +441,9 @@ export async function getBatchCoverage(db: Database, actor: Actor, batchId: stri
   const chapters = await db.select().from(academicChapters).where(eq(academicChapters.courseId, batch.courseId));
   const items = plan ? await db.select().from(academicPlanItems).where(eq(academicPlanItems.planId, plan.id)) : [];
   const records = await db
-    .select({ chapterId: academicClassRecords.chapterId, actualMinutes: academicClassRecords.actualMinutes, state: academicClassRecords.state })
+    .select({ chapterId: academicClassRecords.chapterId, actualMinutes: academicClassRecords.actualMinutes, state: academicClassRecords.state, activity: academicClassRecords.activity, completion: academicClassRecords.completion })
     .from(academicClassRecords)
-    .where(and(eq(academicClassRecords.batchId, batch.id), inArray(academicClassRecords.activity, ['main', 'practice'])));
+    .where(and(eq(academicClassRecords.batchId, batch.id), inArray(academicClassRecords.state, ['submitted', 'verified'])));
   const coverage = computeCoverage({
     items: items.map((i) => ({ chapterId: i.chapterId, plannedMinutes: i.plannedMinutes, plannedClasses: i.plannedClasses, plannedDate: i.plannedDate })),
     chapters: chapters.map((c) => ({ id: c.id, subjectId: c.subjectId, code: c.code, title: c.title })),
@@ -457,7 +457,7 @@ export async function getBatchCoverage(db: Database, actor: Actor, batchId: stri
     asOf,
     coverage,
     note: plan
-      ? 'Completed = verified class records only. Planned figures are a plan, not delivery.'
+      ? 'Taught = submitted or verified first-teaching logs; each chapter counts once. Verified minutes = minutes from coordinator-verified logs only. Revision, practice and tests are evidence, not new coverage. This is what the batch was taught, not what any student has mastered.'
       : 'No locked or provisional plan applies to this batch, so nothing is planned.',
   };
 }

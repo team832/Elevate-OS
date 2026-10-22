@@ -2,16 +2,21 @@
  * Timetable (ACD-011..013): scheduled class sessions, conflict checks,
  * cancellation and rescheduling. Hard conflicts block a write (409 with the
  * conflicts); preferences are returned as warnings. Nothing is auto-fixed.
+ * Every write takes the timetable lock so concurrent changes cannot both pass the check.
  */
-import { and, asc, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import {
+  academicBatchPlacements,
   academicBatches,
   academicCalendarExclusions,
   academicChapters,
   academicClassSessions,
   academicCourses,
+  academicEnrolments,
   academicRooms,
+  academicSessionTeachers,
   academicSubjects,
+  academicTeacherUnavailability,
   staffMembers,
   type AcademicSessionId,
   type Database,
@@ -21,31 +26,53 @@ import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, InvalidStateTransitionError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import type { BatchId, StaffMemberId } from '@elevate/shared-types';
 import type { z } from 'zod';
-import { checkTimetable, type ClassLength, type TimetableCheckResult, type TimetableSession } from '../../domain';
+import { checkTimetable, teachersOf, type ClassLength, type TimetableCheckResult, type TimetableSession } from '../../domain';
 import { assertBatchInScope, assertSessionInScope, audit, resolveScope, type Actor } from '../context';
 import type { checkTimetableBody, rescheduleSessionBody, sessionInput } from '../schemas';
 import { classLengthOf } from './batches';
+import { taughtBy } from './session-guards';
 import { getSetting } from './settings';
 
 type SessionRow = typeof academicClassSessions.$inferSelect;
+export type SessionStatus = SessionRow['status'];
 
-function toTimetableSession(s: Pick<SessionRow, 'id' | 'batchId' | 'teacherStaffId' | 'roomId' | 'date' | 'startTime' | 'durationMinutes' | 'status' | 'sessionType'>): TimetableSession {
-  return { id: s.id, batchId: s.batchId, teacherStaffId: s.teacherStaffId, roomId: s.roomId, date: s.date, startTime: s.startTime, durationMinutes: s.durationMinutes, status: s.status, sessionType: s.sessionType };
+export function toTimetableSession(
+  s: Pick<SessionRow, 'id' | 'batchId' | 'teacherStaffId' | 'roomId' | 'date' | 'startTime' | 'durationMinutes' | 'status' | 'sessionType'>,
+  teacherStaffIds?: readonly string[],
+): TimetableSession {
+  return { id: s.id, batchId: s.batchId, teacherStaffId: s.teacherStaffId, roomId: s.roomId, date: s.date, startTime: s.startTime, durationMinutes: s.durationMinutes, status: s.status, sessionType: s.sessionType, teacherStaffIds };
 }
 
-export async function listSessions(db: Database, actor: Actor, filter: { batchId?: string; from?: string; to?: string }) {
+/** Serialise timetable writes (sessions, patterns, substitutes) inside the caller's transaction. */
+export async function lockTimetable(tx: Database) {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext('academic.timetable'))`);
+}
+
+type SessionFilter = { batchId?: string; from?: string; to?: string; teacherId?: string; roomId?: string; status?: SessionStatus; ids?: readonly string[] };
+
+export async function listSessions(db: Database, actor: Actor, filter: SessionFilter) {
   const scope = await resolveScope(db, actor, 'academic:timetable:read');
   if (scope.kind === 'own' && !scope.staffId) return [];
+  return sessionRows(db, scope.kind === 'own' ? { ...filter, ownStaffId: scope.staffId! } : filter);
+}
+
+/** The session list query without a permission check: callers check scope first. */
+export async function sessionRows(db: Database, filter: SessionFilter & { ownStaffId?: StaffMemberId }) {
   const conditions = [];
   if (filter.batchId) conditions.push(eq(academicClassSessions.batchId, filter.batchId as BatchId));
   if (filter.from) conditions.push(gte(academicClassSessions.date, filter.from));
   if (filter.to) conditions.push(lte(academicClassSessions.date, filter.to));
-  if (scope.kind === 'own') conditions.push(eq(academicClassSessions.teacherStaffId, scope.staffId!));
+  if (filter.teacherId) conditions.push(taughtBy(db, filter.teacherId as StaffMemberId));
+  if (filter.roomId) conditions.push(eq(academicClassSessions.roomId, filter.roomId as never));
+  if (filter.status) conditions.push(eq(academicClassSessions.status, filter.status));
+  if (filter.ownStaffId) conditions.push(taughtBy(db, filter.ownStaffId));
+  if (filter.ids) conditions.push(inArray(academicClassSessions.id, filter.ids as AcademicSessionId[]));
   const rows = await db
     .select({
       session: academicClassSessions,
       batchCode: academicBatches.code,
       subjectCode: academicSubjects.code,
+      subjectName: academicSubjects.name,
       chapterCode: academicChapters.code,
       chapterTitle: academicChapters.title,
       teacherName: staffMembers.fullName,
@@ -60,8 +87,9 @@ export async function listSessions(db: Database, actor: Actor, filter: { batchId
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(asc(academicClassSessions.date), asc(academicClassSessions.startTime))
     .limit(1000);
-  return rows.map((r) => ({ ...r.session, batchCode: r.batchCode, subjectCode: r.subjectCode, chapterCode: r.chapterCode, chapterTitle: r.chapterTitle, teacherName: r.teacherName, roomCode: r.roomCode }));
+  return rows.map((r) => ({ ...r.session, batchCode: r.batchCode, subjectCode: r.subjectCode, subjectName: r.subjectName, chapterCode: r.chapterCode, chapterTitle: r.chapterTitle, teacherName: r.teacherName, roomCode: r.roomCode }));
 }
+export type SessionListRow = Awaited<ReturnType<typeof listSessions>>[number];
 
 export async function getSessionOrThrow(db: Database, sessionId: string) {
   const [row] = await db.select().from(academicClassSessions).where(eq(academicClassSessions.id, sessionId as AcademicSessionId));
@@ -69,12 +97,43 @@ export async function getSessionOrThrow(db: Database, sessionId: string) {
   return row;
 }
 
-/** Load everything the conflict check needs for a date range (all batches: teachers and rooms are shared). */
-async function conflictContext(db: Database, from: string, to: string) {
-  const existing = await db
+/**
+ * Everyone teaching each session: the planned teacher unless an active substitute replaces
+ * them, plus every active planned session_teachers row (co-teachers, substitutes).
+ */
+export async function teachersBySession(db: Database, sessions: readonly Pick<SessionRow, 'id' | 'teacherStaffId'>[]) {
+  const rows = sessions.length
+    ? await db
+        .select()
+        .from(academicSessionTeachers)
+        .where(and(inArray(academicSessionTeachers.sessionId, sessions.map((s) => s.id)), eq(academicSessionTeachers.participation, 'planned'), isNull(academicSessionTeachers.removedAt)))
+    : [];
+  return new Map(
+    sessions.map((s) => {
+      const mine = rows.filter((r) => r.sessionId === s.id);
+      const replaced = new Set(mine.map((r) => r.replacesStaffId as string | null));
+      const ids = [...(s.teacherStaffId ? [s.teacherStaffId as string] : []), ...mine.map((r) => r.staffId as string)];
+      return [s.id as string, [...new Set(ids)].filter((id) => !replaced.has(id))];
+    }),
+  );
+}
+
+/** Load everything the conflict check needs for a date range (all batches: teachers, rooms and students are shared). */
+export async function conflictContext(db: Database, from: string, to: string) {
+  const rows = await db
     .select()
     .from(academicClassSessions)
     .where(and(gte(academicClassSessions.date, from), lte(academicClassSessions.date, to), inArray(academicClassSessions.status, ['scheduled', 'held'])));
+  const teachers = await teachersBySession(db, rows);
+  const unavailability = await db
+    .select({ staffId: academicTeacherUnavailability.staffId, from: academicTeacherUnavailability.fromDate, to: academicTeacherUnavailability.toDate })
+    .from(academicTeacherUnavailability)
+    .where(and(isNull(academicTeacherUnavailability.cancelledAt), lte(academicTeacherUnavailability.fromDate, to), gte(academicTeacherUnavailability.toDate, from)));
+  const placements = await db
+    .select({ studentId: academicEnrolments.studentId, batchId: academicBatchPlacements.batchId, from: academicBatchPlacements.startDate, to: academicBatchPlacements.endDate })
+    .from(academicBatchPlacements)
+    .innerJoin(academicEnrolments, eq(academicEnrolments.id, academicBatchPlacements.enrolmentId))
+    .where(and(lte(academicBatchPlacements.startDate, to), or(isNull(academicBatchPlacements.endDate), gte(academicBatchPlacements.endDate, from))));
   const exclusions = await db
     .select()
     .from(academicCalendarExclusions)
@@ -90,20 +149,37 @@ async function conflictContext(db: Database, from: string, to: string) {
   }
   const cap = await getSetting(db, 'timetable.teacher_workload_cap');
   return {
-    existing,
+    existing: rows.map((r) => toTimetableSession(r, teachers.get(r.id))),
+    unavailability,
+    placements,
     exclusions: exclusions.map((x) => ({ date: x.date!, batchId: x.batchId, kind: x.kind, label: x.label, status: x.status })),
     classLengthByBatch,
     workloadCap: cap.value,
   };
 }
+export type ConflictContext = Awaited<ReturnType<typeof conflictContext>>;
 
-function rangeOf(dates: string[]): { from: string; to: string } {
+/** Check candidates against the loaded timetable (a candidate with an existing id replaces it); report conflicts involving `focus`. */
+export function checkAgainst(ctx: ConflictContext, candidates: readonly TimetableSession[], focus: readonly string[] = candidates.map((c) => c.id)) {
+  const replaced = new Set(candidates.map((c) => c.id));
+  return checkTimetable({
+    sessions: [...ctx.existing.filter((s) => !replaced.has(s.id)), ...candidates],
+    exclusions: ctx.exclusions,
+    classLengthByBatch: ctx.classLengthByBatch,
+    workloadCap: ctx.workloadCap,
+    unavailability: ctx.unavailability,
+    placements: ctx.placements,
+    onlyInvolving: focus,
+  });
+}
+
+export function rangeOf(dates: string[]): { from: string; to: string } {
   const sorted = [...dates].sort();
   return { from: sorted[0]!, to: sorted.at(-1)! };
 }
 
 /** Widen to whole Monday–Sunday weeks so weekly workload sees every session of the week. */
-function weekRange(range: { from: string; to: string }): { from: string; to: string } {
+export function weekRange(range: { from: string; to: string }): { from: string; to: string } {
   const shift = (date: string, days: number) => {
     const d = new Date(`${date}T00:00:00Z`);
     d.setUTCDate(d.getUTCDate() + days);
@@ -113,31 +189,24 @@ function weekRange(range: { from: string; to: string }): { from: string; to: str
   return { from: shift(range.from, 1 - dow(range.from)), to: shift(range.to, 7 - dow(range.to)) };
 }
 
+export function refuseConflicts(check: TimetableCheckResult, message: string) {
+  if (check.verdict === 'infeasible') throw new ConflictError(message, { details: { hard: check.hard, preferences: check.preferences } });
+}
+
 export async function checkTimetableFor(db: Database, actor: Actor, input: z.output<typeof checkTimetableBody>): Promise<TimetableCheckResult> {
   const scope = await resolveScope(db, actor, 'academic:timetable:read');
   if (input.batchId) assertBatchInScope(scope, input.batchId);
   const range = weekRange({ from: input.from, to: input.to });
   const ctx = await conflictContext(db, range.from, range.to);
-  const candidates = input.candidates.map((c, i) => ({ ...c, id: `candidate-${i + 1}` }));
-  const relevant = input.batchId
-    ? ctx.existing.filter((s) => s.date >= input.from && s.date <= input.to && s.batchId === input.batchId)
-    : ctx.existing.filter((s) => s.date >= input.from && s.date <= input.to);
-  const focus = candidates.length > 0 ? candidates.map((c) => c.id) : relevant.map((s) => s.id);
-  if (scope.kind === 'own' && candidates.length === 0) {
-    // Teachers see conflicts on their own sessions only.
-    const own = new Set(relevant.filter((s) => s.teacherStaffId === scope.staffId).map((s) => s.id));
-    focus.splice(0, focus.length, ...[...own]);
-  }
-  return checkTimetable({
-    sessions: [
-      ...ctx.existing.map(toTimetableSession),
-      ...candidates.map((c) => ({ id: c.id, batchId: c.batchId, teacherStaffId: c.teacherStaffId ?? null, roomId: c.roomId ?? null, date: c.date, startTime: c.startTime, durationMinutes: c.durationMinutes, status: 'scheduled' as const, sessionType: c.sessionType })),
-    ],
-    exclusions: ctx.exclusions,
-    classLengthByBatch: ctx.classLengthByBatch,
-    workloadCap: ctx.workloadCap,
-    onlyInvolving: focus,
-  });
+  const candidates = input.candidates.map((c, i) => ({ id: `candidate-${i + 1}`, batchId: c.batchId, teacherStaffId: c.teacherStaffId ?? null, roomId: c.roomId ?? null, date: c.date, startTime: c.startTime, durationMinutes: c.durationMinutes, status: 'scheduled' as const, sessionType: c.sessionType }));
+  const relevant = ctx.existing.filter((s) => s.date >= input.from && s.date <= input.to && (!input.batchId || s.batchId === input.batchId));
+  const focus =
+    candidates.length > 0
+      ? candidates.map((c) => c.id)
+      : scope.kind === 'own' // teachers see conflicts on their own sessions only
+        ? relevant.filter((s) => scope.staffId && teachersOf(s).includes(scope.staffId)).map((s) => s.id)
+        : relevant.map((s) => s.id);
+  return checkAgainst(ctx, candidates, focus);
 }
 
 async function validateRefs(tx: Database, s: z.output<typeof sessionInput>) {
@@ -165,14 +234,13 @@ async function validateRefs(tx: Database, s: z.output<typeof sessionInput>) {
 /** Schedule sessions. Refuses (409) when any hard conflict involves the new sessions. */
 export async function createSessions(db: Database, actor: Actor, inputs: z.output<typeof sessionInput>[]) {
   return withTransaction(db, async (tx) => {
+    await lockTimetable(tx);
     for (const s of inputs) await validateRefs(tx, s);
     const range = weekRange(rangeOf(inputs.map((s) => s.date)));
     const ctx = await conflictContext(tx, range.from, range.to);
     const candidates = inputs.map((s, i) => ({ id: `new-${i + 1}`, batchId: s.batchId, teacherStaffId: s.teacherStaffId ?? null, roomId: s.roomId ?? null, date: s.date, startTime: s.startTime, durationMinutes: s.durationMinutes, status: 'scheduled' as const, sessionType: s.sessionType }));
-    const check = checkTimetable({ sessions: [...ctx.existing.map(toTimetableSession), ...candidates], exclusions: ctx.exclusions, classLengthByBatch: ctx.classLengthByBatch, workloadCap: ctx.workloadCap, onlyInvolving: candidates.map((c) => c.id) });
-    if (check.verdict === 'infeasible') {
-      throw new ConflictError('The sessions conflict with the timetable; nothing was scheduled.', { details: { hard: check.hard, preferences: check.preferences } });
-    }
+    const check = checkAgainst(ctx, candidates);
+    refuseConflicts(check, 'The sessions conflict with the timetable; nothing was scheduled.');
     const rows = await tx
       .insert(academicClassSessions)
       .values(inputs.map((s) => ({
@@ -194,23 +262,29 @@ export async function createSessions(db: Database, actor: Actor, inputs: z.outpu
   });
 }
 
-async function teacherUserId(tx: Database, staffId: string | null) {
+export async function teacherUserId(tx: Database, staffId: string | null) {
   if (!staffId) return null;
   const [row] = await tx.select({ userId: staffMembers.userId }).from(staffMembers).where(eq(staffMembers.id, staffId as StaffMemberId));
   return row?.userId ?? null;
 }
 
+/** Audit a cancellation and tell the planned teacher (used by single cancellations and series edits). */
+export async function recordCancellation(tx: Database, actor: Actor, before: SessionRow, after: SessionRow, reason: string) {
+  await audit(tx, actor, { action: 'class_session.cancelled', entityType: 'class_session', entityId: before.id, before, after, metadata: { reason } });
+  const teacher = await teacherUserId(tx, before.teacherStaffId);
+  if (teacher) {
+    await notify(tx, { userIds: [teacher], module: 'academic', kind: 'class_session.cancelled', title: `Class on ${before.date} at ${before.startTime} cancelled`, body: reason, link: '/academic/timetable', entityType: 'class_session', entityId: before.id });
+  }
+}
+
 export async function cancelSession(db: Database, actor: Actor, sessionId: string, reason: string) {
   return withTransaction(db, async (tx) => {
+    await lockTimetable(tx);
     const [session] = await tx.select().from(academicClassSessions).where(eq(academicClassSessions.id, sessionId as AcademicSessionId)).for('update');
     if (!session) throw new NotFoundError('Session not found.');
     if (session.status !== 'scheduled') throw new InvalidStateTransitionError(`Only a scheduled session can be cancelled (it is ${session.status}).`);
-    const [row] = await tx.update(academicClassSessions).set({ status: 'cancelled', statusReason: reason }).where(eq(academicClassSessions.id, session.id)).returning();
-    await audit(tx, actor, { action: 'class_session.cancelled', entityType: 'class_session', entityId: session.id, before: session, after: row, metadata: { reason } });
-    const teacher = await teacherUserId(tx, session.teacherStaffId);
-    if (teacher) {
-      await notify(tx, { userIds: [teacher], module: 'academic', kind: 'class_session.cancelled', title: `Class on ${session.date} at ${session.startTime} cancelled`, body: reason, link: '/academic/timetable', entityType: 'class_session', entityId: session.id });
-    }
+    const [row] = await tx.update(academicClassSessions).set({ status: 'cancelled', statusReason: reason, version: session.version + 1 }).where(eq(academicClassSessions.id, session.id)).returning();
+    await recordCancellation(tx, actor, session, row!, reason);
     return row!;
   });
 }
@@ -218,6 +292,7 @@ export async function cancelSession(db: Database, actor: Actor, sessionId: strin
 /** Reschedule: the original becomes `rescheduled` (kept) and a linked replacement is scheduled. */
 export async function rescheduleSession(db: Database, actor: Actor, sessionId: string, input: z.output<typeof rescheduleSessionBody>) {
   return withTransaction(db, async (tx) => {
+    await lockTimetable(tx);
     const [session] = await tx.select().from(academicClassSessions).where(eq(academicClassSessions.id, sessionId as AcademicSessionId)).for('update');
     if (!session) throw new NotFoundError('Session not found.');
     if (session.status !== 'scheduled') throw new InvalidStateTransitionError(`Only a scheduled session can be rescheduled (it is ${session.status}).`);
@@ -234,14 +309,11 @@ export async function rescheduleSession(db: Database, actor: Actor, sessionId: s
       onlineLink: session.onlineLink,
     };
     await validateRefs(tx, { ...replacement, teacherStaffId: replacement.teacherStaffId ?? undefined, roomId: replacement.roomId ?? undefined, subjectId: replacement.subjectId ?? undefined, plannedChapterId: replacement.plannedChapterId ?? undefined, onlineLink: undefined });
-    const [updated] = await tx.update(academicClassSessions).set({ status: 'rescheduled', statusReason: input.reason }).where(eq(academicClassSessions.id, session.id)).returning();
+    const [updated] = await tx.update(academicClassSessions).set({ status: 'rescheduled', statusReason: input.reason, version: session.version + 1 }).where(eq(academicClassSessions.id, session.id)).returning();
     const range = weekRange({ from: input.date, to: input.date });
     const ctx = await conflictContext(tx, range.from, range.to);
-    const candidate = { id: 'replacement', ...replacement, status: 'scheduled' as const };
-    const check = checkTimetable({ sessions: [...ctx.existing.map(toTimetableSession), toTimetableSession(candidate as never)], exclusions: ctx.exclusions, classLengthByBatch: ctx.classLengthByBatch, workloadCap: ctx.workloadCap, onlyInvolving: ['replacement'] });
-    if (check.verdict === 'infeasible') {
-      throw new ConflictError('The new slot conflicts with the timetable; nothing was changed.', { details: { hard: check.hard, preferences: check.preferences } });
-    }
+    const check = checkAgainst(ctx, [toTimetableSession({ id: 'replacement' as AcademicSessionId, ...replacement, status: 'scheduled' })]);
+    refuseConflicts(check, 'The new slot conflicts with the timetable; nothing was changed.');
     const [created] = await tx.insert(academicClassSessions).values({ ...replacement, rescheduledFromSessionId: session.id, createdByUserId: actor.user.id }).returning();
     await audit(tx, actor, { action: 'class_session.rescheduled', entityType: 'class_session', entityId: session.id, before: session, after: updated, metadata: { replacementId: created!.id, reason: input.reason } });
     await audit(tx, actor, { action: 'class_session.scheduled', entityType: 'class_session', entityId: created!.id, after: created, metadata: { rescheduledFrom: session.id } });

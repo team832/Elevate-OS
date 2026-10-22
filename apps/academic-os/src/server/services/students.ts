@@ -3,7 +3,7 @@
  * email/phone) are returned only to holders of academic:students:write (the
  * coordinator) — PLT-014 minimisation. Teachers see students of their batches only.
  */
-import { and, asc, count, eq, ilike, inArray, or } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, or } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
   academicBatches,
@@ -14,11 +14,12 @@ import {
   type Database,
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
-import { ConflictError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
+import { NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import type { BatchId, StudentId } from '@elevate/shared-types';
 import type { z } from 'zod';
-import { assertStudentInScope, audit, getBatchOrThrow, resolveScope, studentIdsInScope, todayIst, type Actor } from '../context';
+import { assertStudentInScope, audit, resolveScope, studentIdsInScope, todayIst, type Actor } from '../context';
 import type { createStudentBody, manualEnrolmentBody } from '../schemas';
+import { lockOpenBatch, placementHistory, startPlacement, withReasons } from './placements';
 
 type StudentRow = typeof academicStudents.$inferSelect;
 
@@ -77,7 +78,9 @@ export async function getStudentRecord(db: Database, actor: Actor, studentId: st
     .leftJoin(academicCourses, eq(academicCourses.id, academicEnrolments.courseId))
     .where(eq(academicEnrolments.studentId, row.id));
   const visibleBatches = scope.kind === 'own' ? new Set<string>(scope.batchIds) : null;
+  const placements = withReasons(actor, (await placementHistory(db, { studentId: row.id })).filter((p) => !visibleBatches || visibleBatches.has(p.batchId)));
   return {
+    placements,
     student: presentStudent(row, can(actor.user, 'academic:students:write')),
     enrolments: enrolments
       .filter((e) => !visibleBatches || (e.enrolment.batchId && visibleBatches.has(e.enrolment.batchId)))
@@ -110,16 +113,16 @@ export async function createStudent(db: Database, actor: Actor, input: z.output<
   });
 }
 
-/** Coordinator enrols a student by hand (reason required). Capacity and duplicates are checked. */
+/**
+ * The ONLY path besides the admission intake that creates an active enrolment: a coordinator
+ * (academic:enrolments:decide) enrols by hand for a legacy/outside case, with a reason. It is
+ * labelled `source: manual`, audited, and placed in the batch (seat and clash checked).
+ */
 export async function enrolManually(db: Database, actor: Actor, input: z.output<typeof manualEnrolmentBody>, now = new Date()) {
   return withTransaction(db, async (tx) => {
     const [student] = await tx.select().from(academicStudents).where(eq(academicStudents.id, input.studentId as StudentId));
     if (!student) throw new ValidationError('Student not found.');
-    const batch = await getBatchOrThrow(tx, input.batchId);
-    await tx.select({ id: academicBatches.id }).from(academicBatches).where(eq(academicBatches.id, batch.id)).for('update');
-    if (batch.status === 'completed' || batch.status === 'cancelled') throw new ValidationError(`Batch ${batch.code} is ${batch.status}.`);
-    const [{ n } = { n: 0 }] = await tx.select({ n: count() }).from(academicEnrolments).where(and(eq(academicEnrolments.batchId, batch.id), eq(academicEnrolments.status, 'active')));
-    if (batch.capacity !== null && Number(n) >= batch.capacity) throw new ConflictError(`Batch ${batch.code} is full (${n}/${batch.capacity}).`);
+    const batch = await lockOpenBatch(tx, input.batchId);
     const startDate = input.startDate ?? todayIst(now);
     const [row] = await tx
       .insert(academicEnrolments)
@@ -136,6 +139,7 @@ export async function enrolManually(db: Database, actor: Actor, input: z.output<
       })
       .returning();
     await audit(tx, actor, { action: 'enrolment.created', entityType: 'enrolment', entityId: row!.id, after: row, metadata: { source: 'manual', reason: input.reason } });
+    await startPlacement(tx, actor, { enrolment: row!, batch, startDate, reason: input.reason, placedByUserId: actor.user.id, checkClash: true, action: 'placement.started' });
     return row!;
   });
 }

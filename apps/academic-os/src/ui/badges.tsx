@@ -21,6 +21,7 @@ export function PlanBadge({ status, prefix }: { status: string | null | undefine
 const STATE_TONES: Record<string, Tone> = {
   scheduled: 'info',
   held: 'success',
+  delivered: 'success',
   cancelled: 'danger',
   rescheduled: 'warning',
   submitted: 'warning',

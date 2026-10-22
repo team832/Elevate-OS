@@ -1,4 +1,6 @@
 import * as academicSchema from './academic';
+import * as academicDeliverySchema from './academic-delivery';
+import * as academicReviewsSchema from './academic-reviews';
 import * as coreSchema from './core';
 import * as marketingSchema from './marketing';
 import * as opsSchema from './ops';
@@ -9,10 +11,15 @@ import * as opsFeesIntakeSchema from './ops-fees-intake';
 import * as opsApplicationsSchema from './ops-applications';
 import * as opsOnboardingSchema from './ops-onboarding';
 import * as opsTasksSchema from './ops-tasks';
+import * as opsEodSchema from './ops-eod';
+import * as opsTaskImportsSchema from './ops-task-imports';
+import * as opsReviewAcksSchema from './ops-review-acks';
 
 export * from './core';
 export * from './marketing';
 export * from './academic';
+export * from './academic-delivery';
+export * from './academic-reviews';
 export * from './ops';
 export * from './ops-demos';
 export * from './ops-students';
@@ -21,6 +28,9 @@ export * from './ops-fees-intake';
 export * from './ops-applications';
 export * from './ops-onboarding';
 export * from './ops-tasks';
+export * from './ops-eod';
+export * from './ops-task-imports';
+export * from './ops-review-acks';
 
 /**
  * The schema files in load order, keyed by file name.
@@ -29,6 +39,8 @@ export const SCHEMA_MODULES = {
   core: coreSchema,
   marketing: marketingSchema,
   academic: academicSchema,
+  'academic-delivery': academicDeliverySchema,
+  'academic-reviews': academicReviewsSchema,
   ops: opsSchema,
   'ops-demos': opsDemosSchema,
   'ops-students': opsStudentsSchema,
@@ -37,6 +49,9 @@ export const SCHEMA_MODULES = {
   'ops-applications': opsApplicationsSchema,
   'ops-onboarding': opsOnboardingSchema,
   'ops-tasks': opsTasksSchema,
+  'ops-eod': opsEodSchema,
+  'ops-task-imports': opsTaskImportsSchema,
+  'ops-review-acks': opsReviewAcksSchema,
 } as const;
 
 /** Postgres schemas managed by Elevate OS migrations. */
@@ -68,6 +83,8 @@ const merged = mergeSchemas();
 export const schema = merged as typeof coreSchema &
   typeof marketingSchema &
   typeof academicSchema &
+  typeof academicDeliverySchema &
+  typeof academicReviewsSchema &
   typeof opsSchema &
   typeof opsDemosSchema &
   typeof opsStudentsSchema &
@@ -75,6 +92,9 @@ export const schema = merged as typeof coreSchema &
   typeof opsFeesIntakeSchema &
   typeof opsApplicationsSchema &
   typeof opsOnboardingSchema &
-  typeof opsTasksSchema;
+  typeof opsTasksSchema &
+  typeof opsEodSchema &
+  typeof opsTaskImportsSchema &
+  typeof opsReviewAcksSchema;
 
 export type Schema = typeof schema;

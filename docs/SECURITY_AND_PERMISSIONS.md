@@ -97,6 +97,7 @@ Generated from the code by `npm run docs:permissions` (check with `npm run docs:
 | `academic:assignments:read` |  | ✓ |  |  | ✓ | own |  |  | ✓ |  |
 | `academic:assignments:write` |  |  |  |  | ✓ |  |  |  |  |  |
 | `academic:timetable:read` |  | ✓ |  |  | ✓ | own |  |  | ✓ |  |
+| `academic:timetable:publish` |  |  |  |  | ✓ |  |  |  |  |  |
 | `academic:timetable:write` |  |  |  |  | ✓ |  |  |  |  |  |
 | `academic:classes:read` |  | ✓ |  |  | ✓ | own |  |  | ✓ |  |
 | `academic:classes:record` |  |  |  |  | ✓ | own |  |  |  |  |
@@ -105,9 +106,13 @@ Generated from the code by `npm run docs:permissions` (check with `npm run docs:
 | `academic:attendance:record` |  |  |  |  | ✓ | own |  |  |  |  |
 | `academic:assessments:read` |  | ✓ |  |  | ✓ | own |  |  | ✓ |  |
 | `academic:assessments:write` |  |  |  |  | ✓ |  |  |  |  |  |
+| `academic:assessments:mark` |  |  |  |  | ✓ | own |  |  |  |  |
+| `academic:assessments:publish` |  |  |  |  | ✓ |  |  |  |  |  |
 | `academic:assessments:finalise` |  |  |  |  | ✓ |  |  |  |  |  |
 | `academic:progress:read` |  | ✓ |  |  | ✓ | own |  |  | ✓ |  |
 | `academic:progress:write` |  |  |  |  | ✓ |  |  |  |  |  |
+| `academic:reviews:read` |  | ✓ |  |  | ✓ | own |  |  | ✓ |  |
+| `academic:reviews:write` |  |  |  |  | own | own |  |  |  |  |
 | `academic:settings:manage` |  |  |  |  | ✓ |  |  |  |  |  |
 | `academic:summary:read` |  | ✓ |  |  | ✓ |  |  |  | ✓ |  |
 | `ops:module:access` |  | ✓ |  |  | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -144,14 +149,16 @@ Generated from the code by `npm run docs:permissions` (check with `npm run docs:
 | `ops:event_messages:send` |  |  |  |  |  |  |  | ✓ |  |  |
 | `ops:teachers:read` |  | ✓ |  |  | ✓ | own | ✓ | ✓ | ✓ |  |
 | `ops:teachers:manage` |  |  |  |  |  |  |  | ✓ |  |  |
-| `ops:feedback:read` |  | ✓ |  |  | ✓ | own |  | ✓ | ✓ |  |
-| `ops:feedback:write` |  |  |  |  |  | own |  | ✓ |  |  |
-| `ops:feedback:manage` |  |  |  |  |  |  |  | ✓ |  |  |
+| `ops:feedback:read` |  | ✓ |  |  | ✓ | own | own | ✓ | ✓ |  |
+| `ops:feedback:acknowledge` |  |  |  |  |  |  | own | ✓ |  |  |
+| `ops:feedback:write` |  |  |  |  |  |  |  |  |  |  |
+| `ops:feedback:manage` |  |  |  |  |  |  |  |  |  |  |
 | `ops:feedback:record` |  |  |  |  |  |  | ✓ | ✓ |  |  |
 | `ops:feedback:moderate` |  |  |  |  |  |  |  | ✓ |  |  |
 | `ops:tasks:read` |  | ✓ |  |  | own | own | own | ✓ | ✓ | own |
 | `ops:tasks:write` |  | own |  |  | own | own | own | ✓ |  | own |
 | `ops:eod:review` |  | ✓ |  |  |  |  |  | ✓ |  |  |
+| `ops:tasks:import` |  |  |  |  |  |  |  | ✓ |  |  |
 <!-- permission-matrix:end -->
 
 ## 4. Server-to-server calls

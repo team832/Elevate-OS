@@ -56,3 +56,6 @@ Demo terms (approved in legacy, read-only), demo fee ₹1,000 (`pending_verifica
 
 ## Tables added on 20 Oct 2026 (admissions workspace)
 Sixteen `ops` tables and `core.students` (migration `0003_admissions_workspace.sql`), with field definitions, constraints, indexes and ownership in `DATA_MODEL.md`; state machines in `WORKFLOWS.md`. New configuration, all `proposed`: `admissions.demo.session_count` (3), `admissions.demo.checklist_required` (off), `admissions.number.format`, `appointments.scheduling`, `fees.allocation`.
+
+## Tables added on 21 Oct 2026 (task tracker, EOD versions, teacher reviews read from Academic)
+`staff_tasks` (new columns: source, requester, backup, reviewer, review step, acknowledgement, legacy ref, version), `task_events` (append-only history), `task_updates` (work entries; IST work date vs entry time; one correction with reason), `task_dependencies`, `eod_reports` + `eod_report_versions` (frozen per submit) + `eod_review_events`, `task_import_batches` + `task_import_rows`, `review_acknowledgements` (Ops note on an Academic review version; Ops never edits the review, D-058). Migration `0009_academic_teacher_workspace_tasks` (generated, not applied). Columns: `DATA_DICTIONARY.md`; states: `WORKFLOWS.md`; rules: `ALGORITHMS.md` A-TSK-5 to A-TSK-8.

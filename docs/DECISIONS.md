@@ -218,11 +218,11 @@ All four apps send a per-request nonce CSP (`script-src 'self' 'nonce-…' 'stri
 ## D-042 — PDFs with pdf-lib, fontkit and a vendored OFL font (Approved, technical; owner approved 21 Oct 2026)
 - **Decision:** admission forms, acknowledgements, ID cards and progress reports are real PDFs built with `pdf-lib` + `@pdf-lib/fontkit` and one vendored SIL OFL font that has the ₹ sign (licence file kept beside it). PDFs and print views are light (white paper); the screens keep the dark theme.
 
-## D-043 — Admissions lifecycle schema (Approved, technical, 21 Oct 2026; migration `0007_admissions_lifecycle`)
+## D-043 — Admissions lifecycle schema (Approved, technical, 21 Oct 2026; migration `0007_admissions_lifecycle`; the "Teacher reviews" bullet is superseded by D-058)
 - **Applications:** `ops.applications` (one per primary admission case; origin demo / direct / readmission; status draft → ready_for_review → form_generated → signatures_confirmed → admission_confirmed, or withdrawn), `application_versions` (content snapshot + SHA-256), `application_forms` (PDF hash, template version), `signature_confirmations` (one live row; a material change invalidates it), `admission_approvals` (D-040). Forms, signatures and approvals reference `application_versions (application_id, version)` by composite foreign keys, so a form or signature can never belong to another application or a missing version. `ops.admissions.application_id` (nullable, indexed) links every admission case an application covers (multi-programme bundles; the primary too). `ops.ts` and `ops-applications.ts` import each other; the cycle is safe because the `ops` schema object lives in `ops-columns.ts` and the cross-file references are lazy FK callbacks.
 - **KYC:** identity documents keep a masked reference only (`ops.kyc_documents`: at most 4 digits in total and at least one mask character X, x, * or •; same rule as `isMaskedReference` in `@elevate/shared-contracts`; no numbers, no scans — no protected file storage exists). A guardian's document must belong to a guardian of the same student (composite foreign key). KYC edit history is the audit trail (`core.audit_events` before/after), not a second table. Student KYC stays on the lead (`date_of_birth`, `address`, emergency contact, interested programmes); class/category is `leads.current_stage` (`gap_year` = dropper). Guardians gain `is_primary` (one live per student), `is_emergency`, `address`; sibling links are explicit (`ops.student_siblings`), never inferred from a shared phone.
 - **Onboarding:** versioned templates; items copied per admission; append-only status events; material issue / return / replacement rows (`ops-onboarding.ts`).
-- **Teacher reviews** stay in the single store `ops.teacher_student_feedback` with `scope` (demo_session / enrolment / general), `demo_session_id`, `enrolment_id` and `visibility` (internal by default).
+- **Teacher reviews** (superseded by D-058: reviews are now written in Academic OS) stay in the single store `ops.teacher_student_feedback` with `scope` (demo_session / enrolment / general), `demo_session_id`, `enrolment_id` and `visibility` (internal by default).
 - **Reports:** `report_exports` gains audience, draft / reviewed / final, snapshot and source references; exports made before `0007` are marked final with a `{legacy: true}` snapshot.
 - **Events:** appointment types `event` and `webinar` (no single person needed; title required); participants keep a name snapshot, how they were added, removal, registration and attendance; `ops.event_messages` never `sent` without a provider reference.
 - **Exits:** existing `withdrawn` = early withdrawal, `completed` = completion; exit records add reason code, prior batch, balance in paise, material status and closing notes.
@@ -297,3 +297,65 @@ All four apps send a per-request nonce CSP (`script-src 'self' 'nonce-…' 'stri
 - **Decision:** each fee-agreement version is activated only with its own approval (core policy `ops.fee_agreement.version`, subject = that `fee_plans.id`), decided by someone other than the requester and the version's maker; finance then activates it. Older admission-level `ops.admission.fee_arrangement` approvals stay readable and activate nothing. A paid demo fee is never credited automatically at confirmation (manual linked credit only).
 - **Why:** review found approvals reused across sibling admissions, years and versions; binding to the version id closes every reuse path (`apps/business-ops-os/tests/integration/fee-plans.test.ts`, "an approval binds one exact agreement version", 10 paths).
 - **Proposed (owner to confirm):** a discount, waiver or credit on an active agreement needs `ops:admissions:approve`, a reason, and a poster who is not the agreement's maker (implemented). The alternative — a second person approves every such posting — is the owner's choice.
+
+## D-058 — Teacher reviews of students are written in Academic OS (Approved, owner decision 21 Oct 2026; supersedes the teacher-reviews part of D-043)
+- **Decision:** teachers write, submit, revise and withdraw student reviews in Academic OS (`academic.teacher_reviews`, `/academic/reviews`; permissions `academic:reviews:read`, `academic:reviews:write`). Versions are append-only and drafts are private to their author. Business Ops reads submitted versions through `GET /academic/api/internal/v1/reviews` (caller `ops`) after checking the user's own `ops:feedback:read` (own = students they counsel), may acknowledge a version and add its own follow-up (`ops.review_acknowledgements`, `ops:feedback:acknowledge`), and never edits a teacher's words.
+- **Decided by:** the owner, answering the build questions on 21 Oct 2026 ("teacher reviews move to Academic").
+- **Source:** owner brief "Academic OS and Teacher Workspace" §13 and the owner's answer 1.
+- **Consequence:** `ops:feedback:write` and `ops:feedback:manage` stay defined but no role holds them (`RETIRED` in `packages/authorization/src/permissions/ops.ts`); the Ops `POST`/`PATCH` routes for reviews about students were deleted. Rows already in `ops.teacher_student_feedback` stay visible read-only as history ("Recorded in Business Ops before 21 Oct 2026"). Contract: `INTEGRATION_CONTRACT.md` §7. Evidence: `apps/academic-os/tests/integration/reviews.test.ts`, `apps/business-ops-os/tests/integration/academic-reviews.test.ts`.
+- **Still open:** holders of `ops:feedback:acknowledge` (counsellor own, operations manager all) and counsellor `ops:feedback:read` are Proposed; the review window after a student transfers; the two visibility labels ("Staff only" / "May inform a reviewed parent summary").
+
+## D-059 — The dark theme stays (Approved, owner decision 21 Oct 2026; confirms D-054)
+- **Decision:** the new Academic and Ops screens use the existing dark tokens in `packages/shared-ui`; the light palette in the 21 Oct briefs is not applied. No token changed.
+- **Decided by:** the owner (answer 2, 21 Oct 2026).
+- **Exception:** print views (`@media print`) use black on white so they print legibly.
+
+## D-060 — Teachers mark demo attendance on the Academic class (Approved, owner decision 21 Oct 2026)
+- **Decision:** a demo student linked to an Academic class (`academic.session_demo_attendees`) appears on that class roster with a DEMO badge, and its teacher marks attendance there. Ops Day 1/2/3 views read Academic's mark through `GET /academic/api/internal/v1/demo-attendance` (caller `ops`). Counsellors keep marking demo classes that are not linked to an Academic class. Academic lists the day's Ops demo classes through `GET /ops/api/internal/v1/demo-sessions?date=` (caller `academic`).
+- **Decided by:** the owner (answer 3, 21 Oct 2026).
+- **Consequence:** D-066 covers what happens while Academic cannot be reached. Evidence: `apps/academic-os/tests/integration/attendance-roster.test.ts`, `apps/academic-os/tests/integration/sample-demo-attendee.test.ts`, `apps/business-ops-os/tests/integration/demos.test.ts`.
+
+## D-061 — Sample staff follow the sample rules (Approved, owner decision 21 Oct 2026; applies D-036)
+- **Decision:** the 12 fictional teachers are named "Sample <name>", sign in locally as `<first>.<last>@example.test`, carry `is_sample` and the SAMPLE DATA badge, have no phone numbers, and use codes `DEMO-T01` … `DEMO-T12` (seed `ops.sample-staff`, `apps/business-ops-os/seed/sample-staff.ts`), plus a "Sample Academic Manager" as academic coordinator. `DEMO-T12` has no manager on purpose (the missing-manager case). Production refuses `@example.test` sign-in.
+- **Decided by:** the owner (answer 4, 21 Oct 2026).
+- **Known gap:** only 6 of the 12 have Academic assignments; the other subjects exist only in draft syllabus courses (D-051).
+
+## D-062 — Syllabus coverage counts first teaching only (Approved, technical, 21 Oct 2026; ruling R11)
+- **Decision:** a chapter counts as covered once, from a `submitted` or `verified` class record whose activity is `main` (first teaching). Revision, practice, test, discussion, doubt-solving and catch-up records are shown as evidence and never add coverage. Coverage never implies mastery.
+- **Why:** counting any activity inflated coverage. Detail: `apps/academic-os/docs/ALGORITHMS.md`. Evidence: `apps/academic-os/tests/unit/coverage.test.ts`.
+
+## D-063 — Delivery, attendance and the teaching log are separate facts (Approved, technical, 21 Oct 2026; ruling R12)
+- **Decision:** only "Mark delivered" (`POST /academic/api/v1/sessions/{id}/deliver`) sets a class to held, with its actual teacher(s). Recording attendance or a log no longer does. A log can be submitted only for a delivered class. Reopening needs a coordinator and a reason.
+- **Evidence:** `apps/academic-os/tests/integration/delivery.test.ts`, `apps/academic-os/tests/integration/delivery-summary.test.ts`.
+
+## D-064 — Class rosters come from batch placements (Approved, technical, 21 Oct 2026; ruling R13)
+- **Decision:** `academic.batch_placements` (one open placement per enrolment) decides who is on a roster on a date; every service that allocates or changes a batch writes a placement row. Migration `0009_academic_teacher_workspace_tasks` (generated, not applied) backfills one open placement for each **active** enrolment that has a batch, starting at the enrolment start date (else its creation date, IST). Withdrawn and completed enrolments get no placement because no end date is on record; students already marked on a past class still show on that roster.
+- **Evidence:** `apps/academic-os/tests/integration/placements.test.ts`, `apps/academic-os/tests/unit/placements.test.ts`, `apps/academic-os/tests/integration/attendance-roster.test.ts`.
+
+## D-065 — "Current assignment" is decided by dates (Approved, technical, 21 Oct 2026; ruling R14)
+- **Decision:** a teacher assignment is current on a day when the day falls between its start and end dates (`assignmentActiveOn` / `assignmentPhase`); status is not a currency signal. Storing an end date sets status `ended` (migration 0009 applies this to existing rows). Teacher scope for marks, reviews and activity reads dates only.
+- **Evidence:** `apps/academic-os/tests/integration/placements.test.ts`, `apps/academic-os/tests/integration/marks-publication.test.ts`.
+
+## D-066 — Linked demo attendance: Academic's mark is the fact; known-linked classes wait while Academic is down (Approved, technical, 21 Oct 2026; ruling R15 as amended)
+- **Decision:** for a demo class linked to an Academic class, Academic's mark is the attendance fact. Ops stores `ops.demo_sessions.academic_session_ref` when it first reads a mark for that class. While Academic cannot be reached, counsellor marking and the dependent demo transitions are refused ("Waiting for Academic OS") **only** for classes Ops already knows are linked; classes with no ref stay counsellor-marked.
+- **Known gap:** a class linked in Academic that Ops has not yet read counts as unlinked until Ops reads it. Code: `assertCounsellorMayMark` in `apps/business-ops-os/src/server/academic-summary.ts`.
+
+## D-067 — A withdrawn source review blocks or freezes reports (Approved, technical, 21 Oct 2026; ruling R16)
+- **Decision:** when a review used by an Ops student report is withdrawn in Academic, a draft or reviewed report cannot move on until it is regenerated; a final report stays as issued and shows a notice that its source review was withdrawn.
+
+## D-068 — Imported tracker tasks are dated at import (Approved, technical, 21 Oct 2026; ruling R17)
+- **Decision:** a task imported from the old Task Tracker gets one `imported` event dated when the import is committed. Dates from the tracker are kept in the event's `data.legacy` and never back-date Elevate events, so they do not enter past EOD facts. Guide: `docs/task-tracker-import-guide.md`.
+
+## D-069 — Who may drop a task's review step, cancel or reassign it (Approved, technical, 21 Oct 2026; ruling R18)
+- **Decision:** a task is "self-logged" when its source is `self` and it was created by the owner's own user, or its source is `import` while the owner is still the staff member the import batch was mapped to. This is fixed at creation; recurring copies keep the parent's source, creator, review flag and reviewer. Changing the review step, and cancelling assigned work, need the task's creator or all-scope `ops:tasks:write`; the owner may cancel self-logged work. Reassigning needs the creator, a manager of the owner, all scope, or the owner of self-logged work (one shared predicate `mayReassign`); handing a task to its reviewer is refused. `assignedByStaffId` is display-only.
+- **Visibility (same ruling):** one rule decides who sees a task: the owner, the owner's managers (manager chain), the reviewer, the backup and the assigner. Naming someone as requester grants nothing; `?staffId=` only narrows a list.
+- **Why:** review found an owner could remove the review step of assigned work by reassigning or editing it. **Costs:** a manager who did not create a task cannot remove its review step (the operations manager can); the creator regains authority if the work comes back to them.
+- **Code:** `isSelfLogged`, `GATE_ROLES`, `REASSIGN_ROLES` in `apps/business-ops-os/src/domain/task-lifecycle.ts`; `mayReassign` in `apps/business-ops-os/src/server/task-store.ts`. Evidence: `apps/business-ops-os/tests/unit/task-lifecycle.test.ts`, `apps/business-ops-os/tests/integration/task-lifecycle.test.ts`.
+
+## D-070 — Timetable writes take one lock; series edits start tomorrow (Approved, technical, 21 Oct 2026)
+- **Decision:** timetable writes (sessions, patterns, substitutes) take `pg_advisory_xact_lock(hashtext('academic.timetable'))` inside their transaction, so conflict checks (teacher, room, batch, a student in two batches, teacher unavailability) see a consistent timetable. A series edit takes effect tomorrow at the earliest and never changes delivered classes; today's class is changed on its own. Publishing is idempotent per pattern and date.
+- **Cost:** timetable writes are serialised across the institute; acceptable at this size.
+- **Evidence:** `apps/academic-os/tests/integration/patterns.test.ts`, `apps/academic-os/tests/unit/timetable-workspace.test.ts`.
+
+## D-071 — One CSV helper for every download (Approved, technical, 21 Oct 2026)
+- **Decision:** CSV downloads in both modules use `toCsv` / `csvCell` from `packages/server-kit/src/csv.ts`: RFC 4180 quoting, and a leading apostrophe on cells that start with `=`, `+`, `-`, `@`, tab or carriage return (spreadsheet formula injection). Evidence: `packages/server-kit/tests/csv.test.ts`.

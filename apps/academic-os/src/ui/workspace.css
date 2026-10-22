@@ -1,0 +1,117 @@
+/* Academic teacher workspace: class page action bar, timetable agenda/week grid, print. Tokens only (D-054). */
+
+.acd-sticky-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--el-space-3);
+  align-items: end;
+  padding: var(--el-space-3);
+  background: var(--el-surface);
+  border-top: 1px solid var(--el-border);
+}
+
+.acd-next {
+  display: grid;
+  gap: var(--el-space-2);
+  font-size: var(--el-text-lg);
+}
+.acd-next strong {
+  font-size: var(--el-text-xl);
+}
+
+.acd-day {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--el-space-2);
+}
+.acd-day > li {
+  display: grid;
+  grid-template-columns: 7rem 1fr auto;
+  gap: var(--el-space-3);
+  align-items: center;
+  padding: var(--el-space-2) var(--el-space-3);
+  background: var(--el-well);
+  border: 1px solid var(--el-border);
+  border-radius: var(--el-radius-sm);
+}
+
+/* Week grid: 7 day columns, read-only; every block links to its class page. */
+.acd-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--el-space-2);
+}
+.acd-week-day {
+  min-height: 8rem;
+  padding: var(--el-space-2);
+  background: var(--el-well);
+  border: 1px solid var(--el-border);
+  border-radius: var(--el-radius-sm);
+}
+.acd-week-day h3 {
+  margin: 0 0 var(--el-space-2);
+  font-size: var(--el-text-sm);
+  color: var(--el-text-muted);
+}
+.acd-week-block {
+  display: block;
+  margin-bottom: var(--el-space-2);
+  padding: var(--el-space-2);
+  font-size: var(--el-text-sm);
+  color: var(--el-text);
+  background: var(--el-surface-muted);
+  border: 1px solid var(--el-border-strong);
+  border-radius: var(--el-radius-xs);
+  text-decoration: none;
+}
+.acd-week-block[data-status='cancelled'],
+.acd-week-block[data-status='rescheduled'] {
+  text-decoration: line-through;
+  color: var(--el-text-muted);
+}
+
+@media (max-width: 720px) {
+  .acd-week {
+    grid-template-columns: 1fr;
+  }
+  .acd-week-day {
+    min-height: 0;
+  }
+  .acd-day > li {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  .el-sidebar,
+  .el-topbar,
+  .el-subnav,
+  .el-page-actions,
+  .acd-no-print,
+  form {
+    display: none !important;
+  }
+  body,
+  .el-card,
+  .acd-week-day,
+  .acd-week-block {
+    background: #fff !important;
+    color: #000 !important;
+    border-color: #999 !important;
+  }
+  .acd-week {
+    grid-template-columns: repeat(7, 1fr);
+  }
+  .acd-week-day {
+    break-inside: avoid;
+  }
+}

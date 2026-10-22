@@ -9,7 +9,7 @@ import {
   type Attendance,
   type DayState,
 } from '../../../domain/demos';
-import { REVIEW_STATE_LABELS, type ReviewState } from '../../../domain/feedback';
+import { REVIEW_STATE_LABELS, type AcademicMark, type ReviewState } from '../../../domain/feedback';
 import { followUpAge } from '../../../domain/follow-up-age';
 import type { DemoRecord } from '../../../server/demos';
 import { ActionForm, type FieldSpec } from '../../../ui/action-form';
@@ -156,7 +156,8 @@ export const FollowUpDone = ({ id, title }: { id: string; title: string }) => (
 
 /**
  * A demo class's attendance: the one-tap control once the class has started and is still
- * unrecorded (and the user may write), otherwise the badge and who recorded it, when.
+ * unrecorded (and the user may write), otherwise the badge and who recorded it, when. A class
+ * linked to an Academic class shows the teacher's mark there and no control (owner answer 3).
  */
 export function AttendanceCell({
   action,
@@ -164,21 +165,33 @@ export function AttendanceCell({
   s,
   recorder,
   write,
+  linked,
 }: {
   action: string;
   label: string;
   s: { attendance: string; startsAt: Date; recordedAt: Date | null };
   recorder: string;
   write: boolean;
+  /** Academic's mark of a linked class, or 'unavailable' when Academic could not be read (R15). */
+  linked?: AcademicMark | 'unavailable';
 }) {
   return (
     <AttendanceControl
       action={action}
       label={label}
-      canRecord={write && isPending(s) && s.startsAt <= new Date()}
+      canRecord={!linked && write && isPending(s) && s.startsAt <= new Date()}
     >
       <Badge value={s.attendance} label={ATTENDANCE_LABELS[s.attendance as Attendance]} />
-      {s.recordedAt ? (
+      {linked === 'unavailable' ? (
+        <span className="el-field-hint"> Waiting for Academic OS</span>
+      ) : linked ? (
+        <span className="el-field-hint">
+          {' '}
+          <StatusBadge tone="info">Recorded by teacher in Academic OS</StatusBadge>
+          {linked.teacherNames.length ? ` (${linked.teacherNames.join(', ')})` : ''}
+          {linked.recordedAt ? `, ${fmtDateTime(linked.recordedAt)}` : ''}
+        </span>
+      ) : s.recordedAt ? (
         <span className="el-field-hint">
           {' '}
           by {recorder}, {fmtDateTime(s.recordedAt)}
@@ -202,3 +215,12 @@ export const Disclosure = ({ summary, children }: { summary: string; children: R
     <div className="el-stack">{children}</div>
   </details>
 );
+
+/** The `linked` value of a class for AttendanceCell (R15: known-linked classes wait for Academic). */
+export const linkOf = (
+  row: { academicMarks: { status: string } },
+  s: { academic: AcademicMark | null; academicSessionRef: string | null },
+): AcademicMark | 'unavailable' | undefined =>
+  row.academicMarks.status === 'unavailable' && s.academicSessionRef
+    ? 'unavailable'
+    : (s.academic ?? undefined);

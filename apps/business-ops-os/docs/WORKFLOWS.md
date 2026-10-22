@@ -289,29 +289,30 @@ flowchart TD
 ```
 The closed case, its number and its exit record never change. One live case per student and programme.
 
-### Daily task (A-TSK-1 … A-TSK-3; column `staff_tasks.status`)
+### Staff task (A-TSK-5; column `staff_tasks.status`, D-052, D-069)
 ```mermaid
 stateDiagram-v2
   [*] --> pending
-  pending --> in_progress
-  pending --> done
-  in_progress --> done
-  pending --> blocked: reason
-  in_progress --> blocked: reason
-  pending --> on_hold: reason
-  in_progress --> on_hold: reason
-  blocked --> in_progress
-  on_hold --> in_progress
-  done --> [*]: recurring → next occurrence created
+  pending --> in_progress: start
+  pending --> blocked: block (reason)
+  in_progress --> blocked: block (reason)
+  on_hold --> blocked: block (reason)
+  pending --> on_hold: hold (reason)
+  in_progress --> on_hold: hold (reason)
+  blocked --> on_hold: hold (reason)
+  blocked --> in_progress: resume
+  on_hold --> in_progress: resume
+  in_progress --> in_review: submit for review
+  in_review --> done: approve (reviewer)
+  in_review --> in_progress: request changes (reason)
+  pending --> done: complete (no review step)
+  in_progress --> done: complete (no review step)
+  pending --> cancelled: cancel (reason)
+  in_progress --> cancelled: cancel (reason)
+  done --> in_progress: reopen (reason)
+  cancelled --> in_progress: reopen (reason)
 ```
-Any status can be set from any other; blocked and on hold always need a reason, and a status change drops the old reason.
+Acknowledge and request clarification are events, not statuses (any open status). Blocked, on hold and cancelled may also be reached from the other open statuses as listed in the action table. Every change appends an `ops.task_events` row; work time is recorded as `ops.task_updates`; dependencies refuse cycles. Who may take each action, and the review-step / cancel / reassign authority: `ALGORITHMS.md` A-TSK-5 to A-TSK-7. Routes: `API.md` (staff tasks).
 
-### End-of-day report (A-TSK-4; column `eod_reports.status`)
-```mermaid
-stateDiagram-v2
-  [*] --> draft: built from the day's tasks (refreshed while draft)
-  draft --> submitted: every not-done task has a reason; snapshot frozen; manager notified in-app
-  submitted --> submitted: reviewed by the manager it was sent to or an EOD reviewer (never your own)
-  submitted --> submitted: shared by WhatsApp or email — "Simulated — not sent"
-```
-One report per staff member and day. No manager with a login → every `ops:eod:review` holder receives it.
+### End-of-day report (A-TSK-8; columns `eod_reports.status`, `eod_report_versions`)
+Draft → submitted (a frozen version 1 built from that day's events and updates, `eod-facts/1`) → the recipient views, comments, asks for clarification, asks for a revision (the author submits version n+1, linked to the previous one) or acknowledges; a follow-up task can be created from the report. Versions never change after submit. The recipient is the author's active manager; with no manager the author chooses an `ops:eod:review` holder. Nothing is sent outside Elevate OS: "Copy summary" and PDF only ("External delivery not configured"). Detail: `ALGORITHMS.md` A-TSK-8.

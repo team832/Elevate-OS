@@ -130,10 +130,12 @@ export type AttendanceFacts = ReturnType<typeof attendanceFacts>;
 /** Position within the SAME assessment and its cohort only; never across assessments. */
 export function cohortComparison(r: Result): string {
   if (r.state === 'absent') return 'Absent — not scored, not compared';
-  if (r.percentile === null || r.cohort.scored < 2)
+  // Academic omits rank/percentile unless the setting allows them (A4): absent = not shown.
+  const percentile = r.percentile ?? null;
+  if (percentile === null || r.cohort.scored < 2)
     return `Insufficient data (${r.cohort.scored} scored in ${r.cohort.label})`;
-  const rank = r.rank === null ? '' : `, rank ${r.rank}`;
-  return `Percentile ${round1(r.percentile)}${rank} of ${r.cohort.scored} scored in ${r.cohort.label}`;
+  const rank = (r.rank ?? null) === null ? '' : `, rank ${r.rank}`;
+  return `Percentile ${round1(percentile)}${rank} of ${r.cohort.scored} scored in ${r.cohort.label}`;
 }
 
 export const resultFacts = (r: Result) => ({
@@ -192,7 +194,8 @@ export interface ShareableFeedback {
 export function constructiveSummary(input: {
   attendance: AttendanceFacts | null;
   results: readonly Result[] | null;
-  feedback: readonly ShareableFeedback[];
+  /** null = the reviews could not be read (Academic OS unreachable or no feedback access). */
+  feedback: readonly ShareableFeedback[] | null;
 }) {
   const a = input.attendance;
   const evidence = [
@@ -211,16 +214,19 @@ export function constructiveSummary(input: {
       ...scoreTrends(input.results).map((t) => `Trend — ${t.label}: ${t.text}.`),
     );
   }
+  if (!input.feedback) evidence.push('Teacher reviews: not available for this period.');
   const pick = (k: keyof Omit<ShareableFeedback, 'subject'>) =>
-    input.feedback.filter((f) => f[k]?.trim()).map((f) => `${f.subject}: ${f[k]!.trim()}`);
+    (input.feedback ?? []).filter((f) => f[k]?.trim()).map((f) => `${f.subject}: ${f[k]!.trim()}`);
   const strengths = pick('strengths');
   const areas = pick('areasToImprove');
   const nextSteps = pick('actionPlan');
+  const or = (picked: string[], none: string) =>
+    picked.length ? picked : [input.feedback ? none : 'Not available for this period.'];
   return {
     evidence,
-    strengths: strengths.length ? strengths : ['No strengths recorded for this period.'],
-    areas: areas.length ? areas : ['No areas for improvement recorded for this period.'],
-    nextSteps: nextSteps.length ? nextSteps : ['No next step recorded for this period.'],
+    strengths: or(strengths, 'No strengths recorded for this period.'),
+    areas: or(areas, 'No areas for improvement recorded for this period.'),
+    nextSteps: or(nextSteps, 'No next step recorded for this period.'),
   };
 }
 export type ConstructiveSummary = ReturnType<typeof constructiveSummary>;

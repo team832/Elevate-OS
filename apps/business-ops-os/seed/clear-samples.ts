@@ -1,7 +1,9 @@
 /**
  * Remove every SAMPLE record before real use (`npm run db:clear-samples`, D-036).
- * Sample = `ops.leads.is_sample`, `core.students.is_sample`, `ops.fee_structures.is_sample`, or
- * a staff member whose `ops.staff_profiles.is_sample` is set and who has no login. Everything
+ * Sample = `ops.leads.is_sample`, `core.students.is_sample`, `ops.fee_structures.is_sample`,
+ * `is_sample` tasks, EOD reports and import batches, Academic `is_sample` batches (with their
+ * sessions, logs and teachers), students, placements, demo attendees and reviews, or a staff
+ * member whose `ops.staff_profiles.is_sample` is set and who has no login. Everything
  * that hangs off those rows is deleted with them (including Academic's student and enrolment
  * created by the sample enrolment handoff), children first, in ONE transaction: either all of it
  * goes or nothing does. Kept on purpose: the sample login accounts (other modules'
@@ -41,8 +43,19 @@ const SETS: readonly [string, string][] = [
   ],
   [
     's_academic_students',
-    `SELECT id FROM academic.students WHERE source_admission_id IN (SELECT id FROM s_admissions)`,
+    `SELECT id FROM academic.students WHERE source_admission_id IN (SELECT id FROM s_admissions) OR is_sample`,
   ],
+  ['s_academic_batches', `SELECT id FROM academic.batches WHERE is_sample`],
+  [
+    's_academic_sessions',
+    `SELECT id FROM academic.class_sessions WHERE batch_id IN (SELECT id FROM s_academic_batches)`,
+  ],
+  ['s_import_batches', `SELECT id FROM ops.task_import_batches WHERE is_sample`],
+  [
+    's_tasks',
+    `SELECT id FROM ops.staff_tasks WHERE is_sample OR import_batch_id IN (SELECT id FROM s_import_batches)`,
+  ],
+  ['s_eods', `SELECT id FROM ops.eod_reports WHERE is_sample`],
   [
     's_staff',
     `SELECT p.staff_id AS id FROM ops.staff_profiles p JOIN core.staff_members m ON m.id = p.staff_id
@@ -54,6 +67,32 @@ const IN = (set: string) => `IN (SELECT id FROM ${set})`;
 
 /** Deletes in foreign-key-safe order: [label, statement]. */
 const DELETES: readonly [string, string][] = [
+  // Sample task-tracker work (seed/sample-work.ts) and fixture imports.
+  [
+    'ops.task_import_rows',
+    `DELETE FROM ops.task_import_rows WHERE batch_id ${IN('s_import_batches')} OR task_id ${IN('s_tasks')} OR eod_report_id ${IN('s_eods')}`,
+  ],
+  ['ops.review_acknowledgements', `DELETE FROM ops.review_acknowledgements WHERE is_sample`],
+  ['ops.eod_review_events', `DELETE FROM ops.eod_review_events WHERE report_id ${IN('s_eods')}`],
+  [
+    'ops.eod_report_versions',
+    `DELETE FROM ops.eod_report_versions WHERE report_id ${IN('s_eods')}`,
+  ],
+  ['ops.eod_reports', `DELETE FROM ops.eod_reports WHERE id ${IN('s_eods')}`],
+  [
+    'ops.task_dependencies',
+    // Only a sample task's own links: a real task waiting on a sample one blocks the clear.
+    `DELETE FROM ops.task_dependencies WHERE task_id ${IN('s_tasks')}`,
+  ],
+  ...(['task_updates', 'task_events'] as const).map((t): [string, string] => [
+    `ops.${t}`,
+    `DELETE FROM ops.${t} WHERE task_id ${IN('s_tasks')}`,
+  ]),
+  ['ops.staff_tasks', `DELETE FROM ops.staff_tasks WHERE id ${IN('s_tasks')}`],
+  [
+    'ops.task_import_batches',
+    `DELETE FROM ops.task_import_batches WHERE id ${IN('s_import_batches')}`,
+  ],
   [
     'ops.appointment_changes',
     `DELETE FROM ops.appointment_changes WHERE appointment_id ${IN('s_appointments')}`,
@@ -153,6 +192,36 @@ const DELETES: readonly [string, string][] = [
     `DELETE FROM ops.duplicate_flags WHERE lead_id ${IN('s_leads')} OR matched_lead_id ${IN('s_leads')}`,
   ],
   ['ops.enquiries', `DELETE FROM ops.enquiries WHERE lead_id ${IN('s_leads')}`],
+  // Academic sample teaching (apps/academic-os/seed/samples.ts). A real student's row in a
+  // sample session or batch is not deleted: its foreign key rolls the whole command back.
+  [
+    'academic.teacher_reviews',
+    `DELETE FROM academic.teacher_reviews WHERE is_sample OR academic_student_id ${IN('s_academic_students')} OR core_student_id ${IN('s_students')}`,
+  ],
+  [
+    'academic.session_demo_attendees',
+    `DELETE FROM academic.session_demo_attendees WHERE is_sample`,
+  ],
+  [
+    'academic.attendance',
+    `DELETE FROM academic.attendance WHERE student_id ${IN('s_academic_students')}`,
+  ],
+  ...(['class_records', 'session_teachers'] as const).map((t): [string, string] => [
+    `academic.${t}`,
+    `DELETE FROM academic.${t} WHERE session_id ${IN('s_academic_sessions')}`,
+  ]),
+  [
+    'academic.class_sessions',
+    `DELETE FROM academic.class_sessions WHERE id ${IN('s_academic_sessions')}`,
+  ],
+  [
+    'academic.timetable_patterns',
+    `DELETE FROM academic.timetable_patterns WHERE batch_id ${IN('s_academic_batches')}`,
+  ],
+  [
+    'academic.batch_placements',
+    `DELETE FROM academic.batch_placements WHERE is_sample OR enrolment_id IN (SELECT id FROM academic.enrolments WHERE student_id ${IN('s_academic_students')} OR source_admission_id ${IN('s_admissions')})`,
+  ],
   // Academic's copies made by the enrolment handoff of sample admissions (platform seed).
   [
     'academic.enrolment_intake_log',
@@ -163,6 +232,8 @@ const DELETES: readonly [string, string][] = [
     `DELETE FROM academic.enrolments WHERE source_admission_id ${IN('s_admissions')} OR student_id ${IN('s_academic_students')}`,
   ],
   ['academic.students', `DELETE FROM academic.students WHERE id ${IN('s_academic_students')}`],
+  // Teacher assignments and calendar rules of a batch go with it (ON DELETE CASCADE).
+  ['academic.batches', `DELETE FROM academic.batches WHERE id ${IN('s_academic_batches')}`],
   ['ops.admissions', `DELETE FROM ops.admissions WHERE id ${IN('s_admissions')}`],
   // Not a delete: enrolment handoff events whose admission no longer exists (removed now or by an
   // earlier clear) and that a consumer has not finished are closed (`dead`), so Academic never
@@ -205,6 +276,14 @@ const DELETES: readonly [string, string][] = [
 
 /** Self-references that would block a delete inside the same set. */
 const UNLINK = [
+  `UPDATE ops.staff_tasks SET recurrence_parent_id = NULL WHERE id ${IN('s_tasks')}`,
+  `UPDATE ops.task_updates SET corrects_update_id = NULL WHERE task_id ${IN('s_tasks')}`,
+  `UPDATE ops.eod_review_events SET version_id = NULL WHERE report_id ${IN('s_eods')}`,
+  `UPDATE ops.eod_report_versions SET revision_request_event_id = NULL WHERE report_id ${IN('s_eods')}`,
+  `UPDATE academic.class_sessions SET rescheduled_from_session_id = NULL, makeup_for_session_id = NULL WHERE id ${IN('s_academic_sessions')}`,
+  `UPDATE academic.class_records SET corrects_record_id = NULL WHERE session_id ${IN('s_academic_sessions')}`,
+  `UPDATE academic.teacher_reviews SET supersedes_id = NULL WHERE is_sample`,
+  `UPDATE academic.batch_placements SET transfer_from_placement_id = NULL WHERE is_sample`,
   `UPDATE ops.leads SET merged_into_lead_id = NULL WHERE id ${IN('s_leads')}`,
   `UPDATE ops.teacher_student_feedback SET supersedes_id = NULL WHERE student_id ${IN('s_students')} OR teacher_staff_id ${IN('s_staff')}`,
   `UPDATE ops.kyc_documents SET superseded_by_id = NULL, superseded_at = NULL WHERE student_id ${IN('s_students')}`,

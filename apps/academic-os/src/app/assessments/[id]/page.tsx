@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { ButtonLink, Card, PageHeader } from '@elevate/shared-ui';
-import { checkAssessmentScheduleFor, getAssessment, getResults, validateAssessment } from '../../../server';
+import { checkAssessmentScheduleFor, getAssessment, getAssessmentAnalysis, getResults, validateAssessment } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiButton, ApiForm } from '../../../ui/api-form';
-import { ResultsSection, ScoringSection, ValidationSection } from '../../../ui/assessment-sections';
-import { StateBadge } from '../../../ui/badges';
+import { AnalysisSection, ResultsSection, ScoringSection, ValidationSection } from '../../../ui/assessment-sections';
+import { StateBadge, fmtDateTime } from '../../../ui/badges';
 import { ConflictList } from '../../../ui/conflicts';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 
@@ -36,22 +36,25 @@ export default async function AssessmentPage({ params, searchParams }: { params:
       a,
       validation: await validateAssessment(db, actor, id),
       results: await getResults(db, actor, id, version),
+      analysis: await getAssessmentAnalysis(db, actor, id),
       schedule: await checkAssessmentScheduleFor(db, actor, { batchId: a.batchId }),
     };
   });
   if (!data.ok) return <AcademicShell access={access} active="assessments"><LoadError error={data.error} /></AcademicShell>;
-  const { a, validation, results, schedule } = data.data;
+  const { a, validation, results, analysis, schedule } = data.data;
   const canWrite = can(access.user, 'academic:assessments:write') && a.status !== 'cancelled';
   const canFinalise = can(access.user, 'academic:assessments:finalise');
+  const canMark = can(access.user, 'academic:assessments:mark') && a.status !== 'cancelled';
+  const canPublish = can(access.user, 'academic:assessments:publish') && a.status === 'finalised' && !a.publishedAt;
   const api = (p: string) => MODULE_PATHS.api(`assessments/${a.id}/${p}`);
   const mine = schedule.hard.filter((c) => c.candidateId === a.id || c.otherId === a.id);
   return (
     <AcademicShell access={access} active="assessments">
       <PageHeader
         title={`${a.code} — ${a.title}`}
-        meta={<StateBadge state={a.status} />}
+        meta={<><StateBadge state={a.status} /> {a.publishedAt ? <StateBadge state="published" /> : a.status === 'finalised' ? <StateBadge state="not published" /> : null}</>}
         description={`${a.kind.replace(/_/g, ' ')} · batch ${a.batchCode} · ${a.scheduledDate ?? 'not scheduled'} · ${a.durationMinutes === null ? 'duration unknown' : `${a.durationMinutes} min`}`}
-        actions={<ButtonLink href={MODULE_PATHS.assessments}>All assessments</ButtonLink>}
+        actions={<>{canMark ? <ButtonLink variant="primary" href={MODULE_PATHS.marks(a.id)}>Enter marks</ButtonLink> : null}<ButtonLink href={MODULE_PATHS.assessments}>All assessments</ButtonLink></>}
       />
       <div className="el-stack">
         <ScoringSection a={a} />
@@ -104,7 +107,12 @@ export default async function AssessmentPage({ params, searchParams }: { params:
             <ApiForm action={api('rescore')} submitLabel="Re-score into a new version" successMessage="Re-scored; the previous version is kept." idPrefix="rescore" fields={[{ name: 'reason', label: 'Reason (audited)', required: true }]} />
           ) : null}
         </Card>
+        <Card title="Publication" description="Publishing is separate from finalising. Only published results reach Business Ops, students and parents; a later re-score publishes its new version.">
+          {a.publishedAt ? <p>Published {fmtDateTime(a.publishedAt)}.</p> : <p>Not published. Students, parents and Business Ops do not see these results.</p>}
+          {canPublish ? <ApiButton action={api('publish')} label="Publish results" variant="primary" successMessage="Results published." /> : null}
+        </Card>
         <ResultsSection r={results} assessmentId={a.id} />
+        <AnalysisSection x={analysis} />
         <Card title={`Scheduling check for batch ${schedule.batch.code}`} description={`All dated assessments of the batch against its classes, other assessments, blackouts (target exam date, exam blackouts, closures) and the minimum gap (${schedule.minGap.minDays} days, ${schedule.minGap.status}).`}>
           {mine.length > 0 ? <p>This assessment has {mine.length} hard conflict(s).</p> : null}
           <ConflictList verdict={schedule.verdict} hard={schedule.hard} preferences={schedule.preferences} />

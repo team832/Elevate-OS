@@ -127,10 +127,26 @@ Run: `npx vitest run apps/business-ops-os` (whole module), or one file, e.g. `np
 | `student-kyc-onboarding.test.ts` (10) | masked-only documents, supersede, verify once, 403 for roles without private read, primary guardian, sibling links (404 cross-scope), onboarding union, materials, template v2, own scope it.each over 9 routes |
 | `student-exit-readmission.test.ts` (6) | directory status per student (acceptance 14, 15), exit record fields, readmission keeps history, reactivation vs open readmission, lock order |
 | `events.test.ts` (7) | event scheduling sends nothing, eligibility, own-scope audience, removed student's guardians, messages simulated |
-| `staff-tasks.test.ts` (13) | access and own scope, reasons, recurrence, EOD draft / submit / review / share, a manager without all scope reads the report sent to them, an inactive manager is skipped, PDF access |
+| `staff-tasks.test.ts` | access and own scope, reasons, recurrence (EOD cases moved to `eod-reports.test.ts`; the share route is gone) |
 | `search.test.ts` (3) | groups by permission and scope, contact search only with private access, audited |
 | `admissions-overview.test.ts` (5), `dashboard-series.test.ts` (4) | overview: 403, missing never 0, days not classes, waiting approvals, confirmations, onboarding, fees; programme filter and own scope; no demo-list figures without `ops:leads:read` (the 50-application check cap is not tested); dashboard chart series |
 | `demos.test.ts` (20), `conversion.test.ts` (5), `seeds.test.ts` (2), `admissions.test.ts` (8), `admissions-students.test.ts` (6), `students-profile.test.ts` (7) | updated for identity at booking, 3 demo days, conversion → application, the `admit()` fixture using the real confirmation path, the 21 Oct sample set |
+
+## Added on 21 Oct 2026 (owner brief 2: tasks, EOD, imports, teacher operations, reviews from Academic)
+Map of brief 2's 19 required checks to tests: `docs/task-tracker-verification.md` (repo root).
+
+| File | Rules | Covers |
+|---|---|---|
+| unit `task-lifecycle.test.ts` | A-TSK-5 … A-TSK-7, R18 | action table by role and status, `closedBy` setting, cycles, work entries, time summary, report wording, self-logged fixed at creation |
+| unit `eod.test.ts` | A-TSK-8 | events inside the IST day only, midnight split, late entries, overlaps, HR / Academic unavailable, same-activity flag, replayed backlog and due dates, `factsHash` |
+| unit `task-import.test.ts` | tracker import | parser (HTML refused, BOM, status map, unreadable record), field map, record hash, staff suggestion by email or code only |
+| unit `demo-review-match.test.ts` | A-MTG-4, A-MTG-5 | Academic marks on linked demo classes, review matching by demo class id or IST day + author |
+| integration `task-lifecycle.test.ts` | A-TSK-5 … A-TSK-7 | brief 2 tests 1–3, concurrency (409), work updates, fix-round and R18 cases |
+| integration `eod-reports.test.ts` | A-TSK-8 | brief 2 tests 5–12 and 17: draft, submit, versions, revision, inbox, follow-up, recipient, history setting, PDF/CSV, no share route |
+| integration `task-reports.test.ts` | period report | scope, dated counts, PDF/CSV audited |
+| integration `task-import.test.ts` | tracker import | tests 15–16: permission, preview, commit once, duplicates, concurrent upload, changed records |
+| integration `academic-reviews.test.ts` (+ `academic-stub.ts`, `tests/setup-academic.ts`) | D-058, D-060, D-066 | reviews from Academic (permission before the call, withdrawn hidden, source unavailable), review acknowledgements, internal demo-sessions route, linked demo attendance, teacher directory and profile |
+| integration `feedback.test.ts`, `seeds.test.ts` (changed) | A-75, D-061 | read-only history of Ops reviews; 12 sample teachers with sample work, nothing sent, clear-samples |
 
 ## Not automated (21 Oct 2026)
 Full browser pass with axe on every redesigned screen (agents checked several at 1440 / 390 px); Google re-authentication (not built, D-041); real message delivery (mock adapter only); Devanagari in PDFs; a true concurrency proof of the demo booking lock under PGlite (single connection).

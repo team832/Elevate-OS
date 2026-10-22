@@ -30,16 +30,30 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
   const canWrite = can(access.user, 'academic:progress:write');
   const data = await load(async () => {
     const batches = can(access.user, 'academic:batches:read') ? await listBatches(db, actor) : [];
-    const selected = batches.find((b) => b.id === sp.batchId) ?? batches[0] ?? null;
-    return { batches, selected, catchup: selected ? await listCatchup(db, actor, selected.id) : null, interventions: await listInterventions(db, actor) };
+    const selected = batches.find((b) => b.id === sp.batchId) ?? batches.find((b) => b.activeEnrolments > 0) ?? batches[0] ?? null;
+    return { batches, selected, catchup: selected ? await listCatchup(db, actor, selected.id) : null, interventions: await listInterventions(db, actor), mine: await listInterventions(db, actor, { responsible: 'me' }) };
   });
   return (
     <>
-      <PageHeader title="Progress, catch-up and interventions" description="Catch-up tasks from missed classes, and interventions. Every priority score is explained." />
+      <PageHeader title="Progress, catch-up and support" description="Catch-up tasks from missed classes and support plans. Every priority score is explained; open a student for their four progress dimensions." />
       {!data.ok ? (
         <LoadError error={data.error} />
       ) : (
         <div className="el-stack">
+          {data.data.mine.some((i) => i.status === 'open' || i.status === 'in_progress') ? (
+            <Card title="Your next support actions" description="Support plans where you are the responsible staff member, earliest due first.">
+              <ul>
+                {data.data.mine
+                  .filter((i) => i.status === 'open' || i.status === 'in_progress')
+                  .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'))
+                  .map((i) => (
+                    <li key={i.id}>
+                      <a href={MODULE_PATHS.studentProgress(i.studentId)}>{i.studentName}</a>: {i.action} · due {i.dueDate ?? 'no date'} · review {i.reviewOn ?? 'no date'}
+                    </li>
+                  ))}
+              </ul>
+            </Card>
+          ) : null}
           <form method="get" className="el-grid" style={{ alignItems: 'end' }}>
             <label>
               Batch{' '}
@@ -67,7 +81,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
                 empty={<EmptyState title="No open catch-up tasks" />}
                 columns={[
                   { key: 'rank', header: 'Rank', numeric: true },
-                  { key: 'student', header: 'Student', render: (r) => <a href={MODULE_PATHS.student(r.studentId)}>{r.studentName}</a> },
+                  { key: 'student', header: 'Student', render: (r) => <a href={MODULE_PATHS.studentProgress(r.studentId)}>{r.studentName}</a> },
                   { key: 'missed', header: 'Missed class', render: (r) => `${r.sessionDate}${r.chapterCode ? ` · ${r.chapterCode}` : ''}` },
                   { key: 'score', header: 'Score', numeric: true },
                   { key: 'why', header: 'Why', render: (r) => r.explanation },
@@ -98,7 +112,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
               />
             </Card>
           )}
-          <Card title="Interventions" description="Open interventions with a responsible staff member. Automated risk flagging is not implemented (ACD-022 Proposed); open interventions from a student’s page.">
+          <Card title="Support plans" description="Each plan has a responsible staff member, a due date and a review date. Nothing flags students automatically; each student's progress page lists the raw facts (recent absences, overdue catch-up, declining comparable scores).">
             <InterventionsTable rows={data.data.interventions} canWrite={canWrite} />
           </Card>
         </div>

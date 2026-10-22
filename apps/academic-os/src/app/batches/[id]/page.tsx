@@ -1,21 +1,25 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { ButtonLink, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
-import { getBatch, getBatchCoverage, getBatchFeasibility, getCourse, listStaff, todayIst } from '../../../server';
+import { Card, DataTable, EmptyState, PageHeader, Subnav } from '@elevate/shared-ui';
+import { getBatch, getBatchCoverage, getBatchFeasibility, getCourse, listBatchPlacements, listStaff, todayIst } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
 import { PlanBadge, StateBadge } from '../../../ui/badges';
 import { CoverageSection, FeasibilitySection } from '../../../ui/batch-sections';
+import { BatchDetails, BatchStudents, BatchTeachers } from '../../../ui/batch-tabs';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Batch' };
 
 const WEEKDAY = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const TABS = ['overview', 'students', 'teachers'] as const;
 
-export default async function BatchPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function BatchPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const tab = TABS.find((t) => t === sp.tab) ?? 'overview';
   const access = await gate('academic:batches:read', MODULE_PATHS.batch(id));
   if (access.status !== 'allowed') return <AcademicShell access={access} active="batches">{null}</AcademicShell>;
   const db = getDb();
@@ -26,18 +30,51 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
   const canAssign = can(access.user, 'academic:assignments:write');
   const canWrite = can(access.user, 'academic:batches:write');
   const canTimetable = can(access.user, 'academic:timetable:write');
+  const filtered = (path: string) => `${path}?batchId=${b.id}`;
+  const links: [string, string][] = [
+    [MODULE_PATHS.batch(b.id), 'Overview'],
+    [`${MODULE_PATHS.batch(b.id)}?tab=students`, 'Students'],
+    [`${MODULE_PATHS.batch(b.id)}?tab=teachers`, 'Teachers'],
+    [filtered(MODULE_PATHS.timetable), 'Timetable'],
+    [filtered(MODULE_PATHS.teaching), 'Teaching logs'],
+    [filtered(MODULE_PATHS.assessments), 'Assessments'],
+    [filtered(MODULE_PATHS.progress), 'Progress'],
+  ];
+  const staffList = await load(() => listStaff(db));
+  const staff = staffList.ok ? staffList.data : null;
+  const header = (
+    <PageHeader
+      title={`${b.code} — ${b.name}`}
+      meta={<StateBadge state={b.status} />}
+      description={<>{b.programmeCode} / {b.courseCode} · {b.activeEnrolments} enrolled{b.capacity ? ` of ${b.capacity}` : ''} · class length {b.classLength.minutes ? `${b.classLength.minutes} min` : 'unknown'} <PlanBadge status={b.classLength.status} /></>}
+      tabs={<Subnav label="Batch" items={links} current={links[TABS.indexOf(tab)]![0]} />}
+    />
+  );
+  if (tab === 'students') {
+    const placements = await load(() => listBatchPlacements(db, actor, id));
+    return (
+      <AcademicShell access={access} active="batches">
+        {header}
+        {placements.ok ? <BatchStudents batch={b} placements={placements.data} canDecide={can(access.user, 'academic:enrolments:decide')} /> : <LoadError error={placements.error} />}
+      </AcademicShell>
+    );
+  }
+  if (tab === 'teachers') {
+    const course = canAssign ? await load(() => getCourse(db, b.courseId)) : null;
+    return (
+      <AcademicShell access={access} active="batches">
+        {header}
+        {course && !course.ok ? <LoadError error={course.error} /> : <BatchTeachers batch={b} subjects={course?.ok ? course.data.subjects : []} staff={staff} canAssign={canAssign} />}
+      </AcademicShell>
+    );
+  }
   const coverage = await load(() => getBatchCoverage(db, actor, id, todayIst()));
   const feasibility = can(access.user, 'academic:timetable:read') ? await load(() => getBatchFeasibility(db, actor, id, {})) : null;
-  const pickers = canAssign ? await load(async () => ({ staff: await listStaff(db), course: await getCourse(db, b.courseId) })) : null;
   return (
     <AcademicShell access={access} active="batches">
-      <PageHeader
-        title={`${b.code} — ${b.name}`}
-        meta={<StateBadge state={b.status} />}
-        description={<>{b.programmeCode} / {b.courseCode} · {b.activeEnrolments} enrolled{b.capacity ? ` of ${b.capacity}` : ''} · class length {b.classLength.minutes ? `${b.classLength.minutes} min` : 'unknown'} <PlanBadge status={b.classLength.status} /></>}
-        actions={<ButtonLink href={`${MODULE_PATHS.timetable}?batchId=${b.id}`}>Timetable</ButtonLink>}
-      />
+      {header}
       <div className="el-stack">
+        <BatchDetails batch={b} staff={staff} canWrite={canWrite} />
         {b.targetExamDate ? (
           <p>
             Target exam: {b.targetExam ?? 'exam'} on {b.targetExamDate} <PlanBadge status={b.targetExamDateStatus} />
@@ -45,34 +82,6 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
         ) : null}
         {coverage.ok ? <CoverageSection data={coverage.data} /> : <LoadError error={coverage.error} />}
         {feasibility ? feasibility.ok ? <FeasibilitySection data={feasibility.data} /> : <LoadError error={feasibility.error} /> : null}
-        <Card title="Teacher assignments">
-          <DataTable compact
-            rows={b.assignments}
-            rowKey={(a) => a.id}
-            empty={<EmptyState title="No teachers assigned" />}
-            columns={[
-              { key: 'subject', header: 'Subject', render: (a) => `${a.subjectCode} ${a.subjectName}` },
-              { key: 'staffName', header: 'Teacher' },
-              { key: 'employmentType', header: 'Employment', render: (a) => a.employmentType ?? '—' },
-              { key: 'startDate', header: 'From', render: (a) => a.startDate ?? '—' },
-            ]}
-          />
-          {pickers?.ok ? (
-            <ApiForm
-              action={MODULE_PATHS.api('assignments')}
-              extra={{ batchId: b.id }}
-              submitLabel="Assign teacher"
-              successMessage="Teacher assigned."
-              idPrefix="assign"
-              fields={[
-                { name: 'subjectId', label: 'Subject', type: 'select', required: true, options: pickers.data.course.subjects.map((s) => ({ value: s.id, label: `${s.code} ${s.name}` })) },
-                { name: 'staffMemberId', label: 'Teacher (core staff)', type: 'select', required: true, options: pickers.data.staff.map((s) => ({ value: s.id, label: `${s.fullName}${s.title ? ` — ${s.title}` : ''}` })) },
-                { name: 'employmentType', label: 'Employment', type: 'select', options: [{ value: 'full_time', label: 'full time' }, { value: 'part_time', label: 'part time' }] },
-                { name: 'startDate', label: 'From', type: 'date' },
-              ]}
-            />
-          ) : null}
-        </Card>
         <Card title="Calendar rules" description="Weekly patterns that generate gross class slots.">
           <DataTable compact
             rows={b.calendarRules}

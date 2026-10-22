@@ -18,6 +18,10 @@ export function istToday(now: Date): IsoDate {
   return toIsoDate(now, TIMEZONE);
 }
 
+/** IST instant of a day (and optional `HH:MM[:SS]` time). */
+export const istInstant = (day: string, time = '00:00') =>
+  new Date(`${day}T${time.slice(0, 5)}:00+05:30`);
+
 /** Day of week of a calendar date: 0 = Sunday … 6 = Saturday. */
 export function weekdayOf(date: IsoDate): number {
   const [y, m, d] = date.split('-').map(Number) as [number, number, number];

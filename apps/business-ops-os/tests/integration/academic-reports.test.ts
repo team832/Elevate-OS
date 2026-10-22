@@ -1,7 +1,8 @@
 /**
- * Teacher reviews (single store, scope, own scope, pending/draft/submitted, revisions) and
- * reviewed student reports (audiences, snapshot immutability, PDF) — acceptance 4, 5, 17, 18, 21.
- * Academic OS is simulated by stubbing fetch with a contract payload. Fictional data only.
+ * Teacher reviews of a demo read from Academic OS (owner answer 1, 21 Oct 2026: pending /
+ * submitted / source unavailable, own scope) and reviewed student reports (audiences, snapshot
+ * immutability, PDF) — acceptance 4, 5, 15, 17, 18, 21. Academic OS is simulated by stubbing
+ * fetch with contract payloads. Fictional data only.
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
@@ -22,8 +23,6 @@ import {
   setupTestDatabase,
   type TestUser,
 } from '@elevate/testing';
-import { POST as writeReview } from '../../src/app/api/v1/feedback/about-students/route';
-import { PATCH as editReview } from '../../src/app/api/v1/feedback/about-students/[id]/route';
 import {
   GET as openReport,
   POST as makeReport,
@@ -35,6 +34,7 @@ import { demoFeedbackByDay, demoReviewsDue } from '../../src/server/feedback';
 import { progressReportPdf } from '../../src/server/pdf/progress-report';
 import type { ReportSnapshot } from '../../src/server/student-report';
 import { pendingCase } from './admissions-fixtures';
+import { review as academicReview, reviewsPayload, stubAcademic } from './academic-stub';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -46,7 +46,6 @@ let teacher: StaffUser;
 let otherTeacher: StaffUser;
 let auditor: TestUser;
 let studentId: string;
-let otherStudentId: string;
 let demoId: string;
 let sessionIds: string[];
 const academicStudentId = crypto.randomUUID();
@@ -54,17 +53,6 @@ const enrolmentId = crypto.randomUUID();
 
 const req = (user: TestUser, path: string, method = 'GET', json?: unknown) =>
   authedRequest(user, path, { method, json });
-const review = (user: TestUser, over: Record<string, unknown> = {}) =>
-  callRoute<{ id: string; version: number; status: string }>(
-    writeReview,
-    req(user, '/ops/api/v1/feedback/about-students', 'POST', {
-      studentId,
-      subject: 'Quant',
-      observedOn: '2026-09-15',
-      observations: 'Observed in class.',
-      ...over,
-    }),
-  );
 const report = (user: TestUser, body: Record<string, unknown>) =>
   callRoute<{ id: string; referenceCode: string; fields: string[]; status: string }>(
     makeReport,
@@ -143,19 +131,24 @@ function summary(over: Partial<AcademicStudentSummaryV1> = {}): AcademicStudentS
     ...over,
   };
 }
+/** Submitted reviews Academic returns for this student (tests push to it). */
+const submitted: ReturnType<typeof academicReview>[] = [];
 const academicUp = (payload = summary()) =>
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => Response.json({ data: payload })),
-  );
-const academicDown = () =>
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => {
-      throw new TypeError('fetch failed');
-    }),
-  );
+  stubAcademic({
+    summary: payload,
+    reviews: (url: URL) => reviewsPayload(submitted, url.searchParams.get('coreStudentId')),
+    'demo-attendance': { items: [] },
+  });
+const academicDown = () => stubAcademic({});
+const quantReview = (over: Partial<ReturnType<typeof academicReview>>) =>
+  academicReview({
+    authorStaffId: teacher.staffId as never,
+    authorName: 'Sample Quant Teacher',
+    coreStudentId: studentId as never,
+    ...over,
+  });
 afterEach(() => vi.unstubAllGlobals());
+const SEPT_10 = new Date('2026-09-10T06:00:00Z');
 
 beforeAll(async () => {
   await setupReference(ctx.db);
@@ -165,12 +158,11 @@ beforeAll(async () => {
   teacher = await staffUser(ctx.db, ['teacher'], { name: 'Sample Quant Teacher' });
   otherTeacher = await staffUser(ctx.db, ['teacher'], { name: 'Sample Other Teacher' });
   auditor = await createTestUser(ctx.db, { roles: ['auditor'] });
-  const [s, o] = await ctx.db
+  const [s] = await ctx.db
     .insert(students)
-    .values([{ fullName: 'Sample Report Student' }, { fullName: 'Sample Other Student' }])
+    .values({ fullName: 'Sample Report Student' })
     .returning();
   studentId = s!.id;
-  otherStudentId = o!.id;
   const { leadId, admissionId } = await pendingCase(counsellor, {
     programmeCode: 'CLAT',
     counselledOnly: true,
@@ -234,26 +226,32 @@ beforeAll(async () => {
   sessionIds = rows.sort((a, b) => a.sessionNumber - b.sessionNumber).map((r) => r.id);
 });
 
-describe('teacher reviews of a demo (acceptance 4)', () => {
+describe('teacher reviews of a demo, from Academic OS (acceptance 4)', () => {
   const states = async (user: TestUser) =>
-    (await demoFeedbackByDay(ctx.db, user, demoId)).map((d) => [
+    (await demoFeedbackByDay(ctx.db, user, demoId)).days.map((d) => [
       d.dayNumber,
       d.teachers.map((t) => `${t.teacherName}:${t.state}${t.isSubstitute ? ':substitute' : ''}`),
     ]);
 
-  it('a taught, attended class with no review is pending; absent or not-yet-held classes are not due', async () => {
+  it('a taught, attended class with no submitted review is pending; absent or not-yet-held classes are not due', async () => {
+    academicUp();
     expect(await states(manager)).toEqual([
       [1, ['Sample Quant Teacher:pending']],
       [2, ['Sample Other Teacher:not_due:substitute']],
       [3, ['Sample Quant Teacher:not_due']],
     ]);
-    expect(
-      (await demoReviewsDue(ctx.db, teacher, teacher.staffId)).map((r) => r.sessionId),
-    ).toEqual([sessionIds[0]]);
-    expect(await demoReviewsDue(ctx.db, teacher, otherTeacher.staffId)).toEqual([]);
+    const due = await demoReviewsDue(ctx.db, teacher, teacher.staffId, SEPT_10);
+    // Last 30 days only; not on an Academic roster, so no review link (the coordinator adds it).
+    expect(due.rows.map((r) => [r.id, r.onRoster])).toEqual([[sessionIds[0], false]]);
+    expect((await demoReviewsDue(ctx.db, teacher, teacher.staffId)).rows).toEqual([]);
+    expect(await demoReviewsDue(ctx.db, teacher, otherTeacher.staffId, SEPT_10)).toMatchObject({
+      shared: false,
+      rows: [],
+    });
   });
 
   it('own-scope readers see review states only for demos they run or teach', async () => {
+    academicUp();
     expect(await states(otherTeacher)).toHaveLength(3); // taught day 2 as a substitute
     expect(await states(counsellor)).toHaveLength(3);
     const strangers = await Promise.all(
@@ -265,61 +263,37 @@ describe('teacher reviews of a demo (acceptance 4)', () => {
       );
   });
 
-  it('only the class teacher reviews a demo class, and only this student’s class', async () => {
-    const scope = { scope: 'demo_session', demoSessionId: sessionIds[0] };
-    expect((await review(otherTeacher, scope)).status).toBe(403);
-    expect((await review(manager, { ...scope, teacherStaffId: otherTeacher.staffId })).status).toBe(
-      403,
-    );
-    expect((await review(teacher, { ...scope, studentId: otherStudentId })).status).toBe(400);
-    expect((await review(teacher, { scope: 'demo_session' })).status).toBe(400);
-    expect((await review(teacher, { scope: 'general', demoSessionId: sessionIds[0] })).status).toBe(
-      400,
-    );
-  });
-
-  it('draft → submitted → revision keeps authorship and versions; states follow', async () => {
-    const draft = await review(teacher, { scope: 'demo_session', demoSessionId: sessionIds[0] });
-    expect(draft.status).toBe(201);
-    expect(draft.data).toMatchObject({ status: 'draft', version: 1 });
-    expect((await states(manager))[0]).toEqual([1, ['Sample Quant Teacher:draft']]);
-    const edit = (status: string, observations: string) =>
-      callRoute<{ id: string; version: number; status: string }>(
-        editReview,
-        req(teacher, '/ops/api/v1/x', 'PATCH', {
-          subject: 'Quant',
-          observedOn: '2026-09-01',
-          observations,
-          status,
-        }),
-        { id: draft.data!.id },
-      );
-    expect((await edit('final', 'Submitted text.')).data).toMatchObject({
-      status: 'final',
-      version: 1,
-    });
-    expect((await states(manager))[0]).toEqual([1, ['Sample Quant Teacher:submitted']]);
-    const v2 = await edit('final', 'Corrected text.');
-    expect(v2.data).toMatchObject({ version: 2, status: 'final' });
-    expect((await states(manager))[0]).toEqual([1, ['Sample Quant Teacher:submitted']]);
-    const [byManager] = await demoFeedbackByDay(ctx.db, manager, demoId);
-    expect(byManager!.teachers[0]!.reviewIds).toEqual([v2.data!.id]);
-    const [byCounsellor] = await demoFeedbackByDay(ctx.db, counsellor, demoId);
-    expect(byCounsellor!.teachers[0]).toMatchObject({ state: 'submitted', reviewIds: [] });
-    await expect(demoFeedbackByDay(ctx.db, auditor, demoId)).resolves.toHaveLength(3); // read-only roles see states
-    expect(await demoReviewsDue(ctx.db, teacher, teacher.staffId)).toEqual([]);
-  });
-
-  it('an enrolment review by a teacher needs Academic to list them; it fails closed when Academic is down', async () => {
-    const scope = { scope: 'enrolment', enrolmentId };
-    academicDown();
-    expect((await review(teacher, scope)).status).toBe(403);
+  it('a submitted Academic review of that day by the class teacher makes it submitted; another day or author does not', async () => {
     academicUp();
-    expect((await review(otherTeacher, scope)).status).toBe(403);
+    const own = quantReview({ reviewType: 'demo_session', sessionDate: '2026-09-01' as never });
+    submitted.push(
+      quantReview({ reviewType: 'demo_session', sessionDate: '2026-09-03' as never }),
+      quantReview({
+        reviewType: 'demo_session',
+        sessionDate: '2026-09-01' as never,
+        authorStaffId: otherTeacher.staffId as never,
+      }),
+      own,
+    );
+    expect((await states(manager))[0]).toEqual([1, ['Sample Quant Teacher:submitted']]);
+    const [byCounsellor] = (await demoFeedbackByDay(ctx.db, counsellor, demoId)).days;
+    expect(byCounsellor!.teachers[0]).toMatchObject({
+      state: 'submitted',
+      reviewIds: [`${own.reviewKey}:1`],
+    });
+    await expect(demoFeedbackByDay(ctx.db, auditor, demoId)).resolves.toBeTruthy(); // read-only roles see states
+    expect((await demoReviewsDue(ctx.db, teacher, teacher.staffId, SEPT_10)).rows).toEqual([]);
+    submitted.length = 0;
+  });
+
+  it('Academic down: "Source unavailable" instead of pending, on the demo and the teacher list', async () => {
+    academicDown();
+    expect((await states(manager))[0]).toEqual([1, ['Sample Quant Teacher:unknown']]);
     expect(
-      (await review(teacher, { scope: 'enrolment', enrolmentId: crypto.randomUUID() })).status,
-    ).toBe(400);
-    expect((await review(teacher, scope)).status).toBe(201);
+      (await demoReviewsDue(ctx.db, teacher, teacher.staffId, SEPT_10)).unavailable,
+    ).toMatchObject({
+      status: 'unavailable',
+    });
   });
 });
 
@@ -327,23 +301,29 @@ describe('student reports (acceptance 5, 17, 21)', () => {
   let guardianRef: string;
   let before: ReportSnapshot;
 
-  it('setup: one shareable and one internal submitted review, both carrying the raw-remark sentinel', async () => {
-    for (const [visibility, strengths] of [
-      ['shareable', 'Clear reasoning in class'],
-      ['internal', `${SENTINEL} internal strengths`],
-    ] as const)
-      expect(
-        (
-          await review(teacher, {
-            status: 'final',
-            visibility,
-            observations: `${SENTINEL} often misses homework`,
-            strengths,
-            areasToImprove: visibility === 'shareable' ? 'Ratios' : SENTINEL,
-            actionPlan: visibility === 'shareable' ? 'Short daily practice set' : SENTINEL,
-          })
-        ).status,
-      ).toBe(201);
+  it('setup: one shareable and one internal submitted review, both carrying the raw-remark sentinel', () => {
+    submitted.push(
+      quantReview({
+        visibility: 'shareable',
+        strengths: 'Clear reasoning in class',
+        areasForSupport: 'Ratios',
+        suggestedAction: 'Short daily practice set',
+        academicConcerns: `${SENTINEL} often misses homework`,
+        homeworkEvidence: SENTINEL,
+      }),
+      quantReview({
+        visibility: 'internal',
+        strengths: `${SENTINEL} internal strengths`,
+        areasForSupport: SENTINEL,
+        suggestedAction: SENTINEL,
+      }),
+      quantReview({
+        status: 'withdrawn',
+        withdrawnAt: '2026-09-20T00:00:00.000Z' as never,
+        visibility: 'shareable',
+        strengths: `${SENTINEL} withdrawn`,
+      }),
+    );
   });
 
   it('a guardian report never carries raw reviews (API payload and PDF text); facts and gaps stay honest', async () => {
@@ -406,15 +386,18 @@ describe('student reports (acceptance 5, 17, 21)', () => {
     before = s;
   });
 
-  it('an internal report holds the raw reviews for staff who may read feedback, and hides them from those who may not', async () => {
+  it('an internal report holds the raw reviews (current, not withdrawn) for staff who may read feedback', async () => {
     academicUp();
     const made = await report(manager, { audience: 'internal' });
     const s = (await open(manager, made.data!.referenceCode)).data!.view!;
-    expect(s.feedback!.map((f) => f.observations)).toContain(`${SENTINEL} often misses homework`);
+    expect(s.feedback!.map((f) => f.observations)).toEqual(
+      expect.arrayContaining([expect.stringContaining(`${SENTINEL} often misses homework`)]),
+    );
+    expect(s.feedback!.some((f) => f.strengths?.includes('withdrawn'))).toBe(false);
     expect(s.summary).toBeUndefined();
+    // The student's counsellor reads reviews of students they counsel (owner answer 1).
     const forCounsellor = await open(counsellor, made.data!.referenceCode);
-    expect(forCounsellor.data!.fields).not.toContain('feedback');
-    expect(JSON.stringify(forCounsellor.data)).not.toContain(SENTINEL);
+    expect(forCounsellor.data!.fields).toContain('feedback');
   });
 
   it('audiences not enabled are refused; a student fee statement appears only when asked for', async () => {
@@ -427,6 +410,7 @@ describe('student reports (acceptance 5, 17, 21)', () => {
   });
 
   it('draft → reviewed (someone else) → final; final is immutable even after the records change', async () => {
+    academicUp();
     expect((await move(manager, guardianRef, 'final')).status).toBe(409); // review first
     expect((await move(manager, guardianRef, 'reviewed')).status).toBe(403); // own report
     expect((await move(counsellor, guardianRef, 'reviewed')).status).toBe(403);
@@ -435,7 +419,7 @@ describe('student reports (acceptance 5, 17, 21)', () => {
     expect((await move(manager, guardianRef, 'final')).status).toBe(200);
     expect((await move(manager2, guardianRef, 'final')).status).toBe(409);
     // Records change after finalisation: a new review and different Academic figures.
-    await review(teacher, { status: 'final', visibility: 'shareable', strengths: 'LATER-CHANGE' });
+    submitted.push(quantReview({ visibility: 'shareable', strengths: 'LATER-CHANGE' }));
     academicUp(
       summary({ attendance: { held: 1, present: 0, partial: 0, late: 0, absent: 1, excused: 0 } }),
     );
@@ -462,6 +446,36 @@ describe('student reports (acceptance 5, 17, 21)', () => {
     );
   });
 
+  it('R16: a withdrawn source review blocks a non-final report; a final one only shows a notice', async () => {
+    academicUp();
+    const draft = await report(manager, { audience: 'internal' });
+    const ref = draft.data!.referenceCode;
+    const source = submitted[0]!;
+    submitted[0] = {
+      ...source,
+      status: 'withdrawn',
+      withdrawnAt: '2026-10-01T00:00:00.000Z' as never,
+    };
+    const opened = await open(manager, ref);
+    expect(opened.data).toMatchObject({
+      notice: 'A source review was withdrawn — generate the report again.',
+      actions: { review: false, finalise: false },
+    });
+    expect((await move(manager2, ref, 'reviewed')).status).toBe(409);
+    const pdf = await reportPdf(req(manager, '/ops/api/v1/x'), {
+      params: Promise.resolve({ id: studentId, reportId: ref }),
+    });
+    expect(pdf.status).toBe(409);
+    const issued = await open(manager, guardianRef);
+    expect(issued.data!.view).toEqual(before);
+    expect(issued.data).toMatchObject({
+      notice: 'A source review was withdrawn after this report was finalised.',
+    });
+    submitted[0] = source;
+    academicDown();
+    expect((await move(manager2, ref, 'reviewed')).status).toBe(409); // cannot re-check: waits
+  });
+
   it('Academic unavailable: the snapshot says so with the time checked; nothing becomes zero', async () => {
     academicDown();
     const made = await report(manager, { audience: 'guardian' });
@@ -473,7 +487,9 @@ describe('student reports (acceptance 5, 17, 21)', () => {
     expect(s.summary!.evidence).toEqual([
       'Attendance: not available for this period.',
       'Results: not available for this period.',
+      'Teacher reviews: not available for this period.',
     ]);
+    expect(s.summary!.strengths).toEqual(['Not available for this period.']);
     expect(await academicEvidence(ctx.db, null)).toEqual({ status: 'not_enrolled' });
   });
 

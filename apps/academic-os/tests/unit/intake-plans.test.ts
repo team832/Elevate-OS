@@ -28,7 +28,7 @@ const refs = (over: Partial<IntakeRefs> = {}): IntakeRefs => ({
   programme,
   course: { id: 'C', programmeId: 'P', status: 'active' },
   batch,
-  duplicateInBatch: false,
+  duplicateEnrolment: false,
   ...over,
 });
 const request = (over: Partial<IntakeRequest> = {}): IntakeRequest => ({
@@ -63,7 +63,9 @@ describe('decideIntake', () => {
     ['batch of another course', refs({ batch: { ...batch, courseId: 'C2' } }), request(), 'BATCH_NOT_FOUND'],
     ['completed batch', refs({ batch: { ...batch, status: 'completed' } }), request(), 'BATCH_NOT_FOUND'],
     ['minor without guardian', refs(), request({ student: { dateOfBirth: '2010-05-05' } }), 'INVALID_REQUEST'],
-    ['duplicate in batch', refs({ duplicateInBatch: true }), request(), 'DUPLICATE_ENROLMENT'],
+    ['linked to another person', refs({ identityConflict: true }), request(), 'INVALID_REQUEST'],
+    ['duplicate in batch or course', refs({ duplicateEnrolment: true }), request(), 'DUPLICATE_ENROLMENT'],
+    ['duplicate course without a batch', refs({ batch: null, duplicateEnrolment: true }), request({ intendedBatchId: undefined }), 'DUPLICATE_ENROLMENT'],
     ['batch full', refs({ batch: { ...batch, activeEnrolments: 2 } }), request(), 'BATCH_FULL'],
   ] as const)('rejects: %s', (_label, r, q, code) => {
     const d = decideIntake(q, r, today);

@@ -6,7 +6,7 @@
  * domain/demos.ts and docs/parts/admissions-demos.md. Permissions: ops:leads:read /
  * ops:leads:write (counsellors: own scope = demo or case counsellor, or lead owner).
  */
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lte } from 'drizzle-orm';
 import {
   opsChecklistEntries,
   opsDemos,
@@ -18,6 +18,7 @@ import { notify } from '@elevate/notifications';
 import { withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
+  ForbiddenError,
   InvalidStateTransitionError,
   ValidationError,
 } from '@elevate/shared-contracts';
@@ -44,7 +45,13 @@ import { fmtDateTime } from '../ui/format';
 import { lockAccessible } from './admissions';
 import { assertFree } from './appointments';
 import { applyDemoKyc } from './demos-intake';
-import { lockDemo } from './demos-read';
+import { lockDemo, marksForDemo } from './demos-read';
+import {
+  academicDemoMarks,
+  assertCounsellorMayMark,
+  withMarks,
+  type AcademicDemoMarks,
+} from './academic-summary';
 import {
   accessScope,
   activeStaff,
@@ -268,6 +275,8 @@ export async function addDemoSession(
   const teacher = input.teacherStaffId
     ? await activeStaff(db, input.teacherStaffId, 'teacherStaffId')
     : null;
+  await lockDemo(db, actor, demoId); // permission before Academic is asked
+  const marks = await marksForDemo(db, demoId);
   return withTransaction(db, async (tx) => {
     const { demo, admission } = await lockDemo(tx, actor, demoId);
     if (demo.outcome !== 'open')
@@ -334,7 +343,7 @@ export async function addDemoSession(
         demo.id,
         `Demo class: ${row!.subject}, ${fmtDateTime(startsAt)}.`,
       );
-    await syncDemo(tx, actor, demo, admission, requestId);
+    await syncDemo(tx, actor, demo, admission, marks, requestId);
     await auditDemo(
       tx,
       actor,
@@ -387,19 +396,20 @@ async function logChanges(
 /**
  * After a session change: stamp `completed_at` once every session has a final
  * attendance; when an open demo becomes fully attended, move the case
- * demo_scheduled → demo_attended and add the demo follow-up (A-05).
+ * demo_scheduled → demo_attended and add the demo follow-up (A-05). A linked class counts with
+ * Academic's mark (R15); while Academic cannot be read, a demo with a known-linked class waits.
  */
 async function syncDemo(
   tx: Database,
   actor: Actor,
   demo: Demo,
   admission: AdmissionRow,
+  marks: AcademicDemoMarks,
   requestId?: string,
 ) {
-  const sessions = await tx
-    .select()
-    .from(opsDemoSessions)
-    .where(eq(opsDemoSessions.demoId, demo.id));
+  const rows = await tx.select().from(opsDemoSessions).where(eq(opsDemoSessions.demoId, demo.id));
+  if (marks.status === 'unavailable' && rows.some((r) => r.academicSessionRef)) return;
+  const sessions = withMarks(rows, marks);
   const status = demoAttendanceStatus(demo.outcome, sessions);
   const finished = status === 'attended' || status === 'missed';
   await tx
@@ -493,6 +503,16 @@ export async function updateDemoSession(
   requestId?: string,
   now = new Date(),
 ) {
+  await lockDemo(db, actor, demoId); // permission and scope before Academic is asked
+  const marks = await marksForDemo(db, demoId);
+  if (input.action === 'attendance') {
+    // Read after marksForDemo, which records a newly seen link.
+    const [known] = await db
+      .select({ id: opsDemoSessions.id, academicSessionRef: opsDemoSessions.academicSessionRef })
+      .from(opsDemoSessions)
+      .where(eq(opsDemoSessions.id, sessionId as Session['id']));
+    if (known) assertCounsellorMayMark(marks, known);
+  }
   const teacher =
     input.action === 'assign' && input.teacherStaffId
       ? await activeStaff(db, input.teacherStaffId, 'teacherStaffId')
@@ -564,7 +584,7 @@ export async function updateDemoSession(
         demo.id,
         `Demo class: ${after.subject}, ${fmtDateTime(after.startsAt)}.`,
       );
-    await syncDemo(tx, actor, demo, admission, requestId);
+    await syncDemo(tx, actor, demo, admission, marks, requestId);
     await auditDemo(
       tx,
       actor,
@@ -585,6 +605,8 @@ export async function updateDemo(
   input: z.output<typeof demoActionBody>,
   requestId?: string,
 ) {
+  if (input.action !== 'kyc') await lockDemo(db, actor, id); // permission before Academic
+  const marks = input.action === 'kyc' ? null : await marksForDemo(db, id);
   return withTransaction(db, async (tx) => {
     const { demo, admission } = await lockDemo(tx, actor, id);
     if (input.action === 'kyc') {
@@ -630,7 +652,7 @@ export async function updateDemo(
         requestId,
         settings: await loadSettings(tx),
       });
-    await syncDemo(tx, actor, after!, admission, requestId);
+    await syncDemo(tx, actor, after!, admission, marks!, requestId);
     await auditDemo(tx, actor, demo, 'demo.outcome_set', { before: demo, after }, requestId);
     return after!;
   });
@@ -661,4 +683,43 @@ export async function setDemoChecklistItem(
     await auditDemo(tx, actor, demo, 'demo.checklist_set', { after: entry }, requestId);
     return entry!;
   });
+}
+
+/**
+ * Job (R15): open, unfinished demos are synced again with Academic's marks, so a class the
+ * teacher marked in Academic moves the case on (demo_attended) without an Ops edit. One batched
+ * Academic call for all started classes; nothing moves while Academic cannot be read; idempotent.
+ * The actor needs ops:jobs:run and ops:leads:write (all scope — every demo is locked for writing).
+ */
+export async function syncDemosFromAcademic(
+  db: Database,
+  actor: Actor,
+  requestId?: string,
+  now = new Date(),
+) {
+  await accessScope(db, actor, 'ops:jobs:run');
+  if ((await accessScope(db, actor, 'ops:leads:write')).scope !== 'all')
+    throw new ForbiddenError('This job needs ops:leads:write for every demo.');
+  const classes = await db
+    .select({ id: opsDemoSessions.id, demoId: opsDemoSessions.demoId })
+    .from(opsDemoSessions)
+    .innerJoin(opsDemos, eq(opsDemos.id, opsDemoSessions.demoId))
+    .where(
+      and(
+        eq(opsDemos.outcome, 'open'),
+        isNull(opsDemos.completedAt),
+        lte(opsDemoSessions.startsAt, now),
+      ),
+    );
+  const marks = await academicDemoMarks(
+    db,
+    classes.map((c) => c.id),
+  );
+  const demoIds = [...new Set(classes.filter((c) => marks.marks.has(c.id)).map((c) => c.demoId))];
+  for (const id of demoIds)
+    await withTransaction(db, async (tx) => {
+      const { demo, admission } = await lockDemo(tx, actor, id);
+      await syncDemo(tx, actor, demo, admission, marks, requestId);
+    });
+  return { status: marks.status, synced: demoIds.length };
 }

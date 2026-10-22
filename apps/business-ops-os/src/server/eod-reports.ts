@@ -1,255 +1,410 @@
 /**
- * End-of-day reports (owner decision 21 Oct 2026): a staff member builds the day's report from
- * their tasks (domain/staff-tasks.ts A-TSK-4), adds a summary and submits it to their reporting
- * manager (core.staff_members.manager_id), who gets an in-app notification. Sharing by WhatsApp or
- * email goes through the mock messaging adapter: "Simulated — not sent". One report per staff
- * member and day; the snapshot is frozen once submitted.
+ * End-of-day reports (owner brief 2 §9–11). One report per staff member and IST day; the row is
+ * the working draft (facts rebuilt from task events and updates, plus the employee's narrative).
+ * Submitting freezes an immutable version (`eod_report_versions`) addressed to the resolved
+ * reporting manager — or, when none can be resolved, to an EOD reviewer the employee chooses
+ * (recorded on the version only, never saved as a reporting line). A revision request reopens the
+ * draft; resubmitting makes version n+1. Nothing is sent outside Elevate OS (no provider).
  */
-import { and, asc, desc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
-import { can, grantsForRole, ROLE_KEYS } from '@elevate/authorization';
+import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
+import { can, grantsForRole, ROLE_KEYS } from '@elevate/authorization';
 import {
-  auditEvents,
+  departments,
   opsEodReports as reports,
-  opsStaffTasks as tasks,
+  opsEodReportVersions as versions,
+  opsEodReviewEvents as reviewEvents,
   staffMembers,
   userRoles,
   type Database,
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
-import {
-  ConflictError,
-  ForbiddenError,
-  InvalidStateTransitionError,
-  ValidationError,
-} from '@elevate/shared-contracts';
-import type { StaffMemberId } from '@elevate/shared-types';
+import { ConflictError, ValidationError } from '@elevate/shared-contracts';
+import type { StaffMemberId, UserId } from '@elevate/shared-types';
 import { istToday } from '../domain/dates';
-import {
-  buildEodSnapshot,
-  missingReasons,
-  TASK_STATUS_LABELS,
-  type EodItem,
-  type EodSnapshot,
-} from '../domain/staff-tasks';
-import { fmtDate, fmtDateTime } from '../ui/format';
-import { getMessagingAdapter } from './adapters/messaging';
-import { accessScope, notFound, scopeCovers, staffIdForUser, type Actor } from './context';
+import { factsMissingReasons, isEodFacts, isImportedReport, type EodFacts } from '../domain/eod';
+import { fmtDate } from '../ui/format';
+import { accessScope, managedStaffIds, notFound, staffIdForUser, type Actor } from './context';
+import { collectFacts, factsHash } from './eod-facts';
+import type { EodDraftInput } from './eod-schemas';
 import { fieldError, notifyOthers, opsAudit, rowById } from './ops-common';
-import { createPdf } from './pdf/document';
-import { dayTasks, ownStaffId } from './staff-tasks';
+import { loadSettings } from './settings';
+import { ownStaffId } from './staff-tasks';
 
 type Row = typeof reports.$inferSelect;
-const audit = opsAudit('eod_report');
-export const SIMULATED = 'Simulated — not sent. No WhatsApp or email provider is connected.';
-
-const snapshotOf = (r: Row) => r.snapshot as EodSnapshot;
+export const audit = opsAudit('eod_report');
+export const EXTERNAL_DELIVERY = 'External delivery not configured';
+const EDITABLE: readonly Row['status'][] = ['draft', 'revision_requested'];
 
 /** Submitted after the report day ended (IST). */
 export const submittedLate = (r: Pick<Row, 'submittedAt' | 'reportDate'>) =>
   Boolean(r.submittedAt && istToday(r.submittedAt) > r.reportDate);
 
-/** Reader: own reports, reports addressed to the reader, or everyone's with all scope. */
-async function readable(db: Database, actor: Actor, id: string) {
-  const access = await accessScope(db, actor, 'ops:tasks:read');
-  const [row] = await db
-    .select({ report: reports, staffName: staffMembers.fullName })
-    .from(reports)
-    .innerJoin(staffMembers, eq(staffMembers.id, reports.staffId))
-    .where(eq(reports.id, id as Row['id']))
-    .limit(1);
-  if (!row) notFound('Report');
-  const addressed =
-    access.scope === 'own' &&
-    row.report.status === 'submitted' &&
-    row.report.submittedToStaffId === access.staffId;
-  if (!addressed && !scopeCovers(access, [row.report.staffId])) notFound('Report');
-  return { ...row.report, staffName: row.staffName };
-}
-
-/** A report with its staff name, manager name and simulated shares. */
-export async function getReport(db: Database, actor: Actor, id: string) {
-  const r = await readable(db, actor, id);
-  const [self, manager, shares] = await Promise.all([
-    staffIdForUser(db, actor.id),
-    r.submittedToStaffId
-      ? db
-          .select({ fullName: staffMembers.fullName })
-          .from(staffMembers)
-          .where(eq(staffMembers.id, r.submittedToStaffId))
-      : [],
-    db
-      .select({ at: auditEvents.at, metadata: auditEvents.metadata })
-      .from(auditEvents)
-      .where(
-        and(
-          eq(auditEvents.entityType, 'eod_report'),
-          eq(auditEvents.entityId, r.id),
-          eq(auditEvents.action, 'eod_report.shared'),
-        ),
-      )
-      .orderBy(desc(auditEvents.at)),
-  ]);
-  return {
-    ...r,
-    snapshot: snapshotOf(r),
-    late: submittedLate(r),
-    managerName: manager[0]?.fullName ?? null,
-    shares,
-    canReview:
-      r.status === 'submitted' &&
-      !r.reviewedAt &&
-      r.staffId !== self &&
-      (can(actor, 'ops:eod:review') || (self !== null && r.submittedToStaffId === self)),
-  };
-}
-
 const manager = alias(staffMembers, 'manager');
 
-/** Where a staff member's report goes: their active reporting manager with a login, else none. */
-async function submitTarget(db: Database, staffId: StaffMemberId) {
-  const [row] = await db
-    .select({
-      fullName: staffMembers.fullName,
-      managerId: manager.id,
-      managerName: manager.fullName,
-      managerUserId: manager.userId,
+/** Active staff with a login who hold ops:eod:review (the choice when no manager resolves). */
+async function reviewerCandidates(db: Database, exceptStaffId: string) {
+  const roles = ROLE_KEYS.filter((r) => grantsForRole(r).has('ops:eod:review'));
+  return db
+    .selectDistinct({
+      staffId: staffMembers.id,
+      name: staffMembers.fullName,
+      userId: staffMembers.userId,
     })
     .from(staffMembers)
-    .leftJoin(
-      manager,
+    .innerJoin(userRoles, eq(userRoles.userId, staffMembers.userId))
+    .where(
       and(
-        eq(manager.id, staffMembers.managerId),
-        eq(manager.status, 'active'),
-        isNotNull(manager.userId),
+        inArray(userRoles.role, roles),
+        eq(staffMembers.status, 'active'),
+        ne(staffMembers.id, exceptStaffId as StaffMemberId),
       ),
     )
-    .where(eq(staffMembers.id, staffId));
-  return row!;
+    .orderBy(asc(staffMembers.fullName)) as Promise<
+    { staffId: StaffMemberId; name: string; userId: UserId }[]
+  >;
 }
 
-/** The caller's report for a day (null when not started) and who it goes to; null without a staff record. */
+/**
+ * Who a staff member's report goes to (§11): their reporting manager when active with a login;
+ * otherwise why not, and the EOD reviewers they may choose from.
+ */
+export async function resolveRecipient(db: Database, staffId: string) {
+  const [me] = await db
+    .select({
+      staffName: staffMembers.fullName,
+      managerId: staffMembers.managerId,
+      name: manager.fullName,
+      status: manager.status,
+      userId: manager.userId,
+    })
+    .from(staffMembers)
+    .leftJoin(manager, eq(manager.id, staffMembers.managerId))
+    .where(eq(staffMembers.id, staffId as StaffMemberId));
+  if (!me) notFound('Staff member');
+  if (me.managerId && me.status === 'active' && me.userId)
+    return {
+      kind: 'manager' as const,
+      staffName: me.staffName,
+      staffId: me.managerId,
+      name: me.name!,
+      userId: me.userId,
+    };
+  const why = !me.managerId
+    ? 'No reporting manager is set for you in the Staff directory.'
+    : me.status !== 'active'
+      ? `Your reporting manager, ${me.name}, is not active.`
+      : `Your reporting manager, ${me.name}, cannot sign in.`;
+  return {
+    kind: 'choose' as const,
+    staffName: me.staffName,
+    why,
+    candidates: await reviewerCandidates(db, staffId),
+  };
+}
+export type Recipient = Awaited<ReturnType<typeof resolveRecipient>>;
+
+/**
+ * Who may read a report: its owner; all-scope task readers; whoever a version was submitted
+ * to; and, when `eod.manager_history` is `current_team_all`, the current manager chain (R3).
+ * Drafts are the owner's (and all-scope readers'). Anyone else gets 404.
+ */
+export async function readerOf(db: Database, actor: Actor, row: Row) {
+  const access = await accessScope(db, actor, 'ops:tasks:read');
+  const self = await staffIdForUser(db, actor.id);
+  if (row.staffId === self || access.scope === 'all') return self;
+  if (self && row.status !== 'draft') {
+    const sent = await db
+      .select({ id: versions.id })
+      .from(versions)
+      .where(and(eq(versions.reportId, row.id), eq(versions.submittedToStaffId, self)))
+      .limit(1);
+    if (sent.length) return self;
+    const history = (await loadSettings(db))['eod.manager_history'].value.scope;
+    if (history === 'current_team_all' && (await managedStaffIds(db, self)).includes(row.staffId))
+      return self;
+  }
+  notFound('Report');
+}
+
+/**
+ * Can this reader act on a submitted report: an EOD reviewer, or the person it was sent to.
+ * Imported tracker reports were never sent, so nobody reviews them.
+ */
+export const canReviewReport = (actor: Actor, self: string | null, r: Row) =>
+  r.status !== 'draft' &&
+  !isImportedReport(r.snapshot) &&
+  r.staffId !== self &&
+  (can(actor, 'ops:eod:review') || (self !== null && r.submittedToStaffId === self));
+
+/**
+ * A report with its versions, review trail and names. `checkSource` rebuilds the facts to flag
+ * "Source changed since submission" (costs a rebuild and an Academic call).
+ */
+export async function getReport(
+  db: Database,
+  actor: Actor,
+  id: string,
+  options: { checkSource?: boolean } = {},
+) {
+  const row = await rowById(db, reports, id, 'Report');
+  const self = await readerOf(db, actor, row);
+  const [[owner], versionRows, trail] = await Promise.all([
+    db
+      .select({
+        fullName: staffMembers.fullName,
+        department: departments.name,
+        managerName: manager.fullName,
+      })
+      .from(staffMembers)
+      .leftJoin(departments, eq(departments.id, staffMembers.departmentId))
+      .leftJoin(manager, eq(manager.id, staffMembers.managerId))
+      .where(eq(staffMembers.id, row.staffId)),
+    db.select().from(versions).where(eq(versions.reportId, row.id)).orderBy(asc(versions.version)),
+    db
+      .select({ event: reviewEvents, actorName: staffMembers.fullName })
+      .from(reviewEvents)
+      .leftJoin(staffMembers, eq(staffMembers.userId, reviewEvents.actorUserId))
+      .where(eq(reviewEvents.reportId, row.id))
+      .orderBy(desc(reviewEvents.createdAt)),
+  ]);
+  const ids = [
+    ...new Set(versionRows.map((v) => v.submittedToStaffId).filter(Boolean)),
+  ] as StaffMemberId[];
+  const names = ids.length
+    ? await db
+        .select({ id: staffMembers.id, name: staffMembers.fullName })
+        .from(staffMembers)
+        .where(inArray(staffMembers.id, ids))
+    : [];
+  const nameOf = (s: string | null) => names.find((n) => n.id === s)?.name ?? null;
+  const current = versionRows.at(-1) ?? null;
+  const facts = (current?.snapshot ?? row.snapshot) as EodFacts;
+  const sourceChanged =
+    options.checkSource && current && isEodFacts(current.snapshot)
+      ? factsHash(await collectFacts(db, row.staffId, row.reportDate)) !==
+        factsHash(current.snapshot)
+      : null;
+  const isOwner = row.staffId === self;
+  return {
+    // Others read only what was sent: never the owner's unsubmitted rewrite during a revision.
+    ...(isOwner || !current ? row : { ...row, ...current.narrative, snapshot: current.snapshot }),
+    staffName: owner?.fullName ?? 'Name not on record',
+    department: owner?.department ?? null,
+    managerName: owner?.managerName ?? null,
+    imported: isImportedReport(row.snapshot),
+    late: submittedLate(row),
+    isOwner,
+    canReview: canReviewReport(actor, self, row),
+    facts,
+    versions: versionRows.map((v) => ({ ...v, recipientName: nameOf(v.submittedToStaffId) })),
+    current: current ? { ...current, recipientName: nameOf(current.submittedToStaffId) } : null,
+    trail: trail.map((t) => ({ ...t.event, actorName: t.actorName })),
+    sourceChanged,
+  };
+}
+export type EodReportView = Awaited<ReturnType<typeof getReport>>;
+
+/** The caller's report for a day (null when not started), its recipient and fresh facts. */
 export async function eodContext(db: Database, actor: Actor, day: string) {
   await accessScope(db, actor, 'ops:tasks:read');
   const staffId = await staffIdForUser(db, actor.id);
   if (!staffId) return null;
-  const [[row], target] = await Promise.all([
+  const [[row], recipient, facts] = await Promise.all([
     db
       .select({ id: reports.id })
       .from(reports)
       .where(and(eq(reports.staffId, staffId), eq(reports.reportDate, day))),
-    submitTarget(db, staffId),
+    resolveRecipient(db, staffId),
+    collectFacts(db, staffId, day),
   ]);
+  const report = row ? await getReport(db, actor, row.id) : null;
+  const sent = report?.current?.snapshot;
   return {
-    report: row ? await getReport(db, actor, row.id) : null,
-    managerName: target.managerName,
+    report: report && {
+      ...report,
+      sourceChanged: isEodFacts(sent) ? factsHash(facts) !== factsHash(sent) : null,
+    },
+    recipient,
+    facts,
   };
 }
 
-/** Build or refresh the caller's draft for a day; `summary` is saved when given. */
+/**
+ * Build or refresh the caller's draft for a day (facts rebuilt; narrative saved when given).
+ * Only a draft or a report sent back for revision can change; `version` guards concurrent edits.
+ */
 export async function saveDraft(
   db: Database,
   actor: Actor,
-  input: { reportDate: string; summary?: string | null },
+  input: EodDraftInput,
   requestId?: string,
 ) {
   await accessScope(db, actor, 'ops:tasks:write');
   const staffId = await ownStaffId(db, actor);
-  const now = new Date();
-  if (input.reportDate > istToday(now))
+  if (input.reportDate > istToday(new Date()))
     throw fieldError('reportDate', 'A report can be for today or an earlier day only.');
+  const facts = await collectFacts(db, staffId, input.reportDate);
+  const narrative = Object.fromEntries(
+    (['summary', 'nextDayPlan', 'notes'] as const)
+      .filter((k) => input[k] !== undefined)
+      .map((k) => [k, input[k] ?? null]),
+  );
   return withTransaction(db, async (tx) => {
-    const snapshot = buildEodSnapshot(
-      await dayTasks(tx, staffId, input.reportDate),
-      input.reportDate,
-      now,
-    );
-    const [row] = await tx
-      .insert(reports)
-      .values({
-        staffId,
-        reportDate: input.reportDate,
-        snapshot,
-        summary: input.summary ?? null,
-        createdBy: actor.id,
-      })
-      .onConflictDoUpdate({
-        target: [reports.staffId, reports.reportDate],
-        set: { snapshot, ...(input.summary !== undefined && { summary: input.summary }) },
-        setWhere: eq(reports.status, 'draft'),
-      })
-      .returning();
-    if (!row) throw new ConflictError('This report was already submitted and cannot be changed.');
+    const [cur] = await tx
+      .select()
+      .from(reports)
+      .where(and(eq(reports.staffId, staffId), eq(reports.reportDate, input.reportDate)))
+      .for('update');
+    if (cur && !EDITABLE.includes(cur.status))
+      throw new ConflictError(
+        'This report was submitted and cannot be changed. Your manager can ask for a revision.',
+      );
+    if (cur && input.version !== undefined && cur.version !== input.version)
+      throw new ConflictError(
+        'This report was changed in another tab or window. Reload the page to see the latest version.',
+      );
+    const [row] = cur
+      ? await tx
+          .update(reports)
+          .set({ snapshot: facts, ...narrative, version: cur.version + 1 })
+          .where(eq(reports.id, cur.id))
+          .returning()
+      : await tx
+          .insert(reports)
+          .values({
+            staffId,
+            reportDate: input.reportDate,
+            snapshot: facts,
+            ...narrative,
+            createdBy: actor.id,
+          })
+          .onConflictDoNothing()
+          .returning();
+    if (!row)
+      throw new ConflictError('This report was just started in another tab. Reload the page.');
     await audit(
       tx,
       actor,
       row.id,
       'eod_report.drafted',
-      { after: { summary: row.summary, counts: snapshot.counts } },
+      { after: { ...narrative, counts: facts.counts } },
       requestId,
     );
-    return { ...row, snapshot };
+    return row;
   });
 }
 
-/** Users who hold ops:eod:review (the fallback when a staff member has no reporting manager). */
-async function reviewerUserIds(db: Database) {
-  const roles = ROLE_KEYS.filter((r) => grantsForRole(r).has('ops:eod:review'));
-  const rows = await db
-    .selectDistinct({ userId: userRoles.userId })
-    .from(userRoles)
-    .where(inArray(userRoles.role, roles));
-  return rows.map((r) => r.userId);
-}
-
 /**
- * Submit the caller's report: refresh the snapshot, refuse while a task listed as not done has no
- * reason, freeze it and notify the reporting manager in-app (no manager with a login: the EOD
- * reviewers).
+ * Submit the caller's report: rebuild the facts, refuse while an open task due by the report
+ * day has no reason, and freeze version n+1 for the resolved recipient (in-app notification).
+ * Submitting an already submitted report returns its current version (double click, retry).
  */
-export async function submitReport(db: Database, actor: Actor, id: string, requestId?: string) {
+export async function submitReport(
+  db: Database,
+  actor: Actor,
+  id: string,
+  body: { recipientStaffId?: string; expectedVersion?: number },
+  requestId?: string,
+) {
   await accessScope(db, actor, 'ops:tasks:write');
   const staffId = await ownStaffId(db, actor);
+  const pre = await rowById(db, reports, id, 'Report');
+  if (pre.staffId !== staffId) notFound('Report');
+  const [facts, recipient] = await Promise.all([
+    collectFacts(db, staffId, pre.reportDate),
+    resolveRecipient(db, staffId),
+  ]);
   return withTransaction(db, async (tx) => {
     const row = await rowById(tx, reports, id, 'Report', true);
-    if (row.staffId !== staffId) notFound('Report');
-    if (row.status === 'submitted') throw new ConflictError('This report was already submitted.');
-    const snapshot = buildEodSnapshot(
-      await dayTasks(tx, staffId, row.reportDate),
-      row.reportDate,
-      new Date(),
-    );
-    const missing = missingReasons(snapshot);
+    const [last] = await tx
+      .select()
+      .from(versions)
+      .where(eq(versions.reportId, row.id))
+      .orderBy(desc(versions.version))
+      .limit(1);
+    if (!EDITABLE.includes(row.status)) return { ...row, submittedVersion: last!, replayed: true };
+    if (body.expectedVersion !== undefined && body.expectedVersion !== row.version)
+      throw new ConflictError(
+        'This report was changed in another tab or window. Reload the page and check it before submitting.',
+      );
+    const to =
+      recipient.kind === 'manager'
+        ? recipient
+        : recipient.candidates.find((c) => c.staffId === body.recipientStaffId);
+    if (
+      recipient.kind === 'manager' &&
+      body.recipientStaffId &&
+      body.recipientStaffId !== recipient.staffId
+    )
+      throw fieldError(
+        'recipientStaffId',
+        `Reports go to your reporting manager, ${recipient.name}.`,
+      );
+    if (!to)
+      throw fieldError(
+        'recipientStaffId',
+        recipient.kind === 'choose' && recipient.candidates.length
+          ? `${recipient.why} Choose who receives this report.`
+          : 'No one can receive this report yet. Ask an operations manager to set your reporting manager.',
+      );
+    const missing = factsMissingReasons(facts);
     if (missing.length)
       throw new ValidationError(
         `Add a reason to each task that is not done: ${missing.map((t) => t.title).join(', ')}.`,
         {
           details: missing.map((t) => ({
             location: 'body',
-            path: ['tasks', t.id],
+            path: ['tasks', t.taskId],
             message: `${t.title}: reason needed`,
           })),
         },
       );
-    const me = await submitTarget(tx, staffId);
-    // shortcut: no active manager with a login → every ops:eod:review holder; add backup managers if the owner wants them.
-    const recipients = me.managerUserId ? [me.managerUserId] : await reviewerUserIds(tx);
+    const [request] =
+      row.status === 'revision_requested'
+        ? await tx
+            .select({ id: reviewEvents.id })
+            .from(reviewEvents)
+            .where(
+              and(eq(reviewEvents.reportId, row.id), eq(reviewEvents.kind, 'revision_requested')),
+            )
+            .orderBy(desc(reviewEvents.createdAt))
+            .limit(1)
+        : [];
+    const [version] = await tx
+      .insert(versions)
+      .values({
+        reportId: row.id,
+        version: row.currentVersion + 1,
+        snapshot: facts,
+        narrative: { summary: row.summary, nextDayPlan: row.nextDayPlan, notes: row.notes },
+        sourceCutoffAt: new Date(facts.generatedAt),
+        submittedByUserId: actor.id,
+        submittedToStaffId: to.staffId,
+        revisionOfVersionId: last?.id ?? null,
+        revisionRequestEventId: request?.id ?? null,
+      })
+      .returning();
     const [after] = await tx
       .update(reports)
       .set({
         status: 'submitted',
-        snapshot,
-        submittedAt: new Date(),
-        submittedToStaffId: me.managerId,
+        snapshot: facts,
+        submittedAt: version!.submittedAt,
+        submittedToStaffId: to.staffId,
+        currentVersion: version!.version,
+        version: row.version + 1,
+        reviewedBy: null,
+        reviewedAt: null,
       })
       .where(eq(reports.id, row.id))
       .returning();
-    const c = snapshot.counts;
-    await notifyOthers(tx, actor, recipients, {
+    const c = facts.counts;
+    await notifyOthers(tx, actor, [to.userId], {
       kind: 'eod.submitted',
-      title: `End-of-day report: ${me.fullName}, ${fmtDate(row.reportDate)}`,
-      body: `${c.done} done, ${c.open + c.carried} not done (${c.overdue} overdue).`,
-      link: `/ops/tasks?date=${row.reportDate}&report=${row.id}`,
+      title: `End-of-day report: ${recipient.staffName}, ${fmtDate(row.reportDate)}${version!.version > 1 ? ` (version ${version!.version})` : ''}`,
+      body: `${c.completed} completed, ${c.backlog} open at cut-off (${c.overdue} overdue), ${c.blocked} blocked.`,
+      link: `/ops/tasks/inbox?open=${row.id}`,
       entityType: 'eod_report',
       entityId: row.id,
     });
@@ -259,180 +414,11 @@ export async function submitReport(db: Database, actor: Actor, id: string, reque
       row.id,
       'eod_report.submitted',
       {
-        after: { counts: c, submittedToStaffId: after!.submittedToStaffId },
-        metadata: { notified: recipients.filter((u) => u !== actor.id).length },
+        after: { version: version!.version, submittedToStaffId: to.staffId, counts: c },
+        metadata: { recipientChosen: recipient.kind === 'choose' },
       },
       requestId,
     );
-    return { ...after!, snapshot };
+    return { ...after!, submittedVersion: version!, replayed: false };
   });
-}
-
-/**
- * Mark a submitted report reviewed: an EOD reviewer, or the manager it was sent to; never your
- * own. Repeating it changes nothing.
- */
-export async function reviewReport(db: Database, actor: Actor, id: string, requestId?: string) {
-  await accessScope(db, actor, 'ops:tasks:read');
-  return withTransaction(db, async (tx) => {
-    const row = await rowById(tx, reports, id, 'Report', true);
-    const self = await staffIdForUser(tx, actor.id);
-    if (!can(actor, 'ops:eod:review') && (!self || row.submittedToStaffId !== self))
-      throw new ForbiddenError(
-        'Only the manager it was sent to, or an EOD reviewer, can mark a report reviewed.',
-      );
-    if (row.staffId === self) throw new ForbiddenError('You cannot review your own report.');
-    if (row.status !== 'submitted')
-      throw new InvalidStateTransitionError('Only a submitted report can be marked reviewed.');
-    if (row.reviewedAt) return row;
-    const [after] = await tx
-      .update(reports)
-      .set({ reviewedBy: actor.id, reviewedAt: new Date() })
-      .where(eq(reports.id, row.id))
-      .returning();
-    await audit(tx, actor, row.id, 'eod_report.reviewed', {}, requestId);
-    return after!;
-  });
-}
-
-/** Share by WhatsApp or email through the messaging adapter (mock: simulated, nothing sent). */
-export async function shareReport(
-  db: Database,
-  actor: Actor,
-  id: string,
-  channel: 'email' | 'whatsapp',
-  requestId?: string,
-) {
-  await accessScope(db, actor, 'ops:tasks:write');
-  const staffId = await ownStaffId(db, actor);
-  const r = await readable(db, actor, id);
-  if (r.staffId !== staffId) notFound('Report');
-  if (r.status !== 'submitted')
-    throw new InvalidStateTransitionError('Submit the report before sharing it.');
-  const c = snapshotOf(r).counts;
-  const { providerRef } = await getMessagingAdapter().send({
-    channel,
-    body: `End-of-day report ${fmtDate(r.reportDate)}: ${c.done} done, ${c.open + c.carried} not done.`,
-    // shortcut: no recipient; add the manager's contact when a real provider is connected.
-    to: [],
-  });
-  const status = providerRef ? 'sent' : 'simulated';
-  await audit(
-    db,
-    actor,
-    id,
-    'eod_report.shared',
-    { metadata: { channel, status, providerRef } },
-    requestId,
-  );
-  return { status, message: status === 'simulated' ? SIMULATED : 'Handed to the provider.' };
-}
-
-/**
- * Team view for a day (EOD reviewers): every active staff member with a login and their report
- * state, plus tasks that are blocked or on hold.
- */
-export async function teamDay(db: Database, actor: Actor, day: string) {
-  await accessScope(db, actor, 'ops:eod:review');
-  // shortcut: everyone active with a login is expected to report; add a per-role setting if some roles never do.
-  const [people, stuck] = await Promise.all([
-    db
-      .select({
-        staffId: staffMembers.id,
-        name: staffMembers.fullName,
-        reportId: reports.id,
-        status: reports.status,
-        submittedAt: reports.submittedAt,
-        reviewedAt: reports.reviewedAt,
-        reportDate: reports.reportDate,
-      })
-      .from(staffMembers)
-      .leftJoin(reports, and(eq(reports.staffId, staffMembers.id), eq(reports.reportDate, day)))
-      .where(and(eq(staffMembers.status, 'active'), isNotNull(staffMembers.userId)))
-      .orderBy(asc(staffMembers.fullName)),
-    db
-      .select({
-        id: tasks.id,
-        title: tasks.title,
-        status: tasks.status,
-        reason: tasks.reason,
-        dueOn: tasks.dueOn,
-        staffName: staffMembers.fullName,
-      })
-      .from(tasks)
-      .innerJoin(staffMembers, eq(staffMembers.id, tasks.staffId))
-      .where(
-        and(inArray(tasks.status, ['blocked', 'on_hold']), ne(staffMembers.status, 'inactive')),
-      )
-      .orderBy(asc(tasks.dueOn))
-      .limit(100),
-  ]);
-  return {
-    people: people.map((p) => ({
-      ...p,
-      late: p.reportDate
-        ? submittedLate({ submittedAt: p.submittedAt, reportDate: p.reportDate })
-        : false,
-    })),
-    stuck,
-  };
-}
-
-const itemRows = (items: EodItem[]) =>
-  items.map((t) => [
-    t.title,
-    t.priority,
-    `${TASK_STATUS_LABELS[t.status]}${t.overdue ? ' (overdue)' : ''}`,
-    `${t.progressPercent}%`,
-    `${fmtDate(t.dueOn)}${t.dueTime ? ` ${t.dueTime.slice(0, 5)}` : ''}`,
-    t.reason,
-  ]);
-const COLUMNS = [
-  { header: 'Task', width: 0.3 },
-  { header: 'Priority', width: 0.1 },
-  { header: 'Status', width: 0.15 },
-  { header: 'Done', width: 0.08, align: 'right' as const },
-  { header: 'Due', width: 0.15 },
-  { header: 'Reason', width: 0.22 },
-];
-
-/** The report as a PDF (same read rules as the screen). */
-export async function eodReportPdf(db: Database, actor: Actor, id: string) {
-  const r = await getReport(db, actor, id);
-  const s = r.snapshot;
-  const pdf = await createPdf({
-    title: 'End-of-day report',
-    reference: `${r.staffName} · ${fmtDate(r.reportDate)}`,
-    templateVersion: 'eod-report v1',
-  });
-  if (r.status === 'draft') pdf.banner('Draft — not submitted');
-  pdf.keyValues([
-    ['Staff member', r.staffName],
-    ['Report day', fmtDate(r.reportDate)],
-    [
-      'Submitted',
-      r.submittedAt ? `${fmtDateTime(r.submittedAt)}${r.late ? ' (submitted later)' : ''}` : null,
-    ],
-    ['Submitted to', r.submittedAt ? (r.managerName ?? 'EOD reviewers') : null],
-    ['Reviewed', r.reviewedAt ? fmtDateTime(r.reviewedAt) : null],
-    [
-      'Tasks',
-      `${s.counts.done} done · ${s.counts.open} open today · ${s.counts.carried} carried forward · ${s.counts.overdue} overdue`,
-    ],
-  ]);
-  pdf.heading('Summary');
-  pdf.paragraph(r.summary);
-  for (const [title, items] of [
-    ['Done today', s.done],
-    ['Still open (due today)', s.open],
-    ['Carried forward from earlier days', s.carried],
-  ] as const) {
-    pdf.heading(title);
-    if (items.length) pdf.table(COLUMNS, itemRows(items));
-    else pdf.paragraph('None.', { muted: true });
-  }
-  return {
-    bytes: await pdf.finish(),
-    filename: `eod-report-${r.reportDate}-${r.id.slice(0, 8)}.pdf`,
-  };
 }

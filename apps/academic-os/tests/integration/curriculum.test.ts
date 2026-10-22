@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { auditEvents } from '@elevate/database';
+import { academicClassSessions, auditEvents } from '@elevate/database';
 import { authedRequest, buildRequest, callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import { GET as listCoursesRoute, POST as createCourseRoute } from '../../src/app/api/v1/courses/route';
 import { POST as createPlanRoute } from '../../src/app/api/v1/plans/route';
@@ -115,8 +115,9 @@ describe('coverage (planned vs completed from class records)', () => {
       { batchId: w.batch.id, teacherStaffId: w.teacherStaff, plannedChapterId: w.ch1.id, sessionType: 'teaching', date: '2026-09-07', startTime: '09:00', durationMinutes: 75 },
       { batchId: w.batch.id, teacherStaffId: w.teacherStaff, plannedChapterId: w.ch1.id, sessionType: 'teaching', date: '2026-09-08', startTime: '09:00', durationMinutes: 75 },
     ]);
-    const r1 = await recordClass(ctx.db, actor(u.teacher), { sessionId: sessions[0]!.id, chapterId: w.ch1.id, completion: 'completed', actualMinutes: 75, activity: 'main' });
-    await recordClass(ctx.db, actor(u.teacher), { sessionId: sessions[1]!.id, chapterId: w.ch1.id, completion: 'partial', actualMinutes: 60, activity: 'main' });
+    await ctx.db.update(academicClassSessions).set({ status: 'held', deliveredAt: new Date(), deliveredByUserId: u.coordinator.id }).where(inArray(academicClassSessions.id, sessions.map((s) => s.id)));
+    const r1 = await recordClass(ctx.db, actor(u.teacher), { sessionId: sessions[0]!.id, chapterId: w.ch1.id, completion: 'completed', actualMinutes: 75, activity: 'main', submit: true });
+    await recordClass(ctx.db, actor(u.teacher), { sessionId: sessions[1]!.id, chapterId: w.ch1.id, completion: 'partial', actualMinutes: 60, activity: 'main', submit: true });
     await verifyClassRecord(ctx.db, coord, r1.id);
     const res = await callRoute<{ plan: { status: string }; coverage: { course: { verifiedMinutes: number; unverifiedMinutes: number; plannedMinutes: number } } }>(
       coverageRoute,

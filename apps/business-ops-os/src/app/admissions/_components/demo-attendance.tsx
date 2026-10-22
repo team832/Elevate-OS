@@ -21,6 +21,7 @@ import {
   AttendanceCell,
   Badge,
   Disclosure,
+  linkOf,
   reasonField,
   ReviewBadge,
   reviewTeachers,
@@ -48,6 +49,12 @@ export function DemoAttendance({ d, user, options, level }: DemoTabProps) {
   };
   return (
     <>
+      {d.academicMarks.status === 'unavailable' ? (
+        <p className="el-field-hint">
+          Academic OS could not be reached (checked {fmtDateTime(d.academicMarks.checkedAt)}):
+          teachers' marks for classes linked there are not shown.
+        </p>
+      ) : null}
       <p className="el-field-hint">
         Record a class with one tap once it has started. A day counts as attended when the student
         was present or late in at least one class; absent, excused and unrecorded classes never
@@ -88,6 +95,7 @@ export function DemoAttendance({ d, user, options, level }: DemoTabProps) {
                     s={s}
                     recorder={nameOf(d, s.recordedBy)}
                     write={write}
+                    linked={linkOf(d, s)}
                   />
                 ),
               },
@@ -110,23 +118,31 @@ export function DemoAttendance({ d, user, options, level }: DemoTabProps) {
           <div className="el-stack">
             {d.sessions.map((s) => (
               <Disclosure key={s.id} summary={title(s)}>
-                <ActionForm
-                  compact
-                  action={api(s)}
-                  submitLabel="Record attendance"
-                  extra={{ action: 'attendance' }}
-                  fields={[
-                    {
-                      name: 'attendance',
-                      label: 'Attendance',
-                      type: 'select',
-                      required: true,
-                      options: RECORD_OPTIONS,
-                    },
-                    reasonField('Reason (to change a recorded value)'),
-                    { name: 'notes', label: 'Notes or topics' },
-                  ]}
-                />
+                {linkOf(d, s) ? (
+                  <p className="el-field-hint">
+                    {linkOf(d, s) === 'unavailable'
+                      ? 'Waiting for Academic OS: it could not be reached, so it is not known whether this class is recorded there.'
+                      : 'This class is linked to an Academic OS class: its teacher records attendance there.'}
+                  </p>
+                ) : (
+                  <ActionForm
+                    compact
+                    action={api(s)}
+                    submitLabel="Record attendance"
+                    extra={{ action: 'attendance' }}
+                    fields={[
+                      {
+                        name: 'attendance',
+                        label: 'Attendance',
+                        type: 'select',
+                        required: true,
+                        options: RECORD_OPTIONS,
+                      },
+                      reasonField('Reason (to change a recorded value)'),
+                      { name: 'notes', label: 'Notes or topics' },
+                    ]}
+                  />
+                )}
                 {open ? (
                   <>
                     <ActionForm

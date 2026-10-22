@@ -13,6 +13,7 @@ import { currentRequestId, requirePageAccess, type PageAccess } from '@elevate/s
 import { AppShell, ButtonLink, ErrorState, LoadingState, type Crumb } from '@elevate/shared-ui';
 import { MODULE } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
+import { hasInbox } from '../server/eod-review';
 import { searchable } from '../server/search';
 import { SearchShortcut } from './global-search';
 
@@ -29,6 +30,10 @@ const NAV = [
   ...section('Today', [
     ['home', 'Today', '/ops', 'ops:module:access'],
     ['tasks', 'My day', '/ops/tasks', 'ops:tasks:read'],
+    // Shown only to EOD reviewers and managers with reports (hasInbox, below).
+    ['tasks-inbox', 'Report inbox', '/ops/tasks/inbox', 'ops:tasks:read'],
+    ['tasks-reports', 'Task reports', '/ops/tasks/reports', 'ops:tasks:read'],
+    ['tasks-imports', 'Tracker import', '/ops/tasks/imports', 'ops:tasks:import'],
   ]),
   ...section('Admissions', [
     ['overview', 'Overview', '/ops/admissions/overview', 'ops:admissions:read'],
@@ -88,7 +93,8 @@ export async function Frame({
 }) {
   const user = access.user;
   const canSearch = searchable(user);
-  const visible = NAV.filter((n) => can(user, n.permission));
+  const inbox = can(user, 'ops:tasks:read') && (await hasInbox(getDb(), user).catch(() => false));
+  const visible = NAV.filter((n) => can(user, n.permission) && (n.key !== 'tasks-inbox' || inbox));
   const nav = visible
     .filter((n) => !SETTINGS_KEYS.has(n.key))
     .map((n) => ({ href: n.href, label: n.label, group: n.group, active: n.key === active }));

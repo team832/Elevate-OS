@@ -203,6 +203,25 @@ export const settingSchemas = {
   'reports.audiences': z
     .object({ enabled: z.array(z.enum(REPORT_AUDIENCES)).min(1), reviewBeforeFinal: z.boolean() })
     .strict(),
+  /** Who closes a task that has no reviewer (owner brief 2 §6). */
+  'tasks.completion_without_reviewer': z
+    .object({ closedBy: z.enum(['owner', 'manager']) })
+    .strict(),
+  /** EOD submission deadline, IST `HH:MM`; null = none (brief 2 §9: no invented deadline). */
+  'eod.submission_deadline': z
+    .object({
+      time: z
+        .string()
+        .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+        .nullable(),
+    })
+    .strict(),
+  /** Which earlier EOD reports a manager may read (ruling R3; brief 2 §17). */
+  'eod.manager_history': z
+    .object({ scope: z.enum(['submitted_to_manager', 'current_team_all']) })
+    .strict(),
+  /** External EOD delivery channel; null = in-app manager inbox only (brief 2 §11). */
+  'eod.external_delivery': z.object({ channel: z.enum(['email']).nullable() }).strict(),
 } as const;
 
 export type SettingKey = keyof typeof settingSchemas;
@@ -572,6 +591,46 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
     source: 'owner brief 2026-10-21 §10 (draft / reviewed / final reports; parent report content).',
     ownerDecision: 'Owner to confirm report audiences and the review step',
     editable: true,
+  },
+  'tasks.completion_without_reviewer': {
+    label: 'Closing tasks without a reviewer',
+    description:
+      'When a task has no review step, who marks it done: the task owner, or their manager. Tasks with a review step are always closed by the reviewer.',
+    defaultValue: { closedBy: 'owner' },
+    defaultState: 'proposed',
+    source: 'owner brief 2 2026-10-21 §6 ("no review gate: approved completion policy").',
+    ownerDecision: 'Owner to confirm who closes tasks without a reviewer',
+    editable: true,
+  },
+  'eod.submission_deadline': {
+    label: 'End-of-day report deadline',
+    description:
+      'Time (IST) by which the day’s report should be submitted. Not set: no deadline is shown or enforced, and a late or missing report is never treated as absence.',
+    defaultValue: { time: null },
+    defaultState: 'open',
+    source: 'owner brief 2 2026-10-21 §9 ("no invented fixed deadline").',
+    ownerDecision: 'Owner to decide whether there is a deadline',
+    editable: true,
+  },
+  'eod.manager_history': {
+    label: 'Manager access to past reports',
+    description:
+      'Which earlier end-of-day reports a manager may read: only reports submitted to them, or every report of the people who report to them now (including reports sent to an earlier manager).',
+    defaultValue: { scope: 'submitted_to_manager' },
+    defaultState: 'proposed',
+    source: 'owner brief 2 2026-10-21 §17 (a new manager does not automatically get past reports).',
+    ownerDecision: 'Owner to confirm manager access to past reports',
+    editable: true,
+  },
+  'eod.external_delivery': {
+    label: 'Sending reports outside Elevate OS',
+    description:
+      'Reports go to the manager’s in-app inbox. No external channel is configured: staff can copy or download the summary, and nothing is sent by email or WhatsApp.',
+    defaultValue: { channel: null },
+    defaultState: 'proposed',
+    source: 'owner brief 2 2026-10-21 §11 (no provider configured; never simulate delivery).',
+    ownerDecision: 'Owner to choose an external channel and provider, if any',
+    editable: false,
   },
 };
 

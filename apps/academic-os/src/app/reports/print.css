@@ -1,0 +1,51 @@
+/* Academic report print views (R7): A4, ink on paper via system colours, shell hidden, long names wrap. */
+.report-table td,
+.report-table th {
+  overflow-wrap: anywhere;
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+  :root {
+    --el-bg: Canvas;
+    --el-surface: Canvas;
+    --el-surface-muted: Canvas;
+    --el-well: Canvas;
+    --el-text: CanvasText;
+    --el-text-muted: CanvasText;
+    --el-border: CanvasText;
+  }
+  .el-sidebar,
+  .el-topbar,
+  .el-skip-link,
+  .el-page-actions {
+    display: none !important;
+  }
+  .el-shell {
+    display: block !important;
+  }
+  .el-main {
+    padding: 0 !important;
+  }
+  .report-table {
+    width: 100%;
+    font-size: 9pt;
+    border-collapse: collapse;
+  }
+  .report-table th,
+  .report-table td {
+    border: 0.5pt solid CanvasText;
+    padding: 2pt 4pt;
+  }
+  .report-table thead {
+    display: table-header-group;
+  }
+  .report-table tr {
+    break-inside: avoid;
+  }
+  .report-notes {
+    break-inside: avoid;
+  }
+}

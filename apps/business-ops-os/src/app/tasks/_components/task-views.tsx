@@ -1,8 +1,9 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can, scopeFor } from '@elevate/authorization';
-import { ButtonLink, EmptyState, StatusBadge } from '@elevate/shared-ui';
+import { ButtonLink, EmptyState, StatusBadge, Tabs } from '@elevate/shared-ui';
 import { isIsoDate, istToday } from '../../../domain/dates';
 import {
+  isOverdue,
   missingReasons,
   needsReason,
   TASK_PRIORITIES,
@@ -14,21 +15,24 @@ import {
 } from '../../../domain/staff-tasks';
 import { formOptions } from '../../../server/options';
 import { globalSearch } from '../../../server/search';
-import { staffIdForUser } from '../../../server/context';
-import { getTask, listTasks, myDay, NO_STAFF_RECORD } from '../../../server/staff-tasks';
+import { listTasks, myDay, NO_STAFF_RECORD } from '../../../server/staff-tasks';
+import { TASK_DUE_FILTERS } from '../../../server/staff-tasks-schemas';
+import { rowStatusOptions, taskDetail, type RowOptions } from '../../../server/task-detail';
+import { coversOwner, taskAccess } from '../../../server/task-store';
 import { ActionForm, type FieldSpec } from '../../../ui/action-form';
 import { StatCard } from '../../../ui/charts';
 import { fmtDate } from '../../../ui/format';
 import { load } from '../../../ui/frame';
-import { listHref, options, Pager, SearchPanel } from '../../../ui/list-controls';
+import { listHref, Pager, SearchPanel } from '../../../ui/list-controls';
 import { FormModal, RecordModal } from '../../../ui/record-modal';
 import { RecordTable } from '../../../ui/record-table';
-import { DetailTable, Segment } from '../../../ui/sections';
+import { Segment } from '../../../ui/sections';
 import { QuickAdd } from './quick-add';
+import { AckBadge, TaskFacts } from './task-detail';
 
 export type Params = Record<string, string | undefined>;
 export const BASE = '/ops/tasks';
-const API = '/ops/api/v1/staff-tasks';
+export const API = '/ops/api/v1/staff-tasks';
 const STATUS_OPTIONS = TASK_STATUSES.map((s) => ({ value: s, label: TASK_STATUS_LABELS[s] }));
 const TONES = {
   pending: 'neutral',
@@ -36,6 +40,8 @@ const TONES = {
   done: 'success',
   blocked: 'danger',
   on_hold: 'warning',
+  in_review: 'info',
+  cancelled: 'neutral',
 } as const;
 
 export const TaskBadge = ({ status, overdue }: { status: TaskStatus; overdue?: boolean }) => (
@@ -46,13 +52,26 @@ export const TaskBadge = ({ status, overdue }: { status: TaskStatus; overdue?: b
 );
 
 export const dueText = (t: { dueOn: string; dueTime: string | null }) =>
-  `${fmtDate(t.dueOn)}${t.dueTime ? `, ${t.dueTime.slice(0, 5)}` : ''}`;
+  `${fmtDate(t.dueOn)}${t.dueTime ? `, ${t.dueTime.slice(0, 5)} IST` : ''}`;
+
+/** Due label in IST words: "Overdue since …", "Due today, 17:30 IST", "Due 24 Oct 2026". */
+export function dueLabel(
+  t: { status: TaskStatus; dueOn: string; dueTime: string | null },
+  now: Date,
+) {
+  if (t.status === 'done' || t.status === 'cancelled') return dueText(t);
+  if (isOverdue(t, now)) return `Overdue since ${dueText(t)}`;
+  const today = istToday(now);
+  return t.dueOn === today
+    ? `Due today${t.dueTime ? `, ${t.dueTime.slice(0, 5)} IST` : ''}`
+    : `Due ${dueText(t)}`;
+}
 
 /**
  * Status, progress and reason in one row form (the reason is required for blocked / on hold).
  * Each label and the button carry the task title (hidden), so rows have distinct names.
  */
-function QuickUpdate({ t }: { t: EodItem }) {
+function QuickUpdate({ t, opts }: { t: EodItem; opts: RowOptions }) {
   return (
     <ActionForm
       compact
@@ -61,18 +80,19 @@ function QuickUpdate({ t }: { t: EodItem }) {
       submitLabel="Save"
       variant="secondary"
       labelSuffix={` for ${t.title}`}
+      extra={{ expectedVersion: opts.version }}
       fields={[
         {
           name: 'status',
           label: 'Status',
           type: 'select',
           required: true,
-          options: STATUS_OPTIONS,
+          options: opts.statuses.map((s) => ({ value: s, label: TASK_STATUS_LABELS[s] })),
           defaultValue: t.status,
         },
         {
           name: 'progressPercent',
-          label: '% done',
+          label: '% done (self-reported)',
           type: 'number',
           defaultValue: String(t.progressPercent),
         },
@@ -86,7 +106,7 @@ function QuickUpdate({ t }: { t: EodItem }) {
   );
 }
 
-/** A day's tasks; `edit` adds the status/progress/reason form, `href` opens a task. */
+/** A day's tasks; `edit` (version and allowed statuses per task) adds the row form, `href` opens a task. */
 export function DayTable({
   rows,
   href,
@@ -95,7 +115,7 @@ export function DayTable({
 }: {
   rows: EodItem[];
   href?: (t: EodItem) => string;
-  edit?: boolean;
+  edit?: ReadonlyMap<string, RowOptions>;
   empty?: string;
 }) {
   return (
@@ -114,14 +134,21 @@ export function DayTable({
           render: (t) => <TaskBadge status={t.status} overdue={t.overdue} />,
         },
         edit
-          ? { key: 'update', header: 'Update', render: (t) => <QuickUpdate t={t} /> }
+          ? {
+              key: 'update',
+              header: 'Update',
+              render: (t) => {
+                const opts = edit.get(t.id);
+                return opts ? <QuickUpdate t={t} opts={opts} /> : (t.reason ?? '');
+              },
+            }
           : { key: 'reason', header: 'Reason', render: (t) => t.reason ?? '' },
         ...(edit
           ? []
           : [
               {
                 key: 'progress',
-                header: '% done',
+                header: '% done (self-reported)',
                 numeric: true,
                 render: (t: EodItem) => `${t.progressPercent}%`,
               },
@@ -131,16 +158,41 @@ export function DayTable({
   );
 }
 
-const TASK_LABEL = { high: 'High', medium: 'Medium', low: 'Low' } as const;
-const PRIORITY_OPTIONS = TASK_PRIORITIES.map((p) => ({ value: p, label: TASK_LABEL[p] }));
+export const TASK_LABEL = { high: 'High', medium: 'Medium', low: 'Low' } as const;
+export const PRIORITY_OPTIONS = TASK_PRIORITIES.map((p) => ({ value: p, label: TASK_LABEL[p] }));
 const RECURRENCE_OPTIONS = TASK_RECURRENCES.map((r) => ({
   value: r,
   label: r === 'none' ? 'Does not repeat' : `Repeats ${r}`,
 }));
+const SOURCE_OPTIONS = [
+  { value: 'self', label: 'I found it myself' },
+  { value: 'manager', label: 'My manager' },
+  { value: 'verbal', label: 'Verbal request (call, WhatsApp, in person)' },
+  { value: 'academic', label: 'Academic OS (support case, missing log)' },
+];
+const DUE_OPTIONS = TASK_DUE_FILTERS.map((d) => ({
+  value: d,
+  label: { overdue: 'Overdue', today: 'Due today', week: 'Due this week' }[d],
+}));
+
+type Db = Parameters<typeof globalSearch>[0];
+
+/** Staff options the caller may assign to or filter by: yourself and your reports (all scope: everyone). */
+async function scopedStaff(
+  db: Db,
+  user: AuthenticatedUser,
+  permission: 'ops:tasks:read' | 'ops:tasks:write',
+) {
+  const [access, { staff, departments }] = await Promise.all([
+    taskAccess(db, user, permission),
+    formOptions(db),
+  ]);
+  return { staff: staff.filter((s) => coversOwner(access, s.value)), everyone: staff, departments };
+}
 
 /** Lead and student picks from the existing Admissions search (`rel` query). */
 async function relatedFields(
-  db: Parameters<typeof globalSearch>[0],
+  db: Db,
   user: AuthenticatedUser,
   rel: string | undefined,
 ): Promise<FieldSpec[]> {
@@ -170,22 +222,158 @@ async function relatedFields(
   ];
 }
 
+type Option = { value: string; label: string };
+const ADVANCED = 'Assign, review and source (optional)';
+
+/** The full "Log a task" form: quick fields first, assignment and request details after. */
+function logTaskFields(
+  related: FieldSpec[],
+  assignable: Option[],
+  everyone: Option[],
+  departments: Option[],
+  all: boolean,
+): FieldSpec[] {
+  return [
+    { name: 'title', label: 'Task', required: true, section: 'Task' },
+    {
+      name: 'priority',
+      label: 'Priority',
+      type: 'select',
+      required: true,
+      options: PRIORITY_OPTIONS,
+      defaultValue: 'medium',
+      section: 'Task',
+    },
+    {
+      name: 'dueTime',
+      label: 'Due time today (IST)',
+      hint: '24-hour, e.g. 17:30. Leave empty for end of day.',
+      section: 'Task',
+    },
+    ...related.map((f) => ({ ...f, section: 'Task' })),
+    ...(assignable.length > 1
+      ? [
+          {
+            name: 'staffId',
+            label: 'Owner',
+            type: 'select' as const,
+            options: assignable,
+            hint: 'Empty: you.',
+            section: ADVANCED,
+          },
+        ]
+      : []),
+    {
+      name: 'reviewRequired',
+      label: 'Needs review before it is closed',
+      type: 'checkbox',
+      section: ADVANCED,
+    },
+    {
+      name: 'reviewerStaffId',
+      label: 'Reviewer',
+      type: 'select',
+      options: everyone,
+      hint: 'Review required with no reviewer: only an operations manager can close it.',
+      section: ADVANCED,
+    },
+    { name: 'acceptanceCriteria', label: 'Done when', type: 'textarea', section: ADVANCED },
+    {
+      name: 'source',
+      label: 'Where it came from',
+      type: 'select',
+      options: SOURCE_OPTIONS,
+      section: ADVANCED,
+    },
+    {
+      name: 'requesterStaffId',
+      label: 'Requested by (staff)',
+      type: 'select',
+      options: everyone,
+      section: ADVANCED,
+    },
+    {
+      name: 'requesterNote',
+      label: 'Requested by (someone else)',
+      hint: 'Name and channel, e.g. "Parent of Sample Asha, by phone".',
+      section: ADVANCED,
+    },
+    {
+      name: 'backupStaffId',
+      label: 'Backup',
+      type: 'select',
+      options: everyone,
+      section: ADVANCED,
+    },
+    {
+      name: 'departmentId',
+      label: 'Department',
+      type: 'select',
+      options: departments,
+      section: ADVANCED,
+    },
+    { name: 'dueOn', label: 'Due on another day', type: 'date', section: 'More (optional)' },
+    { name: 'plannedStartOn', label: 'Planned start', type: 'date', section: 'More (optional)' },
+    ...(all
+      ? [
+          {
+            name: 'assignedByStaffId',
+            label: 'Given by',
+            type: 'select' as const,
+            options: everyone,
+            hint: 'Empty: you.',
+            section: 'More (optional)',
+          },
+        ]
+      : []),
+    {
+      name: 'linkedRef',
+      label: 'Linked record in another module',
+      hint: 'e.g. an Academic support case reference.',
+      section: 'More (optional)',
+    },
+    {
+      name: 'recurrence',
+      label: 'Repeats',
+      type: 'select',
+      required: true,
+      options: RECURRENCE_OPTIONS,
+      defaultValue: 'none',
+      section: 'More (optional)',
+    },
+    { name: 'details', label: 'Details', type: 'textarea', section: 'More (optional)' },
+  ];
+}
+
 /** Open work, grouped by where it stands; carried-forward tasks keep their earlier due date. */
-const OPEN_GROUPS = ['in_progress', 'pending', 'blocked', 'on_hold'] as const;
+const OPEN_GROUPS = ['in_progress', 'pending', 'in_review', 'blocked', 'on_hold'] as const;
 
 export async function MyDay({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
   const today = istToday(new Date());
   const write = can(user, 'ops:tasks:write');
+  const adding = write && Boolean(sp.new);
   const r = await load(async (db) => {
-    const [day, staff, related] = await Promise.all([
-      myDay(db, user, today),
-      write && sp.new ? formOptions(db).then((o) => o.staff) : [],
-      write && sp.new ? relatedFields(db, user, sp.rel?.trim() || undefined) : [],
+    const [day, people, related] = await Promise.all([
+      myDay(db, user, today).then(
+        async (d) =>
+          d && {
+            ...d,
+            rowOptions: write
+              ? await rowStatusOptions(
+                  db,
+                  user,
+                  [...d.open, ...d.carried].map((t) => t.id),
+                )
+              : undefined,
+          },
+      ),
+      adding ? scopedStaff(db, user, 'ops:tasks:write') : null,
+      adding ? relatedFields(db, user, sp.rel?.trim() || undefined) : [],
     ]);
-    return { day, staff, related };
+    return { day, people, related };
   });
   if (!r.ok) return r.view;
-  const { day, staff, related } = r.data;
+  const { day, people, related } = r.data;
   if (!day) return <EmptyState title="Your tasks cannot be shown" description={NO_STAFF_RECORD} />;
   const c = day.counts;
   const open = (t: EodItem) => listHref(BASE, sp, { open: t.id });
@@ -214,7 +402,7 @@ export async function MyDay({ user, sp }: { user: AuthenticatedUser; sp: Params 
           const rows = todo.filter((t) => t.status === s);
           return rows.length ? (
             <Segment key={s} title={`${TASK_STATUS_LABELS[s]} (${rows.length})`} flush>
-              <DayTable rows={rows} href={open} edit={write} />
+              <DayTable rows={rows} href={open} edit={day.rowOptions} />
             </Segment>
           ) : null;
         })
@@ -242,7 +430,7 @@ export async function MyDay({ user, sp }: { user: AuthenticatedUser; sp: Params 
             : `${c.done} done today${todo.length ? '; every open task has a reason' : ''}.`}
         </p>
       </Segment>
-      {write && sp.new ? (
+      {adding && people ? (
         <FormModal id="log-task" title="Log a task" meta="Times are IST." closeHref={close}>
           <SearchPanel
             action={BASE}
@@ -261,48 +449,13 @@ export async function MyDay({ user, sp }: { user: AuthenticatedUser; sp: Params 
             submitLabel="Add task"
             redirectTo={BASE}
             secondary={<a href={close}>Cancel</a>}
-            fields={[
-              { name: 'title', label: 'Task', required: true, section: 'Task' },
-              {
-                name: 'priority',
-                label: 'Priority',
-                type: 'select',
-                required: true,
-                options: PRIORITY_OPTIONS,
-                defaultValue: 'medium',
-                section: 'Task',
-              },
-              {
-                name: 'dueTime',
-                label: 'Due time today (IST)',
-                hint: '24-hour, e.g. 17:30. Leave empty for end of day.',
-                section: 'Task',
-              },
-              ...related.map((f) => ({ ...f, section: 'Task' })),
-              {
-                name: 'dueOn',
-                label: 'Due on another day',
-                type: 'date',
-                section: 'More (optional)',
-              },
-              {
-                name: 'assignedByStaffId',
-                label: 'Given by',
-                type: 'select',
-                options: staff,
-                section: 'More (optional)',
-              },
-              {
-                name: 'recurrence',
-                label: 'Repeats',
-                type: 'select',
-                required: true,
-                options: RECURRENCE_OPTIONS,
-                defaultValue: 'none',
-                section: 'More (optional)',
-              },
-              { name: 'details', label: 'Details', type: 'textarea', section: 'More (optional)' },
-            ]}
+            fields={logTaskFields(
+              related,
+              people.staff,
+              people.everyone,
+              people.departments,
+              scopeFor(user, 'ops:tasks:write') === 'all',
+            )}
           />
         </FormModal>
       ) : null}
@@ -311,45 +464,63 @@ export async function MyDay({ user, sp }: { user: AuthenticatedUser; sp: Params 
   );
 }
 
+const VIEWS = [
+  { key: 'all', label: 'All tasks' },
+  { key: 'ack', label: 'Awaiting acknowledgement' },
+  { key: 'overdue', label: 'Overdue' },
+] as const;
+
 export async function AllTasks({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
-  const everyone = scopeFor(user, 'ops:tasks:read') === 'all';
+  const view = VIEWS.find((v) => v.key === sp.view)?.key ?? 'all';
   const filters = {
     q: sp.q?.trim() || undefined,
     status: TASK_STATUSES.find((s) => s === sp.status),
     priority: TASK_PRIORITIES.find((p) => p === sp.priority),
-    staffId: everyone ? sp.staffId || undefined : undefined,
+    staffId: sp.staffId || undefined,
+    departmentId: sp.departmentId || undefined,
+    due: view === 'overdue' ? ('overdue' as const) : TASK_DUE_FILTERS.find((d) => d === sp.due),
+    ack: view === 'ack' ? ('pending' as const) : undefined,
     from: isIsoDate(sp.from) ? sp.from : undefined,
     to: isIsoDate(sp.to) ? sp.to : undefined,
     page: Math.max(1, Number(sp.page) || 1),
   };
   const r = await load(async (db) => {
-    const [list, staff] = await Promise.all([
+    const [list, people] = await Promise.all([
       listTasks(db, user, filters),
-      everyone ? formOptions(db).then((o) => o.staff) : [],
+      scopedStaff(db, user, 'ops:tasks:read'),
     ]);
-    return { list, staff };
+    return { list, people };
   });
   if (!r.ok) return r.view;
-  const { list, staff } = r.data;
+  const { list, people } = r.data;
+  const now = new Date();
+  const showOwner = scopeFor(user, 'ops:tasks:read') === 'all' || people.staff.length > 1;
   return (
     <div className="el-stack">
       <SearchPanel
         action={BASE}
-        hidden={{ tab: 'all' }}
+        hidden={view === 'all' ? { tab: 'all' } : { tab: 'all', view }}
         search={{ name: 'q', label: 'Task title', value: sp.q }}
         filters={[
-          ...(everyone
+          ...(showOwner
             ? [
                 {
                   name: 'staffId',
-                  label: 'Staff member',
+                  label: 'Owner',
                   type: 'select' as const,
-                  options: staff,
+                  options: people.staff,
                   value: filters.staffId,
-                  anyLabel: 'Everyone',
+                  anyLabel: 'Everyone I can see',
                 },
               ]
             : []),
+          {
+            name: 'departmentId',
+            label: 'Department',
+            type: 'select',
+            options: people.departments,
+            value: filters.departmentId,
+          },
           {
             name: 'status',
             label: 'Status',
@@ -361,174 +532,120 @@ export async function AllTasks({ user, sp }: { user: AuthenticatedUser; sp: Para
             name: 'priority',
             label: 'Priority',
             type: 'select',
-            options: options(TASK_PRIORITIES),
+            options: PRIORITY_OPTIONS,
             value: filters.priority,
           },
+          ...(view === 'overdue'
+            ? []
+            : [
+                {
+                  name: 'due',
+                  label: 'Due',
+                  type: 'select' as const,
+                  options: DUE_OPTIONS,
+                  value: filters.due,
+                },
+              ]),
           { name: 'from', label: 'Due from', type: 'date', value: filters.from },
           { name: 'to', label: 'Due to', type: 'date', value: filters.to },
         ]}
       />
-      <RecordTable
-        caption={`${list.total} task${list.total === 1 ? '' : 's'}`}
-        rows={list.rows}
-        rowKey={(t) => t.id}
-        rowHref={(t) => listHref(BASE, sp, { open: t.id })}
-        empty={
-          <EmptyState
-            title="No tasks match"
-            description="Clear a filter, or log a task on My day."
-          />
-        }
-        columns={[
-          { key: 'title', header: 'Task' },
-          ...(everyone ? [{ key: 'staffName' as const, header: 'Staff member' }] : []),
-          { key: 'priority', header: 'Priority', render: (t) => TASK_LABEL[t.priority] },
-          { key: 'due', header: 'Due', render: dueText },
-          { key: 'status', header: 'Status', render: (t) => <TaskBadge status={t.status} /> },
-          {
-            key: 'progress',
-            header: '% done',
-            numeric: true,
-            render: (t) => `${t.progressPercent}%`,
-          },
-          { key: 'reason', header: 'Reason', render: (t) => t.reason ?? '' },
-        ]}
-      />
-      <Pager
-        basePath={BASE}
-        params={sp}
-        page={list.page}
-        pageSize={list.pageSize}
-        total={list.total}
-      />
+      <Tabs
+        idBase="task-tracker"
+        label="Tracker views"
+        selected={view}
+        items={VIEWS.map((v) => ({
+          key: v.key,
+          label: v.label,
+          href: listHref(BASE, sp, {
+            view: v.key === 'all' ? undefined : v.key,
+            page: undefined,
+            open: undefined,
+          }),
+        }))}
+      >
+        <RecordTable
+          caption={`${list.total} task${list.total === 1 ? '' : 's'}`}
+          rows={list.rows}
+          rowKey={(t) => t.id}
+          rowHref={(t) => listHref(BASE, sp, { open: t.id })}
+          empty={
+            <EmptyState
+              title={view === 'ack' ? 'Every task is acknowledged' : 'No tasks match'}
+              description={
+                view === 'ack'
+                  ? 'Assigned work shows here until its owner acknowledges it.'
+                  : 'Clear a filter, or log a task on My day.'
+              }
+            />
+          }
+          columns={[
+            { key: 'title', header: 'Task' },
+            ...(showOwner ? [{ key: 'staffName' as const, header: 'Owner' }] : []),
+            { key: 'priority', header: 'Priority', render: (t) => TASK_LABEL[t.priority] },
+            { key: 'due', header: 'Due (IST)', render: (t) => dueLabel(t, now) },
+            {
+              key: 'status',
+              header: 'Status',
+              render: (t) => (
+                <>
+                  <TaskBadge status={t.status} />
+                  {t.status !== 'done' && t.status !== 'cancelled' ? (
+                    <AckBadge at={t.acknowledgedAt} />
+                  ) : null}
+                  {t.isSample ? (
+                    <span className="el-badge el-badge-sample">Sample data</span>
+                  ) : null}
+                </>
+              ),
+            },
+            {
+              key: 'progress',
+              header: '% done (self-reported)',
+              numeric: true,
+              render: (t) => `${t.progressPercent}%`,
+            },
+            { key: 'reason', header: 'Reason', render: (t) => t.reason ?? '' },
+          ]}
+        />
+        <Pager
+          basePath={BASE}
+          params={sp}
+          page={list.page}
+          pageSize={list.pageSize}
+          total={list.total}
+        />
+      </Tabs>
       {sp.open ? <TaskModal user={user} id={sp.open} sp={sp} /> : null}
     </div>
   );
 }
 
+/** The list's pop-up: the task's facts; actions, updates and history are on the full page. */
 async function TaskModal({ user, id, sp }: { user: AuthenticatedUser; id: string; sp: Params }) {
-  const r = await load(async (db) =>
-    Promise.all([getTask(db, user, id), staffIdForUser(db, user.id)]),
-  );
+  const r = await load((db) => taskDetail(db, user, id));
   if (!r.ok) return r.view;
-  const [t, self] = r.data;
-  const related = t.leadId
-    ? { label: 'Related lead', href: `/ops/leads/${t.leadId}` }
-    : t.admissionId
-      ? { label: 'Related student', href: `/ops/students/${t.admissionId}` }
-      : null;
-  const editable =
-    scopeFor(user, 'ops:tasks:write') === 'all' ||
-    (self === t.staffId && can(user, 'ops:tasks:write'));
+  const t = r.data;
   return (
     <RecordModal
       id="task-modal"
       title={t.title}
-      meta={<TaskBadge status={t.status} />}
+      meta={
+        <>
+          <TaskBadge status={t.status} />
+          <AckBadge at={t.acknowledgedAt} />
+        </>
+      }
+      fullHref={`${BASE}/${t.id}`}
       closeHref={listHref(BASE, sp, { open: undefined })}
       returnId={t.id}
-      tabs={[
-        {
-          key: 'details',
-          label: 'Details',
-          content: (
-            <Segment title="Task" level={3} flush>
-              <DetailTable
-                rows={[
-                  { label: 'Staff member', value: t.staffName ?? 'Not recorded' },
-                  { label: 'Due', value: dueText(t) },
-                  { label: 'Priority', value: TASK_LABEL[t.priority] },
-                  { label: '% done', value: `${t.progressPercent}%` },
-                  { label: 'Reason', value: t.reason ?? 'None given' },
-                  { label: 'Given by', value: t.assignedByName ?? 'Not recorded' },
-                  {
-                    label: 'Repeats',
-                    value: RECURRENCE_OPTIONS.find((o) => o.value === t.recurrence)!.label,
-                  },
-                  { label: 'Details', value: t.details ?? 'None' },
-                  related && {
-                    label: related.label,
-                    value: <a href={related.href}>Open record</a>,
-                  },
-                ]}
-              />
-            </Segment>
-          ),
-        },
-        ...(editable
-          ? [
-              {
-                key: 'edit',
-                label: 'Edit',
-                content: (
-                  <ActionForm
-                    action={`${API}/${t.id}`}
-                    method="PATCH"
-                    submitLabel="Save changes"
-                    fields={[
-                      { name: 'title', label: 'Task', required: true, defaultValue: t.title },
-                      {
-                        name: 'status',
-                        label: 'Status',
-                        type: 'select',
-                        required: true,
-                        options: STATUS_OPTIONS,
-                        defaultValue: t.status,
-                      },
-                      {
-                        name: 'progressPercent',
-                        label: '% done',
-                        type: 'number',
-                        defaultValue: String(t.progressPercent),
-                      },
-                      {
-                        name: 'reason',
-                        label: 'Reason',
-                        hint: 'Required when blocked or on hold.',
-                        defaultValue: t.reason ?? '',
-                      },
-                      {
-                        name: 'priority',
-                        label: 'Priority',
-                        type: 'select',
-                        required: true,
-                        options: PRIORITY_OPTIONS,
-                        defaultValue: t.priority,
-                      },
-                      {
-                        name: 'dueOn',
-                        label: 'Due on',
-                        type: 'date',
-                        required: true,
-                        defaultValue: t.dueOn,
-                      },
-                      {
-                        name: 'dueTime',
-                        label: 'Due time (IST)',
-                        hint: '24-hour, e.g. 17:30.',
-                        defaultValue: t.dueTime?.slice(0, 5) ?? '',
-                      },
-                      {
-                        name: 'recurrence',
-                        label: 'Repeats',
-                        type: 'select',
-                        required: true,
-                        options: RECURRENCE_OPTIONS,
-                        defaultValue: t.recurrence,
-                      },
-                      {
-                        name: 'details',
-                        label: 'Details',
-                        type: 'textarea',
-                        defaultValue: t.details ?? '',
-                      },
-                    ]}
-                  />
-                ),
-              },
-            ]
-          : []),
-      ]}
-    />
+    >
+      <div className="el-stack">
+        <ButtonLink variant="primary" href={`${BASE}/${t.id}`}>
+          Open the task to act, log work or see its history
+        </ButtonLink>
+        <TaskFacts d={t} level={3} />
+      </div>
+    </RecordModal>
   );
 }

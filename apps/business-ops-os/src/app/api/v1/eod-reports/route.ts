@@ -1,17 +1,17 @@
 import { defineRoute } from '@elevate/server-kit';
-import { istToday } from '../../../../domain/dates';
-import { saveDraft, teamDay } from '../../../../server/eod-reports';
-import { eodDraftBody, eodTeamQuery } from '../../../../server/staff-tasks-schemas';
+import { saveDraft } from '../../../../server/eod-reports';
+import { eodInbox } from '../../../../server/eod-review';
+import { eodDraftBody, eodInboxQuery } from '../../../../server/eod-schemas';
 
 export const dynamic = 'force-dynamic';
 
-/** GET /ops/api/v1/eod-reports?date= — Team view for a day (reviewers): who reported, plus blocked tasks. */
+/** GET /ops/api/v1/eod-reports — Manager inbox: submitted reports sent to you (EOD reviewers: all), filtered. */
 export const GET = defineRoute(
-  { permission: 'ops:eod:review', query: eodTeamQuery },
-  async ({ user, db, query }) => teamDay(db, user, query.date ?? istToday(new Date())),
+  { permission: 'ops:tasks:read', query: eodInboxQuery },
+  async ({ user, db, query }) => eodInbox(db, user, query),
 );
 
-/** POST /ops/api/v1/eod-reports — Build or refresh your draft for a day; saves `summary` when given. */
+/** POST /ops/api/v1/eod-reports — Build or refresh your draft for a day; saves summary, next-day plan and notes when given (`version` guards concurrent edits). */
 export const POST = defineRoute(
   { permission: 'ops:tasks:write', body: eodDraftBody },
   async ({ user, db, body, requestId }) => saveDraft(db, user, body, requestId),

@@ -1,4 +1,6 @@
+import { and, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { auditEvents } from '@elevate/database';
 import { authedRequest, callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import { GET as listStudentsRoute, POST as createStudentRoute } from '../../src/app/api/v1/students/route';
 import { GET as studentRoute } from '../../src/app/api/v1/students/[id]/route';
@@ -9,7 +11,8 @@ import { PATCH as taskRoute } from '../../src/app/api/v1/catch-up-tasks/[id]/rou
 import { GET as listInterventionsRoute, POST as createInterventionRoute } from '../../src/app/api/v1/interventions/route';
 import { PATCH as updateInterventionRoute } from '../../src/app/api/v1/interventions/[id]/route';
 import { PUT as settingRoute } from '../../src/app/api/v1/settings/[key]/route';
-import { createAssessment, createSessions, recordAttendance, staffIdForUser } from '../../src/server';
+import { createAssessment, createSessions, staffIdForUser } from '../../src/server';
+import { attend, markHeld } from './a4-helpers';
 import { actor, uniq, users, world, type Users, type World } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -76,8 +79,9 @@ describe('progress, catch-up and interventions', () => {
       { batchId: w.batch.id, teacherStaffId: w.teacherStaff, plannedChapterId: w.ch1.id, sessionType: 'teaching', date: '2026-09-07', startTime: '09:00', durationMinutes: 75 },
       { batchId: w.batch.id, teacherStaffId: w.teacherStaff, plannedChapterId: w.ch2.id, sessionType: 'teaching', date: '2026-09-14', startTime: '09:00', durationMinutes: 75 },
     ]);
-    await recordAttendance(ctx.db, actor(u.teacher), sessions[0]!.id, { marks: [{ studentId: asha.id, status: 'present' }] });
-    await recordAttendance(ctx.db, actor(u.teacher), sessions[1]!.id, { marks: [{ studentId: asha.id, status: 'absent' }, { studentId: ravi.id, status: 'present' }] });
+    await markHeld(ctx.db, sessions.map((s) => s.id));
+    await attend(ctx.db, actor(u.teacher), sessions[0]!.id, [{ studentId: asha.id, status: 'present' }]);
+    await attend(ctx.db, actor(u.teacher), sessions[1]!.id, [{ studentId: asha.id, status: 'absent' }, { studentId: ravi.id, status: 'present' }]);
     await createAssessment(ctx.db, coord, { code: uniq('T-'), title: 'Algebra test (fictional)', kind: 'chapter_test', batchId: w.batch.id, chapterIds: [w.ch2.id], scheduledDate: '2099-01-01', sections: [] });
     expect((await callRoute(generateRoute, authedRequest(u.teacher, `/academic/api/v1/batches/${w.batch.id}/catch-up`, { method: 'POST' }), { id: w.batch.id })).status).toBe(403);
     const gen = await callRoute<{ created: number }>(generateRoute, authedRequest(u.coordinator, `/academic/api/v1/batches/${w.batch.id}/catch-up`, { method: 'POST' }), { id: w.batch.id });
@@ -119,8 +123,13 @@ describe('progress, catch-up and interventions', () => {
     const params = { key: 'assessments.min_gap_days' };
     expect((await callRoute(settingRoute, authedRequest(u.director, path, { method: 'PUT', json: { value: { minDays: 2, enforcement: 'hard' }, status: 'approved' } }), params)).status).toBe(403);
     expect((await callRoute(settingRoute, authedRequest(u.coordinator, path, { method: 'PUT', json: { value: { minDays: -1, enforcement: 'hard' }, status: 'approved' } }), params)).status).toBe(400);
-    const ok = await callRoute<{ status: string }>(settingRoute, authedRequest(u.coordinator, path, { method: 'PUT', json: { value: { minDays: 2, enforcement: 'hard' }, status: 'approved' } }), params);
+    expect((await callRoute(settingRoute, authedRequest(u.coordinator, path, { method: 'PUT', json: { value: { minDays: 2, enforcement: 'hard' }, status: 'approved' } }), params)).status).toBe(400); // approving needs the owner's decision reference
+    const ok = await callRoute<{ status: string }>(settingRoute, authedRequest(u.coordinator, path, { method: 'PUT', json: { value: { minDays: 2, enforcement: 'hard' }, status: 'approved', decisionRef: 'D-900' } }), params);
     expect(ok.data!.status).toBe('approved');
+    const audit = await ctx.db.select().from(auditEvents).where(and(eq(auditEvents.entityId, 'assessments.min_gap_days'), eq(auditEvents.action, 'setting.updated')));
+    expect(audit[0]!.metadata).toMatchObject({ decisionRef: 'D-900' });
+    expect((await callRoute(settingRoute, authedRequest(u.coordinator, path, { method: 'PUT', json: { value: { minDays: 2, enforcement: 'hard' }, status: 'approved' } }), params)).status).toBe(200); // re-saving the approved value
+    expect((await callRoute(settingRoute, authedRequest(u.coordinator, path, { method: 'PUT', json: { value: { minDays: 3, enforcement: 'hard' }, status: 'approved' } }), params)).status).toBe(400); // a new value needs a new reference
     expect((await callRoute(settingRoute, authedRequest(u.coordinator, '/academic/api/v1/settings/unknown.key', { method: 'PUT', json: { value: 1, status: 'proposed' } }), { key: 'unknown.key' })).status).toBe(404);
   });
 });

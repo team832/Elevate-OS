@@ -31,10 +31,10 @@ describe('computeCoverage', () => {
       chapters,
       subjects,
       records: [
-        { chapterId: 'c1', actualMinutes: 75, state: 'verified' },
-        { chapterId: 'c1', actualMinutes: 70, state: 'submitted' },
-        { chapterId: 'c1', actualMinutes: 999, state: 'superseded' },
-        { chapterId: 'c9', actualMinutes: 30, state: 'verified' },
+        { chapterId: 'c1', actualMinutes: 75, state: 'verified', activity: 'main', completion: 'completed' },
+        { chapterId: 'c1', actualMinutes: 70, state: 'submitted', activity: 'main', completion: 'completed' },
+        { chapterId: 'c1', actualMinutes: 999, state: 'superseded', activity: 'main', completion: 'completed' },
+        { chapterId: 'c9', actualMinutes: 30, state: 'verified', activity: 'main', completion: 'completed' },
       ],
       asOf: '2027-04-05',
     });

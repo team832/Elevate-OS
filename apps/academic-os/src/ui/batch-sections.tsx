@@ -6,8 +6,12 @@ import { PlanBadge, StateBadge, fmtHours } from './badges';
 type Coverage = Awaited<ReturnType<typeof getBatchCoverage>>;
 type Feasibility = Awaited<ReturnType<typeof getBatchFeasibility>>;
 
-const pct = (v: number | null) => (v === null ? 'Missing' : `${v}%`);
-const variance = (v: number | null) => (v === null ? 'Unknown (undated plan)' : `${v > 0 ? '+' : ''}${v} min`);
+const EVIDENCE_LABEL: Record<string, string> = { practice: 'practised', catch_up: 'catch-up', test: 'tested', discussion: 'discussed', revision: 'revised', doubt_solving: 'doubts solved' };
+const TAUGHT_LABEL = { not_taught: 'not taught', partial: 'partly taught', completed: 'taught' } as const;
+const evidence = (e: Record<string, number | undefined>) =>
+  Object.entries(e).map(([k, n]) => `${EVIDENCE_LABEL[k] ?? k} ${n}`).join(', ') || 'None';
+const chapters = (f: { chaptersPlanned: number; chaptersTaught: number; chaptersCompleted: number }) =>
+  `${f.chaptersTaught} of ${f.chaptersPlanned} taught (${f.chaptersCompleted} completed)`;
 
 export function CoverageSection({ data }: { data: Coverage }) {
   const { coverage, plan } = data;
@@ -21,7 +25,7 @@ export function CoverageSection({ data }: { data: Coverage }) {
       ) : (
         <div className="el-stack">
           <Alert tone="info" title="Course total">
-            Planned {fmtHours(coverage.course.plannedMinutes)} ({coverage.course.plannedClasses} classes, planned) · completed (verified) {fmtHours(coverage.course.verifiedMinutes)} · recorded but not yet verified {fmtHours(coverage.course.unverifiedMinutes)} · completion {pct(coverage.course.completionPercent)}
+            Chapters: {chapters(coverage.course)} · planned {fmtHours(coverage.course.plannedMinutes)} ({coverage.course.plannedClasses} classes, planned) · delivered (verified) {fmtHours(coverage.course.verifiedMinutes)} · recorded, not yet verified {fmtHours(coverage.course.unverifiedMinutes)}
           </Alert>
           <DataTable
             caption="By subject"
@@ -29,12 +33,9 @@ export function CoverageSection({ data }: { data: Coverage }) {
             rowKey={(s) => s.subjectId}
             columns={[
               { key: 'code', header: 'Subject' },
+              { key: 'chapters', header: 'Chapters', render: (s) => chapters(s) },
               { key: 'planned', header: 'Planned hours', numeric: true, render: (s) => s.plannedHours },
-              { key: 'toDate', header: 'Planned to date', numeric: true, render: (s) => (s.plannedToDateMinutes === null ? 'Unknown' : fmtHours(s.plannedToDateMinutes)) },
-              { key: 'verified', header: 'Completed (verified) h', numeric: true, render: (s) => s.verifiedHours },
-              { key: 'unverified', header: 'Unverified min', numeric: true, render: (s) => s.unverifiedMinutes },
-              { key: 'pct', header: 'Completion', numeric: true, render: (s) => pct(s.completionPercent) },
-              { key: 'var', header: 'Variance vs plan to date', render: (s) => variance(s.varianceMinutes) },
+              { key: 'verified', header: 'Delivered (verified) h', numeric: true, render: (s) => s.verifiedHours },
             ]}
           />
           <DataTable
@@ -44,11 +45,8 @@ export function CoverageSection({ data }: { data: Coverage }) {
             columns={[
               { key: 'code', header: 'Chapter', render: (c) => `${c.code} ${c.title}` },
               { key: 'classes', header: 'Planned classes', numeric: true, render: (c) => c.plannedClasses },
-              { key: 'planned', header: 'Planned h', numeric: true, render: (c) => c.plannedHours },
-              { key: 'verified', header: 'Completed (verified) h', numeric: true, render: (c) => c.verifiedHours },
-              { key: 'unverified', header: 'Unverified min', numeric: true, render: (c) => c.unverifiedMinutes },
-              { key: 'pct', header: 'Completion', numeric: true, render: (c) => pct(c.completionPercent) },
-              { key: 'var', header: 'Variance', render: (c) => variance(c.varianceMinutes) },
+              { key: 'taught', header: 'Taught', render: (c) => <StateBadge state={TAUGHT_LABEL[c.taught]} /> },
+              { key: 'evidence', header: 'Other evidence', render: (c) => evidence(c.evidence) },
             ]}
           />
           {coverage.unplanned.length > 0 ? (

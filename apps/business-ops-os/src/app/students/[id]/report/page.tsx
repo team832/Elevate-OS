@@ -163,7 +163,7 @@ async function Report({
 }) {
   const r = await load((db) => getStudentReport(db, user, id, exportKey));
   if (!r.ok) return r.view;
-  const { export: e, view: s, actions } = r.data;
+  const { export: e, view: s, actions, blocked, notice } = r.data;
   const statusAction = (to: 'reviewed' | 'final', label: string) => (
     <ActionForm
       action={`/ops/api/v1/students/${id}/report/${e.referenceCode}/status`}
@@ -181,14 +181,19 @@ async function Report({
         actions={
           <span className="ops-no-print el-inline-form">
             <a href={`/ops/students/${id}`}>Back to the student</a>
-            {s ? (
+            {s && !blocked ? (
               <a href={`/ops/api/v1/students/${id}/report/${e.referenceCode}/pdf`}>Download PDF</a>
             ) : null}
-            <PrintButton />
+            {blocked ? null : <PrintButton />}
           </span>
         }
       />
       <div className="el-stack">
+        {notice ? (
+          <Alert tone="warning" title="Source reviews changed">
+            {notice}
+          </Alert>
+        ) : null}
         {s?.student.isSample ? (
           <Alert tone="info" title="Sample data">
             This report is about a fictional sample student.
@@ -299,13 +304,17 @@ function Snapshot({ s }: { s: NonNullable<Awaited<ReturnType<typeof getStudentRe
       {s.feedback ? (
         <Segment
           title="Teacher reviews"
-          description="Submitted reviews in the period. Internal: never shared with families."
+          description="Submitted in Academic OS, as they stood when this report was made. Internal: never shared with families."
           flush
         >
           <RecordTable
             rows={s.feedback}
             rowKey={(f) => f.id}
-            empty="No submitted reviews in this period."
+            empty={
+              s.reviewsSource?.status === 'unavailable'
+                ? `Source unavailable — Academic OS could not be reached (checked ${fmtDateTime(s.reviewsSource.checkedAt)}).`
+                : 'No submitted reviews in this period.'
+            }
             columns={[
               {
                 key: 'who',
@@ -313,7 +322,11 @@ function Snapshot({ s }: { s: NonNullable<Awaited<ReturnType<typeof getStudentRe
                 render: (f) =>
                   `${f.teacher} · ${f.subject} · ${fmtDate(f.observedOn)} · v${f.version}`,
               },
-              { key: 'obs', header: 'Observation', render: (f) => f.observations },
+              {
+                key: 'obs',
+                header: 'Internal remarks',
+                render: (f) => f.observations ?? 'None recorded',
+              },
               { key: 'str', header: 'Strengths', render: (f) => f.strengths ?? 'None recorded' },
               {
                 key: 'area',

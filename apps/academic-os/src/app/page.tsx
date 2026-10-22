@@ -1,12 +1,13 @@
-import { can } from '@elevate/authorization';
+import { can, scopeFor } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { metric } from '@elevate/shared-contracts';
-import { Alert, Card, DataTable, EmptyState, MetricStrip, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { Alert, Card, DataTable, MetricStrip, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import { addDays, type IsoDate } from '@elevate/shared-types';
-import { buildAcademicDeliverySummary, getIntakeQueue, listPlans, listSessions, todayIst } from '../server';
+import { buildAcademicDeliverySummary, coordinatorOverview, getIntakeQueue, teacherDay, todayIst } from '../server';
 import { MODULE_PATHS } from '../server/paths';
-import { PlanBadge, StateBadge } from '../ui/badges';
+import { CoordinatorHome, TeacherHome } from '../ui/my-day';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../ui/shell';
+import '../ui/workspace.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,77 +31,29 @@ const HOURS = [
   ['hoursDeliveredInWindow', 'Delivered hours, 30 days', 'Verified class records in the window.'],
 ] as const;
 
-export default async function DashboardPage() {
+/** Role home: a teacher sees My day; anyone who reads the whole timetable sees the coordinator's exceptions. */
+export default async function HomePage() {
   const access = await gate('academic:module:access', MODULE_PATHS.home);
   if (access.status !== 'allowed') return <AcademicShell access={access} active="home">{null}</AcademicShell>;
   const db = getDb();
   const user = access.user;
+  const actor = actorFor(user);
   const today = todayIst();
   const window = { from: addDays(today as IsoDate, -29), to: today };
-  const showSummary = can(user, 'academic:summary:read');
-  const summary = showSummary ? await load(() => buildAcademicDeliverySummary(db, window)) : null;
-  const plans = can(user, 'academic:courses:read') ? await load(() => listPlans(db)) : null;
+  const timetableScope = scopeFor(user, 'academic:timetable:read');
+  const day = timetableScope === 'own' ? await load(() => teacherDay(db, actor)) : null;
+  const overview = timetableScope === 'all' ? await load(() => coordinatorOverview(db, actor)) : null;
+  const summary = can(user, 'academic:summary:read') ? await load(() => buildAcademicDeliverySummary(db, window)) : null;
   const intake = can(user, 'academic:enrolments:read') ? await load(() => getIntakeQueue(db)) : null;
-  const mySessions = !showSummary ? await load(() => listSessions(db, actorFor(user), { from: today, to: today })) : null;
-
-  const planCounts = plans?.ok
-    ? Object.entries(plans.data.reduce<Record<string, number>>((acc, p) => ({ ...acc, [p.status]: (acc[p.status] ?? 0) + 1 }), {}))
-    : [];
 
   return (
     <AcademicShell access={access} active="home">
-      <PageHeader title="Academic OS" description={`Delivery from ${window.from} to ${window.to} (IST). Planned is never counted as delivered; missing is never zero.`} />
+      <PageHeader title={day ? 'My day' : 'Academic overview'} description={`Today is ${today} (IST). Every count names its dates; missing is never zero and planned is never delivered.`} />
       <div className="el-stack">
-        {summary ? (
-          summary.ok ? (
-            <Figures summary={summary.data} />
-          ) : (
-            <LoadError error={summary.error} />
-          )
+        {day ? (
+          !day.ok ? <LoadError error={day.error} /> : day.data.kind === 'teacher' ? <TeacherHome day={day.data} /> : <Alert tone="info" title="No staff record">Your sign-in is not linked to a staff record, so no classes can be shown. Ask an academic coordinator.</Alert>
         ) : null}
-
-        {mySessions ? (
-          <Card title="Your sessions today" description="Sessions you teach. Log what you taught and take attendance from the teaching log.">
-            {mySessions.ok ? (
-              <DataTable compact
-                rows={mySessions.data}
-                rowKey={(s) => s.id}
-                empty={<EmptyState title="No sessions today" description="Nothing is timetabled for you today." />}
-                columns={[
-                  { key: 'time', header: 'Time', render: (s) => `${s.startTime} (${s.durationMinutes} min)` },
-                  { key: 'batch', header: 'Batch', render: (s) => s.batchCode },
-                  { key: 'chapter', header: 'Planned chapter', render: (s) => s.chapterTitle ?? '—' },
-                  { key: 'status', header: 'Status', render: (s) => <StateBadge state={s.status} /> },
-                  { key: 'go', header: '', render: (s) => <a href={MODULE_PATHS.attendance(s.id)}>Attendance</a> },
-                ]}
-              />
-            ) : (
-              <LoadError error={mySessions.error} />
-            )}
-          </Card>
-        ) : null}
-
-        {plans ? (
-          <Card title="Curriculum plan versions" description="Counts by status. Locked and provisional are plans; delivery is recorded only in class records.">
-            {plans.ok ? (
-              planCounts.length === 0 ? (
-                <EmptyState title="No curriculum plans yet" description="Import the legacy plans (npm run db:seed) or create one under Curriculum." />
-              ) : (
-                <p>
-                  {planCounts.map(([status, n]) => (
-                    <span key={status}>
-                      <PlanBadge status={status} /> {n}{' '}
-                    </span>
-                  ))}
-                  <a href={MODULE_PATHS.curriculum}>Open curriculum</a>
-                </p>
-              )
-            ) : (
-              <LoadError error={plans.error} />
-            )}
-          </Card>
-        ) : null}
-
+        {overview ? overview.ok ? <CoordinatorHome o={overview.data} /> : <LoadError error={overview.error} /> : null}
         {intake ? (
           <Card title="Enrolment intake" description="Admissions confirmed in Business Operations, waiting to become enrolments.">
             {intake.ok ? (
@@ -114,8 +67,7 @@ export default async function DashboardPage() {
             )}
           </Card>
         ) : null}
-
-        {!showSummary && !mySessions ? <Alert tone="info">The delivery summary needs academic:summary:read.</Alert> : null}
+        {summary ? summary.ok ? <Figures summary={summary.data} /> : <LoadError error={summary.error} /> : null}
       </div>
     </AcademicShell>
   );

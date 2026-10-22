@@ -15,6 +15,7 @@ export type FieldType =
   | 'date'
   | 'time'
   | 'select'
+  | 'multi-select'
   | 'textarea'
   | 'json'
   | 'checkbox'
@@ -35,7 +36,7 @@ export interface FormField {
 export interface ApiFormProps {
   /** Browser path of the API route (with /academic). */
   action: string;
-  method?: 'POST' | 'PUT' | 'PATCH';
+  method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   fields: readonly FormField[];
   submitLabel: string;
   /** Static JSON merged into the body (e.g. an id). */
@@ -46,6 +47,12 @@ export interface ApiFormProps {
   refresh?: boolean;
   variant?: 'primary' | 'secondary' | 'danger';
   idPrefix?: string;
+  /** Adds a "save draft" button: the body gets `submit: false` from it and `submit: true` from the main button. */
+  draftLabel?: string;
+  /** Keep the buttons in view at the bottom of the screen (long forms, phones). */
+  stickyActions?: boolean;
+  /** App path WITHOUT the /academic basePath (the router adds it, D-022) to open after success; `{id}` = the returned record's id. */
+  goTo?: string;
 }
 
 interface ErrorView {
@@ -53,29 +60,15 @@ interface ErrorView {
   details: string[];
 }
 
-/** Turn an error envelope's details into readable lines (validation issues, conflicts, issue lists). */
+/** Readable lines from an error envelope's details: only entries with a message (validation issues, clashes, file problems), never raw ids or debug fields. */
 export function describeDetails(details: unknown): string[] {
-  if (!details) return [];
   const lines: string[] = [];
   const visit = (value: unknown) => {
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-    } else if (value && typeof value === 'object') {
-      const v = value as Record<string, unknown>;
-      if (typeof v.message === 'string') {
-        const where = Array.isArray(v.path) && v.path.length ? `${(v.path as unknown[]).join('.')}: ` : '';
-        const code = typeof v.code === 'string' ? `[${v.code}] ` : '';
-        const line = typeof v.line === 'number' ? `line ${v.line}: ` : '';
-        lines.push(`${code}${line}${where}${v.message}`);
-      } else {
-        for (const [k, inner] of Object.entries(v)) {
-          if (Array.isArray(inner) || (inner && typeof inner === 'object')) visit(inner);
-          else lines.push(`${k}: ${String(inner)}`);
-        }
-      }
-    } else if (value !== undefined && value !== null) {
-      lines.push(String(value));
-    }
+    if (!value || typeof value !== 'object') return;
+    const v = value as Record<string, unknown>;
+    if (typeof v.message !== 'string') return Object.values(v).forEach(visit);
+    const where = Array.isArray(v.path) && v.path.length ? `${v.path.join('.')}: ` : '';
+    lines.push(`${typeof v.line === 'number' ? `line ${v.line}: ` : ''}${where}${v.message}`);
   };
   visit(details);
   return lines.slice(0, 50);
@@ -88,6 +81,11 @@ function collect(form: HTMLFormElement, fields: readonly FormField[]): Record<st
     const type = f.type ?? 'text';
     if (type === 'checkbox') {
       body[f.name] = data.get(f.name) === 'on';
+      continue;
+    }
+    if (type === 'multi-select') {
+      const values = data.getAll(f.name).map(String);
+      if (values.length) body[f.name] = values;
       continue;
     }
     const raw = String(data.get(f.name) ?? '').trim();
@@ -151,15 +149,19 @@ function ErrorAlert({ error }: { error: ErrorView }) {
   );
 }
 
-export function ApiForm({ action, method = 'POST', fields, submitLabel, extra, wrapAs, successMessage = 'Saved.', refresh = true, variant = 'primary', idPrefix = 'f' }: ApiFormProps) {
+const STICKY = { position: 'sticky', bottom: 0, zIndex: 1, display: 'flex', gap: 'var(--el-space-2)', flexWrap: 'wrap', padding: 'var(--el-space-3) 0', background: 'var(--el-bg)', borderTop: '1px solid var(--el-border)' } as const;
+
+export function ApiForm({ action, method = 'POST', fields, submitLabel, extra, wrapAs, successMessage = 'Saved.', refresh = true, variant = 'primary', idPrefix = 'f', draftLabel, stickyActions, goTo }: ApiFormProps) {
   const router = useRouter();
   const [state, setState] = useState<{ kind: 'idle' } | { kind: 'saving' } | { kind: 'error'; error: ErrorView } | { kind: 'done'; message: string }>({ kind: 'idle' });
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     let body: Record<string, unknown>;
+    const asDraft = draftLabel !== undefined && (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'draft';
     try {
-      body = { ...collect(event.currentTarget, fields), ...extra };
+      body = { ...collect(form, fields), ...extra, ...(draftLabel !== undefined ? { submit: !asDraft } : {}) };
     } catch (e) {
       setState({ kind: 'error', error: { message: (e as Error).message, details: [] } });
       return;
@@ -171,8 +173,10 @@ export function ApiForm({ action, method = 'POST', fields, submitLabel, extra, w
         setState({ kind: 'error', error: result.error });
         return;
       }
-      setState({ kind: 'done', message: successMessage });
-      if (refresh) router.refresh();
+      setState({ kind: 'done', message: asDraft ? 'Draft saved. Only you can see it.' : successMessage });
+      if (method === 'POST') form.reset(); // a create form starts empty again for the next entry
+      if (goTo) router.push(goTo.replace('{id}', String((result.data as { id?: string } | null)?.id ?? '')));
+      else if (refresh) router.refresh();
     } catch {
       setState({ kind: 'error', error: { message: 'Could not reach Academic OS. Check your connection and try again.', details: [] } });
     }
@@ -189,9 +193,9 @@ export function ApiForm({ action, method = 'POST', fields, submitLabel, extra, w
         const common = { id, name: f.name, required: f.required, defaultValue: f.defaultValue === undefined ? undefined : String(f.defaultValue), placeholder: f.placeholder, 'aria-describedby': f.hint ? `${id}-hint` : undefined };
         return (
           <Field key={f.name} id={id} label={`${f.label}${f.required ? ' *' : ''}`} hint={f.hint}>
-            {type === 'select' ? (
-              <Select {...common}>
-                {!f.required ? <option value="">—</option> : null}
+            {type === 'select' || type === 'multi-select' ? (
+              <Select {...common} multiple={type === 'multi-select'} size={type === 'multi-select' ? Math.min(8, f.options?.length ?? 0) : undefined}>
+                {!f.required && type === 'select' ? <option value="">—</option> : null}
                 {(f.options ?? []).map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
@@ -208,17 +212,22 @@ export function ApiForm({ action, method = 'POST', fields, submitLabel, extra, w
       })}
       {state.kind === 'error' ? <ErrorAlert error={state.error} /> : null}
       {state.kind === 'done' ? <Alert tone="success">{state.message}</Alert> : null}
-      <div>
-        <Button type="submit" variant={variant} disabled={state.kind === 'saving'}>
+      <div style={stickyActions ? STICKY : undefined}>
+        <Button type="submit" variant={variant} value="submit" disabled={state.kind === 'saving'}>
           {state.kind === 'saving' ? 'Saving…' : submitLabel}
         </Button>
+        {draftLabel !== undefined ? (
+          <Button type="submit" variant="secondary" value="draft" disabled={state.kind === 'saving'}>
+            {draftLabel}
+          </Button>
+        ) : null}
       </div>
     </form>
   );
 }
 
 /** A button that sends a fixed body (or none) to a route. */
-export function ApiButton({ action, method = 'POST', body, label, successMessage = 'Done.', variant = 'secondary', showResult = false }: { action: string; method?: 'POST' | 'PUT' | 'PATCH'; body?: unknown; label: string; successMessage?: string; variant?: 'primary' | 'secondary' | 'danger'; showResult?: boolean }) {
+export function ApiButton({ action, method = 'POST', body, label, successMessage = 'Done.', variant = 'secondary', showResult = false }: { action: string; method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: unknown; label: string; successMessage?: string; variant?: 'primary' | 'secondary' | 'danger'; showResult?: boolean }) {
   const router = useRouter();
   const [state, setState] = useState<{ kind: 'idle' } | { kind: 'saving' } | { kind: 'error'; error: ErrorView } | { kind: 'done'; data: unknown }>({ kind: 'idle' });
   async function onClick() {

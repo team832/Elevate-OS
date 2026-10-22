@@ -53,6 +53,41 @@ export const SETTING_DEFINITIONS = {
       .refine((v) => v.minPoints <= v.lastN, { error: 'minPoints cannot exceed lastN' }),
     defaultValue: DEFAULT_TREND_OPTIONS,
   },
+  'attendance.denominator': {
+    description:
+      'Attendance %: whether a late mark counts as attended, and whether excused sessions are left out of the denominator. Not-recorded sessions are always shown separately, never as absent.',
+    schema: z.object({ lateCountsAsAttended: z.boolean(), excludeExcused: z.boolean() }).strict(),
+    defaultValue: { lateCountsAsAttended: true, excludeExcused: true },
+  },
+  'progress.show_rank_percentile': {
+    description:
+      'Show rank and percentile beside assessment results. Off until the owner approves a ranking policy.',
+    schema: z.object({ show: z.boolean() }).strict(),
+    defaultValue: { show: false },
+  },
+  'teaching_log.deadline_hours': {
+    description:
+      'Hours after a session ends by which its teaching log should be submitted. Null = no deadline (logs are listed as pending, never as late).',
+    schema: z.object({ hours: z.int().min(1).max(720).nullable() }).strict(),
+    defaultValue: { hours: null },
+  },
+  'demo.attendees_count_toward_capacity': {
+    description:
+      'Whether demo students added to a class roster take a seat in the batch capacity check.',
+    schema: z.object({ counts: z.boolean() }).strict(),
+    defaultValue: { counts: true },
+  },
+  'reviews.cadence_days': {
+    description:
+      'How often a periodic progress review is expected per student and subject, in days. Null = no cadence (a missing review is pending, not negative).',
+    schema: z.object({ days: z.int().min(1).max(365).nullable() }).strict(),
+    defaultValue: { days: null },
+  },
+  'timetable.substitute_authoriser': {
+    description: 'Which role may authorise a substitute teacher for a class session.',
+    schema: z.object({ role: z.enum(['academic_coordinator', 'director']) }).strict(),
+    defaultValue: { role: 'academic_coordinator' as const },
+  },
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFINITIONS;

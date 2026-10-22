@@ -14,10 +14,25 @@ export interface AttendanceSummary {
   absent: number;
   excused: number;
   /**
-   * (present + late + partial) ÷ (recorded − excused) × 100, 1 dp.
+   * attended ÷ (recorded − excused) × 100, 1 dp, under the AttendanceRule (default: late attends, excused left out).
    * null when nothing countable is recorded (missing, not 0 %).
    */
   ratePercent: number | null;
+}
+
+/** Setting `attendance.denominator`. */
+export interface AttendanceRule {
+  lateCountsAsAttended: boolean;
+  excludeExcused: boolean;
+}
+
+export const DEFAULT_ATTENDANCE_RULE: AttendanceRule = { lateCountsAsAttended: true, excludeExcused: true };
+
+/** Plain-words definition of the attendance rate under a rule (shown on screens and reports). */
+export function attendanceDefinition(rule: AttendanceRule): string {
+  const attended = rule.lateCountsAsAttended ? 'present, late or partial' : 'present or partial (late is not attended)';
+  const excused = rule.excludeExcused ? 'Excused sessions are left out.' : 'Excused sessions count as not attended.';
+  return `Attended = ${attended}, out of delivered (held) sessions with a recorded mark within the student's placement dates; cancelled and future sessions are left out. ${excused} Delivered sessions with no mark are shown as not recorded, never as absent.`;
 }
 
 /**
@@ -28,6 +43,7 @@ export interface AttendanceSummary {
 export function summariseAttendance(
   heldSessionIds: readonly string[],
   marks: readonly { sessionId: string; status: AttendanceStatus }[],
+  rule: AttendanceRule = DEFAULT_ATTENDANCE_RULE,
 ): AttendanceSummary {
   const held = new Set(heldSessionIds);
   const counted = marks.filter((m) => held.has(m.sessionId));
@@ -38,7 +54,8 @@ export function summariseAttendance(
   const absent = count('absent');
   const excused = count('excused');
   const recorded = counted.length;
-  const denominator = recorded - excused;
+  const denominator = recorded - (rule.excludeExcused ? excused : 0);
+  const attended = present + partial + (rule.lateCountsAsAttended ? late : 0);
   return {
     heldSessions: held.size,
     recorded,
@@ -48,8 +65,7 @@ export function summariseAttendance(
     partial,
     absent,
     excused,
-    ratePercent:
-      denominator <= 0 ? null : Math.round(((present + late + partial) / denominator) * 1000) / 10,
+    ratePercent: denominator <= 0 ? null : Math.round((attended / denominator) * 1000) / 10,
   };
 }
 
@@ -128,7 +144,8 @@ export function assessmentTrend(
   options: Partial<TrendOptions> = {},
 ): TrendResult {
   const opts = { ...DEFAULT_TREND_OPTIONS, ...options };
-  const valid = points.filter((p) => Number.isFinite(p.percent) && p.percent >= 0 && p.percent <= 100);
+  // Negative percentages are real under negative marking; above 100 % is impossible.
+  const valid = points.filter((p) => Number.isFinite(p.percent) && p.percent <= 100);
   const used = [...valid].sort((a, b) => a.date.localeCompare(b.date)).slice(-opts.lastN);
   if (used.length < opts.minPoints) {
     return {
@@ -153,4 +170,32 @@ export function assessmentTrend(
   const direction =
     Math.abs(slope) < opts.flatThreshold ? 'flat' : slope > 0 ? 'improving' : 'declining';
   return { status: 'ok', slope, direction, pointsUsed: n, mean: Math.round(meanY * 10) / 10 };
+}
+
+export interface SupportSignal {
+  kind: 'absence_streak' | 'overdue_catch_up' | 'declining_scores';
+  text: string;
+}
+
+/**
+ * Transparent support indicators (brief 14): raw facts with no invented threshold.
+ * - absence streak: consecutive most-recent recorded marks that are absent (unrecorded sessions skipped);
+ * - overdue catch-up: open tasks past the due date staff set;
+ * - declining comparable scores: the least-squares trend (setting progress.trend) over same-kind, same-max results.
+ */
+export function supportSignals(input: {
+  delivered: readonly { date: string; status: AttendanceStatus | null }[];
+  overdueCatchup: number;
+  declining: { label: string; slope: number; pointsUsed: number } | null;
+}): SupportSignal[] {
+  const signals: SupportSignal[] = [];
+  const recorded = [...input.delivered].filter((d) => d.status !== null).sort((a, b) => b.date.localeCompare(a.date));
+  const streak = recorded.findIndex((d) => d.status !== 'absent');
+  const n = streak === -1 ? recorded.length : streak;
+  if (n > 0) signals.push({ kind: 'absence_streak', text: `Absent at the last ${n} recorded class${n === 1 ? '' : 'es'} (since ${recorded[n - 1]!.date}).` });
+  if (input.overdueCatchup > 0) signals.push({ kind: 'overdue_catch_up', text: `${input.overdueCatchup} catch-up task${input.overdueCatchup === 1 ? '' : 's'} past the due date.` });
+  if (input.declining) {
+    signals.push({ kind: 'declining_scores', text: `Scores declining across ${input.declining.pointsUsed} comparable results (${input.declining.label}): ${input.declining.slope} percentage points per assessment.` });
+  }
+  return signals;
 }

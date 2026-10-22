@@ -33,7 +33,6 @@ import {
   integer,
   jsonb,
   numeric,
-  pgSchema,
   text,
   timestamp,
   uniqueIndex,
@@ -48,11 +47,20 @@ import type {
   ProgrammeId,
   StaffMemberId,
   StudentId,
+  StudentIdentityId,
   UserId,
 } from '@elevate/shared-types';
-import { programmes, staffMembers, users } from './core';
+import {
+  ACADEMIC_TEACHER_ROLES,
+  academic,
+  createdAt,
+  inList,
+  updatedAt,
+} from './academic-columns';
+import { academicTimetablePatterns, type AcademicPatternId } from './academic-delivery';
+import { programmes, staffMembers, students as coreStudents, users } from './core';
 
-export const academic = pgSchema('academic');
+export { ACADEMIC_TEACHER_ROLES, academic };
 
 // --- Academic-local branded ids (the shared ones come from @elevate/shared-types) ---------
 export type AcademicSubjectId = Brand<string, 'AcademicSubjectId'>;
@@ -70,16 +78,6 @@ export type AcademicAttemptId = Brand<string, 'AcademicAttemptId'>;
 export type AcademicResultRunId = Brand<string, 'AcademicResultRunId'>;
 export type AcademicInterventionId = Brand<string, 'AcademicInterventionId'>;
 export type AcademicCatchupTaskId = Brand<string, 'AcademicCatchupTaskId'>;
-
-const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
-const updatedAt = () =>
-  timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date());
-
-/** `text` column with a CHECK listing the allowed values. */
-const inList = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`).join(', '));
 
 // --- vocabularies (mirrored by apps/academic-os/src/domain/vocabulary.ts) ------------------
 export const ACADEMIC_PLAN_STATUSES = ['locked', 'provisional', 'proposed', 'superseded'] as const;
@@ -108,13 +106,28 @@ export const ACADEMIC_SESSION_TYPES = [
   'test',
   'discussion',
 ] as const;
+/** `held` = delivered: set only by an explicit "mark delivered" action (R12), never by attendance or a log. */
 export const ACADEMIC_SESSION_STATUSES = [
   'scheduled',
   'held',
   'cancelled',
   'rescheduled',
 ] as const;
-export const ACADEMIC_RECORD_STATES = ['submitted', 'verified', 'superseded'] as const;
+export const ACADEMIC_SESSION_KINDS = ['regular', 'makeup', 'doubt', 'extra'] as const;
+export const ACADEMIC_RECORD_STATES = ['draft', 'submitted', 'verified', 'superseded'] as const;
+/** `main` = first teaching (introduced); only `main` rows count as coverage (R11). */
+export const ACADEMIC_RECORD_ACTIVITIES = [
+  'main',
+  'practice',
+  'catch_up',
+  'test',
+  'discussion',
+  'revision',
+  'doubt_solving',
+] as const;
+/** `withheld` = sat but result held back; `exempt` = not required to sit (neither is a 0). */
+export const ACADEMIC_ATTEMPT_STATUSES = ['submitted', 'absent', 'exempt', 'withheld'] as const;
+export const ACADEMIC_RESULT_STATES = ['scored', 'absent', 'exempt', 'withheld'] as const;
 export const ACADEMIC_ATTENDANCE_STATUSES = [
   'present',
   'partial',
@@ -436,6 +449,11 @@ export const academicBatches = academic.table(
       enum: ['official', 'tentative', 'assumed', 'unverified'],
     }),
     status: text('status', { enum: ACADEMIC_BATCH_STATUSES }).notNull().default('planning'),
+    campus: text('campus'),
+    coordinatorStaffId: uuid('coordinator_staff_id')
+      .references(() => staffMembers.id, { onDelete: 'restrict' })
+      .$type<StaffMemberId>(),
+    isSample: boolean('is_sample').notNull().default(false),
     sourceRef: text('source_ref'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -443,6 +461,7 @@ export const academicBatches = academic.table(
   (t) => [
     uniqueIndex('batches_code_key').on(t.code),
     index('batches_course_idx').on(t.courseId),
+    index('batches_coordinator_idx').on(t.coordinatorStaffId),
     index('batches_programme_status_idx').on(t.programmeId, t.status),
     check('batches_status_check', sql`${t.status} IN (${inList(ACADEMIC_BATCH_STATUSES)})`),
     check(
@@ -480,6 +499,7 @@ export const academicTeacherAssignments = academic.table(
       .references(() => staffMembers.id, { onDelete: 'restrict' })
       .$type<StaffMemberId>(),
     employmentType: text('employment_type', { enum: ['full_time', 'part_time'] }),
+    role: text('role', { enum: ACADEMIC_TEACHER_ROLES }).notNull().default('primary'),
     status: text('status', { enum: ['active', 'ended'] })
       .notNull()
       .default('active'),
@@ -494,6 +514,7 @@ export const academicTeacherAssignments = academic.table(
       .where(sql`${t.status} = 'active'`),
     index('teacher_assignments_staff_idx').on(t.staffMemberId, t.status),
     check('teacher_assignments_status_check', sql`${t.status} IN ('active', 'ended')`),
+    check('teacher_assignments_role_check', sql`${t.role} IN (${inList(ACADEMIC_TEACHER_ROLES)})`),
   ],
 );
 
@@ -630,6 +651,22 @@ export const academicClassSessions = academic.table(
       .references((): AnyPgColumn => academicClassSessions.id, { onDelete: 'restrict' })
       .$type<AcademicSessionId>(),
     onlineLink: text('online_link'),
+    /** The published pattern this occurrence was generated from (null = one-off session). */
+    patternId: uuid('pattern_id')
+      .references((): AnyPgColumn => academicTimetablePatterns.id, { onDelete: 'restrict' })
+      .$type<AcademicPatternId>(),
+    kind: text('kind', { enum: ACADEMIC_SESSION_KINDS }).notNull().default('regular'),
+    makeupForSessionId: uuid('makeup_for_session_id')
+      .references((): AnyPgColumn => academicClassSessions.id, { onDelete: 'restrict' })
+      .$type<AcademicSessionId>(),
+    /** Explicit "mark delivered" (R12); actual teachers are in session_teachers. */
+    deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    deliveredByUserId: uuid('delivered_by_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .$type<UserId>(),
+    deliveryNote: text('delivery_note'),
+    /** Optimistic concurrency: writers compare and increment. */
+    version: integer('version').notNull().default(1),
     createdByUserId: uuid('created_by_user_id')
       .references(() => users.id, { onDelete: 'restrict' })
       .$type<UserId>(),
@@ -638,6 +675,18 @@ export const academicClassSessions = academic.table(
   },
   (t) => [
     index('class_sessions_batch_date_idx').on(t.batchId, t.date),
+    uniqueIndex('class_sessions_pattern_date_key')
+      .on(t.patternId, t.date)
+      .where(sql`${t.patternId} IS NOT NULL`),
+    check('class_sessions_kind_check', sql`${t.kind} IN (${inList(ACADEMIC_SESSION_KINDS)})`),
+    check(
+      'class_sessions_makeup_link',
+      sql`${t.makeupForSessionId} IS NULL OR ${t.kind} = 'makeup'`,
+    ),
+    check(
+      'class_sessions_delivery_pair',
+      sql`(${t.deliveredAt} IS NULL) = (${t.deliveredByUserId} IS NULL)`,
+    ),
     index('class_sessions_teacher_date_idx').on(t.teacherStaffId, t.date),
     index('class_sessions_room_date_idx').on(t.roomId, t.date),
     check('class_sessions_type_check', sql`${t.sessionType} IN (${inList(ACADEMIC_SESSION_TYPES)})`),
@@ -677,14 +726,21 @@ export const academicClassRecords = academic.table(
       .notNull()
       .references(() => staffMembers.id, { onDelete: 'restrict' })
       .$type<StaffMemberId>(),
-    activity: text('activity', { enum: ['main', 'practice', 'catch_up', 'test', 'discussion'] })
-      .notNull()
-      .default('main'),
+    activity: text('activity', { enum: ACADEMIC_RECORD_ACTIVITIES }).notNull().default('main'),
     completion: text('completion', { enum: ['completed', 'partial'] }).notNull(),
     actualMinutes: integer('actual_minutes').notNull(),
     notes: text('notes'),
     evidence: text('evidence'),
+    materials: text('materials'),
+    homework: text('homework'),
+    homeworkDueOn: date('homework_due_on', { mode: 'string' }),
+    difficulties: text('difficulties'),
+    nextPlan: text('next_plan'),
+    catchUpNeeded: text('catch_up_needed'),
     state: text('state', { enum: ACADEMIC_RECORD_STATES }).notNull().default('submitted'),
+    /** Null while `draft`; drafts are private to the author and never count. */
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    version: integer('version').notNull().default(1),
     correctsRecordId: uuid('corrects_record_id')
       .references((): AnyPgColumn => academicClassRecords.id, { onDelete: 'restrict' })
       .$type<AcademicClassRecordId>(),
@@ -710,7 +766,11 @@ export const academicClassRecords = academic.table(
     check('class_records_minutes_range', sql`${t.actualMinutes} BETWEEN 1 AND 600`),
     check(
       'class_records_activity_check',
-      sql`${t.activity} IN ('main', 'practice', 'catch_up', 'test', 'discussion')`,
+      sql`${t.activity} IN (${inList(ACADEMIC_RECORD_ACTIVITIES)})`,
+    ),
+    check(
+      'class_records_draft_unsubmitted',
+      sql`${t.state} <> 'draft' OR ${t.submittedAt} IS NULL`,
     ),
     check('class_records_completion_check', sql`${t.completion} IN ('completed', 'partial')`),
     check(
@@ -752,6 +812,11 @@ export const academicStudents = academic.table(
     guardianPhone: text('guardian_phone'),
     sourceAdmissionId: uuid('source_admission_id'),
     sourceLeadId: uuid('source_lead_id'),
+    /** The canonical person (core.students); one academic student per person. */
+    coreStudentId: uuid('core_student_id')
+      .references(() => coreStudents.id, { onDelete: 'restrict' })
+      .$type<StudentIdentityId>(),
+    isSample: boolean('is_sample').notNull().default(false),
     status: text('status', { enum: ['active', 'inactive'] })
       .notNull()
       .default('active'),
@@ -760,6 +825,9 @@ export const academicStudents = academic.table(
   },
   (t) => [
     uniqueIndex('students_code_key').on(t.code),
+    uniqueIndex('students_core_student_key')
+      .on(t.coreStudentId)
+      .where(sql`${t.coreStudentId} IS NOT NULL`),
     uniqueIndex('students_source_admission_key')
       .on(t.sourceAdmissionId)
       .where(sql`${t.sourceAdmissionId} IS NOT NULL`),
@@ -791,6 +859,8 @@ export const academicEnrolments = academic.table(
       .$type<BatchId>(),
     status: text('status', { enum: ACADEMIC_ENROLMENT_STATUSES }).notNull().default('active'),
     startDate: date('start_date', { mode: 'string' }),
+    /** Academic-year label from the admission, e.g. `2026-27` (a label, not a date). */
+    academicYear: text('academic_year'),
     /** Joined after the batch start: missed topics are computed from the plan (ACD-020). */
     lateJoiner: boolean('late_joiner').notNull().default(false),
     source: text('source', { enum: ['admission_event', 'manual'] }).notNull(),
@@ -812,6 +882,9 @@ export const academicEnrolments = academic.table(
     uniqueIndex('enrolments_active_student_batch_key')
       .on(t.studentId, t.batchId)
       .where(sql`${t.status} = 'active' AND ${t.batchId} IS NOT NULL`),
+    uniqueIndex('enrolments_active_student_course_key')
+      .on(t.studentId, t.courseId)
+      .where(sql`${t.status} = 'active' AND ${t.courseId} IS NOT NULL`),
     index('enrolments_batch_status_idx').on(t.batchId, t.status),
     index('enrolments_student_idx').on(t.studentId),
     check('enrolments_status_check', sql`${t.status} IN (${inList(ACADEMIC_ENROLMENT_STATUSES)})`),
@@ -940,6 +1013,11 @@ export const academicAssessments = academic.table(
     /** Signed: a penalty is negative, e.g. -0.25. */
     marksPerWrong: marks('marks_per_wrong'),
     marksUnattempted: marks('marks_unattempted'),
+    /** Publication to students/parents is separate from finalising results. */
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    publishedByUserId: uuid('published_by_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .$type<UserId>(),
     sourceRef: text('source_ref'),
     createdByUserId: uuid('created_by_user_id')
       .references(() => users.id, { onDelete: 'restrict' })
@@ -949,6 +1027,10 @@ export const academicAssessments = academic.table(
   },
   (t) => [
     uniqueIndex('assessments_code_key').on(t.code),
+    check(
+      'assessments_publication_pair',
+      sql`(${t.publishedAt} IS NULL) = (${t.publishedByUserId} IS NULL)`,
+    ),
     index('assessments_batch_date_idx').on(t.batchId, t.scheduledDate),
     check('assessments_kind_check', sql`${t.kind} IN (${inList(ACADEMIC_ASSESSMENT_KINDS)})`),
     check(
@@ -1047,9 +1129,15 @@ export const academicAttempts = academic.table(
       .notNull()
       .references(() => academicStudents.id, { onDelete: 'restrict' })
       .$type<StudentId>(),
-    status: text('status', { enum: ['submitted', 'absent'] }).notNull(),
+    status: text('status', { enum: ACADEMIC_ATTEMPT_STATUSES }).notNull(),
     responses: jsonb('responses').$type<Record<string, (string | null)[]>>(),
     keyVersion: integer('key_version'),
+    /** Directly entered total (no per-question responses, e.g. a written test). */
+    manualScore: marks('manual_score'),
+    markedByUserId: uuid('marked_by_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .$type<UserId>(),
+    version: integer('version').notNull().default(1),
     enteredByUserId: uuid('entered_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' })
@@ -1059,10 +1147,10 @@ export const academicAttempts = academic.table(
   },
   (t) => [
     uniqueIndex('attempts_assessment_student_key').on(t.assessmentId, t.studentId),
-    check('attempts_status_check', sql`${t.status} IN ('submitted', 'absent')`),
+    check('attempts_status_check', sql`${t.status} IN (${inList(ACADEMIC_ATTEMPT_STATUSES)})`),
     check(
       'attempts_shape',
-      sql`(${t.status} = 'absent' AND ${t.responses} IS NULL) OR (${t.status} = 'submitted' AND ${t.responses} IS NOT NULL)`,
+      sql`(${t.status} IN ('absent', 'exempt') AND ${t.responses} IS NULL AND ${t.manualScore} IS NULL) OR (${t.status} = 'submitted' AND (${t.responses} IS NOT NULL OR ${t.manualScore} IS NOT NULL)) OR ${t.status} NOT IN ('absent', 'exempt', 'submitted')`,
     ),
   ],
 );
@@ -1081,8 +1169,8 @@ export const academicResultRuns = academic.table(
       .references(() => academicAssessments.id, { onDelete: 'restrict' })
       .$type<AcademicAssessmentId>(),
     version: integer('version').notNull(),
+    /** null when every result was entered as a manual total (no answer key). */
     answerKeyId: uuid('answer_key_id')
-      .notNull()
       .references(() => academicAnswerKeys.id, { onDelete: 'restrict' })
       .$type<AcademicAnswerKeyId>(),
     status: text('status', { enum: ['final', 'superseded'] }).notNull(),
@@ -1136,10 +1224,14 @@ export const academicResults = academic.table(
     rank: integer('rank'),
     sectionScores: jsonb('section_scores').notNull(),
     absent: boolean('absent').notNull().default(false),
+    /** Only `scored` carries a total; absent/exempt/withheld are never 0 (`absent` = no score, kept for old readers). */
+    state: text('state', { enum: ACADEMIC_RESULT_STATES }).notNull().default('scored'),
     createdAt: createdAt(),
   },
   (t) => [
     uniqueIndex('results_run_attempt_key').on(t.runId, t.attemptId),
+    check('results_state_check', sql`${t.state} IN (${inList(ACADEMIC_RESULT_STATES)})`),
+    check('results_state_shape', sql`(${t.state} = 'scored') = (${t.totalScore} IS NOT NULL) AND ${t.absent} = (${t.state} <> 'scored')`),
     index('results_student_idx').on(t.studentId),
     check(
       'results_absent_shape',
@@ -1227,12 +1319,16 @@ export const academicInterventions = academic.table(
       ],
     }).notNull(),
     description: text('description').notNull(),
+    /** Support plan (brief 14): evidence, goal, action, owner, due, review, outcome. */
+    evidence: text('evidence'),
+    goal: text('goal'),
     responsibleStaffId: uuid('responsible_staff_id')
       .notNull()
       .references(() => staffMembers.id, { onDelete: 'restrict' })
       .$type<StaffMemberId>(),
     action: text('action').notNull(),
     dueDate: date('due_date', { mode: 'string' }),
+    reviewOn: date('review_on', { mode: 'string' }),
     status: text('status', { enum: ['open', 'in_progress', 'resolved', 'closed'] })
       .notNull()
       .default('open'),

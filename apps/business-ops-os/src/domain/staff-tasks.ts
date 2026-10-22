@@ -1,17 +1,65 @@
 /**
  * Staff daily tasks and end-of-day reports (owner decision 21 Oct 2026). Pure.
  * Algorithms: A-TSK-1 status rules, A-TSK-2 overdue, A-TSK-3 next occurrence, A-TSK-4 EOD snapshot.
- * Vocabularies mirror packages/database/src/schema/ops-tasks.ts (a unit test keeps them equal).
+ * Vocabularies mirror packages/database/src/schema/ops-tasks.ts and ops-eod.ts (a unit test keeps
+ * them equal).
  */
-import { addDays, istToday, type IsoDate } from './dates';
+import { addDays, istInstant, type IsoDate } from './dates';
 
-export const TASK_STATUSES = ['pending', 'in_progress', 'done', 'blocked', 'on_hold'] as const;
+export const TASK_STATUSES = [
+  'pending',
+  'in_progress',
+  'done',
+  'blocked',
+  'on_hold',
+  'in_review',
+  'cancelled',
+] as const;
 export const TASK_PRIORITIES = ['high', 'medium', 'low'] as const;
 export const TASK_RECURRENCES = ['none', 'daily', 'weekly', 'monthly'] as const;
-export const EOD_STATUSES = ['draft', 'submitted'] as const;
+export const TASK_SOURCES = [
+  'manager',
+  'self',
+  'verbal',
+  'academic',
+  'import',
+  'recurring',
+] as const;
+export const TASK_EVENT_KINDS = [
+  'created',
+  'assigned',
+  'reassigned',
+  'acknowledged',
+  'clarification_requested',
+  'status_changed',
+  'submitted_for_review',
+  'review_approved',
+  'changes_requested',
+  'reopened',
+  'cancelled',
+  'due_changed',
+  'priority_changed',
+  'comment',
+  'imported',
+  'dependency_added',
+  'edited',
+] as const;
+export const EOD_STATUSES = ['draft', 'submitted', 'revision_requested', 'acknowledged'] as const;
+export const EOD_REVIEW_EVENT_KINDS = [
+  'viewed',
+  'comment',
+  'clarification_requested',
+  'revision_requested',
+  'acknowledged',
+  'follow_up_task_created',
+] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 export type TaskRecurrence = (typeof TASK_RECURRENCES)[number];
+export type TaskSource = (typeof TASK_SOURCES)[number];
+export type TaskEventKind = (typeof TASK_EVENT_KINDS)[number];
+export type EodStatus = (typeof EOD_STATUSES)[number];
+export type EodReviewEventKind = (typeof EOD_REVIEW_EVENT_KINDS)[number];
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   pending: 'Not started',
@@ -19,9 +67,13 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   done: 'Done',
   blocked: 'Blocked',
   on_hold: 'On hold',
+  in_review: 'In review',
+  cancelled: 'Cancelled',
 };
 
-export const needsReason = (status: TaskStatus) => status === 'blocked' || status === 'on_hold';
+/** Statuses the database refuses without a reason (staff_tasks_reason_check). */
+export const needsReason = (status: TaskStatus) =>
+  status === 'blocked' || status === 'on_hold' || status === 'cancelled';
 
 export interface TaskState {
   status: TaskStatus;
@@ -51,12 +103,11 @@ export function resolveTaskState(
   const missing = needsReason(status) && !reason;
   return {
     state,
-    error: missing ? { field: 'reason', message: 'Say why the task is blocked or on hold.' } : null,
+    error: missing
+      ? { field: 'reason', message: 'Say why the task is blocked, on hold or cancelled.' }
+      : null,
   };
 }
-
-/** IST instant of a day (and optional `HH:MM[:SS]` time). */
-const istInstant = (day: string, time = '00:00') => new Date(`${day}T${time.slice(0, 5)}:00+05:30`);
 
 export interface EodTask extends TaskState {
   id: string;
@@ -95,71 +146,4 @@ export function nextOccurrence(
   return new Date(Date.UTC(y, m, Math.min(anchor, lastOf(m + 1)))).toISOString().slice(0, 10);
 }
 
-export interface EodItem extends TaskState {
-  id: string;
-  title: string;
-  priority: TaskPriority;
-  dueOn: string;
-  dueTime: string | null;
-  overdue: boolean;
-}
-
-export interface EodSnapshot {
-  reportDate: string;
-  generatedAt: string;
-  /** Completed on the report day. */
-  done: EodItem[];
-  /** Due on the report day and not done. */
-  open: EodItem[];
-  /** Due before the report day and still not done. */
-  carried: EodItem[];
-  counts: { done: number; open: number; carried: number; overdue: number };
-}
-
-const RANK: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
-const byPriority = (a: EodTask, b: EodTask) =>
-  RANK[a.priority] - RANK[b.priority] || (a.dueTime ?? '99').localeCompare(b.dueTime ?? '99');
-
-/**
- * A-TSK-4: the day's report from the owner's tasks. Overdue is judged at `now`, or at the end
- * of the report day when that day is over. Tasks keep their current status and reason.
- */
-export function buildEodSnapshot(tasks: EodTask[], reportDate: string, now: Date): EodSnapshot {
-  const endOfDay = new Date(istInstant(addDays(reportDate as IsoDate, 1)).getTime() - 1);
-  const asOf = now < endOfDay ? now : endOfDay;
-  const item = (t: EodTask): EodItem => ({
-    id: t.id,
-    title: t.title,
-    priority: t.priority,
-    status: t.status,
-    progressPercent: t.progressPercent,
-    reason: t.reason,
-    dueOn: t.dueOn,
-    dueTime: t.dueTime,
-    overdue: isOverdue(t, asOf),
-  });
-  const notDone = tasks.filter((t) => t.status !== 'done').sort(byPriority);
-  const done = tasks
-    .filter((t) => t.completedAt && istToday(t.completedAt) === reportDate)
-    .sort((a, b) => a.completedAt!.getTime() - b.completedAt!.getTime())
-    .map(item);
-  const open = notDone.filter((t) => t.dueOn === reportDate).map(item);
-  const carried = notDone.filter((t) => t.dueOn < reportDate).map(item);
-  return {
-    reportDate,
-    generatedAt: now.toISOString(),
-    done,
-    open,
-    carried,
-    counts: {
-      done: done.length,
-      open: open.length,
-      carried: carried.length,
-      overdue: [...open, ...carried].filter((t) => t.overdue).length,
-    },
-  };
-}
-
-/** Tasks the report lists as not done that still have no reason (submit needs one each). */
-export const missingReasons = (s: EodSnapshot) =>
-  [...s.open, ...s.carried].filter((t) => !t.reason);
+export { buildEodSnapshot, missingReasons, type EodItem, type EodSnapshot } from './eod';

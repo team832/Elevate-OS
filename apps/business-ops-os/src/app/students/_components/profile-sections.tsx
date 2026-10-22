@@ -17,6 +17,8 @@ import {
   type JourneyStage,
 } from '@elevate/shared-ui';
 import { ADMISSION_STATUS_LABELS, type AdmissionStatus } from '../../../domain';
+import { istToday } from '../../../domain/dates';
+import { ACTIVE_CASE_STATUSES } from '../../../domain/student-lifecycle';
 import type { getStudent } from '../../../server/students';
 import { ActionForm, type FieldSpec } from '../../../ui/action-form';
 import { fmtDate, fmtDateTime, fmtPaise, humanise, statusTone } from '../../../ui/format';
@@ -34,6 +36,23 @@ export const statusLabel = (s: string) =>
 /** Batches belong to Academic OS; Ops only knows whether one is requested or assigned. */
 export const batchLabel = (enrolled: string | null, intended: string | null) =>
   enrolled ? 'Assigned in Academic OS' : intended ? 'Requested from Academic OS' : 'To be assigned';
+
+/**
+ * "Class 12 Commerce (batch assigned) + IPMAT preparation (batch Sample IPMAT A, from Academic OS)":
+ * `placed` is Academic's batch name per enrolment id; without one, Ops' own state is shown.
+ */
+export const programmesLine = (d: Profile, placed: ReadonlyMap<string, string>) =>
+  d.cases
+    .filter(
+      (c) =>
+        (ACTIVE_CASE_STATUSES as readonly string[]).includes(c.status) ||
+        c.population === 'on_hold',
+    )
+    .map((c) => {
+      const batch = c.enrolmentId && placed.get(c.enrolmentId);
+      return `${c.programme?.name ?? 'Programme not set'} (batch ${batch ? `${batch}, from Academic OS` : c.enrolledBatchId ? 'assigned' : c.intendedBatchId ? 'requested' : 'to be assigned'})`;
+    })
+    .join(' + ') || 'No active programme';
 
 const StatusCell = ({ status, label }: { status: string; label: string }) => (
   <StatusBadge tone={statusTone(status)}>{label}</StatusBadge>
@@ -200,13 +219,15 @@ export function ExitRecords({ d, level = 2 }: { d: Profile } & Level) {
 /** G Upcoming: open follow-ups and meetings still to happen, soonest first. */
 export function UpcomingTable({ d }: { d: Profile }) {
   const rows = [
-    ...d.followUps.map((f) => ({
-      key: f.id,
-      sort: f.dueDate,
-      when: fmtDate(f.dueDate),
-      what: `Follow-up: ${f.title}`,
-      who: d.owner?.fullName ?? 'Unassigned',
-    })),
+    ...d.followUps
+      .filter((f) => f.dueDate >= istToday(new Date()))
+      .map((f) => ({
+        key: f.id,
+        sort: f.dueDate,
+        when: fmtDate(f.dueDate),
+        what: `Follow-up: ${f.title}`,
+        who: d.owner?.fullName ?? 'Unassigned',
+      })),
     ...d.upcomingCounselling.map((s) => ({
       key: s.id,
       sort: s.scheduledAt.toISOString(),

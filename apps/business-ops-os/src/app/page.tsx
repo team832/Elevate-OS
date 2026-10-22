@@ -35,7 +35,7 @@ import {
   Funnel,
   OutcomeDonut,
 } from './reports/_components/admissions-charts';
-import { AttendanceCell, FollowUpDone } from './admissions/_components/demo-bits';
+import { AttendanceCell, FollowUpDone, linkOf } from './admissions/_components/demo-bits';
 import { dueText, TaskBadge } from './tasks/_components/task-views';
 
 export const dynamic = 'force-dynamic';
@@ -150,6 +150,7 @@ async function Dashboard({ user, allStaff }: { user: AuthenticatedUser; allStaff
                     s={s}
                     recorder={demosToday.data.names.get(s.recordedBy ?? '') ?? 'Staff member'}
                     write={write}
+                    linked={linkOf(r, s)}
                   />
                 ) as ReactNode,
                 href: `/ops/admissions?open=${r.demo.id}`,

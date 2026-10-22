@@ -5,14 +5,19 @@
  *
  * TEACHER SCOPE (`own`), resolved from core.staff_members.user_id:
  * - sessions / class records / attendance: sessions whose teacher is the user's staff record;
- * - batches / assessments: batches with an ACTIVE teaching assignment for that staff record;
- * - students / progress: students with an active enrolment in those batches.
+ * - batches / assessments: batches with a teaching assignment ACTIVE ON THE DATE in question
+ *   (default today): start date ≤ date ≤ end date, open ends allowed; an `ended` row without an
+ *   end date counts as ended. Past sessions and authorship are not affected (sessions are scoped
+ *   by their teacher).
+ * - students / progress: students placed (from on or before the date) in a batch where that
+ *   staff member's assignment window is open on the date, with overlapping dates.
  * A user with no staff record has an empty scope (sees nothing), never "all".
  */
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gte, isNull, lte, or } from 'drizzle-orm';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { scopeFor, type GrantScope, type Permission } from '@elevate/authorization';
 import {
+  academicBatchPlacements,
   academicBatches,
   academicEnrolments,
   academicTeacherAssignments,
@@ -41,26 +46,30 @@ export async function staffIdForUser(db: Database, userId: string): Promise<Staf
   return row?.id ?? null;
 }
 
-export async function assignedBatchIds(db: Database, staffId: StaffMemberId): Promise<BatchId[]> {
+const ta = academicTeacherAssignments;
+/** The end of an assignment window: its end date, else open while `active` (an `ended` row without a date is closed). */
+const assignmentOpenOrEndsOnOrAfter = (day: string | typeof academicBatchPlacements.startDate) =>
+  or(and(isNull(ta.endDate), eq(ta.status, 'active')), gte(ta.endDate, day));
+
+/** SQL: the assignment window is open on `day` (start ≤ day ≤ end; open ends allowed). */
+export const assignmentActiveOn = (day: string) => and(or(isNull(ta.startDate), lte(ta.startDate, day)), assignmentOpenOrEndsOnOrAfter(day));
+
+/** Batches where the staff member has an assignment active on `day` (YYYY-MM-DD, default today IST). */
+export async function assignedBatchIds(db: Database, staffId: StaffMemberId, day: string = todayIst()): Promise<BatchId[]> {
   const rows = await db
-    .selectDistinct({ batchId: academicTeacherAssignments.batchId })
-    .from(academicTeacherAssignments)
-    .where(
-      and(
-        eq(academicTeacherAssignments.staffMemberId, staffId),
-        eq(academicTeacherAssignments.status, 'active'),
-      ),
-    );
+    .selectDistinct({ batchId: ta.batchId })
+    .from(ta)
+    .where(and(eq(ta.staffMemberId, staffId), assignmentActiveOn(day)));
   return rows.map((r) => r.batchId);
 }
 
-/** Resolve the actor's scope for a permission; throws FORBIDDEN when it is not held. */
-export async function resolveScope(db: Database, actor: Actor, permission: Permission): Promise<Scope> {
+/** Resolve the actor's scope for a permission (own scope: assignments active on `day`); throws FORBIDDEN when it is not held. */
+export async function resolveScope(db: Database, actor: Actor, permission: Permission, day?: string): Promise<Scope> {
   const scope: GrantScope | null = scopeFor(actor.user, permission);
   if (scope === null) throw new ForbiddenError('You do not have permission to do this.', { details: { permission } });
   if (scope === 'all') return { kind: 'all' };
   const staffId = await staffIdForUser(db, actor.user.id);
-  return { kind: 'own', staffId, batchIds: staffId ? await assignedBatchIds(db, staffId) : [] };
+  return { kind: 'own', staffId, batchIds: staffId ? await assignedBatchIds(db, staffId, day) : [] };
 }
 
 /** Throw NOT_FOUND (not FORBIDDEN — do not leak existence) unless the batch is in scope. */
@@ -77,15 +86,28 @@ export function assertSessionInScope(scope: Scope, session: { teacherStaffId: st
   }
 }
 
-/** Student ids visible under an own scope (active enrolment in an assigned batch). */
-export async function studentIdsInScope(db: Database, scope: Scope): Promise<StudentId[] | null> {
+/**
+ * Student ids visible under an own scope: on `day` the teacher has an assignment window open in
+ * the batch, and the student's placement there overlaps that window and has started. A closed
+ * window shows nothing (past sessions stay visible through the session teacher, not this list).
+ */
+export async function studentIdsInScope(db: Database, scope: Scope, day: string = todayIst()): Promise<StudentId[] | null> {
   if (scope.kind === 'all') return null;
-  if (scope.batchIds.length === 0) return [];
+  if (!scope.staffId) return [];
+  const p = academicBatchPlacements;
   const rows = await db
     .selectDistinct({ studentId: academicEnrolments.studentId })
-    .from(academicEnrolments)
+    .from(p)
+    .innerJoin(academicEnrolments, eq(academicEnrolments.id, p.enrolmentId))
+    .innerJoin(ta, eq(ta.batchId, p.batchId))
     .where(
-      and(inArray(academicEnrolments.batchId, scope.batchIds), eq(academicEnrolments.status, 'active')),
+      and(
+        eq(ta.staffMemberId, scope.staffId),
+        lte(p.startDate, day),
+        assignmentActiveOn(day),
+        or(isNull(ta.startDate), isNull(p.endDate), gte(p.endDate, ta.startDate)),
+        assignmentOpenOrEndsOnOrAfter(p.startDate),
+      ),
     );
   return rows.map((r) => r.studentId);
 }

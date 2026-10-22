@@ -66,6 +66,7 @@ import { demoAttendanceStatus, demoDaysAndSubjects } from '../domain/demos';
 import { summariseFees, type FeeRecordLike } from '../domain/fees';
 import { deriveHandoffView, retryDecision, type HandoffInput } from '../domain/students';
 import { feeAgreementPolicy, feeArrangementPolicy } from './approval-policies';
+import { academicDemoMarks, withMarks } from './academic-summary';
 import {
   accessScope,
   activeStaff,
@@ -365,9 +366,10 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
     .from(opsDemos)
     .where(eq(opsDemos.admissionId, admission.id))
     .orderBy(desc(opsDemos.createdAt));
-  const demoSessions = demos.length
+  const plainSessions = demos.length
     ? await db
         .select({
+          id: opsDemoSessions.id,
           demoId: opsDemoSessions.demoId,
           startsAt: opsDemoSessions.startsAt,
           subject: opsDemoSessions.subject,
@@ -384,6 +386,14 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
         )
         .orderBy(asc(opsDemoSessions.sessionNumber))
     : [];
+  // R15: a linked class shows Academic's mark and actual teachers.
+  const demoSessions = withMarks(
+    plainSessions,
+    await academicDemoMarks(
+      db,
+      plainSessions.map((x) => x.id),
+    ),
+  ).map((x) => ({ ...x, teacherName: x.academic?.teacherNames.join(', ') || x.teacherName }));
   const [event] = admission.lastRequestEventId
     ? await db
         .select({ id: integrationEvents.id, occurredAt: integrationEvents.occurredAt })

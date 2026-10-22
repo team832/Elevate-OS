@@ -1,6 +1,7 @@
 import { created, defineRoute } from '@elevate/server-kit';
 import { actorOf } from '../../../../../../server/route-helpers';
-import { correctClassBody, uuidParams } from '../../../../../../server/schemas';
+import { uuidParams } from '../../../../../../server/schemas';
+import { correctClassBody } from '../../../../../../server/schemas-teaching';
 import { correctClassRecord } from '../../../../../../server';
 
 export const dynamic = 'force-dynamic';

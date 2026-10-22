@@ -1,7 +1,8 @@
 /**
  * Demo reads (owner brief 21 Oct 2026 §4, §5): the list by view with sorting, the full record
- * (days and classes, change history, KYC, demo fee from the ledger, teacher reviews from the
- * single feedback store, checklist, follow-ups, activity) and the cases a demo can be booked for.
+ * (days and classes with Academic's marks for linked classes, change history, KYC, demo fee from
+ * the ledger, teacher reviews from Academic OS and older Ops ones, checklist, follow-ups, activity),
+ * the cases a demo can be booked for, and the day's demo classes for Academic (internal route).
  * Permission: ops:leads:read (counsellors: own scope = demo or case counsellor, or lead owner).
  */
 import {
@@ -12,6 +13,7 @@ import {
   getTableColumns,
   ilike,
   inArray,
+  isNotNull,
   or,
   sql,
   type SQL,
@@ -57,7 +59,8 @@ import { lockAccessible, namesOf, ownAdmissionFilter } from './admissions';
 import { accessScope, assertScope, notFound, type AccessScope, type Actor } from './context';
 import type { DemoListQuery, DEMO_SORTS } from './demos-schemas';
 import { demoKyc } from './demos-intake';
-import { listStudentFeedback, demoFeedbackByDay } from './feedback';
+import { academicDemoMarks, withMarks, type AcademicDemoMarks } from './academic-summary';
+import { demoFeedbackByDay } from './feedback';
 import { inOrder, rowById } from './ops-common';
 import { loadSettings } from './settings';
 
@@ -113,8 +116,43 @@ const demoRows = (db: Database, where: SQL | undefined) =>
     .where(where);
 type DemoRow = Awaited<ReturnType<typeof demoRows>>[number];
 
-/** Sessions (with teacher names), checklist entries and the cases' follow-ups for these demos. */
-async function demoExtras(db: Database, demos: readonly Demo[]) {
+/** Classes Academic is asked about: started ones only, inside a list's date window if any. */
+const askable = (
+  sessions: readonly { id: string; startsAt: Date }[],
+  now: Date,
+  window: { from?: string; to?: string } = {},
+) =>
+  sessions
+    .filter(
+      (s) =>
+        s.startsAt <= now &&
+        (!window.from || istToday(s.startsAt) >= window.from) &&
+        (!window.to || istToday(s.startsAt) <= window.to),
+    )
+    .map((s) => s.id);
+
+/**
+ * Academic's marks for one demo's started classes. Call it BEFORE a transaction opens: no
+ * network call happens inside one (pass the result to demoWithChecklist / syncDemo).
+ */
+export async function marksForDemo(db: Database, demoId: string, now = new Date()) {
+  const sessions = await db
+    .select({ id: opsDemoSessions.id, startsAt: opsDemoSessions.startsAt })
+    .from(opsDemoSessions)
+    .where(eq(opsDemoSessions.demoId, demoId as Demo['id']));
+  return academicDemoMarks(db, askable(sessions, now));
+}
+
+/**
+ * Sessions (with teacher names, and Academic's mark and actual teachers for a linked class — R15,
+ * one batched Academic call about started classes; Academic stays the only writer of the mark),
+ * checklist entries and the cases' follow-ups for these demos. Inside a transaction, pass `marks`.
+ */
+async function demoExtras(
+  db: Database,
+  demos: readonly Demo[],
+  opts: { marks?: AcademicDemoMarks; window?: { from?: string; to?: string }; now?: Date } = {},
+) {
   const ids = demos.map((d) => d.id);
   const [sessions, entries, followUps] = await inOrder([
     db
@@ -139,17 +177,31 @@ async function demoExtras(db: Database, demos: readonly Demo[]) {
       .where(inArray(opsFollowUps.admissionId, [...new Set(demos.map((d) => d.admissionId))]))
       .orderBy(asc(opsFollowUps.dueDate)),
   ]);
+  const marks =
+    opts.marks ??
+    (await academicDemoMarks(db, askable(sessions, opts.now ?? new Date(), opts.window)));
+  const marked = withMarks(sessions, marks).map((s) => ({
+    ...s,
+    teacherName: s.academic?.teacherNames.join(', ') || s.teacherName,
+  }));
   return {
-    sessions: groupBy(sessions, (s) => s.demoId),
+    marks,
+    sessions: groupBy(marked, (s) => s.demoId),
     entries: groupBy(entries, (e) => e.subjectId),
     followUps: groupBy(followUps, (f) => f.admissionId),
   };
 }
 
 /** One demo (optionally locked FOR UPDATE) with its resolved checklist; NOT_FOUND "Demo not found.". */
-export async function demoWithChecklist(db: Database, id: string, lock = false) {
+export async function demoWithChecklist(
+  db: Database,
+  id: string,
+  lock = false,
+  /** Required inside a transaction (read with marksForDemo before it opens). */
+  marks?: AcademicDemoMarks,
+) {
   const demo = await rowById(db, opsDemos, id, 'Demo', lock);
-  const { entries, sessions } = await demoExtras(db, [demo]);
+  const { entries, sessions } = await demoExtras(db, [demo], { marks });
   return {
     demo,
     checklist: demoChecklist(entries.get(demo.id) ?? [], sessions.get(demo.id) ?? []),
@@ -178,6 +230,8 @@ function summarise(
     checklist: demoChecklist(extras.entries.get(demo.id) ?? [], sessions),
     followUp: demoFollowUp(extras.followUps.get(demo.admissionId) ?? [], now, window),
     gaps: setupGaps(demo, sessions),
+    /** Whether Academic's marks were readable; when not, linked classes wait (R15). */
+    academicMarks: { status: extras.marks.status, checkedAt: extras.marks.checkedAt },
   };
 }
 export type DemoSummary = ReturnType<typeof summarise>;
@@ -249,6 +303,7 @@ export async function listDemos(
   const extras = await demoExtras(
     db,
     base.map((r) => r.demo),
+    { window: { from: query.from, to: query.to }, now },
   );
   const rows = base
     .map((r) => summarise(r, extras, now, window))
@@ -365,8 +420,7 @@ export async function getDemo(db: Database, actor: Actor, id: string, now = new 
     .flatMap((c) => [c.previousValue, c.newValue])
     // Substitute rows hold "Substitute" / "Planned teacher", not staff ids.
     .filter((v): v is string => Boolean(v && z.uuid().safeParse(v).success));
-  const sessionIds = new Set(sessions.map((s) => s.id as string));
-  const [teachers, names, feedback, reviewTexts] = await Promise.all([
+  const [teachers, names, feedback] = await Promise.all([
     db
       .select({ id: staffMembers.id, fullName: staffMembers.fullName })
       .from(staffMembers)
@@ -379,22 +433,17 @@ export async function getDemo(db: Database, actor: Actor, id: string, now = new 
       ...(fees?.records ?? []).map((f) => f.recordedBy),
       row.demo.outcomeBy,
     ]),
-    demoFeedbackByDay(db, actor, row.demo.id),
-    // Raw review text stays internal: only for ops:feedback:read (own scope = own reviews).
-    can(actor, 'ops:feedback:read') && row.studentId
-      ? listStudentFeedback(db, actor, row.studentId).then((rows) =>
-          rows.filter((r) => !r.superseded && sessionIds.has(r.demoSessionId ?? '')),
-        )
-      : [],
+    demoFeedbackByDay(db, actor, row.demo.id, extras.marks),
   ]);
   return {
     ...summarise(row, extras, now, settings['followups.due_rules'].value.upcomingWindowDays),
     changes,
     kyc,
     fees,
-    /** Review state per day per teacher, from the single feedback store (server/feedback.ts). */
-    feedback,
-    reviewTexts,
+    /** Review state per day per teacher, Academic reviews and older Ops ones (server/feedback.ts). */
+    feedback: feedback.days,
+    reviews: feedback.reviews,
+    legacyReviews: feedback.legacy,
     checklistHistory: [...entries].reverse(),
     followUps: extras.followUps.get(row.demo.admissionId) ?? [],
     counselling: counselling.map(({ s, counsellorName }) => ({ ...s, counsellorName })),
@@ -431,4 +480,41 @@ export async function bookableAdmissions(db: Database, actor: Actor) {
     )
     .orderBy(asc(opsLeads.studentName))
     .limit(200);
+}
+
+/**
+ * GET /ops/api/internal/v1/demo-sessions?date= (caller academic, R5): the day's demo classes (IST)
+ * that are not cancelled, with the minimum Academic needs to add a demo student to a class roster.
+ * No contact, guardian or KYC data.
+ */
+export async function demoSessionsForDay(db: Database, date: string) {
+  const rows = await db
+    .select({
+      demoSessionId: opsDemoSessions.id,
+      coreStudentId: opsAdmissions.studentId,
+      displayName: opsLeads.studentName,
+      dayNumber: opsDemoSessions.dayNumber,
+      subject: opsDemoSessions.subject,
+      startsAt: opsDemoSessions.startsAt,
+      isSample: opsLeads.isSample,
+    })
+    .from(opsDemoSessions)
+    .innerJoin(opsDemos, eq(opsDemos.id, opsDemoSessions.demoId))
+    .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsDemos.admissionId))
+    .innerJoin(opsLeads, eq(opsLeads.id, opsDemos.leadId))
+    .where(
+      and(
+        sql`(${opsDemoSessions.startsAt} AT TIME ZONE 'Asia/Kolkata')::date = ${date}::date`,
+        sql`${opsDemoSessions.attendance} <> 'cancelled'`,
+        isNotNull(opsAdmissions.studentId),
+      ),
+    )
+    .orderBy(asc(opsDemoSessions.startsAt));
+  return {
+    items: rows.map((r) => ({
+      ...r,
+      coreStudentId: r.coreStudentId!,
+      startsAt: r.startsAt.toISOString(),
+    })),
+  };
 }

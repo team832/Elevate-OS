@@ -1,19 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
+  OPS_EOD_REVIEW_EVENT_KINDS,
   OPS_EOD_STATUSES,
+  OPS_TASK_EVENT_KINDS,
   OPS_TASK_PRIORITIES,
   OPS_TASK_RECURRENCES,
+  OPS_TASK_SOURCES,
   OPS_TASK_STATUSES,
 } from '@elevate/database';
 import {
   buildEodSnapshot,
+  EOD_REVIEW_EVENT_KINDS,
   EOD_STATUSES,
   isOverdue,
   missingReasons,
   nextOccurrence,
   resolveTaskState,
+  TASK_EVENT_KINDS,
   TASK_PRIORITIES,
   TASK_RECURRENCES,
+  TASK_SOURCES,
   TASK_STATUSES,
   type EodTask,
   type TaskState,
@@ -22,11 +28,16 @@ import {
 const ist = (day: string, hhmm: string) => new Date(`${day}T${hhmm}:00+05:30`);
 
 describe('staff task vocabularies match the database', () => {
-  it('statuses, priorities, recurrences and EOD statuses', () => {
-    expect([...TASK_STATUSES]).toEqual([...OPS_TASK_STATUSES]);
-    expect([...TASK_PRIORITIES]).toEqual([...OPS_TASK_PRIORITIES]);
-    expect([...TASK_RECURRENCES]).toEqual([...OPS_TASK_RECURRENCES]);
-    expect([...EOD_STATUSES]).toEqual([...OPS_EOD_STATUSES]);
+  it.each([
+    ['task statuses', TASK_STATUSES, OPS_TASK_STATUSES],
+    ['priorities', TASK_PRIORITIES, OPS_TASK_PRIORITIES],
+    ['recurrences', TASK_RECURRENCES, OPS_TASK_RECURRENCES],
+    ['task sources', TASK_SOURCES, OPS_TASK_SOURCES],
+    ['task event kinds', TASK_EVENT_KINDS, OPS_TASK_EVENT_KINDS],
+    ['EOD statuses', EOD_STATUSES, OPS_EOD_STATUSES],
+    ['EOD review event kinds', EOD_REVIEW_EVENT_KINDS, OPS_EOD_REVIEW_EVENT_KINDS],
+  ] as const)('%s', (_, app, db) => {
+    expect([...app]).toEqual([...db]);
   });
 });
 

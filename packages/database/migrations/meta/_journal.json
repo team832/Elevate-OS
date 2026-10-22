@@ -64,6 +64,27 @@
       "when": 1792576067687,
       "tag": "0008_staff_tasks",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792602180503,
+      "tag": "0009_academic_teacher_workspace_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792603426392,
+      "tag": "0010_link_academic_students_to_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792636129455,
+      "tag": "0011_mark_sample_academic_students",
+      "breakpoints": true
     }
   ]
 }

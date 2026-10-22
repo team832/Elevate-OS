@@ -21,6 +21,9 @@ export function formatClock(minutes: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+/** Weekday names by ISO number − 1 (index 0 = Monday). */
+export const WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
+
 /** ISO weekday of a calendar date: 1 = Monday … 7 = Sunday. */
 export function isoWeekday(date: string): number {
   const [y, m, d] = date.split('-').map(Number) as [number, number, number];

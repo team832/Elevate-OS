@@ -4,6 +4,7 @@
  * Student" (Tanisha keeps the brief's "Tanisha Demo Student"), emails are @example.test,
  * no phone numbers exist. Sample staff come from the core seed and ./reference.ts; the
  * owner-supplied real teachers (./teachers.ts) are never given a class, meeting or feedback.
+ * Teacher reviews of students are Academic's (owner answer 1): sample ones are seeded there.
  * Each case is walked through the real services, so history, audit and admission numbers
  * are genuine. Dates are relative to today (IST); leads arrive over the last 30 days.
  * Idempotent per case: a case whose lead email exists is skipped, so new cases can be added
@@ -44,7 +45,6 @@ import {
   updateDemoSession,
 } from '../src/server/demos';
 import type { SessionAction } from '../src/server/demos-schemas';
-import { createTeacherFeedback } from '../src/server/feedback';
 import {
   createFeePlan,
   decideFeePlan,
@@ -129,7 +129,6 @@ interface SampleStudent {
   /** Annual agreement: the three instalment due days and how many are paid; `pendingApproval` stops at the approval request. */
   fees?: { dueIn: number[]; paid: number; pendingApproval?: boolean };
   meetings?: SampleMeeting[];
-  feedback?: { subject: string; day: number; observations: string; areasToImprove: string };
   followUp?: { title: string; dueIn: number };
 }
 
@@ -285,7 +284,7 @@ export const SAMPLE_STUDENTS: readonly SampleStudent[] = [
     first: 'Arjun',
     stage: 'class_11',
     programme: 'CLAT',
-    shows: 'active: Class 11 Commerce + CLAT; fee instalment 2 upcoming; teacher feedback',
+    shows: 'active: Class 11 Commerce + CLAT; fee instalment 2 upcoming',
     days: [-24, -23, -22],
     hour: 9,
     steps: allPresent,
@@ -301,12 +300,6 @@ export const SAMPLE_STUDENTS: readonly SampleStudent[] = [
         outcome: 'Parent happy with the timetable; asked for monthly updates.',
       },
     ],
-    feedback: {
-      subject: 'Legal Reasoning',
-      day: -3,
-      observations: 'Reads passages carefully; applies principles to facts well.',
-      areasToImprove: 'Finish the passage sets inside the time limit.',
-    },
   },
   {
     first: 'Diya',
@@ -327,12 +320,6 @@ export const SAMPLE_STUDENTS: readonly SampleStudent[] = [
         purpose: 'Quant progress and mock plan',
       },
     ],
-    feedback: {
-      subject: 'Mathematics',
-      day: -2,
-      observations: 'Quick with arithmetic; algebra needs steadier practice.',
-      areasToImprove: 'Two timed algebra sets a week.',
-    },
   },
   {
     first: 'Kavya',
@@ -668,16 +655,6 @@ export async function seedSamples(db: Database, log: (m: string) => void = () =>
       );
     if (s.convert?.admit)
       await admitSample(db, manager.actor, admission.id, s.convert.requestEnrolment ?? false);
-    if (studentId && s.feedback)
-      await createTeacherFeedback(db, manager.actor, {
-        studentId,
-        teacherStaffId: teachers.get(s.feedback.subject),
-        subject: s.feedback.subject,
-        observedOn: addDays(today, s.feedback.day),
-        observations: `${s.feedback.observations} (sample)`,
-        areasToImprove: s.feedback.areasToImprove,
-        status: 'final',
-      } as never);
     added += 1;
   }
   await seedMeetingsAndFollowUps(db, { manager, counsellor }, teachers, today);

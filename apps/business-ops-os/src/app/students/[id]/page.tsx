@@ -7,7 +7,7 @@
 import type { ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { ACTIVE_CASE_STATUSES } from '../../../domain/student-lifecycle';
+import { fetchAcademicStudentSummary } from '../../../server/academic-summary';
 import { getStudent } from '../../../server/students';
 import { fmtDateTime, humanise } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
@@ -28,6 +28,7 @@ import {
   NO_LIFECYCLE,
   PrimaryAction,
   ProfileForm,
+  programmesLine,
   ProgrammesTable,
   StudentJourney,
   StudentMeta,
@@ -79,20 +80,6 @@ export default async function StudentPage({
   );
 }
 
-/** "Class 12 Commerce (batch assigned) + CLAT UG preparation (batch requested)". */
-const programmesLine = (d: Profile) =>
-  d.cases
-    .filter(
-      (c) =>
-        (ACTIVE_CASE_STATUSES as readonly string[]).includes(c.status) ||
-        c.population === 'on_hold',
-    )
-    .map(
-      (c) =>
-        `${c.programme?.name ?? 'Programme not set'} (batch ${c.enrolledBatchId ? 'assigned' : c.intendedBatchId ? 'requested' : 'to be assigned'})`,
-    )
-    .join(' + ') || 'No active programme';
-
 async function StudentProfile({
   user,
   d,
@@ -108,13 +95,24 @@ async function StudentProfile({
   const base = `/ops/students/${id}`;
   const tab: TabKey = TABS.some(([k]) => k === query.tab) ? (query.tab as TabKey) : 'overview';
   const pc = d.primaryContact;
+  const [content, academic] = await Promise.all([
+    panel(tab, d, user, query, base),
+    d.academic.studentId ? fetchAcademicStudentSummary(d.academic.studentId) : null,
+  ]);
+  const placed = new Map(
+    academic?.status === 'available'
+      ? academic.data.enrolments.flatMap((e) =>
+          e.batchName ? [[e.enrolmentId as string, e.batchName] as const] : [],
+        )
+      : [],
+  );
   return (
     <>
       <PageHeader
         title={d.person.fullName}
         meta={<StudentMeta d={d} />}
         description={[
-          programmesLine(d),
+          programmesLine(d, placed),
           a.academicYear ? `Academic year ${a.academicYear}` : 'Academic year not recorded',
           pc ? `${pc.label}: ${pc.phone ?? 'no phone'}` : 'No contact recorded',
         ].join(' · ')}
@@ -135,7 +133,7 @@ async function StudentProfile({
       />
       <div className="el-stack">
         <StudentJourney d={d} />
-        {await panel(tab, d, user, query, base)}
+        {content}
       </div>
       <ProfileForm d={d} action={query.action} base={listHref(base, { tab })} />
     </>
@@ -170,7 +168,7 @@ async function panel(
             >
               <AdmissionFacts d={d} />
             </Segment>
-            <Segment title="Coming up" flush description="Open follow-ups and meetings.">
+            <Segment title="Coming up" flush description="Follow-ups and meetings from today on.">
               <UpcomingTable d={d} />
             </Segment>
           </div>
@@ -226,7 +224,11 @@ async function panel(
       );
     case 'feedback':
       return studentId ? (
-        <StudentFeedbackSection studentId={studentId} user={user} />
+        <StudentFeedbackSection
+          studentId={studentId}
+          academicStudentId={d.academic.studentId}
+          user={user}
+        />
       ) : (
         noIdentity('Feedback')
       );

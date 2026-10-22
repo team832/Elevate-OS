@@ -67,6 +67,8 @@ export interface ActionFormProps {
   amountLabel?: string;
   /** Visually hidden text after every label and the button (e.g. " for Call Asha"), so repeated row forms have distinct accessible names. */
   labelSuffix?: string;
+  /** Empty the fields after a success (repeatable entries such as comments). */
+  resetOnSuccess?: boolean;
 }
 
 const WIDE = new Set<FieldSpec['type']>(['textarea', 'json', 'checkbox']);
@@ -228,6 +230,7 @@ export function ActionForm({
   successText = 'Saved.',
   amountLabel,
   labelSuffix,
+  resetOnSuccess,
 }: ActionFormProps) {
   const router = useRouter();
   const [error, setError] = useState<ApiError | null>(null);
@@ -244,7 +247,8 @@ export function ActionForm({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const body = toBody(fields, new FormData(event.currentTarget), extra);
+    const form = event.currentTarget;
+    const body = toBody(fields, new FormData(form), extra);
     // Disabled before the request starts: a double click never posts twice.
     setSubmitting(true);
     const json = await gate(JSON.stringify(body), async (key) => {
@@ -277,6 +281,7 @@ export function ActionForm({
     setError(json.error ?? null);
     setDone(!json.error);
     if (json.error) return;
+    if (resetOnSuccess) form.reset();
     startTransition(() => {
       if (redirectTo)
         router.push(
@@ -325,7 +330,7 @@ export function ActionForm({
     if (f.type === 'checkbox')
       return (
         <div key={f.name} className="el-field el-field-wide">
-          <label className="el-checkbox">
+          <label className="el-checkbox" htmlFor={id}>
             <input
               type="checkbox"
               name={f.name}

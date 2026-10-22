@@ -49,6 +49,11 @@ export const academicPermissionList = [
   { key: 'academic:assignments:write', description: 'Assign teachers to batches and subjects.' },
   { key: 'academic:timetable:read', description: 'Read the timetable, conflicts and capacity.' },
   {
+    key: 'academic:timetable:publish',
+    description:
+      'Publish timetable patterns (generates dated class sessions) and authorise substitutes.',
+  },
+  {
     key: 'academic:timetable:write',
     description: 'Schedule, cancel and reschedule class sessions; manage rooms and calendars.',
   },
@@ -69,6 +74,15 @@ export const academicPermissionList = [
     description: 'Plan assessments, configure scoring rules, answer keys and enter responses.',
   },
   {
+    key: 'academic:assessments:mark',
+    description:
+      'Enter and correct marks (teachers: assessments of their own batches and subjects).',
+  },
+  {
+    key: 'academic:assessments:publish',
+    description: 'Publish finalised results to students and parents (separate from finalising).',
+  },
+  {
     key: 'academic:assessments:finalise',
     description: 'Finalise results (immutable) and re-score into a new result version.',
   },
@@ -79,6 +93,15 @@ export const academicPermissionList = [
   {
     key: 'academic:progress:write',
     description: 'Create and update catch-up tasks and interventions.',
+  },
+  {
+    key: 'academic:reviews:read',
+    description:
+      'Read submitted teacher reviews of students (teachers: own reviews and own students; drafts only by their author).',
+  },
+  {
+    key: 'academic:reviews:write',
+    description: 'Write, submit, revise and withdraw own teacher reviews (own scope only).',
   },
   {
     key: 'academic:settings:manage',
@@ -105,7 +128,9 @@ export const academicPermissions = definePermissions<AcademicPermission>({
   module: 'academic',
   permissions: academicPermissionList,
   grants: {
-    academic_coordinator: academicPermissionList.map((p) => p.key),
+    academic_coordinator: academicPermissionList.map((p) =>
+      p.key === 'academic:reviews:write' ? own(p.key) : p.key,
+    ),
     teacher: [
       'academic:module:access',
       'academic:courses:read',
@@ -118,7 +143,10 @@ export const academicPermissions = definePermissions<AcademicPermission>({
       own('academic:attendance:read'),
       own('academic:attendance:record'),
       own('academic:assessments:read'),
+      own('academic:assessments:mark'),
       own('academic:progress:read'),
+      own('academic:reviews:read'),
+      own('academic:reviews:write'),
     ],
     director: readOnly,
     auditor: readOnly,

@@ -8,7 +8,8 @@
  * - capacity.ts             capacity feasibility (gross − exclusions = net vs required)
  * - assessment-schedule.ts  assessment scheduling constraints
  * - scoring.ts              exact scoring, validation, aggregation, percentiles
- * - progress.ts             attendance summary, missed classes, least-squares trend
+ * - progress.ts             attendance summary, missed classes, least-squares trend, support signals
+ * - analysis.ts             assessment analysis (scored-only average) and comparability
  * - catchup.ts              catch-up prioritisation
  * - intake.ts               enrolment intake decision
  * - plans.ts                curriculum plan status rules
@@ -34,3 +35,4 @@ export * from './plans';
 export * from './intake';
 export * from './responses-csv';
 export * from './settings';
+export * from './analysis';

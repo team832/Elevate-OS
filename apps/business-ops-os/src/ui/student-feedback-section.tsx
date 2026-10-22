@@ -1,288 +1,247 @@
 /**
- * Student profile section: teacher reviews of the student (owner brief §8H; 21 Oct §5), the
- * single review store (feedback service: ../server/feedback). A review references a demo class,
- * an enrolment or neither; Draft and Submitted are distinct; Internal by default. Raw reviews
- * are for authorised staff only. Versions: a submitted review is never overwritten — an edit
- * adds a version, older ones are listed under it. Student/guardian feedback ABOUT teachers is
- * not shown here; it lives on each teacher's profile (moderated).
+ * Teacher reviews of a student, read from Academic OS (owner answer 21 Oct 2026, supersedes
+ * D-043; server/academic-reviews.ts). Teachers write and submit them in Academic; Ops shows the
+ * submitted versions (withdrawn hidden, edits marked), lets permitted staff acknowledge a version
+ * and add Ops' own follow-up, and never edits the teacher's words. Reviews recorded in Business
+ * Ops before 21 Oct 2026 stay below as read-only history. Student/guardian feedback ABOUT
+ * teachers lives on each teacher's profile (moderated).
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import type { StudentIdentityId } from '@elevate/shared-types';
-import { StatusBadge } from '@elevate/shared-ui';
-import { REVIEW_STATE_LABELS } from '../domain/feedback';
-import { listStudentFeedback, reviewTargets } from '../server/feedback';
-import { listTeachers } from '../server/teachers';
-import { ActionForm, type FieldSpec } from './action-form';
-import { fmtDate, fmtDateTime } from './format';
+import { Alert, StatusBadge, type Column } from '@elevate/shared-ui';
+import { studentReviews, writeReviewHref, type ReviewsResult } from '../server/academic-reviews';
+import { listStudentFeedback } from '../server/feedback';
+import { ActionForm } from './action-form';
+import { fmtDate, fmtDateTime, humanise } from './format';
 import { load } from './frame';
 import { RecordTable } from './record-table';
 import { DetailTable, Segment } from './sections';
 
 const TITLE = 'Teacher reviews';
+const LEGACY = 'Recorded in Business Ops before 21 Oct 2026';
 const WHERE_OTHER =
-  'Internal: raw reviews never reach parents or students. Feedback from students and guardians about teachers is kept on each teacher’s profile.';
+  'Written and submitted by teachers in Academic OS. Internal remarks never reach parents or students. Feedback from students and guardians about teachers is kept on each teacher’s profile.';
 
-const SCOPE_LABELS = {
-  demo_session: 'A demo class',
-  enrolment: 'An Academic enrolment',
-  general: 'General',
-} as const;
-const stateLabel = (status: string) =>
-  status === 'final' ? REVIEW_STATE_LABELS.submitted : REVIEW_STATE_LABELS.draft;
+type Review = Extract<ReviewsResult, { status: 'available' }>['reviews'][number];
 
-const fields = (f?: {
-  [
-    K in
-      | 'subject'
-      | 'observedOn'
-      | 'relatedRef'
-      | 'observations'
-      | 'strengths'
-      | 'areasToImprove'
-      | 'actionPlan'
-      | 'status'
-      | 'visibility'
-  ]?: string | null;
-}): FieldSpec[] => [
-  { name: 'subject', label: 'Subject', required: true, defaultValue: f?.subject ?? '' },
+/** Whether the signed-in person teaches (the Academic review form is theirs to use). */
+export const isTeacher = (user: AuthenticatedUser) => user.roles.includes('teacher');
+
+/** Academic reviews with their acknowledgements; "Source unavailable" when Academic is down. */
+export function AcademicReviewList({
+  result,
+  user,
+  showStudent = false,
+  heading: Heading = 'h3',
+}: {
+  result: ReviewsResult | null;
+  user: AuthenticatedUser;
+  /** On a teacher's profile each review names its student. */
+  showStudent?: boolean;
+  /** One level below the surrounding Segment's heading. */
+  heading?: 'h3' | 'h4';
+}) {
+  if (!result) return <p className="el-field-hint">Needs permission ops:feedback:read.</p>;
+  if (result.status === 'unavailable')
+    return (
+      <Alert tone="warning" title="Source unavailable — Academic OS could not be reached">
+        Checked {fmtDateTime(result.checkedAt)} ({result.reason}). Reviews may exist; try again
+        later.
+      </Alert>
+    );
+  const current = result.reviews.filter((r) => !r.superseded);
+  if (!current.length)
+    return (
+      <p>
+        No submitted review. A review appears here once the teacher submits it in Academic OS; no
+        review is not a mark against the student.
+      </p>
+    );
+  return (
+    <div className="el-stack">
+      {current.map((r) => {
+        const older = result.reviews.filter((o) => o.reviewKey === r.reviewKey && o.superseded);
+        return (
+          <article key={`${r.reviewKey}:${r.version}`} className="el-stack">
+            <Heading>
+              {r.subjectName ?? 'Subject not recorded'}, {when(r)}{' '}
+              <StatusBadge tone="success">Submitted</StatusBadge>{' '}
+              {r.version > 1 ? (
+                <StatusBadge tone="info">Edited — version {r.version}</StatusBadge>
+              ) : null}
+            </Heading>
+            <DetailTable
+              caption={`Review by ${r.authorName}`}
+              rows={[
+                { label: 'Teacher', value: r.authorName },
+                showStudent && { label: 'Student', value: r.studentName },
+                { label: 'Type', value: humanise(r.reviewType) },
+                { label: 'Strengths', value: r.strengths ?? 'None recorded' },
+                { label: 'Areas needing support', value: r.areasForSupport ?? 'None recorded' },
+                !!r.attendanceEvidence && {
+                  label: 'Attendance and engagement',
+                  value: r.attendanceEvidence,
+                },
+                !!r.homeworkEvidence && {
+                  label: 'Homework and practice',
+                  value: r.homeworkEvidence,
+                },
+                !!r.academicConcerns && { label: 'Academic concerns', value: r.academicConcerns },
+                { label: 'Suggested next step', value: r.suggestedAction ?? 'None recorded' },
+                {
+                  label: 'Teacher follow-up',
+                  value: r.followUpOn ? fmtDate(r.followUpOn) : 'None',
+                },
+                {
+                  label: 'Visibility',
+                  value:
+                    r.visibility === 'shareable'
+                      ? 'Strengths, areas and next step may go into a reviewed parent/student report'
+                      : 'Internal staff only',
+                },
+                { label: 'Submitted', value: fmtDateTime(r.submittedAt) },
+                // The Academic page checks access itself; the link is offered to its users only.
+                can(user, 'academic:module:access') && {
+                  label: 'Source',
+                  value: <a href={r.sourcePath}>Open in Academic OS</a>,
+                },
+              ]}
+            />
+            {older.length ? (
+              <p className="el-field-hint">
+                Earlier version{older.length === 1 ? '' : 's'}{' '}
+                {older.map((o) => `${o.version} (${fmtDateTime(o.submittedAt)})`).join(', ')}{' '}
+                superseded by the teacher; open the source to compare.
+              </p>
+            ) : null}
+            <Acknowledgements r={r} user={user} />
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+const ackDetailColumns: Column<Review['acknowledgements'][number]>[] = [
+  { key: 'note', header: 'Note', render: (a) => a.note ?? '—' },
   {
-    name: 'observedOn',
-    label: 'Date observed',
-    type: 'date',
-    required: true,
-    defaultValue: f?.observedOn ?? '',
-  },
-  {
-    name: 'relatedRef',
-    label: 'Related class or test (optional)',
-    defaultValue: f?.relatedRef ?? '',
-  },
-  {
-    name: 'observations',
-    label: 'Observation (internal only, never in parent or student reports)',
-    type: 'textarea',
-    required: true,
-    defaultValue: f?.observations ?? '',
-  },
-  { name: 'strengths', label: 'Strengths', type: 'textarea', defaultValue: f?.strengths ?? '' },
-  {
-    name: 'areasToImprove',
-    label: 'Areas needing support',
-    type: 'textarea',
-    defaultValue: f?.areasToImprove ?? '',
-  },
-  {
-    name: 'actionPlan',
-    label: 'Suggested next step',
-    type: 'textarea',
-    defaultValue: f?.actionPlan ?? '',
-  },
-  {
-    name: 'visibility',
-    label: 'Who may see it',
-    type: 'select',
-    required: true,
-    defaultValue: f?.visibility ?? 'internal',
-    options: [
-      { value: 'internal', label: 'Internal staff only' },
-      {
-        value: 'shareable',
-        label: 'Strengths, areas and next step may go into a reviewed parent/student report',
-      },
-    ],
-  },
-  {
-    name: 'status',
-    label: 'Status',
-    type: 'select',
-    required: true,
-    defaultValue: f?.status ?? 'draft',
-    options: [
-      { value: 'draft', label: 'Draft (can still be edited in place)' },
-      { value: 'final', label: 'Submitted (later edits add a new version)' },
-    ],
+    key: 'follow',
+    header: 'Ops follow-up (Ops’ own words)',
+    render: (a) =>
+      a.followUp ? `${a.followUp}${a.followUpOn ? ` (by ${fmtDate(a.followUpOn)})` : ''}` : '—',
   },
 ];
 
+const when = (r: Review) =>
+  r.sessionDate
+    ? fmtDate(r.sessionDate)
+    : r.periodFrom && r.periodTo
+      ? `${fmtDate(r.periodFrom)} to ${fmtDate(r.periodTo)}`
+      : `submitted ${fmtDateTime(r.submittedAt)}`;
+
+function Acknowledgements({ r, user }: { r: Review; user: AuthenticatedUser }) {
+  const mine = r.acknowledgements.some((a) => a.byUserId === user.id);
+  // Ops' notes and follow-ups reach holders of ops:feedback:acknowledge only (the server blanks them).
+  const details = can(user, 'ops:feedback:acknowledge');
+  return (
+    <>
+      {r.acknowledgements.length ? (
+        <RecordTable
+          caption="Acknowledged in Business Ops"
+          rows={r.acknowledgements}
+          rowKey={(a) => a.id}
+          columns={[
+            { key: 'by', header: 'By', render: (a) => `${a.by}, ${fmtDateTime(a.at)}` },
+            ...(details ? ackDetailColumns : []),
+          ]}
+        />
+      ) : null}
+      {can(user, 'ops:feedback:acknowledge') && !mine && r.coreStudentId ? (
+        <details>
+          <summary>Acknowledge this review</summary>
+          <ActionForm
+            action="/ops/api/v1/review-acks"
+            submitLabel="Acknowledge review"
+            successText="Acknowledged."
+            labelSuffix={` (${r.authorName}, version ${r.version})`}
+            variant="secondary"
+            extra={{ coreStudentId: r.coreStudentId, reviewKey: r.reviewKey, version: r.version }}
+            fields={[
+              { name: 'note', label: 'Note (optional)', type: 'textarea' },
+              { name: 'followUp', label: 'Ops follow-up (optional)', type: 'textarea' },
+              { name: 'followUpOn', label: 'Follow-up date', type: 'date' },
+            ]}
+          />
+        </details>
+      ) : null}
+    </>
+  );
+}
+
 export async function StudentFeedbackSection({
   studentId,
+  academicStudentId,
   user,
-  readOnly = false,
 }: {
   studentId: StudentIdentityId;
+  /** The Academic student record, once the student is enrolled there (the review form needs it). */
+  academicStudentId: string | null;
   user: AuthenticatedUser;
-  /** No forms (the printed report). */
-  readOnly?: boolean;
 }) {
+  const write =
+    isTeacher(user) && academicStudentId ? (
+      <a href={writeReviewHref({ studentId: academicStudentId })}>Write review in Academic OS</a>
+    ) : undefined;
   if (!can(user, 'ops:feedback:read'))
     return (
-      <Segment title={TITLE} description={WHERE_OTHER}>
+      <Segment title={TITLE} description={WHERE_OTHER} actions={write}>
         <p className="el-field-hint">Needs permission ops:feedback:read.</p>
       </Segment>
     );
-  const manage = !readOnly && can(user, 'ops:feedback:manage');
-  const write = manage || (!readOnly && can(user, 'ops:feedback:write'));
   const r = await load(async (db) => ({
-    rows: await listStudentFeedback(db, user, studentId),
-    teachers: manage ? (await listTeachers(db, user)).teachers : [],
-    targets: write ? await reviewTargets(db, studentId) : null,
+    academic: await studentReviews(db, user, studentId),
+    legacy: await listStudentFeedback(db, user, studentId),
   }));
   if (!r.ok)
     return (
-      <Segment title={TITLE} description={WHERE_OTHER}>
+      <Segment title={TITLE} description={WHERE_OTHER} actions={write}>
         {r.view}
       </Segment>
     );
-  const { rows, teachers, targets } = r.data;
-  const byId = new Map(rows.map((f) => [f.id, f]));
-  const olderVersions = (f: (typeof rows)[number]) => {
-    const out = [];
-    for (
-      let p = f.supersedesId ? byId.get(f.supersedesId) : undefined;
-      p;
-      p = p.supersedesId ? byId.get(p.supersedesId) : undefined
-    )
-      out.push(p);
-    return out;
-  };
-  const current = rows.filter((f) => !f.superseded);
-  const sessions = targets?.sessions ?? [];
-  const enrolments = targets?.enrolments ?? [];
+  const { academic, legacy } = r.data;
   return (
-    <Segment title={TITLE} description={WHERE_OTHER}>
-      <div className="el-stack">
-        {current.length === 0 ? (
-          <p>No teacher review yet.{write ? ' Add one with “Add a review” below.' : ''}</p>
-        ) : null}
-        {current.map((f) => {
-          const older = olderVersions(f);
-          return (
-            <article key={f.id} className="el-stack">
-              <h3>
-                {f.subject}, {fmtDate(f.observedOn)}{' '}
-                <StatusBadge tone={f.status === 'final' ? 'success' : 'neutral'}>
-                  {stateLabel(f.status)}, version {f.version}
-                </StatusBadge>
-              </h3>
-              <DetailTable
-                caption={`Review of ${f.subject}`}
-                rows={[
-                  { label: 'Teacher', value: f.teacherName },
-                  { label: 'About', value: SCOPE_LABELS[f.scope] },
-                  { label: 'Observation', value: f.observations },
-                  { label: 'Strengths', value: f.strengths ?? 'None recorded' },
-                  { label: 'Areas needing support', value: f.areasToImprove ?? 'None recorded' },
-                  { label: 'Suggested next step', value: f.actionPlan ?? 'None recorded' },
-                  {
-                    label: 'Visibility',
-                    value:
-                      f.visibility === 'shareable'
-                        ? 'Shareable in reviewed reports (never the observation)'
-                        : 'Internal staff only',
-                  },
-                  { label: 'Written', value: fmtDateTime(f.createdAt) },
-                  !!f.relatedRef && { label: 'Related to', value: f.relatedRef },
-                ]}
-              />
-              {older.length ? (
-                <RecordTable
-                  caption={`Earlier versions (${older.length})`}
-                  rows={older}
-                  rowKey={(v) => v.id}
-                  columns={[
-                    { key: 'v', header: 'Version', numeric: true, render: (v) => v.version },
-                    { key: 's', header: 'Status', render: (v) => stateLabel(v.status) },
-                    { key: 'at', header: 'Written', render: (v) => fmtDateTime(v.createdAt) },
-                    { key: 'o', header: 'Observation', render: (v) => v.observations },
-                  ]}
-                />
-              ) : null}
-              {write ? (
-                <details>
-                  <summary>Edit this review</summary>
-                  <ActionForm
-                    action={`/ops/api/v1/feedback/about-students/${f.id}`}
-                    method="PATCH"
-                    submitLabel={f.status === 'final' ? 'Save as new version' : 'Save review'}
-                    variant="secondary"
-                    fields={fields(f)}
-                  />
-                </details>
-              ) : null}
-            </article>
-          );
-        })}
-        {write ? (
-          <details>
-            <summary>Add a review</summary>
-            <ActionForm
-              action="/ops/api/v1/feedback/about-students"
-              submitLabel="Save review"
-              extra={{ studentId }}
-              fields={[
-                ...(manage
-                  ? [
-                      {
-                        name: 'teacherStaffId',
-                        label: 'Teacher',
-                        type: 'select' as const,
-                        required: true,
-                        options: teachers.map((t) => ({ value: t.id, label: t.displayName })),
-                      },
-                    ]
-                  : []),
-                {
-                  name: 'scope',
-                  label: 'About',
-                  type: 'select' as const,
-                  required: true,
-                  defaultValue: 'general',
-                  options: [
-                    { value: 'general', label: SCOPE_LABELS.general },
-                    ...(sessions.length
-                      ? [
-                          {
-                            value: 'demo_session',
-                            label: `${SCOPE_LABELS.demo_session} (choose below)`,
-                          },
-                        ]
-                      : []),
-                    ...(enrolments.length
-                      ? [{ value: 'enrolment', label: `${SCOPE_LABELS.enrolment} (choose below)` }]
-                      : []),
-                  ],
-                },
-                ...(sessions.length
-                  ? [
-                      {
-                        name: 'demoSessionId',
-                        label: 'Demo class',
-                        type: 'select' as const,
-                        hint: 'Only the teacher who took the class can review it.',
-                        options: sessions.map((s) => ({
-                          value: s.id,
-                          label: `Day ${s.dayNumber} · ${fmtDateTime(s.startsAt)} · ${s.subject ?? 'Subject not recorded'} · ${s.teacherName ?? 'No teacher'}`,
-                        })),
-                      },
-                    ]
-                  : []),
-                ...(enrolments.length
-                  ? [
-                      {
-                        name: 'enrolmentId',
-                        label: 'Enrolment',
-                        type: 'select' as const,
-                        options: enrolments.map((e) => ({ value: e.id, label: e.code })),
-                      },
-                    ]
-                  : []),
-                ...fields(),
-              ]}
-            />
-          </details>
-        ) : null}
-      </div>
-    </Segment>
+    <>
+      <Segment title={TITLE} description={WHERE_OTHER} actions={write}>
+        <AcademicReviewList result={academic} user={user} />
+      </Segment>
+      {legacy.length ? (
+        <Segment title={`Earlier reviews — ${LEGACY}`} flush description="Read-only history.">
+          <RecordTable
+            rows={legacy}
+            rowKey={(f) => f.id}
+            columns={[
+              { key: 'on', header: 'Date', render: (f) => fmtDate(f.observedOn) },
+              { key: 'teacher', header: 'Teacher', render: (f) => f.teacherName },
+              { key: 'subject', header: 'Subject' },
+              {
+                key: 'status',
+                header: 'Status',
+                render: (f) =>
+                  `${f.status === 'final' ? 'Submitted' : 'Draft'}, version ${f.version}${f.superseded ? ' (superseded)' : ''}`,
+              },
+              {
+                key: 'text',
+                header: 'Observation, strengths, support, next step',
+                render: (f) =>
+                  [f.observations, f.strengths, f.areasToImprove, f.actionPlan]
+                    .filter(Boolean)
+                    .join(' · '),
+              },
+            ]}
+          />
+        </Segment>
+      ) : null}
+    </>
   );
 }
