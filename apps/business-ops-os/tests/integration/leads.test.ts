@@ -46,7 +46,6 @@ const post = (
   headers?: Record<string, string>,
 ) => authedRequest(user, path, { method: 'POST', json, headers });
 
-/** HTTP status of a route call. */
 const status = async (
   route: Parameters<typeof callRoute>[0],
   req: Request,
@@ -300,6 +299,9 @@ describe('merge review (explicit, audited)', () => {
     expect(res.status).toBe(200);
     const src = await leadRow(sid);
     expect(src?.mergedIntoLeadId).toBe(target.data!.lead.id);
+    const call = { kind: 'call', outcome: 'no_answer' };
+    expect(await status(activity, post(manager, '/x', call), { id: sid })).toBe(409);
+    expect(await status(accept, post(manager, '/x', {}), { id: sid })).toBe(409);
     expect((await leadRow(target.data!.lead.id))?.studentEmail).toBe(src?.studentEmail);
     const detail = await callRoute<{ enquiries: unknown[] }>(
       getLead,

@@ -135,6 +135,7 @@ export async function Frame({
       {canSearch ? <SearchShortcut inputId="el-search-ops" /> : null}
       {access.status === 'forbidden' ? (
         <ErrorState
+          level={1}
           title="No access"
           description="Your roles do not allow this page. Ask an operations manager or a platform administrator."
         />

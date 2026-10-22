@@ -50,6 +50,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
     >
       {access.status === 'forbidden' ? (
         <ErrorState
+          level={1}
           title="No access"
           description="Users & roles needs the platform:users:read permission. Ask a platform administrator."
         />

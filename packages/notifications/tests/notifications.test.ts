@@ -45,18 +45,15 @@ describe('in-app notifications', () => {
     expect(await countUnread(ctx.db, b.id)).toBe(1);
   });
 
-  it('rejects absolute links', async () => {
-    const a = await createTestUser(ctx.db);
-    await expect(
-      notify(ctx.db, {
-        userIds: [a.id],
-        module: 'ops',
-        kind: 'x',
-        title: 'x',
-        link: 'https://evil.example',
-      }),
-    ).rejects.toThrow();
-  });
+  it.each(['https://evil.example', '//evil.example/x', '/\\evil.example'])(
+    'rejects off-site link %s',
+    async (link) => {
+      const a = await createTestUser(ctx.db);
+      await expect(
+        notify(ctx.db, { userIds: [a.id], module: 'ops', kind: 'x', title: 'x', link }),
+      ).rejects.toThrow('single "/"');
+    },
+  );
 });
 
 describe('channel adapters', () => {

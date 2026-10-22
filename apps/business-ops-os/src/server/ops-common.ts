@@ -32,6 +32,16 @@ export async function inOrder<T extends readonly unknown[]>(
   return out as never;
 }
 
+/** Rows by `key`; rows whose key is null are left out. */
+export function groupBy<T>(rows: readonly T[], key: (r: T) => string | null) {
+  const out = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = key(r);
+    if (k) out.set(k, [...(out.get(k) ?? []), r]);
+  }
+  return out;
+}
+
 /** One row by id (optionally locked FOR UPDATE), or NOT_FOUND "<what> not found.". */
 export async function rowById<T extends PgTable & { id: PgColumn }>(
   db: Database,

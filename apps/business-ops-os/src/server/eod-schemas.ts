@@ -1,4 +1,3 @@
-/** zod bodies and queries for end-of-day reports, the manager inbox and period reports. */
 import { z } from 'zod';
 import { isoDateSchema } from '@elevate/shared-contracts';
 import { EOD_STATUSES } from '../domain/staff-tasks';
@@ -72,4 +71,3 @@ export const periodReportQuery = z
     message: 'The start must be on or before the end.',
     path: ['to'],
   });
-export type PeriodReportQuery = z.output<typeof periodReportQuery>;

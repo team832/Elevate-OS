@@ -4,7 +4,7 @@
 - **vitest 5.0.5**, one project per workspace (`packages/*/vitest.config.ts`, `apps/*/vitest.config.ts`) using the shared preset `vitest.shared.ts` (node environment, `tests/**/*.test.ts(x)`, test-only env values such as `SESSION_SECRET=test-only-…`, `LOG_LEVEL=error`).
 - **PGlite** in memory via `createTestDb()` / `setupTestDatabase()` — real PostgreSQL 17 semantics (constraints, transactions, `gen_random_uuid()`, jsonb) with the full current schema from all four schema files (D-025).
 - Route handlers are called directly with `Request` objects (`authedRequest`, `callRoute`) — no server needed.
-- **Playwright E2E is deferred** (D-007) until screens stabilise; cross-zone behaviour is currently verified manually with curl (IMPLEMENTATION_STATUS.md).
+- **Playwright E2E is deferred** (D-007) until screens stabilise. Instead, screens are checked by `renderToStaticMarkup` contract tests and a scripted real-browser pass (§3).
 
 ## 2. Commands
 | Command | Runs |
@@ -13,6 +13,7 @@
 | `npx vitest run --project academic-os` | One project (names = package folder names) |
 | `npm run test:watch` | Watch mode |
 | `npm run validate` | typecheck + lint + test + secret scan |
+| `npm run db:check` | Read-only check of the local live database (see §3) |
 
 ## 3. Layers
 | Layer | Where | What | Database |
@@ -21,6 +22,11 @@
 | Service / route integration | `apps/<m>/tests/integration` | Services and `defineRoute` handlers: permissions (401/403), validation (400), happy path, audit rows, events published | `setupTestDatabase()` |
 | Contract | `packages/shared-contracts/tests` | Schemas accept valid and reject invalid payloads; registry | none |
 | Platform services | `packages/*/tests` | Auth, RBAC, outbox, approvals, idempotency, notifications, UI rendering | PGlite where needed |
+| Database constraints | `packages/database/tests/constraints/*.test.ts` | One suite per schema area (`core`, `marketing`, `academic`, `academic-workspace`, `ops-*`): each CHECK, unique and foreign key refuses a bad row and accepts a good one (`helpers.ts`: `insertSql`, `rolledBack`). `enum-checks.test.ts` fails if any `text(..., { enum })` column has no CHECK | PGlite |
+| Migrations ≡ schema | `packages/database/tests/constraints/migrations.test.ts`, `migration-0009.test.ts` | Applying `0000`…latest gives the same tables, columns, constraints and indexes as `createTestDb()`; data migrations keep existing rows. Plus `drizzle-kit generate --name check` → "No schema changes" | PGlite |
+| Live database | `npm run db:check` (`scripts/development/db-check.ts`) | Read-only, local URLs only: live schema ≡ `createTestDb()`, every migration applied, no invalid indexes or constraints, sample rows follow D-036 | the owner's local PostgreSQL |
+| Screen contract | `packages/shared-ui/tests/components.test.tsx`, `apps/<m>/tests/unit/screens.test.tsx` | `renderToStaticMarkup` of components and screen parts: labels, aria, empty states, missing ≠ 0, SAMPLE DATA badge, ₹ grouping, masked phones, escaping | none |
+| Real browser (manual run) | headless Chrome over the DevTools protocol; not in `validate` | Every static page and the sample detail pages at 1440 and 390 px: console errors, horizontal scroll, one h1, labelled controls, named buttons, image alt, duplicate ids, `href="#"`, skip link, visible first-Tab focus, text contrast. Last run 22 Oct 2026 (`IMPLEMENTATION_STATUS.md`). On a PC where Windows blocks Next's native compiler, start the apps with `npm run dev -w <app> -- --webpack` | local dev database |
 | Cross-module (wave 3) | Integration wave | e.g. publish `ops.admission.enrolment_requested` → Academic consumer → reply → Ops consumer, importing modules' `./server` entry points | PGlite |
 
 ## 4. Writing a module integration test

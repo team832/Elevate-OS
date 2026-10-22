@@ -1,6 +1,6 @@
 # Elevate OS — handoff
 
-_Last updated 21 Oct 2026. Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
+_Last updated 22 Oct 2026. Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
 
 ## For the owner (plain language)
 
@@ -48,6 +48,8 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 
 **2a. Update the database for the 21 Oct teacher-workspace and task work (this computer only) — done on your computer on 21–22 Oct (migrations `0009`–`0011` applied, samples seeded).** On another computer: the new screens need database changes `0009`, `0010` and `0011`. With `npm run db:start` running, type `! npm run db:migrate` in the Claude Code chat (or run `npm run db:migrate` in a terminal in the `elevate-os` folder). It also fills in what can be known from existing records: each active enrolment's batch becomes a batch placement, and past end-of-day reports become version 1. Before you run it: the database must not have one student enrolled twice, both active, in the same course (the update adds a rule that forbids this). If it stops with an error that mentions `enrolments_active_student_course_key`, that is the cause: stop and tell the developer; nothing is changed. Then type `! npm run db:seed` to add the sample teachers and sample classes (all named "Sample …").
 
+**2b. If `npm run dev` stops with an Application Control error (this computer).** On this PC, Windows refuses to load one file that Next.js uses to compile pages faster: the error says an Application Control policy blocked `next-swc.win32-x64-msvc.node`. This is a Windows security setting on your computer, so only you (or whoever looks after this PC) control it; the developer does not change it. Meanwhile the apps work in the slower mode: start each one with `npm run dev -w @elevate/platform -- --webpack` (and the same with `@elevate/marketing-os`, `@elevate/academic-os`, `@elevate/business-ops-os`, one terminal each). The production build is blocked the same way; it works with `npm run build -w @elevate/platform -- --webpack` (and the same for the other three apps). Nothing else is needed now. If you later want the normal `npm run dev`, the choice is whether to allow that one file in your Windows security settings; do not turn Windows security off as a whole. The exact screens differ between Windows editions, so the steps are not written here; ask the developer to sit with you for it. On a hosting server this does not apply.
+
 **3. When it goes on the internet.** The search page puts what was typed in the address bar (`/ops/search?q=…`), which can be a phone number. In the hosting account, set request logs to **not keep query strings** (D-056). The developer does this with you on go-live day.
 
 ### Decisions waiting for you
@@ -87,6 +89,8 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | Do tasks imported from the old Task Tracker count when measuring how often end-of-day reports were sent? | No; shown as "Imported — not sent" |
 | Who may close a task that has no reviewer? | The task owner (Proposed) |
 | Should end-of-day reports be sent outside the system (email or WhatsApp)? | Not connected; "Copy summary" and PDF only |
+| A staff account cannot be deleted while it is the only person on a Marketing content assignment (writer, reviewer and so on). Keep refusing, or should the system first ask you to hand that work to someone else? | Refused; reassign the work first, then delete |
+| The audit history (who changed what) is never changed by the system, but the database itself does not forbid it. Add a database rule later so even a developer mistake cannot edit or delete it? | No database rule yet (the code only adds rows) |
 
 Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), keep the dark look with a new layout (D-054, confirmed again as D-059), teacher reviews written in Academic (D-058), demo attendance marked by the teacher in Academic (D-060), sample staff named "Sample …" with `@example.test` sign-ins (D-061).
 
@@ -103,10 +107,11 @@ Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), 
 | Foundation (sign-in, Google sign-in, Users & roles, sessions, roles, audit, outbox, approvals, shared UI) | Implemented, Tested | `IMPLEMENTATION_STATUS.md` |
 | Marketing OS, Academic OS | Implemented, Tested | `IMPLEMENTATION_STATUS.md`, `apps/*/README.md` |
 | Business Ops: admissions lifecycle, fees, students, events, exits, reports, search, daily tasks & EOD, new layout (D-038 … D-057) | Implemented, Tested (API); screens checked in Chrome by the coordinator | `IMPLEMENTATION_STATUS.md` "admissions lifecycle" section |
-| Academic teacher workspace: placements, classes and attendance, delivery, substitutes, timetable patterns, teaching log, coverage, reviews, marks and publication, progress, reports (D-058 … D-071) | Implemented, Tested (API); screens not yet browser-checked | `IMPLEMENTATION_STATUS.md` "teacher workspace" section, `apps/academic-os/README.md` |
-| Business Ops task tracker: task lifecycle and history, work updates, dependencies, end-of-day versions and manager inbox, task and period reports, tracker import, teacher directory, reviews read from Academic | Implemented, Tested (API); screens not yet browser-checked | same section, `apps/business-ops-os/README.md`, `docs/task-tracker-implementation.md` |
+| Academic teacher workspace: placements, classes and attendance, delivery, substitutes, timetable patterns, teaching log, coverage, reviews, marks and publication, progress, reports (D-058 … D-071) | Implemented, Tested (API); screens checked in Chrome on 22 Oct at 1440 and 390 px | `IMPLEMENTATION_STATUS.md` "teacher workspace" section, `apps/academic-os/README.md` |
+| Business Ops task tracker: task lifecycle and history, work updates, dependencies, end-of-day versions and manager inbox, task and period reports, tracker import, teacher directory, reviews read from Academic | Implemented, Tested (API); screens checked in Chrome on 22 Oct at 1440 and 390 px | same section, `apps/business-ops-os/README.md`, `docs/task-tracker-implementation.md` |
 | Migrations `0000` … `0008` | Implemented; applied to the local database only | `docs/DATABASE_MIGRATION_PLAN.md` |
-| Migrations `0009_academic_teacher_workspace_tasks`, `0010_link_academic_students_to_core`, `0011_mark_sample_academic_students` | **Applied on the owner's computer** 21–22 Oct (all frozen; next change = `0012`) | `packages/database/migrations/` |
+| Migrations `0009_academic_teacher_workspace_tasks`, `0010_link_academic_students_to_core`, `0011_mark_sample_academic_students` | **Applied on the owner's computer** 21–22 Oct (all frozen) | `packages/database/migrations/` |
+| Migration `0012_missing_checks` (22 database rules the 22 Oct tests found missing; no data changed) | **Applied on the owner's computer** 22 Oct after a check found no rows breaking them (frozen; next change = `0013`) | `docs/DATABASE_MIGRATION_PLAN.md` |
 | Security headers and CSP with per-request nonces (all four apps) | Implemented, Tested (unit test + production smoke, §6) | §5 below |
 | Deployment, hosting, domain, monitoring, backups schedule | **Not built** (Proposed only) | `infrastructure/deployment/README.md` |
 | Password reset / change screen, shared login rate limit, outbox scheduler, Google re-authentication for confirmation | **Not built** | `infrastructure/deployment/README.md`; `C:\OPENBOT\Elevate-Not-Working` |
@@ -204,6 +209,8 @@ Run by the security agent on 20 Oct 2026 (Windows 11, Node 24.19.0):
 | Data exposure spot check (§6.6) | `password_hash` is read only in `packages/authentication/src/login.ts`. Every join with `core.users` selects named columns. Session `token_hash` never leaves `sessions.ts` |
 
 Not verified: pages behind sign-in in a browser (the seed users are `@example.test`, which D-030 rejects); axe, Lighthouse and keyboard passes. These belong to the release run.
+
+Later runs: on 22 Oct 2026 a scripted headless-Chrome pass opened every static page and the sample detail pages at 1440 and 390 px (console errors, sideways scroll, one h1, labels, button names, image alt, duplicate ids, skip link, first-Tab focus, text contrast); its findings were fixed or filed in `C:\OPENBOT\Elevate-Not-Working`. Details: `IMPLEMENTATION_STATUS.md` "22 Oct 2026 — full test session". Lighthouse and axe are still for the release run.
 
 ### Final verification — filled at release
 _To be filled by the orchestrator: `npm run validate`, `npm run build`, smoke test, axe, Lighthouse, keyboard pass, `npm audit`._

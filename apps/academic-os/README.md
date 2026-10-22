@@ -108,7 +108,7 @@ Server components inside `AppShell`, gated by `requirePageAccess(<permission>, {
 | Batches | `/academic/batches` | `batches:read` | Batches (teachers: own), course, class length, active enrolments |
 | Batch detail | `/academic/batches/[id]` | `batches:read` | Assignments, calendar rules, exclusions, chapter plan with planned vs completed (verified) hours, capacity feasibility |
 | Timetable | `/academic/timetable` | `timetable:read` | Agenda, week and print views (teachers: own), filters by teacher/room/status, conflict check results, cancel / reschedule (coordinator) |
-| Patterns | `/academic/timetable/patterns`, `/academic/timetable/patterns/[id]` | `timetable:read` | Weekly patterns: draft → preview → publish; series edit from tomorrow (coordinator) |
+| Patterns | `/academic/timetable/patterns`, `/academic/timetable/patterns/[id]` | `timetable:read` | Weekly patterns: draft → preview → publish; series edit from tomorrow (coordinator). The subject picker lists each subject once per course, labelled with that course's batch codes |
 | Teachers | `/academic/teachers`, `/academic/teachers/[staffId]` | `assignments:read` | Directory and profile: assignments, timetable, planned / delivered / cancelled / substituted (operational, not payroll), academic unavailability, "HR attendance unavailable", no ratings |
 | Enrolments | `/academic/enrolments` | `enrolments:read` | Awaiting batch / Placed / Transfers / Ended; allocate, transfer, end (coordinator) |
 | Teaching logs | `/academic/teaching`, `/academic/teaching/log/[sessionId]` | `classes:read` | Logs to write, drafts, exceptions (delivered without a log, planned ≠ logged chapter); verify / request correction / correct (coordinator) |

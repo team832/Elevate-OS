@@ -10,12 +10,12 @@ import {
   marketingSocialAccounts,
   staffMembers,
   type Database,
-  type MarketingSocialAccountId,
 } from '@elevate/database';
-import { NotFoundError, recordAudit, withTransaction } from '@elevate/server-kit';
+import { NotFoundError, withTransaction } from '@elevate/server-kit';
 import type { StaffMemberId } from '@elevate/shared-types';
 import { CADENCE_ENFORCEMENT, ACCOUNT_STATUSES, type AccountCadence } from '../domain';
 import { assertCan, type Actor } from './access';
+import { auditMarketing, rowById } from './common';
 import { getPublishingAdapter } from './adapters/publishing';
 
 export type SocialAccountRow = typeof marketingSocialAccounts.$inferSelect;
@@ -33,14 +33,8 @@ export async function listLegacyConflicts(db: Database) {
   return db.select().from(marketingLegacyConflicts).orderBy(asc(marketingLegacyConflicts.code));
 }
 
-export async function getAccountById(db: Database, id: string): Promise<SocialAccountRow> {
-  const [row] = await db
-    .select()
-    .from(marketingSocialAccounts)
-    .where(eq(marketingSocialAccounts.id, id as MarketingSocialAccountId));
-  if (!row) throw new NotFoundError('Social account not found.');
-  return row;
-}
+export const getAccountById = (db: Database, id: string): Promise<SocialAccountRow> =>
+  rowById(db, marketingSocialAccounts, id, 'Social account not found.');
 
 export async function getAccountByCode(db: Database, code: string): Promise<SocialAccountRow> {
   const [row] = await db
@@ -112,9 +106,7 @@ export async function updateAccount(
       .set(set)
       .where(eq(marketingSocialAccounts.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: 'social_account.updated',
       entityType: 'social_account',
       entityId: before.id,
@@ -147,9 +139,7 @@ export async function verifyAccountConnection(
       })
       .where(eq(marketingSocialAccounts.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: 'social_account.connection_verified',
       entityType: 'social_account',
       entityId: before.id,

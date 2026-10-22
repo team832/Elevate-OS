@@ -6,9 +6,9 @@
  */
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { requirePermission, type Permission, type Principal } from '@elevate/authorization';
-import { departments, programmes, staffMembers, userRoles, type Database } from '@elevate/database';
+import { programmes, staffMembers, userRoles, type Database } from '@elevate/database';
 import { ForbiddenError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
-import type { DepartmentId, ProgrammeId, StaffMemberId, UserId } from '@elevate/shared-types';
+import type { ProgrammeId, StaffMemberId, UserId } from '@elevate/shared-types';
 import { CODE_FORMATS, formatCode, type CodeKind } from '../domain';
 import { ancestorChain } from '../domain/graph';
 
@@ -152,16 +152,6 @@ export async function activeStaff(
       details: [{ location: 'body', path: [field], message: 'Staff member is not active' }],
     });
   return row;
-}
-
-export async function departmentByCode(db: Database, code: string): Promise<DepartmentId> {
-  const [row] = await db
-    .select({ id: departments.id })
-    .from(departments)
-    .where(eq(departments.code, code))
-    .limit(1);
-  if (!row) throw new ValidationError(`Unknown department "${code}".`);
-  return row.id;
 }
 
 /** Login user ids for staff ids (staff without a login are skipped). */

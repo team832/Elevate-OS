@@ -19,9 +19,7 @@ import {
 import {
   ConflictError,
   InvalidStateTransitionError,
-  NotFoundError,
   ValidationError,
-  recordAudit,
   withTransaction,
 } from '@elevate/server-kit';
 import {
@@ -39,6 +37,7 @@ import {
   type ScheduleConflict,
 } from '../domain';
 import { assertCan, type Actor } from './access';
+import { auditMarketing, rowById } from './common';
 import { cadenceOf, getAccountByCode } from './accounts';
 import { getPublishingAdapter, type PublishResult } from './adapters/publishing';
 import { getContentItem, getVersion, type ContentItemRow } from './content';
@@ -69,33 +68,11 @@ export const manualPublicationBody = z
 
 const STALE_PENDING_MS = 10 * 60_000;
 
-export async function getPlacement(db: Database, id: string): Promise<PlacementRow> {
-  const [row] = await db
-    .select()
-    .from(marketingPlacements)
-    .where(eq(marketingPlacements.id, id as MarketingPlacementId));
-  if (!row) throw new NotFoundError('Placement not found.');
-  return row;
-}
+const lockPlacement = (db: Database, id: string) =>
+  rowById(db, marketingPlacements, id, 'Placement not found.', true);
 
-async function lockPlacement(db: Database, id: string): Promise<PlacementRow> {
-  const [row] = await db
-    .select()
-    .from(marketingPlacements)
-    .where(eq(marketingPlacements.id, id as MarketingPlacementId))
-    .for('update');
-  if (!row) throw new NotFoundError('Placement not found.');
-  return row;
-}
-
-async function accountOf(db: Database, placement: PlacementRow) {
-  const [a] = await db
-    .select()
-    .from(marketingSocialAccounts)
-    .where(eq(marketingSocialAccounts.id, placement.accountId));
-  if (!a) throw new NotFoundError('Account not found.');
-  return a;
-}
+const accountOf = (db: Database, placement: PlacementRow) =>
+  rowById(db, marketingSocialAccounts, placement.accountId, 'Account not found.');
 
 /** Valid approval = approved state family + approved version is current + core approval approved. */
 export async function approvalValidity(
@@ -127,6 +104,21 @@ export async function approvalValidity(
   if (a?.status !== 'approved')
     return { valid: false, reason: 'The approval record is not in the approved state.' };
   return { valid: true };
+}
+
+/** Refuses publishing unless the placement and its approved, current version allow it. */
+async function assertPublishable(tx: Database, placement: PlacementRow, item: ContentItemRow) {
+  const eligibility = checkPublishEligibility({
+    placementStatus: placement.status,
+    contentState: item.state,
+    approvalApproved: (await approvalValidity(tx, item)).valid,
+    approvedVersionId: item.approvedVersionId,
+    currentVersionId: item.currentVersionId,
+  });
+  if (!eligibility.ok)
+    throw new InvalidStateTransitionError(eligibility.message, {
+      details: { reason: eligibility.code },
+    });
 }
 
 async function itemTransition(
@@ -207,9 +199,7 @@ export async function createPlacement(
           createdBy: actor.id,
         })
         .returning();
-      await recordAudit(tx, {
-        actorUserId: actor.id,
-        module: 'marketing',
+      await auditMarketing(tx, actor, {
         action: 'placement.created',
         entityType: 'placement',
         entityId: row!.id,
@@ -316,7 +306,7 @@ export async function schedulePlacement(
       candidate,
       await scheduledSlotsAround(tx, at, placement.id),
       [cadenceOf(account)],
-      { slotWindowMinutes: policy.slotWindowMinutes, staggerWarning: policy.staggerWarning },
+      policy,
       now,
     );
     result.hard.push(...hard);
@@ -335,9 +325,7 @@ export async function schedulePlacement(
       .where(eq(marketingPlacements.id, placement.id))
       .returning();
     const itemState = await itemTransition(tx, item, 'schedule');
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: placement.status === 'scheduled' ? 'placement.rescheduled' : 'placement.scheduled',
       entityType: 'placement',
       entityId: placement.id,
@@ -393,9 +381,7 @@ export async function unschedulePlacement(
           placement.id,
         )
       : null;
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: 'placement.unscheduled',
       entityType: 'placement',
       entityId: placement.id,
@@ -435,9 +421,7 @@ export async function cancelPlacement(
         placement.id,
       );
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: 'placement.cancelled',
       entityType: 'placement',
       entityId: placement.id,
@@ -485,27 +469,15 @@ export async function publishPlacement(
             .from(marketingPublishingRecords)
             .where(eq(marketingPublishingRecords.idempotencyKey, key))
         : [];
-      if (existing?.status === 'succeeded') {
-        return {
+      const duplicate = (r: NonNullable<typeof existing>) =>
+        ({
           kind: 'duplicate',
-          recordId: existing.id,
-          attemptNumber: existing.attempts,
+          recordId: r.id,
+          attemptNumber: r.attempts,
           request: null as never,
-        };
-      }
-      const approval = await approvalValidity(tx, item);
-      const eligibility = checkPublishEligibility({
-        placementStatus: placement.status,
-        contentState: item.state,
-        approvalApproved: approval.valid,
-        approvedVersionId: item.approvedVersionId,
-        currentVersionId: item.currentVersionId,
-      });
-      if (!eligibility.ok) {
-        throw new InvalidStateTransitionError(eligibility.message, {
-          details: { reason: eligibility.code },
-        });
-      }
+        }) as const;
+      if (existing?.status === 'succeeded') return duplicate(existing);
+      await assertPublishable(tx, placement, item);
       const stale =
         existing?.status === 'pending' &&
         Date.now() - existing.updatedAt.getTime() > STALE_PENDING_MS;
@@ -553,12 +525,7 @@ export async function publishPlacement(
         recordId = existing!.id;
         attemptNumber = decision.attemptNumber;
       } else {
-        return {
-          kind: 'duplicate',
-          recordId: existing!.id,
-          attemptNumber: existing!.attempts,
-          request: null as never,
-        };
+        return duplicate(existing!);
       }
       const version = await getVersion(tx, item.approvedVersionId!);
       const assets = await tx
@@ -649,9 +616,7 @@ export async function publishPlacement(
         .where(eq(marketingPlacements.id, placement.id));
       await itemTransition(tx, await getContentItem(tx, placement.contentItemId!), 'publish');
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: ok
         ? sandbox
           ? 'placement.published_sandbox'
@@ -695,18 +660,7 @@ export async function recordManualPublication(
     if (!placement.contentItemId)
       throw new InvalidStateTransitionError('This legacy placement is not linked to content.');
     const item = await getContentItem(tx, placement.contentItemId);
-    const approval = await approvalValidity(tx, item);
-    const eligibility = checkPublishEligibility({
-      placementStatus: placement.status,
-      contentState: item.state,
-      approvalApproved: approval.valid,
-      approvedVersionId: item.approvedVersionId,
-      currentVersionId: item.currentVersionId,
-    });
-    if (!eligibility.ok)
-      throw new InvalidStateTransitionError(eligibility.message, {
-        details: { reason: eligibility.code },
-      });
+    await assertPublishable(tx, placement, item);
     let record;
     try {
       [record] = await tx
@@ -743,9 +697,7 @@ export async function recordManualPublication(
       .where(eq(marketingPlacements.id, placement.id))
       .returning();
     await itemTransition(tx, item, 'publish');
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: 'placement.publication_recorded',
       entityType: 'placement',
       entityId: placement.id,
@@ -812,10 +764,7 @@ export async function listCalendar(
     });
   }
   const policy = await loadPolicy(db);
-  const conflicts = calendarConflicts(slots, accounts.map(cadenceOf), {
-    slotWindowMinutes: policy.slotWindowMinutes,
-    staggerWarning: policy.staggerWarning,
-  });
+  const conflicts = calendarConflicts(slots, accounts.map(cadenceOf), policy);
   return rows.map((r) => ({
     ...r.p,
     accountCode: r.accountCode,

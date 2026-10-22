@@ -15,7 +15,7 @@ import {
   type Database,
   type MarketingPlacementId,
 } from '@elevate/database';
-import { ValidationError, recordAudit, withTransaction } from '@elevate/server-kit';
+import { ValidationError, withTransaction } from '@elevate/server-kit';
 import {
   DATE_FORMATS,
   METRIC_KEYS,
@@ -28,6 +28,7 @@ import {
   type ParsedMetricRow,
 } from '../domain';
 import { assertCan, type Actor } from './access';
+import { auditMarketing } from './common';
 import { getAccountByCode } from './accounts';
 
 export const importMetricsBody = z
@@ -228,9 +229,7 @@ export async function importMetricsCsv(
       await tx.delete(marketingMetricValues).where(eq(marketingMetricValues.snapshotId, snap!.id));
       await tx.insert(marketingMetricValues).values(valueRows(snap!.id, r.metrics));
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: 'metrics.imported',
       entityType: 'metric_import',
       entityId: imp!.id,

@@ -120,6 +120,7 @@ export async function MarketingPage(props: MarketingPageProps) {
     >
       {access.status === 'forbidden' ? (
         <ErrorState
+          level={1}
           title="No access"
           description="Your roles do not include the permission this page needs. Ask a platform administrator if you need it."
         />

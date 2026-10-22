@@ -171,8 +171,6 @@ export const OPS_HANDOFF_ATTEMPT_OUTCOMES = [
 export const OPS_CONSENT_STATUSES = ['given', 'refused', 'withdrawn'] as const;
 export const OPS_CONTACT_CHANNELS = ['call', 'whatsapp', 'sms', 'email'] as const;
 
-// --- configuration -----------------------------------------------------------------------
-
 /**
  * Policy/configuration values (OPS-022). Every value carries a decision state
  * (PLT-007): a value implementing a `proposed` policy is shown as proposed.
@@ -227,8 +225,6 @@ export const opsLeadSources = ops.table(
     check('lead_sources_status_check', sql`${t.status} IN ('active', 'retired')`),
   ],
 );
-
-// --- leads and enquiries -------------------------------------------------------------------
 
 /**
  * One person who enquired (usually a student, often through a parent): contact details,
@@ -457,8 +453,6 @@ export const opsDuplicateFlags = ops.table(
   ],
 );
 
-// --- admissions pipeline ---------------------------------------------------------------------
-
 /**
  * One admission case per lead and programme: the pipeline record whose status
  * walks new → … → enrolled (state machine: domain/pipeline.ts). The enrolment
@@ -527,7 +521,6 @@ export const opsAdmissions = ops.table(
      * Admission number (counter `ops.admission_number_counters`, format setting
      * `admissions.number.format`, approved D-037). Given at final confirmation (D-040) and
      * then immutable (composite FK from `ops.admission_approvals`); earlier changes are logged in
-
      * `ops.admission_number_changes`. Null before confirmation and on extra programme
      * admissions of the same conversion (the student's number is on the primary one).
      */
@@ -580,6 +573,14 @@ export const opsAdmissions = ops.table(
     check(
       'admissions_held_from_check',
       sql`(${t.status} = 'on_hold') = (${t.heldFromStatus} IS NOT NULL)`,
+    ),
+    check(
+      'admissions_held_from_status_check',
+      sql`${t.heldFromStatus} IS NULL OR ${t.heldFromStatus} IN ${inList(OPS_ADMISSION_STATUSES)}`,
+    ),
+    check(
+      'admissions_delivery_mode_check',
+      sql`${t.deliveryMode} IS NULL OR ${t.deliveryMode} IN ('offline', 'online', 'hybrid')`,
     ),
     check('admissions_handoff_check', sql`${t.handoffStatus} IN ${inList(OPS_HANDOFF_STATUSES)}`),
     check('admissions_attempt_check', sql`${t.enrolmentAttempt} >= 0`),
@@ -635,6 +636,11 @@ export const opsAdmissionTransitions = ops.table(
       'admission_transitions_to_check',
       sql`${t.toStatus} IN ${inList(OPS_ADMISSION_STATUSES)}`,
     ),
+    check(
+      'admission_transitions_from_check',
+      sql`${t.fromStatus} IS NULL OR ${t.fromStatus} IN ${inList(OPS_ADMISSION_STATUSES)}`,
+    ),
+    check('admission_transitions_actor_check', sql`${t.actorType} IN ('user', 'system')`),
     check(
       'admission_transitions_user_has_id',
       sql`${t.actorType} <> 'user' OR ${t.actorUserId} IS NOT NULL`,
@@ -715,6 +721,8 @@ export const opsFollowUps = ops.table(
     check('follow_ups_kind_check', sql`${t.kind} IN ${inList(OPS_FOLLOW_UP_KINDS)}`),
     check('follow_ups_status_check', sql`${t.status} IN ('open', 'done', 'cancelled')`),
     check('follow_ups_done_has_time', sql`${t.status} <> 'done' OR ${t.completedAt} IS NOT NULL`),
+    check('follow_ups_done_has_outcome', sql`${t.status} <> 'done' OR ${t.outcome} IS NOT NULL`),
+    check('follow_ups_source_check', sql`${t.source} IN ('manual', 'rule')`),
   ],
 );
 
@@ -807,6 +815,10 @@ export const opsContactPreferences = ops.table(
       sql`${t.consentStatus} IN ${inList(OPS_CONSENT_STATUSES)}`,
     ),
     check('contact_preferences_by_check', sql`${t.consentBy} IN ('student', 'guardian', 'both')`),
+    check(
+      'contact_preferences_preferred_check',
+      sql`${t.preferredContact} IS NULL OR ${t.preferredContact} IN ('student', 'guardian')`,
+    ),
     check(
       'contact_preferences_channels_check',
       sql`${t.allowedChannels} <@ ${sql.raw(`ARRAY[${OPS_CONTACT_CHANNELS.map((c) => `'${c}'`).join(', ')}]::text[]`)}`,

@@ -5,7 +5,6 @@
 import { eq } from 'drizzle-orm';
 import { opsSettings, type Database } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
-import { ValidationError } from '@elevate/shared-contracts';
 import {
   resolveSettings,
   SETTING_DEFINITIONS,
@@ -13,7 +12,7 @@ import {
   type ResolvedSettings,
 } from '../domain';
 import { accessScope, type Actor } from './context';
-import { opsAudit } from './ops-common';
+import { fieldError, opsAudit } from './ops-common';
 
 const audit = opsAudit('setting');
 
@@ -36,10 +35,7 @@ export async function updateSetting(
 ) {
   await accessScope(db, actor, 'ops:settings:manage');
   const check = validateSettingChange(input.key, input.value);
-  if (!check.ok)
-    throw new ValidationError(check.message, {
-      details: [{ location: 'body', path: ['value'], message: check.message }],
-    });
+  if (!check.ok) throw fieldError('value', check.message);
   const def = SETTING_DEFINITIONS[check.key];
   return withTransaction(db, async (tx) => {
     const [before] = await tx.select().from(opsSettings).where(eq(opsSettings.key, check.key));

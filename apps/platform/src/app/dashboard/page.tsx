@@ -47,6 +47,7 @@ export default async function DashboardPage() {
     >
       {access.status === 'forbidden' ? (
         <ErrorState
+          level={1}
           title="No access"
           description="The leadership dashboard needs the platform:dashboard:read permission."
         />

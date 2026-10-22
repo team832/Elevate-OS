@@ -76,15 +76,13 @@ import {
   type AccessScope,
   type Actor,
 } from './context';
-import { opsAudit, rowById } from './ops-common';
+import { fieldError, opsAudit, rowById } from './ops-common';
 import { applyTransition, lockAdmission, type AdmissionRow } from './pipeline';
 import type { checkBody, UpdateAdmissionInput } from './schemas';
 import { loadSettings } from './settings';
 
 /** Academic's consumer name for the enrolment request (INTEGRATION_CONTRACT.md §6). */
 export const ACADEMIC_INTAKE_CONSUMER = 'academic.enrolment-intake';
-
-// --- shared reads --------------------------------------------------------------------------------
 
 export async function leadOwnerOf(db: Database, admission: Pick<AdmissionRow, 'leadId'>) {
   const [lead] = await db
@@ -129,7 +127,6 @@ export function ownAdmissionFilter(access: AccessScope): SQL | undefined {
 export const admissionRow = (db: Database, id: string) =>
   rowById(db, opsAdmissions, id, 'Admission');
 
-/** Display names of users by id. */
 export async function namesOf(db: Database, ids: readonly (string | null)[]) {
   const unique = [...new Set(ids.filter((i): i is string => Boolean(i)))] as UserId[];
   if (!unique.length) return new Map<string, string>();
@@ -286,8 +283,6 @@ export async function readinessOf(db: Database, admission: AdmissionRow) {
   return { gaps, checks, fee, settings };
 }
 
-// --- board / list --------------------------------------------------------------------------------
-
 export async function listAdmissions(
   db: Database,
   actor: Actor,
@@ -333,8 +328,6 @@ export async function listAdmissions(
     demoSkipped: a.demoSkipped,
   }));
 }
-
-// --- detail --------------------------------------------------------------------------------------
 
 export async function getAdmission(db: Database, actor: Actor, id: string) {
   const access = await accessScope(db, actor, 'ops:admissions:read');
@@ -481,8 +474,6 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
   };
 }
 
-// --- user transitions --------------------------------------------------------------------------
-
 export async function transitionAdmission(
   db: Database,
   actor: Actor,
@@ -516,10 +507,7 @@ export async function transitionAdmission(
       requireCode: closure.requireCode,
       actor: 'user',
     });
-    if (!coded.ok)
-      throw new ValidationError(coded.message, {
-        details: [{ location: 'body', path: ['reasonCode'], message: coded.message }],
-      });
+    if (!coded.ok) throw fieldError('reasonCode', coded.message);
     const readinessMissing =
       input.to === 'admitted'
         ? (await readinessOf(tx, admission)).gaps.map((g) => READINESS_GAP_LABELS[g])
@@ -597,8 +585,6 @@ export async function updateAdmission(
     return after as AdmissionRow;
   });
 }
-
-// --- checklist -----------------------------------------------------------------------------------
 
 export async function recordAdmissionCheck(
   db: Database,

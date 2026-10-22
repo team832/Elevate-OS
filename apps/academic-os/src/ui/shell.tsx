@@ -48,8 +48,6 @@ const NAV: { key: Section; label: string; href: string; permission: Permission; 
   { key: 'settings', label: 'Academic settings', href: MODULE_PATHS.settings, permission: 'academic:settings:manage', group: 'Oversight' },
 ];
 
-/** Curriculum area tabs (courses and plans, concept-book indices). */
-/** Timetable area tabs. */
 export const TIMETABLE_TABS = [
   [MODULE_PATHS.timetable, 'Agenda'],
   [`${MODULE_PATHS.timetable}?view=week`, 'Week'],
@@ -95,7 +93,7 @@ export async function AcademicShell({ access, active, loading, children }: { acc
       unreadNotifications={await unreadFor(access)}
     >
       {access.status === 'forbidden' ? (
-        <ErrorState title="No access to this page" description="Your roles do not include the permission this page needs. Ask an academic coordinator or a platform administrator." />
+        <ErrorState level={1} title="No access to this page" description="Your roles do not include the permission this page needs. Ask an academic coordinator or a platform administrator." />
       ) : (
         <Suspense fallback={<LoadingState label={loading} />}>{children}</Suspense>
       )}

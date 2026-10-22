@@ -41,9 +41,12 @@ export function ErrorState({
   description = 'This could not be loaded. Try again in a moment; if it keeps happening, tell a platform administrator.',
   requestId,
   action,
+  level = 2,
 }: {
   title?: string;
   description?: ReactNode;
+  /** 1 when the error replaces the whole page (e.g. "No access"), so the page keeps one h1. */
+  level?: 1 | 2;
   /** Shown as a reference to quote to an administrator; omitted when unknown. */
   requestId?: string;
   /** Next step, e.g. a "Try again" link to the current URL. */
@@ -51,7 +54,7 @@ export function ErrorState({
 }) {
   return (
     <div className="el-state el-state-error" role="alert" data-state="error">
-      <h2>{title}</h2>
+      {level === 1 ? <h1>{title}</h1> : <h2>{title}</h2>}
       <p>{description}</p>
       {action ?? null}
       {requestId ? (

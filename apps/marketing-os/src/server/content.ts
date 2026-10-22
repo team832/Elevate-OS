@@ -31,12 +31,10 @@ import {
   ConflictError,
   ForbiddenError,
   InvalidStateTransitionError,
-  NotFoundError,
   ValidationError,
   decideApproval,
   defineApprovalPolicy,
   findPendingApproval,
-  recordAudit,
   requestApproval,
   withTransaction,
   withdrawApproval,
@@ -55,6 +53,7 @@ import {
   type RuleCheckResult,
 } from '../domain';
 import { actorCan, assertCan, type Actor } from './access';
+import { auditMarketing, rowById } from './common';
 import { loadPolicy } from './policy';
 import { runRuleCheck } from './rules';
 
@@ -160,33 +159,26 @@ export function hashVersion(input: {
   return createHash('sha256').update(canonical).digest('hex');
 }
 
-export async function getContentItem(db: Database, id: string): Promise<ContentItemRow> {
-  const [row] = await db
-    .select()
-    .from(marketingContentItems)
-    .where(eq(marketingContentItems.id, id as ContentItemId));
-  if (!row) throw new NotFoundError('Content item not found.');
-  return row;
+export const getContentItem = (db: Database, id: string, lock = false) =>
+  rowById(db, marketingContentItems, id, 'Content item not found.', lock);
+
+const lockItem = (db: Database, id: string) => getContentItem(db, id, true);
+
+async function setItem(
+  tx: Database,
+  id: ContentItemId,
+  set: Partial<typeof marketingContentItems.$inferInsert>,
+) {
+  const [row] = await tx
+    .update(marketingContentItems)
+    .set(set)
+    .where(eq(marketingContentItems.id, id))
+    .returning();
+  return row!;
 }
 
-async function lockItem(db: Database, id: string): Promise<ContentItemRow> {
-  const [row] = await db
-    .select()
-    .from(marketingContentItems)
-    .where(eq(marketingContentItems.id, id as ContentItemId))
-    .for('update');
-  if (!row) throw new NotFoundError('Content item not found.');
-  return row;
-}
-
-export async function getVersion(db: Database, id: string): Promise<ContentVersionRow> {
-  const [row] = await db
-    .select()
-    .from(marketingContentVersions)
-    .where(eq(marketingContentVersions.id, id as MarketingContentVersionId));
-  if (!row) throw new NotFoundError('Version not found.');
-  return row;
-}
+export const getVersion = (db: Database, id: string) =>
+  rowById(db, marketingContentVersions, id, 'Version not found.');
 
 function nextState(state: ContentState, action: ContentAction): ContentState {
   const t = transitionContent(state, action);
@@ -302,11 +294,7 @@ export async function createContentItem(
 ) {
   assertCan(actor, 'marketing:content:write');
   return withTransaction(db, async (tx) => {
-    const [idea] = await tx
-      .select()
-      .from(marketingIdeas)
-      .where(eq(marketingIdeas.id, ideaId as never));
-    if (!idea) throw new NotFoundError('Idea not found.');
+    const idea = await rowById(tx, marketingIdeas, ideaId, 'Idea not found.');
     if (idea.quarantineState === 'quarantined' || !idea.code) {
       throw new InvalidStateTransitionError(
         'This idea is quarantined (duplicate legacy ID, OD-003); it has no code yet, so no content can be produced under it.',
@@ -328,23 +316,16 @@ export async function createContentItem(
     let current: ContentItemRow = item!;
     if (input.initialVersion) {
       const version = await insertVersion(tx, actor, current, input.initialVersion);
-      const [updated] = await tx
-        .update(marketingContentItems)
-        .set({ currentVersionId: version.id })
-        .where(eq(marketingContentItems.id, current.id))
-        .returning();
-      current = updated!;
+      current = await setItem(tx, current.id, { currentVersionId: version.id });
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: 'content_item.created',
       entityType: 'content_item',
-      entityId: current!.id,
+      entityId: current.id,
       after: current,
       requestId,
     });
-    return current!;
+    return current;
   });
 }
 
@@ -399,24 +380,18 @@ export async function addVersion(
         );
     }
     set.state = state;
-    const [after] = await tx
-      .update(marketingContentItems)
-      .set(set)
-      .where(eq(marketingContentItems.id, item.id))
-      .returning();
+    const after = await setItem(tx, item.id, set);
     if (effect === 'revise') {
       ({ check } = await openReview(
         tx,
         actor,
-        after!,
+        after,
         version,
         input.changeNote ?? 'Revised after approval',
         requestId,
       ));
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action:
         effect === 'revise' ? 'content_item.revised_after_approval' : 'content_version.created',
       entityType: 'content_item',
@@ -434,7 +409,7 @@ export async function addVersion(
       },
       requestId,
     });
-    return { item: after!, version, approvalVoided: effect === 'revise', ruleCheck: check };
+    return { item: after, version, approvalVoided: effect === 'revise', ruleCheck: check };
   });
 }
 
@@ -452,15 +427,9 @@ export async function submitForReview(
     if (!item.currentVersionId)
       throw new ValidationError('Add a version (copy) before submitting for review.');
     const version = await getVersion(tx, item.currentVersionId);
-    const [after] = await tx
-      .update(marketingContentItems)
-      .set({ state: to })
-      .where(eq(marketingContentItems.id, item.id))
-      .returning();
-    const { check } = await openReview(tx, actor, after!, version, comment, requestId);
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    const after = await setItem(tx, item.id, { state: to });
+    const { check } = await openReview(tx, actor, after, version, comment, requestId);
+    await auditMarketing(tx, actor, {
       action: 'content_item.submitted',
       entityType: 'content_item',
       entityId: item.id,
@@ -468,7 +437,7 @@ export async function submitForReview(
       after: { state: to, versionId: version.id, versionHash: version.contentHash },
       requestId,
     });
-    return { item: after!, ruleCheck: check };
+    return { item: after, ruleCheck: check };
   });
 }
 
@@ -495,14 +464,8 @@ export async function withdrawFromReview(
         .set({ outcome: 'withdrawn' })
         .where(eq(marketingContentReviews.approvalId, pending.id));
     }
-    const [after] = await tx
-      .update(marketingContentItems)
-      .set({ state: to })
-      .where(eq(marketingContentItems.id, item.id))
-      .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    const after = await setItem(tx, item.id, { state: to });
+    await auditMarketing(tx, actor, {
       action: 'content_item.withdrawn',
       entityType: 'content_item',
       entityId: item.id,
@@ -510,7 +473,7 @@ export async function withdrawFromReview(
       after: { state: to },
       requestId,
     });
-    return after!;
+    return after;
   });
 }
 
@@ -598,15 +561,13 @@ export async function decideContent(
         ruleCheck: check as unknown as object,
       })
       .where(eq(marketingContentReviews.id, review.id));
-    const [after] = await tx
-      .update(marketingContentItems)
-      .set(
-        input.decision === 'approve'
-          ? { state: to, approvedVersionId: version.id, approvalId: decided.id }
-          : { state: to },
-      )
-      .where(eq(marketingContentItems.id, item.id))
-      .returning();
+    const after = await setItem(
+      tx,
+      item.id,
+      input.decision === 'approve'
+        ? { state: to, approvedVersionId: version.id, approvalId: decided.id }
+        : { state: to },
+    );
     await notify(tx, {
       userIds: [pending.requestedBy],
       module: 'marketing',
@@ -615,9 +576,7 @@ export async function decideContent(
       body: input.comment ?? null,
       link: modulePath(`content/${item.id}`),
     });
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action:
         input.decision === 'approve' ? 'content_item.approved' : 'content_item.changes_requested',
       entityType: 'content_item',
@@ -632,7 +591,7 @@ export async function decideContent(
       requestId,
       metadata: { acknowledged: input.acknowledgedRuleCodes },
     });
-    return { item: after!, approval: decided, ruleCheck: check };
+    return { item: after, approval: decided, ruleCheck: check };
   });
 }
 
@@ -660,14 +619,8 @@ export async function archiveContentItem(
           inArray(marketingPlacements.status, ['planned', 'scheduled']),
         ),
       );
-    const [after] = await tx
-      .update(marketingContentItems)
-      .set({ state: to, archivedReason: reason })
-      .where(eq(marketingContentItems.id, item.id))
-      .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    const after = await setItem(tx, item.id, { state: to, archivedReason: reason });
+    await auditMarketing(tx, actor, {
       action: 'content_item.archived',
       entityType: 'content_item',
       entityId: item.id,
@@ -675,7 +628,7 @@ export async function archiveContentItem(
       after: { state: to, reason },
       requestId,
     });
-    return after!;
+    return after;
   });
 }
 
@@ -727,9 +680,7 @@ export async function setAssignment(
         })
         .returning();
     }
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: 'content_item.assignment_changed',
       entityType: 'content_item',
       entityId: item.id,
@@ -772,9 +723,7 @@ export async function addComment(
         body: input.body,
       })
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: 'content_comment.added',
       entityType: 'content_item',
       entityId: item.id,

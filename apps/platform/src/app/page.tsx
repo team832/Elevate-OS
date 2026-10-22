@@ -90,6 +90,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     return (
       <AppShell {...shell}>
         <ErrorState
+          level={1}
           title="No access"
           description="Your account has no role that opens Elevate OS. Ask a platform administrator."
         />

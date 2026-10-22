@@ -10,7 +10,9 @@ export default defineConfig({
   schema: [
     './src/schema/core.ts',
     './src/schema/marketing.ts',
+    './src/schema/academic-curriculum.ts',
     './src/schema/academic.ts',
+    './src/schema/academic-assessments.ts',
     './src/schema/academic-delivery.ts',
     './src/schema/academic-reviews.ts',
     './src/schema/ops.ts',

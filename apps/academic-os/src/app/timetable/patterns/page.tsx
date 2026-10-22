@@ -28,8 +28,13 @@ async function Body({ access }: { access: PageAccess }) {
   const canWrite = can(access.user, 'academic:timetable:write');
   const data = await load(async () => {
     const batches = canWrite ? await listBatches(db, actor) : [];
-    const subjects = [];
-    for (const b of batches) for (const s of (await getCourse(db, b.courseId)).subjects) subjects.push({ value: s.id, label: `${b.code}: ${s.name}` });
+    // One option per subject: batches of the same course share its subjects.
+    const courseIds = [...new Set(batches.map((b) => b.courseId))];
+    const courses = await Promise.all(courseIds.map((id) => getCourse(db, id)));
+    const subjects = courses.flatMap((c, i) => {
+      const codes = batches.filter((b) => b.courseId === courseIds[i]).map((b) => b.code).join(', ');
+      return c.subjects.map((s) => ({ value: s.id, label: `${codes}: ${s.name}` }));
+    });
     return { patterns: await listPatterns(db, actor), batches, subjects, staff: canWrite ? await listStaff(db) : [], rooms: canWrite ? await listRooms(db) : [] };
   });
   return (

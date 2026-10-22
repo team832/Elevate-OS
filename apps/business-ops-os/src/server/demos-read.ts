@@ -61,20 +61,11 @@ import type { DemoListQuery, DEMO_SORTS } from './demos-schemas';
 import { demoKyc } from './demos-intake';
 import { academicDemoMarks, withMarks, type AcademicDemoMarks } from './academic-summary';
 import { demoFeedbackByDay } from './feedback';
-import { inOrder, rowById } from './ops-common';
+import { groupBy, inOrder, rowById } from './ops-common';
 import { loadSettings } from './settings';
 
 const PAGE_SIZE = 25;
 type Demo = typeof opsDemos.$inferSelect;
-
-function groupBy<T>(rows: readonly T[], key: (r: T) => string | null) {
-  const out = new Map<string, T[]>();
-  for (const r of rows) {
-    const k = key(r);
-    if (k) out.set(k, [...(out.get(k) ?? []), r]);
-  }
-  return out;
-}
 
 /** The demo (locked) and its case, for a caller with ops:leads:write on it. */
 export async function lockDemo(tx: Database, actor: Actor, id: string) {

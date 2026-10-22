@@ -14,7 +14,8 @@
  *   npm run db:start            start (initialising the cluster on first run)
  *   npm run db:start -- --stop  stop a server left running by a crashed session
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -82,11 +83,19 @@ if (process.argv.includes('--stop')) {
   process.exit(pgCtl(['stop', '-D', dataDir, '-m', 'fast']) ? 0 : 1);
 }
 
-if (existsSync(path.join(dataDir, 'postmaster.pid'))) {
-  fail(
-    `${path.relative(repoRoot, dataDir)}/postmaster.pid exists: a server may already be running (or crashed). ` +
-      'If nothing is listening, run "npm run db:start -- --stop" first.',
-  );
+const pidFile = path.join(dataDir, 'postmaster.pid');
+if (existsSync(pidFile)) {
+  const listening = await new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port }, () => {
+      socket.end();
+      resolve(true);
+    });
+    socket.on('error', () => resolve(false));
+  });
+  if (listening) fail(`a server is already listening on port ${port}.`);
+  // A crash leaves the pid file behind and Windows may reuse its PID, so pg_ctl can neither stop nor start.
+  rmSync(pidFile);
+  console.log(`db:start — removed a stale postmaster.pid (nothing listening on port ${port}).`);
 }
 
 const quiet = (message) => {

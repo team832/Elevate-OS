@@ -4,15 +4,19 @@
  */
 import { defineApprovalPolicy } from '@elevate/server-kit';
 
-/** BR-OPS-7 before D-039: admission-level fee approvals. Kept readable in history; they activate no agreement. */
-export const feeArrangementPolicy = defineApprovalPolicy({
-  key: 'ops.admission.fee_arrangement',
+const opsFeeApproval = {
   module: 'ops',
-  subjectType: 'admission',
   deciderPermission: 'ops:admissions:approve',
   requesterPermission: 'ops:admissions:write',
   allowSelfApproval: false,
   requireCommentOnReject: true,
+} as const;
+
+/** BR-OPS-7 before D-039: admission-level fee approvals. Kept readable in history; they activate no agreement. */
+export const feeArrangementPolicy = defineApprovalPolicy({
+  ...opsFeeApproval,
+  key: 'ops.admission.fee_arrangement',
+  subjectType: 'admission',
   description:
     'Authorised approval of an agreed fee arrangement before admission. Elevate OS stores the decision and references, not amounts.',
 });
@@ -23,12 +27,8 @@ export const feeArrangementPolicy = defineApprovalPolicy({
  * gap; it can never activate other terms, another version, year or admission.
  */
 export const feeAgreementPolicy = defineApprovalPolicy({
+  ...opsFeeApproval,
   key: 'ops.fee_agreement.version',
-  module: 'ops',
   subjectType: 'fee_plan',
-  deciderPermission: 'ops:admissions:approve',
-  requesterPermission: 'ops:admissions:write',
-  allowSelfApproval: false,
-  requireCommentOnReject: true,
   description: 'Approval of the exact terms of one annual fee agreement version.',
 });

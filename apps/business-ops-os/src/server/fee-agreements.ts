@@ -286,7 +286,7 @@ export async function createFeeAgreement(
     .insert(opsFeePlans)
     .values({
       admissionId: admission.id,
-      studentId: studentId,
+      studentId,
       label: input.label,
       pricingReference: clean(input.pricingReference),
       totalPaise: input.tuitionPaise,
@@ -339,13 +339,7 @@ export async function createFeePlan(
   const tuitionPaise = paiseOf(input.totalPaise, input.totalRupees) ?? Number.NaN;
   return withTransaction(db, async (tx) => {
     const admission = await lockAccessible(tx, access, await admissionForPlan(tx, input));
-    const r = await createFeeAgreement(
-      tx,
-      actor,
-      admission,
-      { ...input, tuitionPaise, dueDates: input.dueDates },
-      requestId,
-    );
+    const r = await createFeeAgreement(tx, actor, admission, { ...input, tuitionPaise }, requestId);
     if (!r.created)
       throw new ConflictError(
         `This student already has a fee agreement for ${input.academicYear}; one agreement covers every programme in the bundle.`,
@@ -721,7 +715,8 @@ export async function studentFeePlans(
           .orderBy(desc(opsFeeRecords.recordedAt), desc(opsFeeRecords.code))
       : [],
   ]);
-  const drafts = shown.filter((p) => p.status === 'draft').map((p) => p.id as string);
+  const draftPlans = shown.filter((p) => p.status === 'draft');
+  const drafts = draftPlans.map((p) => p.id as string);
   const pending = drafts.length
     ? await db
         .select({ subjectId: approvals.subjectId, requestedBy: approvals.requestedBy })
@@ -737,15 +732,13 @@ export async function studentFeePlans(
   const activatable = new Set(
     (
       await inOrder(
-        shown
-          .filter((p) => p.status === 'draft')
-          .map(
-            (p) => () =>
-              activationPatch(db, p).then(
-                () => p.id as string,
-                () => null,
-              ),
-          ),
+        draftPlans.map(
+          (p) => () =>
+            activationPatch(db, p).then(
+              () => p.id as string,
+              () => null,
+            ),
+        ),
       )
     ).filter(Boolean),
   );

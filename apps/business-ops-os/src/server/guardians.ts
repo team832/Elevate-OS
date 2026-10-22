@@ -115,13 +115,11 @@ export async function identityAccess(
 
 function guardianContacts(input: Pick<GuardianInput, 'phone' | 'email'>) {
   const out: { phone?: string | null; email?: string | null } = {};
-  const issue = (path: string, message: string) =>
-    new ValidationError(message, { details: [{ location: 'body', path: [path], message }] });
   if (input.phone !== undefined) {
     if (!input.phone) out.phone = null;
     else {
       const p = normalisePhone(input.phone);
-      if (!p.ok) throw issue('phone', PHONE_ERROR_MESSAGES[p.reason]);
+      if (!p.ok) throw fieldError('phone', PHONE_ERROR_MESSAGES[p.reason]);
       out.phone = p.e164;
     }
   }
@@ -129,7 +127,7 @@ function guardianContacts(input: Pick<GuardianInput, 'phone' | 'email'>) {
     if (!input.email) out.email = null;
     else {
       const e = normaliseEmail(input.email);
-      if (!e.ok) throw issue('email', 'Not a valid email address.');
+      if (!e.ok) throw fieldError('email', 'Not a valid email address.');
       out.email = e.email;
     }
   }

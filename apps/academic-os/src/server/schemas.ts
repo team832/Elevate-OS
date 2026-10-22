@@ -25,7 +25,6 @@ const labelStatus = z.enum(['locked', 'approved', 'provisional', 'proposed', 'dr
 const mode = z.enum(['offline', 'online', 'hybrid']);
 export const uuidParams = z.object({ id: z.uuid() });
 
-// --- curriculum --------------------------------------------------------------------------
 export const createCourseBody = z
   .object({
     programmeCode: programmeCodeSchema,
@@ -105,7 +104,6 @@ export const decidePlanApprovalBody = z
   .object({ decision: z.enum(['approved', 'rejected']), comment: optionalText(1000) })
   .strict();
 
-// --- batches, calendars, timetable ---------------------------------------------------------
 export const createBatchBody = z
   .object({
     code,
@@ -169,12 +167,12 @@ export const createExclusionBody = z
     date: isoDateSchema.optional(),
     periodStart: isoDateSchema.optional(),
     periodEnd: isoDateSchema.optional(),
-    days: z.int().min(0).max(366).optional(),
-    slotsPerDay: z.int().min(0).max(24).optional(),
+    days: z.int().min(1).max(366).optional(),
+    slotsPerDay: z.int().min(1).max(24).optional(),
     status: z.enum(['provisional', 'confirmed', 'locked', 'unverified']).default('provisional'),
   })
   .strict()
-  .refine((x) => Boolean(x.date) !== Boolean(x.periodStart && x.periodEnd), {
+  .refine((x) => (x.date ? !x.periodStart && !x.periodEnd : Boolean(x.periodStart && x.periodEnd)), {
     error: 'Give either a date, or periodStart and periodEnd',
     path: ['date'],
   })
@@ -258,7 +256,6 @@ export const feasibilityQuery = z.object({
   to: isoDateSchema.optional(),
 });
 
-// --- teaching operations ---------------------------------------------------------------------
 /** Marks for enrolled students and demo attendees; changing an existing mark needs `reason` (audited). */
 export const attendanceBody = z
   .object({
@@ -284,7 +281,6 @@ export const attendanceBody = z
   .strict()
   .refine((b) => b.marks.length + b.demoMarks.length > 0, { error: 'Mark at least one student.', path: ['marks'] });
 
-// --- assessments --------------------------------------------------------------------------------
 export const assessmentKind = z.enum(['chapter_test', 'sectional', 'full_mock', 'practice']);
 
 export const sectionBody = z
@@ -382,7 +378,6 @@ export const scheduleCheckBody = z
   })
   .strict();
 
-// --- students, enrolments, progress -----------------------------------------------------------
 export const createStudentBody = z
   .object({
     fullName: text(),

@@ -2,7 +2,7 @@
 
 Elevate OS is the internal operating system for **Elevate Education**, a coaching institute (Sikar + online) preparing students for **CLAT, IPMAT, CUET, Class 11–12 Commerce and CA Foundation**. It replaces scattered spreadsheets, Markdown trackers and chat memory with one system that staff sign in to once.
 
-> Status (22 Oct 2026): Foundation, Marketing OS, Academic OS and Business Ops OS are built and tested; nothing is deployed. The latest work added the Academic teacher workspace (placements, classes and attendance, delivery, timetable patterns, teaching log, reviews, marks, progress, reports) and the Business Ops task tracker, end-of-day versions and teacher operations (D-058 … D-071). `npm run validate` passed: 158 test files, 2,069 tests, secret scan 1,166 files; `npm run build` passed for all four apps. Migrations `0009`–`0011` are applied on the owner's computer; both milestones were checked live over HTTP and in Chrome (1440 px). Details: `IMPLEMENTATION_STATUS.md`.
+> Status (22 Oct 2026): Foundation, Marketing OS, Academic OS and Business Ops OS are built and tested; nothing is deployed. The latest work added the Academic teacher workspace (placements, classes and attendance, delivery, timetable patterns, teaching log, reviews, marks, progress, reports) and the Business Ops task tracker, end-of-day versions and teacher operations (D-058 … D-071). `npm run validate` passed: 158 test files, 2,069 tests, secret scan 1,166 files; `npm run build` passed for all four apps. Migrations `0009`–`0012` are applied on the owner's computer (`0012` adds 22 missing database checks, 22 Oct; next = `0013`); both milestones were checked live over HTTP and in Chrome (1440 px). Details: `IMPLEMENTATION_STATUS.md`.
 
 ## Contents
 1. [The three modules and their boundaries](#1-the-three-modules-and-their-boundaries)
@@ -120,11 +120,12 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `npm test` / `test:watch` | vitest, all projects |
 | `npm run secret-scan` | Fails on credential-like text or non-ignored `.env` files |
 | `npm run validate` | typecheck + lint + test + secret-scan |
-| `npm run db:start` / `db:stop` | Local PostgreSQL (embedded-postgres) |
+| `npm run db:start` / `db:stop` | Local PostgreSQL (embedded-postgres). After a crash, `db:start` removes a stale `postmaster.pid` when nothing listens on the port |
 | `npm run db:generate` | drizzle-kit migration from all schema files (the `ops` schema spans five, D-029) (wave 3 / Integration) |
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:seed` | Core + module seeds (local DBs only) |
 | `npm run db:reset` | Dev only: drop Elevate schemas, migrate, seed (refuses non-local URLs) |
+| `npm run db:check` | Read-only check of the local database: live schema = code schema, all migrations applied, valid indexes and constraints, sample-data rules (D-036) |
 | `npm run db:backup` | `pg_dump` wrapper (needs PostgreSQL client tools) |
 | `npm run docs:permissions` | Regenerate the permission matrix in `docs/SECURITY_AND_PERMISSIONS.md` (`-- --check` to verify) |
 

@@ -58,6 +58,13 @@ export const demoKycBody = z
   .partial();
 export type DemoKycInput = z.output<typeof demoKycBody>;
 
+const classFields = {
+  startsAt: isoDateTimeSchema,
+  endsAt: isoDateTimeSchema.nullish(),
+  subject: z.string().trim().min(1).max(100),
+  teacherStaffId: z.uuid().nullish(),
+};
+
 export const createDemoBody = z.object({
   admissionId: z.uuid(),
   programmeCode: programmeCodeSchema.nullish(),
@@ -65,15 +72,7 @@ export const createDemoBody = z.object({
   /** End = start + duration unless a class gives its own end. */
   durationMinutes: z.coerce.number().int().min(15).max(480).default(60),
   /** Classes; without `dayNumber`, classes on the same IST date form one demo day. */
-  sessions: indexed(
-    z.object({
-      dayNumber: day.nullish(),
-      startsAt: isoDateTimeSchema,
-      endsAt: isoDateTimeSchema.nullish(),
-      subject: z.string().trim().min(1).max(100),
-      teacherStaffId: z.uuid().nullish(),
-    }),
-  ),
+  sessions: indexed(z.object({ dayNumber: day.nullish(), ...classFields })),
   notes: optText(2000),
   kyc: demoKycBody.nullish(),
 });
@@ -131,14 +130,7 @@ export const sessionActionBody = z.discriminatedUnion('action', [
 ]);
 
 /** Add a class to a demo day (a day beyond the booked count needs "Extra demo days"). */
-export const addSessionBody = z.object({
-  dayNumber: day,
-  startsAt: isoDateTimeSchema,
-  endsAt: isoDateTimeSchema.nullish(),
-  subject: z.string().trim().min(1).max(100),
-  teacherStaffId: z.uuid().nullish(),
-  reason,
-});
+export const addSessionBody = z.object({ dayNumber: day, ...classFields, reason });
 
 export const checklistBody = z.object({
   itemKey: z.string().max(60),

@@ -1,5 +1,4 @@
 /* Components inside the work tray (mobile first). */
-/* --- section cards ------------------------------------------------------- */
 .el-card {
   background: var(--el-surface);
   border: 1px solid var(--el-border);
@@ -201,7 +200,6 @@
   line-height: 1.25rem;
 }
 
-/* --- buttons ------------------------------------------------------------- */
 .el-button {
   display: inline-flex;
   align-items: center;
@@ -258,7 +256,6 @@
   width: 100%;
 }
 
-/* --- forms ---------------------------------------------------------------- */
 .el-field {
   display: flex;
   flex-direction: column;
@@ -268,6 +265,11 @@
 .el-field label {
   font-weight: 600;
   font-size: var(--el-text-sm);
+}
+/* Visible marker for fields whose control is required; screen readers already announce `required`. */
+.el-field:has(> :required, > * :required) > label::after {
+  content: ' *' / '';
+  color: var(--el-danger-fg);
 }
 .el-field-hint {
   color: var(--el-text-muted);
@@ -312,7 +314,6 @@
   accent-color: var(--el-accent);
 }
 
-/* --- alerts and states -------------------------------------------------------- */
 .el-alert {
   border-radius: var(--el-radius-sm);
   padding: var(--el-space-3) var(--el-space-4);
@@ -576,6 +577,12 @@ a.el-journey-body:focus-visible {
   background: var(--el-well);
   overflow-x: auto;
 }
+/* Phones: wrap instead of hiding the last tabs off-screen. */
+@media (max-width: 719px) {
+  .el-tablist {
+    flex-wrap: wrap;
+  }
+}
 .el-tab {
   display: inline-flex;
   align-items: center;
@@ -627,7 +634,6 @@ a.el-journey-body:focus-visible {
   outline-offset: 4px;
 }
 
-/* --- dialog ------------------------------------------------------------------ */
 .el-dialog {
   width: min(40rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 2rem);
@@ -681,7 +687,6 @@ a.el-journey-body:focus-visible {
   flex-wrap: wrap;
 }
 
-/* --- fieldsets (groups of related form fields) ----------------------------------- */
 .el-fieldset {
   min-width: 0;
   margin: 0 0 var(--el-space-2);

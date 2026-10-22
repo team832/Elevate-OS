@@ -96,7 +96,7 @@ async function Inbox({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
                 {x.isSample ? (
                   <>
                     {' '}
-                    <span className="el-badge-sample">SAMPLE DATA</span>
+                    <span className="el-badge el-badge-sample">SAMPLE DATA</span>
                   </>
                 ) : null}
               </>

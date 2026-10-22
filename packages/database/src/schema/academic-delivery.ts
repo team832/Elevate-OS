@@ -41,11 +41,10 @@ import {
   academicClassSessions,
   academicEnrolments,
   academicRooms,
-  academicSubjects,
   type AcademicRoomId,
   type AcademicSessionId,
-  type AcademicSubjectId,
 } from './academic';
+import { academicSubjects, type AcademicSubjectId } from './academic-curriculum';
 import { staffMembers, students as coreStudents, users } from './core';
 
 export type AcademicPlacementId = Brand<string, 'AcademicPlacementId'>;

@@ -35,6 +35,7 @@
     "db:seed": "tsx scripts/development/seed.ts",
     "db:reset": "tsx scripts/development/db-reset.ts",
     "db:clear-samples": "tsx scripts/development/clear-samples.ts",
+    "db:check": "tsx scripts/development/db-check.ts",
     "db:backup": "node scripts/backup/pg-backup.mjs",
     "docs:permissions": "tsx scripts/development/permission-matrix.ts",
     "docs:data-dictionary": "tsx scripts/development/data-dictionary.ts",

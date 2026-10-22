@@ -12,7 +12,7 @@ export const NOW = '2026-10-21T04:30:00Z';
 export const LATER = '2026-10-21T05:30:00Z';
 export const FUTURE = '2099-01-01T00:00:00Z';
 
-function insertSql(table: string, row: Row): [string, unknown[]] {
+export function insertSql(table: string, row: Row): [string, unknown[]] {
   const cols = Object.keys(row);
   return [
     `INSERT INTO ${table} (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING *`,
@@ -26,18 +26,25 @@ export async function insert(pg: PGlite, table: string, row: Row): Promise<strin
   return result.rows[0]!.id;
 }
 
-/** Insert in a rolled-back transaction: `'ok'`, the refusing constraint, or the SQLSTATE. */
-export async function attempt(pg: PGlite, table: string, row: Row): Promise<string> {
+/** Runs `work` in a rolled-back transaction: its result, or the refusing constraint / SQLSTATE. */
+export async function rolledBack<T>(pg: PGlite, work: () => Promise<T>): Promise<T | string> {
   await pg.exec('BEGIN');
   try {
-    await pg.query(...insertSql(table, row));
-    return 'ok';
+    return await work();
   } catch (error) {
     const pgError = findPgError(error);
     return pgError?.constraint ?? pgError?.code ?? String(error);
   } finally {
     await pg.exec('ROLLBACK');
   }
+}
+
+/** Insert in a rolled-back transaction: `'ok'`, the refusing constraint, or the SQLSTATE. */
+export async function attempt(pg: PGlite, table: string, row: Row): Promise<string> {
+  return rolledBack(pg, async () => {
+    await pg.query(...insertSql(table, row));
+    return 'ok';
+  });
 }
 
 /**

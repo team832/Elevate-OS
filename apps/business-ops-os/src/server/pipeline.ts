@@ -14,7 +14,7 @@ import {
   type Database,
 } from '@elevate/database';
 import { recordAudit } from '@elevate/server-kit';
-import { InvalidStateTransitionError, ValidationError } from '@elevate/shared-contracts';
+import { InvalidStateTransitionError } from '@elevate/shared-contracts';
 import type {
   AdmissionId,
   IntegrationEventId,
@@ -32,6 +32,7 @@ import {
   type TransitionContext,
 } from '../domain';
 import { nextCode } from './context';
+import { fieldError } from './ops-common';
 
 export type AdmissionRow = typeof opsAdmissions.$inferSelect;
 
@@ -125,10 +126,7 @@ export async function applyTransition(
     heldFromStatus: (admission.heldFromStatus as AdmissionStatus | null) ?? null,
   });
   if (!check.ok) {
-    if (check.code === 'REASON_REQUIRED')
-      throw new ValidationError(check.message, {
-        details: [{ location: 'body', path: ['reason'], message: check.message }],
-      });
+    if (check.code === 'REASON_REQUIRED') throw fieldError('reason', check.message);
     throw new InvalidStateTransitionError(check.message, {
       details: { from, to, code: check.code, missing: check.missing ?? [] },
     });

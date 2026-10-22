@@ -57,7 +57,7 @@ import {
 } from '../domain/applications';
 import { EMPTY_FORM_FIELDS, type ApplicationFormFields } from '../domain/admission-form';
 import { normalisePhone } from '../domain/contacts';
-import { lockAccessible, readinessOf } from './admissions';
+import { leadOwnerOf, lockAccessible, readinessOf } from './admissions';
 import type { SaveApplicationInput } from './applications-schemas';
 import { accessScope, type AccessScope, type Actor } from './context';
 import { resolveStudent } from './conversion';
@@ -71,8 +71,6 @@ type ApplicationRow = typeof opsApplications.$inferSelect;
 const audit = opsAudit('application');
 export const sha256 = (data: string | Uint8Array) =>
   createHash('sha256').update(data).digest('hex');
-
-// --- content ---------------------------------------------------------------------------------------
 
 /** Closed extra cases (lost, exited) leave the bundle: a material change, so the form is re-signed. */
 const CLOSED: AdmissionStatus[] = ['lost', ...EXIT_STATUSES];
@@ -277,7 +275,7 @@ export async function confirmationCheck(
   settings: ResolvedSettings,
 ) {
   const state = await currentState(tx, app, settings);
-  const [[signature], docs, paid, [lead], readiness, bundle] = await inOrder([
+  const [[signature], docs, paid, leadOwner, readiness, bundle] = await inOrder([
     tx
       .select({ s: opsSignatureConfirmations, formVersion: opsApplicationForms.version })
       .from(opsSignatureConfirmations)
@@ -300,10 +298,7 @@ export async function confirmationCheck(
         ),
       ),
     () => paidOf(tx, admission.id),
-    tx
-      .select({ owner: opsLeads.ownerStaffId })
-      .from(opsLeads)
-      .where(eq(opsLeads.id, admission.leadId)),
+    () => leadOwnerOf(tx, admission),
     () => readinessOf(tx, admission),
     () => bundleOf(tx, app),
   ]);
@@ -319,7 +314,7 @@ export async function confirmationCheck(
       : null,
     verifiedDocuments: docs.map((d) => d.type),
     paid,
-    counsellorAssigned: Boolean(admission.counsellorStaffId ?? lead?.owner),
+    counsellorAssigned: Boolean(admission.counsellorStaffId ?? leadOwner),
     today: istToday(new Date()),
   });
   // BR-OPS-7 (approved): two fee verifications by different people; BR-OPS-6: documents item.
@@ -348,8 +343,6 @@ export async function confirmationCheck(
     });
   return { ...state, gaps, signature: signature?.s ?? null, paid };
 }
-
-// --- create ------------------------------------------------------------------------------------------
 
 /**
  * A new application with version 1 (conversion, direct admission, readmission). Runs in the
@@ -465,8 +458,6 @@ export async function startDirectApplication(
     });
   });
 }
-
-// --- write helpers -------------------------------------------------------------------------------
 
 /** Lock the application and its case (scope checked), refuse when `action` is not allowed now. */
 export async function lockApplication(
@@ -678,12 +669,10 @@ export async function markReady(
       throw new ConflictError(
         `Details changed since version ${app.currentVersion} (${changed.join(', ')}). Save the application, then review the new version.`,
       );
-    const [lead] = await tx
-      .select({ owner: opsLeads.ownerStaffId })
-      .from(opsLeads)
-      .where(eq(opsLeads.id, admission.leadId));
     const gaps = informationGaps(live, gapSettings(settings), {
-      counsellorAssigned: Boolean(admission.counsellorStaffId ?? lead?.owner),
+      counsellorAssigned: Boolean(
+        admission.counsellorStaffId ?? (await leadOwnerOf(tx, admission)),
+      ),
       today: istToday(new Date()),
     }).map((g) => g.message);
     if (gaps.length)

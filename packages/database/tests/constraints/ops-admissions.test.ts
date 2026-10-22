@@ -106,6 +106,30 @@ describe('admissions', () => {
         'admission_transitions_to_check',
         (v) => ({ admission_id: ctx.ids.admission, to_status: v, actor_type: 'system' }),
       ),
+      vocab(
+        'a transition starts from a known status',
+        'ops.admission_transitions',
+        OPS_ADMISSION_STATUSES,
+        'admission_transitions_from_check',
+        (v) => ({
+          admission_id: ctx.ids.admission,
+          from_status: v,
+          to_status: 'new',
+          actor_type: 'system',
+        }),
+      ),
+      vocab(
+        'a transition actor is a user or the system',
+        'ops.admission_transitions',
+        ['user', 'system'],
+        'admission_transitions_actor_check',
+        (v) => ({
+          admission_id: ctx.ids.admission,
+          to_status: 'new',
+          actor_type: v,
+          actor_user_id: ctx.ids.user,
+        }),
+      ),
       one(
         'an admission status outside the vocabulary is refused',
         'ops.admissions',

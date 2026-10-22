@@ -14,7 +14,6 @@ import {
 import { addDays, type IsoDate } from '@elevate/shared-types';
 import {
   aggregateWeekly,
-  istDate,
   istMidnightUtc,
   weekLabel,
   weekStart,
@@ -130,13 +129,4 @@ export async function weeklyReport(
     accountsWithNoData: perAccount.filter((a) => a.postsWithData === 0).map((a) => a.accountCode),
     snapshotsConsidered: snapshots.length,
   };
-}
-
-/** Latest capture date across all snapshots (for "as of" labels); null when none. */
-export async function latestCapture(db: Database): Promise<IsoDate | null> {
-  const rows = await db
-    .select({ at: marketingMetricSnapshots.capturedAt })
-    .from(marketingMetricSnapshots);
-  if (rows.length === 0) return null;
-  return istDate(new Date(Math.max(...rows.map((r) => r.at.getTime()))));
 }

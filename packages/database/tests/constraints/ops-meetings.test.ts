@@ -141,6 +141,19 @@ describe('participants and event messages', () => {
           'channel bogus': [{ channel: 'bogus' }, 'event_messages_channel_check'],
         },
       ),
+      vocab(
+        'teacher feedback is given by a student or a guardian',
+        'ops.student_teacher_feedback',
+        ['student', 'guardian'],
+        'student_teacher_feedback_by_check',
+        (v) => ({
+          teacher_staff_id: ctx.ids.staff,
+          submitted_by_kind: v,
+          feedback_on: '2026-10-21',
+          comment: 'Sample feedback',
+          recorded_by: user(),
+        }),
+      ),
     ],
   );
 });

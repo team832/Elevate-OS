@@ -3,7 +3,6 @@ import { notifications, type Database } from '@elevate/database';
 import type { ModuleKey, NotificationId, UserId } from '@elevate/shared-types';
 
 export interface NotifyInput {
-  /** One or more recipients. */
   userIds: readonly UserId[];
   module: ModuleKey;
   /** Machine-readable kind, e.g. `approval.requested`, `enrolment.confirmed`. */
@@ -25,8 +24,9 @@ export type NotificationRow = typeof notifications.$inferSelect;
 export async function notify(tx: Database, input: NotifyInput): Promise<NotificationId[]> {
   const recipients = [...new Set(input.userIds)];
   if (recipients.length === 0) return [];
-  if (input.link && !input.link.startsWith('/'))
-    throw new Error('Notification links must be relative paths starting with "/"');
+  // Same rule as the notifications_link_relative CHECK: "//host" and "/\host" open another site.
+  if (input.link && !/^\/([^/\\]|$)/.test(input.link))
+    throw new Error('Notification links must be relative paths starting with a single "/"');
   const rows = await tx
     .insert(notifications)
     .values(

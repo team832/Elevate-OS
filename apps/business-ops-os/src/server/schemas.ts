@@ -18,8 +18,6 @@ const optUuid = z.uuid().nullish();
 
 export const idParams = z.object({ id: z.uuid() });
 
-// --- leads ----------------------------------------------------------------------------------
-
 export const contactFields = {
   studentName: text(200).min(1),
   preferredName: optText(200),
@@ -47,10 +45,7 @@ export const duplicateCheckBody = z.object({
 });
 export type DuplicateCheckInput = z.output<typeof duplicateCheckBody>;
 
-export const createLeadBody = z.object({
-  ...contactFields,
-  programmeCode: programmeCodeSchema.nullish(),
-  interestMode: z.enum(['offline', 'online', 'undecided']).default('undecided'),
+export const enquiryBody = z.object({
   receivedAt: isoDateTimeSchema.nullish(),
   sourceCode: z
     .string()
@@ -60,7 +55,16 @@ export const createLeadBody = z.object({
   discoverySource: optText(200),
   campaignRef: optText(200),
   contentRef: optText(200),
+  programmeCode: programmeCodeSchema.nullish(),
+  interestMode: z.enum(['offline', 'online', 'undecided']).default('undecided'),
   notes: optText(2000),
+});
+export type EnquiryInput = z.output<typeof enquiryBody>;
+
+/** A new lead is its first enquiry plus the contact fields. */
+export const createLeadBody = z.object({
+  ...contactFields,
+  ...enquiryBody.shape,
   ownerStaffId: optUuid,
   /** Required to save when an EXACT duplicate exists (the UI shows the warning first). */
   acknowledgeDuplicates: z.object({ reason: text(500).min(3) }).nullish(),
@@ -94,22 +98,6 @@ export const listLeadsQuery = z.object({
     .optional(),
 });
 
-export const enquiryBody = z.object({
-  receivedAt: isoDateTimeSchema.nullish(),
-  sourceCode: z
-    .string()
-    .regex(/^[A-Z][A-Z0-9_]{1,39}$/)
-    .default('UNKNOWN'),
-  channel: optText(200),
-  discoverySource: optText(200),
-  campaignRef: optText(200),
-  contentRef: optText(200),
-  programmeCode: programmeCodeSchema.nullish(),
-  interestMode: z.enum(['offline', 'online', 'undecided']).default('undecided'),
-  notes: optText(2000),
-});
-export type EnquiryInput = z.output<typeof enquiryBody>;
-
 export const assignBody = z.object({ ownerStaffId: uuid });
 export const activityBody = z.object({
   kind: z.enum(['call', 'whatsapp', 'sms', 'email', 'visit', 'note']),
@@ -134,15 +122,9 @@ export const duplicateReviewBody = z.object({
   note: text(1000).min(3),
 });
 
-// --- admissions -------------------------------------------------------------------------------
-
 export const listAdmissionsQuery = z.object({
   status: z.enum(ADMISSION_STATUSES).optional(),
   handoff: z.enum(['not_requested', 'pending', 'enrolled', 'rejected']).optional(),
-});
-export const transitionBody = z.object({
-  to: z.enum(ADMISSION_STATUSES),
-  reason: optText(1000),
 });
 export const updateAdmissionBody = z
   .object({
@@ -166,9 +148,6 @@ export const feeApprovalBody = z.discriminatedUnion('action', [
   z.object({ action: z.literal('reject'), comment: text(1000).min(1) }),
   z.object({ action: z.literal('withdraw') }),
 ]);
-export const enrolmentRequestBody = z.object({ notes: optText(2000) });
-
-// --- follow-ups, counselling, demos ---------------------------------------------------------
 
 export const followUpBody = z.object({
   leadId: uuid,
@@ -192,8 +171,6 @@ export const scheduleQuery = z.object({
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
 });
-
-// --- organisation ------------------------------------------------------------------------------
 
 export const createStaffBody = z.object({
   fullName: text(200).min(1),
@@ -219,11 +196,15 @@ export const createDepartmentBody = z.object({
   name: text(200).min(1),
   description: optText(1000),
 });
-// --- settings, jobs, dashboard --------------------------------------------------------------------
 
 export const settingBody = z.object({ value: z.unknown(), note: optText(1000) });
 export const settingParams = z.object({ key: z.string().min(1).max(100) });
-export const OPS_JOBS = ['follow-up-reminders', 'enrolment-replies', 'lead-intake', 'demo-academic-marks'] as const;
+export const OPS_JOBS = [
+  'follow-up-reminders',
+  'enrolment-replies',
+  'lead-intake',
+  'demo-academic-marks',
+] as const;
 export const jobParams = z.object({ job: z.enum(OPS_JOBS) });
 export const dashboardQuery = z.object({
   from: isoDateSchema.optional(),

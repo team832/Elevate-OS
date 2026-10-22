@@ -114,6 +114,7 @@ const followUp = (owner: Staff, leadId: LeadId, title: string, due: string, stat
     ownerStaffId: owner.staffId,
     status: status as 'open',
     completedAt: status === 'done' ? now : null,
+    outcome: status === 'done' ? 'Sample outcome' : null,
   } as never);
 
 let manager: OverviewDeps;

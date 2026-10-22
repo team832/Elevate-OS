@@ -72,7 +72,7 @@ import {
 import { ACADEMIC_INTAKE_CONSUMER, handoffInputOf } from './admissions';
 import { accessScope, type AccessScope, type Actor } from './context';
 import { feeStatusForStudents } from './fees';
-import { opsAudit } from './ops-common';
+import { groupBy, opsAudit } from './ops-common';
 import type { StudentSearchQuery } from './students-schemas';
 
 export {
@@ -313,15 +313,6 @@ async function numbersByIdentity(db: Database, ids: readonly (string | null)[]) 
 
 const uniqueIds = (ids: readonly (string | null)[]) =>
   [...new Set(ids.filter((i): i is string => Boolean(i)))] as StudentIdentityId[];
-
-const groupBy = <T>(rows: readonly T[], key: (r: T) => string | null) => {
-  const out = new Map<string, T[]>();
-  for (const r of rows) {
-    const k = key(r);
-    if (k) out.set(k, [...(out.get(k) ?? []), r]);
-  }
-  return out;
-};
 
 /** Programmes of each identity across all its cases (a cohort and an exam are two cases). */
 async function programmesByIdentity(db: Database, ids: readonly (string | null)[]) {

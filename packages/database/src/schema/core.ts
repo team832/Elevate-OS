@@ -60,8 +60,6 @@ const updatedAt = () =>
 
 const MODULE_CHECK = sql`IN ('platform', 'marketing', 'academic', 'ops')`;
 
-// --- identity -----------------------------------------------------------------------
-
 export const users = core.table(
   'users',
   {
@@ -319,8 +317,6 @@ export const auditEvents = core.table(
   ],
 );
 
-// --- notifications ------------------------------------------------------------------------
-
 export const notifications = core.table(
   'notifications',
   {
@@ -343,7 +339,8 @@ export const notifications = core.table(
   (t) => [
     index('notifications_user_unread_idx').on(t.userId, t.readAt, t.createdAt),
     check('notifications_module_check', sql`${t.module} ${MODULE_CHECK}`),
-    check('notifications_link_relative', sql`${t.link} IS NULL OR ${t.link} LIKE '/%'`),
+    // A leading `//` or `/\` is an off-site URL to a browser.
+    check('notifications_link_relative', sql`${t.link} IS NULL OR ${t.link} ~ '^/([^/\\\\]|$)'`),
   ],
 );
 

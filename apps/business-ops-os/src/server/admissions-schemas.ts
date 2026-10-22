@@ -22,7 +22,6 @@ export const codedTransitionBody = z.object({
   reason: optText(1000),
   reasonCode,
 });
-export type CodedTransitionInput = z.output<typeof codedTransitionBody>;
 
 /**
  * POST /admissions/{id}/fees — exactly one of `amountPaise` (integer paise) or
@@ -53,13 +52,6 @@ export const feeRecordBody = z
     error: 'Give either amountPaise or amountRupees, not both',
     path: ['amountRupees'],
   });
-export type FeeRecordInput = z.output<typeof feeRecordBody>;
-
-export const feeActionBody = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('verify'), note: optText(500) }).strict(),
-  z.object({ action: z.literal('void'), reason: z.string().trim().min(1).max(500) }).strict(),
-]);
-export type FeeActionInput = z.output<typeof feeActionBody>;
 
 export const feeListQuery = z.object({
   status: z.enum(['recorded', 'verified', 'voided']).optional(),
@@ -86,7 +78,6 @@ export const studentListQuery = z.object({
     .regex(/^\d{1,6}$/)
     .optional(),
 });
-export type StudentListQuery = z.output<typeof studentListQuery>;
 
 export const handoffRetryBody = z.object({ reason: z.string().trim().min(1).max(1000) }).strict();
 

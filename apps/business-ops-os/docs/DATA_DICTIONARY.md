@@ -281,10 +281,10 @@ One admission case per lead and programme: the pipeline record whose status walk
 | `programme_id` | uuid | no |  | (id) | Programme (CLAT, IPMAT, Class 12 Commerce …). → `core.programmes` |
 | `status` | text | yes (default new) | `new`, `contacted`, `counselling_scheduled`, `counselled`, `demo_scheduled`, `demo_attended`, `admission_pending`, `admitted`, `enrolment_requested`, `enrolled`, `lost`, `on_hold`, `withdrawn`, `completed`, `transferred`, `cancelled_before_enrolment`, `other_inactive` | new | Where the case is in the pipeline (state machine: domain/pipeline.ts). |
 | `status_reason` | text | no |  |  | Why the current status was set (free text). |
-| `held_from_status` | text | no |  |  | Status before `on_hold`, restored on resume. |
+| `held_from_status` | text | no | `new`, `contacted`, `counselling_scheduled`, `counselled`, `demo_scheduled`, `demo_attended`, `admission_pending`, `admitted`, `enrolment_requested`, `enrolled`, `lost`, `on_hold`, `withdrawn`, `completed`, `transferred`, `cancelled_before_enrolment`, `other_inactive` | new | Status before `on_hold`, restored on resume. |
 | `status_changed_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the status last changed (UTC). |
 | `counsellor_staff_id` | uuid | no |  | (id) | Counsellor responsible for the case. → `core.staff_members` |
-| `delivery_mode` | text | no |  |  | How the student will study. |
+| `delivery_mode` | text | no | `offline`, `online`, `hybrid` | offline | How the student will study. |
 | `intended_start_date` | date | no |  | 2026-10-21 | Intended start day (Asia/Kolkata calendar day). |
 | `intended_course_id` | uuid | no |  | (id) | Academic-owned refs chosen in counselling (no FK across modules, D-005). |
 | `intended_batch_id` | uuid | no |  | (id) | Academic OS batch chosen in counselling; null = to be assigned. |
@@ -328,11 +328,11 @@ Every status change (first-attainment times come from here).
 |---|---|---|---|---|---|
 | `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
 | `admission_id` | uuid | yes |  | (id) | The admission case this belongs to. → `ops.admissions` |
-| `from_status` | text | no |  |  | Status before (null for the first row). |
+| `from_status` | text | no | `new`, `contacted`, `counselling_scheduled`, `counselled`, `demo_scheduled`, `demo_attended`, `admission_pending`, `admitted`, `enrolment_requested`, `enrolled`, `lost`, `on_hold`, `withdrawn`, `completed`, `transferred`, `cancelled_before_enrolment`, `other_inactive` | new | Status before (null for the first row). |
 | `to_status` | text | yes | `new`, `contacted`, `counselling_scheduled`, `counselled`, `demo_scheduled`, `demo_attended`, `admission_pending`, `admitted`, `enrolment_requested`, `enrolled`, `lost`, `on_hold`, `withdrawn`, `completed`, `transferred`, `cancelled_before_enrolment`, `other_inactive` | new | Status after. |
 | `reason` | text | no |  |  | Why (free text). |
 | `reason_code` | text | no |  |  | Coded reason (closure), e.g. `chose_competitor`; null = not coded. |
-| `actor_type` | text | yes |  |  | `user` (a person) or `system` (an event reply or rule). |
+| `actor_type` | text | yes | `user`, `system` | user | `user` (a person) or `system` (an event reply or rule). |
 | `actor_user_id` | uuid | no |  | (id) | User who made the change. → `core.users` |
 | `event_id` | uuid | no |  | (id) | Integration event that caused (reply) or was caused by (request) this transition. → `core.integration_events` |
 | `at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When it happened (UTC). |
@@ -376,7 +376,7 @@ Follow-ups (OPS-007, BR-OPS-9: every follow-up has an owner and a due date).
 | `completed_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was completed (UTC). |
 | `completed_by` | uuid | no |  | (id) | User who completed it. → `core.users` |
 | `last_reminder_on` | date | no |  | 2026-10-21 | IST date of the last reminder sent (one reminder per follow-up per day). |
-| `source` | text | yes (default manual) |  |  | `manual` = typed by staff; `rule` = created by a follow-up rule. |
+| `source` | text | yes (default manual) | `manual`, `rule` | manual | `manual` = typed by staff; `rule` = created by a follow-up rule. |
 | `created_by` | uuid | no |  | (id) | User who created the row. → `core.users` |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
 | `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
@@ -420,7 +420,7 @@ Contact consent and communication preferences of a student/family (OPS-077). Pri
 | `consent_status` | text | yes | `given`, `refused`, `withdrawn` | given | Consent to be contacted. |
 | `consent_by` | text | yes | `student`, `guardian`, `both` | student | Who gave or refused consent (minors: the guardian). |
 | `allowed_channels` | text[] | yes |  |  | Channels the family allows. |
-| `preferred_contact` | text | no |  |  | Contact the student or the guardian first. |
+| `preferred_contact` | text | no | `student`, `guardian` | student | Contact the student or the guardian first. |
 | `note` | text | no |  |  | Free-text notes. |
 | `recorded_by` | uuid | yes |  | (id) | User who recorded it. → `core.users` |
 | `recorded_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When it was recorded (UTC). |
@@ -724,7 +724,7 @@ Student / guardian → teacher feedback, recorded by staff on their behalf and m
 | `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
 | `teacher_staff_id` | uuid | yes |  | (id) | Teacher the feedback is about. → `core.staff_members` |
 | `student_id` | uuid | no |  | (id) | The student (canonical identity, core.students). → `core.students` |
-| `submitted_by_kind` | text | yes |  |  | Given by the student or a guardian (staff record it). |
+| `submitted_by_kind` | text | yes | `student`, `guardian` | student | Given by the student or a guardian (staff record it). |
 | `subject_ref` | text | no |  |  | Subject or batch the feedback is about (free text; batches are Academic-owned). |
 | `feedback_on` | date | yes |  | 2026-10-21 | Feedback day (Asia/Kolkata calendar day). |
 | `rating` | integer | no |  | 1 | 1–5 when given (scale is a proposed setting); null = no rating. |

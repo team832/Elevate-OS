@@ -67,7 +67,12 @@ export function Tabs({
               onKeyDown={(e) => onKeyDown(e, i)}
             >
               {t.label}
-              {typeof t.count === 'number' ? <span className="el-tab-count">{t.count}</span> : null}
+              {typeof t.count === 'number' ? (
+                <>
+                  <span className="el-visually-hidden">, </span>
+                  <span className="el-tab-count">{t.count}</span>
+                </>
+              ) : null}
             </a>
           );
         })}

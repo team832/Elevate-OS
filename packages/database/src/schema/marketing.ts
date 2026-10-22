@@ -175,8 +175,6 @@ export const MARKETING_MATCH_STATUSES = [
 export const MARKETING_SETTING_STATUSES = ['proposed', 'approved'] as const;
 export const MARKETING_CAMPAIGN_STATUSES = ['draft', 'active', 'ended', 'cancelled'] as const;
 
-// --- configuration and owner decisions ------------------------------------------------------
-
 /**
  * Configurable business policies. Unapproved owner decisions (OD-xxx) live here with
  * status `proposed` instead of being hard-coded as fact.
@@ -225,8 +223,6 @@ export const marketingLegacyConflicts = marketing.table(
     check('legacy_conflicts_status_check', sql`${t.status} IN ('unreconciled', 'resolved')`),
   ],
 );
-
-// --- social accounts ------------------------------------------------------------------------
 
 export const marketingSocialAccounts = marketing.table(
   'social_accounts',
@@ -361,8 +357,6 @@ export const marketingCodeCounters = marketing.table(
   (t) => [check('code_counters_non_negative', sql`${t.lastNumber} >= 0`)],
 );
 
-// --- campaigns ---------------------------------------------------------------------------------
-
 export const marketingCampaigns = marketing.table(
   'campaigns',
   {
@@ -393,8 +387,6 @@ export const marketingCampaigns = marketing.table(
     ),
   ],
 );
-
-// --- ideas -------------------------------------------------------------------------------------
 
 export const marketingIdeas = marketing.table(
   'ideas',
@@ -474,8 +466,6 @@ export const marketingIdeas = marketing.table(
     ),
   ],
 );
-
-// --- content items, versions, assets, assignments, comments, reviews ------------------------------
 
 export const marketingContentItems = marketing.table(
   'content_items',
@@ -675,8 +665,6 @@ export const marketingContentReviews = marketing.table(
   ],
 );
 
-// --- placements and collab groups -----------------------------------------------------------------
-
 /** A collab (BR-MKT-4 / CH-006): one post shared across several accounts on one platform. */
 export const marketingPlacementGroups = marketing.table(
   'placement_groups',
@@ -786,8 +774,6 @@ export const marketingPlacements = marketing.table(
   ],
 );
 
-// --- publishing records -----------------------------------------------------------------------------
-
 /**
  * One record per (placement, version) — the idempotency key — so the same approved version
  * can never be published twice. Retries reuse the record and add attempts.
@@ -867,8 +853,6 @@ export const marketingPublishingAttempts = marketing.table(
   ],
 );
 
-// --- metrics ---------------------------------------------------------------------------------------
-
 export const marketingMetricImports = marketing.table(
   'metric_imports',
   {
@@ -898,7 +882,7 @@ export const marketingMetricImports = marketing.table(
     uniqueIndex('metric_imports_file_account_key').on(t.accountId, t.fileSha256),
     check(
       'metric_imports_counts',
-      sql`${t.rowsTotal} >= 0 AND ${t.rowsAccepted} >= 0 AND ${t.rowsRejected} >= 0`,
+      sql`${t.rowsTotal} >= 0 AND ${t.rowsAccepted} >= 0 AND ${t.rowsRejected} >= 0 AND ${t.rowsSkipped} >= 0`,
     ),
   ],
 );
@@ -963,6 +947,7 @@ export const marketingMetricSnapshots = marketing.table(
       'metric_snapshots_window_check',
       sql`${t.window} IN ('lifetime_at_capture', '24h', '7d')`,
     ),
+    check('metric_snapshots_precision_check', sql`${t.capturedPrecision} IN ('instant', 'date')`),
   ],
 );
 

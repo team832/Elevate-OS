@@ -1,4 +1,6 @@
+import * as academicCurriculumSchema from './academic-curriculum';
 import * as academicSchema from './academic';
+import * as academicAssessmentsSchema from './academic-assessments';
 import * as academicDeliverySchema from './academic-delivery';
 import * as academicReviewsSchema from './academic-reviews';
 import * as coreSchema from './core';
@@ -17,7 +19,9 @@ import * as opsReviewAcksSchema from './ops-review-acks';
 
 export * from './core';
 export * from './marketing';
+export * from './academic-curriculum';
 export * from './academic';
+export * from './academic-assessments';
 export * from './academic-delivery';
 export * from './academic-reviews';
 export * from './ops';
@@ -38,7 +42,9 @@ export * from './ops-review-acks';
 export const SCHEMA_MODULES = {
   core: coreSchema,
   marketing: marketingSchema,
+  'academic-curriculum': academicCurriculumSchema,
   academic: academicSchema,
+  'academic-assessments': academicAssessmentsSchema,
   'academic-delivery': academicDeliverySchema,
   'academic-reviews': academicReviewsSchema,
   ops: opsSchema,
@@ -54,7 +60,6 @@ export const SCHEMA_MODULES = {
   'ops-review-acks': opsReviewAcksSchema,
 } as const;
 
-/** Postgres schemas managed by Elevate OS migrations. */
 export const MANAGED_SCHEMAS = ['core', 'marketing', 'academic', 'ops'] as const;
 
 /**
@@ -82,7 +87,9 @@ const merged = mergeSchemas();
 
 export const schema = merged as typeof coreSchema &
   typeof marketingSchema &
+  typeof academicCurriculumSchema &
   typeof academicSchema &
+  typeof academicAssessmentsSchema &
   typeof academicDeliverySchema &
   typeof academicReviewsSchema &
   typeof opsSchema &

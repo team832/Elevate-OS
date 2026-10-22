@@ -32,7 +32,8 @@ Run one module alone: `npm run db:start` + `npm run dev:academic` → http://loc
 
 ## The dev database (D-006a)
 - `npm run db:start` reads user/password/port/database from `DATABASE_URL`, refuses non-local hosts and placeholder passwords, listens on 127.0.0.1 only, and keeps data in `.data/postgres` (git-ignored).
-- Ctrl+C stops it cleanly; if a session crashed and left `postmaster.pid`, run `npm run db:stop`.
+- Ctrl+C stops it cleanly. If a session crashed and left `postmaster.pid`, just run `npm run db:start` again: when nothing listens on the port it removes the stale file and starts (`db:stop` cannot help there; it fails with "No such process"). If a server is listening, it stops with "a server is already listening on port …".
+- `npm run db:check` (read-only) compares the live database with the code's schema, checks every migration is applied and that sample rows follow D-036.
 - Start from scratch: stop the server, delete `.data/postgres`, start again.
 - PGlite alternative for a single process (e.g. one app only): `DATABASE_URL=pglite://.data/pglite`. Four apps cannot share a PGlite directory.
 
@@ -44,6 +45,7 @@ npm 11.17 does not run dependency install scripts unless approved. The root `pac
 |---|---|
 | Health shows `database: unavailable` | Is `npm run db:start` running? Is `DATABASE_URL` in the root `.env`? |
 | `Invalid environment configuration … SESSION_SECRET: missing` | Fill `.env` (all apps read the root file) |
-| `postmaster.pid exists` on `db:start` | `npm run db:stop`, then start again |
+| `postmaster.pid exists` on `db:start` | Run `npm run db:start` again; it removes a stale file when nothing listens on the port. "a server is already listening" means one is running: use it, or stop it with Ctrl+C in its terminal |
+| `npm run dev` fails with an Application Control message about `next-swc.win32-x64-msvc.node` | Windows blocks Next's native compiler on this PC (an owner security setting). Start each app with `npm run dev -w <app> -- --webpack` meanwhile (`HANDOFF.md`) |
 | Typecheck complains about `.next/types/…` | Run `npm run build` or `npm run dev` once for that app (Next generates `next-env.d.ts` and route types) |
 | Git Bash mangles `next=/academic` in curl args | Prefix the command with `MSYS_NO_PATHCONV=1` |

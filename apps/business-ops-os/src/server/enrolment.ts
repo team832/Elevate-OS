@@ -41,8 +41,8 @@ import {
 import type { IntegrationEventId, LeadId, StaffMemberId, StudentId } from '@elevate/shared-types';
 import type { ResolvedSettings } from '../domain';
 import { retryDecision } from '../domain/students';
-import { accessScope, userIdsForStaff, userIdsWithRole, notFound, type Actor } from './context';
-import { opsAudit } from './ops-common';
+import { accessScope, userIdsForStaff, userIdsWithRole, type Actor } from './context';
+import { opsAudit, rowById } from './ops-common';
 import { academicDeliveryOf, handoffInputOf, leadOwnerOf, lockAccessible } from './admissions';
 import { applyTransition, lockAdmission, type AdmissionRow } from './pipeline';
 import { loadSettings } from './settings';
@@ -117,8 +117,7 @@ async function buildPayload(
   requestedBy: Actor['id'],
   notes: string | null,
 ): Promise<RequestPayload> {
-  const [lead] = await tx.select().from(opsLeads).where(eq(opsLeads.id, admission.leadId));
-  if (!lead) notFound('Lead');
+  const lead = await rowById(tx, opsLeads, admission.leadId, 'Lead');
   if (!admission.programmeId)
     throw new ValidationError('Choose a programme before requesting enrolment.');
   const [programme] = await tx

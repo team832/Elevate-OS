@@ -55,6 +55,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
     >
       {access.status === 'forbidden' ? (
         <ErrorState
+          level={1}
           title="No access"
           description="Users & roles needs the platform:users:read permission. Ask a platform administrator."
         />

@@ -28,8 +28,8 @@ Request/response schemas: `src/server/schemas.ts` (zod). Response shapes are the
 | GET | `/ops/api/v1/leads/{id}/history` | `ops:leads:read` | Audit history of the lead and linked records. |
 | POST | `/ops/api/v1/leads/{id}/enquiries` | `ops:leads:write` | Attach a new enquiry to an existing lead. |
 | POST | `/ops/api/v1/leads/{id}/assign` | `ops:leads:assign` | Assign the lead owner (handoff pending until accepted). |
-| POST | `/ops/api/v1/leads/{id}/accept` | `ops:leads:write` | The assigned owner accepts the handoff. |
-| POST | `/ops/api/v1/leads/{id}/activities` | `ops:leads:write` | Log a contact attempt; a successful two-way contact moves new admissions to contacted. |
+| POST | `/ops/api/v1/leads/{id}/accept` | `ops:leads:write` | The assigned owner accepts the handoff. 409 if the lead was merged into another lead. |
+| POST | `/ops/api/v1/leads/{id}/activities` | `ops:leads:write` | Log a contact attempt; a successful two-way contact moves new admissions to contacted. 409 if the lead was merged (log it on the lead it was merged into). |
 | POST | `/ops/api/v1/leads/{id}/merge` | `ops:leads:merge` | Merge this lead INTO targetLeadId (explicit, audited). |
 | GET | `/ops/api/v1/lead-sources` | `ops:leads:read` | Configured lead sources. |
 

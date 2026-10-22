@@ -69,8 +69,6 @@ export type LeadRow = typeof opsLeads.$inferSelect;
 
 const SUCCESSFUL_OUTCOMES = new Set(['connected_two_way', 'replied', 'visited']);
 
-// --- access ------------------------------------------------------------------------------------
-
 async function assertLeadAccess(
   db: Database,
   access: AccessScope,
@@ -113,8 +111,6 @@ async function lockWorkableLead(tx: Database, access: AccessScope, id: string, m
   if (lead.mergedIntoLeadId) throw new ConflictError(merged);
   return lead;
 }
-
-// --- create -------------------------------------------------------------------------------------
 
 async function assertSource(db: Database, code: string) {
   const [row] = await db
@@ -289,8 +285,6 @@ export async function createLead(
     };
   });
 }
-
-// --- read ---------------------------------------------------------------------------------------
 
 function assignmentStatus(
   lead: Pick<LeadRow, 'ownerStaffId' | 'acceptedAt'>,
@@ -569,8 +563,6 @@ async function leadHistory(db: Database, leadId: string) {
     .limit(300);
 }
 
-// --- update, enquiries, assignment, activity --------------------------------------------------------
-
 /** Lead text fields: trimmed, empty → null. */
 const TEXT_FIELDS = [
   'preferredName',
@@ -766,6 +758,7 @@ export async function acceptLead(db: Database, actor: Actor, leadId: string, req
   const staffId = await staffIdForUser(db, actor.id);
   return withTransaction(db, async (tx) => {
     const lead = await getLeadRow(tx, leadId, true);
+    if (lead.mergedIntoLeadId) throw new ConflictError('This lead was merged into another lead.');
     if (!staffId || lead.ownerStaffId !== staffId)
       throw new ForbiddenError('Only the assigned owner can accept this lead.');
     if (lead.acceptedAt) return lead;
@@ -802,8 +795,12 @@ export async function logActivity(
   const staffId = await staffIdForUser(db, actor.id);
   const settings = await loadSettings(db);
   return withTransaction(db, async (tx) => {
-    const lead = await getLeadRow(tx, leadId, true);
-    await assertLeadAccess(tx, access, lead);
+    const lead = await lockWorkableLead(
+      tx,
+      access,
+      leadId,
+      'This lead was merged into another lead; log the contact on that one.',
+    );
     const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
     if (occurredAt.getTime() > Date.now() + 5 * 60_000)
       throw new ValidationError('A contact attempt cannot be in the future.');
@@ -857,8 +854,6 @@ export async function logActivity(
     return { activity, successful, admissionsMovedToContacted: moved };
   });
 }
-
-// --- merge review -----------------------------------------------------------------------------------
 
 /** Fields of the merge target that the source fills when the target's are empty. */
 const MERGE_FILL_FIELDS = [...CONTACT_KEYS, 'guardianName', 'previousSchool', 'city'] as const;

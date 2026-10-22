@@ -16,12 +16,9 @@ import {
 import {
   ConflictError,
   InvalidStateTransitionError,
-  NotFoundError,
   ValidationError,
-  recordAudit,
   withTransaction,
 } from '@elevate/server-kit';
-import type { IdeaId } from '@elevate/shared-types';
 import {
   COURSE_PREFIXES,
   EXAM_PREFIXES,
@@ -35,6 +32,7 @@ import {
   type IdeaStatus,
 } from '../domain';
 import { assertCan, type Actor } from './access';
+import { auditMarketing, rowById } from './common';
 import { allocateIdeaCode, type CodeAllocator } from './codes';
 import { loadPolicy } from './policy';
 
@@ -196,9 +194,7 @@ export async function createIdea(
             .returning();
           return row!;
         });
-        await recordAudit(tx, {
-          actorUserId: actor.id,
-          module: 'marketing',
+        await auditMarketing(tx, actor, {
           action: 'idea.created',
           entityType: 'idea',
           entityId: idea.id,
@@ -255,14 +251,8 @@ export async function listIdeas(db: Database, filters: IdeaListFilters = {}): Pr
     .limit(Math.min(filters.limit ?? 500, 500));
 }
 
-export async function getIdea(db: Database, id: string): Promise<IdeaRow> {
-  const [row] = await db
-    .select()
-    .from(marketingIdeas)
-    .where(eq(marketingIdeas.id, id as IdeaId));
-  if (!row) throw new NotFoundError('Idea not found.');
-  return row;
-}
+export const getIdea = (db: Database, id: string): Promise<IdeaRow> =>
+  rowById(db, marketingIdeas, id, 'Idea not found.');
 
 export async function getIdeaDetail(db: Database, id: string) {
   const idea = await getIdea(db, id);
@@ -351,9 +341,7 @@ export async function updateIdea(
         .set(set)
         .where(eq(marketingIdeas.id, before.id))
         .returning();
-      await recordAudit(tx, {
-        actorUserId: actor.id,
-        module: 'marketing',
+      await auditMarketing(tx, actor, {
         action: 'idea.updated',
         entityType: 'idea',
         entityId: before.id,
@@ -393,9 +381,7 @@ export async function changeIdeaStatus(
       .set({ status: input.status, statusReason: input.reason ?? null })
       .where(eq(marketingIdeas.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: 'idea.status_changed',
       entityType: 'idea',
       entityId: before.id,

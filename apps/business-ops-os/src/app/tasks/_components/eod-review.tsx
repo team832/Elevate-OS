@@ -48,7 +48,7 @@ export async function ReviewPane({
       meta={
         <>
           <EodStatus r={rep} />{' '}
-          {rep.isSample ? <span className="el-badge-sample">SAMPLE DATA</span> : null}
+          {rep.isSample ? <span className="el-badge el-badge-sample">SAMPLE DATA</span> : null}
         </>
       }
       closeHref={closeHref}

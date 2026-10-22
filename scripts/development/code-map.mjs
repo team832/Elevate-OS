@@ -53,7 +53,6 @@ function ownerOf(path) {
   return 'docs';
 }
 
-// ---------- folder tree ----------
 const allFiles = [];
 function walk(dir) {
   const node = {
@@ -91,17 +90,16 @@ function walk(dir) {
 }
 const tree = walk(ROOT);
 
-// ---------- schema parsing ----------
 const exportToTable = new Map(); // export name -> "schema.table"
 const schemas = [];
 for (const schema of SCHEMAS) {
+  // A module's tables are split over `<schema>.ts` and `<schema>-*.ts` (e.g. ops-demos.ts).
+  const files = readdirSync(join(ROOT, SCHEMA_DIR)).filter(
+    (f) => f === `${schema}.ts` || f.startsWith(`${schema}-`),
+  );
+  if (!files.length) continue;
   const file = `${SCHEMA_DIR}/${schema}.ts`;
-  let src;
-  try {
-    src = readFileSync(join(ROOT, file), 'utf8');
-  } catch {
-    continue;
-  }
+  const src = files.map((f) => readFileSync(join(ROOT, SCHEMA_DIR, f), 'utf8')).join('\n');
   const lines = src.split('\n');
   // helper column builders that embed a foreign key, e.g. const staffRef = (n) => uuid(n).references(() => staffMembers.id)
   const helpers = new Map();
@@ -145,7 +143,6 @@ for (const s of schemas)
   for (const t of s.tables)
     for (const r of t.refs) r.targetTable = exportToTable.get(r.target) ?? null;
 
-// ---------- who imports which table ----------
 const byExport = new Map();
 for (const s of schemas) for (const t of s.tables) byExport.set(t.export, t);
 const codeFiles = allFiles.filter(
@@ -172,7 +169,6 @@ for (const f of codeFiles) {
   for (const name of used) byExport.get(name).usedBy.push(f.path);
 }
 
-// ---------- stats ----------
 const countBy = (pred) => allFiles.filter(pred).length;
 const sumLines = (pred) => allFiles.filter(pred).reduce((a, f) => a + (f.lines ?? 0), 0);
 const isCode = (f) => /\.(ts|tsx|mts|mjs)$/.test(f.name);

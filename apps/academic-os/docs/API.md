@@ -44,7 +44,7 @@ Base path `/academic/api/v1`. Every route is built with `defineRoute` (`src/app/
 | `GET /rooms` | `timetable:read` | — | rooms |
 | `POST /rooms` | `timetable:write` | `code`, `name`, `capacity?` | 201 room |
 | `GET /exclusions?batchId=` | `timetable:read` | — | exclusions (with `batchId`: the batch's + centre-wide) |
-| `POST /exclusions` | `timetable:write` | `batchId?`, `kind`, `label`, either `date` or `periodStart`+`periodEnd`; allowances need `days` + `slotsPerDay` (not for `exam_blackout` windows); `status`='provisional' | 201 |
+| `POST /exclusions` | `timetable:write` | `batchId?`, `kind`, `label`, either `date` or `periodStart`+`periodEnd`; allowances need `days` + `slotsPerDay`, each ≥ 1 (not for `exam_blackout` windows); `status`='provisional' | 201; 400 for a `date` sent together with a period, or `days`/`slotsPerDay` below 1 (the database check `calendar_exclusions_shape` backs this, migration 0012) |
 | `POST /calendar-rules` | `batches:write` | `batchId`, `label`, `periodStart`, `periodEnd`, `weekdays[1..7]`, `slotsPerDay` 1–12, `kind` regular\|extra, `status`='provisional' | 201 |
 
 ## 3. Timetable

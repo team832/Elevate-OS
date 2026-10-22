@@ -168,7 +168,7 @@ export function PaperAnswers({ d, level }: { d: ApplicationView; level: 2 | 3 })
         rows={[
           ...PAPER_FIELDS.map(([name, text]) => ({
             label: text,
-            value: f[name] ?? 'Not recorded',
+            value: missing(f[name]),
           })),
           {
             label: 'Result publicity consent',

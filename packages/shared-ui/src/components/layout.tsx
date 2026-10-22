@@ -214,7 +214,6 @@ function Sidebar(props: AppShellProps) {
         <BrandLogo size="sm" />
       </a>
       <nav className="el-sidebar-nav" aria-label="Modules and sections">
-        {/* Module switcher: the current module is marked, its sections are listed below. */}
         <ul className="el-nav-list el-nav-modules" aria-label="Modules">
           <li>
             <SidebarLink href="/" label="Overview" icon="overview" current={overviewCurrent} />
@@ -225,6 +224,7 @@ function Sidebar(props: AppShellProps) {
                 className="el-nav-link el-nav-module"
                 href={moduleHref(m.key)}
                 data-current={m.key === current ? 'true' : undefined}
+                aria-current={m.key === current || undefined}
               >
                 <Icon name={m.icon} />
                 <span>{m.label}</span>

@@ -142,37 +142,6 @@ export async function buildDashboard(db: Database, actor: Actor, options: Dashbo
   };
 }
 
-/** The signed-in user's own work (home page for roles without the dashboard). */
-export async function myWork(db: Database, actor: Actor, now = new Date()) {
-  await accessScope(db, actor, 'ops:module:access');
-  const today = istToday(now);
-  const [me] = await db
-    .select({ id: staffMembers.id })
-    .from(staffMembers)
-    .where(eq(staffMembers.userId, actor.id));
-  if (!me)
-    return {
-      linked: false as const,
-      followUpsDue: 0,
-      followUpsOverdue: 0,
-      openAdmissions: 0,
-    };
-  const followUps = await db
-    .select({ dueDate: opsFollowUps.dueDate })
-    .from(opsFollowUps)
-    .where(and(eq(opsFollowUps.ownerStaffId, me.id), eq(opsFollowUps.status, 'open')));
-  const admissions = await db
-    .select({ status: opsAdmissions.status })
-    .from(opsAdmissions)
-    .where(eq(opsAdmissions.counsellorStaffId, me.id));
-  return {
-    linked: true as const,
-    followUpsDue: followUps.filter((f) => f.dueDate === today).length,
-    followUpsOverdue: followUps.filter((f) => f.dueDate < today).length,
-    openAdmissions: admissions.filter((a) => isOpenStatus(a.status)).length,
-  };
-}
-
 /** Counts per Asia/Kolkata day for the `days` days ending `to`, oldest first; other dates are ignored. */
 export function perDay(dates: readonly Date[], to: IsoDate, days: number) {
   const counts = new Map<string, number>();

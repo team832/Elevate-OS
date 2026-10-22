@@ -33,10 +33,9 @@ import {
   academicClassSessions,
   academicEnrolments,
   academicStudents,
-  academicSubjects,
   type AcademicSessionId,
-  type AcademicSubjectId,
 } from './academic';
+import { academicSubjects, type AcademicSubjectId } from './academic-curriculum';
 import { staffMembers, students as coreStudents, users } from './core';
 
 export type AcademicReviewId = Brand<string, 'AcademicReviewId'>;

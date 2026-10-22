@@ -473,5 +473,9 @@ export const opsStudentTeacherFeedback = ops.table(
       'student_teacher_feedback_visibility_check',
       sql`${t.visibility} IN ('staff_only', 'teacher_and_staff')`,
     ),
+    check(
+      'student_teacher_feedback_by_check',
+      sql`${t.submittedByKind} IN ('student', 'guardian')`,
+    ),
   ],
 );

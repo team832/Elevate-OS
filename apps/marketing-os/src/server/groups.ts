@@ -9,7 +9,6 @@ import {
   marketingPlacements,
   marketingSocialAccounts,
   type Database,
-  type MarketingPlacementGroupId,
   type MarketingPlacementId,
 } from '@elevate/database';
 import {
@@ -17,7 +16,6 @@ import {
   InvalidStateTransitionError,
   NotFoundError,
   ValidationError,
-  recordAudit,
   withTransaction,
 } from '@elevate/server-kit';
 import type { CampaignId } from '@elevate/shared-types';
@@ -28,6 +26,7 @@ import {
   type CollabValidation,
 } from '../domain';
 import { assertCan, type Actor } from './access';
+import { auditMarketing, rowById } from './common';
 
 export const createGroupBody = z
   .object({
@@ -110,9 +109,7 @@ export async function createPlacementGroup(
             isNull(marketingPlacements.placementGroupId),
           ),
         );
-      await recordAudit(tx, {
-        actorUserId: actor.id,
-        module: 'marketing',
+      await auditMarketing(tx, actor, {
         action: 'placement_group.created',
         entityType: 'placement_group',
         entityId: group!.id,
@@ -134,11 +131,7 @@ export async function createPlacementGroup(
 }
 
 export async function getPlacementGroup(db: Database, id: string) {
-  const [group] = await db
-    .select()
-    .from(marketingPlacementGroups)
-    .where(eq(marketingPlacementGroups.id, id as MarketingPlacementGroupId));
-  if (!group) throw new NotFoundError('Collab group not found.');
+  const group = await rowById(db, marketingPlacementGroups, id, 'Collab group not found.');
   const [idea] = await db.select().from(marketingIdeas).where(eq(marketingIdeas.id, group.ideaId));
   const ids = (
     await db
@@ -163,8 +156,6 @@ export async function getPlacementGroup(db: Database, id: string) {
     validation,
   };
 }
-
-// --- campaigns ---------------------------------------------------------------------
 
 export const createCampaignBody = z
   .object({
@@ -211,9 +202,7 @@ export async function createCampaign(
           createdBy: actor.id,
         })
         .returning();
-      await recordAudit(tx, {
-        actorUserId: actor.id,
-        module: 'marketing',
+      await auditMarketing(tx, actor, {
         action: 'campaign.created',
         entityType: 'campaign',
         entityId: row!.id,
@@ -238,26 +227,14 @@ export async function setPlacementCampaign(
 ) {
   assertCan(actor, 'marketing:campaigns:write');
   return withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(marketingPlacements)
-      .where(eq(marketingPlacements.id, placementId as MarketingPlacementId));
-    if (!before) throw new NotFoundError('Placement not found.');
-    if (campaignId) {
-      const [c] = await tx
-        .select()
-        .from(marketingCampaigns)
-        .where(eq(marketingCampaigns.id, campaignId as CampaignId));
-      if (!c) throw new NotFoundError('Campaign not found.');
-    }
+    const before = await rowById(tx, marketingPlacements, placementId, 'Placement not found.');
+    if (campaignId) await rowById(tx, marketingCampaigns, campaignId, 'Campaign not found.');
     const [after] = await tx
       .update(marketingPlacements)
       .set({ campaignId: campaignId as CampaignId | null })
       .where(eq(marketingPlacements.id, before.id))
       .returning();
-    await recordAudit(tx, {
-      actorUserId: actor.id,
-      module: 'marketing',
+    await auditMarketing(tx, actor, {
       action: 'placement.campaign_changed',
       entityType: 'placement',
       entityId: before.id,
