@@ -43,7 +43,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@next/eslint-plugin-next": "16.4.2",
-    "@types/node": "24.19.2",
+    "@types/node": "26.6.5",
     "concurrently": "10.0.6",
     "drizzle-orm": "0.45.4",
     "embedded-postgres": "18.4.0-beta.17",
