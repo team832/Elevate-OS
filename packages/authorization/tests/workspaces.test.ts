@@ -18,6 +18,7 @@ describe('workspacesFor (D-072: membership = a stored role granting <workspace>:
     [['operations_manager'], ['ops']],
     [['admissions_counsellor'], ['ops']],
     [['finance_officer'], ['ops']],
+    [['hr_manager'], ['ops']],
     [['marketing_manager'], ['marketing']],
     [['marketing_contributor'], ['marketing']],
     [['teacher'], ['academic']],

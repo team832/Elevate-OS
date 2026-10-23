@@ -2,10 +2,15 @@ import { afterAll, beforeAll, describe } from 'vitest';
 import {
   OPS_EOD_REVIEW_EVENT_KINDS,
   OPS_EOD_STATUSES,
+  OPS_REPORT_PERIOD_KINDS,
   OPS_TASK_EVENT_KINDS,
+  OPS_TASK_EVENT_STATUSES,
   OPS_TASK_IMPORT_OUTCOMES,
+  OPS_TASK_RELATED_KINDS,
+  OPS_TASK_REVIEW_DECISIONS,
   OPS_TASK_SOURCES,
   OPS_TASK_STATUSES,
+  OPS_TASK_VISIBILITIES,
 } from '../../src/schema/index';
 import { LATER, NOW, insert, runCases, setup, variants, vocab, type Row } from './helpers';
 
@@ -18,6 +23,7 @@ const task = (o: Row = {}): Row => ({
   staff_id: ctx.ids.staff,
   title: 'Sample task',
   due_on: '2026-10-21',
+  original_due_on: '2026-10-21',
   created_by: ctx.ids.user,
   ...o,
 });
@@ -38,6 +44,8 @@ const update = (o: Row = {}): Row => ({
 const report = (o: Row = {}): Row => ({
   staff_id: ctx.ids.staff,
   report_date: '2026-10-20',
+  period_start: '2026-10-20',
+  period_end: '2026-10-20',
   snapshot: '{}',
   created_by: ctx.ids.user,
   ...o,
@@ -55,6 +63,26 @@ const reviewEvent = (o: Row = {}): Row => ({
   report_id: ids.report,
   kind: 'viewed',
   actor_user_id: ctx.ids.user,
+  ...o,
+});
+const submission = (o: Row = {}): Row => ({
+  task_id: ids.task,
+  version: 1,
+  completion_note: 'Sheet and answer key attached',
+  submitted_by_user_id: ctx.ids.user,
+  ...o,
+});
+const review = (o: Row = {}): Row => ({
+  task_id: ids.task,
+  submission_id: ids.submission,
+  decision: 'comment',
+  reviewer_user_id: ctx.ids.user2,
+  ...o,
+});
+const checklist = (o: Row = {}): Row => ({
+  task_id: ids.task,
+  position: 0,
+  text: 'Answer key',
   ...o,
 });
 const batch = (o: Row = {}): Row => ({
@@ -86,6 +114,14 @@ beforeAll(async () => {
   ids.task = await insert(pg, 'ops.staff_tasks', task({ legacy_ref: 'deskday_backup_json:s:t-1' }));
   ids.task2 = await insert(pg, 'ops.staff_tasks', task());
   ids.update = await insert(pg, 'ops.task_updates', update());
+  ids.submission = await insert(pg, 'ops.task_submissions', submission());
+  ids.submission2 = await insert(pg, 'ops.task_submissions', submission({ version: 2 }));
+  await insert(pg, 'ops.task_reviews', review({ decision: 'approved' }));
+  await insert(pg, 'ops.task_collaborators', {
+    task_id: ids.task,
+    staff_id: ctx.ids.staff,
+    added_by: ctx.ids.user,
+  });
   await insert(
     pg,
     'ops.task_updates',
@@ -118,6 +154,7 @@ describe('staff tasks, events, updates and dependencies', () => {
             status: v,
             reason: 'Sample reason',
             ...(v === 'done' ? { completed_at: NOW, progress_percent: 100 } : {}),
+            ...(v === 'in_review' ? { first_submitted_at: NOW, last_submitted_at: NOW } : {}),
           }),
       ),
       vocab(
@@ -129,7 +166,66 @@ describe('staff tasks, events, updates and dependencies', () => {
       ),
       variants('task rules', 'ops.staff_tasks', task, {
         'cancelled without a reason': [{ status: 'cancelled' }, 'staff_tasks_reason_check'],
-        'in review without a reason': [{ status: 'in_review' }, 'ok'],
+        'in review without a reason': [
+          { status: 'in_review', first_submitted_at: NOW, last_submitted_at: NOW },
+          'ok',
+        ],
+        'in review never submitted': [{ status: 'in_review' }, 'staff_tasks_submitted_check'],
+        'blocked is no longer a status': [
+          { status: 'blocked', reason: 'Waiting' },
+          'staff_tasks_status_check',
+        ],
+        'blocked flag with kind and reason (status kept)': [
+          {
+            status: 'in_progress',
+            blocked_at: NOW,
+            blocked_kind: 'on_hold',
+            blocked_reason: 'Waiting',
+          },
+          'ok',
+        ],
+        'blocked flag without a reason': [
+          { blocked_at: NOW, blocked_kind: 'blocked' },
+          'staff_tasks_blocked_check',
+        ],
+        'blocked reason without the flag': [
+          { blocked_reason: 'Waiting' },
+          'staff_tasks_blocked_check',
+        ],
+        'blocked kind bogus': [
+          { blocked_at: NOW, blocked_kind: 'bogus', blocked_reason: 'Waiting' },
+          'staff_tasks_blocked_kind_check',
+        ],
+        'latest submission before the first': [
+          { first_submitted_at: LATER, last_submitted_at: NOW },
+          'staff_tasks_submitted_check',
+        ],
+        'first submission without the latest': [
+          { first_submitted_at: NOW },
+          'staff_tasks_submitted_check',
+        ],
+        'no original deadline': [{ original_due_on: null }, '23502'],
+        'related id without a kind': [
+          { related_id: () => ctx.ids.student },
+          'staff_tasks_related_check',
+        ],
+        'related label without a record': [{ related_label: 'IPMAT' }, 'staff_tasks_related_check'],
+        'related batch and a student': [
+          {
+            related_kind: 'batch',
+            related_id: () => ctx.ids.student,
+            student_id: () => ctx.ids.student,
+          },
+          'staff_tasks_one_related',
+        ],
+        'own parent': [
+          {
+            id: '00000000-0000-4000-8000-0000000000aa',
+            parent_task_id: '00000000-0000-4000-8000-0000000000aa',
+          },
+          'staff_tasks_not_own_parent',
+        ],
+        'child of a task': [{ parent_task_id: id('task') }, 'ok'],
         'acknowledged time without who': [
           { acknowledged_at: NOW },
           'staff_tasks_acknowledged_check',
@@ -144,6 +240,27 @@ describe('staff tasks, events, updates and dependencies', () => {
         ],
         'version 0': [{ version: 0 }, 'staff_tasks_version_check'],
       }),
+      vocab(
+        'task related kinds (OPS_TASK_RELATED_KINDS)',
+        'ops.staff_tasks',
+        OPS_TASK_RELATED_KINDS,
+        'staff_tasks_related_kind_check',
+        (v) => task({ related_kind: v, related_id: ctx.ids.student, related_label: 'Sample' }),
+      ),
+      vocab(
+        'task visibility (OPS_TASK_VISIBILITIES)',
+        'ops.staff_tasks',
+        OPS_TASK_VISIBILITIES,
+        'staff_tasks_visibility_check',
+        (v) => task({ visibility: v }),
+      ),
+      vocab(
+        'event statuses keep the retired ones (OPS_TASK_EVENT_STATUSES)',
+        'ops.task_events',
+        OPS_TASK_EVENT_STATUSES,
+        'task_events_status_check',
+        (v) => event({ kind: 'status_changed', from_status: v, to_status: v }),
+      ),
       vocab(
         'task event kinds (OPS_TASK_EVENT_KINDS)',
         'ops.task_events',
@@ -167,6 +284,7 @@ describe('staff tasks, events, updates and dependencies', () => {
           'task_events_owner_change_check',
         ],
         'cancelled without a reason': [{ kind: 'cancelled' }, 'task_events_reason_check'],
+        'blocked without a reason': [{ kind: 'blocked_set' }, 'task_events_reason_check'],
         'unknown status': [{ from_status: 'bogus' }, 'task_events_status_check'],
         'imported with an original time': [{ kind: 'imported', occurred_at: NOW }, 'ok'],
       }),
@@ -209,10 +327,80 @@ describe('staff tasks, events, updates and dependencies', () => {
   );
 });
 
+describe('checklist, submissions, reviews and collaborators', () => {
+  runCases(
+    () => ctx.pg,
+    [
+      variants('checklist rules', 'ops.task_checklist_items', checklist, {
+        item: [{}, 'ok'],
+        'blank text': [{ text: ' ' }, 'task_checklist_items_text_check'],
+        'negative position': [{ position: -1 }, 'task_checklist_items_position_check'],
+        'done without who': [{ done_at: NOW }, 'task_checklist_items_done_check'],
+      }),
+      variants('submission rules', 'ops.task_submissions', submission, {
+        'version 3': [{ version: 3 }, 'ok'],
+        'version 1 twice': [{}, 'task_submissions_task_version_key'],
+        'version 0': [{ version: 0 }, 'task_submissions_version_check'],
+        'blank completion note': [
+          { version: 4, completion_note: ' ' },
+          'task_submissions_note_check',
+        ],
+      }),
+      vocab(
+        'review decisions (OPS_TASK_REVIEW_DECISIONS)',
+        'ops.task_reviews',
+        OPS_TASK_REVIEW_DECISIONS,
+        'task_reviews_decision_check',
+        (v) => review({ decision: v, note: 'Sample note', submission_id: ids.submission2 }),
+      ),
+      variants('review rules', 'ops.task_reviews', review, {
+        'second decision on one submission': [
+          { decision: 'changes_requested', note: 'Attach the key' },
+          'task_reviews_one_decision_key',
+        ],
+        'comment on a decided submission': [{ decision: 'comment', note: 'Thanks' }, 'ok'],
+        'changes without a reason': [
+          { decision: 'changes_requested', submission_id: null },
+          'task_reviews_note_check',
+        ],
+        'approval without a submission': [
+          { decision: 'approved', submission_id: null },
+          'task_reviews_submission_check',
+        ],
+      }),
+      variants(
+        'collaborator rules',
+        'ops.task_collaborators',
+        (o) => ({ task_id: ids.task, staff_id: ctx.ids.staff, added_by: ctx.ids.user, ...o }),
+        { 'same person twice': [{}, 'task_collaborators_pkey'] },
+      ),
+    ],
+  );
+});
+
 describe('EOD reports, versions and review events', () => {
   runCases(
     () => ctx.pg,
     [
+      vocab(
+        'report periods (OPS_REPORT_PERIOD_KINDS)',
+        'ops.eod_reports',
+        OPS_REPORT_PERIOD_KINDS,
+        'eod_reports_period_kind_check',
+        (v) =>
+          report({
+            period_kind: v,
+            // An unknown kind gets month-shaped dates, so only the kind check can refuse it.
+            ...({
+              day: {
+                report_date: '2026-11-02',
+                period_start: '2026-11-02',
+                period_end: '2026-11-02',
+              },
+              week: { report_date: null, period_start: '2026-11-02', period_end: '2026-11-08' },
+            }[v] ?? { report_date: null, period_start: '2026-11-01', period_end: '2026-11-30' }),
+          }),
+      ),
       vocab(
         'EOD statuses (OPS_EOD_STATUSES)',
         'ops.eod_reports',
@@ -221,6 +409,8 @@ describe('EOD reports, versions and review events', () => {
         (v) =>
           report({
             report_date: '2026-10-21',
+            period_start: '2026-10-21',
+            period_end: '2026-10-21',
             status: v,
             ...(v === 'draft' ? {} : { submitted_at: NOW }),
           }),
@@ -228,7 +418,13 @@ describe('EOD reports, versions and review events', () => {
       variants(
         'EOD report rules',
         'ops.eod_reports',
-        (o) => report({ report_date: '2026-10-21', ...o }),
+        (o) =>
+          report({
+            report_date: '2026-10-21',
+            period_start: '2026-10-21',
+            period_end: '2026-10-21',
+            ...o,
+          }),
         {
           'submitted without a time': [{ status: 'submitted' }, 'eod_reports_submitted_check'],
           'draft with a submit time': [{ submitted_at: NOW }, 'eod_reports_submitted_check'],
@@ -237,8 +433,53 @@ describe('EOD reports, versions and review events', () => {
             'eod_reports_reviewed_check',
           ],
           'second report for the day': [
-            { report_date: '2026-10-20' },
-            'eod_reports_staff_date_key',
+            { report_date: '2026-10-20', period_start: '2026-10-20', period_end: '2026-10-20' },
+            'eod_reports_staff_period_key',
+          ],
+          'day report ending another day': [
+            { period_end: '2026-10-22' },
+            'eod_reports_period_check',
+          ],
+          'day report without its date': [{ report_date: null }, 'eod_reports_period_check'],
+          'week of 7 days from the day report': [
+            {
+              period_kind: 'week',
+              report_date: null,
+              period_start: '2026-10-20',
+              period_end: '2026-10-26',
+            },
+            'ok',
+          ],
+          'week of 6 days': [
+            {
+              period_kind: 'week',
+              report_date: null,
+              period_end: '2026-10-26',
+              period_start: '2026-10-21',
+            },
+            'eod_reports_period_check',
+          ],
+          'week with a report date': [
+            { period_kind: 'week', period_end: '2026-10-27' },
+            'eod_reports_period_check',
+          ],
+          'calendar month': [
+            {
+              period_kind: 'month',
+              report_date: null,
+              period_start: '2026-02-01',
+              period_end: '2026-02-28',
+            },
+            'ok',
+          ],
+          'month not starting on the 1st': [
+            {
+              period_kind: 'month',
+              report_date: null,
+              period_start: '2026-02-02',
+              period_end: '2026-03-01',
+            },
+            'eod_reports_period_check',
           ],
         },
       ),

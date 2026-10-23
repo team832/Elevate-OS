@@ -17,17 +17,18 @@ import { listHref } from '../../../ui/list-controls';
 import '../../ops.css';
 import { TasksNav, type TasksArea } from './eod-nav';
 import { EodReport } from './eod-views';
-import {
-  AckBadge,
-  TaskActions,
-  TaskDependencies,
-  TaskFacts,
-  TaskHistory,
-  TaskReport,
-  WaitingAlert,
-  WorkUpdates,
-} from './task-detail';
+import { AckBadge, TaskActions, TaskDependencies, TaskFacts, WaitingAlert } from './task-detail';
+import { listAttachments } from '../../../server/attachments';
+import { TaskHistory, TaskReport } from './task-history';
 import { AllTasks, dueLabel, MyDay, TaskBadge, taskPaths, type Params } from './task-views';
+import {
+  Checklist,
+  Discussion,
+  Submissions,
+  SubmitWork,
+  TaskFiles,
+  WorkUpdates,
+} from './task-work';
 
 export interface BodyProps {
   user: AuthenticatedUser;
@@ -60,7 +61,7 @@ export async function TasksHeader({
 const VIEWS = { day: MyDay, all: AllTasks, eod: EodReport };
 const LABELS = { day: 'My tasks', all: 'Task tracker', eod: 'End-of-day report' };
 const DESCRIPTIONS = {
-  day: 'Log work as it comes in and keep each task up to date.',
+  day: 'Work assigned to you and work you log yourself, each with its deadline and next step.',
   all: 'Every task you may see, with filters.',
   eod: 'Your report for a day, built from your task history. Add your notes and submit it to your manager.',
 };
@@ -107,15 +108,16 @@ export function TaskBody({ user, base, id }: Omit<BodyProps, 'searchParams'> & {
 async function TaskView({ user, base, id }: Omit<BodyProps, 'searchParams'> & { id: string }) {
   const r = await load(async (db) => {
     const d = await taskDetail(db, user, id);
-    const [options, open] = await Promise.all([
+    const [options, open, files] = await Promise.all([
       d.canEdit ? formOptions(db) : null,
       // shortcut: the 100 newest tasks in scope as dependency choices; add a search when lists grow.
       d.canEdit ? listTasks(db, user, { page: 1 }, 100) : null,
+      listAttachments(db, user, 'task', d.id),
     ]);
-    return { d, staff: options?.staff ?? [], open: open?.rows ?? [] };
+    return { d, staff: options?.staff ?? [], open: open?.rows ?? [], files };
   });
   if (!r.ok) return r.view;
-  const { d, staff, open } = r.data;
+  const { d, staff, open, files } = r.data;
   const candidates = open
     .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
     .map((t) => ({ value: t.id, label: `${t.title} (${t.staffName})` }));
@@ -125,7 +127,11 @@ async function TaskView({ user, base, id }: Omit<BodyProps, 'searchParams'> & { 
         title={d.title}
         meta={
           <>
-            <TaskBadge status={d.status} />
+            <TaskBadge
+              status={d.status}
+              reviewRequired={d.reviewRequired}
+              blocked={d.blockedKind}
+            />
             <AckBadge at={d.acknowledgedAt} />
             {d.isSample ? <span className="el-badge el-badge-sample">Sample data</span> : null}
           </>
@@ -141,8 +147,13 @@ async function TaskView({ user, base, id }: Omit<BodyProps, 'searchParams'> & { 
       <WaitingAlert d={d} />
       <TaskActions d={d} staff={staff} base={base} />
       <TaskFacts d={d} base={base} />
-      <TaskDependencies d={d} candidates={candidates} base={base} />
+      <Checklist d={d} base={base} />
+      <TaskFiles d={d} base={base} files={files} />
+      <SubmitWork d={d} base={base} />
+      <Submissions d={d} base={base} />
+      <Discussion d={d} base={base} />
       <WorkUpdates d={d} base={base} />
+      <TaskDependencies d={d} candidates={candidates} base={base} />
       <TaskReport d={d} base={base} />
       <TaskHistory d={d} />
     </div>

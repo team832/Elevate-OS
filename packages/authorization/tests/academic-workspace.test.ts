@@ -35,6 +35,7 @@ describe('teacher workspace grants (brief 20)', () => {
       'admissions_counsellor',
       'operations_manager',
       'finance_officer',
+      'hr_manager',
     ] as RoleKey[]) {
       expect([...grantsForRole(role).keys()].filter((k) => k.startsWith('academic:'))).toEqual([]);
     }

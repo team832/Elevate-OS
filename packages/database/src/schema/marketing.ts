@@ -16,8 +16,9 @@
  * - Only `import type` from workspace packages (drizzle-kit loads this file directly).
  * - Do not run `drizzle-kit generate`; tests build the schema with `createTestDb()`.
  *
- * The literal vocabularies below are mirrored in apps/marketing-os/src/domain/vocabulary.ts;
- * a unit test (tests/unit/vocabulary.test.ts) fails if they drift apart.
+ * Vocabularies live in ./marketing-vocabulary; campaigns, campaign members and the planning
+ * tables (calendar, SEO/AIO/GEO, targets) in ./marketing-planning. Both are re-exported here,
+ * so every import path stays the same.
  */
 import { sql } from 'drizzle-orm';
 import {
@@ -28,7 +29,6 @@ import {
   index,
   integer,
   jsonb,
-  pgSchema,
   text,
   timestamp,
   uniqueIndex,
@@ -41,12 +41,46 @@ import type {
   CampaignId,
   ContentItemId,
   IdeaId,
+  ProgrammeId,
   StaffMemberId,
   UserId,
 } from '@elevate/shared-types';
-import { approvals, staffMembers, users } from './core';
+import { approvals, programmes, staffMembers, users } from './core';
+import { createdAt, inList, marketing, updatedAt } from './marketing-columns';
+import { marketingCampaigns } from './marketing-planning';
+import {
+  MARKETING_ACCOUNT_SCOPES,
+  MARKETING_ACCOUNT_STATUSES,
+  MARKETING_ASSIGNEE_ROLES,
+  MARKETING_CADENCE_ENFORCEMENT,
+  MARKETING_CALENDAR_ITEM_TYPES,
+  MARKETING_CHANNELS,
+  MARKETING_CONTENT_FORMATS,
+  MARKETING_CONTENT_STATES,
+  MARKETING_COURSE_PREFIXES,
+  MARKETING_EFFORT_SIZES,
+  MARKETING_IDEA_SCOPES,
+  MARKETING_IDEA_STATUSES,
+  MARKETING_INTEGRATION_STATUSES,
+  MARKETING_MATCH_STATUSES,
+  MARKETING_METRIC_KEYS,
+  MARKETING_METRIC_STATES,
+  MARKETING_PLACEMENT_STATUSES,
+  MARKETING_PLACEMENT_VARIANTS,
+  MARKETING_PLATFORMS,
+  MARKETING_PUBLICATION_MODES,
+  MARKETING_PUBLISHING_STATUSES,
+  MARKETING_QUARANTINE_STATES,
+  MARKETING_RIGHTS_STATES,
+  MARKETING_RULE_KINDS,
+  MARKETING_RULE_STATUSES,
+  MARKETING_SETTING_STATUSES,
+  MARKETING_SNAPSHOT_SOURCES,
+} from './marketing-vocabulary';
 
-export const marketing = pgSchema('marketing');
+export { marketing } from './marketing-columns';
+export * from './marketing-vocabulary';
+export * from './marketing-planning';
 
 // --- branded ids for marketing rows (IdeaId, ContentItemId, CampaignId live in shared-types) ---
 export type MarketingSocialAccountId = Brand<string, 'MarketingSocialAccountId'>;
@@ -64,116 +98,6 @@ export type MarketingMetricSnapshotId = Brand<string, 'MarketingMetricSnapshotId
 export type MarketingContentRuleId = Brand<string, 'MarketingContentRuleId'>;
 export type MarketingPolicySettingId = Brand<string, 'MarketingPolicySettingId'>;
 export type MarketingLegacyConflictId = Brand<string, 'MarketingLegacyConflictId'>;
-
-const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
-const updatedAt = () =>
-  timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date());
-
-/** `col IN ('a', 'b')` for a literal list (values are compile-time constants, never user input). */
-const inList = (values: readonly string[]) =>
-  sql.raw(`(${values.map((v) => `'${v}'`).join(', ')})`);
-
-// --- vocabularies (mirrored in apps/marketing-os/src/domain/vocabulary.ts) ---------------
-export const MARKETING_PLATFORMS = ['instagram', 'youtube', 'linkedin', 'other'] as const;
-export const MARKETING_ACCOUNT_STATUSES = ['live', 'starting', 'later', 'retired'] as const;
-export const MARKETING_ACCOUNT_SCOPES = ['exam', 'local', 'company', 'founder'] as const;
-export const MARKETING_INTEGRATION_STATUSES = [
-  'not_configured',
-  'sandbox',
-  'connected',
-  'error',
-] as const;
-export const MARKETING_CADENCE_ENFORCEMENT = ['warn', 'block'] as const;
-export const MARKETING_COURSE_PREFIXES = ['CLAT', 'IPMAT', 'CUET', 'COM', 'GEN'] as const;
-export const MARKETING_IDEA_STATUSES = [
-  'idea',
-  'in_development',
-  'ready',
-  'held',
-  'rejected',
-  'archived',
-] as const;
-export const MARKETING_IDEA_SCOPES = [
-  'single_exam',
-  'cross_exam',
-  'founder',
-  'local_sikar',
-  'general',
-] as const;
-export const MARKETING_QUARANTINE_STATES = ['none', 'quarantined', 'resolved'] as const;
-export const MARKETING_CONTENT_FORMATS = [
-  'script',
-  'caption',
-  'carousel',
-  'video_brief',
-  'image',
-  'post',
-] as const;
-export const MARKETING_CONTENT_STATES = [
-  'draft',
-  'in_review',
-  'changes_requested',
-  'approved',
-  'scheduled',
-  'published',
-  'archived',
-] as const;
-export const MARKETING_ASSIGNEE_ROLES = ['writer', 'designer', 'editor', 'presenter'] as const;
-export const MARKETING_RIGHTS_STATES = [
-  'own',
-  'third_party_cleared',
-  'third_party_pending',
-] as const;
-export const MARKETING_PLACEMENT_STATUSES = [
-  'planned',
-  'scheduled',
-  'published',
-  'cancelled',
-] as const;
-export const MARKETING_PLACEMENT_VARIANTS = ['short', 'long'] as const;
-export const MARKETING_PUBLICATION_MODES = [
-  'sandbox',
-  'adapter',
-  'manual',
-  'legacy_reported',
-] as const;
-export const MARKETING_PUBLISHING_STATUSES = ['pending', 'succeeded', 'failed'] as const;
-export const MARKETING_RULE_KINDS = [
-  'banned_phrase',
-  'channel_rule',
-  'requires_approval',
-  'consent',
-] as const;
-export const MARKETING_RULE_STATUSES = ['approved', 'documented', 'proposed', 'retired'] as const;
-export const MARKETING_METRIC_KEYS = [
-  'views',
-  'reach',
-  'impressions',
-  'likes',
-  'comments',
-  'shares',
-  'saves',
-  'watch_hours',
-  'ctr_pct',
-] as const;
-export const MARKETING_METRIC_STATES = [
-  'reported',
-  'estimated',
-  'missing',
-  'not_applicable',
-] as const;
-export const MARKETING_SNAPSHOT_SOURCES = ['csv_import', 'manual_audit', 'adapter'] as const;
-export const MARKETING_MATCH_STATUSES = [
-  'matched_link',
-  'suggested_title_date',
-  'unmatched',
-  'historical',
-] as const;
-export const MARKETING_SETTING_STATUSES = ['proposed', 'approved'] as const;
-export const MARKETING_CAMPAIGN_STATUSES = ['draft', 'active', 'ended', 'cancelled'] as const;
 
 /**
  * Configurable business policies. Unapproved owner decisions (OD-xxx) live here with
@@ -357,37 +281,6 @@ export const marketingCodeCounters = marketing.table(
   (t) => [check('code_counters_non_negative', sql`${t.lastNumber} >= 0`)],
 );
 
-export const marketingCampaigns = marketing.table(
-  'campaigns',
-  {
-    id: uuid('id').primaryKey().defaultRandom().$type<CampaignId>(),
-    code: text('code').notNull(),
-    name: text('name').notNull(),
-    objective: text('objective'),
-    kind: text('kind', { enum: ['organic'] })
-      .notNull()
-      .default('organic'),
-    startsOn: date('starts_on'),
-    endsOn: date('ends_on'),
-    status: text('status', { enum: MARKETING_CAMPAIGN_STATUSES }).notNull().default('draft'),
-    createdBy: uuid('created_by')
-      .references(() => users.id, { onDelete: 'restrict' })
-      .$type<UserId>(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    uniqueIndex('campaigns_code_key').on(t.code),
-    check('campaigns_code_format', sql`${t.code} ~ '^[A-Z0-9][A-Z0-9-]{1,39}$'`),
-    check('campaigns_status_check', sql`${t.status} IN ${inList(MARKETING_CAMPAIGN_STATUSES)}`),
-    check('campaigns_kind_check', sql`${t.kind} IN ('organic')`),
-    check(
-      'campaigns_dates_order',
-      sql`${t.startsOn} IS NULL OR ${t.endsOn} IS NULL OR ${t.startsOn} <= ${t.endsOn}`,
-    ),
-  ],
-);
-
 export const marketingIdeas = marketing.table(
   'ideas',
   {
@@ -426,6 +319,24 @@ export const marketingIdeas = marketing.table(
     /** Proposed renumbering for the second occurrence of a duplicate legacy ID — NOT applied. */
     proposedCode: text('proposed_code'),
     proposedCodeStatus: text('proposed_code_status'),
+    // Ideas board (brief §13, 0016). `audience` above is the target audience.
+    problemNeed: text('problem_need'),
+    hypothesis: text('hypothesis'),
+    effort: text('effort', { enum: MARKETING_EFFORT_SIZES }),
+    expectedOutcome: text('expected_outcome'),
+    proposedFormat: text('proposed_format', { enum: MARKETING_CALENDAR_ITEM_TYPES }),
+    proposedChannel: text('proposed_channel', { enum: MARKETING_CHANNELS }),
+    /** Relevant course (core.programmes); course_prefix stays the code scope (GEN for CA, maths). */
+    programmeId: uuid('programme_id')
+      .references(() => programmes.id, { onDelete: 'restrict' })
+      .$type<ProgrammeId>(),
+    ownerStaffId: uuid('owner_staff_id')
+      .references(() => staffMembers.id, { onDelete: 'set null' })
+      .$type<StaffMemberId>(),
+    campaignId: uuid('campaign_id')
+      .references(() => marketingCampaigns.id, { onDelete: 'set null' })
+      .$type<CampaignId>(),
+    isSample: boolean('is_sample').notNull().default(false),
     provenance: jsonb('provenance'),
     createdBy: uuid('created_by')
       .references(() => users.id, { onDelete: 'restrict' })
@@ -458,6 +369,11 @@ export const marketingIdeas = marketing.table(
     check(
       'ideas_quarantine_check',
       sql`${t.quarantineState} IN ${inList(MARKETING_QUARANTINE_STATES)}`,
+    ),
+    index('ideas_owner_idx').on(t.ownerStaffId),
+    check(
+      'ideas_board_check',
+      sql`(${t.effort} IS NULL OR ${t.effort} IN ${inList(MARKETING_EFFORT_SIZES)}) AND (${t.proposedFormat} IS NULL OR ${t.proposedFormat} IN ${inList(MARKETING_CALENDAR_ITEM_TYPES)}) AND (${t.proposedChannel} IS NULL OR ${t.proposedChannel} IN ${inList(MARKETING_CHANNELS)})`,
     ),
     // A code may be missing only while the row is quarantined.
     check(

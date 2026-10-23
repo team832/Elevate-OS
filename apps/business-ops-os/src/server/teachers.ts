@@ -228,7 +228,7 @@ export async function getTeacherProfile(db: Database, actor: Actor, id: string, 
     can(actor, 'ops:appointments:read')
       ? listAppointments(db, actor, { staffId: staff.id, from: today }, 10)
       : null,
-    readsFeedback ? listFeedbackAboutTeacher(db, actor, staff.id) : null,
+    listFeedbackAboutTeacher(db, actor, staff.id),
     readsFeedback ? listFeedbackByTeacher(db, actor, staff.id) : null,
     readsFeedback ? reviewsAuthored(db, actor, staff.id) : null,
     academicActivity([staff.id], window).then((m) => m.get(staff.id)!),

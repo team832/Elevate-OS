@@ -19,8 +19,10 @@ export const ROLES: Readonly<Record<RoleKey, { label: string; description: strin
       'Runs Marketing OS: plans, approves and publishes content, reads marketing metrics.',
   },
   marketing_contributor: {
-    label: 'Marketing contributor',
-    description: 'Drafts ideas and content in Marketing OS; cannot approve or publish.',
+    // Key unchanged; label per brief 23 Oct 2026 §5 ("Marketing employee").
+    label: 'Marketing employee',
+    description:
+      'Works assigned campaigns, drafts ideas and content in Marketing OS; cannot approve or publish.',
   },
   academic_coordinator: {
     label: 'Academic coordinator',
@@ -48,6 +50,11 @@ export const ROLES: Readonly<Record<RoleKey, { label: string; description: strin
   finance_officer: {
     label: 'Finance-authorised user',
     description: 'Manually recorded admission fee records. No payroll execution.',
+  },
+  hr_manager: {
+    label: 'HR manager',
+    description:
+      'Runs HR in Business Operations for teachers and marketing staff: staff records and private details, attendance, task assignment and review, work reports, student feedback about teachers. Grants are Proposed.',
   },
 };
 

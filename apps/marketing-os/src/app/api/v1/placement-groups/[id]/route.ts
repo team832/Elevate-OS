@@ -8,5 +8,5 @@ const idParams = z.object({ id: z.uuid() });
 /** GET — the group, its placements and a fresh collab-rule validation. */
 export const GET = defineRoute(
   { permission: 'marketing:content:read', params: idParams },
-  async ({ db, params }) => getPlacementGroup(db, params.id),
+  async ({ db, params, user }) => getPlacementGroup(db, params.id, user),
 );

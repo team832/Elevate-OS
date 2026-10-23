@@ -7,6 +7,7 @@ import { toIsoDate } from '@elevate/shared-types';
 import { POST as createLead } from '../../src/app/api/v1/leads/route';
 import { POST as createFollowUp } from '../../src/app/api/v1/follow-ups/route';
 import DashboardPage from '../../src/app/page';
+import MyDayPage from '../../src/app/my-day/page';
 import { call, seedRegistry } from '../helpers';
 
 const ctx = setupTestDatabase();
@@ -30,9 +31,9 @@ vi.mock('../../src/ui/shell', () => ({
   Section: (p: { load: () => unknown }) => p.load(),
 }));
 
-const render = async (user: TestUser) => {
+const render = async (user: TestUser, Page = DashboardPage) => {
   state.user = user;
-  const page = await DashboardPage({ searchParams: Promise.resolve({}) });
+  const page = await Page({ searchParams: Promise.resolve({}) });
   const html = await new Response((await prerender(page)).prelude).text();
   return html.replaceAll('<!-- -->', '');
 };
@@ -82,10 +83,10 @@ describe('Marketing Overview: follow-up counts', () => {
     ['a failed load', true, 'Follow-up counts could not be loaded.'],
   ])('%s shows a message, never 0', async (_, fail, text) => {
     state.failFollowUps = fail;
-    const user = fail
-      ? manager
-      : await createTestUser(ctx.db, { roles: ['marketing_contributor'] });
-    const html = await render(user);
+    // A marketing employee without a staff record lands on My day, which shares the tiles.
+    const html = fail
+      ? await render(manager)
+      : await render(await createTestUser(ctx.db, { roles: ['marketing_contributor'] }), MyDayPage);
     state.failFollowUps = false;
     expect(html).toContain(text);
     expect(html).not.toContain('view=due_today');

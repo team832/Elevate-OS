@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
@@ -5,8 +6,9 @@ import { Alert, Card, DataTable, EmptyState, StatusBadge } from '@elevate/shared
 import { addDays, toIsoDate } from '@elevate/shared-types';
 import { followUpDaySummary } from '@elevate/business-ops-os/leads';
 import { taskDaySummary } from '@elevate/business-ops-os/work';
-import { formatIst, modulePath } from '../domain';
-import { campaignResults, listCampaigns, loadDashboard } from '../server';
+import { toAppPath } from '@elevate/server-kit/next';
+import { MODULE, formatIst, modulePath } from '../domain';
+import { campaignResults, listCampaigns, loadDashboard, teamWide } from '../server';
 import { CampaignResultsTable } from '../ui/campaigns';
 import { OverviewTiles, PipelineCharts } from '../ui/overview';
 import { MarketingPage, Section, type SearchParams } from '../ui/shell';
@@ -23,7 +25,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       description="Today's marketing work: posts due this week, approvals waiting, running campaigns and when metric numbers were last imported."
       searchParams={await searchParams}
     >
-      {(user) => <Section load={async () => <Overview user={user} />} />}
+      {(user) =>
+        // Marketing employees land on My day; the module-wide Overview is for managers.
+        teamWide(user) ? (
+          <Section load={async () => <Overview user={user} />} />
+        ) : (
+          redirect(toAppPath(modulePath('my-day'), MODULE.basePath))
+        )
+      }
     </MarketingPage>
   );
 }

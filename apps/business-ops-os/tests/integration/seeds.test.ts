@@ -1,5 +1,6 @@
+import { EOD_FACTS_FORMAT } from '../../src/domain/eod';
 import { describe, expect, it } from 'vitest';
-import { count, eq, inArray, isNotNull } from 'drizzle-orm';
+import { count, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { hashPassword } from '@elevate/authentication';
 import {
   approvals,
@@ -15,6 +16,8 @@ import {
   opsFollowUps,
   opsLeads,
   opsLeadSources,
+  opsStaffDepartments,
+  opsStaffManagerHistory,
   opsStaffProfiles,
   staffMembers,
   students,
@@ -23,6 +26,7 @@ import {
   opsEodReports,
   opsStaffTasks,
   opsTaskEvents,
+  opsTaskSubmissions,
   opsTaskUpdates,
   userRoles,
   users,
@@ -88,6 +92,16 @@ describe('Business Ops seeds (D-036 sample set)', () => {
         .filter((s) => !ownerSupplied.has(s.fullName))
         .every((s) => s.isSample && s.fullName.startsWith('Sample ')),
     ).toBe(true);
+
+    // HR history (open rows) equals the current department and manager after seeding twice.
+    expect(await ctx.db.$count(opsStaffDepartments)).toBeGreaterThan(0);
+    expect(await ctx.db.$count(opsStaffManagerHistory)).toBeGreaterThan(0);
+    const drift = await ctx.db.execute(sql`SELECT m.full_name FROM core.staff_members m
+      LEFT JOIN ops.staff_departments d ON d.staff_id = m.id AND d.is_primary AND d.to_date IS NULL
+      LEFT JOIN ops.staff_manager_history h ON h.staff_id = m.id AND h.to_date IS NULL
+      WHERE m.department_id IS DISTINCT FROM d.department_id
+        OR m.manager_id IS DISTINCT FROM h.manager_staff_id`);
+    expect(drift.rows).toEqual([]);
 
     // Real teachers are never given a sample class or meeting.
     const realIds = real.map((s) => s.id);
@@ -239,8 +253,15 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     expect(tasks).toHaveLength(SAMPLE_TASKS.length); // not doubled by the second run
     expect(tasks.every((t) => t.isSample)).toBe(true);
     expect(new Set(tasks.map((t) => t.status))).toEqual(
-      new Set(['pending', 'in_progress', 'blocked', 'in_review', 'done', 'cancelled']),
+      new Set(['pending', 'in_progress', 'in_review', 'done', 'cancelled']),
     );
+    // R4: blocked is a flag on a task that keeps its status; a resubmission is version 2.
+    expect(tasks.filter((t) => t.blockedAt)).toEqual([
+      expect.objectContaining({ status: 'in_progress', blockedKind: 'blocked' }),
+    ]);
+    expect((await ctx.db.select().from(opsTaskSubmissions)).map((v) => v.version).sort()).toEqual([
+      1, 1, 2,
+    ]);
     expect(tasks.filter((t) => t.status === 'pending' && !t.acknowledgedAt)).toHaveLength(1);
     const events = await ctx.db.select().from(opsTaskEvents);
     const kinds = events.map((e) => e.kind);
@@ -263,12 +284,12 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     // Built with O2's event-based facts (Academic marked unavailable), versions too.
     for (const r of await ctx.db.select().from(opsEodReports))
       expect(r.snapshot).toMatchObject({
-        format: 'eod-facts/1',
+        format: EOD_FACTS_FORMAT,
         academic: { status: 'unavailable' },
       });
     expect(
       (await ctx.db.select().from(opsEodReportVersions)).every(
-        (v) => (v.snapshot as { format?: string }).format === 'eod-facts/1',
+        (v) => (v.snapshot as { format?: string }).format === EOD_FACTS_FORMAT,
       ),
     ).toBe(true);
     // Nothing was sent or notified to the sample staff.
@@ -291,6 +312,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
         staffId: sample!.staffId,
         title: 'Real task',
         dueOn: sample!.dueOn,
+        originalDueOn: sample!.dueOn,
         createdBy: sample!.createdBy,
       })
       .returning();

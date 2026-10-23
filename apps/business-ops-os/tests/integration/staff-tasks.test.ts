@@ -12,6 +12,7 @@ import { auditEvents, opsStaffTasks } from '@elevate/database';
 import { istToday } from '../../src/domain/dates';
 import { GET as listRoute, POST as createRoute } from '../../src/app/api/v1/staff-tasks/route';
 import { GET as getRoute, PATCH as patchRoute } from '../../src/app/api/v1/staff-tasks/[id]/route';
+import { POST as actionRoute } from '../../src/app/api/v1/staff-tasks/[id]/[action]/route';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -50,6 +51,26 @@ const create = (user: TestUser, json: Record<string, unknown>) =>
     createRoute,
     authedRequest(user, '/ops/api/v1/staff-tasks', { method: 'POST', json }),
   );
+/** A lifecycle action with the task's current version unless one is given. */
+const act = async (
+  user: TestUser,
+  id: string,
+  action: string,
+  json: Record<string, unknown> = {},
+) => {
+  const [row] = await ctx.db
+    .select()
+    .from(opsStaffTasks)
+    .where(eq(opsStaffTasks.id, id as never));
+  return callRoute<Task>(
+    actionRoute,
+    authedRequest(user, `/ops/api/v1/staff-tasks/${id}/${action}`, {
+      method: 'POST',
+      json: { expectedVersion: row!.version, ...json },
+    }),
+    { id, action },
+  );
+};
 /** PATCH with the task's current version (the edit form always sends the one it showed). */
 const patch = async (user: TestUser, id: string, json: Record<string, unknown>) => {
   const [row] = await ctx.db
@@ -91,7 +112,7 @@ describe('staff tasks: access and own scope', () => {
     expect(
       (await callRoute(getRoute, authedRequest(b, `/ops/api/v1/staff-tasks/${id}`), { id })).status,
     ).toBe(404);
-    expect((await patch(b, id, { status: 'in_progress' })).status).toBe(404);
+    expect((await patch(b, id, { priority: 'low' })).status).toBe(404);
     expect((await create(b, { title: 'For A', staffId: a.staffId })).status).toBe(403);
     expect((await create(manager, { title: 'Prepare fee slips', staffId: a.staffId })).status).toBe(
       201,
@@ -123,20 +144,20 @@ describe('staff tasks: access and own scope', () => {
 });
 
 describe('staff tasks: status rules and recurrence', () => {
-  it('blocked needs a reason; done forces 100%', async () => {
+  it('PATCH never changes the status (C1/C2); done through its action forces 100%', async () => {
     const t = await create(a, { title: 'Collect documents' });
     const id = t.data!.id;
-    const noReason = await patch(a, id, { status: 'blocked' });
-    expect(noReason.status).toBe(400);
-    expect(noReason.error!.details).toEqual([expect.objectContaining({ path: ['reason'] })]);
-    expect((await patch(a, id, { status: 'blocked', reason: 'Parent travelling' })).status).toBe(
-      200,
-    );
-    const done = await patch(a, id, { status: 'done', progressPercent: 20 });
+    for (const status of ['blocked', 'in_progress', 'done']) {
+      const refused = await patch(a, id, { status, progressPercent: 20 });
+      expect(refused.status).toBe(400);
+      expect(refused.error!.details).toEqual([expect.objectContaining({ path: ['status'] })]);
+    }
+    expect((await patch(a, id, { progressPercent: 20 })).status).toBe(200);
+    const done = await act(a, id, 'complete');
     expect(done.data).toMatchObject({ status: 'done', progressPercent: 100, nextTaskId: null });
     const audits = await ctx.db.select().from(auditEvents).where(eq(auditEvents.entityId, id));
     expect(audits.map((r) => r.action).sort()).toEqual([
-      'staff_task.completed',
+      'staff_task.complete',
       'staff_task.created',
       'staff_task.updated',
     ]);
@@ -151,15 +172,15 @@ describe('staff tasks: status rules and recurrence', () => {
     const id = t.data!.id;
     // Two clicks with the same version: one completes, the other is refused as stale (or replays).
     const results = await Promise.all([
-      patch(a, id, { status: 'done', expectedVersion: 1 }),
-      patch(a, id, { status: 'done', expectedVersion: 1 }),
+      act(a, id, 'complete', { expectedVersion: 1 }),
+      act(a, id, 'complete', { expectedVersion: 1 }),
     ]);
     expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
     // Reopening a done task is a lifecycle step: it needs a reason.
-    expect((await patch(a, id, { status: 'in_progress', progressPercent: 90 })).status).toBe(400);
-    const reopened = await patch(a, id, { status: 'in_progress', reason: 'Two calls missed' });
+    expect((await act(a, id, 'reopen')).status).toBe(400);
+    const reopened = await act(a, id, 'reopen', { reason: 'Two calls missed' });
     expect(reopened.status).toBe(200);
-    await patch(a, id, { status: 'done' });
+    await act(a, id, 'complete');
     const children = await ctx.db
       .select()
       .from(opsStaffTasks)
@@ -179,7 +200,7 @@ describe('staff tasks: status rules and recurrence', () => {
     ).data!.id;
     const due: string[] = [];
     for (let i = 0; i < 2; i++) {
-      id = (await patch(a, id, { status: 'done' })).data!.nextTaskId!;
+      id = (await act(a, id, 'complete')).data!.nextTaskId!;
       const [next] = await ctx.db
         .select()
         .from(opsStaffTasks)

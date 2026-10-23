@@ -36,6 +36,7 @@ import {
   ProgrammesTable,
   StudentJourney,
   StudentMeta,
+  ReportButtons,
   UpcomingTable,
 } from './profile-sections';
 
@@ -506,6 +507,7 @@ export async function StudentQuickView({
       ]}
     >
       <StudentJourney d={d} />
+      <ReportButtons d={d} />
     </RecordModal>
   );
 }

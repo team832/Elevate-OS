@@ -26,6 +26,7 @@ const ctx = setupTestDatabase();
 
 /** Stand-ins for the Ops seeds: the sample teachers and Diya's demo (class 3, 19 days ago, 10:00 IST). */
 const opsStubs = [
+  defineSeed({ name: 'ops.teachers', module: 'ops', description: 'test stub', run: async () => {} }),
   defineSeed({
     name: 'ops.sample-staff',
     module: 'ops',

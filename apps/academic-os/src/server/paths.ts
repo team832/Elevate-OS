@@ -26,6 +26,11 @@ export const MODULE_PATHS = {
   reviews: modulePath('reviews'),
   /** Shared task tracker and EOD report (`?tab=eod`), from @elevate/business-ops-os/work. */
   tasks: modulePath('tasks'),
+  /** Own staff attendance, reports, and feedback summaries + development actions: HR bodies from @elevate/business-ops-os/work (R11). */
+  myAttendance: modulePath('my-attendance'),
+  myReports: modulePath('my-reports'),
+  myFeedback: modulePath('my-feedback'),
+  notifications: modulePath('notifications'),
   /** The caller's own meetings, read-only, from @elevate/business-ops-os/work. */
   meetings: modulePath('meetings'),
   review: (id: string) => modulePath(`reviews/${id}`),

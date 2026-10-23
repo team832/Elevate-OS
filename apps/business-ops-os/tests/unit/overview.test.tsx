@@ -57,6 +57,8 @@ describe('Business Operations navigation (brief 22 Oct 2026 §5)', () => {
   it('top items in the agreed order; Settings stays at the sidebar foot', () => {
     expect(NAV.map((n) => n.label)).toEqual([
       'Overview',
+      'My attendance',
+      'My reports',
       'Admissions',
       'Demo Students',
       'Active Students',
@@ -65,6 +67,16 @@ describe('Business Operations navigation (brief 22 Oct 2026 §5)', () => {
       'Teachers',
       'Academic Summary',
       'Tasks and EOD Reports',
+      // HR section (brief 23 Oct 2026 §6)
+      'HR Overview',
+      'Staff Directory',
+      'Teaching Assignments',
+      'Attendance',
+      'Tasks',
+      'Submission Review',
+      'Work Reports',
+      'Student Feedback about Teachers',
+      'HR Settings',
       'Marketing Summary',
       'Reports',
     ]);
@@ -106,7 +118,7 @@ describe('Business Operations navigation (brief 22 Oct 2026 §5)', () => {
     for (const t of ['Fee structure', 'Collections', 'Outstanding', 'Approvals'])
       expect(fees).toContain(`>${t}</a>`);
     expect(html(<PeopleNav current="teachers" user={as('operations_manager')} />)).toContain(
-      '>Staff directory</a>',
+      '>All staff</a>',
     );
     expect(html(<FeesNav current="structure" user={as('teacher')} />)).not.toContain('Collections');
   });

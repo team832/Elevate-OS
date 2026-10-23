@@ -42,7 +42,7 @@
   /* surfaces, from the canvas up */
   --el-bg: #f4f1eb; /* canvas */
   --el-well: #f8f6f1; /* tables, inputs, detail values */
-  --el-surface: #ffffff; /* cards, tiles, the sidebar rail */
+  --el-surface: #ffffff; /* cards, tiles */
   --el-surface-muted: #efebe4; /* raised rows, header bars, hover */
   --el-overlay: #ffffff; /* dialogs and sheets (solid fallback under the glass) */
   --el-border: #e6e0d6;
@@ -66,6 +66,22 @@
   --el-accent-soft: rgb(255 134 35 / 0.14);
   --el-accent-wash: rgb(255 134 35 / 0.08);
   --el-focus: #c2520a;
+
+  /* The sidebar rail is charcoal (owner, 23 Oct 2026, amends D-074); everything else stays light.
+   * Contrast on --el-rail-bg: text 14.3:1 (11.5 on hover, 12.6 on raised); muted 7.5:1 (6.0 on
+   * hover); focus ring 6.7:1 (5.4 on hover); scrollbar thumb 3.5:1; current item = ink on
+   * --el-accent 7.4:1. The divider is decorative. */
+  --el-rail-bg: #24201d;
+  --el-rail-hover: #36302b;
+  --el-rail-raised: #2f2a26; /* profile card */
+  --el-rail-text: #f4f1eb;
+  --el-rail-text-muted: #b8afa4;
+  --el-rail-border: #3d3631;
+  --el-rail-focus: var(--el-accent);
+  --el-rail-scrollbar: #7d746a;
+  --el-rail-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06), 0 2px 6px rgb(var(--el-shadow-ink) / 0.12),
+    0 18px 40px -16px rgb(var(--el-shadow-ink) / 0.45);
 
   --el-success-fg: #176e42;
   --el-success-bg: #e2f3e9;

@@ -5,13 +5,16 @@
  * (not payroll, not HR attendance); a class taught by two teachers counts once for each
  * teacher's workload, labelled as participation. No ratings or rankings.
  */
-import { and, asc, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
+import { and, asc, countDistinct, eq, gte, inArray, isNull, lt, lte } from 'drizzle-orm';
 import {
   academicAssessments,
+  academicAttempts,
   academicBatches,
+  academicChapters,
+  academicClassRecords,
+  academicClassSessions,
   academicSessionTeachers,
   academicSubjects,
-  academicTeacherAssignments,
   academicTeacherReviews,
   academicTeacherUnavailability,
   staffMembers,
@@ -21,19 +24,13 @@ import { NotFoundError, academicTeacherActivityV1Schema, metric, type AcademicTe
 import { addDays, type IsoDate, type StaffMemberId } from '@elevate/shared-types';
 import { assignmentPhase } from '../../domain/placements';
 import { resolveScope, todayIst, type Actor } from '../context';
-import { HR_UNAVAILABLE, LOOKBACK_DAYS, sessionWork } from './my-day';
+import { listAssignmentsFor, type AssignmentRow } from './assignments';
+import { LOOKBACK_DAYS, sessionWork } from './my-day';
 import { sessionRows, teachersBySession, type SessionListRow } from './timetable';
 
-async function assignmentsOf(db: Database, staffIds?: readonly string[]) {
-  return db
-    .select({ assignment: academicTeacherAssignments, batchCode: academicBatches.code, subjectName: academicSubjects.name })
-    .from(academicTeacherAssignments)
-    .innerJoin(academicBatches, eq(academicBatches.id, academicTeacherAssignments.batchId))
-    .innerJoin(academicSubjects, eq(academicSubjects.id, academicTeacherAssignments.subjectId))
-    .where(staffIds ? inArray(academicTeacherAssignments.staffMemberId, staffIds as StaffMemberId[]) : undefined)
-    .orderBy(asc(academicBatches.code), asc(academicSubjects.name))
-    .then((rows) => rows.map((r) => ({ ...r.assignment, batchCode: r.batchCode, subjectName: r.subjectName })));
-}
+/** Every assignment row of these teachers (history and pending included). */
+const assignmentsOf = (db: Database, staffIds?: readonly string[]) => listAssignmentsFor(db, { staffIds, history: true });
+const isCurrent = (a: AssignmentRow, today: string) => a.status !== 'pending' && assignmentPhase(a.startDate, a.endDate, today) === 'current';
 
 /**
  * One teacher's sessions in a window with their part in each: planned (scheduled, not
@@ -66,14 +63,17 @@ export async function listTeachers(db: Database, actor: Actor, now = new Date())
   const staff = staffIds.length ? await db.select().from(staffMembers).where(inArray(staffMembers.id, staffIds as StaffMemberId[])).orderBy(asc(staffMembers.fullName)) : [];
   const out = [];
   for (const s of staff) {
-    const mine = assignments.filter((a) => a.staffMemberId === s.id && assignmentPhase(a.startDate, a.endDate, today) === 'current');
+    const own = assignments.filter((a) => a.staffMemberId === s.id);
+    const mine = own.filter((a) => isCurrent(a, today));
     const sessions = await participation(db, s.id, recent);
     const work = await sessionWork(db, sessions.filter((p) => p.part === 'delivered'));
     out.push({
       staffId: s.id,
       name: s.fullName,
       subjects: [...new Set(mine.map((a) => a.subjectName))],
-      batches: [...new Set(mine.map((a) => a.batchCode))],
+      batches: [...new Set(mine.map((a) => a.batchCode!))],
+      /** Recorded without a batch yet: opens nothing (R9). */
+      pendingSubjects: own.filter((a) => a.status === 'pending').map((a) => `${a.subjectName} (${a.courseCode})`),
       todayClasses: sessions.filter((p) => p.date === today && (p.part === 'planned' || p.part === 'delivered')).length,
       pendingLogs: [...work.values()].filter((w) => !w.logSubmitted).length,
       pendingLogsRange: recent,
@@ -96,20 +96,19 @@ export async function teacherProfile(db: Database, actor: Actor, staffId: string
     sessions,
     hours: { plannedMinutes: minutes(by('planned')), deliveredMinutes: minutes(by('delivered')), cancelledMinutes: minutes(by('cancelled')), substitutedMinutes: minutes(by('substituted')) },
     unavailability: await db.select().from(academicTeacherUnavailability).where(eq(academicTeacherUnavailability.staffId, staffId as StaffMemberId)).orderBy(asc(academicTeacherUnavailability.fromDate)),
-    hrAttendance: HR_UNAVAILABLE,
   };
 }
 
 /** Contract `academic.teacher_activity` v1 (internal route for Ops). */
 export async function teacherActivity(db: Database, staffId: string, window: { from: string; to: string }, now = new Date()): Promise<AcademicTeacherActivityV1> {
-  const [staff] = await db.select({ id: staffMembers.id }).from(staffMembers).where(eq(staffMembers.id, staffId as StaffMemberId));
+  const [staff] = await db.select({ id: staffMembers.id, userId: staffMembers.userId }).from(staffMembers).where(eq(staffMembers.id, staffId as StaffMemberId));
   if (!staff) throw new NotFoundError('Teacher not found.');
   const sessions = await participation(db, staffId, window);
   const by = (part: string) => sessions.filter((s) => s.part === part);
   const today = todayIst(now);
   const work = await sessionWork(db, sessions.filter((s) => s.part === 'delivered' || (s.part === 'planned' && s.date <= today)));
-  const assignments = await assignmentsOf(db, [staffId]);
-  const activeBatchIds = [...new Set(assignments.filter((a) => assignmentPhase(a.startDate, a.endDate, today) === 'current').map((a) => a.batchId))];
+  const assignments = (await assignmentsOf(db, [staffId])).filter((a) => a.status !== 'pending'); // pending rows have no batch and no work yet
+  const activeBatchIds = [...new Set(assignments.filter((a) => isCurrent(a, today)).map((a) => a.batchId!))];
   const marking = activeBatchIds.length ? (await db.select({ id: academicAssessments.id }).from(academicAssessments).where(and(inArray(academicAssessments.batchId, activeBatchIds), eq(academicAssessments.status, 'conducted')))).length : 0;
   const reviews = await db.select({ status: academicTeacherReviews.status, submittedAt: academicTeacherReviews.submittedAt }).from(academicTeacherReviews).where(eq(academicTeacherReviews.authorStaffId, staffId as StaffMemberId));
   const inWindow = (d: Date | null) => d !== null && d.toISOString().slice(0, 10) >= window.from && d.toISOString().slice(0, 10) <= window.to;
@@ -127,7 +126,7 @@ export async function teacherActivity(db: Database, staffId: string, window: { f
     generatedAt: now.toISOString(),
     staffId: staff.id,
     window,
-    assignments: assignments.map((a) => ({ batchCode: a.batchCode, subjectName: a.subjectName, role: a.role, startDate: a.startDate, endDate: a.endDate })),
+    assignments: assignments.map((a) => ({ batchCode: a.batchCode!, subjectName: a.subjectName, role: a.role, startDate: a.startDate, endDate: a.endDate, batchId: a.batchId!, subjectId: a.subjectId })),
     sessions: {
       planned: m(by('planned').length, 'Scheduled classes this teacher is planned to teach (not yet delivered, not replaced).'),
       delivered: m(by('delivered').length, 'Classes marked delivered with this teacher recorded as an actual teacher.'),
@@ -142,5 +141,38 @@ export async function teacherActivity(db: Database, staffId: string, window: { f
       draft: m(reviews.filter((r) => r.status === 'draft').length, 'Teacher reviews still in draft now (private to the author).', true),
     },
     unavailability,
+    topicsCovered: await topicsCovered(db, staffId, window),
+    assessments: await assessmentWork(db, staff.userId, window, teaching),
   });
+}
+
+/** Chapters of this teacher's verified class records whose class date is in the window, with the number of classes. */
+async function topicsCovered(db: Database, staffId: string, window: { from: string; to: string }) {
+  const r = academicClassRecords;
+  return db
+    .select({ batchCode: academicBatches.code, subjectName: academicSubjects.name, chapterTitle: academicChapters.title, classes: countDistinct(r.sessionId) })
+    .from(r)
+    .innerJoin(academicClassSessions, eq(academicClassSessions.id, r.sessionId))
+    .innerJoin(academicBatches, eq(academicBatches.id, r.batchId))
+    .innerJoin(academicChapters, eq(academicChapters.id, r.chapterId))
+    .innerJoin(academicSubjects, eq(academicSubjects.id, academicChapters.subjectId))
+    .where(and(eq(r.teacherStaffId, staffId as StaffMemberId), eq(r.state, 'verified'), gte(academicClassSessions.date, window.from), lte(academicClassSessions.date, window.to)))
+    .groupBy(academicBatches.id, academicSubjects.id, academicChapters.id)
+    .orderBy(asc(academicBatches.code), asc(academicSubjects.name), asc(academicChapters.sortOrder));
+}
+
+/** Assessments created / with marks entered by the teacher's sign-in, timestamps in the IST window. No sign-in or no teaching = missing, never 0. */
+async function assessmentWork(db: Database, userId: string | null, window: { from: string; to: string }, teaching: boolean) {
+  const meta = (definition: string) => ({ definition, window, unit: 'count' as const });
+  const prepared = meta('Assessments created by this teacher’s sign-in in the window (drafted, not necessarily held).');
+  const marked = meta('Assessments in which this teacher’s sign-in entered or changed marks in the window.');
+  const reason = !userId ? 'No sign-in linked to this staff record' : !teaching ? 'No teaching assignments' : null;
+  if (reason) return { prepared: metric.missing(reason, prepared), marked: metric.missing(reason, marked) };
+  const from = new Date(`${window.from}T00:00:00+05:30`);
+  const to = new Date(`${addDays(window.to as IsoDate, 1)}T00:00:00+05:30`);
+  const a = academicAssessments;
+  const at = academicAttempts;
+  const [made] = await db.select({ n: countDistinct(a.id) }).from(a).where(and(eq(a.createdByUserId, userId as never), gte(a.createdAt, from), lt(a.createdAt, to)));
+  const [entered] = await db.select({ n: countDistinct(at.assessmentId) }).from(at).where(and(eq(at.enteredByUserId, userId as never), gte(at.updatedAt, from), lt(at.updatedAt, to)));
+  return { prepared: metric.ok(made!.n, prepared), marked: metric.ok(entered!.n, marked) };
 }

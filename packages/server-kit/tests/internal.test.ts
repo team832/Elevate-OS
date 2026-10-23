@@ -4,8 +4,10 @@ import { buildRequest, callRoute, setupTestDatabase } from '@elevate/testing';
 import {
   createHealthHandler,
   defineInternalRoute,
+  defineInternalWriteRoute,
   fetchInternal,
   getInternalServiceTokens,
+  sendInternal,
 } from '../src/index';
 
 const ctx = setupTestDatabase();
@@ -68,6 +70,100 @@ describe('internal service auth', () => {
       }) as unknown as typeof fetch;
       await fetchInternal('http://x', z.object({ n: z.number() }), { caller: 'ops', fetchImpl });
       expect(sent).toBe(`Bearer ${OPS_TOKEN}`);
+    });
+  });
+});
+
+describe('internal write routes', () => {
+  const USER = '00000000-0000-4000-8000-000000000001';
+  const write = defineInternalWriteRoute(
+    { callers: ['ops'], body: z.strictObject({ score: z.string() }) },
+    async ({ body, actingUserId, caller }) => ({ body, actingUserId, caller }),
+  );
+  const headers = (o: Record<string, string | undefined> = {}) =>
+    Object.fromEntries(
+      Object.entries({
+        authorization: `Bearer ${TOKEN}`,
+        'x-elevate-caller': 'ops',
+        'x-elevate-acting-user': USER,
+        'content-type': 'application/json',
+        ...o,
+      }).filter(([, v]) => v !== undefined),
+    ) as Record<string, string>;
+  const post = (h: Record<string, string>, body = '{"score":"12.5"}') =>
+    callRoute(write, new Request('http://localhost/x', { method: 'POST', headers: h, body }));
+
+  it('passes the validated body and the acting user to the handler', async () => {
+    expect((await post(headers())).data).toEqual({
+      body: { score: '12.5' },
+      actingUserId: USER,
+      caller: 'ops',
+    });
+  });
+
+  it.each([
+    ['wrong token', headers({ authorization: 'Bearer nope' }), undefined, 401],
+    ['caller not listed', headers({ 'x-elevate-caller': 'marketing' }), undefined, 403],
+    ['no acting user', headers({ 'x-elevate-acting-user': undefined }), undefined, 400],
+    ['acting user not a uuid', headers({ 'x-elevate-acting-user': 'bob' }), undefined, 400],
+    ['not JSON media type', headers({ 'content-type': 'text/plain' }), undefined, 400],
+    ['broken JSON', headers(), '{', 400],
+    ['body off-contract', headers(), '{"score":12}', 400],
+  ])('refuses: %s', async (_name, h, body, status) => {
+    expect((await post(h, body)).status).toBe(status);
+  });
+
+  it('read routes ignore bodies and keep actingUserId null', async () => {
+    const read = defineInternalRoute({}, async ({ actingUserId, body }) => ({
+      actingUserId,
+      body,
+    }));
+    const res = await callRoute(read, buildRequest('/x', { headers: headers() }));
+    expect(res.data).toEqual({ actingUserId: null });
+  });
+
+  describe('sendInternal', () => {
+    const schema = z.object({ body: z.object({ score: z.string() }), actingUserId: z.string() });
+    const viaRoute = (async (url: string, init: RequestInit) =>
+      write(new Request(url, init), { params: Promise.resolve({}) })) as unknown as typeof fetch;
+    const send = (body: unknown, fetchImpl = viaRoute, token = TOKEN) =>
+      sendInternal('http://localhost/x', schema, {
+        caller: 'ops',
+        actingUserId: USER,
+        body,
+        token,
+        fetchImpl,
+      });
+
+    it('sends token, caller, acting user and JSON body', async () => {
+      expect(await send({ score: '4' })).toEqual({
+        ok: true,
+        data: { body: { score: '4' }, actingUserId: USER },
+      });
+    });
+
+    it('returns the server refusal with its code and details', async () => {
+      const res = await send({ score: 4 });
+      expect(res).toMatchObject({ ok: false, status: 400, error: { code: 'VALIDATION_FAILED' } });
+      expect(res.ok === false && res.error.details).toBeTruthy();
+      expect(await send({ score: '4' }, viaRoute, 'wrong')).toMatchObject({
+        ok: false,
+        status: 401,
+      });
+    });
+
+    it('never reports success for unreachable sources or off-contract replies', async () => {
+      const down = (async () => {
+        throw new TypeError('fetch failed');
+      }) as unknown as typeof fetch;
+      expect(await send({}, down)).toMatchObject({ ok: false, status: 0 });
+      const odd = (async () => Response.json({ data: { n: 1 } })) as unknown as typeof fetch;
+      expect(await send({}, odd)).toMatchObject({
+        ok: false,
+        error: { code: 'CONTRACT_MISMATCH' },
+      });
+      const bare = (async () => new Response('x', { status: 502 })) as unknown as typeof fetch;
+      expect(await send({}, bare)).toMatchObject({ ok: false, status: 502 });
     });
   });
 });

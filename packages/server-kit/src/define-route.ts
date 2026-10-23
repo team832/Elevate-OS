@@ -54,6 +54,8 @@ export interface RouteSpec<
    * `required` rejects requests without the header.
    */
   idempotency?: 'optional' | 'required';
+  /** Refuse a JSON body larger than this with 413 (default: no limit). */
+  maxBodyBytes?: number;
   /** Module label for logs; defaults to the permission's module prefix. */
   module?: ModuleKey;
 }
@@ -106,6 +108,32 @@ export function created<T>(
   init: { meta?: ApiMeta; headers?: HeadersInit } = {},
 ): RouteResult<T> {
   return respond(data, { ...init, status: 201 });
+}
+
+/** VALIDATION_FAILED with HTTP 413: the body is over the route's `maxBodyBytes`. */
+class PayloadTooLargeError extends ValidationError {
+  override readonly status = 413;
+}
+
+/** The body as text, refused once it passes `max` bytes (declared or actually sent). */
+async function cappedText(request: Request, max: number): Promise<string> {
+  const tooLarge = () =>
+    new PayloadTooLargeError(
+      `The request is larger than the ${max < 1024 * 1024 ? `${Math.floor(max / 1024)} KB` : `${Math.floor(max / (1024 * 1024))} MB`} limit.`,
+    );
+  if (Number(request.headers.get('content-length') ?? 0) > max) throw tooLarge();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = request.body?.getReader();
+  for (let r = await reader?.read(); r && !r.done; r = await reader!.read()) {
+    size += r.value.length;
+    if (size > max) {
+      await reader!.cancel();
+      throw tooLarge();
+    }
+    chunks.push(r.value);
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 function isRouteResult(value: unknown): value is RouteResult<unknown> {
@@ -264,8 +292,12 @@ export function defineRoute<
           );
         }
         try {
-          rawBody = await request.json();
-        } catch {
+          rawBody = spec.maxBodyBytes
+            ? JSON.parse(await cappedText(request, spec.maxBodyBytes))
+            : await request.json();
+        } catch (error) {
+          // A broken or aborted upload stream is the client's problem (400), like bad JSON.
+          if (error instanceof PayloadTooLargeError) throw error;
           throw new ValidationError('The request body is not valid JSON.');
         }
         const parsed = spec.body.safeParse(rawBody);

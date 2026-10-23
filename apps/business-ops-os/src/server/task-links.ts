@@ -7,11 +7,14 @@
 import { loadRoles } from '@elevate/authentication';
 import { workspacesFor, type WorkspaceKey } from '@elevate/authorization';
 import { appOrigin } from '@elevate/configuration/workspaces';
-import type { Database } from '@elevate/database';
+import { opsStaffTasks, opsTaskEvents, type Database } from '@elevate/database';
+import { eq } from 'drizzle-orm';
 import type { NotifyInput } from '@elevate/notifications';
 import { MODULES, type UserId } from '@elevate/shared-types';
-import type { Actor } from './context';
+import { deadlineText } from '../domain/staff-tasks';
+import { userIdsForStaff, type Actor } from './context';
 import { notifyOthers } from './ops-common';
+import type { TaskRow } from './task-store';
 
 /** Workspaces whose shell hosts each area, in preference order (Ops keeps its inbox and tools). */
 export const HOSTS = {
@@ -46,4 +49,46 @@ export async function notifyHosted(
 ) {
   for (const id of userIds)
     await notifyOthers(tx, actor, [id], { ...input, link: await linkFor(tx, id, area, path) });
+}
+
+/** `notifyHosted` to staff (people without a login are skipped), linking to the task. */
+export async function notifyStaff(
+  tx: Database,
+  actor: Actor,
+  staffIds: readonly (string | null | undefined)[],
+  taskId: string,
+  input: { kind: string; title: string; body?: string | null },
+) {
+  const users = await userIdsForStaff(tx, staffIds);
+  await notifyHosted(tx, actor, users, 'work', `/tasks/${taskId}`, {
+    ...input,
+    entityType: 'staff_task',
+    entityId: taskId,
+  });
+}
+
+/**
+ * Brief §9: deliver an assigned task to its owner — an in-app notification linking into their
+ * own workspace (Academic for teachers, Marketing for marketers; never a forced redirect),
+ * `delivered_at` and a `delivered` event. Not delivered (null) when the owner has no login or
+ * is the caller. Delivery is not acknowledgement.
+ */
+export async function deliverTask(tx: Database, actor: Actor, row: TaskRow): Promise<TaskRow> {
+  const [owner] = await userIdsForStaff(tx, [row.staffId]);
+  if (!owner || owner === actor.id) return row;
+  const now = new Date();
+  await notifyStaff(tx, actor, [row.staffId], row.id, {
+    kind: 'task.assigned',
+    title: `New task: ${row.title}`,
+    body: `Due ${deadlineText(row.dueOn, row.dueTime)}.${row.expectedDeliverable ? ` Deliverable: ${row.expectedDeliverable}` : ''}`,
+  });
+  const [after] = await tx
+    .update(opsStaffTasks)
+    .set({ deliveredAt: now })
+    .where(eq(opsStaffTasks.id, row.id))
+    .returning();
+  await tx
+    .insert(opsTaskEvents)
+    .values({ taskId: row.id, kind: 'delivered', actorUserId: actor.id, occurredAt: now });
+  return after!;
 }

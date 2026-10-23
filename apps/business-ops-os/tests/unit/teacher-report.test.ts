@@ -89,7 +89,7 @@ describe('teacher report facts (pure)', () => {
       '3 teaching logs pending',
       '2 classes without attendance recorded',
       '2 classes cancelled',
-      '8 calendar days without an EOD report',
+      '8 expected workdays without an EOD report',
     ]);
     const a = activity();
     const quiet = deliveryFacts(
@@ -112,7 +112,7 @@ describe('teacher report facts (pure)', () => {
       'Class delivery: 36 of 40 planned classes delivered (90%); 2 cancelled.',
       'Pending in Academic OS: 3 teaching logs pending, 2 attendance not recorded.',
       'Student reviews: 4 submitted in this period (3 shareable, 1 internal); latest 12 Oct 2026.',
-      'Tasks: 4 completed of 6 assigned in the period; 3 open and 1 overdue at the cut-off. EOD reports: 22 of 30 calendar days submitted.',
+      'Tasks: 4 completed of 6 assigned in the period; 3 open and 1 overdue at the cut-off. EOD reports: 22 submitted; 8 of 30 expected workdays missing.',
     ]);
     expect(
       teacherSummary({

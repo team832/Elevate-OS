@@ -291,6 +291,9 @@ export const academicStudentReviewsV1Schema = z.object({
         academicConcerns: optionalText,
         suggestedAction: optionalText,
         followUpOn: isoDateSchema.nullable(),
+        /** Added 23 Oct 2026b (optional, brief §16): date observed and the batch the review is about. */
+        observationOn: isoDateSchema.nullable().optional(),
+        batchId: batchIdSchema.nullable().optional(),
         visibility: z.enum(['internal', 'shareable']),
         submittedAt: isoDateTimeSchema,
         withdrawnAt: isoDateTimeSchema.nullable(),
@@ -321,6 +324,9 @@ export const academicTeacherActivityV1Schema = z.object({
       role: z.enum(TEACHER_ROLES),
       startDate: isoDateSchema.nullable(),
       endDate: isoDateSchema.nullable(),
+      /** Added 23 Oct 2026 (optional, v1-compatible): ids to link feedback/reports to the batch and subject. */
+      batchId: z.uuid().optional(),
+      subjectId: z.uuid().optional(),
     }),
   ),
   /** Planned ≠ delivered: `delivered` counts sessions marked delivered with this teacher as actual. */
@@ -336,8 +342,72 @@ export const academicTeacherActivityV1Schema = z.object({
   reviews: z.object({ submitted: metricSchema, draft: metricSchema }),
   /** Academic availability records (not HR leave). */
   unavailability: z.array(z.object({ from: isoDateSchema, to: isoDateSchema })),
+  /**
+   * Added 23 Oct 2026, optional so v1 consumers and stubs stay valid. Chapters of VERIFIED class
+   * records of this teacher whose class date is in the window (verified delivery, not mastery).
+   */
+  topicsCovered: z
+    .array(z.object({ batchCode: z.string().min(1), subjectName: z.string().min(1), chapterTitle: z.string().min(1), classes: z.int().min(1) }))
+    .optional(),
+  /** Added 23 Oct 2026 (optional): assessments created, and assessments with marks entered, by this teacher's sign-in in the window. */
+  assessments: z
+    .object({
+      prepared: metricSchema,
+      marked: metricSchema,
+      /**
+       * Added 23 Oct 2026b (optional, brief §21), over not-cancelled assessments dated in the window
+       * where this teacher is the responsible teacher or evaluator: `assigned` all of them;
+       * `completed` conducted or finalised; `awaitingMarking` (as evaluator, else responsible)
+       * held with an active roster row unmarked or not verified; `published` with a current
+       * publication. `missing` when the source cannot tell (e.g. no roster snapshot), never 0.
+       */
+      assigned: metricSchema.optional(),
+      completed: metricSchema.optional(),
+      awaitingMarking: metricSchema.optional(),
+      published: metricSchema.optional(),
+    })
+    .optional(),
 });
 export type AcademicTeacherActivityV1 = z.output<typeof academicTeacherActivityV1Schema>;
+
+export const TEACHING_ASSIGNMENT_STATUSES = ['pending', 'active', 'ended'] as const;
+
+/**
+ * One page of teaching assignments (brief 23 Oct 2026 §4, R9) for HR, served by Academic at
+ * `GET /academic/api/internal/v1/teaching-assignments?staffId&status&q&page&pageSize` (caller `ops`).
+ * Includes pending rows (no batch yet: they open no students). `status` is the stored status.
+ */
+export const teachingAssignmentsV1Schema = z.object({
+  contract: z.literal('academic.teaching_assignments'),
+  version: z.literal(1),
+  generatedAt: isoDateTimeSchema,
+  total: z.int().min(0),
+  page: z.int().min(1),
+  pageSize: z.int().min(1),
+  items: z.array(
+    z.object({
+      assignmentId: z.uuid(),
+      staffId: staffMemberIdSchema,
+      teacherName: z.string().min(1),
+      /** Course or programme name. */
+      courseName: z.string().min(1).nullable(),
+      subjectName: z.string().min(1),
+      classLevel: z.string().min(1).nullable(),
+      /** null only while pending ("No batch yet"). */
+      batchCode: z.string().min(1).nullable(),
+      /** Added 23 Oct 2026 (optional): ids for related-batch/subject pickers; batchId null while pending. */
+      batchId: z.uuid().nullable().optional(),
+      subjectId: z.uuid().optional(),
+      academicYear: z.string().nullable(),
+      branchName: z.string().min(1).nullable(),
+      startDate: isoDateSchema.nullable(),
+      endDate: isoDateSchema.nullable(),
+      role: z.enum(TEACHER_ROLES),
+      status: z.enum(TEACHING_ASSIGNMENT_STATUSES),
+    }),
+  ),
+});
+export type TeachingAssignmentsV1 = z.output<typeof teachingAssignmentsV1Schema>;
 
 /**
  * Demo attendance marked by teachers on Academic class rosters (R5), served at

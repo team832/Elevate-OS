@@ -17,7 +17,7 @@ import { withTransaction } from '@elevate/server-kit';
 import { ForbiddenError, InvalidStateTransitionError } from '@elevate/shared-contracts';
 import type { DepartmentId, StaffMemberId } from '@elevate/shared-types';
 import { isImportedReport } from '../domain/eod';
-import { fmtDate } from '../ui/format';
+import { KIND_LABELS, periodLabel } from '../domain/work-report';
 import {
   accessScope,
   managedStaffIds,
@@ -25,9 +25,10 @@ import {
   userIdsForStaff,
   type Actor,
 } from './context';
-import { audit, canReviewReport, readerOf } from './eod-reports';
+import { audit, canReviewReport, ownReportPath, periodOfRow, readerOf } from './eod-reports';
 import type { EodInboxQuery, EodReviewInput } from './eod-schemas';
 import { rowById } from './ops-common';
+import { hrScopeFor, hrScopeWhere } from './organisation';
 import { notifyHosted } from './task-links';
 import { createTask } from './staff-tasks';
 import { taskBody } from './staff-tasks-schemas';
@@ -38,8 +39,8 @@ export const REVIEW_LABELS: Record<EodReviewInput['kind'] | 'follow_up_task_crea
   viewed: 'Viewed',
   comment: 'Comment',
   clarification_requested: 'Clarification requested',
-  revision_requested: 'Revision requested',
-  acknowledged: 'Acknowledged',
+  revision_requested: 'Changes requested',
+  acknowledged: 'Reviewed',
   follow_up_task_created: 'Follow-up task created',
 };
 
@@ -104,8 +105,8 @@ export async function reviewReport(
     )
       throw new InvalidStateTransitionError(
         row.status === 'revision_requested'
-          ? 'A revision was already requested; wait for the new version.'
-          : 'This report was already acknowledged.',
+          ? 'Changes were already requested; wait for the new version.'
+          : 'This report was already reviewed.',
       );
     await tx.insert(reviewEvents).values({
       reportId: row.id,
@@ -133,10 +134,10 @@ export async function reviewReport(
         actor,
         await userIdsForStaff(tx, [row.staffId]),
         'work',
-        `/tasks?tab=eod&date=${row.reportDate}`,
+        ownReportPath(row),
         {
           kind: `eod.${input.kind}`,
-          title: `${REVIEW_LABELS[input.kind]}: your report for ${fmtDate(row.reportDate)}`,
+          title: `${REVIEW_LABELS[input.kind]}: your ${KIND_LABELS[row.periodKind].toLowerCase()} report for ${periodLabel(periodOfRow(row))}`,
           body: input.text ?? null,
           entityType: 'eod_report',
           entityId: row.id,
@@ -199,8 +200,10 @@ export async function eodInbox(
   actor: Actor,
   q: EodInboxQuery,
   pageSize = INBOX_PAGE_SIZE,
+  /** HR view (ops:work_reports:read): the staff HR manages, never the reader's own reports. */
+  { hr = false } = {},
 ) {
-  await accessScope(db, actor, 'ops:tasks:read');
+  await accessScope(db, actor, hr ? 'ops:work_reports:read' : 'ops:tasks:read');
   const self = await staffIdForUser(db, actor.id);
   // Counts come from the latest submitted version, never the owner's draft.
   const counts = sql<Record<string, number> | null>`${versions.snapshot}->'counts'`;
@@ -211,14 +214,17 @@ export async function eodInbox(
   );
   const where = and(
     ne(reports.status, 'draft'),
-    can(actor, 'ops:eod:review')
-      ? undefined
-      : self
-        ? eq(reports.submittedToStaffId, self)
-        : sql`false`,
+    hr
+      ? and(hrScopeWhere(await hrScopeFor(db, actor)), self ? ne(reports.staffId, self) : undefined)
+      : can(actor, 'ops:eod:review')
+        ? undefined
+        : self
+          ? eq(reports.submittedToStaffId, self)
+          : sql`false`,
     q.q ? ilike(staffMembers.fullName, `%${q.q.replace(/[%_\\]/g, '\\$&')}%`) : undefined,
-    q.from ? gte(reports.reportDate, q.from) : undefined,
-    q.to ? lte(reports.reportDate, q.to) : undefined,
+    q.from ? gte(reports.periodEnd, q.from) : undefined,
+    q.to ? lte(reports.periodStart, q.to) : undefined,
+    q.kind ? eq(reports.periodKind, q.kind) : undefined,
     q.staffId ? eq(reports.staffId, q.staffId as StaffMemberId) : undefined,
     q.departmentId ? eq(staffMembers.departmentId, q.departmentId as DepartmentId) : undefined,
     q.status ? eq(reports.status, q.status) : undefined,
@@ -232,6 +238,9 @@ export async function eodInbox(
         staffName: staffMembers.fullName,
         department: departments.name,
         reportDate: reports.reportDate,
+        periodKind: reports.periodKind,
+        periodStart: reports.periodStart,
+        periodEnd: reports.periodEnd,
         status: reports.status,
         currentVersion: reports.currentVersion,
         submittedAt: reports.submittedAt,
@@ -247,7 +256,7 @@ export async function eodInbox(
   const [rows, [total]] = await Promise.all([
     base()
       .where(where)
-      .orderBy(desc(reports.reportDate), desc(reports.submittedAt))
+      .orderBy(desc(reports.periodStart), desc(reports.submittedAt))
       .limit(pageSize)
       .offset((q.page - 1) * pageSize),
     db

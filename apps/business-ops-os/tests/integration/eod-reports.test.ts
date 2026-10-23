@@ -111,6 +111,7 @@ async function task(
       staffId: owner.staffId,
       title,
       dueOn: D,
+      originalDueOn: D,
       createdBy: owner.id,
       createdAt: ist(D, '08:00'),
       status: 'in_progress',
@@ -190,7 +191,6 @@ describe('EOD draft: facts from events, narrative, concurrency', () => {
     expect(f.backlog.map((x) => x.title)).toEqual(['Sample call list']);
     expect(f.work).toHaveLength(1);
     expect(f.duration.minutes).toBe(45);
-    expect(f.hr).toEqual({ status: 'unavailable' });
     expect(f.academic).toMatchObject({ status: 'unavailable' });
     const audit = await ctx.db
       .select()
@@ -299,7 +299,11 @@ describe('EOD draft: facts from events, narrative, concurrency', () => {
   });
 
   it('during a revision the manager still reads the submitted version; inbox counts come from it', async () => {
-    await task(a, 'Sample blocked visit', { status: 'blocked', reason: 'Parent away' });
+    await task(a, 'Sample blocked visit', {
+      blockedAt: ist(D, '09:00'),
+      blockedKind: 'blocked',
+      blockedReason: 'Parent away',
+    });
     const d = await draft(a, { summary: 'Unsent rewrite' });
     expect(d.data!.snapshot.counts.blocked).toBe(1);
     const asManager = await read(lead, id);
@@ -531,6 +535,8 @@ describe('EOD recipient when no manager resolves (test 10) and external delivery
       .insert(opsEodReports)
       .values({
         staffId: a.staffId,
+        periodStart: '2026-09-10',
+        periodEnd: '2026-09-10',
         reportDate: '2026-09-10',
         status: 'submitted',
         snapshot,

@@ -14,11 +14,11 @@ import {
   verify,
   type KeyObject,
 } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { WORKSPACE_KEYS } from '@elevate/authorization';
 import { appOrigin, createLogger, loadEnv } from '@elevate/configuration';
-import { getDb, insertAuditEvent, users, type Database } from '@elevate/database';
+import { getDb, insertAuditEvent, staffMembers, users, type Database } from '@elevate/database';
 import {
   NotFoundError,
   errorResponse,
@@ -81,7 +81,7 @@ export function googleSignInHref(next: string, env = process.env): string | unde
 /** `code` is what the login page shows (`?error=google_<code>`); `reason` is only logged. */
 export class GoogleSignInError extends Error {
   constructor(
-    readonly code: 'domain' | 'failed',
+    readonly code: 'domain' | 'failed' | 'alias',
     readonly reason: string,
   ) {
     super(reason);
@@ -396,7 +396,12 @@ export function createGoogleSignInHandlers(options: GoogleHandlerOptions) {
   return { start, callback };
 }
 
-/** The account for a verified Google identity; created (no roles) on first sign-in. */
+/**
+ * The account for a verified Google identity; created (no roles) on first sign-in, unless a
+ * staff record with the same name already has an account under another email (brief §3: an
+ * email change must not create a second identity; an administrator changes that account's
+ * login email instead).
+ */
 async function findOrCreateUser(
   db: Database,
   identity: { email: string; name?: string },
@@ -415,6 +420,16 @@ async function findOrCreateUser(
       )[0];
     const existing = await find();
     if (existing) return existing;
+    // shortcut: same-name match only (Google gives no other link); a namesake must be added by an administrator.
+    const [linked] = identity.name
+      ? await t
+          .select({ id: staffMembers.id })
+          .from(staffMembers)
+          .innerJoin(users, eq(users.id, staffMembers.userId))
+          .where(sql`lower(trim(${staffMembers.fullName})) = lower(trim(${identity.name}))`)
+          .limit(1)
+      : [];
+    if (linked) throw new GoogleSignInError('alias', 'staff record linked to another account');
     const [created] = await t
       .insert(users)
       .values({

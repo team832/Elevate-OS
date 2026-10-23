@@ -6,7 +6,7 @@
  * stream; material items complete only from the issue/return/replacement rows. Reading needs
  * `ops:students:read`, changes `ops:admissions:write` (own scope = the student's cases).
  */
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
   opsAdmissions,
@@ -40,13 +40,9 @@ import {
 import { caseState } from '../domain/student-lifecycle';
 import { accessScope, activeStaff, assertScope, clean, scopeCovers, type Actor } from './context';
 import { defined, fieldError, inOrder, opsAudit } from './ops-common';
-import type {
-  MaterialInput,
-  OnboardingInput,
-  OnboardingItemInput,
-  TemplateInput,
-} from './profile-schemas';
+import type { MaterialInput, OnboardingInput, OnboardingItemInput } from './profile-schemas';
 
+export { listTemplates, publishTemplateVersion } from './onboarding-templates';
 const audit = opsAudit('admission');
 
 /** The template entry an item was copied from (none for items added by hand). */
@@ -379,70 +375,6 @@ export async function recordMaterial(
           edition: row!.edition,
         },
       },
-      requestId,
-    );
-    return row!;
-  });
-}
-
-/** GET /onboarding-templates — every version, newest first per code (settings screens). */
-export async function listTemplates(db: Database, actor: Actor) {
-  await accessScope(db, actor, 'ops:settings:read');
-  return db
-    .select()
-    .from(opsOnboardingTemplates)
-    .orderBy(asc(opsOnboardingTemplates.code), desc(opsOnboardingTemplates.version));
-}
-
-/**
- * POST /onboarding-templates — publish the next version of `code` (active; the earlier active
- * version is retired). Existing checklists keep the version they were built from.
- */
-export async function publishTemplateVersion(
-  db: Database,
-  actor: Actor,
-  input: TemplateInput,
-  requestId?: string,
-) {
-  await accessScope(db, actor, 'ops:settings:manage');
-  const known = await db
-    .select({ code: programmes.code })
-    .from(programmes)
-    .where(inArray(programmes.code, input.programmeCodes));
-  const unknown = input.programmeCodes.filter((c) => !known.some((k) => k.code === c));
-  if (unknown.length)
-    throw fieldError('programmeCodes', `Unknown programme: ${unknown.join(', ')}`);
-  return withTransaction(db, async (tx) => {
-    const old = await tx
-      .select()
-      .from(opsOnboardingTemplates)
-      .where(eq(opsOnboardingTemplates.code, input.code))
-      .for('update');
-    await tx
-      .update(opsOnboardingTemplates)
-      .set({ status: 'retired' })
-      .where(
-        and(
-          eq(opsOnboardingTemplates.code, input.code),
-          eq(opsOnboardingTemplates.status, 'active'),
-        ),
-      );
-    const [row] = await tx
-      .insert(opsOnboardingTemplates)
-      .values({
-        ...input,
-        classCategory: input.classCategory as never,
-        version: Math.max(0, ...old.map((t) => t.version)) + 1,
-        status: 'active',
-        createdBy: actor.id,
-      })
-      .returning();
-    await opsAudit('onboarding_template')(
-      tx,
-      actor,
-      row!.id,
-      'onboarding.template_published',
-      { after: { code: row!.code, version: row!.version, items: row!.items.map((i) => i.key) } },
       requestId,
     );
     return row!;

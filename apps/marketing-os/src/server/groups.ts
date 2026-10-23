@@ -1,5 +1,5 @@
 /** Collab placement groups (BR-MKT-4, CH-006) and campaigns (MKT-018, organic only). */
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   isUniqueViolation,
@@ -27,6 +27,7 @@ import {
 } from '../domain';
 import { assertCan, type Actor } from './access';
 import { auditMarketing, rowById } from './common';
+import { assertPlacementVisible, teamWide } from './scope';
 
 export const createGroupBody = z
   .object({
@@ -130,8 +131,11 @@ export async function createPlacementGroup(
   });
 }
 
-export async function getPlacementGroup(db: Database, id: string) {
-  const group = await rowById(db, marketingPlacementGroups, id, 'Collab group not found.');
+const NO_GROUP = 'Collab group not found.';
+
+/** The group with its placements; NOT_FOUND unless every placement is in the actor's scope. */
+export async function getPlacementGroup(db: Database, id: string, actor: Actor) {
+  const group = await rowById(db, marketingPlacementGroups, id, NO_GROUP);
   const [idea] = await db.select().from(marketingIdeas).where(eq(marketingIdeas.id, group.ideaId));
   const ids = (
     await db
@@ -140,6 +144,11 @@ export async function getPlacementGroup(db: Database, id: string) {
       .where(eq(marketingPlacements.placementGroupId, group.id))
   ).map((r) => r.id);
   const members = ids.length ? await membersOf(db, ids) : [];
+  if (!teamWide(actor)) {
+    // Empty or out-of-scope groups read exactly like a missing one.
+    if (!members.length) throw new NotFoundError(NO_GROUP);
+    for (const m of members) await assertPlacementVisible(db, actor, m.placement, NO_GROUP);
+  }
   const validation = validateCollabGroup(
     { code: idea!.code, scope: idea!.scope, scopePrefixes: idea!.scopePrefixes },
     group.platform,
@@ -177,8 +186,9 @@ export const createCampaignBody = z
 
 export const placementCampaignBody = z.object({ campaignId: z.uuid().nullable() }).strict();
 
-export async function listCampaigns(db: Database) {
-  return db.select().from(marketingCampaigns).orderBy(asc(marketingCampaigns.code));
+/** Campaigns, narrowed by `scope` (scope.ts campaignFilter) when given. */
+export async function listCampaigns(db: Database, scope?: SQL) {
+  return db.select().from(marketingCampaigns).where(scope).orderBy(asc(marketingCampaigns.code));
 }
 
 export async function createCampaign(

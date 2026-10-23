@@ -3,6 +3,7 @@
  * from domain/policies.ts. Changing a value never approves it.
  */
 import { eq } from 'drizzle-orm';
+import type { Permission } from '@elevate/authorization';
 import { opsSettings, type Database } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
 import {
@@ -32,8 +33,10 @@ export async function updateSetting(
   actor: Actor,
   input: { key: string; value: unknown; note?: string | null },
   requestId?: string,
+  /** HR settings are changed with ops:hr_settings:manage (server/hr-settings.ts). */
+  permission: Permission = 'ops:settings:manage',
 ) {
-  await accessScope(db, actor, 'ops:settings:manage');
+  await accessScope(db, actor, permission);
   const check = validateSettingChange(input.key, input.value);
   if (!check.ok) throw fieldError('value', check.message);
   const def = SETTING_DEFINITIONS[check.key];

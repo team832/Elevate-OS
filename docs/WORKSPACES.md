@@ -75,13 +75,30 @@ Generated from `packages/authorization` (all = every record, own = the person's 
 | Platform administrator | — (platform only) | — | — | — | — | — | — | — | — | — | — | — | all |
 | Director | Business Ops, Academic, Marketing | all | all | — | — | all | own | all | all | — | all | all | — |
 | Marketing manager | Marketing | all | — | all | — | — | own | — | — | — | — | all | — |
-| Marketing contributor | Marketing | own | — | own | — | — | own | — | — | — | — | all | — |
+| Marketing employee (`marketing_contributor`) | Marketing | own | — | own | — | — | own | — | — | — | — | all | — |
 | Academic coordinator | Business Ops, Academic | — | — | — | — | — | own | — | all | all | all | — | — |
 | Teacher | Academic | — | — | — | — | — | own | — | own | own | own | — | — |
 | Admissions counsellor | Business Ops | own | own | — | own | own | own | — | — | — | — | — | — |
 | Operations manager | Business Ops | all | all | all | all | all | all | all | — | — | — | — | — |
 | Auditor | Business Ops, Academic, Marketing | all | all | — | — | all | — | — | all | — | all | all | — |
 | Finance-authorised user | Business Ops | — | all | — | — | all | own | — | — | — | — | — | — |
+| HR manager (Proposed, 23 Oct 2026) | Business Ops | — | — | — | — | — | all (HR scope) | all (HR scope) | — | — | — | — | — |
+
+**HR and own-scope rows (23 Oct 2026, D-080 … D-093; every grant here is Proposed, code marker `PROPOSED-GRANTS-2026-10-23`).** Read from the generated matrix in `docs/SECURITY_AND_PERMISSIONS.md` (`npm run docs:permissions`). For the HR manager, "all" means the staff of `hr.staff_scope_departments` plus staff with no department and their own record (D-089); the operations manager, director and auditor are not limited. "Staff private details" = HR-only contact details. "Raw feedback about teachers" is also refused to anyone who teaches (D-088). "Campaigns" own = campaigns the marketing employee is a current member of (D-093).
+
+| Role | Staff attendance | Ask for a correction | Record attendance | HR records | Staff private details | Teaching assignments | Review tasks | Work reports | Raw feedback about teachers | Approved feedback summaries | Campaigns | Marketing metrics |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Platform administrator | — | — | — | — | — | — | — | — | — | — | — | — |
+| Director | all | — | — | all | — | all | own | all | — | all | all | all |
+| Marketing manager | own | own | — | — | — | — | own | — | — | — | all | all |
+| Marketing employee | own | own | — | — | — | — | — | — | — | — | own | all |
+| Academic coordinator | own | own | — | — | — | — | own | — | — | — | — | — |
+| Teacher | own | own | — | — | — | — | — | — | — | own | — | — |
+| Admissions counsellor | own | own | — | — | — | — | — | — | — | — | — | — |
+| Operations manager | all | all | all | all | — | all | all | all | all | all | — | — |
+| Auditor | all | — | — | all | — | all | — | all | — | all | all | all |
+| Finance-authorised user | own | own | — | — | — | — | — | — | — | — | — | — |
+| HR manager | all | all | all | all | all | all | all | all | all | all | — | — |
 
 ## What changed (file structure)
 

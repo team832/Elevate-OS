@@ -1,22 +1,22 @@
 /**
  * Task detail sections (brief 2 §6, §12B, §16): facts, actions the caller may take (the server
- * checks again), dependencies, work updates, the end-to-end report and the event history.
+ * checks again) and dependencies (work: task-work.tsx; report and history: task-history.tsx).
  */
-import { Alert, ButtonLink, StatusBadge } from '@elevate/shared-ui';
-import { istToday } from '../../../domain/dates';
+import { Alert, StatusBadge } from '@elevate/shared-ui';
 import { ACTION_RULES, type TaskAction } from '../../../domain/task-lifecycle';
-import { EVENT_LABELS, eventDetail, fmtDuration, updateDetail } from '../../../domain/task-report';
-import { TASK_STATUS_LABELS } from '../../../domain/staff-tasks';
-import { minutesOf } from '../../../domain/task-lifecycle';
+import { istWhen, TASK_STATUS_LABELS } from '../../../domain/staff-tasks';
 import { ACTION_SLUG } from '../../../server/staff-tasks-schemas';
 import type { TaskDetail } from '../../../server/task-detail';
 import { ActionForm, type FieldSpec } from '../../../ui/action-form';
 import { fmtDate, fmtDateTime, humanise } from '../../../ui/format';
-import { DetailTable, Segment, Timeline } from '../../../ui/sections';
-import { dueText, PRIORITY_OPTIONS, TASK_LABEL, taskPaths } from './task-views';
+import { DetailTable, Segment } from '../../../ui/sections';
+import { deliveryText, dueText, PRIORITY_OPTIONS, TASK_LABEL, taskPaths } from './task-common';
 
 type Option = { value: string; label: string };
+/** Submit, review decisions and comments have their own forms (task-work.tsx). */
+export const OWN_FORMS: readonly TaskAction[] = ['submit', 'approve', 'request_changes', 'comment'];
 const PRIMARY: readonly TaskAction[] = [
+  'publish',
   'acknowledge',
   'start',
   'submit',
@@ -38,8 +38,24 @@ export function TaskFacts({ d, base, level = 2 }: { d: TaskDetail; base: string;
       <DetailTable
         rows={[
           { label: 'Details', value: d.details ?? 'None recorded' },
+          d.category && { label: 'Category', value: d.category },
+          { label: 'Expected deliverable', value: d.expectedDeliverable ?? 'Not specified' },
           { label: 'Done when', value: d.acceptanceCriteria ?? 'No acceptance criteria recorded' },
           { label: 'Accountable owner', value: d.staffName ?? 'Not recorded' },
+          { label: 'Delivery', value: deliveryText(d) },
+          d.parent && {
+            label: 'Part of',
+            value: <a href={`${taskPaths(base).tasks}/${d.parent.id}`}>{d.parent.title}</a>,
+          },
+          d.group && {
+            label: 'Assigned to several people',
+            value: `${d.group.done} of ${d.group.total} approved (each person's task is tracked on its own)`,
+          },
+          d.relatedLabel && { label: `Related ${d.relatedKind}`, value: d.relatedLabel },
+          d.collaborators.length > 0 && {
+            label: 'Collaborators',
+            value: d.collaborators.map((c) => c.name).join(', '),
+          },
           { label: 'Backup', value: d.backupName ?? 'None' },
           {
             label: 'Review',
@@ -58,9 +74,27 @@ export function TaskFacts({ d, base, level = 2 }: { d: TaskDetail; base: string;
           { label: 'Received', value: fmtDateTime(d.receivedAt) },
           d.plannedStartOn && { label: 'Planned start', value: fmtDate(d.plannedStartOn) },
           {
-            label: 'Due',
+            label: 'Deadline',
             value: `${dueText(d)}${dueChanges ? ` (changed ${dueChanges}×, see history)` : ''}`,
           },
+          dueChanges > 0 && {
+            label: 'Original deadline',
+            value: dueText({ dueOn: d.originalDueOn, dueTime: d.originalDueTime }),
+          },
+          d.blockedAt && {
+            label: d.blockedKind === 'on_hold' ? 'On hold' : 'Blocked',
+            value: `${d.blockedReason} (since ${istWhen(d.blockedAt)})`,
+          },
+          d.firstSubmittedAt && {
+            label: 'First submitted',
+            value: `${istWhen(d.firstSubmittedAt)}${d.onTime === null ? '' : d.onTime ? ' · on time' : ' · late'}`,
+          },
+          d.lastSubmittedAt &&
+            +d.lastSubmittedAt !== +(d.firstSubmittedAt ?? 0) && {
+              label: 'Latest submission',
+              value: istWhen(d.lastSubmittedAt),
+            },
+          d.approvedAt && { label: 'Approved', value: istWhen(d.approvedAt) },
           {
             label: 'Acknowledged',
             value: d.acknowledgedAt ? fmtDateTime(d.acknowledgedAt) : 'Not yet',
@@ -125,10 +159,12 @@ export function TaskActions({ d, staff, base }: { d: TaskDetail; staff: Option[]
       s.value !== d.reviewerStaffId &&
       (!d.assignable || d.assignable.includes(s.value)),
   );
-  if (!d.allowed.length && !d.canEdit)
+  if (!d.allowed.some((a) => !OWN_FORMS.includes(a)) && !d.canEdit)
     return (
       <p className="el-field-hint">
-        You can read this task; only its owner, manager or reviewer acts on it.
+        {d.status === 'in_review'
+          ? 'Submitted: waiting for the reviewer.'
+          : 'You can read this task; only its owner, manager or reviewer acts on it.'}
       </p>
     );
   return (
@@ -136,13 +172,13 @@ export function TaskActions({ d, staff, base }: { d: TaskDetail; staff: Option[]
       <div className="el-stack">
         <div className="el-card-actions">
           {d.allowed
-            .filter((a) => !ACTION_RULES[a].reason)
+            .filter((a) => !ACTION_RULES[a].reason && !OWN_FORMS.includes(a))
             .map((a) => (
               <ActionButton key={a} d={d} action={a} api={api} />
             ))}
         </div>
         {d.allowed
-          .filter((a) => ACTION_RULES[a].reason)
+          .filter((a) => ACTION_RULES[a].reason && !OWN_FORMS.includes(a))
           .map((a) => (
             <ActionButton key={a} d={d} action={a} api={api} />
           ))}
@@ -168,55 +204,70 @@ export function TaskActions({ d, staff, base }: { d: TaskDetail; staff: Option[]
         ) : null}
         {d.canEdit ? (
           <details className="el-explain">
-            <summary>Edit details, due date or priority…</summary>
+            <summary>
+              {d.canEditBrief
+                ? 'Edit details, due date or priority…'
+                : 'Update priority or progress…'}
+            </summary>
             <ActionForm
               action={`${api}/${d.id}`}
               method="PATCH"
               submitLabel="Save changes"
               extra={{ expectedVersion: d.version }}
-              fields={[
-                { name: 'title', label: 'Task', required: true, defaultValue: d.title },
-                {
-                  name: 'priority',
-                  label: 'Priority',
-                  type: 'select',
-                  required: true,
-                  options: PRIORITY_OPTIONS,
-                  defaultValue: d.priority,
-                },
-                {
-                  name: 'dueOn',
-                  label: 'Due on',
-                  type: 'date',
-                  required: true,
-                  defaultValue: d.dueOn,
-                },
-                {
-                  name: 'dueTime',
-                  label: 'Due time (IST)',
-                  hint: '24-hour, e.g. 17:30.',
-                  defaultValue: d.dueTime?.slice(0, 5) ?? '',
-                },
-                { name: 'changeReason', label: 'Why the date or priority changed' },
-                {
-                  name: 'progressPercent',
-                  label: '% done (self-reported)',
-                  type: 'number',
-                  defaultValue: String(d.progressPercent),
-                },
-                {
-                  name: 'acceptanceCriteria',
-                  label: 'Done when',
-                  type: 'textarea',
-                  defaultValue: d.acceptanceCriteria ?? '',
-                },
-                {
-                  name: 'details',
-                  label: 'Details',
-                  type: 'textarea',
-                  defaultValue: d.details ?? '',
-                },
-              ]}
+              fields={(
+                [
+                  { name: 'title', label: 'Task', required: true, defaultValue: d.title },
+                  {
+                    name: 'priority',
+                    label: 'Priority',
+                    type: 'select',
+                    required: true,
+                    options: PRIORITY_OPTIONS,
+                    defaultValue: d.priority,
+                  },
+                  {
+                    name: 'dueOn',
+                    label: 'Due on',
+                    type: 'date',
+                    required: true,
+                    defaultValue: d.dueOn,
+                  },
+                  {
+                    name: 'dueTime',
+                    label: 'Due time (IST)',
+                    hint: '24-hour, e.g. 17:30.',
+                    defaultValue: d.dueTime?.slice(0, 5) ?? '',
+                  },
+                  {
+                    name: 'changeReason',
+                    label: 'Why the deadline or priority changed',
+                    hint: 'Required when the deadline changes. The original deadline is kept.',
+                  },
+                  {
+                    name: 'expectedDeliverable',
+                    label: 'Expected deliverable',
+                    defaultValue: d.expectedDeliverable ?? '',
+                  },
+                  {
+                    name: 'progressPercent',
+                    label: '% done (self-reported)',
+                    type: 'number',
+                    defaultValue: String(d.progressPercent),
+                  },
+                  {
+                    name: 'acceptanceCriteria',
+                    label: 'Done when',
+                    type: 'textarea',
+                    defaultValue: d.acceptanceCriteria ?? '',
+                  },
+                  {
+                    name: 'details',
+                    label: 'Details',
+                    type: 'textarea',
+                    defaultValue: d.details ?? '',
+                  },
+                ] satisfies FieldSpec[]
+              ).filter((f) => d.canEditBrief || !BRIEF_FIELD_NAMES.has(f.name))}
             />
           </details>
         ) : null}
@@ -224,6 +275,17 @@ export function TaskActions({ d, staff, base }: { d: TaskDetail; staff: Option[]
     </Segment>
   );
 }
+
+/** I1: on assigned work these are the assigner's (the assignee asks for clarification). */
+const BRIEF_FIELD_NAMES = new Set([
+  'title',
+  'dueOn',
+  'dueTime',
+  'changeReason',
+  'expectedDeliverable',
+  'acceptanceCriteria',
+  'details',
+]);
 
 const statusOf = (s: keyof typeof TASK_STATUS_LABELS) => TASK_STATUS_LABELS[s];
 
@@ -282,160 +344,13 @@ export function TaskDependencies({
   );
 }
 
-const UPDATE_FIELDS: FieldSpec[] = [
-  {
-    name: 'workPerformed',
-    label: 'Work performed',
-    type: 'textarea',
-    required: true,
-    section: 'Work',
-  },
-  { name: 'result', label: 'Result', section: 'Work' },
-  { name: 'remainingWork', label: 'Remaining', section: 'Work' },
-  { name: 'blocker', label: 'Blocker', section: 'Work' },
-  { name: 'nextStep', label: 'Next step', section: 'Work' },
-  { name: 'evidence', label: 'Evidence', hint: 'A link or where to find it.', section: 'Work' },
-  {
-    name: 'occurredOn',
-    label: 'Work date',
-    type: 'date',
-    hint: 'IST. A late entry keeps this date and the time you record it.',
-    section: 'Time (optional)',
-  },
-  { name: 'durationMinutes', label: 'Minutes spent', type: 'number', section: 'Time (optional)' },
-  { name: 'startedAt', label: 'Started (IST)', type: 'datetime', section: 'Time (optional)' },
-  { name: 'endedAt', label: 'Stopped (IST)', type: 'datetime', section: 'Time (optional)' },
-];
-
-const local = (at: Date | null) =>
-  at ? new Date(+at + 330 * 60000).toISOString().slice(0, 16) : '';
-
-export function WorkUpdates({ d, base }: { d: TaskDetail; base: string }) {
-  const { api } = taskPaths(base);
-  const items = [...d.updates].reverse().map((u) => {
-    const minutes = minutesOf(u);
-    const late = istToday(u.recordedAt) > u.occurredOn;
-    return {
-      key: u.id,
-      when: `Work date ${fmtDate(u.occurredOn)} · recorded ${fmtDateTime(u.recordedAt)}${late ? ' (later)' : ''}`,
-      title: `${u.authorName}${minutes !== null ? ` · ${fmtDuration(minutes)}` : ''}${u.corrected ? ' · replaced by a correction' : ''}`,
-      detail: (
-        <>
-          {updateDetail(u)}
-          {u.warnings.map((w) => (
-            <StatusBadge key={w} tone="warning">
-              {w}
-            </StatusBadge>
-          ))}
-          {u.authorStaffId === d.selfStaffId && !u.corrected ? (
-            <details className="el-explain">
-              <summary>Correct this entry…</summary>
-              <ActionForm
-                action={`${api}/${d.id}/updates`}
-                submitLabel="Save correction"
-                extra={{ correctsUpdateId: u.id }}
-                fields={[
-                  {
-                    name: 'correctionReason',
-                    label: 'What was wrong',
-                    required: true,
-                    section: 'Correction',
-                  },
-                  ...UPDATE_FIELDS.map((f) => ({
-                    ...f,
-                    defaultValue:
-                      f.name === 'startedAt' || f.name === 'endedAt'
-                        ? local(u[f.name])
-                        : String(u[f.name as keyof typeof u] ?? ''),
-                  })),
-                ]}
-              />
-            </details>
-          ) : null}
-        </>
-      ),
-    };
-  });
-  return (
-    <Segment
-      title={`Work updates (${d.updates.length})`}
-      description="Newest first. Entries are never edited: a correction is a new entry with a reason."
-    >
-      <div className="el-stack">
-        {d.canLogWork ? (
-          <details className="el-explain" open={!d.updates.length}>
-            <summary>Log work</summary>
-            <ActionForm
-              action={`${api}/${d.id}/updates`}
-              submitLabel="Log work"
-              successText="Work logged."
-              fields={UPDATE_FIELDS}
-            />
-          </details>
-        ) : null}
-        {items.length ? (
-          <Timeline label="Work updates" items={items} />
-        ) : (
-          <p className="el-field-hint">No work logged yet.</p>
-        )}
-      </div>
-    </Segment>
-  );
-}
-
-export function TaskReport({ d, base }: { d: TaskDetail; base: string }) {
-  const href = (f: string) => `${taskPaths(base).api}/${d.id}/report?format=${f}`;
-  return (
-    <Segment
-      title="End-to-end report"
-      actions={
-        <>
-          <ButtonLink href={href('pdf')}>Download PDF</ButtonLink>{' '}
-          <ButtonLink href={href('csv')}>Download CSV</ButtonLink>
-        </>
-      }
-    >
-      <DetailTable
-        rows={[
-          {
-            label: 'Recorded work time',
-            value: `${fmtDuration(d.time.recordedMinutes)} (sum of work updates, self-reported)`,
-          },
-          {
-            label: 'Elapsed time',
-            value: `${fmtDuration(d.time.elapsedMinutes)} since received (not effort)`,
-          },
-          {
-            label: 'Waiting time',
-            value: `${fmtDuration(d.time.waitingMinutes)} blocked, on hold or in review`,
-          },
-          ...d.time.waits.map((w, i) => ({
-            label: i ? '' : 'Waiting intervals',
-            value: `${statusOf(w.status)}: ${fmtDateTime(w.from)} – ${fmtDateTime(w.to)}${w.reason ? ` · ${w.reason}` : ''}`,
-          })),
-        ]}
-      />
-    </Segment>
-  );
-}
-
-export function TaskHistory({ d }: { d: TaskDetail }) {
-  return (
-    <Segment title="History" description="Every change, newest first, with who made it.">
-      <Timeline
-        label="Task history"
-        items={[...d.events].reverse().map((e) => ({
-          key: e.id,
-          when: fmtDateTime(e.occurredAt),
-          title: `${EVENT_LABELS[e.kind]} · ${e.actorName}`,
-          detail: eventDetail(e) || undefined,
-        }))}
-      />
-    </Segment>
-  );
-}
-
 export function WaitingAlert({ d }: { d: TaskDetail }) {
+  if (d.status === 'draft')
+    return (
+      <Alert title="Draft: not assigned yet">
+        {d.staffName ?? 'The assignee'} cannot see this task until you assign it.
+      </Alert>
+    );
   if (!d.waitingOn.length && d.acknowledgedAt) return null;
   return (
     <>
@@ -444,7 +359,7 @@ export function WaitingAlert({ d }: { d: TaskDetail }) {
           Finishing those tasks does not complete this one.
         </Alert>
       ) : null}
-      {!d.acknowledgedAt ? (
+      {!d.acknowledgedAt && d.status !== 'done' && d.status !== 'cancelled' ? (
         <Alert title={`Assigned to ${d.staffName ?? 'the owner'}, not yet acknowledged`}>
           Acknowledging confirms the task was received. It does not change its status.
         </Alert>

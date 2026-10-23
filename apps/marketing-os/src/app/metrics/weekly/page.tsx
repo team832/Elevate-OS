@@ -13,7 +13,7 @@ import {
 } from '@elevate/shared-ui';
 import { isIsoDate, toIsoDate, type IsoDate } from '@elevate/shared-types';
 import { METRIC_KEYS, formatIst, modulePath } from '../../../domain';
-import { weeklyReport } from '../../../server';
+import { teamWide, weeklyReport } from '../../../server';
 import { IntegrationBadge, MetricCell } from '../../../ui/badges';
 import { MarketingPage, Section, param, type SearchParams } from '../../../ui/shell';
 
@@ -26,7 +26,7 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
   const sp = await searchParams;
   const weekRaw = param(sp, 'week');
   const week = (weekRaw && isIsoDate(weekRaw) ? weekRaw : toIsoDate()) as IsoDate;
-  const groupBy = param(sp, 'groupBy') === 'campaign' ? 'campaign' : 'account';
+  const byCampaign = param(sp, 'groupBy') === 'campaign';
   return (
     <MarketingPage
       permission="marketing:metrics:read"
@@ -36,9 +36,12 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
       description="Monday to Sunday (IST), from imported exports only. Missing values are never added as zero."
       searchParams={sp}
     >
-      {() => (
+      {(user) => (
         <Section
           load={async () => {
+            // Per-campaign figures cover every campaign: team-wide readers only.
+            const team = teamWide(user);
+            const groupBy = byCampaign && team ? 'campaign' : 'account';
             const r = await weeklyReport(getDb(), { weekOf: week, groupBy });
             return (
               <div className="el-stack">
@@ -49,7 +52,7 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
                   <Field id="groupBy" label="Group by">
                     <Select id="groupBy" name="groupBy" defaultValue={groupBy}>
                       <option value="account">Account</option>
-                      <option value="campaign">Campaign</option>
+                      {team ? <option value="campaign">Campaign</option> : null}
                     </Select>
                   </Field>
                   <div>

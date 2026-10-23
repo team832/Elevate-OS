@@ -32,6 +32,9 @@ export const IDEA_STATUSES = [
   'held',
   'rejected',
   'archived',
+  'submitted',
+  'approved',
+  'changes_requested',
 ] as const;
 export type IdeaStatus = (typeof IDEA_STATUSES)[number];
 

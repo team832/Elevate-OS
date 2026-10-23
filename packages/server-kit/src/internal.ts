@@ -25,6 +25,9 @@ import { toAppError, zodIssues } from './errors';
  * Internal routes are never called from browsers.
  */
 export const CALLER_HEADER = 'x-elevate-caller';
+/** Write routes: the signed-in user the calling server acts for (recorded in the audit trail). */
+export const ACTING_USER_HEADER = 'x-elevate-acting-user';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type ModuleTokens = Partial<Record<ModuleKey, string>>;
 
@@ -84,19 +87,32 @@ export function verifyInternalRequest(
 type Schema = z.ZodType | undefined;
 type Out<S extends Schema> = S extends z.ZodType ? z.output<S> : undefined;
 
-export interface InternalRouteSpec<Q extends Schema, P extends Schema> {
+export interface InternalRouteSpec<
+  Q extends Schema,
+  P extends Schema,
+  B extends Schema = undefined,
+> {
   /** Modules allowed to call this route (default: any module). */
   callers?: readonly ModuleKey[];
   query?: Q;
   params?: P;
+  /** JSON body: write routes only (use defineInternalWriteRoute). */
+  body?: B;
 }
 
-export interface InternalRouteContext<Q extends Schema, P extends Schema> {
+export interface InternalRouteContext<
+  Q extends Schema,
+  P extends Schema,
+  B extends Schema = undefined,
+> {
   request: Request;
   requestId: string;
   caller: ModuleKey;
   query: Out<Q>;
   params: Out<P>;
+  body: Out<B>;
+  /** Write routes: the user the caller acts for (from ACTING_USER_HEADER); null on reads. */
+  actingUserId: string | null;
   db: Database;
   log: Logger;
 }
@@ -109,9 +125,13 @@ const log = createLogger({ component: 'internal-route' });
  *   export const GET = defineInternalRoute({ callers: ['ops', 'platform'] }, async ({ db }) =>
  *     buildAcademicDeliverySummary(db));
  */
-export function defineInternalRoute<Q extends Schema = undefined, P extends Schema = undefined>(
-  spec: InternalRouteSpec<Q, P>,
-  handler: (ctx: InternalRouteContext<Q, P>) => Promise<unknown>,
+export function defineInternalRoute<
+  Q extends Schema = undefined,
+  P extends Schema = undefined,
+  B extends Schema = undefined,
+>(
+  spec: InternalRouteSpec<Q, P, B>,
+  handler: (ctx: InternalRouteContext<Q, P, B>) => Promise<unknown>,
   options: { getDb?: () => Database; getToken?: () => string } = {},
 ): RouteHandler {
   return async (request: Request, context: NextRouteContext) => {
@@ -143,12 +163,37 @@ export function defineInternalRoute<Q extends Schema = undefined, P extends Sche
           });
         params = parsed.data;
       }
+      let body: unknown;
+      let actingUserId: string | null = null;
+      if (spec.body) {
+        actingUserId = request.headers.get(ACTING_USER_HEADER);
+        if (!actingUserId || !UUID_RE.test(actingUserId))
+          throw new ValidationError(
+            `Write routes need the ${ACTING_USER_HEADER} header (a user id).`,
+          );
+        const mediaType = (request.headers.get('content-type') ?? '').split(';')[0]!.trim();
+        if (mediaType.toLowerCase() !== 'application/json')
+          throw new ValidationError(
+            'Send the request body as JSON (Content-Type: application/json).',
+          );
+        const raw: unknown = await request.json().catch(() => {
+          throw new ValidationError('The request body is not valid JSON.');
+        });
+        const parsed = spec.body.safeParse(raw);
+        if (!parsed.success)
+          throw new ValidationError('The request body is not valid.', {
+            details: zodIssues(parsed.error, 'body'),
+          });
+        body = parsed.data;
+      }
       const data = await handler({
         request,
         requestId,
         caller,
         query: query as Out<Q>,
         params: params as Out<P>,
+        body: body as Out<B>,
+        actingUserId,
         db: (options.getDb ?? getDb)(),
         log: log.child({ requestId, caller }),
       });
@@ -170,6 +215,38 @@ export function defineInternalRoute<Q extends Schema = undefined, P extends Sche
 }
 
 /**
+ * Wrap an internal WRITE route (export it as POST or PATCH). Same token auth as reads, plus: the
+ * calling modules must be listed, the JSON body is validated, and the caller names the user it
+ * acts for in ACTING_USER_HEADER (the handler audits under that user). The calling server must
+ * have checked that user's own permission first; this route trusts the authenticated module.
+ *
+ *   export const POST = defineInternalWriteRoute(
+ *     { callers: ['ops'], params: idParams, body: recordScoresBody },
+ *     async ({ db, params, body, actingUserId }) => recordScores(db, actingUserId, params.id, body));
+ */
+export function defineInternalWriteRoute<
+  B extends z.ZodType,
+  Q extends Schema = undefined,
+  P extends Schema = undefined,
+>(
+  spec: InternalRouteSpec<Q, P, B> & { callers: readonly [ModuleKey, ...ModuleKey[]]; body: B },
+  handler: (ctx: InternalRouteContext<Q, P, B> & { actingUserId: string }) => Promise<unknown>,
+  options: { getDb?: () => Database; getToken?: () => string } = {},
+): RouteHandler {
+  return defineInternalRoute(
+    spec,
+    handler as (ctx: InternalRouteContext<Q, P, B>) => Promise<unknown>,
+    options,
+  );
+}
+
+const internalHeaders = (caller: ModuleKey, token?: string) => ({
+  authorization: `Bearer ${token ?? getInternalServiceTokens()?.[caller] ?? getInternalServiceToken()}`,
+  [CALLER_HEADER]: caller,
+  accept: 'application/json',
+});
+
+/**
  * Fetch another zone's internal endpoint and validate it against a contract.
  * NEVER throws and never substitutes zeros: any failure (network, timeout,
  * non-2xx, schema mismatch) returns `{ status: 'unavailable', reason }`, which
@@ -183,11 +260,7 @@ export async function fetchInternal<S extends z.ZodType>(
   const fetchedAt = new Date().toISOString();
   try {
     const response = await (options.fetchImpl ?? fetch)(url, {
-      headers: {
-        authorization: `Bearer ${options.token ?? getInternalServiceTokens()?.[options.caller] ?? getInternalServiceToken()}`,
-        [CALLER_HEADER]: options.caller,
-        accept: 'application/json',
-      },
+      headers: internalHeaders(options.caller, options.token),
       signal: AbortSignal.timeout(options.timeoutMs ?? 5000),
       cache: 'no-store',
     });
@@ -205,4 +278,64 @@ export async function fetchInternal<S extends z.ZodType>(
         : 'Could not reach the source';
     return { status: 'unavailable', reason, fetchedAt };
   }
+}
+
+export type InternalWriteResult<T> =
+  | { ok: true; data: T }
+  /** `status` 0 = the source was never reached (network failure or timeout). */
+  | { ok: false; status: number; error: { code: string; message: string; details?: unknown } };
+
+/**
+ * Call another zone's internal WRITE route (POST/PATCH). Never throws: a refusal comes back with
+ * the server's error code, message and details for the caller to show; a 2xx reply that does not
+ * match `schema` is an error, never a success.
+ */
+export async function sendInternal<S extends z.ZodType>(
+  url: string,
+  schema: S,
+  options: {
+    caller: ModuleKey;
+    actingUserId: string;
+    body: unknown;
+    method?: 'POST' | 'PATCH';
+    timeoutMs?: number;
+    token?: string;
+    fetchImpl?: typeof fetch;
+  },
+): Promise<InternalWriteResult<z.output<S>>> {
+  const fail = (status: number, code: string, message: string) => ({
+    ok: false as const,
+    status,
+    error: { code, message },
+  });
+  let response: Response;
+  try {
+    response = await (options.fetchImpl ?? fetch)(url, {
+      method: options.method ?? 'POST',
+      headers: {
+        ...internalHeaders(options.caller, options.token),
+        'content-type': 'application/json',
+        [ACTING_USER_HEADER]: options.actingUserId,
+      },
+      body: JSON.stringify(options.body),
+      signal: AbortSignal.timeout(options.timeoutMs ?? 15000),
+      cache: 'no-store',
+    });
+  } catch (error) {
+    // A timed-out write may still have committed: callers re-read before offering a retry.
+    const timedOut = error instanceof Error && error.name === 'TimeoutError';
+    return fail(0, 'UNAVAILABLE', timedOut ? 'Timed out' : 'Could not reach the source');
+  }
+  const json = (await response.json().catch(() => null)) as {
+    data?: unknown;
+    error?: { code: string; message: string; details?: unknown };
+  } | null;
+  if (!response.ok)
+    return json?.error
+      ? { ok: false, status: response.status, error: json.error }
+      : fail(response.status, 'UNAVAILABLE', `HTTP ${response.status}`);
+  const parsed = schema.safeParse(json?.data);
+  return parsed.success
+    ? { ok: true, data: parsed.data }
+    : fail(response.status, 'CONTRACT_MISMATCH', 'Response did not match the contract');
 }

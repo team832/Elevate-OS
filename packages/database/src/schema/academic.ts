@@ -58,7 +58,14 @@ import {
   type AcademicSubjectId,
 } from './academic-curriculum';
 import { academicTimetablePatterns, type AcademicPatternId } from './academic-delivery';
-import { programmes, staffMembers, students as coreStudents, users } from './core';
+import {
+  branches,
+  programmes,
+  staffMembers,
+  students as coreStudents,
+  users,
+  type CoreBranchId,
+} from './core';
 
 export { ACADEMIC_TEACHER_ROLES, academic };
 
@@ -180,13 +187,18 @@ export const academicBatches = academic.table(
   ],
 );
 
-/** Teacher (core staff member) → subject → batch (ACD-003). */
+export const ACADEMIC_ASSIGNMENT_STATUSES = ['pending', 'active', 'ended'] as const;
+
+/**
+ * Teacher (core staff member) → subject → batch (ACD-003). Only `active` rows grant access to a
+ * batch's students. `pending` = a confirmed responsibility with no batch yet (brief 23 Oct 2026
+ * §4, ruling R9); only a pending row may lack its batch.
+ */
 export const academicTeacherAssignments = academic.table(
   'teacher_assignments',
   {
     id: uuid('id').primaryKey().defaultRandom().$type<AcademicAssignmentId>(),
     batchId: uuid('batch_id')
-      .notNull()
       .references(() => academicBatches.id, { onDelete: 'cascade' })
       .$type<BatchId>(),
     subjectId: uuid('subject_id')
@@ -199,11 +211,17 @@ export const academicTeacherAssignments = academic.table(
       .$type<StaffMemberId>(),
     employmentType: text('employment_type', { enum: ['full_time', 'part_time'] }),
     role: text('role', { enum: ACADEMIC_TEACHER_ROLES }).notNull().default('primary'),
-    status: text('status', { enum: ['active', 'ended'] })
-      .notNull()
-      .default('active'),
+    status: text('status', { enum: ACADEMIC_ASSIGNMENT_STATUSES }).notNull().default('active'),
     startDate: date('start_date', { mode: 'string' }),
     endDate: date('end_date', { mode: 'string' }),
+    /** e.g. `2026-27`. */
+    academicYear: text('academic_year'),
+    branchId: uuid('branch_id')
+      .references(() => branches.id, { onDelete: 'restrict' })
+      .$type<CoreBranchId>(),
+    courseId: uuid('course_id')
+      .references(() => academicCourses.id, { onDelete: 'restrict' })
+      .$type<CourseId>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -211,8 +229,22 @@ export const academicTeacherAssignments = academic.table(
     uniqueIndex('teacher_assignments_active_key')
       .on(t.batchId, t.subjectId, t.staffMemberId)
       .where(sql`${t.status} = 'active'`),
+    uniqueIndex('teacher_assignments_pending_key')
+      .on(t.staffMemberId, t.subjectId)
+      .where(sql`${t.status} = 'pending' AND ${t.batchId} IS NULL`),
     index('teacher_assignments_staff_idx').on(t.staffMemberId, t.status),
-    check('teacher_assignments_status_check', sql`${t.status} IN ('active', 'ended')`),
+    check(
+      'teacher_assignments_status_check',
+      sql`${t.status} IN (${inList(ACADEMIC_ASSIGNMENT_STATUSES)})`,
+    ),
+    check(
+      'teacher_assignments_batch_check',
+      sql`${t.batchId} IS NOT NULL OR ${t.status} = 'pending'`,
+    ),
+    check(
+      'teacher_assignments_year_check',
+      sql`${t.academicYear} IS NULL OR ${t.academicYear} ~ '^[0-9]{4}-[0-9]{2}$'`,
+    ),
     check('teacher_assignments_role_check', sql`${t.role} IN (${inList(ACADEMIC_TEACHER_ROLES)})`),
     check(
       'teacher_assignments_employment_check',

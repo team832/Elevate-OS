@@ -131,7 +131,7 @@ async function Report({ user, sp, base }: { user: AuthenticatedUser; sp: Params;
           <StatCard
             label="EOD reports missing"
             value={t.eodMissing}
-            note="Calendar days with no submitted report, per person"
+            note="Expected workdays with no submitted report"
           />
         </li>
       </ul>
@@ -164,8 +164,8 @@ async function Report({ user, sp, base }: { user: AuthenticatedUser; sp: Params;
               header: 'EOD submitted / acknowledged / missing',
               render: (p) =>
                 p.eod.days === null
-                  ? `${p.eod.submitted} submitted (not expected: no login or inactive)`
-                  : `${p.eod.submitted} / ${p.eod.acknowledged} / ${p.eod.missing} of ${p.eod.days} calendar days`,
+                  ? `${p.eod.submitted} submitted (${p.eod.note === 'no_schedule' ? 'no work schedule' : 'not expected: no sign-in or inactive'})`
+                  : `${p.eod.submitted} / ${p.eod.acknowledged} / ${p.eod.missing} of ${p.eod.days} expected days`,
             },
           ]}
         />

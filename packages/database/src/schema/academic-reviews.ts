@@ -21,6 +21,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import type {
+  BatchId,
   Brand,
   EnrolmentId,
   StaffMemberId,
@@ -30,6 +31,7 @@ import type {
 } from '@elevate/shared-types';
 import { academic, createdAt, inList, updatedAt } from './academic-columns';
 import {
+  academicBatches,
   academicClassSessions,
   academicEnrolments,
   academicStudents,
@@ -88,6 +90,11 @@ export const academicTeacherReviews = academic.table(
     academicConcerns: text('academic_concerns'),
     suggestedAction: text('suggested_action'),
     followUpOn: date('follow_up_on', { mode: 'string' }),
+    /** Date the teacher observed what the review says (brief §16). */
+    observationOn: date('observation_on', { mode: 'string' }),
+    batchId: uuid('batch_id')
+      .references(() => academicBatches.id, { onDelete: 'restrict' })
+      .$type<BatchId>(),
     visibility: text('visibility', { enum: ACADEMIC_REVIEW_VISIBILITIES })
       .notNull()
       .default('internal'),

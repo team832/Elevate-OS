@@ -367,8 +367,9 @@ describe('student report', () => {
   it('generation writes an export row + audit with the permitted field groups; reference reopens it', async () => {
     const s = await enrolledStudent();
     const period = { from: '2026-01-01', to: '2026-12-31' };
+    // Directors generate student reports since D-079; the read-only auditor still may not.
     expect(
-      (await callRoute(generateReport, post(director, period), { id: s.studentId })).status,
+      (await callRoute(generateReport, post(auditor, period), { id: s.studentId })).status,
     ).toBe(403);
     expect(
       (

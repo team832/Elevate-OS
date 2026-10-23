@@ -3,29 +3,42 @@
  * dated events (oldest first), work updates, dependencies, time summary and the actions the
  * caller may take. Read scope as the list (task-store.ts); the server re-checks every action.
  */
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, eq, inArray } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
   departments,
   opsStaffTasks as tasks,
-  opsTaskImportBatches,
+  opsTaskCollaborators,
   opsTaskEvents as events,
   opsTaskUpdates as updates,
   staffMembers,
   users,
   type Database,
 } from '@elevate/database';
-import type { TaskStatus } from '../domain/staff-tasks';
+import { submittedOnTime } from '../domain/staff-tasks';
 import {
-  ACTION_RULES,
   allowedActions,
+  BRIEF_ROLES,
   isOpenStatus,
+  nextAction,
   overlapWarnings,
   taskTimeSummary,
+  type TaskRole,
 } from '../domain/task-lifecycle';
 import type { Actor } from './context';
 import { dependenciesOf } from './task-actions';
-import { ctxOf, lifecycleOf, loadTaskFor, mayReassign, rolesOn, taskAccess } from './task-store';
+import { isCollaborator } from './task-access';
+import { checklistOf } from './task-checklist';
+import { submissionHistory } from './task-submissions';
+import {
+  ctxOf,
+  editsTask,
+  loadTaskFor,
+  mayLogWork,
+  mayReassign,
+  rolesOn,
+  taskAccess,
+} from './task-store';
 
 const FIRST = new Set(['created', 'imported']);
 
@@ -35,8 +48,13 @@ export async function taskDetail(db: Database, actor: Actor, id: string, now = n
   const access = can(actor, 'ops:tasks:write')
     ? await taskAccess(db, actor, 'ops:tasks:write')
     : null;
-  const roles = access ? rolesOn(access, row) : [];
-  const [evs, ups, deps, dept] = await Promise.all([
+  const roles: TaskRole[] = access
+    ? [
+        ...rolesOn(access, row),
+        ...((await isCollaborator(db, access, row)) ? (['collaborator'] as const) : []),
+      ]
+    : [];
+  const [evs, ups, deps, dept, checklist, history, collaborators, children] = await Promise.all([
     db.select().from(events).where(eq(events.taskId, row.id)).orderBy(asc(events.occurredAt)),
     db.select().from(updates).where(eq(updates.taskId, row.id)).orderBy(asc(updates.recordedAt)),
     dependenciesOf(db, read, row.id),
@@ -46,7 +64,25 @@ export async function taskDetail(db: Database, actor: Actor, id: string, now = n
           .from(departments)
           .where(eq(departments.id, row.departmentId))
       : [],
+    checklistOf(db, row.id),
+    submissionHistory(db, row.id),
+    db
+      .select({ id: staffMembers.id, name: staffMembers.fullName })
+      .from(opsTaskCollaborators)
+      .innerJoin(staffMembers, eq(staffMembers.id, opsTaskCollaborators.staffId))
+      .where(eq(opsTaskCollaborators.taskId, row.id)),
+    db
+      .select({ status: tasks.status, n: count() })
+      .from(tasks)
+      .where(eq(tasks.parentTaskId, row.id))
+      .groupBy(tasks.status),
   ]);
+  const [parent] = row.parentTaskId
+    ? await db
+        .select({ id: tasks.id, title: tasks.title })
+        .from(tasks)
+        .where(eq(tasks.id, row.parentTaskId))
+    : [];
   // created/imported first when an acknowledgement shares its instant
   evs.sort((a, b) => +a.occurredAt - +b.occurredAt || +FIRST.has(b.kind) - +FIRST.has(a.kind));
   const staffIds = [
@@ -90,8 +126,9 @@ export async function taskDetail(db: Database, actor: Actor, id: string, now = n
     );
   const staffName = (s: string | null) => staff.find((x) => x.id === s)?.name ?? null;
   const userName = (u: string) => people.find((x) => x.id === u)?.name ?? 'Unknown user';
-  const ctx = await ctxOf(db, roles);
-  const editor = roles.some((r) => r !== 'reviewer');
+  const ctx = await ctxOf(db, roles, actor);
+  const childTotal = children.reduce((n, c) => n + c.n, 0);
+  const editor = editsTask(roles);
   return {
     ...row,
     staffName: staffName(row.staffId),
@@ -116,9 +153,25 @@ export async function taskDetail(db: Database, actor: Actor, id: string, now = n
     waitingOn: deps.waitsOn.filter((d) => isOpenStatus(d.status)).map((d) => d.title),
     time: taskTimeSummary(evs, ups, row.receivedAt, now),
     allowed: allowedActions(life, ctx),
+    next: roles.includes('owner') ? nextAction(life, ctx.closedBy) : null,
+    checklist,
+    ...history,
+    collaborators,
+    parent: parent ?? null,
+    /** Multi-assignment progress: children approved (done) of all children; null = not a parent. */
+    group: childTotal
+      ? { total: childTotal, done: children.find((c) => c.status === 'done')?.n ?? 0 }
+      : null,
+    onTime: submittedOnTime(
+      row,
+      evs.filter((e) => e.kind === 'due_changed'),
+    ),
+    dueChanges: evs.filter((e) => e.kind === 'due_changed'),
     selfLogged: life.selfLogged,
     canEdit: editor,
-    canLogWork: editor || (!!access?.self && row.backupStaffId === access.self),
+    /** I1: the brief and deadline of assigned work are the assigner's. */
+    canEditBrief: editor && (life.selfLogged || BRIEF_ROLES.some((r) => roles.includes(r))),
+    canLogWork: !!access && mayLogWork({ roles, row, access }),
     canReassign: mayReassign(roles, life) && isOpenStatus(row.status),
     selfStaffId: access?.self ?? null,
     /** Staff the caller may hand work to (null = anyone); the server checks again. */
@@ -126,32 +179,3 @@ export async function taskDetail(db: Database, actor: Actor, id: string, now = n
   };
 }
 export type TaskDetail = Awaited<ReturnType<typeof taskDetail>>;
-
-const ROW_ACTIONS = new Set(['start', 'block', 'hold', 'resume', 'complete', 'reopen']);
-
-/** For My day's row forms: each task's version and the statuses the caller may set now. */
-export async function rowStatusOptions(db: Database, actor: Actor, ids: string[]) {
-  if (!ids.length || !can(actor, 'ops:tasks:write')) return new Map<string, RowOptions>();
-  const access = await taskAccess(db, actor, 'ops:tasks:write');
-  const rows = await db
-    .select({
-      task: tasks,
-      ownerUserId: staffMembers.userId,
-      importStaffId: opsTaskImportBatches.staffId,
-    })
-    .from(tasks)
-    .innerJoin(staffMembers, eq(staffMembers.id, tasks.staffId))
-    .leftJoin(opsTaskImportBatches, eq(opsTaskImportBatches.id, tasks.importBatchId))
-    .where(inArray(tasks.id, ids as never[]));
-  const { closedBy } = await ctxOf(db, []);
-  const out = new Map<string, RowOptions>();
-  for (const { task: r, ownerUserId, importStaffId } of rows) {
-    const ctx = { roles: rolesOn(access, r), closedBy };
-    const next = allowedActions(lifecycleOf(r, ownerUserId, importStaffId), ctx)
-      .filter((a) => ROW_ACTIONS.has(a))
-      .map((a) => ACTION_RULES[a].to!);
-    out.set(r.id, { version: r.version, statuses: [...new Set([r.status, ...next])] });
-  }
-  return out;
-}
-export type RowOptions = { version: number; statuses: TaskStatus[] };

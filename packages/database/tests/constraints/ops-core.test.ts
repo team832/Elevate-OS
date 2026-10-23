@@ -6,6 +6,7 @@ import {
   OPS_CONSENT_STATUSES,
   OPS_CONTACT_CHANNELS,
   OPS_DECISION_STATES,
+  OPS_EMPLOYMENT_STATUSES,
   OPS_FOLLOW_UP_KINDS,
   OPS_GUARDIAN_RELATIONSHIPS,
   OPS_HANDOFF_ATTEMPT_KINDS,
@@ -128,6 +129,7 @@ beforeAll(async () => {
   await insert(pg, 'ops.staff_profiles', { staff_id: ids.staff2, staff_code: 'SAMPLE-01' });
   await insert(pg, 'core.departments', coded('SAMPLE_DESK')({}));
   await insert(pg, 'core.programmes', coded('SAMPLE_CLAT')({}));
+  await insert(pg, 'core.branches', coded('SAMPLE_BR')({}));
   await insert(pg, 'core.approvals', approval());
   await insert(pg, 'core.event_deliveries', {
     event_id: ids.event1,
@@ -433,7 +435,41 @@ describe('admissions, checklist, enrolment attempts and staff profiles', () => {
           { staff_id: SUBJECT },
           'staff_profiles_staff_id_staff_members_id_fk',
         ],
+        'employment status bogus': [
+          { employment_status: 'bogus' },
+          'staff_profiles_employment_status_check',
+        ],
+        'exited without a last day': [{ employment_status: 'exited' }, 'staff_profiles_left_check'],
+        'exited with a last day': [
+          { employment_status: 'exited', joined_on: '2025-06-01', left_on: '2026-10-01' },
+          'ok',
+        ],
+        'left before joining': [
+          { employment_status: 'exited', joined_on: '2026-06-01', left_on: '2026-05-01' },
+          'staff_profiles_left_check',
+        ],
+        'active with a last day': [
+          { employment_status: 'active', left_on: '2026-10-01' },
+          'staff_profiles_left_check',
+        ],
+        'on notice with a last day': [
+          { employment_status: 'on_notice', left_on: '2026-11-30' },
+          'ok',
+        ],
+        'blank time zone': [{ timezone: '' }, 'staff_profiles_timezone_check'],
+        'unknown branch': [{ branch_id: SUBJECT }, 'staff_profiles_branch_id_branches_id_fk'],
       },
+    ),
+    vocab(
+      'employment statuses (OPS_EMPLOYMENT_STATUSES)',
+      'ops.staff_profiles',
+      OPS_EMPLOYMENT_STATUSES,
+      'staff_profiles_employment_status_check',
+      (v) => ({
+        staff_id: ctx.ids.staff,
+        employment_status: v,
+        ...(v === 'exited' ? { left_on: '2026-10-01' } : {}),
+      }),
     ),
   ]);
 });
@@ -444,6 +480,7 @@ describe('core organisation, approvals, audit, notifications and outbox', () => 
       [
         ['core.departments', 'SAMPLE_DESK', 'departments'],
         ['core.programmes', 'SAMPLE_CLAT', 'programmes'],
+        ['core.branches', 'SAMPLE_BR', 'branches'],
       ] as const
     ).map(([table, taken, name]) =>
       variants(`${name}: code format, unique code, status`, table, coded('SAMPLE_NEW'), {
@@ -791,6 +828,7 @@ describe('column defaults', () => {
     ['core.staff_members', () => ({ full_name: 'Sample Fresh' }), { status: 'active' }],
     ['core.departments', () => coded('SAMPLE_FRESH')({}), { status: 'provisional' }],
     ['core.programmes', () => coded('SAMPLE_FRESH')({}), { status: 'planned' }],
+    ['core.branches', () => coded('SAMPLE_FRESH')({}), { status: 'provisional' }],
     [
       'core.approvals',
       () => approval({ subject_id: SELF }),
@@ -865,6 +903,8 @@ describe('column defaults', () => {
       {
         is_sample: false,
         employment_type: 'not_recorded',
+        employment_status: 'not_recorded',
+        timezone: 'Asia/Kolkata',
         verification_status: 'unverified',
         role_labels: [],
         updated_at: TX,

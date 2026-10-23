@@ -232,6 +232,31 @@ export function scoreBounds(sections: readonly SectionSpec[], rules: readonly Re
   return { minUnits, maxUnits, negativeAllowed: minUnits < 0 };
 }
 
+/**
+ * Bounds of a test entered as totals only (no sections): max = the entered maximum; min = 0, or
+ * -max when the rule has negative marking.
+ * shortcut: -max is a loose floor (question counts unknown); enter sections for an exact floor.
+ */
+export function totalOnlyBounds(maxMarks: string, marksPerWrong: string | null): ScoreBounds {
+  const maxUnits = parseMarks(maxMarks)!;
+  const negativeAllowed = (parseMarks(marksPerWrong) ?? 0) < 0;
+  return { minUnits: negativeAllowed ? -maxUnits : 0, maxUnits, negativeAllowed };
+}
+
+/** Bounds for finalising: the sections' rule, or the entered maximum when there are no sections. */
+export function finaliseBounds(
+  input: Pick<FinaliseInput, 'sections' | 'assessmentRule' | 'key' | 'maxMarks'>,
+  rules: readonly ResolvedSectionRule[],
+): ScoreBounds {
+  return input.sections.length === 0 && input.maxMarks
+    ? totalOnlyBounds(input.maxMarks, input.assessmentRule.marksPerWrong)
+    : scoreBounds(input.sections, rules, input.key?.answers ?? null);
+}
+
+/** Competition ranking (1, 2, 2, 4): one more than the number of strictly higher totals. */
+export const competitionRank = (total: MarkUnits, totals: readonly MarkUnits[]): number =>
+  totals.filter((t) => t > total).length + 1;
+
 /** Why a manually entered total is not acceptable under the scheme, or null when it is. */
 export function manualScoreProblem(value: string, bounds: ScoreBounds): string | null {
   let units: MarkUnits | null;
@@ -288,8 +313,10 @@ export interface FinaliseInput {
   sections: readonly SectionSpec[];
   key: { version: number; answers: Responses } | null;
   attempts: readonly AttemptInput[];
-  /** Students with an active enrolment in the assessment's batch. */
+  /** Students with an active enrolment in the assessment's batch (roster-managed: the active roster). */
   enrolledStudentIds: readonly string[];
+  /** Entered maximum of a total-only test (no sections). */
+  maxMarks?: string | null;
 }
 
 export interface FinaliseValidation {
@@ -308,7 +335,7 @@ export interface FinaliseValidation {
  */
 export function validateForFinalise(input: FinaliseInput): FinaliseValidation {
   const issues: ValidationIssue[] = [];
-  if (input.sections.length === 0) {
+  if (input.sections.length === 0 && !input.maxMarks) {
     issues.push({ code: 'NO_SECTIONS', message: 'The assessment has no sections.' });
   }
   const { rules, problems } = resolveRules(input.assessmentRule, input.sections);
@@ -319,7 +346,7 @@ export function validateForFinalise(input: FinaliseInput): FinaliseValidation {
   const submitted = input.attempts.filter((a) => a.status === 'submitted');
   const manualOnly = submitted.length > 0 && submitted.every((a) => a.responses === null && a.manualScore);
   if (!input.key) {
-    if (!manualOnly) issues.push({ code: 'NO_ANSWER_KEY', message: 'No answer key has been entered.' });
+    if (!manualOnly && input.sections.length > 0) issues.push({ code: 'NO_ANSWER_KEY', message: 'No answer key has been entered.' });
   } else {
     for (const s of input.sections) {
       const row = input.key.answers[s.code];
@@ -353,7 +380,7 @@ export function validateForFinalise(input: FinaliseInput): FinaliseValidation {
 
   const bounds =
     problems.length === 0 && rules.length === input.sections.length
-      ? scoreBounds(input.sections, rules, input.key?.answers ?? null)
+      ? finaliseBounds(input, rules)
       : null;
   const enrolled = new Set(input.enrolledStudentIds);
   const seen = new Map<string, number>();
@@ -502,8 +529,8 @@ export function aggregateResults(
   /** null only when every submitted attempt is a manual total. */
   key: Responses | null,
   attempts: readonly AttemptInput[],
+  bounds: ScoreBounds = scoreBounds(sections, rules, key),
 ): AggregatedResults {
-  const bounds = scoreBounds(sections, rules, key);
   const scoreOf = (a: AttemptInput): AttemptScore | null => {
     if (a.status !== 'submitted') return null;
     if (a.responses === null && a.manualScore) {
@@ -522,14 +549,13 @@ export function aggregateResults(
     }
     const below = totals.filter((t) => t < score.totalUnits).length;
     const equal = totals.filter((t) => t === score.totalUnits).length;
-    const above = totals.filter((t) => t > score.totalUnits).length;
     return {
       attemptId: attempt.attemptId,
       studentId: attempt.studentId,
       state: 'scored',
       absent: false,
       score,
-      rank: above + 1,
+      rank: competitionRank(score.totalUnits, totals),
       percentile: percentileRank(below, equal, n),
     };
   });

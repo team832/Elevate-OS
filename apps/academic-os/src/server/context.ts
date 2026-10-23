@@ -12,8 +12,9 @@
  * - students / progress: students placed (from on or before the date) in a batch where that
  *   staff member's assignment window is open on the date, with overlapping dates.
  * A user with no staff record has an empty scope (sees nothing), never "all".
+ * A `pending` assignment (no batch yet, R9) and a subject capability grant nothing.
  */
-import { and, eq, gte, isNull, lte, or } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, isNull, lte, ne, or } from 'drizzle-orm';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { scopeFor, type GrantScope, type Permission } from '@elevate/authorization';
 import {
@@ -51,8 +52,8 @@ const ta = academicTeacherAssignments;
 const assignmentOpenOrEndsOnOrAfter = (day: string | typeof academicBatchPlacements.startDate) =>
   or(and(isNull(ta.endDate), eq(ta.status, 'active')), gte(ta.endDate, day));
 
-/** SQL: the assignment window is open on `day` (start ≤ day ≤ end; open ends allowed). */
-export const assignmentActiveOn = (day: string) => and(or(isNull(ta.startDate), lte(ta.startDate, day)), assignmentOpenOrEndsOnOrAfter(day));
+/** SQL: the assignment window is open on `day` (start ≤ day ≤ end; open ends allowed); pending rows never count. */
+export const assignmentActiveOn = (day: string) => and(ne(ta.status, 'pending'), isNotNull(ta.batchId), or(isNull(ta.startDate), lte(ta.startDate, day)), assignmentOpenOrEndsOnOrAfter(day));
 
 /** Batches where the staff member has an assignment active on `day` (YYYY-MM-DD, default today IST). */
 export async function assignedBatchIds(db: Database, staffId: StaffMemberId, day: string = todayIst()): Promise<BatchId[]> {
@@ -60,7 +61,7 @@ export async function assignedBatchIds(db: Database, staffId: StaffMemberId, day
     .selectDistinct({ batchId: ta.batchId })
     .from(ta)
     .where(and(eq(ta.staffMemberId, staffId), assignmentActiveOn(day)));
-  return rows.map((r) => r.batchId);
+  return rows.map((r) => r.batchId!); // assignmentActiveOn excludes rows without a batch
 }
 
 /** Resolve the actor's scope for a permission (own scope: assignments active on `day`); throws FORBIDDEN when it is not held. */

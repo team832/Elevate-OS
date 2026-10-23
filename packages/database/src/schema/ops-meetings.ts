@@ -12,6 +12,7 @@
  */
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
   integer,
@@ -37,6 +38,8 @@ import {
 } from './ops-columns';
 import { opsDemoSessions, opsDemos, type OpsDemoId, type OpsDemoSessionId } from './ops-demos';
 import { opsGuardians, type OpsGuardianId } from './ops-students';
+// Cycle on purpose (import_id): used only in a lazy FK callback; see ops-columns.ts.
+import { opsTeacherFeedbackImports } from './ops-feedback';
 
 export type OpsAppointmentId = Brand<string, 'OpsAppointmentId'>;
 export type OpsTeacherStudentFeedbackId = Brand<string, 'OpsTeacherStudentFeedbackId'>;
@@ -45,6 +48,14 @@ export type OpsEventMessageId = Brand<string, 'OpsEventMessageId'>;
 
 export const OPS_FEEDBACK_STATUSES = ['draft', 'final'] as const;
 export const OPS_MODERATION_STATUSES = ['pending', 'approved', 'rejected', 'hidden'] as const;
+/** How student feedback about a teacher was collected (brief 23 Oct 2026 §15). */
+export const OPS_FEEDBACK_COLLECTION_METHODS = [
+  'form',
+  'paper',
+  'interview',
+  'import',
+  'other',
+] as const;
 export const OPS_VERIFICATION_STATUSES = ['unverified', 'confirmed'] as const;
 /** What a teacher review is about: a demo class, an Academic enrolment, or neither. */
 export const OPS_FEEDBACK_SCOPES = ['demo_session', 'enrolment', 'general'] as const;
@@ -427,7 +438,12 @@ export const opsTeacherStudentFeedback = ops.table(
   ],
 );
 
-/** Student / guardian → teacher feedback, recorded by staff on their behalf and moderated. */
+/**
+ * Student / guardian → teacher feedback, recorded by staff or imported (brief 23 Oct 2026 §15),
+ * moderated. The original words and ratings are kept here; edited wording lives only in
+ * teacher_feedback_summaries. Batch / subject are Academic UUIDs (no FK) with a label.
+ * Anonymous rows hold no student; a row is respondent-identifiable unless shown otherwise.
+ */
 export const opsStudentTeacherFeedback = ops.table(
   'student_teacher_feedback',
   {
@@ -440,8 +456,28 @@ export const opsStudentTeacherFeedback = ops.table(
     /** Subject or batch the feedback is about (free text; batches are Academic-owned). */
     subjectRef: text('subject_ref'),
     feedbackOn: isoDate('feedback_on').notNull(),
-    /** 1–5 when given (scale is a proposed setting); null = no rating. */
+    /** Overall rating 1…rating_scale_max when given; null = no rating. */
     rating: integer('rating'),
+    ratingScaleMax: integer('rating_scale_max').notNull().default(5),
+    /** Category key (setting feedback.categories) → rating on the same scale. */
+    categoryRatings: jsonb('category_ratings').$type<Record<string, number>>(),
+    periodStart: isoDate('period_start'),
+    periodEnd: isoDate('period_end'),
+    /** null = not recorded (rows from before 23 Oct 2026). */
+    collectionMethod: text('collection_method', { enum: OPS_FEEDBACK_COLLECTION_METHODS }),
+    batchId: uuid('batch_id'),
+    subjectId: uuid('subject_id'),
+    courseLabel: text('course_label'),
+    importId: uuid('import_id').references((): AnyPgColumn => opsTeacherFeedbackImports.id, {
+      onDelete: 'restrict',
+    }),
+    importRow: integer('import_row'),
+    isAnonymous: boolean('is_anonymous').notNull().default(false),
+    /** False only when nothing collected identifies the respondent (never promised otherwise). */
+    respondentIdentifiable: boolean('respondent_identifiable').notNull().default(true),
+    reviewedAt: instant('reviewed_at'),
+    reviewedByUserId: userRef('reviewed_by_user_id'),
+    isSample: boolean('is_sample').notNull().default(false),
     /** The feedback in their words. */
     comment: text('comment').notNull(),
     /** Moderation state; only `approved` can be shown. */
@@ -461,13 +497,46 @@ export const opsStudentTeacherFeedback = ops.table(
   },
   (t) => [
     index('student_teacher_feedback_teacher_idx').on(t.teacherStaffId, t.moderationStatus),
+    index('student_teacher_feedback_period_idx').on(t.teacherStaffId, t.periodStart),
+    uniqueIndex('student_teacher_feedback_import_row_key')
+      .on(t.importId, t.importRow)
+      .where(sql`${t.importId} IS NOT NULL`),
+    check(
+      'student_teacher_feedback_method_check',
+      sql`${t.collectionMethod} IS NULL OR ${t.collectionMethod} IN ${inList(OPS_FEEDBACK_COLLECTION_METHODS)}`,
+    ),
+    check('student_teacher_feedback_scale_check', sql`${t.ratingScaleMax} BETWEEN 2 AND 10`),
+    check(
+      'student_teacher_feedback_category_check',
+      sql`${t.categoryRatings} IS NULL OR jsonb_typeof(${t.categoryRatings}) = 'object'`,
+    ),
+    check(
+      'student_teacher_feedback_period_check',
+      sql`(${t.periodStart} IS NULL) = (${t.periodEnd} IS NULL) AND (${t.periodEnd} IS NULL OR ${t.periodEnd} >= ${t.periodStart})`,
+    ),
+    check(
+      'student_teacher_feedback_import_check',
+      sql`(${t.importId} IS NULL) = (${t.importRow} IS NULL)`,
+    ),
+    check(
+      'student_teacher_feedback_anonymous_check',
+      sql`NOT ${t.isAnonymous} OR ${t.studentId} IS NULL`,
+    ),
+    check(
+      'student_teacher_feedback_identifiable_check',
+      sql`${t.studentId} IS NULL OR ${t.respondentIdentifiable}`,
+    ),
+    check(
+      'student_teacher_feedback_reviewed_check',
+      sql`(${t.reviewedAt} IS NULL) = (${t.reviewedByUserId} IS NULL)`,
+    ),
     check(
       'student_teacher_feedback_moderation_check',
       sql`${t.moderationStatus} IN ${inList(OPS_MODERATION_STATUSES)}`,
     ),
     check(
       'student_teacher_feedback_rating_check',
-      sql`${t.rating} IS NULL OR ${t.rating} BETWEEN 1 AND 5`,
+      sql`${t.rating} IS NULL OR ${t.rating} BETWEEN 1 AND ${t.ratingScaleMax}`,
     ),
     check(
       'student_teacher_feedback_visibility_check',

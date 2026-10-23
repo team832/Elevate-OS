@@ -7,7 +7,7 @@ import { authedRequest, buildRequest, callRoute, setupTestDatabase } from '@elev
 import { GET as teachersRoute } from '../../src/app/api/v1/teachers/route';
 import { GET as teacherRoute } from '../../src/app/api/v1/teachers/[staffId]/route';
 import { GET as activityRoute } from '../../src/app/api/internal/v1/teachers/[staffId]/activity/route';
-import { addDemoAttendee, attendanceWorklist, coordinatorOverview, createReview, createSessions, createStudent, enrolManually, markDelivered, recordAttendance, teacherActivity, teacherDay } from '../../src/server';
+import { addDemoAttendee, attendanceWorklist, coordinatorOverview, createReview, createSessions, createStudent, enrolManually, markDelivered, recordAttendance, recordClass, teacherActivity, teacherDay, verifyClassRecord } from '../../src/server';
 import { createReviewBody } from '../../src/server/schemas-teaching';
 import { actor, staffFor, users, world, type Users, type World } from './fixtures';
 
@@ -48,7 +48,8 @@ describe('teacher My day', () => {
     expect(day.logsMissing.map((s) => s.id).sort()).toEqual([ids.monday, ids.tuesday].sort());
     expect(day.demoAwaitingFeedback.map((d) => d.displayName)).toEqual(['Dev Sample Demo Student']);
     expect(day.support).toEqual([expect.objectContaining({ studentName: 'Asha Sample Student', due: true })]);
-    expect(day.hrAttendance).toBe('HR attendance unavailable');
+    expect(day.assignments.map((a) => [a.batchId, a.subjectName, a.status])).toEqual([[w.batch.id, 'Quant', 'active']]);
+    expect(day).not.toHaveProperty('hrAttendance'); // staff attendance is HR's (My attendance), never inferred here
     expect(day.batches.map((b) => b.id)).toEqual([w.batch.id]);
     expect(day.draftReviews).toBe(0);
     expect(await teacherDay(ctx.db, actor(u.coordinator), now)).toMatchObject({ kind: 'no_staff' });
@@ -89,9 +90,8 @@ describe('teachers directory and profile', () => {
     expect(mine.data!.map((t) => t.staffId)).toEqual([w.teacherStaff]);
     const path = (id: string, q = '?from=2026-09-01&to=2026-09-30') => `/academic/api/v1/teachers/${id}${q}`;
     expect((await callRoute(teacherRoute, authedRequest(u.teacher, path(w.teacher2Staff)), { staffId: w.teacher2Staff })).status).toBe(404);
-    const profile = await callRoute<{ hours: Record<string, number>; hrAttendance: string }>(teacherRoute, authedRequest(u.teacher, path(w.teacherStaff)), { staffId: w.teacherStaff });
+    const profile = await callRoute<{ hours: Record<string, number> }>(teacherRoute, authedRequest(u.teacher, path(w.teacherStaff)), { staffId: w.teacherStaff });
     expect(profile.data!.hours).toEqual({ plannedMinutes: 225, deliveredMinutes: 75, cancelledMinutes: 0, substitutedMinutes: 0 });
-    expect(profile.data!.hrAttendance).toBe('HR attendance unavailable');
     expect(JSON.stringify(profile.data)).not.toMatch(/rating|rank/i);
   });
 
@@ -106,6 +106,12 @@ describe('teachers directory and profile', () => {
     expect(data.sessions.delivered).toMatchObject({ status: 'ok', value: 1 });
     expect(data.sessions.planned).toMatchObject({ value: 3 });
     expect(data.logsPending).toMatchObject({ value: 4 }); // all four September classes are past by the real clock; none has a submitted log
+    // Optional v1 additions (23 Oct 2026): no verified class record yet → no topics; sign-in linked → measured counts.
+    expect(data.topicsCovered).toEqual([]);
+    expect(data.assessments).toMatchObject({ prepared: { status: 'ok', value: 0 }, marked: { status: 'ok', value: 0 } });
+    // A v1 payload without the new fields still parses (consumer stubs stay valid).
+    const { topicsCovered: _t, assessments: _a, ...older } = data;
+    expect(academicTeacherActivityV1Schema.safeParse(older).success).toBe(true);
   });
 
   it('a staff member with no teaching assignment or class in the window gets missing figures, never measured zeros', async () => {
@@ -114,5 +120,15 @@ describe('teachers directory and profile', () => {
     expect(data.sessions.delivered).toMatchObject({ status: 'missing', value: null, reason: 'No teaching assignments' });
     expect([data.sessions.planned, data.logsPending, data.attendancePending, data.markingPending].map((x) => x.status)).toEqual(['missing', 'missing', 'missing', 'missing']);
     expect(data.reviews.draft).toMatchObject({ status: 'ok', value: 0 }); // their own reviews are a measured fact
+    expect(data.assessments?.prepared).toMatchObject({ status: 'missing', reason: 'No teaching assignments' });
+  });
+
+  it('teacher_activity topics covered = chapters of VERIFIED class records with the class date in the window', async () => {
+    const september = { from: '2026-09-01', to: '2026-09-30' };
+    const r = await recordClass(ctx.db, actor(u.teacher), { sessionId: ids.tuesday!, chapterId: w.ch1.id, completion: 'completed', actualMinutes: 75, activity: 'main', submit: true });
+    expect((await teacherActivity(ctx.db, w.teacherStaff, september)).topicsCovered).toEqual([]); // submitted, not verified
+    await verifyClassRecord(ctx.db, actor(u.coordinator), r.id);
+    expect((await teacherActivity(ctx.db, w.teacherStaff, september)).topicsCovered).toEqual([{ batchCode: w.batch.code, subjectName: 'Quant', chapterTitle: 'Numbers', classes: 1 }]);
+    expect((await teacherActivity(ctx.db, w.teacherStaff, { from: '2026-10-01', to: '2026-10-31' })).topicsCovered).toEqual([]);
   });
 });

@@ -182,15 +182,6 @@ export const teacherUpdateBody = z.object({
 
 export const studentFeedbackQuery = z.object({ studentId: z.uuid() });
 
-export const studentTeacherFeedbackBody = z.object({
-  teacherStaffId: z.uuid(),
-  studentId: optUuid,
-  submittedByKind: z.enum(['student', 'guardian']),
-  subjectRef: optText(200),
-  feedbackOn: isoDateSchema,
-  rating: z.int().min(1).max(5).nullish(),
-  comment: required(4000),
-});
 export const teacherFeedbackQuery = z.object({ teacherStaffId: z.uuid() });
 export const moderationBody = z.object({
   action: z.enum(Object.keys(MODERATION_ACTIONS) as [keyof typeof MODERATION_ACTIONS]),

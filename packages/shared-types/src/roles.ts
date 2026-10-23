@@ -16,6 +16,8 @@ export const ROLE_KEYS = [
   'auditor',
   // Fee records in Business Ops (D-028). A profile, not a person (OD-009).
   'finance_officer',
+  // HR for teachers and marketing staff (brief 23 Oct 2026, supersedes D-032 in part). Proposed.
+  'hr_manager',
 ] as const;
 
 export type RoleKey = (typeof ROLE_KEYS)[number];

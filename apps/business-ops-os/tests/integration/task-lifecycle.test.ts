@@ -149,16 +149,25 @@ describe('test 1: receive → acknowledge → update → review → close, with 
       durationMinutes: 40,
     });
     expect(upd.status).toBe(201);
-    expect((await act(low, id, 'submit-for-review', { expectedVersion: 3 })).data!.status).toBe(
-      'in_review',
-    );
+    expect((await act(low, id, 'submit-for-review', { expectedVersion: 3 })).status).toBe(400);
+    expect(
+      (
+        await act(low, id, 'submit-for-review', {
+          expectedVersion: 3,
+          completionNote: 'Checked all slips',
+        })
+      ).data!.status,
+    ).toBe('in_review');
     expect((await act(low, id, 'approve', { expectedVersion: 4 })).status).toBe(403);
     expect((await act(lead, id, 'request-changes', { expectedVersion: 4 })).status).toBe(400);
     expect(
       (await act(lead, id, 'request-changes', { expectedVersion: 4, reason: 'Two slips missing' }))
         .data!.status,
-    ).toBe('in_progress');
-    await act(low, id, 'submit-for-review', { expectedVersion: 5 });
+    ).toBe('changes_requested');
+    await act(low, id, 'submit-for-review', {
+      expectedVersion: 5,
+      completionNote: 'Checked all slips',
+    });
     const done = await act(lead, id, 'approve', { expectedVersion: 6 });
     expect(done.data).toMatchObject({ status: 'done', version: 7 });
 
@@ -169,6 +178,7 @@ describe('test 1: receive → acknowledge → update → review → close, with 
       .orderBy(asc(opsTaskEvents.occurredAt));
     expect(events.map((e) => e.kind)).toEqual([
       'created',
+      'delivered',
       'acknowledged',
       'status_changed',
       'submitted_for_review',
@@ -176,10 +186,10 @@ describe('test 1: receive → acknowledge → update → review → close, with 
       'submitted_for_review',
       'review_approved',
     ]);
-    expect(events[4]).toMatchObject({
+    expect(events[5]).toMatchObject({
       reason: 'Two slips missing',
       fromStatus: 'in_review',
-      toStatus: 'in_progress',
+      toStatus: 'changes_requested',
     });
     const audits = await ctx.db.select().from(auditEvents).where(eq(auditEvents.entityId, id));
     expect(audits.length).toBeGreaterThanOrEqual(8);
@@ -256,9 +266,13 @@ describe('test 2: unauthorised users cannot read, reassign, close or export', ()
         }),
         { id: reviewed },
       );
-    expect((await patch({ status: 'done' })).status).toBe(409);
-    expect((await patch({ status: 'in_review' })).status).toBe(400);
-    expect((await patch({ status: 'cancelled', reason: 'x' })).status).toBe(400);
+    // C1/C2: no status changes through PATCH at all (the actions are the one gate).
+    for (const json of [
+      { status: 'done' },
+      { status: 'in_review' },
+      { status: 'cancelled', reason: 'x' },
+    ])
+      expect((await patch(json)).status).toBe(400);
   });
 });
 
@@ -307,6 +321,7 @@ describe('test 3: dependencies, reopen and reassign keep history', () => {
       'dependency_added',
       'status_changed',
       'reassigned',
+      'delivered',
     ]);
     const [ev] = await ctx.db
       .select()
@@ -459,7 +474,7 @@ describe('fix round 1: review gate, scope and validation', () => {
     });
     expect(res.data).toMatchObject({ staffId: mid.staffId, acknowledgedAt: expect.any(String) });
     const kinds = (await get(mid, t.id)).data!.events.map((e) => e.kind);
-    expect(kinds).toEqual(['created', 'reassigned', 'acknowledged']);
+    expect(kinds).toEqual(['created', 'delivered', 'reassigned', 'acknowledged']);
     const handed = (await create(lead, { title: 'Sample hand', staffId: lead.staffId })).data!;
     await post(reassignRoute, lead, handed.id, { expectedVersion: 1, toStaffId: low.staffId });
     expect((await get(low, handed.id)).data).toMatchObject({ assignedByStaffId: lead.staffId });
@@ -697,7 +712,7 @@ describe('final polish', () => {
     ).data!;
     await act(low, t.id, 'acknowledge', { expectedVersion: 1 });
     await act(low, t.id, 'start', { expectedVersion: 2 });
-    await act(low, t.id, 'submit-for-review', { expectedVersion: 3 });
+    await act(low, t.id, 'submit-for-review', { expectedVersion: 3, completionNote: 'Checked' });
     const done = await act(lead, t.id, 'approve', { expectedVersion: 4 });
     const nextId = (done.data as unknown as { nextTaskId: string }).nextTaskId;
     const next = (await get(low, nextId)).data as unknown as Record<string, unknown>;

@@ -40,6 +40,8 @@ export const OPS_EOD_STATUSES = [
   'revision_requested',
   'acknowledged',
 ] as const;
+/** Report period (ruling R7): one table for EOD, weekly and monthly work reports. */
+export const OPS_REPORT_PERIOD_KINDS = ['day', 'week', 'month'] as const;
 export const OPS_EOD_REVIEW_EVENT_KINDS = [
   'viewed',
   'comment',
@@ -57,8 +59,10 @@ export interface OpsEodNarrative {
 }
 
 /**
- * One staff member's end-of-day report for one IST day — the report identity (one per staff
- * member and day). The row holds the working draft; each submission freezes a version in
+ * One staff member's work report for one period — the report identity (one per staff member,
+ * period kind and start). Day = the EOD report (`report_date` = the day; null for week / month so
+ * day-only readers never pick up a period report); week = 7 days from `period_start`; month =
+ * a calendar month. The row holds the working draft; each submission freezes a version in
  * `eod_report_versions` (`current_version` = latest submitted, 0 = never submitted).
  * `submitted_at` is the latest submission. `version` is bumped on every write (concurrency).
  */
@@ -67,7 +71,10 @@ export const opsEodReports = ops.table(
   {
     id: uuid('id').primaryKey().defaultRandom().$type<OpsEodReportId>(),
     staffId: staffRefRestrict('staff_id').notNull(),
-    reportDate: isoDate('report_date').notNull(),
+    periodKind: text('period_kind', { enum: OPS_REPORT_PERIOD_KINDS }).notNull().default('day'),
+    periodStart: isoDate('period_start').notNull(),
+    periodEnd: isoDate('period_end').notNull(),
+    reportDate: isoDate('report_date'),
     status: text('status', { enum: OPS_EOD_STATUSES }).notNull().default('draft'),
     /** Shape: EodSnapshot (business-ops domain/staff-tasks.ts); packages cannot import app types. */
     snapshot: jsonb('snapshot').$type<object>().notNull(),
@@ -87,8 +94,17 @@ export const opsEodReports = ops.table(
     updatedAt: updatedAt(),
   },
   (t) => [
-    uniqueIndex('eod_reports_staff_date_key').on(t.staffId, t.reportDate),
+    uniqueIndex('eod_reports_staff_period_key').on(t.staffId, t.periodKind, t.periodStart),
     index('eod_reports_date_idx').on(t.reportDate),
+    index('eod_reports_period_idx').on(t.periodKind, t.periodStart),
+    check(
+      'eod_reports_period_kind_check',
+      sql`${t.periodKind} IN ${inList(OPS_REPORT_PERIOD_KINDS)}`,
+    ),
+    check(
+      'eod_reports_period_check',
+      sql`(${t.periodKind} = 'day') = (${t.reportDate} IS NOT NULL) AND (${t.reportDate} IS NULL OR ${t.reportDate} = ${t.periodStart}) AND CASE ${t.periodKind} WHEN 'day' THEN ${t.periodEnd} = ${t.periodStart} WHEN 'week' THEN ${t.periodEnd} = ${t.periodStart} + 6 ELSE extract(day FROM ${t.periodStart}) = 1 AND ${t.periodEnd} = (${t.periodStart} + interval '1 month' - interval '1 day')::date END`,
+    ),
     check('eod_reports_status_check', sql`${t.status} IN ${inList(OPS_EOD_STATUSES)}`),
     check('eod_reports_submitted_check', sql`(${t.status} = 'draft') = (${t.submittedAt} IS NULL)`),
     check(

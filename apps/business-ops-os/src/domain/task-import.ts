@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 import { isIsoDate } from './dates';
-import type { TaskPriority, TaskRecurrence, TaskStatus } from './staff-tasks';
+import type { TaskBlockKind, TaskPriority, TaskRecurrence, TaskStatus } from './staff-tasks';
 
 export const TRACKER_SOURCE_KIND = 'deskday_backup_json';
 /** The largest backup accepted (characters); a year of tasks and reports is well under 1 MB. */
@@ -16,8 +16,11 @@ export const MAX_BACKUP_CHARS = 5_000_000;
 export const NOT_AN_EXPORT =
   'This is the tracker program, not a data export. Open it in the browser, choose Backup → Export backup, and upload the Task-EOD-backup-….json file it downloads.';
 
-/** Statuses the tracker writes, lower-cased (older versions wrote "Not Started", "In Progress", "On-Hold"). */
-const STATUSES: Record<string, TaskStatus> = {
+/**
+ * Statuses the tracker writes, lower-cased (older versions wrote "Not Started", "In Progress",
+ * "On-Hold"). Blocked and On-hold become the blocked flag (R4); the status comes from progress.
+ */
+const STATUSES: Record<string, TaskStatus | TaskBlockKind> = {
   'not started': 'pending',
   'in progress': 'in_progress',
   done: 'done',
@@ -90,6 +93,9 @@ export interface ImportedTaskValues {
   status: TaskStatus;
   progressPercent: number;
   reason: string | null;
+  /** The tracker's Blocked / On-hold, kept as the blocked flag with `blockedReason` (R4). */
+  blockedKind: TaskBlockKind | null;
+  blockedReason: string | null;
   recurrence: TaskRecurrence;
   dueOn: string;
   dueTime: string | null;
@@ -176,8 +182,9 @@ function mapTask(raw: unknown, n: number): MappedRecord<ImportedTaskValues> {
   const completedOn = t.completedAt && isIsoDate(t.completedAt) ? t.completedAt : null;
   if (status === 'done' && !completedOn)
     return unresolved('Marked Done without a completion date.');
-  const needsReason = status === 'blocked' || status === 'on_hold';
-  if (needsReason && !t.reason) base.notes.push(`No reason in the tracker: "${NO_REASON}".`);
+  const blockedKind = status === 'blocked' || status === 'on_hold' ? status : null;
+  if (blockedKind && !t.reason) base.notes.push(`No reason in the tracker: "${NO_REASON}".`);
+  const progress = Math.round(t.prog ?? 0);
   const createdOn = t.createdAt && isIsoDate(t.createdAt) ? t.createdAt : null;
   if (!createdOn) base.notes.push('No creation date: received time is the import time.');
   return {
@@ -192,9 +199,11 @@ function mapTask(raw: unknown, n: number): MappedRecord<ImportedTaskValues> {
           .filter(Boolean)
           .join(' · ') || null,
       priority,
-      status,
-      progressPercent: status === 'done' ? 100 : Math.round(t.prog ?? 0),
-      reason: status === 'done' ? null : (t.reason ?? (needsReason ? NO_REASON : null)),
+      status: blockedKind ? (progress > 0 ? 'in_progress' : 'pending') : (status as TaskStatus),
+      progressPercent: status === 'done' ? 100 : progress,
+      reason: status === 'done' || blockedKind ? null : (t.reason ?? null),
+      blockedKind,
+      blockedReason: blockedKind ? (t.reason ?? NO_REASON) : null,
       recurrence,
       dueOn: t.deadlineDate,
       dueTime: t.deadlineTime,
@@ -299,6 +308,8 @@ const DIFF_LABELS = {
   dueTime: 'Due time',
   progressPercent: 'Progress',
   reason: 'Reason',
+  blockedKind: 'Blocked or on hold',
+  blockedReason: 'Blocker',
 } as const;
 
 /** Fields where the tracker's newer copy differs from the task in Elevate (Elevate keeps its value). */

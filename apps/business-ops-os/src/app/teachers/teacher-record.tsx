@@ -1,18 +1,17 @@
 /**
  * One teacher, shared by the directory pop-up (`/ops/teachers?open=<id>`) and the profile route
  * (`/ops/teachers/<id>`): bordered sections as tabs, and the edit / record-feedback flows in their
- * own FormModal (`act=<key>`). Each fact names its source (brief 2 §7–8): HR attendance has none
- * (D-032), class delivery and logs come from Academic OS, tasks and EOD from Business Ops. No
+ * own FormModal (`act=<key>`). Each fact names its source (brief 2 §7–8): HR attendance lives in
+ * HR → Attendance (linked), class delivery and logs come from Academic OS, tasks and EOD from Business Ops. No
  * salary, identity documents, private notes, ratings or productivity scores.
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { can } from '@elevate/authorization';
+import { can, scopeFor } from '@elevate/authorization';
 import type { Metric } from '@elevate/shared-contracts';
 import { Alert, MetricStrip, StatusBadge } from '@elevate/shared-ui';
 import { REVIEW_STATE_LABELS } from '../../domain/feedback';
 import { writeReviewHref } from '../../server/academic-reviews';
 import { demoReviewsDue, REVIEWS_DUE_DAYS } from '../../server/feedback';
-import { HR_UNAVAILABLE } from '../../server/teacher-ops';
 import type { getTeacherProfile } from '../../server/teachers';
 import { ActionForm, type ActionFormProps } from '../../ui/action-form';
 import { Unavailable } from '../../ui/cross-module';
@@ -48,11 +47,14 @@ export function teacherTabs(
   actHref: (act: TeacherAct) => string,
   level: 2 | 3,
 ): ModalTab[] {
-  const moderate = can(user, 'ops:feedback:moderate');
+  const moderate = can(user, 'ops:teacher_feedback:manage');
   const about = t.feedbackAbout;
   const a = t.activity.status === 'available' ? t.activity.data : null;
   const sources = [
-    { source: 'HR attendance and leave', state: 'Source unavailable (no HR module, D-032)' },
+    {
+      source: 'HR attendance and leave',
+      state: 'Kept in HR → Attendance (see the Attendance tab)',
+    },
     {
       source: 'Academic OS — assignments, classes, logs, marking',
       state:
@@ -177,12 +179,18 @@ export function teacherTabs(
       content: (
         <Segment title="Attendance and leave" level={level}>
           <div className="el-stack">
-            <p>
-              <StatusBadge tone="neutral">{HR_UNAVAILABLE}</StatusBadge>
-            </p>
+            {scopeFor(user, 'ops:attendance:read') === 'all' ? (
+              <p>
+                <a href={`/ops/hr/attendance?staffId=${t.staff.id}`}>
+                  Open this teacher’s attendance in HR
+                </a>
+              </p>
+            ) : (
+              <p className="el-field-hint">Staff attendance is kept by HR.</p>
+            )}
             <p className="el-field-hint">
-              Elevate OS has no HR attendance or leave records, so nobody is shown present or absent
-              here. Class delivery (Academic OS) and EOD reports are not attendance.
+              Class delivery (Academic OS) and EOD reports are not attendance, and attendance does
+              not prove a class was taught.
             </p>
             {a?.unavailability.length ? (
               <RecordTable
@@ -363,13 +371,13 @@ export function teacherTabs(
           flush
           description="Recorded by staff on their behalf and moderated. The teacher cannot edit it."
           actions={
-            can(user, 'ops:feedback:record') ? (
+            can(user, 'ops:teacher_feedback:manage') ? (
               <a href={actHref('feedback')}>Record feedback</a>
             ) : undefined
           }
         >
           {about === null ? (
-            needs('ops:feedback:read')
+            needs('ops:teacher_feedback:read')
           ) : (
             <>
               <DetailTable
@@ -592,7 +600,7 @@ export function TeacherActModal({
     },
     feedback: {
       title: 'Record feedback',
-      allowed: can(user, 'ops:feedback:record'),
+      allowed: can(user, 'ops:teacher_feedback:manage'),
       form: {
         action: '/ops/api/v1/feedback/about-teachers',
         submitLabel: 'Record feedback',

@@ -8,6 +8,7 @@ export { authOptions } from './auth';
 export * from './context';
 export * from './services/curriculum';
 export * from './services/batches';
+export * from './services/assignments';
 export * from './services/timetable';
 export * from './services/teaching';
 export * from './services/assessments';

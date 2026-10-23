@@ -5,19 +5,14 @@
  * rewrites them. Scheduling sends nothing: a message is drafted with a preview, then sent only
  * by an explicit action holding `ops:event_messages:send`, through the messaging adapter
  * (no provider → `simulated`, never `sent`). Contacts are read only to count and send; they
- * never leave this file. Algorithms: A-EVT-1 (audience), A-EVT-2 (reach), A-EVT-3 (send).
+ * never leave ./events-messages.ts. Algorithms: A-EVT-1 (audience), A-EVT-2 (reach), A-EVT-3 (send).
  */
-import { and, eq, inArray, isNotNull, isNull, ne, notInArray, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import {
-  opsAdmissions,
   opsAppointmentChanges,
   opsAppointmentParticipants as participants,
   opsAppointments as appointments,
-  opsContactPreferences,
-  opsEventMessages,
   opsGuardians,
-  opsLeads,
-  programmes,
   students,
   type Database,
 } from '@elevate/database';
@@ -28,204 +23,26 @@ import {
   APPOINTMENT_TYPE_LABELS,
   BLOCKING_STATUSES,
   DEFAULT_OFFLINE_LOCATION,
-  isGroupType,
-  messageStatus,
-  reachable,
-  type MessageChannel,
 } from '../domain/appointments';
-import { ACTIVE_CASE_STATUSES } from '../domain/student-lifecycle';
 import { fmtDateTime } from '../ui/format';
-import { getMessagingAdapter } from './adapters/messaging';
 import { assertFree, MEETINGS, ownStaff } from './appointments';
-import type {
-  EventAudience,
-  EventEdit,
-  EventInput,
-  ParticipantChange,
-} from './appointments-schemas';
+import type { EventEdit, EventInput, ParticipantChange } from './appointments-schemas';
+import { accessScope, activeStaff, userIdsForStaff, type Actor } from './context';
 import {
-  accessScope,
-  activeStaff,
-  assertScope,
-  userIdsForStaff,
-  type AccessScope,
-  type Actor,
-} from './context';
+  assertEligible,
+  audienceStudents,
+  eligibleOrThrow,
+  lockEvent,
+  participantRows,
+  registeredCount,
+} from './events-audience';
 import { fieldError, opsAudit, rowById } from './ops-common';
 import { loadSettings } from './settings';
 import { notifyHosted } from './task-links';
-import { activeCase, noOtherCase, ownCase, pastCase } from './students';
+
+export { draftEventMessage, sendEventMessage } from './events-messages';
 
 const audit = opsAudit('appointment');
-type Row = typeof appointments.$inferSelect;
-type Tx = Database;
-const PRE_DEMO = ['new', 'contacted', 'counselling_scheduled', 'counselled'] as const;
-
-/** The event (locked), refusing one-to-one appointments and records outside the actor's scope. */
-async function lockEvent(tx: Tx, actor: Actor, id: string) {
-  const row = await rowById(tx, appointments, id, 'Event', true);
-  if (!isGroupType(row.type))
-    throw new InvalidStateTransitionError('Only events and webinars have an audience.');
-  assertScope(
-    await accessScope(tx, actor, 'ops:appointments:manage'),
-    [row.staffId, row.organiserStaffId],
-    'events',
-  );
-  return row;
-}
-
-/**
- * Cases in any of these populations (lead, demo, active, past: the directory rules on the case
- * itself, so a multi-programme student matches on any case) and inside the actor's scope: an
- * own-scope user reaches only students whose case they counsel or whose lead they own.
- */
-const inPopulations = (tx: Tx, populations: readonly string[], access: AccessScope) =>
-  and(
-    or(
-      ...populations.map(
-        (p) =>
-          ({
-            lead: inArray(opsAdmissions.status, [...PRE_DEMO]),
-            demo: inArray(opsAdmissions.status, ['demo_scheduled', 'demo_attended']),
-            active: inArray(opsAdmissions.status, [...ACTIVE_CASE_STATUSES]),
-            past: and(pastCase(), noOtherCase(tx, activeCase)),
-          })[p],
-      ),
-    ),
-    ownCase(tx, access),
-  );
-
-/** Students named by hand follow the same `events.eligibility` rule as the audience. */
-async function assertEligible(
-  tx: Tx,
-  ids: readonly StudentIdentityId[],
-  eligible: readonly string[],
-  access: AccessScope,
-  path: string,
-) {
-  if (!ids.length) return;
-  const ok = await tx
-    .selectDistinct({ id: opsAdmissions.studentId })
-    .from(opsAdmissions)
-    .where(and(inArray(opsAdmissions.studentId, [...ids]), inPopulations(tx, eligible, access)));
-  const outside = ids.length - ok.length;
-  if (outside)
-    throw fieldError(
-      path,
-      `${outside === 1 ? 'This student is' : `${outside} chosen students are`} not in the groups allowed by setting “Event and webinar audience” (${eligible.join(', ')}).`,
-    );
-}
-
-const hasFilter = (a: EventAudience) =>
-  a.populations.length + a.programmeCodes.length + a.stages.length + a.batchIds.length > 0;
-
-/**
- * A-EVT-1: canonical students matching the audience (every filter must match the same case).
- * Cases without a student identity yet (e.g. a lead) cannot be participants and are counted.
- */
-async function audienceStudents(
-  tx: Tx,
-  a: EventAudience,
-  eligible: readonly string[],
-  access: AccessScope,
-) {
-  if (!hasFilter(a)) return { people: [], withoutIdentity: 0 };
-  const rows = await tx
-    .select({ studentId: opsAdmissions.studentId, fullName: students.fullName })
-    .from(opsAdmissions)
-    .innerJoin(opsLeads, eq(opsLeads.id, opsAdmissions.leadId))
-    .leftJoin(programmes, eq(programmes.id, opsAdmissions.programmeId))
-    .leftJoin(students, eq(students.id, opsAdmissions.studentId))
-    .where(
-      and(
-        inPopulations(tx, a.populations.length ? a.populations : eligible, access),
-        a.programmeCodes.length ? inArray(programmes.code, a.programmeCodes) : undefined,
-        a.stages.length ? inArray(opsLeads.currentStage, a.stages) : undefined,
-        a.batchIds.length
-          ? or(
-              inArray(opsAdmissions.enrolledBatchId, a.batchIds as never[]),
-              inArray(opsAdmissions.intendedBatchId, a.batchIds as never[]),
-            )
-          : undefined,
-      ),
-    );
-  const people = new Map(rows.filter((r) => r.studentId).map((r) => [r.studentId!, r.fullName!]));
-  return {
-    people: [...people].map(([studentId, fullName]) => ({ studentId, fullName })),
-    withoutIdentity: rows.filter((r) => !r.studentId).length,
-  };
-}
-
-/** Participant rows for students (and their live guardians when the setting includes them). */
-async function participantRows(
-  tx: Tx,
-  actor: Actor,
-  appointmentId: Row['id'],
-  people: readonly { studentId: StudentIdentityId; fullName: string }[],
-  addedVia: 'audience_snapshot' | 'manual',
-  includeGuardians: boolean,
-) {
-  const ids = people.map((p) => p.studentId);
-  // Guardians already live on the event are not added twice.
-  const guardians =
-    includeGuardians && ids.length
-      ? await tx
-          .select()
-          .from(opsGuardians)
-          .where(
-            and(
-              inArray(opsGuardians.studentId, ids),
-              isNull(opsGuardians.archivedAt),
-              notInArray(
-                opsGuardians.id,
-                tx
-                  .select({ id: participants.guardianId })
-                  .from(participants)
-                  .where(
-                    and(
-                      eq(participants.appointmentId, appointmentId),
-                      isNull(participants.removedAt),
-                      isNotNull(participants.guardianId),
-                    ),
-                  ),
-              ),
-            ),
-          )
-      : [];
-  const base = {
-    appointmentId,
-    addedVia,
-    addedBy: actor.id,
-    registrationStatus: 'invited' as const,
-  };
-  const values = [
-    ...people.map((p) => ({
-      ...base,
-      kind: 'student' as const,
-      studentId: p.studentId,
-      role: 'student',
-      nameSnapshot: p.fullName,
-    })),
-    ...guardians.map((g) => ({
-      ...base,
-      kind: 'guardian' as const,
-      guardianId: g.id,
-      role: g.relationship,
-      nameSnapshot: g.fullName,
-    })),
-  ];
-  if (values.length) await tx.insert(participants).values(values);
-  return values.length;
-}
-
-const eligibleOrThrow = (a: EventAudience, eligible: readonly string[]) => {
-  const bad = a.populations.filter((p) => !eligible.includes(p));
-  if (bad.length)
-    throw fieldError(
-      'audience.populations',
-      `Not allowed by setting “Event and webinar audience”: ${bad.join(', ')}.`,
-    );
-};
 
 /** POST /appointments/events — schedule, snapshot the audience, notify the owner in-app only. */
 export async function scheduleEvent(
@@ -380,20 +197,6 @@ export async function editEvent(
   });
 }
 
-async function registeredCount(tx: Tx, appointmentId: Row['id']) {
-  const rows = await tx
-    .select({ id: participants.id })
-    .from(participants)
-    .where(
-      and(
-        eq(participants.appointmentId, appointmentId),
-        eq(participants.registrationStatus, 'registered'),
-        isNull(participants.removedAt),
-      ),
-    );
-  return rows.length;
-}
-
 /** POST /appointments/{id}/participants — an explicit addition (kept apart from the snapshot). */
 export async function addParticipant(
   db: Database,
@@ -522,146 +325,5 @@ export async function changeParticipant(
       requestId,
     );
     return after;
-  });
-}
-
-/**
- * Contacts of the event's current participants on one channel, with consent applied (A-EVT-2).
- * Declined and removed participants are skipped. Contacts never leave the server.
- */
-async function recipients(tx: Tx, appointmentId: Row['id'], channel: MessageChannel) {
-  const rows = await tx
-    .select({ p: participants, g: opsGuardians })
-    .from(participants)
-    .leftJoin(opsGuardians, eq(opsGuardians.id, participants.guardianId))
-    .where(
-      and(
-        eq(participants.appointmentId, appointmentId),
-        inArray(participants.kind, ['student', 'guardian']),
-        isNull(participants.removedAt),
-        or(
-          isNull(participants.registrationStatus),
-          ne(participants.registrationStatus, 'declined'),
-        ),
-      ),
-    );
-  const studentOf = (r: (typeof rows)[number]) => (r.p.studentId ?? r.g?.studentId)!;
-  const ids = [...new Set(rows.map(studentOf))];
-  const leads = ids.length
-    ? await tx
-        .select({ studentId: opsAdmissions.studentId, lead: opsLeads, pref: opsContactPreferences })
-        .from(opsAdmissions)
-        .innerJoin(opsLeads, eq(opsLeads.id, opsAdmissions.leadId))
-        .leftJoin(opsContactPreferences, eq(opsContactPreferences.leadId, opsLeads.id))
-        .where(and(inArray(opsAdmissions.studentId, ids), isNotNull(opsAdmissions.studentId)))
-    : [];
-  const field = channel === 'email' ? 'Email' : 'Phone';
-  const out: string[] = [];
-  for (const r of rows) {
-    const mine = leads.filter((l) => l.studentId === studentOf(r));
-    const contact = r.g
-      ? r.g[channel === 'email' ? 'email' : 'phone']
-      : (mine.map((l) => l.lead[`student${field}`]).find(Boolean) ?? null);
-    const ok = reachable(channel, {
-      contact,
-      preferences: mine.flatMap((l) => (l.pref ? [l.pref] : [])),
-      ...(r.g ? { guardianConsent: r.g.consentStatus } : {}),
-    });
-    if (ok && contact) out.push(contact);
-  }
-  return { to: [...new Set(out)], unreachable: rows.length - out.length };
-}
-
-const NOT_CONNECTED =
-  'No messaging provider is connected: sending will be recorded as “Simulated — not sent”.';
-
-/** POST /appointments/{id}/messages — saves a draft and returns its preview; sends nothing. */
-export async function draftEventMessage(
-  db: Database,
-  actor: Actor,
-  id: string,
-  input: { channel: MessageChannel; body: string },
-  requestId?: string,
-) {
-  return withTransaction(db, async (tx) => {
-    const row = await lockEvent(tx, actor, id);
-    const { to, unreachable } = await recipients(tx, row.id, input.channel);
-    const [message] = await tx
-      .insert(opsEventMessages)
-      .values({
-        appointmentId: row.id,
-        channel: input.channel,
-        body: input.body,
-        // Reach at preview time; replaced by the count at send time.
-        recipientCount: to.length,
-        createdBy: actor.id,
-      })
-      .returning();
-    await audit(
-      tx,
-      actor,
-      row.id,
-      'event.message_drafted',
-      {
-        metadata: {
-          messageId: message!.id,
-          channel: input.channel,
-          reachable: to.length,
-          unreachable,
-        },
-      },
-      requestId,
-    );
-    const adapter = getMessagingAdapter();
-    return {
-      ...message!,
-      preview: {
-        reachable: to.length,
-        unreachable,
-        providerConnected: adapter.connected,
-        notice: adapter.connected ? null : NOT_CONNECTED,
-      },
-    };
-  });
-}
-
-/** POST /appointments/{id}/messages/{messageId} — the explicit send (ops:event_messages:send). */
-export async function sendEventMessage(
-  db: Database,
-  actor: Actor,
-  id: string,
-  messageId: string,
-  requestId?: string,
-) {
-  await accessScope(db, actor, 'ops:event_messages:send');
-  return withTransaction(db, async (tx) => {
-    const row = await lockEvent(tx, actor, id);
-    const message = await rowById(tx, opsEventMessages, messageId, 'Message', true);
-    if (message.appointmentId !== row.id)
-      throw fieldError('messageId', 'Not a message of this event.');
-    if (message.status !== 'draft')
-      throw new ConflictError('This message was already sent or simulated.');
-    const { to } = await recipients(tx, row.id, message.channel as MessageChannel);
-    // shortcut: provider call inside the transaction; move it to the outbox before a real provider is connected (a crash after sending would allow a re-send).
-    const { providerRef } = await getMessagingAdapter().send({
-      channel: message.channel as MessageChannel,
-      body: message.body,
-      to,
-    });
-    const status = messageStatus(providerRef);
-    const [after] = await tx
-      .update(opsEventMessages)
-      .set({ status, providerRef, recipientCount: to.length, sentBy: actor.id, sentAt: new Date() })
-      .where(eq(opsEventMessages.id, message.id))
-      .returning();
-    await audit(
-      tx,
-      actor,
-      row.id,
-      `event.message_${status}`,
-      { metadata: { messageId: message.id, channel: message.channel, recipients: to.length } },
-      requestId,
-    );
-    return after!;
   });
 }

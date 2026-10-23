@@ -2,7 +2,8 @@
  * End-to-end task report wording (brief 2 §12B): one chronology of dated events and work
  * updates, in words. Pure; shared by the task page, the PDF and the CSV.
  */
-import { TASK_STATUS_LABELS, type TaskEventKind, type TaskStatus } from './staff-tasks';
+import type { EventStatus } from './eod';
+import { TASK_STATUS_LABELS, type TaskEventKind } from './staff-tasks';
 import { minutesOf, type WorkEntry } from './task-lifecycle';
 
 export const EVENT_LABELS: Record<TaskEventKind, string> = {
@@ -12,17 +13,22 @@ export const EVENT_LABELS: Record<TaskEventKind, string> = {
   acknowledged: 'Acknowledged',
   clarification_requested: 'Clarification requested',
   status_changed: 'Status changed',
-  submitted_for_review: 'Submitted for review',
-  review_approved: 'Review approved — closed',
+  submitted_for_review: 'Submitted',
+  review_approved: 'Approved',
   changes_requested: 'Changes requested',
   reopened: 'Reopened',
   cancelled: 'Cancelled',
   due_changed: 'Due date changed',
   priority_changed: 'Priority changed',
-  comment: 'Details changed',
+  comment: 'Comment',
   imported: 'Imported from the old tracker',
   dependency_added: 'Dependency added',
   edited: 'Details changed',
+  blocked_set: 'Marked blocked',
+  blocked_cleared: 'No longer blocked',
+  checklist_changed: 'Checklist changed',
+  collaborator_added: 'Collaborator added',
+  delivered: 'Delivered',
 };
 
 /** "2 days 3 h", "1 h 45 min", "20 min"; null = "Not recorded". Elapsed days are not effort hours. */
@@ -35,15 +41,17 @@ export function fmtDuration(minutes: number | null): string {
   return parts.filter(Boolean).join(' ') || '0 min';
 }
 
-const status = (s: TaskStatus | null) => (s ? TASK_STATUS_LABELS[s] : null);
+const RETIRED_LABELS: Record<string, string> = { blocked: 'Blocked', on_hold: 'On hold' };
+const status = (s: EventStatus | null) =>
+  s ? ((TASK_STATUS_LABELS as Record<string, string>)[s] ?? RETIRED_LABELS[s]) : null;
 const dueText = (day: string | undefined, time: string | null | undefined) =>
   `${day ?? '—'}${time ? ` ${time.slice(0, 5)} IST` : ''}`;
 
 export interface ReportEvent {
   kind: TaskEventKind;
   occurredAt: Date;
-  fromStatus: TaskStatus | null;
-  toStatus: TaskStatus | null;
+  fromStatus: EventStatus | null;
+  toStatus: EventStatus | null;
   fromStaffName: string | null;
   toStaffName: string | null;
   actorName: string;

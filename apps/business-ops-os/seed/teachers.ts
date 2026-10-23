@@ -3,9 +3,12 @@
  * no emails, phones, logins, photos or credentials are stored, and nobody gets a
  * permission. The owner confirmed the names and subject/role assignments the same day;
  * Tushar Bhakte's alumni listing stays an internal, unverified note. Nikunj Bindal teaches
- * Accounts (owner, 21 Oct 2026, D-047); his role stays Head of Business Operations. Idempotent.
+ * Accounts (owner, 21 Oct 2026, D-047); his role stays Head of Business Operations. Owner answer
+ * OA-2 (23 Oct 2026): "Soma" (CLAT Current Affairs, name unverified) and "Soma Tiwari" (Economics)
+ * are two different people — never merge them. Satish's subjects per brief 23 Oct 2026 §4.
+ * `retired` subjects are removed on re-seed (replaced by the owner's newer answer). Idempotent.
  */
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import {
   opsStaffProfiles,
   opsStaffSubjectCapabilities,
@@ -27,7 +30,8 @@ export const OWNER_SUPPLIED_STAFF = [
   {
     fullName: 'Satish Raghuvanshi',
     title: 'Teacher',
-    subjects: ['Mathematics'],
+    subjects: ['Class 11 Mathematics', 'Class 12 Mathematics', 'IPMAT Quantitative Aptitude'],
+    retired: ['Mathematics'],
     sourceNote: `${SOURCE}; owner also wrote "Raghuanshi"; elevateeducation.in/ace-batch spells "Raghuvanshi" (checked 2026-10-20)`,
   },
   {
@@ -55,11 +59,27 @@ export const OWNER_SUPPLIED_STAFF = [
     subjects: ['Commerce-oriented / special mathematics'],
     sourceNote: `${SOURCE}; name as supplied (no surname given)`,
   },
-  { fullName: 'Soma Tiwari', title: 'Teacher', subjects: ['Current Affairs'] },
+  {
+    fullName: 'Soma Tiwari',
+    title: 'Teacher',
+    subjects: ['Economics'],
+    retired: ['Current Affairs'],
+    sourceNote: `${SOURCE}; subject changed to Economics by the owner 2026-10-23 (OA-2)`,
+  },
+  {
+    fullName: 'Soma',
+    title: 'Teacher',
+    subjects: ['CLAT Current Affairs'],
+    verification: 'unverified',
+    sourceNote:
+      'owner-supplied 2026-10-23 (OA-2): "Soma ma’am", CLAT Current Affairs; a different person from Soma Tiwari; full name not given',
+  },
 ] as const satisfies readonly {
   fullName: string;
   title: string;
   subjects: readonly string[];
+  retired?: readonly string[];
+  verification?: 'unverified';
   roleNote?: string;
   sourceNote?: string;
   notes?: string;
@@ -81,7 +101,7 @@ export async function seedTeachers(db: Database) {
       )[0]!.id;
     const profile = {
       displayName: t.fullName,
-      verificationStatus: 'confirmed' as const,
+      verificationStatus: 'verification' in t ? t.verification : ('confirmed' as const),
       roleNote: 'roleNote' in t ? t.roleNote : null,
       sourceNote: 'sourceNote' in t ? t.sourceNote : SOURCE,
       notes: 'notes' in t ? t.notes : null,
@@ -104,10 +124,19 @@ export async function seedTeachers(db: Database) {
         await db.insert(opsStaffSubjectCapabilities).values({
           staffId: id,
           subject,
-          verificationStatus: 'confirmed',
+          verificationStatus: profile.verificationStatus,
           sourceNote: profile.sourceNote,
         });
     }
+    if ('retired' in t)
+      await db
+        .delete(opsStaffSubjectCapabilities)
+        .where(
+          and(
+            eq(opsStaffSubjectCapabilities.staffId, id),
+            inArray(opsStaffSubjectCapabilities.subject, [...t.retired]),
+          ),
+        );
   }
   await db
     .delete(opsStaffSubjectCapabilities)
@@ -125,7 +154,7 @@ export const teacherSeeds = [
     module: 'ops',
     dependsOn: ['core.staff_members'],
     description:
-      '7 owner-supplied staff (all teach; Nikunj Bindal also heads Business Ops) with subjects; no contacts, logins or permissions',
+      '8 owner-supplied staff (all teach; Nikunj Bindal also heads Business Ops) with subjects; no contacts, logins or permissions',
     run: ({ db }) => seedTeachers(db),
   }),
 ];

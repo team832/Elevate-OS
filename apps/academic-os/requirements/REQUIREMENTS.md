@@ -107,3 +107,11 @@ Statuses per D-013; evidence files are in `tests/`. Screens without automated te
 | Per-student summary sends `attendance.ratePercent` (null when nothing countable) and `attendance.definition` per the `attendance.denominator` setting; Business Ops never recomputes | Tested | `integration/student-summary.test.ts` |
 | Teacher activity for staff with no assignment in the window: sessions, logs, attendance and marking `missing` "No teaching assignments" (reviews still measured) | Tested | `integration/teachers-myday.test.ts` |
 | Review form: privacy hint on all six evidence fields, `maxLength` 1,500 (**Proposed**; the contract keeps 4,000), visibility hint naming the readers, `aria-describedby` | Tested (screens) | `unit/screens.test.tsx`; D-076 |
+
+## 23 Oct 2026 — HR area (D-080 … D-093; grants Proposed; migration 0015 not applied)
+
+| Part | Status | Evidence / notes |
+|---|---|---|
+| Teaching assignments `pending / active / ended` with academic year, branch and course; a pending row (no batch) opens nothing; internal route `GET /academic/api/internal/v1/teaching-assignments` for Ops (D-083) | Tested | `integration/teacher-workspace.test.ts`; `packages/database/tests/constraints/migration-0015.test.ts` |
+| Owner's 23 Oct assignments seeded (Satish IPMAT Quant active; Maths, Nikunj CA Accounting, Soma CLAT CA pending; D-082) | Tested · Nikunj's row is the agent's pick (owner to confirm) | `integration/owner-assignments-seed.test.ts` |
+| My Attendance, My Feedback (approved summaries only), My Reports (day, week, month), Notifications pages mounted from Business Operations | Implemented · not browser-checked | `apps/business-ops-os/tests/integration/attendance-screens.test.tsx`, `teacher-feedback.test.tsx`, `notifications.test.tsx` |

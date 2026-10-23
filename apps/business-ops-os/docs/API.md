@@ -392,3 +392,80 @@ Business Operations is its own workspace at `http://localhost:3000/ops` (`BUSINE
 
 ## Mounted in other workspaces (D-073)
 The same handlers serve `/academic/api/v1/{staff-tasks…, eod-reports…, task-reports}` (15 route files) and `/marketing/api/v1/{staff-tasks…, eod-reports…, task-reports, leads…, lead-sources, follow-ups…}` (31 route files), from `workRoutes` and `leadsRoutes` in `src/work.ts` and `src/leads.ts`. Request, response, permission and errors are those documented above for `/ops/api/v1/…`; the membership check uses the host's base path (`academic:module:access`, `marketing:module:access`). Tracker imports (`/ops/api/v1/task-imports…`) stay in Ops only.
+
+# Routes added or changed on 23 Oct 2026 (HR area, D-080 … D-093)
+Every grant below is **Proposed** (code marker `PROPOSED-GRANTS-2026-10-23`). Check order and envelope as above. HR-scoped readers (`isHrScoped`, D-089) see only the staff of `hr.staff_scope_departments`, staff with no department and themselves; a record outside the reader's scope answers 404. The doc comment at the top of each `route.ts` is the short source.
+
+## HR staff records (D-080, D-089, D-090)
+| Method | Path | Permission | Request | Notes |
+|---|---|---|---|---|
+| GET | `/ops/api/v1/hr/staff` | `ops:hr:read` | `directoryQuery` (filters, `page`) | HR staff directory, 25 a page |
+| GET | `/ops/api/v1/hr/staff/{id}` | `ops:hr:read` | — | Staff record; HR-only contact details only with `ops:staff_private:read` |
+| PATCH | `/ops/api/v1/hr/staff/{id}` | `ops:staff:manage` | employment profile fields | Audited; refused for your own record and outside the remit (`assertRemit`) |
+| PUT | `/ops/api/v1/hr/staff/{id}/private` | `ops:staff_private:manage` | HR-only contact details | HR managers only |
+| POST | `/ops/api/v1/hr/staff/{id}/{department, manager or end-employment}` | `ops:staff:manage` | per action | Department or manager change with history; `end-employment` = profile exited + last working day, staff record inactive, login disabled and its sessions revoked, in one transaction (409 if already ended) |
+| PUT | `/ops/api/v1/hr/settings/{key}` | `ops:hr_settings:manage` | `{ value, note? }` | HR, report and feedback settings (`hr.*` except `hr.staff_scope_departments`, `feedback.*`, `reports.week_start` / `weekly_deadline` / `monthly_deadline` / `timezone`, `tasks.reopen_roles`); a change stays Proposed; other keys → 404 |
+
+## Staff attendance (D-086)
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `<base>/api/v1/attendance` | `ops:attendance:read` | Days in a range (default the last 7, at most 62): status, first in, last out, late minutes, missing check-out, why a day needs review. Own scope = your own days. Also mounted under `/academic` and `/marketing` |
+| GET, POST | `<base>/api/v1/attendance/corrections` | GET `ops:attendance:read`; POST `ops:attendance:request` | Ask HR to correct one of your days (reason required; one waiting request per day, else 409). Also under `/academic` and `/marketing` |
+| POST | `/ops/api/v1/attendance/corrections/{id}` | `ops:attendance:manage` | Approve (applies the change) or reject (note required); never your own |
+| POST | `/ops/api/v1/attendance/decisions` | `ops:attendance:manage` | HR sets a day's status with a note; it survives every recomputation; never your own day |
+| POST | `/ops/api/v1/attendance/punches` | `ops:attendance:manage` | Manual check-in or check-out (duplicate → 409) |
+| POST | `/ops/api/v1/attendance/imports` | `ops:attendance:manage` | Preview a punch CSV (Staff code, Date-time, Direction) row by row; a file already imported → 409 |
+| POST | `/ops/api/v1/attendance/imports/{id}` | `ops:attendance:manage` | Commit a previewed import; stored punches are skipped |
+| POST | `/ops/api/v1/attendance/leave` | `ops:attendance:manage` | Record approved leave (dates inclusive) |
+| POST | `/ops/api/v1/attendance/leave/{id}` | `ops:attendance:manage` | Cancel approved leave with a reason (audited; never your own) |
+| POST | `/ops/api/v1/attendance/holidays` | `ops:attendance:manage` | Add a staff holiday (one branch or all); Proposed until approved |
+| POST | `/ops/api/v1/attendance/holidays/{id}` | `ops:hr_settings:manage` | `{ action: 'approve' or 'remove' }`; only an approved holiday changes staff days |
+| POST | `/ops/api/v1/attendance/schedules` | `ops:attendance:manage` | Weekly schedule (hours per weekday, null = weekly off) |
+| PUT | `/ops/api/v1/attendance/schedules/{id}` | `ops:attendance:manage` | Replace name, hours, grace, default flag |
+| POST | `/ops/api/v1/attendance/schedule-assignments` | `ops:attendance:manage` | The schedule a staff member follows (null = the default one) |
+
+## Work reports (D-087)
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/ops/api/v1/work-reports?kind=day,week or month&date=&standing=&q=&departmentId=&page=` | `ops:work_reports:read` | One row per staff member HR manages for one period; "Missing" only when due on a scheduled workday; listed by name, never ranked. Own reports keep the EOD routes above (`period_kind` day, week or month) |
+
+## Student feedback about teachers (D-088)
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET, POST | `/ops/api/v1/feedback/about-teachers` | GET `ops:teacher_feedback:read`; POST `ops:teacher_feedback:manage` | Raw rows (`?teacherStaffId=`); never rows about the reader; 403 for anyone who teaches. POST records a row (starts pending; `correctsId` hides the row it corrects) |
+| PATCH | `/ops/api/v1/feedback/about-teachers/{id}` | `ops:teacher_feedback:manage` | Moderate: approve, reject or hide |
+| POST | `/ops/api/v1/feedback/imports` | `ops:teacher_feedback:import` | Upload a CSV: a preview with row outcomes (valid, invalid, unresolved, duplicate); nothing imported yet; the same file while live or committed → refused |
+| PATCH | `/ops/api/v1/feedback/imports/{id}` | `ops:teacher_feedback:import` | Preview again with another column mapping |
+| POST | `/ops/api/v1/feedback/imports/{id}/commit` or `/discard` | `ops:teacher_feedback:import` | Commit the valid rows in one transaction (again = no change) or discard |
+| POST | `/ops/api/v1/feedback/summaries` | `ops:teacher_feedback:manage` | Start a draft summary for a teacher and period (counts approved rows) |
+| GET, PATCH | `/ops/api/v1/feedback/summaries/{id}` | GET `ops:teacher_feedback:read`; PATCH `ops:teacher_feedback:manage` | PATCH: `edit` a draft, `approve` (not about yourself) or `withdraw`; figures gated by `feedback.min_group_size` |
+| POST | `/ops/api/v1/feedback/actions` | `ops:teacher_feedback:manage` | Record a development action agreed with a teacher |
+| PATCH | `/ops/api/v1/feedback/actions/{id}` | `ops:teacher_feedback:manage` | Done, dropped or open again; record agreement |
+| GET | `<base>/api/v1/feedback/mine`, `…/mine/{id}` | `ops:teacher_feedback_summaries:read` (own) | The signed-in teacher's approved summaries and agreed actions, never raw rows; also under `/academic` |
+| GET | `/ops/api/v1/feedback/about-students?studentId=` | `ops:feedback:read` | Read-only history of reviews recorded in Ops before 21 Oct 2026 |
+
+## Tasks: assignment and review (D-084)
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/ops/api/v1/staff-tasks` | `ops:tasks:write` | New fields: `assignees.<staffId>` (several people: one parent + one child each), `checklist` (one item per line), `relatedRef` (`batch:<id>` or `subject:<id>`; campaign and event links are not offered because Marketing has no list route for them), `visibility` (`assignee_chain`, `department`, `collaborators`) + `collaborators.<staffId>`, `category`, `expectedDeliverable`; save as draft or assign now |
+| PATCH | `/ops/api/v1/staff-tasks/{id}` | `ops:tasks:write` | `status` in the body → 400 (use the actions). Reviewer and review step: creator or all scope only; the owner cannot turn review off; the reviewer is never the owner or the backup |
+| POST | `/ops/api/v1/staff-tasks/{id}/{action}` | `ops:tasks:write` (approve, request changes: the reviewer) | Slugs: `publish`, `comment`, `acknowledge`, `request-clarification`, `start`, `block`, `hold`, `resume`, `submit-for-review`, `approve`, `request-changes`, `complete`, `cancel`, `reopen`. Approving your own submission → 403; approving a version handed in before a reassignment → 409 |
+| POST | `/ops/api/v1/staff-tasks/{id}/reassign` | `ops:tasks:write` | Refused while a version is submitted, and to the reviewer |
+| POST | `/ops/api/v1/staff-tasks/{id}/checklist` | `ops:tasks:write` | `{ itemId, done }` |
+| — | mounted copies | — | The same handlers under `/academic/api/v1/staff-tasks…` and `/marketing/api/v1/staff-tasks…` |
+
+## Files, AI drafts, notifications (D-085, D-091, D-092)
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `<base>/api/v1/attachments` | signed in; access decided by the owning record (`ATTACHMENT_ACCESS`) | JSON with base64, at most 8 MB (`maxBodyBytes`; over → 413), extension and magic-byte check; 201 `{ id }`, the same file on the same record → 200 `{ id, duplicate: true }`; production refuses until a storage provider is chosen. Also under `/academic` and `/marketing` |
+| GET, DELETE | `<base>/api/v1/attachments/{id}` | signed in; the owning record's rule | GET the file (else 404); DELETE hides it (uploader or record manager; audited); never after the task is done or cancelled |
+| POST | `/ops/api/v1/ai/feedback-summary` | `ops:teacher_feedback:manage` | Draft strengths and areas to improve (nothing saved) |
+| POST | `<base>/api/v1/ai/report-draft` | `ops:tasks:write` | Draft your own report's narrative from your recorded work; also under `/academic` and `/marketing` |
+| POST | `/ops/api/v1/ai/task-brief` | `ops:tasks:review` | Draft a task brief from a rough line |
+| POST | `/ops/api/v1/ai/csv-mapping` | the import permission of `kind` | Suggested column matching from headings and value shapes (cells are never sent) |
+| GET, POST | `<base>/api/v1/notifications` | `platform:notifications:read` (own) | Your notifications, 25 a page, with total and unread; POST marks read `{ ids }` or `{ all: true }`. Also under `/academic` and `/marketing` |
+
+AI routes: daily limit reached → 429 (`RATE_LIMITED`); a helper turned off in `ai.features` → 409; without `OPENAI_API_KEY` and `OPENAI_MODEL` the reply says "AI drafting is not set up".
+
+## Pages (23 Oct 2026)
+`/ops/hr` (HR Overview), `/ops/hr/staff`, `/ops/hr/assignments` (from Academic's internal `GET /academic/api/internal/v1/teaching-assignments`), `/ops/hr/attendance` and `/ops/hr/attendance/{staffId}`, `/ops/hr/tasks`, `/ops/hr/review`, `/ops/hr/reports`, `/ops/hr/feedback`, `/ops/hr/settings`, `/ops/notifications`.

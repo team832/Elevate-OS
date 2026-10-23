@@ -11,7 +11,7 @@
  *   flag; every checklist item acknowledged.
  */
 import { createHash } from 'node:crypto';
-import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   marketingContentAssets,
@@ -56,6 +56,7 @@ import { actorCan, assertCan, type Actor } from './access';
 import { auditMarketing, rowById } from './common';
 import { loadPolicy } from './policy';
 import { runRuleCheck } from './rules';
+import { assertContentVisible, teamWide } from './scope';
 
 export const contentApprovalPolicy = defineApprovalPolicy({
   key: 'marketing.content.approval',
@@ -159,10 +160,14 @@ export function hashVersion(input: {
   return createHash('sha256').update(canonical).digest('hex');
 }
 
-export const getContentItem = (db: Database, id: string, lock = false) =>
-  rowById(db, marketingContentItems, id, 'Content item not found.', lock);
+/** One content item; with `actor`, NOT_FOUND unless it is in their scope (scope.ts). */
+export async function getContentItem(db: Database, id: string, lock = false, actor?: Actor) {
+  const item = await rowById(db, marketingContentItems, id, 'Content item not found.', lock);
+  if (actor) await assertContentVisible(db, actor, item.id);
+  return item;
+}
 
-const lockItem = (db: Database, id: string) => getContentItem(db, id, true);
+const lockItem = (db: Database, id: string, actor: Actor) => getContentItem(db, id, true, actor);
 
 async function setItem(
   tx: Database,
@@ -339,7 +344,7 @@ export async function addVersion(
 ) {
   assertCan(actor, 'marketing:content:write');
   return withTransaction(db, async (tx) => {
-    const item = await lockItem(tx, itemId);
+    const item = await lockItem(tx, itemId, actor);
     const effect = editEffect(item.state);
     if (effect === 'blocked') {
       throw new InvalidStateTransitionError(
@@ -422,7 +427,7 @@ export async function submitForReview(
 ) {
   assertCan(actor, 'marketing:content:write');
   return withTransaction(db, async (tx) => {
-    const item = await lockItem(tx, itemId);
+    const item = await lockItem(tx, itemId, actor);
     const to = nextState(item.state, 'submit');
     if (!item.currentVersionId)
       throw new ValidationError('Add a version (copy) before submitting for review.');
@@ -449,7 +454,7 @@ export async function withdrawFromReview(
 ) {
   assertCan(actor, 'marketing:content:write');
   return withTransaction(db, async (tx) => {
-    const item = await lockItem(tx, itemId);
+    const item = await lockItem(tx, itemId, actor);
     const to = nextState(item.state, 'withdraw');
     const pending = await findPendingApproval(tx, contentApprovalPolicy, item.id);
     if (pending) {
@@ -492,7 +497,7 @@ export async function decideContent(
         `Only ${policy.approverRoles.join(' or ')} may decide content approvals (OD-002, ${'proposed'}).`,
       );
     }
-    const item = await lockItem(tx, itemId);
+    const item = await lockItem(tx, itemId, actor);
     const action: ContentAction = input.decision === 'approve' ? 'approve' : 'request_changes';
     const to = nextState(item.state, action);
     const pending = await findPendingApproval(tx, contentApprovalPolicy, item.id);
@@ -604,7 +609,7 @@ export async function archiveContentItem(
 ) {
   assertCan(actor, 'marketing:content:write');
   return withTransaction(db, async (tx) => {
-    const item = await lockItem(tx, itemId);
+    const item = await lockItem(tx, itemId, actor);
     const to = nextState(item.state, 'archive');
     await tx
       .update(marketingPlacements)
@@ -640,8 +645,11 @@ export async function setAssignment(
   requestId?: string,
 ) {
   assertCan(actor, 'marketing:content:write');
+  // Assigning people grants access to the content (scope.ts), so only team-wide readers may.
+  if (!teamWide(actor))
+    throw new ForbiddenError('Only a marketing manager assigns people to content.');
   return withTransaction(db, async (tx) => {
-    const item = await getContentItem(tx, itemId);
+    const item = await getContentItem(tx, itemId, false, actor);
     const [before] = await tx
       .select()
       .from(marketingContentAssignments)
@@ -706,7 +714,7 @@ export async function addComment(
     throw new ForbiddenError('You do not have permission to comment on content.');
   }
   return withTransaction(db, async (tx) => {
-    const item = await getContentItem(tx, itemId);
+    const item = await getContentItem(tx, itemId, false, actor);
     if (input.versionId) {
       const v = await getVersion(tx, input.versionId);
       if (v.contentItemId !== item.id)
@@ -735,7 +743,11 @@ export async function addComment(
 }
 
 /** Content items needing attention, for the dashboard and lists. */
-export async function listContentItems(db: Database, filter: { state?: ContentState } = {}) {
+export async function listContentItems(
+  db: Database,
+  filter: { state?: ContentState } = {},
+  scope?: SQL,
+) {
   return db
     .select({
       item: marketingContentItems,
@@ -745,9 +757,12 @@ export async function listContentItems(db: Database, filter: { state?: ContentSt
     .from(marketingContentItems)
     .innerJoin(marketingIdeas, eq(marketingIdeas.id, marketingContentItems.ideaId))
     .where(
-      filter.state
-        ? eq(marketingContentItems.state, filter.state)
-        : ne(marketingContentItems.state, 'archived'),
+      and(
+        filter.state
+          ? eq(marketingContentItems.state, filter.state)
+          : ne(marketingContentItems.state, 'archived'),
+        scope,
+      ),
     )
     .orderBy(desc(marketingContentItems.updatedAt))
     .limit(500);

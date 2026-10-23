@@ -40,7 +40,7 @@ export default async function ContentItemPage({
           load={async () => {
             if (!/^[0-9a-f-]{36}$/i.test(id)) return <ErrorState title="Content item not found" />;
             const db = getDb();
-            const d = await getContentItemDetail(db, id);
+            const d = await getContentItemDetail(db, id, user);
             const accounts = await listAccounts(db);
             const write = can(user, 'marketing:content:write');
             const approve = can(user, 'marketing:content:approve');

@@ -2,7 +2,8 @@
  * OWNER: Business Ops OS — staff tasks: the task, its dated history (`task_events`), work updates
  * and dependencies (owner decision 21 Oct 2026, partial reversal of D-032; owner brief 2 §5–6).
  * Part of the `ops` Postgres schema, split across ops*.ts; same rules as ops.ts. EOD reports are
- * in ops-eod.ts, tracker imports in ops-task-imports.ts. Ownership history = `reassigned` events.
+ * in ops-eod.ts, tracker imports in ops-task-imports.ts, checklist / submissions / reviews /
+ * collaborators in ops-task-work.ts. Ownership history = `reassigned` events.
  */
 import { sql } from 'drizzle-orm';
 import {
@@ -22,6 +23,7 @@ import { departments } from './core';
 import { ops, opsAdmissions, opsLeads } from './ops';
 import {
   createdAt,
+  filled,
   inList,
   instant,
   isoDate,
@@ -38,16 +40,38 @@ export type OpsTaskEventId = Brand<string, 'OpsTaskEventId'>;
 export type OpsTaskUpdateId = Brand<string, 'OpsTaskUpdateId'>;
 
 // Mirrored in apps/business-ops-os/src/domain/staff-tasks.ts (a unit test keeps them equal).
-/** D-052 tracker statuses plus `in_review` and `cancelled` (R1). Acknowledgement is not a status. */
+/**
+ * Lifecycle (brief 23 Oct 2026 §10, ruling R4): draft → pending ("Assigned") → in_progress →
+ * in_review ("Submitted") → done ("Approved"), plus changes_requested and cancelled.
+ * Acknowledgement and blocked/on-hold are not statuses (acknowledged_at, blocked_* columns);
+ * overdue is computed.
+ */
 export const OPS_TASK_STATUSES = [
   'pending',
   'in_progress',
   'done',
-  'blocked',
-  'on_hold',
   'in_review',
   'cancelled',
+  'draft',
+  'changes_requested',
 ] as const;
+/** Statuses task_events may hold: today's plus the retired `blocked` / `on_hold` (history). */
+export const OPS_TASK_EVENT_STATUSES = [...OPS_TASK_STATUSES, 'blocked', 'on_hold'] as const;
+export const OPS_TASK_BLOCK_KINDS = ['blocked', 'on_hold'] as const;
+/**
+ * Records a task is about (plain UUIDs, no FK); lead / admission / student use their FK columns.
+ * `test` = an Academic assessment, `hr_request` = ops.hr_requests (0016).
+ */
+export const OPS_TASK_RELATED_KINDS = [
+  'batch',
+  'subject',
+  'campaign',
+  'event',
+  'test',
+  'hr_request',
+] as const;
+export const OPS_TASK_REMINDER_KINDS = ['due_soon', 'overdue', 'unacknowledged'] as const;
+export const OPS_TASK_VISIBILITIES = ['assignee_chain', 'department', 'collaborators'] as const;
 export const OPS_TASK_PRIORITIES = ['high', 'medium', 'low'] as const;
 export const OPS_TASK_RECURRENCES = ['none', 'daily', 'weekly', 'monthly'] as const;
 export const OPS_TASK_SOURCES = [
@@ -76,15 +100,20 @@ export const OPS_TASK_EVENT_KINDS = [
   'imported',
   'dependency_added',
   'edited',
+  'blocked_set',
+  'blocked_cleared',
+  'checklist_changed',
+  'collaborator_added',
+  'delivered',
 ] as const;
 
-const filled = (column: AnyPgColumn) => sql`length(trim(coalesce(${column}, ''))) > 0`;
-
 /**
- * Work a staff member received (manager, self, verbal request, another module, import) and logs
- * by IST day. One accountable owner (`staff_id`); the backup owner is not accountable unless
- * reassigned. Blocked, on-hold and cancelled tasks carry a reason; a done task is 100% with its
- * completion time. Completing a recurring task creates its next occurrence once
+ * Work a staff member received (manager, HR, self, verbal request, another module, import) and
+ * logs by IST day. One accountable owner (`staff_id`); the backup owner is not accountable unless
+ * reassigned. Work for several people = one child task each under `parent_task_id` (each tracked
+ * on its own). A cancelled task carries a reason; the blocked flag carries kind, reason and time
+ * and keeps the status. A done task is 100% with its completion time. `original_due_*` never
+ * change; `due_*` is the deadline in force. Completing a recurring task creates its next occurrence once
  * (`recurrence_parent_id` is unique). `version` is bumped on every write (optimistic concurrency).
  */
 export const opsStaffTasks = ops.table(
@@ -121,6 +150,19 @@ export const opsStaffTasks = ops.table(
     studentId: studentRef(),
     /** Plain reference to a record in another module (e.g. an Academic support case); no FK (R8). */
     linkedRef: text('linked_ref'),
+    /** Batch, subject, campaign or event the task is about (other module's UUID; no FK). */
+    relatedKind: text('related_kind', { enum: OPS_TASK_RELATED_KINDS }),
+    relatedId: uuid('related_id'),
+    /** Label as shown when linked (e.g. "IPMAT-C12-APR27 · QUANT"). */
+    relatedLabel: text('related_label'),
+    category: text('category'),
+    expectedDeliverable: text('expected_deliverable'),
+    parentTaskId: uuid('parent_task_id')
+      .references((): AnyPgColumn => opsStaffTasks.id, { onDelete: 'restrict' })
+      .$type<OpsStaffTaskId>(),
+    visibility: text('visibility', { enum: OPS_TASK_VISIBILITIES })
+      .notNull()
+      .default('assignee_chain'),
     priority: text('priority', { enum: OPS_TASK_PRIORITIES }).notNull().default('medium'),
     /** When the work was received (UTC). */
     receivedAt: instant('received_at').notNull().defaultNow(),
@@ -128,11 +170,24 @@ export const opsStaffTasks = ops.table(
     /** IST due day, and optional IST time on that day. */
     dueOn: isoDate('due_on').notNull(),
     dueTime: time('due_time'),
+    /** Deadline when the task was created; never changes (brief §10). */
+    originalDueOn: isoDate('original_due_on').notNull(),
+    originalDueTime: time('original_due_time'),
     status: text('status', { enum: OPS_TASK_STATUSES }).notNull().default('pending'),
     /** Self-reported progress; never derived from elapsed time. */
     progressPercent: integer('progress_percent').notNull().default(0),
-    /** Why it is blocked, on hold, cancelled or not done (shown in the EOD report). */
+    /** Why it is cancelled or not done (shown in the EOD report). */
     reason: text('reason'),
+    /** Blocked flag: set with kind and reason, cleared together; the status is kept. */
+    blockedAt: instant('blocked_at'),
+    blockedKind: text('blocked_kind', { enum: OPS_TASK_BLOCK_KINDS }),
+    blockedReason: text('blocked_reason'),
+    /** First and latest submission for review (on-time is judged on the first, R5). */
+    firstSubmittedAt: instant('first_submitted_at'),
+    lastSubmittedAt: instant('last_submitted_at'),
+    approvedAt: instant('approved_at'),
+    /** When the assignee's in-app notification was created. */
+    deliveredAt: instant('delivered_at'),
     acknowledgedAt: instant('acknowledged_at'),
     acknowledgedByUserId: userRef('acknowledged_by_user_id'),
     recurrence: text('recurrence', { enum: OPS_TASK_RECURRENCES }).notNull().default('none'),
@@ -157,6 +212,13 @@ export const opsStaffTasks = ops.table(
     index('staff_tasks_staff_due_idx').on(t.staffId, t.dueOn),
     index('staff_tasks_status_due_idx').on(t.status, t.dueOn),
     index('staff_tasks_reviewer_status_idx').on(t.reviewerStaffId, t.status),
+    index('staff_tasks_staff_status_idx').on(t.staffId, t.status),
+    index('staff_tasks_parent_idx')
+      .on(t.parentTaskId)
+      .where(sql`${t.parentTaskId} IS NOT NULL`),
+    index('staff_tasks_related_idx')
+      .on(t.relatedKind, t.relatedId)
+      .where(sql`${t.relatedId} IS NOT NULL`),
     uniqueIndex('staff_tasks_recurrence_parent_key')
       .on(t.recurrenceParentId)
       .where(sql`${t.recurrenceParentId} IS NOT NULL`),
@@ -174,9 +236,31 @@ export const opsStaffTasks = ops.table(
       'staff_tasks_done_check',
       sql`(${t.status} = 'done') = (${t.completedAt} IS NOT NULL) AND (${t.status} <> 'done' OR ${t.progressPercent} = 100)`,
     ),
+    check('staff_tasks_reason_check', sql`${t.status} <> 'cancelled' OR ${filled(t.reason)}`),
     check(
-      'staff_tasks_reason_check',
-      sql`${t.status} NOT IN ('blocked', 'on_hold', 'cancelled') OR ${filled(t.reason)}`,
+      'staff_tasks_blocked_kind_check',
+      sql`${t.blockedKind} IS NULL OR ${t.blockedKind} IN ${inList(OPS_TASK_BLOCK_KINDS)}`,
+    ),
+    check(
+      'staff_tasks_blocked_check',
+      sql`(${t.blockedAt} IS NULL) = (${t.blockedKind} IS NULL) AND (${t.blockedAt} IS NULL) = (${t.blockedReason} IS NULL) AND (${t.blockedReason} IS NULL OR ${filled(t.blockedReason)})`,
+    ),
+    check(
+      'staff_tasks_submitted_check',
+      sql`(${t.firstSubmittedAt} IS NULL) = (${t.lastSubmittedAt} IS NULL) AND (${t.lastSubmittedAt} IS NULL OR ${t.lastSubmittedAt} >= ${t.firstSubmittedAt}) AND (${t.status} <> 'in_review' OR ${t.lastSubmittedAt} IS NOT NULL)`,
+    ),
+    check(
+      'staff_tasks_related_kind_check',
+      sql`${t.relatedKind} IS NULL OR ${t.relatedKind} IN ${inList(OPS_TASK_RELATED_KINDS)}`,
+    ),
+    check(
+      'staff_tasks_related_check',
+      sql`(${t.relatedKind} IS NULL) = (${t.relatedId} IS NULL) AND (${t.relatedLabel} IS NULL OR ${t.relatedId} IS NOT NULL)`,
+    ),
+    check('staff_tasks_visibility_check', sql`${t.visibility} IN ${inList(OPS_TASK_VISIBILITIES)}`),
+    check(
+      'staff_tasks_not_own_parent',
+      sql`${t.parentTaskId} IS NULL OR ${t.parentTaskId} <> ${t.id}`,
     ),
     check(
       'staff_tasks_acknowledged_check',
@@ -188,7 +272,7 @@ export const opsStaffTasks = ops.table(
     ),
     check(
       'staff_tasks_one_related',
-      sql`num_nonnulls(${t.leadId}, ${t.admissionId}, ${t.studentId}) <= 1`,
+      sql`num_nonnulls(${t.leadId}, ${t.admissionId}, ${t.studentId}, ${t.relatedId}) <= 1`,
     ),
   ],
 );
@@ -209,8 +293,8 @@ export const opsTaskEvents = ops.table(
     id: uuid('id').primaryKey().defaultRandom().$type<OpsTaskEventId>(),
     taskId: taskRef('task_id').notNull(),
     kind: text('kind', { enum: OPS_TASK_EVENT_KINDS }).notNull(),
-    fromStatus: text('from_status', { enum: OPS_TASK_STATUSES }),
-    toStatus: text('to_status', { enum: OPS_TASK_STATUSES }),
+    fromStatus: text('from_status', { enum: OPS_TASK_EVENT_STATUSES }),
+    toStatus: text('to_status', { enum: OPS_TASK_EVENT_STATUSES }),
     /** Owner before/after (assigned, reassigned). */
     fromStaffId: staffRefRestrict('from_staff_id'),
     toStaffId: staffRefRestrict('to_staff_id'),
@@ -227,7 +311,7 @@ export const opsTaskEvents = ops.table(
     check('task_events_kind_check', sql`${t.kind} IN ${inList(OPS_TASK_EVENT_KINDS)}`),
     check(
       'task_events_status_check',
-      sql`(${t.fromStatus} IS NULL OR ${t.fromStatus} IN ${inList(OPS_TASK_STATUSES)}) AND (${t.toStatus} IS NULL OR ${t.toStatus} IN ${inList(OPS_TASK_STATUSES)})`,
+      sql`(${t.fromStatus} IS NULL OR ${t.fromStatus} IN ${inList(OPS_TASK_EVENT_STATUSES)}) AND (${t.toStatus} IS NULL OR ${t.toStatus} IN ${inList(OPS_TASK_EVENT_STATUSES)})`,
     ),
     check(
       'task_events_status_change_check',
@@ -239,7 +323,7 @@ export const opsTaskEvents = ops.table(
     ),
     check(
       'task_events_reason_check',
-      sql`${t.kind} NOT IN ('clarification_requested', 'changes_requested', 'reopened', 'cancelled') OR ${filled(t.reason)}`,
+      sql`${t.kind} NOT IN ('clarification_requested', 'changes_requested', 'reopened', 'cancelled', 'blocked_set') OR ${filled(t.reason)}`,
     ),
   ],
 );
@@ -312,5 +396,29 @@ export const opsTaskDependencies = ops.table(
     uniqueIndex('task_dependencies_pair_key').on(t.taskId, t.dependsOnTaskId),
     index('task_dependencies_depends_on_idx').on(t.dependsOnTaskId),
     check('task_dependencies_not_self', sql`${t.taskId} <> ${t.dependsOnTaskId}`),
+  ],
+);
+
+/**
+ * One reminder sent to one person about one task in one window (e.g. the IST day, or the
+ * interval number from setting `tasks.reminders`). The unique key suppresses duplicates.
+ */
+export const opsTaskReminders = ops.table(
+  'task_reminders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => opsStaffTasks.id, { onDelete: 'cascade' })
+      .$type<OpsStaffTaskId>(),
+    staffId: staffRefRestrict('staff_id').notNull(),
+    kind: text('kind', { enum: OPS_TASK_REMINDER_KINDS }).notNull(),
+    windowKey: text('window_key').notNull(),
+    sentAt: instant('sent_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('task_reminders_window_key').on(t.taskId, t.staffId, t.kind, t.windowKey),
+    check('task_reminders_kind_check', sql`${t.kind} IN ${inList(OPS_TASK_REMINDER_KINDS)}`),
+    check('task_reminders_window_check', filled(t.windowKey)),
   ],
 );

@@ -50,8 +50,9 @@ describe('tasks and EOD inside Academic OS', () => {
     const block = renderToStaticMarkup(
       <TasksDay summary={await taskDaySummary(ctx.db, u.teacher)} />,
     );
-    expect(block).toContain('<span class="el-stat-value">1</span>');
-    expect(block).toContain('0 overdue · 1 due today');
+    expect(block).toContain('href="/academic/tasks?due=today"');
+    expect(block).toContain('<span class="el-stat-value">1</span>'); // due today
+    expect(block).toContain('1 open in all');
     expect(block).toContain('Not started');
     expect(block).toContain('href="/academic/tasks?tab=eod"');
     expect(

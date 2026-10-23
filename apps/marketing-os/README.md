@@ -37,10 +37,13 @@ Open owner decisions are visible on **Rules & settings** as `proposed`: OD-001 a
 | metrics:import | ✓ | ✓ | | |
 | accounts:manage, campaigns:write | ✓ | | | |
 | summary:read | ✓ | | ✓ | ✓ |
+| campaigns:read (23 Oct 2026, **Proposed**) | all | own: campaigns with a current membership | all | all |
 
 Business Ops permissions used inside Marketing OS (22 Oct 2026, **Proposed**, D-073): marketing manager `ops:leads:read`, `ops:leads:write`, `ops:leads:assign`, `ops:lead_contacts:read` (all leads) and own `ops:tasks:read/write`; marketing contributor the same leads and lead-contact permissions with **own** scope (leads they own) and own tasks. No student-private, KYC, fee, admission or review permission: a lead opened here shows contact fields but no date of birth, address, emergency contact or KYC history, and no admission details. Marketing roles do not hold `ops:module:access`, so Business Operations stays closed to them.
 
 teacher, admissions_counsellor, academic_coordinator, operations_manager and platform_admin have no marketing access (academic fact-checking by teachers is Proposed). Every route checks on the server (`defineRoute`); every mutating service re-checks (`assertCan`); screens use `requirePageAccess`.
+
+**Marketing employees (23 Oct 2026, D-093, grants Proposed):** the role `marketing_contributor` is labelled "Marketing employee". `marketing.campaign_members` (owner or member, with dates, never deleted) decides what an employee sees: campaigns they are a current member of and content that is theirs or placed in those campaigns; out of scope reads as 404 (`src/server/scope.ts`, `campaign-members.ts`). Only a marketing manager adds members (no future dates) and assigns people to content. Account-level weekly metrics stay visible to employees (Proposed). New pages: `/marketing/my-campaigns`, `/marketing/deliverables`, and from Business Operations `/marketing/my-attendance`, `/marketing/my-reports`, `/marketing/notifications`. Campaign and event links on HR tasks are not offered yet (Marketing has no list route for them). Tests: `tests/integration/campaign-scope.test.ts`, `marketing-staff.test.tsx`, `tests/unit/deliverables.test.ts`.
 
 ## 4. Commands
 ```bash

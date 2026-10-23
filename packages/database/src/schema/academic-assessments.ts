@@ -23,11 +23,11 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { BatchId, Brand, StudentId, UserId } from '@elevate/shared-types';
+import type { BatchId, Brand, StaffMemberId, StudentId, UserId } from '@elevate/shared-types';
 import { academic, createdAt, inList, updatedAt } from './academic-columns';
 import { academicBatches, academicStudents } from './academic';
 import { academicSubjects, type AcademicSubjectId } from './academic-curriculum';
-import { users } from './core';
+import { staffMembers, users } from './core';
 
 export type AcademicAssessmentId = Brand<string, 'AcademicAssessmentId'>;
 export type AcademicSectionId = Brand<string, 'AcademicSectionId'>;
@@ -100,11 +100,32 @@ export const academicAssessments = academic.table(
     createdByUserId: uuid('created_by_user_id')
       .references(() => users.id, { onDelete: 'restrict' })
       .$type<UserId>(),
+    /** YYYY-YY (brief §17); null on assessments created before migration 0016. */
+    academicYear: text('academic_year'),
+    responsibleTeacherStaffId: uuid('responsible_teacher_staff_id')
+      .references(() => staffMembers.id, { onDelete: 'restrict' })
+      .$type<StaffMemberId>(),
+    evaluatorStaffId: uuid('evaluator_staff_id')
+      .references(() => staffMembers.id, { onDelete: 'restrict' })
+      .$type<StaffMemberId>(),
+    /** Maximum of a test entered as totals (no sections); null = from the sections' rule, or unknown. */
+    maxMarks: marks('max_marks'),
+    /** Set when the roster was snapshotted: from then on academic.assessment_roster is the population. */
+    rosterSnapshotAt: timestamp('roster_snapshot_at', { withTimezone: true }),
+    isSample: boolean('is_sample').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     uniqueIndex('assessments_code_key').on(t.code),
+    check(
+      'assessments_academic_year_format',
+      sql`${t.academicYear} IS NULL OR ${t.academicYear} ~ '^[0-9]{4}-[0-9]{2}$'`,
+    ),
+    check('assessments_max_marks_positive', sql`${t.maxMarks} IS NULL OR ${t.maxMarks} > 0`),
+    index('assessments_status_date_idx').on(t.status, t.scheduledDate),
+    index('assessments_responsible_teacher_idx').on(t.responsibleTeacherStaffId),
+    index('assessments_evaluator_idx').on(t.evaluatorStaffId),
     check(
       'assessments_publication_pair',
       sql`(${t.publishedAt} IS NULL) = (${t.publishedByUserId} IS NULL)`,

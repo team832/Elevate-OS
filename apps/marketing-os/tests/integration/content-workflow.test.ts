@@ -146,6 +146,12 @@ describe('content production and approval', () => {
       'Another fictional draft written by the second manager.',
       team.manager2,
     );
+    // The contributor works on it (own scope: assigned content only), so they may submit it.
+    await call(assignRoute, team.manager2, '/x', {
+      method: 'PUT',
+      params: { id: authored.itemId },
+      json: { role: 'editor', userId: team.contributor.id },
+    });
     await call(submitRoute, team.contributor, '/x', { params: { id: authored.itemId }, json: {} });
     const d2 = await detail(authored.itemId);
     const byAuthor = await call(decisionRoute, team.manager2, '/x', {
@@ -276,16 +282,24 @@ describe('content production and approval', () => {
       (await call(commentRoute, null, '/x', { params: { id: itemId }, json: { body: 'no' } }))
         .status,
     ).toBe(401);
-    const assign = await call(assignRoute, team.contributor, '/x', {
+    // Assigning grants access (own scope), so it is a manager action, even for yourself.
+    const json = { role: 'writer', userId: team.contributor.id };
+    const self = await call(assignRoute, team.contributor, '/x', {
       method: 'PUT',
       params: { id: itemId },
-      json: { role: 'writer', userId: team.contributor.id },
+      json,
+    });
+    expect(self.status).toBe(403);
+    const assign = await call(assignRoute, team.manager, '/x', {
+      method: 'PUT',
+      params: { id: itemId },
+      json,
     });
     expect(assign.status).toBe(200);
     const d = await detail(itemId);
     expect(d.comments).toHaveLength(1);
     expect(d.assignments[0]).toMatchObject({ role: 'writer', userId: team.contributor.id });
-    const bad = await call(assignRoute, team.contributor, '/x', {
+    const bad = await call(assignRoute, team.manager, '/x', {
       method: 'PUT',
       params: { id: itemId },
       json: { role: 'boss' },

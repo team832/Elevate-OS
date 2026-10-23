@@ -11,6 +11,7 @@
  * - programmes: only Academic OS (steward).
  * - approvals / audit_events / integration_events / event_deliveries / idempotency_keys:
  *   only through @elevate/server-kit; notifications only through @elevate/notifications.
+ * - user_preferences: only the user it belongs to (own row), through module services.
  * Any module may hold a foreign key INTO core.
  *
  * Only `import type` from workspace packages here: drizzle-kit loads this file
@@ -35,6 +36,7 @@ import {
 import type {
   ApprovalId,
   AuditEventId,
+  Brand,
   DepartmentId,
   EventDeliveryId,
   IdempotencyKeyId,
@@ -93,6 +95,23 @@ export const users = core.table(
       sql`${t.preferredWorkspace} IS NULL OR ${t.preferredWorkspace} IN ('ops', 'academic', 'marketing')`,
     ),
   ],
+);
+
+/**
+ * Personal settings of one user (0016): dashboard filters, calendar view, working hours, focus
+ * blocks, notification and reminder preferences, personal checklist, goals. Never overrides HR data.
+ */
+export const userPreferences = core.table(
+  'user_preferences',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' })
+      .$type<UserId>(),
+    settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+    updatedAt: updatedAt(),
+  },
+  (t) => [check('user_preferences_settings_check', sql`jsonb_typeof(${t.settings}) = 'object'`)],
 );
 
 export const sessions = core.table(
@@ -160,6 +179,32 @@ export const departments = core.table(
     uniqueIndex('departments_code_key').on(t.code),
     check('departments_status_check', sql`${t.status} IN ('active', 'provisional', 'archived')`),
     check('departments_code_format', sql`${t.code} ~ '^[A-Z][A-Z0-9_]{1,39}$'`),
+  ],
+);
+
+export type CoreBranchId = Brand<string, 'BranchId'>;
+
+/**
+ * Where staff work and batches run (brief 23 Oct 2026 §3–4, ruling R2). Stewarded by Business Ops
+ * like departments; Academic and Ops hold FKs to it. A seeded row stays `provisional` until the
+ * owner confirms it. Online delivery is a batch mode (academic.batches.mode), not a branch.
+ */
+export const branches = core.table(
+  'branches',
+  {
+    id: uuid('id').primaryKey().defaultRandom().$type<CoreBranchId>(),
+    code: text('code').notNull(),
+    name: text('name').notNull(),
+    status: text('status', { enum: ['active', 'provisional', 'archived'] })
+      .notNull()
+      .default('provisional'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('branches_code_key').on(t.code),
+    check('branches_status_check', sql`${t.status} IN ('active', 'provisional', 'archived')`),
+    check('branches_code_format', sql`${t.code} ~ '^[A-Z][A-Z0-9_]{1,39}$'`),
   ],
 );
 

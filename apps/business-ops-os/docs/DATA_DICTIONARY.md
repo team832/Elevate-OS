@@ -68,7 +68,7 @@ One programme Elevate sells (CLAT, IPMAT, Class 12 Commerce, Dropper…). Academ
 
 One member of staff (teacher, counsellor, manager…), with or without a login. Business Ops is the steward.
 
-- **Written by:** `src/server/organisation.ts`
+- **Written by:** `src/server/hr-staff-actions.ts`, `src/server/organisation.ts`
 - **Sample or real:** Reference or configuration data (not person data).
 - **Links to:** `user_id` → `core.users` (on delete set null); `department_id` → `core.departments` (on delete restrict); `manager_id` → `core.staff_members` (on delete set null)
 
@@ -103,7 +103,7 @@ One real person who is (or was) a student: the canonical student identity shared
 
 One login account. Written only by authentication and platform admin.
 
-- **Written by:** see `packages/database/src/schema/core.ts` (write rules at the top)
+- **Written by:** `src/server/hr-staff-actions.ts`
 - **Sample or real:** Reference or configuration data (not person data).
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
@@ -159,7 +159,7 @@ Configurable lead-source list (OPS-002).
 
 One person who enquired (usually a student, often through a parent): contact details, programme interest, owner and first contact. Every lead has at least one contact; a duplicate is merged into another lead, never deleted. Restricted contact fields are masked in lists. Each enquiry is a row of `ops.enquiries`; the pipeline is `ops.admissions`.
 
-- **Written by:** `src/server/applications.ts`, `src/server/demos-intake.ts`, `src/server/leads.ts`
+- **Written by:** `src/server/applications.ts`, `src/server/demos-intake.ts`, `src/server/leads-actions.ts`, `src/server/leads.ts`
 - **Sample or real:** Own flag: `is_sample = true` marks a sample row.
 - **Links to:** `programme_id` → `core.programmes` (on delete restrict); `owner_staff_id` → `core.staff_members` (on delete set null); `merged_into_lead_id` → `ops.leads` (on delete restrict); `created_by` → `core.users` (on delete restrict)
 
@@ -203,7 +203,7 @@ One person who enquired (usually a student, often through a parent): contact det
 
 Each enquiry a person made (one lead can enquire several times, from several sources).
 
-- **Written by:** `src/server/leads.ts`
+- **Written by:** `src/server/leads-actions.ts`, `src/server/leads.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `lead_id` → `ops.leads` (on delete restrict); `source_code` → `ops.lead_sources` (on delete restrict); `programme_id` → `core.programmes` (on delete restrict); `created_by` → `core.users` (on delete restrict)
 
@@ -228,7 +228,7 @@ Each enquiry a person made (one lead can enquire several times, from several sou
 
 Contact attempts and notes (OPS-006).
 
-- **Written by:** `src/server/leads.ts`
+- **Written by:** `src/server/leads-actions.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `lead_id` → `ops.leads` (on delete restrict); `staff_id` → `core.staff_members` (on delete set null); `created_by` → `core.users` (on delete restrict)
 
@@ -248,7 +248,7 @@ Contact attempts and notes (OPS-006).
 
 Duplicate-contact warnings raised at creation (OPS-003). Never merged automatically.
 
-- **Written by:** `src/server/lead-duplicates.ts`, `src/server/leads.ts`
+- **Written by:** `src/server/lead-duplicates.ts`, `src/server/leads-actions.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `lead_id` → `ops.leads` (on delete restrict); `matched_lead_id` → `ops.leads` (on delete restrict); `reviewed_by` → `core.users` (on delete restrict)
 
@@ -270,7 +270,7 @@ Duplicate-contact warnings raised at creation (OPS-003). Never merged automatica
 
 One admission case per lead and programme: the pipeline record whose status walks new → … → enrolled (state machine: domain/pipeline.ts). The enrolment handoff fields mirror the outbox conversation with Academic OS.
 
-- **Written by:** `src/server/admissions.ts`, `src/server/applications-confirm.ts`, `src/server/applications.ts`, `src/server/appointments.ts`, `src/server/conversion.ts`, `src/server/demos-intake.ts`, `src/server/enrolment.ts`, `src/server/leads.ts`, `src/server/pipeline.ts`
+- **Written by:** `src/server/admissions.ts`, `src/server/applications-confirm.ts`, `src/server/applications.ts`, `src/server/appointments.ts`, `src/server/conversion-numbers.ts`, `src/server/conversion.ts`, `src/server/demos-intake.ts`, `src/server/enrolment.ts`, `src/server/leads-actions.ts`, `src/server/pipeline.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `lead_id` → `ops.leads` (on delete restrict); `programme_id` → `core.programmes` (on delete restrict); `counsellor_staff_id` → `core.staff_members` (on delete set null); `last_request_event_id` → `core.integration_events` (on delete set null); `student_id` → `core.students` (on delete restrict); `legacy_verified_by` → `core.users` (on delete restrict); `application_id` → `ops.applications` (on delete restrict); `created_by` → `core.users` (on delete restrict)
 
@@ -359,7 +359,7 @@ Admission checklist (OPS-010/011): status and references only, never documents o
 
 Follow-ups (OPS-007, BR-OPS-9: every follow-up has an owner and a due date).
 
-- **Written by:** `src/server/follow-ups.ts`, `src/server/leads.ts`, `src/server/pipeline.ts`
+- **Written by:** `src/server/follow-ups.ts`, `src/server/leads-actions.ts`, `src/server/pipeline.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `lead_id` → `ops.leads` (on delete restrict); `admission_id` → `ops.admissions` (on delete restrict); `owner_staff_id` → `core.staff_members` (on delete restrict); `completed_by` → `core.users` (on delete restrict); `created_by` → `core.users` (on delete restrict)
 
@@ -386,7 +386,7 @@ Follow-ups (OPS-007, BR-OPS-9: every follow-up has an owner and a due date).
 
 Every enrolment-handoff attempt of an admission (OPS-075, IR-OPS-03): one row per published `ops.admission.enrolment_requested` event, so the attempt history and each outcome stay visible. The business identity (admission id) is the same for every attempt; a new attempt is only allowed once the previous one can no longer create an enrolment (rejected, or its Academic delivery is `dead` — rolled back).
 
-- **Written by:** `src/server/enrolment.ts`
+- **Written by:** `src/server/enrolment-replies.ts`, `src/server/enrolment.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `admission_id` → `ops.admissions` (on delete restrict); `request_event_id` → `core.integration_events` (on delete restrict); `requested_by` → `core.users` (on delete restrict); `reply_event_id` → `core.integration_events` (on delete set null)
 
@@ -428,11 +428,11 @@ Contact consent and communication preferences of a student/family (OPS-077). Pri
 
 ### `ops.staff_profiles`
 
-Operational profile of a staff member. No payroll, biometrics, leave or HR records (D-015, OD-026).
+Employee profile of a staff member (ruling R1: `staff_code` is the Employee ID). HR-private contact details live in `staff_private_details` (ops-hr.ts). No payroll or biometrics (D-015).
 
-- **Written by:** `src/server/organisation.ts`, `src/server/teachers.ts`
+- **Written by:** `src/server/attendance-actions.ts`, `src/server/hr-staff-actions.ts`, `src/server/organisation.ts`, `src/server/teachers.ts`
 - **Sample or real:** Own flag: `is_sample = true` marks a sample row.
-- **Links to:** `staff_id` → `core.staff_members` (on delete cascade); `updated_by` → `core.users` (on delete set null)
+- **Links to:** `staff_id` → `core.staff_members` (on delete cascade); `branch_id` → `core.branches` (on delete restrict); `work_schedule_id` → `ops.work_schedules` (on delete restrict); `updated_by` → `core.users` (on delete set null)
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
 |---|---|---|---|---|---|
@@ -446,6 +446,12 @@ Operational profile of a staff member. No payroll, biometrics, leave or HR recor
 | `role_note` | text | no |  |  | Organisational role, kept apart from teaching (e.g. "CEO / director of coaching"). |
 | `source_note` | text | no |  |  | Where the record came from (e.g. "owner-supplied 2026-10-20"). |
 | `is_sample` | boolean | yes (default false) |  | false | Sample staff member for development (D-036); removed by `npm run db:clear-samples`. |
+| `employment_status` | text | yes (default not_recorded) | `active`, `on_notice`, `exited`, `not_recorded` | active | Employment status. |
+| `joined_on` | date | no |  | 2026-10-21 | Joined day (Asia/Kolkata calendar day). |
+| `left_on` | date | no |  | 2026-10-21 | Last working day; set once notice is given, required when exited. |
+| `branch_id` | uuid | no |  | (id) | Branch id. → `core.branches` |
+| `work_schedule_id` | uuid | no |  | (id) | null = the default schedule (ops.work_schedules.is_default). → `ops.work_schedules` |
+| `timezone` | text | yes (default Asia/Kolkata) |  |  | Time zone the instants are shown in (Asia/Kolkata). |
 | `updated_by` | uuid | no |  | (id) | User who last changed the row. → `core.users` |
 | `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
 
@@ -453,7 +459,7 @@ Operational profile of a staff member. No payroll, biometrics, leave or HR recor
 
 A demo: N demo days of separate trial classes for one admission case (OPS-009, BR-OPS-2), never main-batch sessions. Dates, subjects, teachers and attendance live in `ops.demo_sessions` (below), one row per class. The demo fee and its terms are copied from the `demo.fee` setting at booking, with that setting's decision state. Sample or real follows the lead (`ops.leads.is_sample`).
 
-- **Written by:** `src/server/conversion.ts`, `src/server/demos-intake.ts`, `src/server/demos.ts`
+- **Written by:** `src/server/conversion.ts`, `src/server/demos-common.ts`, `src/server/demos-intake.ts`, `src/server/demos-sessions.ts`, `src/server/demos.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `admission_id` → `ops.admissions` (on delete restrict); `lead_id` → `ops.leads` (on delete restrict); `programme_id` → `core.programmes` (on delete restrict); `counsellor_staff_id` → `core.staff_members` (on delete set null); `outcome_by` → `core.users` (on delete restrict); `converted_admission_id` → `ops.admissions` (on delete restrict); `created_by` → `core.users` (on delete restrict)
 
@@ -485,7 +491,7 @@ A demo: N demo days of separate trial classes for one admission case (OPS-009, B
 
 One class of a demo, on one of its demo days. Instants are UTC; `timezone` is how they are shown.
 
-- **Written by:** `src/server/academic-summary.ts`, `src/server/demos.ts`
+- **Written by:** `src/server/academic-summary.ts`, `src/server/demos-sessions.ts`, `src/server/demos.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `demo_id` → `ops.demos` (on delete restrict); `programme_id` → `core.programmes` (on delete restrict); `teacher_staff_id` → `core.staff_members` (on delete restrict); `recorded_by` → `core.users` (on delete restrict); `updated_by` → `core.users` (on delete restrict)
 
@@ -518,7 +524,7 @@ One class of a demo, on one of its demo days. Instants are UTC; `timezone` is ho
 
 Append-only history of session changes (attendance corrections, reschedules, mock, teacher).
 
-- **Written by:** `src/server/demos.ts`
+- **Written by:** `src/server/demos-common.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `session_id` → `ops.demo_sessions` (on delete restrict); `actor_user_id` → `core.users` (on delete restrict)
 
@@ -599,7 +605,7 @@ One counselling session, meeting, event or webinar (OPS-008, brief §11–§12) 
 
 Who takes part in an appointment besides the assigned staff member.
 
-- **Written by:** `src/server/appointments.ts`, `src/server/events.ts`
+- **Written by:** `src/server/appointments.ts`, `src/server/events-audience.ts`, `src/server/events.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `appointment_id` → `ops.appointments` (on delete restrict); `staff_id` → `core.staff_members` (on delete restrict); `guardian_id` → `ops.guardians` (on delete restrict); `student_id` → `core.students` (on delete restrict); `added_by` → `core.users` (on delete restrict); `removed_by` → `core.users` (on delete restrict)
 
@@ -645,7 +651,7 @@ Append-only history of appointment changes (reschedule, status, outcome).
 
 A message to an event's participants. Written as a draft; sent only by an explicit, authorised action through the messaging adapter. Never `sent` without a provider reference.
 
-- **Written by:** `src/server/events.ts`
+- **Written by:** `src/server/events-messages.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `appointment_id` → `ops.appointments` (on delete restrict); `created_by` → `core.users` (on delete restrict); `sent_by` → `core.users` (on delete restrict)
 
@@ -714,11 +720,11 @@ Teacher → student feedback: the ONE store of teacher reviews (demo classes inc
 
 ### `ops.student_teacher_feedback`
 
-Student / guardian → teacher feedback, recorded by staff on their behalf and moderated.
+Student / guardian → teacher feedback, recorded by staff or imported (brief 23 Oct 2026 §15), moderated. The original words and ratings are kept here; edited wording lives only in teacher_feedback_summaries. Batch / subject are Academic UUIDs (no FK) with a label. Anonymous rows hold no student; a row is respondent-identifiable unless shown otherwise.
 
-- **Written by:** `src/server/feedback.ts`
-- **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
-- **Links to:** `teacher_staff_id` → `core.staff_members` (on delete restrict); `student_id` → `core.students` (on delete restrict); `moderated_by` → `core.users` (on delete restrict); `recorded_by` → `core.users` (on delete restrict)
+- **Written by:** `src/server/feedback-import.ts`, `src/server/feedback-responses.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `teacher_staff_id` → `core.staff_members` (on delete restrict); `student_id` → `core.students` (on delete restrict); `import_id` → `ops.teacher_feedback_imports` (on delete restrict); `reviewed_by_user_id` → `core.users` (on delete restrict); `moderated_by` → `core.users` (on delete restrict); `recorded_by` → `core.users` (on delete restrict)
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
 |---|---|---|---|---|---|
@@ -728,7 +734,22 @@ Student / guardian → teacher feedback, recorded by staff on their behalf and m
 | `submitted_by_kind` | text | yes | `student`, `guardian` | student | Given by the student or a guardian (staff record it). |
 | `subject_ref` | text | no |  |  | Subject or batch the feedback is about (free text; batches are Academic-owned). |
 | `feedback_on` | date | yes |  | 2026-10-21 | Feedback day (Asia/Kolkata calendar day). |
-| `rating` | integer | no |  | 1 | 1–5 when given (scale is a proposed setting); null = no rating. |
+| `rating` | integer | no |  | 1 | Overall rating 1…rating_scale_max when given; null = no rating. |
+| `rating_scale_max` | integer | yes (default 5) |  | 1 | Rating scale max. |
+| `category_ratings` | jsonb | no |  |  | Category key (setting feedback.categories) → rating on the same scale. |
+| `period_start` | date | no |  | 2026-10-21 | Period start. |
+| `period_end` | date | no |  | 2026-10-21 | Period end. |
+| `collection_method` | text | no | `form`, `paper`, `interview`, `import`, `other` | form | null = not recorded (rows from before 23 Oct 2026). |
+| `batch_id` | uuid | no |  | (id) | Batch id. |
+| `subject_id` | uuid | no |  | (id) | Subject id. |
+| `course_label` | text | no |  |  | Course label. |
+| `import_id` | uuid | no |  | (id) | Import id. → `ops.teacher_feedback_imports` |
+| `import_row` | integer | no |  | 1 | Import row. |
+| `is_anonymous` | boolean | yes (default false) |  | false | Is anonymous. |
+| `respondent_identifiable` | boolean | yes (default true) |  | false | False only when nothing collected identifies the respondent (never promised otherwise). |
+| `reviewed_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was reviewed (UTC). |
+| `reviewed_by_user_id` | uuid | no |  | (id) | Reviewed by user id. → `core.users` |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
 | `comment` | text | yes |  |  | The feedback in their words. |
 | `moderation_status` | text | yes (default pending) | `pending`, `approved`, `rejected`, `hidden` | pending | Moderation state; only `approved` can be shown. |
 | `moderation_note` | text | no |  |  | Moderator note. |
@@ -742,7 +763,7 @@ Student / guardian → teacher feedback, recorded by staff on their behalf and m
 
 One counter per scope key (`all`, or `Y2026` when the format includes the year).
 
-- **Written by:** `src/server/conversion.ts`
+- **Written by:** `src/server/conversion-numbers.ts`
 - **Sample or real:** Reference or configuration data (not person data).
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
@@ -755,7 +776,7 @@ One counter per scope key (`all`, or `Y2026` when the format includes the year).
 
 Append-only log of every admission number given or changed.
 
-- **Written by:** `src/server/conversion.ts`
+- **Written by:** `src/server/conversion-numbers.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `admission_id` → `ops.admissions` (on delete restrict); `actor_user_id` → `core.users` (on delete restrict)
 
@@ -1043,7 +1064,7 @@ One receipt per Marketing lead handed off (`marketing.lead.handed_off` v1, consu
 
 An admission application (brief §6) for one admission case, through a demo, directly, or as a readmission of a former student (same identity, new case). Completing it never admits anyone: only `admission_approvals` does.
 
-- **Written by:** `src/server/applications-confirm.ts`, `src/server/applications.ts`
+- **Written by:** `src/server/applications-confirm.ts`, `src/server/applications-state.ts`, `src/server/applications.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `student_id` → `core.students` (on delete restrict); `admission_id` → `ops.admissions` (on delete restrict); `demo_id` → `ops.demos` (on delete restrict); `previous_admission_id` → `ops.admissions` (on delete restrict); `created_by` → `core.users` (on delete restrict)
 
@@ -1085,7 +1106,7 @@ Every saved version of an application: the full content (KYC, programmes, fee ag
 
 Each generated admission-form PDF and the application version it shows.
 
-- **Written by:** `src/server/applications.ts`
+- **Written by:** `src/server/applications-signing.ts`
 - **Sample or real:** Reference or configuration data (not person data).
 - **Links to:** `application_id` → `ops.applications` (on delete restrict); `generated_by` → `core.users` (on delete restrict); `application_id, version` → `ops.application_versions` (on delete no action)
 
@@ -1103,7 +1124,7 @@ Each generated admission-form PDF and the application version it shows.
 
 Staff confirmation that the required physical signatures are on a printed form. At most one live (not invalidated) confirmation per application.
 
-- **Written by:** `src/server/applications.ts`
+- **Written by:** `src/server/applications-signing.ts`, `src/server/applications.ts`
 - **Sample or real:** Reference or configuration data (not person data).
 - **Links to:** `application_id` → `ops.applications` (on delete restrict); `confirmed_by` → `core.users` (on delete restrict); `invalidated_by` → `core.users` (on delete restrict); `form_id, application_id, version` → `ops.application_forms` (on delete no action)
 
@@ -1146,7 +1167,7 @@ The final, password-confirmed admission approval (one per admission case): actor
 
 A versioned onboarding checklist template for programme codes and, optionally, a class/category.
 
-- **Written by:** `src/server/onboarding.ts`
+- **Written by:** `src/server/onboarding-templates.ts`
 - **Sample or real:** Reference or configuration data (not person data).
 - **Links to:** `created_by` → `core.users` (on delete restrict)
 
@@ -1228,11 +1249,11 @@ Books and materials issued, returned or replaced (several sets for multi-program
 
 ### `ops.staff_tasks`
 
-Work a staff member received (manager, self, verbal request, another module, import) and logs by IST day. One accountable owner (`staff_id`); the backup owner is not accountable unless reassigned. Blocked, on-hold and cancelled tasks carry a reason; a done task is 100% with its completion time. Completing a recurring task creates its next occurrence once (`recurrence_parent_id` is unique). `version` is bumped on every write (optimistic concurrency).
+Work a staff member received (manager, HR, self, verbal request, another module, import) and logs by IST day. One accountable owner (`staff_id`); the backup owner is not accountable unless reassigned. Work for several people = one child task each under `parent_task_id` (each tracked on its own). A cancelled task carries a reason; the blocked flag carries kind, reason and time and keeps the status. A done task is 100% with its completion time. `original_due_*` never change; `due_*` is the deadline in force. Completing a recurring task creates its next occurrence once (`recurrence_parent_id` is unique). `version` is bumped on every write (optimistic concurrency).
 
-- **Written by:** `src/server/task-store.ts`
+- **Written by:** `src/server/task-links.ts`, `src/server/task-store.ts`
 - **Sample or real:** Own flag: `is_sample = true` marks a sample row.
-- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `assigned_by_staff_id` → `core.staff_members` (on delete set null); `requester_staff_id` → `core.staff_members` (on delete set null); `department_id` → `core.departments` (on delete restrict); `backup_staff_id` → `core.staff_members` (on delete set null); `reviewer_staff_id` → `core.staff_members` (on delete set null); `lead_id` → `ops.leads` (on delete restrict); `admission_id` → `ops.admissions` (on delete restrict); `student_id` → `core.students` (on delete restrict); `acknowledged_by_user_id` → `core.users` (on delete restrict); `recurrence_parent_id` → `ops.staff_tasks` (on delete restrict); `import_batch_id` → `ops.task_import_batches` (on delete restrict); `created_by` → `core.users` (on delete restrict); `updated_by` → `core.users` (on delete restrict)
+- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `assigned_by_staff_id` → `core.staff_members` (on delete set null); `requester_staff_id` → `core.staff_members` (on delete set null); `department_id` → `core.departments` (on delete restrict); `backup_staff_id` → `core.staff_members` (on delete set null); `reviewer_staff_id` → `core.staff_members` (on delete set null); `lead_id` → `ops.leads` (on delete restrict); `admission_id` → `ops.admissions` (on delete restrict); `student_id` → `core.students` (on delete restrict); `parent_task_id` → `ops.staff_tasks` (on delete restrict); `acknowledged_by_user_id` → `core.users` (on delete restrict); `recurrence_parent_id` → `ops.staff_tasks` (on delete restrict); `import_batch_id` → `ops.task_import_batches` (on delete restrict); `created_by` → `core.users` (on delete restrict); `updated_by` → `core.users` (on delete restrict)
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
 |---|---|---|---|---|---|
@@ -1253,14 +1274,30 @@ Work a staff member received (manager, self, verbal request, another module, imp
 | `admission_id` | uuid | no |  | (id) | The admission case this belongs to. → `ops.admissions` |
 | `student_id` | uuid | no |  | (id) | The student (canonical identity, core.students). → `core.students` |
 | `linked_ref` | text | no |  |  | Plain reference to a record in another module (e.g. an Academic support case); no FK (R8). |
+| `related_kind` | text | no | `batch`, `subject`, `campaign`, `event` | batch | Batch, subject, campaign or event the task is about (other module's UUID; no FK). |
+| `related_id` | uuid | no |  | (id) | Related id. |
+| `related_label` | text | no |  |  | Label as shown when linked (e.g. "IPMAT-C12-APR27 · QUANT"). |
+| `category` | text | no |  |  | Category. |
+| `expected_deliverable` | text | no |  |  | Expected deliverable. |
+| `parent_task_id` | uuid | no |  | (id) | Parent task id. → `ops.staff_tasks` |
+| `visibility` | text | yes (default assignee_chain) | `assignee_chain`, `department`, `collaborators` | assignee_chain | Visibility. |
 | `priority` | text | yes (default medium) | `high`, `medium`, `low` | high | Priority. |
 | `received_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the work was received (UTC). |
 | `planned_start_on` | date | no |  | 2026-10-21 | Planned start day (Asia/Kolkata calendar day). |
 | `due_on` | date | yes |  | 2026-10-21 | IST due day, and optional IST time on that day. |
 | `due_time` | time | no |  |  | Due time. |
-| `status` | text | yes (default pending) | `pending`, `in_progress`, `done`, `blocked`, `on_hold`, `in_review`, `cancelled` | pending | Current state (allowed values listed). |
+| `original_due_on` | date | yes |  | 2026-10-21 | Deadline when the task was created; never changes (brief §10). |
+| `original_due_time` | time | no |  |  | Original due time. |
+| `status` | text | yes (default pending) | `pending`, `in_progress`, `done`, `in_review`, `cancelled`, `draft`, `changes_requested` | pending | Current state (allowed values listed). |
 | `progress_percent` | integer | yes (default 0) |  | 1 | Self-reported progress; never derived from elapsed time. |
-| `reason` | text | no |  |  | Why it is blocked, on hold, cancelled or not done (shown in the EOD report). |
+| `reason` | text | no |  |  | Why it is cancelled or not done (shown in the EOD report). |
+| `blocked_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | Blocked flag: set with kind and reason, cleared together; the status is kept. |
+| `blocked_kind` | text | no | `blocked`, `on_hold` | blocked | Blocked kind. |
+| `blocked_reason` | text | no |  |  | Why it was blocked (free text). |
+| `first_submitted_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | First and latest submission for review (on-time is judged on the first, R5). |
+| `last_submitted_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was last submitted (UTC). |
+| `approved_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was approved (UTC). |
+| `delivered_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When the assignee's in-app notification was created. |
 | `acknowledged_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was acknowledged (UTC). |
 | `acknowledged_by_user_id` | uuid | no |  | (id) | Acknowledged by user id. → `core.users` |
 | `recurrence` | text | yes (default none) | `none`, `daily`, `weekly`, `monthly` | none | Recurrence. |
@@ -1279,7 +1316,7 @@ Work a staff member received (manager, self, verbal request, another module, imp
 
 Append-only, date-aware history of a task: what happened, when, by whom and why. EOD drafts and end-to-end reports read it (never the task's current status). `occurred_at` is the original time (kept on import); `created_at` is when the row was written.
 
-- **Written by:** `src/server/task-store.ts`
+- **Written by:** `src/server/task-checklist.ts`, `src/server/task-links.ts`, `src/server/task-store.ts`
 - **Sample or real:** Reference or configuration data (not person data).
 - **Links to:** `task_id` → `ops.staff_tasks` (on delete restrict); `from_staff_id` → `core.staff_members` (on delete restrict); `to_staff_id` → `core.staff_members` (on delete restrict); `actor_user_id` → `core.users` (on delete restrict)
 
@@ -1287,9 +1324,9 @@ Append-only, date-aware history of a task: what happened, when, by whom and why.
 |---|---|---|---|---|---|
 | `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
 | `task_id` | uuid | yes |  | (id) | Task id. → `ops.staff_tasks` |
-| `kind` | text | yes | `created`, `assigned`, `reassigned`, `acknowledged`, `clarification_requested`, `status_changed`, `submitted_for_review`, `review_approved`, `changes_requested`, `reopened`, `cancelled`, `due_changed`, `priority_changed`, `comment`, `imported`, `dependency_added`, `edited` | created | What kind of row this is (allowed values listed). |
-| `from_status` | text | no | `pending`, `in_progress`, `done`, `blocked`, `on_hold`, `in_review`, `cancelled` | pending | From status. |
-| `to_status` | text | no | `pending`, `in_progress`, `done`, `blocked`, `on_hold`, `in_review`, `cancelled` | pending | To status. |
+| `kind` | text | yes | `created`, `assigned`, `reassigned`, `acknowledged`, `clarification_requested`, `status_changed`, `submitted_for_review`, `review_approved`, `changes_requested`, `reopened`, `cancelled`, `due_changed`, `priority_changed`, `comment`, `imported`, `dependency_added`, `edited`, `blocked_set`, `blocked_cleared`, `checklist_changed`, `collaborator_added`, `delivered` | created | What kind of row this is (allowed values listed). |
+| `from_status` | text | no | `pending`, `in_progress`, `done`, `in_review`, `cancelled`, `draft`, `changes_requested`, `blocked`, `on_hold` | pending | From status. |
+| `to_status` | text | no | `pending`, `in_progress`, `done`, `in_review`, `cancelled`, `draft`, `changes_requested`, `blocked`, `on_hold` | pending | To status. |
 | `from_staff_id` | uuid | no |  | (id) | Owner before/after (assigned, reassigned). → `core.staff_members` |
 | `to_staff_id` | uuid | no |  | (id) | Staff member who is the to. → `core.staff_members` |
 | `actor_user_id` | uuid | yes |  | (id) | User who made the change. → `core.users` |
@@ -1346,7 +1383,7 @@ Task A waits on task B. Self-links are refused here; cycles are refused by the s
 
 ### `ops.eod_reports`
 
-One staff member's end-of-day report for one IST day — the report identity (one per staff member and day). The row holds the working draft; each submission freezes a version in `eod_report_versions` (`current_version` = latest submitted, 0 = never submitted). `submitted_at` is the latest submission. `version` is bumped on every write (concurrency).
+One staff member's work report for one period — the report identity (one per staff member, period kind and start). Day = the EOD report (`report_date` = the day; null for week / month so day-only readers never pick up a period report); week = 7 days from `period_start`; month = a calendar month. The row holds the working draft; each submission freezes a version in `eod_report_versions` (`current_version` = latest submitted, 0 = never submitted). `submitted_at` is the latest submission. `version` is bumped on every write (concurrency).
 
 - **Written by:** `src/server/eod-reports.ts`, `src/server/eod-review.ts`, `src/server/task-import.ts`
 - **Sample or real:** Own flag: `is_sample = true` marks a sample row.
@@ -1356,7 +1393,10 @@ One staff member's end-of-day report for one IST day — the report identity (on
 |---|---|---|---|---|---|
 | `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
 | `staff_id` | uuid | yes |  | (id) | Staff member. → `core.staff_members` |
-| `report_date` | date | yes |  | 2026-10-21 | Report day (Asia/Kolkata calendar day). |
+| `period_kind` | text | yes (default day) | `day`, `week`, `month` | day | Period kind. |
+| `period_start` | date | yes |  | 2026-10-21 | Period start. |
+| `period_end` | date | yes |  | 2026-10-21 | Period end. |
+| `report_date` | date | no |  | 2026-10-21 | Report day (Asia/Kolkata calendar day). |
 | `status` | text | yes (default draft) | `draft`, `submitted`, `revision_requested`, `acknowledged` | draft | Current state (allowed values listed). |
 | `snapshot` | jsonb | yes |  |  | Shape: EodSnapshot (business-ops domain/staff-tasks.ts); packages cannot import app types. |
 | `summary` | text | no |  |  | Summary. |

@@ -17,6 +17,7 @@ import {
   linePoints,
   niceMax,
   percent,
+  shareLabels,
   summarise,
   type Datum,
 } from './chart-math';
@@ -152,39 +153,56 @@ export function BarChart({
 const slotClass = (slot: number, label?: string) =>
   label === 'Other' ? 'el-c-other' : `el-c${slot + 1}`;
 
-/** Share of a whole, at most 6 segments (the rest fold into "Other"), total in the centre. */
+/**
+ * Share of a whole, at most 6 segments (the rest fold into "Other"), total in the centre. A datum
+ * with `href` makes its segment a link; `table` adds "Show as table" (when no table sits beside it).
+ */
 export function DonutChart({
   label,
   data,
   format = fmtNumber,
   emptyText = EMPTY,
   totalLabel = 'Total',
-}: ChartProps & { totalLabel?: string }) {
+  table = false,
+}: ChartProps & { totalLabel?: string; table?: boolean }) {
   const folded = foldOther(data);
   const arcs = donutArcs(folded);
   if (!arcs) return <NotEnoughData text={emptyText} />;
   const total = arcs.reduce((a, s) => a + s.value, 0);
-  const shareOf = (d: Datum) => fmtPercent(percent(d.value, total));
+  const shares = shareLabels(folded.map((d) => d.value));
+  const shareOf = (d: Datum) => shares[folded.indexOf(d)];
   const words = (d: Datum) => `${d.label} ${show(d.value, format)} (${shareOf(d)})`;
+  // A linked segment must stay reachable, so the drawing is a group, not an img.
+  const linked = folded.some((d) => d.href);
   return (
     <ChartFigure className="el-donut">
       <svg
         viewBox="0 0 42 42"
-        role="img"
+        role={linked ? 'group' : 'img'}
         aria-label={`${label}: ${folded.map(words).join(', ')}. ${totalLabel} ${format(total)}.`}
       >
-        {arcs.map((a) => (
-          <circle
-            key={a.slot}
-            className={`el-donut-arc ${slotClass(a.slot, folded[a.slot]?.label)}`}
-            cx="21"
-            cy="21"
-            r="15.915"
-            strokeDasharray={`${a.dash} ${100 - a.dash}`}
-            strokeDashoffset={a.offset}
-            data-tip={words(folded[a.slot] as Datum)}
-          />
-        ))}
+        {arcs.map((a) => {
+          const d = folded[a.slot] as Datum;
+          const arc = (
+            <circle
+              key={a.slot}
+              className={`el-donut-arc ${slotClass(a.slot, d.label)}`}
+              cx="21"
+              cy="21"
+              r="15.915"
+              strokeDasharray={`${a.dash} ${100 - a.dash}`}
+              strokeDashoffset={a.offset}
+              data-tip={words(d)}
+            />
+          );
+          return d.href ? (
+            <a key={a.slot} href={d.href} aria-label={words(d)}>
+              {arc}
+            </a>
+          ) : (
+            arc
+          );
+        })}
         <text x="21" y="21" className="el-donut-total">
           {format(total)}
         </text>
@@ -202,6 +220,7 @@ export function DonutChart({
           </li>
         ))}
       </ul>
+      {table ? <DataToggle label={label} data={folded} format={format} /> : null}
     </ChartFigure>
   );
 }

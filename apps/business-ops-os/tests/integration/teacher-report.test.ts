@@ -14,6 +14,7 @@ import {
   opsStaffSubjectCapabilities,
   opsStaffTasks,
   opsTeacherReportExports,
+  opsWorkSchedules,
 } from '@elevate/database';
 import {
   authedRequest,
@@ -30,7 +31,7 @@ import {
 import { GET as reportPdf } from '../../src/app/api/v1/teachers/[id]/report/[reportId]/pdf/route';
 import { addDays, istToday } from '../../src/domain/dates';
 import { teacherReportPdf } from '../../src/server/pdf/teacher-report';
-import type { TeacherReportSnapshot } from '../../src/server/teacher-report';
+import { snapshotFor, type TeacherReportSnapshot } from '../../src/server/teacher-report';
 import { review, reviewsPayload, stubAcademic } from './academic-stub';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 
@@ -142,18 +143,30 @@ beforeAll(async () => {
       staffId: teacher.staffId,
       title: 'Sample open task',
       dueOn: '2099-01-01',
+      originalDueOn: '2099-01-01',
       createdBy: teacher.id,
     },
     {
       staffId: teacher.staffId,
       title: 'Sample overdue task',
       dueOn: '2026-01-01',
+      originalDueOn: '2026-01-01',
       createdBy: teacher.id,
     },
   ] as never);
+  // A seven-day default schedule: every finished day of the period is an expected EOD workday.
+  const day = { start: '09:00', end: '17:00' };
+  await ctx.db.insert(opsWorkSchedules).values({
+    name: 'Sample every-day schedule',
+    weeklyPattern: { mon: day, tue: day, wed: day, thu: day, fri: day, sat: day, sun: day },
+    isDefault: true,
+    createdBy: manager.id,
+  });
   await ctx.db.insert(opsEodReports).values({
     staffId: teacher.staffId,
     reportDate: addDays(today, -1),
+    periodStart: addDays(today, -1),
+    periodEnd: addDays(today, -1),
     status: 'submitted',
     submittedAt: new Date(),
     snapshot: {},
@@ -207,12 +220,13 @@ describe('teacher reports (owner brief 22 Oct 2026)', () => {
       status: 'available',
       open: 2,
       overdue: 1,
-      eod: { submitted: 1, days: 30 },
+      // Finished days only (today is not yet expected): 29 workdays, one report.
+      eod: { submitted: 1, days: 29, missing: 28 },
     });
     expect(s.workOn).toEqual([
       '3 teaching logs pending',
       '1 classes cancelled',
-      '29 calendar days without an EOD report',
+      '28 expected workdays without an EOD report',
     ]);
     expect(JSON.stringify(s)).not.toMatch(/phone|email|@example\.test|"notes"/i);
     expect(await audits('teacher.report_generated')).toMatchObject([{ entityId: teacher.staffId }]);
@@ -255,6 +269,15 @@ describe('teacher reports (owner brief 22 Oct 2026)', () => {
       params: Promise.resolve({ id: teacher.staffId, reportId: reference }),
     });
     expect(asTeacher.status).toBe(403);
+  });
+
+  it('stored feedback counts reach only readers who may read raw feedback now (round 8)', async () => {
+    const s = (await storedSnapshot(reference)).snapshot as TeacherReportSnapshot;
+    const managerWhoTeaches = await staffUser(ctx.db, ['operations_manager', 'teacher']);
+    expect((await snapshotFor(ctx.db, manager, teacher.staffId, s)).feedback).toEqual(s.feedback);
+    expect(s.feedback).not.toBeNull();
+    for (const who of [director, managerWhoTeaches, teacher])
+      expect((await snapshotFor(ctx.db, who, teacher.staffId, s)).feedback).toBeNull();
   });
 
   it('Academic OS unavailable: the snapshot and PDF say so and carry no delivery figures (never 0)', async () => {

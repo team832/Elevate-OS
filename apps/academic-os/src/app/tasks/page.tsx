@@ -11,7 +11,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const access = await gate('ops:tasks:read', MODULE_PATHS.tasks);
   const sp = await searchParams;
   return (
-    <AcademicShell access={access} active={sp.tab === 'eod' ? 'eod' : 'tasks'}>
+    <AcademicShell access={access} active="tasks">
       {access.status === 'allowed' ? <TasksBody user={access.user} base={MODULE.basePath} searchParams={sp} /> : null}
     </AcademicShell>
   );

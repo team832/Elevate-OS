@@ -1,11 +1,16 @@
 import { created, defineRoute } from '@elevate/server-kit';
-import { createCampaign, createCampaignBody, listCampaigns } from '../../../../server';
+import {
+  campaignFilter,
+  createCampaign,
+  createCampaignBody,
+  listCampaigns,
+} from '../../../../server';
 
 export const dynamic = 'force-dynamic';
 
-/** GET /marketing/api/v1/campaigns */
-export const GET = defineRoute({ permission: 'marketing:content:read' }, async ({ db }) =>
-  listCampaigns(db),
+/** GET /marketing/api/v1/campaigns — a marketing employee gets only the campaigns they are on. */
+export const GET = defineRoute({ permission: 'marketing:campaigns:read' }, async ({ db, user }) =>
+  listCampaigns(db, await campaignFilter(db, user)),
 );
 
 /** POST /marketing/api/v1/campaigns — organic campaign (paid campaigns are Proposed). */

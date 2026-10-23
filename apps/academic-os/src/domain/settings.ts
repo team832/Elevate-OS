@@ -27,6 +27,12 @@ export const SETTING_DEFINITIONS = {
     schema: z.object({ minDays: z.int().min(0).max(60), enforcement }).strict(),
     defaultValue: { minDays: 0, enforcement: 'warning' as const },
   },
+  'assessments.provisional_publication': {
+    description:
+      'Whether results may be published as PROVISIONAL while roster rows are still unmarked, imported (unverified) or present without marks. Off: only complete results are published.',
+    schema: z.object({ allowed: z.boolean() }).strict(),
+    defaultValue: { allowed: false },
+  },
   'catchup.weights': {
     description:
       'Catch-up prioritisation weights: recency, chapter weight, upcoming-assessment urgency, and the horizon in days.',

@@ -5,7 +5,7 @@
  * screen states (loading via <Suspense>, empty, error, success).
  */
 import { Suspense, type ReactNode } from 'react';
-import { can, type Permission } from '@elevate/authorization';
+import { can, scopeFor, type Permission } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { countUnread } from '@elevate/notifications';
 import { AppError } from '@elevate/shared-contracts';
@@ -21,14 +21,26 @@ import { MODULE_PATHS } from '../server/paths';
 import { searchable } from '../server/search';
 import { SearchShortcut } from './global-search';
 
-/** [key, label, href, permission, page keys (Frame `active`) that light this item up]. */
-type NavRow = [key: string, label: string, href: string, permission: Permission, also?: string[]];
+/**
+ * [key, label, href, permission, page keys (Frame `active`) that light this item up, needs the
+ * permission at `all` scope (own-scope holders, e.g. staff reading their own attendance, do not
+ * get the HR list)].
+ */
+type NavRow = [
+  key: string,
+  label: string,
+  href: string,
+  permission: Permission,
+  also?: string[],
+  allScope?: boolean,
+];
 const section = (group: string | undefined, rows: NavRow[]) =>
-  rows.map(([key, label, href, permission, also = []]) => ({
+  rows.map(([key, label, href, permission, also = [], allScope = false]) => ({
     key,
     label,
     href,
     permission,
+    allScope,
     group,
     keys: new Set([key, ...also]),
   }));
@@ -41,6 +53,11 @@ const section = (group: string | undefined, rows: NavRow[]) =>
  */
 export const NAV = [
   ...section(undefined, [['home', 'Overview', '/ops', 'ops:module:access']]),
+  // Personal rows (own scope is enough): your own records, not the HR lists.
+  ...section('My work', [
+    ['my-attendance', 'My attendance', '/ops/my-attendance', 'ops:attendance:read'],
+    ['my-reports', 'My reports', '/ops/my-reports', 'ops:tasks:read'],
+  ]),
   ...section('Admissions', [
     [
       'overview',
@@ -68,6 +85,28 @@ export const NAV = [
       'ops:tasks:read',
       ['tasks-inbox', 'tasks-reports', 'tasks-imports'],
     ],
+  ]),
+  // HR (brief 23 Oct 2026 §6): each area page passes its key as Frame `active`.
+  ...section('HR', [
+    ['hr', 'HR Overview', '/ops/hr', 'ops:hr:read'],
+    ['hr-staff', 'Staff Directory', '/ops/hr/staff', 'ops:hr:read'],
+    [
+      'hr-assignments',
+      'Teaching Assignments',
+      '/ops/hr/assignments',
+      'ops:teaching_assignments:read',
+    ],
+    ['hr-attendance', 'Attendance', '/ops/hr/attendance', 'ops:attendance:read', [], true],
+    ['hr-tasks', 'Tasks', '/ops/hr/tasks', 'ops:tasks:review'],
+    ['hr-review', 'Submission Review', '/ops/hr/review', 'ops:tasks:review'],
+    ['hr-reports', 'Work Reports', '/ops/hr/reports', 'ops:work_reports:read'],
+    [
+      'hr-feedback',
+      'Student Feedback about Teachers',
+      '/ops/hr/feedback',
+      'ops:teacher_feedback:read',
+    ],
+    ['hr-settings', 'HR Settings', '/ops/hr/settings', 'ops:hr_settings:manage'],
   ]),
   ...section('Insight', [
     ['marketing-summary', 'Marketing Summary', '/ops/marketing-summary', 'ops:dashboard:read'],
@@ -108,7 +147,9 @@ export async function Frame({
 }) {
   const user = access.user;
   const canSearch = searchable(user);
-  const nav = NAV.filter((n) => can(user, n.permission)).map((n) => ({
+  const nav = NAV.filter((n) =>
+    n.allScope ? scopeFor(user, n.permission) === 'all' : can(user, n.permission),
+  ).map((n) => ({
     href: n.href,
     label: n.label,
     group: n.group,

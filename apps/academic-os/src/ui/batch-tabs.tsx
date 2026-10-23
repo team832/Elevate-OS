@@ -5,6 +5,7 @@ import { MODULE_PATHS } from '../server/paths';
 import { assignmentPhase } from '../domain/placements';
 import { todayIst } from '../server/context';
 import { ApiForm } from './api-form';
+import { ROLE_LABEL } from './assignments';
 import { StateBadge } from './badges';
 
 type Batch = Awaited<ReturnType<typeof getBatch>>;
@@ -12,7 +13,6 @@ type Placement = Awaited<ReturnType<typeof listBatchPlacements>>[number];
 type Staff = Awaited<ReturnType<typeof listStaff>>;
 
 const opts = (values: readonly string[]) => values.map((v) => ({ value: v, label: v.replace(/_/g, ' ') }));
-const ROLE_LABEL: Record<string, string> = { primary: 'Primary', co_teacher: 'Co-teacher', substitute: 'Substitute' };
 
 /** Placement note: transfer marker plus reasons (reasons arrive only for coordinators; the server strips them for others). */
 export function placementNote(p: { transferFromPlacementId: string | null; reason: string | null; endedReason: string | null }): string {

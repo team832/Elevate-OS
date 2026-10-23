@@ -7,7 +7,7 @@
  * file: it is never listed in SCHEMA_MODULES or drizzle.config.ts and exports no tables.
  */
 import { sql } from 'drizzle-orm';
-import { date, pgSchema, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { date, pgSchema, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { StaffMemberId, StudentIdentityId, UserId } from '@elevate/shared-types';
 import { staffMembers, students, users } from './core';
 
@@ -41,6 +41,19 @@ export const studentRef = (name = 'student_id') =>
   uuid(name)
     .references(() => students.id, { onDelete: 'restrict' })
     .$type<StudentIdentityId>();
+
+/** Decision state of a policy value (PLT-007); re-exported by ops.ts. */
+export const OPS_DECISION_STATES = [
+  'proposed',
+  'approved',
+  'locked',
+  'open',
+  'pending_verification',
+  'superseded',
+] as const;
+
+/** CHECK fragment: the text column holds something other than blanks. */
+export const filled = (column: AnyPgColumn) => sql`length(trim(coalesce(${column}, ''))) > 0`;
 
 /** `IN (...)` list for CHECK constraints built from a readonly tuple. */
 export function inList(values: readonly string[]) {

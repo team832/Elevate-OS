@@ -6,6 +6,7 @@
  */
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { refusal, savePdf } from '../../../../ui/pdf-download';
 
 export function FormDownload({ applicationId, label }: { applicationId: string; label: string }) {
   const router = useRouter();
@@ -19,19 +20,11 @@ export function FormDownload({ applicationId, label }: { applicationId: string; 
       credentials: 'same-origin',
     });
     if (!res.ok) {
-      const json = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-      setError(json.error?.message ?? `The form could not be generated (${res.status}).`);
+      setError(await refusal(res, 'The form could not be generated'));
       setBusy(false);
       return;
     }
-    const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1];
-    const url = URL.createObjectURL(await res.blob());
-    const a = Object.assign(document.createElement('a'), {
-      href: url,
-      download: name ?? 'admission-form.pdf',
-    });
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000); // revoking at once can cancel the download
+    await savePdf(res, 'admission-form.pdf');
     setBusy(false);
     router.refresh();
   }

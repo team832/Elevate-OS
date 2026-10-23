@@ -499,18 +499,21 @@ describe('teacher operations (brief 2 §7–8)', () => {
         staffId: teacher.staffId,
         title: 'Sample overdue task',
         dueOn: '2026-01-01' as never,
+        originalDueOn: '2026-01-01' as never,
         createdBy: teacher.id,
       },
       {
         staffId: teacher.staffId,
         title: 'Sample open task',
         dueOn: '2099-01-01' as never,
+        originalDueOn: '2099-01-01' as never,
         createdBy: teacher.id,
       },
       {
         staffId: teacher.staffId,
         title: 'Sample done task',
         dueOn: '2026-01-01' as never,
+        originalDueOn: '2026-01-01' as never,
         status: 'done',
         progressPercent: 100,
         completedAt: new Date(),
@@ -520,6 +523,8 @@ describe('teacher operations (brief 2 §7–8)', () => {
     await ctx.db.insert(opsEodReports).values({
       staffId: teacher.staffId,
       reportDate: today as never,
+      periodStart: today as never,
+      periodEnd: today as never,
       snapshot: {},
       createdBy: teacher.id,
     } as never);

@@ -3,7 +3,7 @@ import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Button, Card, Field, Select, TextInput } from '@elevate/shared-ui';
 import { CAMPAIGN_STATUSES, modulePath } from '../../domain';
-import { campaignResults, listCampaigns } from '../../server';
+import { campaignFilter, campaignResults, listCampaigns } from '../../server';
 import { CampaignResultsTable } from '../../ui/campaigns';
 import { createCampaignAction } from '../actions/placements';
 import { MarketingPage, Section, type SearchParams } from '../../ui/shell';
@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: 'Campaigns' };
 export default async function CampaignsPage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <MarketingPage
-      permission="marketing:content:read"
+      permission="marketing:campaigns:read"
       path={modulePath('campaigns')}
       active="campaigns"
       title="Campaigns"
@@ -25,7 +25,10 @@ export default async function CampaignsPage({ searchParams }: { searchParams: Se
         <Section
           load={async () => {
             const db = getDb();
-            const campaigns = await campaignResults(db, await listCampaigns(db));
+            const campaigns = await campaignResults(
+              db,
+              await listCampaigns(db, await campaignFilter(db, user)),
+            );
             return (
               <div className="el-stack">
                 <details className="el-explain">

@@ -1,8 +1,8 @@
 /**
- * Batches, teacher assignments, rooms, calendars and capacity (ACD-002,
- * ACD-003, ACD-009, ACD-010).
+ * Batches, rooms, calendars and capacity (ACD-002, ACD-009, ACD-010). Teacher assignments
+ * (ACD-003) are in ./assignments.ts.
  */
-import { and, asc, desc, eq, exists, gte, inArray, isNotNull, isNull, lte, ne, or } from 'drizzle-orm';
+import { and, asc, eq, exists, inArray, isNull, or } from 'drizzle-orm';
 import {
   academicBatches,
   academicCalendarExclusions,
@@ -10,27 +10,25 @@ import {
   academicCourses,
   academicPlanItems,
   academicRooms,
-  academicSubjects,
   academicTeacherAssignments,
   programmes,
   staffMembers,
   type Database,
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
-import { ConflictError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
+import { NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import type { BatchId, CourseId, StaffMemberId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { computeCapacity, monthKey } from '../../domain';
-import { assertBatchInScope, assignmentActiveOn, audit, getBatchOrThrow, resolveScope, todayIst, type Actor } from '../context';
+import { assertBatchInScope, audit, getBatchOrThrow, resolveScope, todayIst, type Actor } from '../context';
 import type {
-  createAssignmentBody,
   createBatchBody,
   createCalendarRuleBody,
   createExclusionBody,
   createRoomBody,
   updateBatchBody,
 } from '../schemas';
-import type { endAssignmentBody } from '../schemas-placements';
+import { activeStaffOrThrow, listAssignmentsFor } from './assignments';
 import { currentPlanForBatch } from './curriculum';
 import { placedCounts, seatReport } from './placements';
 
@@ -132,111 +130,6 @@ export async function getBatch(db: Database, actor: Actor, batchId: string) {
     calendarRules: rules,
     exclusions,
   };
-}
-
-// --- teacher assignments ----------------------------------------------------------------------
-
-/** Assignments current today by their dates, or with `history` every row (newest start first). */
-async function listAssignmentsFor(db: Database, filter: { batchId?: string; staffId?: string | null; history?: boolean }) {
-  const conditions = filter.history ? [] : [assignmentActiveOn(todayIst())!];
-  if (filter.batchId) conditions.push(eq(academicTeacherAssignments.batchId, filter.batchId as BatchId));
-  if (filter.staffId) conditions.push(eq(academicTeacherAssignments.staffMemberId, filter.staffId as StaffMemberId));
-  return db
-    .select({
-      id: academicTeacherAssignments.id,
-      batchId: academicTeacherAssignments.batchId,
-      batchCode: academicBatches.code,
-      subjectId: academicTeacherAssignments.subjectId,
-      subjectCode: academicSubjects.code,
-      subjectName: academicSubjects.name,
-      staffMemberId: academicTeacherAssignments.staffMemberId,
-      staffName: staffMembers.fullName,
-      employmentType: academicTeacherAssignments.employmentType,
-      role: academicTeacherAssignments.role,
-      startDate: academicTeacherAssignments.startDate,
-      endDate: academicTeacherAssignments.endDate,
-      status: academicTeacherAssignments.status,
-    })
-    .from(academicTeacherAssignments)
-    .innerJoin(academicBatches, eq(academicBatches.id, academicTeacherAssignments.batchId))
-    .innerJoin(academicSubjects, eq(academicSubjects.id, academicTeacherAssignments.subjectId))
-    .innerJoin(staffMembers, eq(staffMembers.id, academicTeacherAssignments.staffMemberId))
-    .where(and(...conditions))
-    .orderBy(asc(academicBatches.code), asc(academicSubjects.code), desc(academicTeacherAssignments.startDate));
-}
-
-export async function listAssignments(db: Database, actor: Actor) {
-  const scope = await resolveScope(db, actor, 'academic:assignments:read');
-  if (scope.kind === 'own') return scope.staffId ? listAssignmentsFor(db, { staffId: scope.staffId }) : [];
-  return listAssignmentsFor(db, {});
-}
-
-export async function createAssignment(db: Database, actor: Actor, input: z.input<typeof createAssignmentBody>) {
-  return withTransaction(db, async (tx) => {
-    const batch = await getBatchOrThrow(tx, input.batchId);
-    const [subject] = await tx.select().from(academicSubjects).where(eq(academicSubjects.id, input.subjectId as never));
-    if (!subject || subject.courseId !== batch.courseId) throw new ValidationError('The subject is not part of the batch’s course.');
-    const staff = await activeStaffOrThrow(tx, input.staffMemberId);
-    await assertNoOverlap(tx, { batchId: batch.id, subjectId: subject.id, staffMemberId: staff.id, startDate: input.startDate ?? null, endDate: input.endDate ?? null });
-    const [row] = await tx
-      .insert(academicTeacherAssignments)
-      .values({ batchId: batch.id, subjectId: subject.id, staffMemberId: staff.id, employmentType: input.employmentType ?? null, role: input.role ?? 'primary', startDate: input.startDate ?? null, endDate: input.endDate ?? null, status: input.endDate ? 'ended' : 'active' })
-      .returning();
-    await audit(tx, actor, { action: 'assignment.created', entityType: 'teacher_assignment', entityId: row!.id, after: row });
-    return row!;
-  });
-}
-
-/**
- * End an assignment, or change a planned end that is today or later: store its last day and keep
- * the row as history. A stored end date always means status `ended`; current, upcoming or ended
- * is read from the dates. A past end cannot be rewritten. Past sessions are never touched.
- */
-export async function endAssignment(db: Database, actor: Actor, assignmentId: string, input: z.output<typeof endAssignmentBody>, now = new Date()) {
-  return withTransaction(db, async (tx) => {
-    const [before] = await tx.select().from(academicTeacherAssignments).where(eq(academicTeacherAssignments.id, assignmentId as never)).for('update');
-    if (!before) throw new NotFoundError('Assignment not found.');
-    if (before.status !== 'active' && !(before.endDate && before.endDate >= todayIst(now))) throw new ConflictError('This assignment has already ended.');
-    if (before.startDate && input.endDate < before.startDate) throw new ValidationError(`The end date cannot be before the start date (${before.startDate}).`);
-    await assertNoOverlap(tx, { ...before, endDate: input.endDate }, before.id);
-    const [row] = await tx
-      .update(academicTeacherAssignments)
-      .set({ endDate: input.endDate, status: 'ended' })
-      .where(eq(academicTeacherAssignments.id, before.id))
-      .returning();
-    await audit(tx, actor, { action: 'assignment.ended', entityType: 'teacher_assignment', entityId: before.id, before, after: row });
-    return row!;
-  });
-}
-
-/** Refuse (409) another assignment of the same teacher, batch and subject whose dates overlap (open ends count; a dateless `ended` row is closed). */
-async function assertNoOverlap(
-  tx: Database,
-  a: { batchId: BatchId; subjectId: string; staffMemberId: StaffMemberId; startDate: string | null; endDate: string | null },
-  exceptId?: string,
-) {
-  const t = academicTeacherAssignments;
-  const [clash] = await tx
-    .select({ id: t.id, startDate: t.startDate, endDate: t.endDate })
-    .from(t)
-    .where(
-      and(
-        eq(t.batchId, a.batchId),
-        eq(t.subjectId, a.subjectId as never),
-        eq(t.staffMemberId, a.staffMemberId),
-        exceptId ? ne(t.id, exceptId as never) : undefined,
-        a.endDate ? or(isNull(t.startDate), lte(t.startDate, a.endDate)) : undefined,
-        or(and(isNull(t.endDate), eq(t.status, 'active')), a.startDate ? gte(t.endDate, a.startDate) : isNotNull(t.endDate)),
-      ),
-    )
-    .limit(1);
-  if (clash) throw new ConflictError(`This teacher already has this subject in this batch from ${clash.startDate ?? 'the start'} to ${clash.endDate ?? 'open'}.`);
-}
-
-async function activeStaffOrThrow(db: Database, staffId: string) {
-  const [staff] = await db.select().from(staffMembers).where(eq(staffMembers.id, staffId as StaffMemberId));
-  if (!staff || staff.status === 'inactive') throw new ValidationError('The staff member does not exist or is inactive.');
-  return staff;
 }
 
 /** Active core staff for pickers (read-only use of the core table). */

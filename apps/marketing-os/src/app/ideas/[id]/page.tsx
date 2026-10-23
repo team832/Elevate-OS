@@ -15,7 +15,7 @@ import {
   TextInput,
 } from '@elevate/shared-ui';
 import { CONTENT_FORMATS, IDEA_STATUSES, formatIst, modulePath } from '../../../domain';
-import { getIdeaDetail } from '../../../server';
+import { contentFilter, getIdeaDetail } from '../../../server';
 import { changeIdeaStatusAction, createContentItemAction } from '../../actions/ideas';
 import { ContentStateBadge, PlacementBadge } from '../../../ui/badges';
 import { MarketingPage, Section, type SearchParams } from '../../../ui/shell';
@@ -49,7 +49,8 @@ export default async function IdeaDetailPage({
                   description="That address is not a valid idea."
                 />
               );
-            const d = await getIdeaDetail(getDb(), id);
+            const db = getDb();
+            const d = await getIdeaDetail(db, id, await contentFilter(db, user));
             const { idea } = d;
             const write = can(user, 'marketing:ideas:write');
             const contentWrite = can(user, 'marketing:content:write');

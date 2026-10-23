@@ -5,6 +5,8 @@
  * - nobody changes their own roles or status (another administrator must);
  * - the last active platform administrator cannot lose the role or be disabled;
  * - only @elevateeducation.in accounts are added (DB CHECK `users_email_domain` backs it);
+ * - a login email change keeps the same account id, so staff records, tasks and history stay
+ *   with the person (brief 23 Oct 2026 §3) and ends their sessions;
  * - every change is audited in the same transaction.
  */
 import { and, asc, count, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
@@ -41,18 +43,20 @@ export const listUsersQuery = z.object({
   dir: z.enum(['asc', 'desc']).default('asc'),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
 });
+const email = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(254)
+  .regex(/^[^@\s]+@[^@\s]+$/, { error: 'Enter an email address.' });
 export const addPersonBody = z.object({
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .max(254)
-    .regex(/^[^@\s]+@[^@\s]+$/, { error: 'Enter an email address.' }),
+  email,
   displayName: z.string().trim().min(1).max(200),
   roles: roleList.default([]),
 });
 export const rolesBody = z.object({ roles: roleList });
 export const statusBody = z.object({ status: z.enum(['active', 'disabled']) });
+export const emailBody = z.object({ email });
 
 export type ListUsersQuery = z.infer<typeof listUsersQuery>;
 
@@ -283,6 +287,43 @@ export async function setUserStatus(
   });
 }
 
+/** Change the login email of an existing account: same users.id, sessions ended, audited old → new. */
+export async function changeUserEmail(
+  db: Database,
+  user: AuthenticatedUser,
+  id: UserId,
+  email: string,
+  requestId: string,
+) {
+  notSelf(user, id, 'change your own login email');
+  assertAllowedEmail(email);
+  return withTransaction(db, async (tx) => {
+    const [target] = await tx
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, id))
+      .for('update');
+    if (!target) throw new NotFoundError('There is no account with this id.');
+    if (target.email === email) return { id, email, sessionsRevoked: 0 };
+    const [taken] = await tx.select({ id: users.id }).from(users).where(eq(users.email, email));
+    if (taken) throw new ConflictError(`${email} is already used by another account.`);
+    await tx.update(users).set({ email }).where(eq(users.id, id));
+    const sessionsRevoked = await revokeAllSessionsForUser(tx, id);
+    await recordAudit(tx, {
+      actorUserId: user.id,
+      module: 'platform',
+      action: 'user.email_changed',
+      entityType: 'user',
+      entityId: id,
+      before: { email: target.email },
+      after: { email },
+      metadata: { sessionsRevoked },
+      requestId,
+    });
+    return { id, email, sessionsRevoked };
+  });
+}
+
 export const auditLabel = (action: string): string =>
   ({
     'user.created_via_google': 'Account created at first Google sign-in',
@@ -291,5 +332,6 @@ export const auditLabel = (action: string): string =>
     'role.bootstrapped': 'Roles granted from BOOTSTRAP_OWNER_EMAILS at sign-in',
     'user.disabled': 'Account disabled, all sessions ended',
     'user.enabled': 'Account enabled',
+    'user.email_changed': 'Login email changed, all sessions ended',
     'user.access_revoked': 'Access revoked after leaving (HR separation)',
   })[action] ?? action;

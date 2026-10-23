@@ -2,7 +2,10 @@
  * Remove every SAMPLE record before real use (`npm run db:clear-samples`, D-036).
  * Sample = `ops.leads.is_sample`, `core.students.is_sample`, `ops.fee_structures.is_sample`,
  * `is_sample` tasks, EOD reports and import batches, Academic `is_sample` batches (with their
- * sessions, logs and teachers), students, placements, demo attendees and reviews, or a staff
+ * sessions, logs and teachers), students, placements, demo attendees and reviews, `is_sample`
+ * attachments and those of sample tasks, submissions, updates, corrections and reports (rows only:
+ * files on disk stay; shortcut: delete them too once the storage adapter offers it), leave, attendance punches/imports/days/corrections,
+ * student feedback about teachers with its imports, summaries and development actions, or a staff
  * member whose `ops.staff_profiles.is_sample` is set and who has no login. Everything
  * that hangs off those rows is deleted with them (including Academic's student and enrolment
  * created by the sample enrolment handoff), children first, in ONE transaction: either all of it
@@ -56,6 +59,7 @@ const SETS: readonly [string, string][] = [
     `SELECT id FROM ops.staff_tasks WHERE is_sample OR import_batch_id IN (SELECT id FROM s_import_batches)`,
   ],
   ['s_eods', `SELECT id FROM ops.eod_reports WHERE is_sample`],
+  ['s_feedback_imports', `SELECT id FROM ops.teacher_feedback_imports WHERE is_sample`],
   [
     's_staff',
     `SELECT p.staff_id AS id FROM ops.staff_profiles p JOIN core.staff_members m ON m.id = p.staff_id
@@ -67,6 +71,37 @@ const IN = (set: string) => `IN (SELECT id FROM ${set})`;
 
 /** Deletes in foreign-key-safe order: [label, statement]. */
 const DELETES: readonly [string, string][] = [
+  // HR samples (brief 23 Oct 2026): attachments, attendance and leave, and a sample staff
+  // member's own department/manager history and task collaborations.
+  [
+    'ops.attachments',
+    `DELETE FROM ops.attachments WHERE is_sample
+       OR (owner_kind = 'task' AND owner_id ${IN('s_tasks')})
+       OR (owner_kind = 'task_submission' AND owner_id IN (SELECT id FROM ops.task_submissions WHERE task_id ${IN('s_tasks')}))
+       OR (owner_kind = 'task_update' AND owner_id IN (SELECT id FROM ops.task_updates WHERE task_id ${IN('s_tasks')}))
+       OR (owner_kind = 'attendance_correction' AND owner_id IN (SELECT id FROM ops.attendance_corrections WHERE is_sample OR staff_id ${IN('s_staff')}))
+       OR (owner_kind = 'work_report' AND owner_id ${IN('s_eods')})`,
+  ],
+  ...(
+    ['attendance_corrections', 'daily_attendance', 'attendance_punches', 'leave_records'] as const
+  ).map((t): [string, string] => [
+    `ops.${t}`,
+    `DELETE FROM ops.${t} WHERE is_sample OR staff_id ${IN('s_staff')}`,
+  ]),
+  [
+    'ops.attendance_punches (import)',
+    `DELETE FROM ops.attendance_punches WHERE import_id IN (SELECT id FROM ops.attendance_imports WHERE is_sample)`,
+  ],
+  ['ops.attendance_imports', `DELETE FROM ops.attendance_imports WHERE is_sample`],
+  [
+    'ops.teacher_development_actions',
+    `DELETE FROM ops.teacher_development_actions WHERE is_sample OR teacher_staff_id ${IN('s_staff')} OR summary_id IN (SELECT id FROM ops.teacher_feedback_summaries WHERE is_sample OR teacher_staff_id ${IN('s_staff')})`,
+  ],
+  [
+    'ops.teacher_feedback_summaries',
+    `DELETE FROM ops.teacher_feedback_summaries WHERE is_sample OR teacher_staff_id ${IN('s_staff')}`,
+  ],
+  ['ops.task_collaborators', `DELETE FROM ops.task_collaborators WHERE staff_id ${IN('s_staff')}`],
   // Sample task-tracker work (seed/sample-work.ts) and fixture imports.
   [
     'ops.task_import_rows',
@@ -256,14 +291,27 @@ const DELETES: readonly [string, string][] = [
     `DELETE FROM ops.teacher_student_feedback WHERE student_id ${IN('s_students')} OR teacher_staff_id ${IN('s_staff')}`,
   ],
   [
+    'ops.teacher_feedback_import_rows',
+    `DELETE FROM ops.teacher_feedback_import_rows WHERE import_id ${IN('s_feedback_imports')} OR feedback_id IN (SELECT id FROM ops.student_teacher_feedback WHERE is_sample OR student_id ${IN('s_students')} OR teacher_staff_id ${IN('s_staff')})`,
+  ],
+  [
     'ops.student_teacher_feedback',
-    `DELETE FROM ops.student_teacher_feedback WHERE student_id ${IN('s_students')} OR teacher_staff_id ${IN('s_staff')}`,
+    `DELETE FROM ops.student_teacher_feedback WHERE is_sample OR student_id ${IN('s_students')} OR teacher_staff_id ${IN('s_staff')} OR import_id ${IN('s_feedback_imports')}`,
+  ],
+  [
+    'ops.teacher_feedback_imports',
+    `DELETE FROM ops.teacher_feedback_imports WHERE id ${IN('s_feedback_imports')}`,
   ],
   ['core.students', `DELETE FROM core.students WHERE id ${IN('s_students')}`],
   ['ops.leads', `DELETE FROM ops.leads WHERE id ${IN('s_leads')}`],
   [
     'ops.staff_subject_capabilities',
     `DELETE FROM ops.staff_subject_capabilities WHERE staff_id ${IN('s_staff')}`,
+  ],
+  ['ops.staff_departments', `DELETE FROM ops.staff_departments WHERE staff_id ${IN('s_staff')}`],
+  [
+    'ops.staff_manager_history',
+    `DELETE FROM ops.staff_manager_history WHERE staff_id ${IN('s_staff')} OR manager_staff_id ${IN('s_staff')}`,
   ],
   ['core.staff_members', `DELETE FROM core.staff_members WHERE id ${IN('s_staff')}`],
   ['ops.fee_structures', `DELETE FROM ops.fee_structures WHERE is_sample`],
@@ -276,7 +324,7 @@ const DELETES: readonly [string, string][] = [
 
 /** Self-references that would block a delete inside the same set. */
 const UNLINK = [
-  `UPDATE ops.staff_tasks SET recurrence_parent_id = NULL WHERE id ${IN('s_tasks')}`,
+  `UPDATE ops.staff_tasks SET recurrence_parent_id = NULL, parent_task_id = NULL WHERE id ${IN('s_tasks')}`,
   `UPDATE ops.task_updates SET corrects_update_id = NULL WHERE task_id ${IN('s_tasks')}`,
   `UPDATE ops.eod_review_events SET version_id = NULL WHERE report_id ${IN('s_eods')}`,
   `UPDATE ops.eod_report_versions SET revision_request_event_id = NULL WHERE report_id ${IN('s_eods')}`,

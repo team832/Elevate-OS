@@ -84,3 +84,14 @@ Screens use server actions (`src/app/actions/*.ts`) that call the same services;
 - **Tasks and EOD (15):** `staff-tasks`, `staff-tasks/:id`, `staff-tasks/:id/:action`, `…/dependencies`, `…/reassign`, `…/report`, `…/updates`, `eod-reports`, `eod-reports/:id`, `…/csv`, `…/follow-up`, `…/pdf`, `…/review`, `…/submit`, `task-reports`.
 
 Permissions, requests, responses and errors are those in `apps/business-ops-os/docs/API.md`; the workspace check here is `marketing:module:access`. Marketing roles hold (Proposed, D-073): manager `ops:leads:read/write/assign` and `ops:lead_contacts:read` on every lead, contributor the same on own leads only, both own `ops:tasks:read/write`. Routes that need other permissions (merge needs `ops:leads:merge`) answer 403 to marketing roles. A lead read here returns contact fields but no KYC fields, no KYC history and only `{ id, code, status, createdAt, programmeCode }` for admission cases. Tests: `tests/integration/shared-entries.test.ts`; `apps/business-ops-os/tests/integration/shared-entries.test.tsx`, `lead-kyc-masking.test.ts`.
+
+## Added on 23 Oct 2026 (campaign membership and staff pages, D-091 … D-093; grants Proposed)
+| Method | Path | Permission | Request | Response / notes |
+|---|---|---|---|---|
+| GET | `/campaigns` | `marketing:campaigns:read` | — | All campaigns (managers, director, auditor) or, at own scope, only those the marketing employee is a current member of |
+| GET | `/campaigns/:id/members` | `marketing:campaigns:read` | — | Current and past members; 404 out of scope |
+| POST | `/campaigns/:id/members` | `marketing:campaigns:write` | `{ staffId, role?: owner or member (default member), fromDate? (default today IST) }` | Adds a membership (marketing manager); a date in the future (IST) → 400 |
+| PATCH | `/campaigns/:id/members/:memberId` | `marketing:campaigns:write` | `{ toDate? (default today IST, never in the future) }` | Ends a membership; rows are never deleted |
+| PUT | `/content-items/:id/assignments` | `marketing:content:write` | `assignmentBody` | Only a marketing manager assigns people to content (others → 403) |
+
+Out-of-scope campaigns and content read as 404, never 403. Mounted from Business Operations (same handlers): `/marketing/api/v1/attendance`, `…/attendance/corrections`, `…/ai/report-draft`, `…/attachments`, `…/notifications`, `…/staff-tasks/{id}/checklist`. Pages: `/marketing/my-campaigns`, `/marketing/deliverables`, `/marketing/my-attendance`, `/marketing/my-reports`, `/marketing/notifications`.

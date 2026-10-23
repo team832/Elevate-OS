@@ -58,3 +58,12 @@ Platform requirements used: PLT-002 (server-side permissions), PLT-004 (no sole 
 | MKT-WS-7 | Marketing grants on leads, lead contacts and own tasks | **Proposed** (owner to confirm, D-073); in the code and tested | `packages/authorization/tests/workspaces.test.ts` |
 | MKT-WS-8 | Conversion outcomes (leads → demos → admissions) by campaign | Proposed — not built | enquiries carry only a free-text `campaignRef`; owner decision to make it a reference |
 | MKT-WS-9 | Events and Webinars in Marketing | Proposed — not built | needs a new events-only permission (owner decision) |
+
+## Marketing employees (owner brief 23 Oct 2026; D-093; grants Proposed; migration 0015 not applied)
+| ID | Requirement (short) | Status | Evidence / notes |
+|---|---|---|---|
+| MKT-HR-1 | Campaign membership (`marketing.campaign_members`, owner or member, dates, never deleted); future dates refused | Tested | `integration/campaign-scope.test.ts` |
+| MKT-HR-2 | Marketing employees see only their campaigns and their content (404 out of scope) | Tested · Proposed | `integration/campaign-scope.test.ts`, `marketing-staff.test.tsx` |
+| MKT-HR-3 | Only a marketing manager assigns people to content | Tested | `integration/campaign-scope.test.ts` (E4) |
+| MKT-HR-4 | Account-level weekly metrics stay visible to employees | Implemented · Proposed (owner to confirm) | `marketing:metrics:read` unscoped |
+| MKT-HR-5 | My Campaigns, Deliverables, My Attendance, My Reports, Notifications pages | Implemented · not browser-checked | `integration/marketing-staff.test.tsx`, `unit/deliverables.test.ts` |

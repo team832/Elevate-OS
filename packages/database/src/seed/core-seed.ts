@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm';
 import type { RoleKey, StaffMemberId, UserId } from '@elevate/shared-types';
-import { departments, programmes, staffMembers, userRoles, users } from '../schema/core';
+import { branches, departments, programmes, staffMembers, userRoles, users } from '../schema/core';
 import { defineSeed, type SeedDefinition } from './registry';
+import { syncStaffHistory } from './staff-history';
 
 /**
  * Departments from the legacy "Suggested departments" table in
@@ -151,6 +152,15 @@ export const SEED_USERS: readonly {
     managerRole: 'director',
   },
   {
+    // Brief 23 Oct 2026 §5 (role Proposed): HR for teachers and marketing staff.
+    role: 'hr_manager',
+    email: 'hr-manager@example.test',
+    displayName: 'Sample HR Manager',
+    department: 'HUMAN_RESOURCES',
+    title: 'HR manager',
+    managerRole: 'director',
+  },
+  {
     role: 'auditor',
     email: 'auditor@example.test',
     displayName: 'Sample Auditor',
@@ -171,6 +181,23 @@ const departmentsSeed = defineSeed({
         .values({ code, name, description, status: 'provisional' })
         .onConflictDoUpdate({ target: departments.code, set: { name, description } });
     }
+  },
+});
+
+/**
+ * The one centre on record: the Sikar address printed on every document (INSTITUTE in
+ * packages/shared-ui/src/components/brand.tsx). `provisional` until the owner confirms the
+ * branch list; "Online" is a delivery mode, not a branch. A re-seed never changes its status.
+ */
+const branchesSeed = defineSeed({
+  name: 'core.branches',
+  module: 'platform',
+  description: 'Sikar centre (provisional; the only branch on record)',
+  async run({ db }) {
+    await db
+      .insert(branches)
+      .values({ code: 'SIKAR', name: 'Sikar centre', status: 'provisional' })
+      .onConflictDoUpdate({ target: branches.code, set: { name: 'Sikar centre' } });
   },
 });
 
@@ -259,11 +286,13 @@ const staffSeed = defineSeed({
       const managerId = u.managerRole ? (staffIdByRole.get(u.managerRole) ?? null) : null;
       await db.update(staffMembers).set({ managerId }).where(eq(staffMembers.id, id));
     }
+    await syncStaffHistory(db, [...staffIdByRole.values()], userIdByRole.get('platform_admin')!);
   },
 });
 
 export const coreSeeds: readonly SeedDefinition[] = [
   departmentsSeed,
+  branchesSeed,
   programmesSeed,
   usersSeed,
   staffSeed,

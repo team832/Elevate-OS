@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { isoDateSchema } from '@elevate/shared-contracts';
 import { EOD_STATUSES } from '../domain/staff-tasks';
+import { PERIOD_KINDS } from '../domain/work-report';
 
 const optText = (max: number) => z.string().trim().max(max).nullish();
 const required = (max: number) => z.string().trim().min(1, 'Required').max(max);
 
-/** Build or refresh the draft for a day; narrative fields are saved when given. */
+/** Build or refresh the draft for the day, week or month containing `reportDate`; narrative fields are saved when given. */
 export const eodDraftBody = z.object({
   reportDate: isoDateSchema,
+  periodKind: z.enum(PERIOD_KINDS).default('day'),
   summary: optText(4000),
   nextDayPlan: optText(4000),
   notes: optText(4000),
@@ -53,6 +55,7 @@ export const eodInboxQuery = z.object({
   to: isoDateSchema.optional(),
   staffId: z.uuid().optional(),
   departmentId: z.uuid().optional(),
+  kind: z.enum(PERIOD_KINDS).optional(),
   status: z.enum(EOD_STATUSES).exclude(['draft']).optional(),
   blockers: z.enum(['1']).optional(),
   page: z.coerce.number().int().min(1).default(1),
@@ -71,3 +74,24 @@ export const periodReportQuery = z
     message: 'The start must be on or before the end.',
     path: ['to'],
   });
+
+export const REPORT_STANDINGS = [
+  'missing',
+  'not_started',
+  'not_expected',
+  'no_schedule',
+  'draft',
+  'submitted',
+  'revision_requested',
+  'acknowledged',
+] as const;
+/** HR work-report list: one row per staff member for the period containing `date`. */
+export const workReportListQuery = z.object({
+  kind: z.enum(PERIOD_KINDS).default('week'),
+  date: isoDateSchema.optional(),
+  q: z.string().trim().max(100).optional(),
+  departmentId: z.uuid().optional(),
+  standing: z.enum(REPORT_STANDINGS).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+});
+export type WorkReportListQuery = z.output<typeof workReportListQuery>;

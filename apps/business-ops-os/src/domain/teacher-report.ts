@@ -84,7 +84,7 @@ export function workOn(delivery: DeliveryFacts | null, work: WorkFacts | null): 
       ['assessments pending marking', delivery.pending[2]!.value],
       ['classes cancelled', delivery.classes[2]!.value],
     );
-  if (work) items.push(['calendar days without an EOD report', work.eod.missing]);
+  if (work) items.push(['expected workdays without an EOD report', work.eod.missing]);
   const out = items.filter(([, n]) => n).map(([what, n]) => `${n} ${what}`);
   return out.length ? out : ['Nothing pending in this period.'];
 }
@@ -132,7 +132,7 @@ export function teacherSummary(input: {
   out.push(
     !w
       ? 'Tasks and EOD reports: not included.'
-      : `Tasks: ${w.completed} completed of ${w.assigned} assigned in the period; ${w.open} open and ${w.overdue} overdue at the cut-off. EOD reports: ${w.eod.days === null ? `${w.eod.submitted} submitted (expected days not known: no login or inactive)` : `${w.eod.submitted} of ${w.eod.days} calendar days submitted`}.`,
+      : `Tasks: ${w.completed} completed of ${w.assigned} assigned in the period; ${w.open} open and ${w.overdue} overdue at the cut-off. EOD reports: ${w.eod.days === null ? `${w.eod.submitted} submitted (no expected days: no sign-in, inactive or no work schedule)` : `${w.eod.submitted} submitted; ${w.eod.missing} of ${w.eod.days} expected workdays missing`}.`,
   );
   return out;
 }

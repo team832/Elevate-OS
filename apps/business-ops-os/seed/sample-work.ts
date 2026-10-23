@@ -14,6 +14,8 @@ import {
   opsStaffProfiles,
   opsStaffTasks,
   opsTaskEvents,
+  opsTaskReviews,
+  opsTaskSubmissions,
   opsTaskUpdates,
   staffMembers,
   type Database,
@@ -35,7 +37,9 @@ type At = [number, string];
 type Step =
   | { kind: 'acknowledged' | 'submitted_for_review'; at: At }
   | { kind: 'status_changed'; at: At; to: TaskStatus; reason?: string }
-  | { kind: 'reopened' | 'cancelled'; at: At; reason: string }
+  | { kind: 'reopened' | 'cancelled' | 'blocked_set'; at: At; reason: string }
+  | { kind: 'changes_requested'; at: At; reason: string }
+  | { kind: 'review_approved'; at: At }
   | { kind: 'reassigned'; at: At; to: SampleTeacherCode; reason: string };
 interface Update {
   on: number;
@@ -61,6 +65,8 @@ interface SampleTask {
   priority: TaskPriority;
   progress?: number;
   review?: true;
+  /** Brief 23 Oct 2026 §8: what the assignee hands in. */
+  deliverable?: string;
   steps: Step[];
   updates?: Update[];
 }
@@ -135,7 +141,11 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     steps: [
       ack(-3, '11:30'),
       to('in_progress', -2, '10:00'),
-      to('blocked', -1, '15:00', 'Waiting for a free room from the coordinator (sample).'),
+      {
+        kind: 'blocked_set',
+        at: [-1, '15:00'],
+        reason: 'Waiting for a free room from the coordinator (sample).',
+      },
     ],
     updates: [
       {
@@ -163,6 +173,30 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
       { kind: 'submitted_for_review', at: [-1, '16:00'] },
     ],
     updates: [{ on: -1, work: 'Checked 32 homework notebooks', at: [-1, '15:30'], minutes: 90 }],
+  },
+  {
+    owner: 'DEMO-T03',
+    title: 'Prepare the integration practice sheet with an answer key',
+    shows: 'submitted, changes requested, resubmitted as version 2 (review required)',
+    source: 'manager',
+    review: true,
+    deliverable: 'Practice sheet (PDF) and its answer key',
+    received: [-3, '09:00'],
+    due: 0,
+    dueTime: '17:00',
+    priority: 'high',
+    progress: 100,
+    steps: [
+      ack(-3, '09:20'),
+      to('in_progress', -3, '10:00'),
+      { kind: 'submitted_for_review', at: [-2, '16:42'] },
+      {
+        kind: 'changes_requested',
+        at: [-1, '10:00'],
+        reason: 'Please attach the answer key (sample).',
+      },
+      { kind: 'submitted_for_review', at: [-1, '15:30'] },
+    ],
   },
   {
     owner: 'DEMO-T06',
@@ -359,6 +393,11 @@ export async function seedSampleWork(db: Database, log: (m: string) => void = ()
     let reason: string | null = null;
     let completedAt: Date | null = null;
     let acknowledged: { at: Date; by: UserId } | null = null;
+    let blocked: { at: Date; reason: string } | null = null;
+    let approvedAt: Date | null = null;
+    const submitted: Date[] = [];
+    const reviews: { at: Date; note: string | null; decision: 'approved' | 'changes_requested' }[] =
+      [];
     const events: Omit<typeof opsTaskEvents.$inferInsert, 'taskId'>[] = [];
     const creator = t.source === 'manager' ? manager : owner;
     const event = (e: (typeof events)[number]) => events.push(e);
@@ -387,7 +426,25 @@ export async function seedSampleWork(db: Database, log: (m: string) => void = ()
         });
         owner = next;
         acknowledged = null;
+      } else if (s.kind === 'blocked_set') {
+        // R4: blocked is a flag; the status stays.
+        blocked = { at: occurredAt, reason: s.reason };
+        event({
+          kind: s.kind,
+          actorUserId: owner.userId,
+          occurredAt,
+          reason: s.reason,
+          data: { kind: 'blocked' },
+        });
       } else {
+        if (s.kind === 'submitted_for_review') submitted.push(occurredAt);
+        if (s.kind === 'changes_requested' || s.kind === 'review_approved')
+          reviews.push({
+            at: occurredAt,
+            note: s.kind === 'changes_requested' ? s.reason : null,
+            decision: s.kind === 'changes_requested' ? 'changes_requested' : 'approved',
+          });
+        if (s.kind === 'review_approved') approvedAt = occurredAt;
         const toStatus: TaskStatus =
           s.kind === 'status_changed'
             ? s.to
@@ -395,8 +452,14 @@ export async function seedSampleWork(db: Database, log: (m: string) => void = ()
               ? 'in_review'
               : s.kind === 'reopened'
                 ? 'in_progress'
-                : 'cancelled';
-        const actor = s.kind === 'cancelled' ? manager : owner;
+                : s.kind === 'changes_requested'
+                  ? 'changes_requested'
+                  : s.kind === 'review_approved'
+                    ? 'done'
+                    : 'cancelled';
+        const actor = ['cancelled', 'changes_requested', 'review_approved'].includes(s.kind)
+          ? manager
+          : owner;
         event({
           kind: s.kind,
           fromStatus: status,
@@ -425,6 +488,15 @@ export async function seedSampleWork(db: Database, log: (m: string) => void = ()
         receivedAt: at(t.received),
         dueOn: day(t.due),
         dueTime: t.dueTime ?? null,
+        originalDueOn: day(t.due),
+        originalDueTime: t.dueTime ?? null,
+        expectedDeliverable: t.deliverable ?? null,
+        blockedAt: blocked?.at ?? null,
+        blockedKind: blocked ? 'blocked' : null,
+        blockedReason: blocked?.reason ?? null,
+        firstSubmittedAt: submitted[0] ?? null,
+        lastSubmittedAt: submitted.at(-1) ?? null,
+        approvedAt,
         priority: t.priority,
         status,
         progressPercent: status === 'done' ? 100 : (t.progress ?? 0),
@@ -437,6 +509,34 @@ export async function seedSampleWork(db: Database, log: (m: string) => void = ()
       })
       .returning({ id: opsStaffTasks.id });
     await db.insert(opsTaskEvents).values(events.map((e) => ({ ...e, taskId: task!.id })));
+    const versions = [];
+    for (const [i, submittedAt] of submitted.entries())
+      versions.push(
+        (
+          await db
+            .insert(opsTaskSubmissions)
+            .values({
+              taskId: task!.id,
+              version: i + 1,
+              completionNote: `Version ${i + 1} handed in (sample).`,
+              // A task with an expected deliverable is submitted with it (as the service requires).
+              evidence: t.deliverable ? `Sample shared folder: version ${i + 1} (sample).` : null,
+              submittedByUserId: owner.userId,
+              submittedAt,
+            })
+            .returning()
+        )[0]!,
+      );
+    for (const r of reviews)
+      await db.insert(opsTaskReviews).values({
+        taskId: task!.id,
+        // The decision is on the latest version handed in before it.
+        submissionId: versions.filter((v) => v.submittedAt <= r.at).at(-1)!.id,
+        decision: r.decision,
+        note: r.note,
+        reviewerUserId: manager.userId,
+        createdAt: r.at,
+      });
     for (const u of t.updates ?? [])
       await db.insert(opsTaskUpdates).values({
         taskId: task!.id,
@@ -502,6 +602,9 @@ export async function seedSampleWork(db: Database, log: (m: string) => void = ()
       .values({
         staffId: owner.staffId,
         reportDate: day(e.day),
+        periodKind: 'day',
+        periodStart: day(e.day),
+        periodEnd: day(e.day),
         status,
         snapshot,
         summary: narrative.summary,

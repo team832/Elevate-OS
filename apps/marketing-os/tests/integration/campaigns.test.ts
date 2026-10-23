@@ -156,7 +156,7 @@ describe('campaign results (verified data only)', () => {
   it('overview shows when numbers were last imported, null when never', async () => {
     const res = await call<{
       metricImports: { accountCode: string; lastImportedAt: string | null }[];
-    }>(dashboardRoute, team.contributor, '/x');
+    }>(dashboardRoute, team.manager, '/x');
     expect(res.status).toBe(200);
     expect(res.data!.metricImports.length).toBeGreaterThan(0);
     expect(res.data!.metricImports.every((r) => r.lastImportedAt === null)).toBe(true);

@@ -18,6 +18,7 @@ import {
 import { listApprovalHistory } from '@elevate/server-kit';
 import type { UserId } from '@elevate/shared-types';
 import { allowedContentActions, editEffect } from '../domain';
+import type { Actor } from './access';
 import { getContentItem } from './content';
 import { runRuleCheck } from './rules';
 
@@ -31,8 +32,8 @@ async function userNames(db: Database, ids: readonly (string | null | undefined)
   return new Map(rows.map((r) => [r.id as string, r.name]));
 }
 
-export async function getContentItemDetail(db: Database, id: string) {
-  const item = await getContentItem(db, id);
+export async function getContentItemDetail(db: Database, id: string, actor?: Actor) {
+  const item = await getContentItem(db, id, false, actor);
   const [idea] = await db.select().from(marketingIdeas).where(eq(marketingIdeas.id, item.ideaId));
   const versions = await db
     .select()

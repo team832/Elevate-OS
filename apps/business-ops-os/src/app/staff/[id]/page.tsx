@@ -2,7 +2,6 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { PageHeader } from '@elevate/shared-ui';
 import { getStaffDetail } from '../../../server/organisation';
-import { formOptions } from '../../../server/options';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { StaffEditModal, StaffProfile } from '../staff-record';
 
@@ -30,16 +29,16 @@ export default async function StaffMemberPage({
 
 async function Detail({ user, id, edit }: { user: AuthenticatedUser; id: string; edit: boolean }) {
   const r = await load(async (db) =>
-    Promise.all([getStaffDetail(db, user, id), edit ? formOptions(db) : null]),
+    getStaffDetail(db, user, id),
   );
   if (!r.ok) return r.view;
-  const [d, o] = r.data;
+  const d = r.data;
   const self = `/ops/staff/${d.staff.id}`;
   return (
     <div className="el-stack">
       <PageHeader title={d.staff.fullName} description={<a href="/ops/staff">Staff directory</a>} />
       <StaffProfile d={d} user={user} editHref={`${self}?act=edit`} level={2} />
-      {o ? <StaffEditModal d={d} o={o} closeHref={self} /> : null}
+      {edit ? <StaffEditModal d={d} closeHref={self} /> : null}
     </div>
   );
 }

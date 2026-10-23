@@ -5,7 +5,6 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import type { getStaffDetail } from '../../server/organisation';
-import type { formOptions } from '../../server/options';
 import { ActionForm } from '../../ui/action-form';
 import { humanise } from '../../ui/format';
 import { options } from '../../ui/list-controls';
@@ -32,6 +31,7 @@ export function StaffProfile({
       flush
       actions={
         <span className="el-inline-form">
+          {can(user, 'ops:hr:read') ? <a href={`/ops/hr/staff/${d.staff.id}`}>HR record</a> : null}
           {can(user, 'ops:teachers:read') ? (
             <a href={`/ops/teachers/${d.staff.id}`}>Teacher profile</a>
           ) : null}
@@ -69,21 +69,18 @@ export function StaffProfile({
   );
 }
 
-export function StaffEditModal({
-  d,
-  o,
-  closeHref,
-}: {
-  d: StaffDetail;
-  o: Awaited<ReturnType<typeof formOptions>>;
-  closeHref: string;
-}) {
+export function StaffEditModal({ d, closeHref }: { d: StaffDetail; closeHref: string }) {
   return (
     <FormModal
       id="staff-edit"
       title={`Edit staff record: ${d.staff.fullName}`}
       closeHref={closeHref}
     >
+      <p className="el-field-hint">
+        Department and manager changes keep their history in HR:{' '}
+        <a href={`/ops/hr/staff/${d.staff.id}?act=department`}>change department</a> or{' '}
+        <a href={`/ops/hr/staff/${d.staff.id}?act=manager`}>change manager</a>.
+      </p>
       <ActionForm
         action={`/ops/api/v1/staff/${d.staff.id}`}
         method="PATCH"
@@ -93,22 +90,6 @@ export function StaffEditModal({
         secondary={<a href={closeHref}>Cancel</a>}
         fields={[
           { name: 'title', label: 'Title', defaultValue: d.staff.title ?? '', section: 'Role' },
-          {
-            name: 'departmentId',
-            label: 'Department',
-            type: 'select',
-            options: o.departments,
-            defaultValue: d.staff.departmentId ?? '',
-            section: 'Role',
-          },
-          {
-            name: 'managerId',
-            label: 'Reports to',
-            type: 'select',
-            options: o.staff.filter((s) => s.value !== d.staff.id),
-            defaultValue: d.staff.managerId ?? '',
-            section: 'Role',
-          },
           {
             name: 'status',
             label: 'Status',

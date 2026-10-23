@@ -162,6 +162,7 @@ describe('OverviewTiles', () => {
           open: 3,
           overdue: 1,
           dueToday: 2,
+          submitted: 0,
           eod: 'not_started',
         }}
       />,

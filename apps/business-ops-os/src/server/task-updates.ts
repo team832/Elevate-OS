@@ -14,7 +14,7 @@ import type { Actor } from './context';
 import { fieldError } from './ops-common';
 import { ownStaffId } from './staff-tasks';
 import type { TaskUpdateInput } from './staff-tasks-schemas';
-import { loadTaskFor, taskAudit } from './task-store';
+import { loadTaskFor, mayLogWork, taskAudit } from './task-store';
 
 export async function addTaskUpdate(
   db: Database,
@@ -25,8 +25,9 @@ export async function addTaskUpdate(
 ) {
   const author = await ownStaffId(db, actor);
   return withTransaction(db, async (tx) => {
-    const { row, roles } = await loadTaskFor(tx, actor, id, true);
-    if (!roles.some((r) => r !== 'reviewer') && row.backupStaffId !== author)
+    const loaded = await loadTaskFor(tx, actor, id, true);
+    const { row } = loaded;
+    if (!mayLogWork(loaded))
       throw new ForbiddenError(
         'Only the owner, the backup or their manager can log work on this task.',
       );

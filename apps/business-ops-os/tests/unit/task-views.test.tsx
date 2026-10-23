@@ -1,38 +1,49 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DayTable } from '../../src/app/tasks/_components/task-views';
-import type { EodItem } from '../../src/domain/staff-tasks';
-import type { RowOptions } from '../../src/server/task-detail';
+import { NextActionButton } from '../../src/app/tasks/_components/task-common';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace() {}, push() {}, refresh() {} }),
 }));
 
-const row = (id: string, title: string): EodItem => ({
+const row = (id: string, title: string, more = {}) => ({
   id,
   title,
-  priority: 'medium',
-  dueOn: '2026-10-21',
-  dueTime: null,
-  overdue: false,
-  status: 'pending',
-  progressPercent: 0,
-  reason: null,
+  version: 1,
+  status: 'pending' as const,
+  reviewRequired: true,
+  acknowledgedAt: null,
+  blockedAt: null,
+  ...more,
 });
 
-const opts = new Map(
-  ['a', 'b'].map((id): [string, RowOptions] => [
-    id,
-    { version: 1, statuses: ['pending', 'in_progress'] },
-  ]),
-);
-
-describe('My day row forms (review M2)', () => {
-  it('each row’s fields and Save button are named after its task', () => {
+describe('My Tasks next action (brief §18, review M2)', () => {
+  it('each row’s button is named after its task', () => {
     const html = renderToStaticMarkup(
-      <DayTable base="/ops" rows={[row('a', 'Call Asha'), row('b', 'Print forms')]} edit={opts} />,
+      <>
+        <NextActionButton t={row('a', 'Call Asha')} base="/academic" />
+        <NextActionButton t={row('b', 'Print forms')} base="/academic" />
+      </>,
     );
     for (const title of ['Call Asha', 'Print forms'])
-      expect(html.match(new RegExp(`for ${title}<`, 'g'))).toHaveLength(4); // 3 labels + Save
+      expect(html).toContain(`Acknowledge<span class="el-visually-hidden"> — ${title}</span>`);
+  });
+
+  it('submit opens the task’s submit form in the host workspace; submitted waits', () => {
+    const html = renderToStaticMarkup(
+      <NextActionButton
+        t={row('a', 'Worksheet', { status: 'in_progress', acknowledgedAt: new Date() })}
+        base="/academic"
+      />,
+    );
+    expect(html).toContain('href="/academic/tasks/a#submit"');
+    expect(
+      renderToStaticMarkup(
+        <NextActionButton
+          t={row('a', 'Worksheet', { status: 'in_review', acknowledgedAt: new Date() })}
+          base="/academic"
+        />,
+      ),
+    ).toContain('Waiting for review');
   });
 });

@@ -208,7 +208,7 @@ describe('AppShell sidebar', () => {
     );
     expect(html).toContain('name="q"');
     expect(html).toContain('placeholder="Search leads"');
-    expect(html).toContain('3 unread notifications');
+    expect(html).toContain('Notifications, 3 unread');
     expect(shell({ unreadNotifications: null })).not.toContain('el-notify');
   });
 

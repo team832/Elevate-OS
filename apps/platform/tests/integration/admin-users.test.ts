@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
 import { validateSession } from '@elevate/authentication';
-import { auditEvents, insertAuditEvent, userRoles, users } from '@elevate/database';
+import { auditEvents, insertAuditEvent, staffMembers, userRoles, users } from '@elevate/database';
 import type { RoleKey, UserId } from '@elevate/shared-types';
 import {
   authedRequest,
@@ -20,6 +20,7 @@ import * as list from '../../src/app/api/v1/admin/users/route';
 import * as detail from '../../src/app/api/v1/admin/users/[id]/route';
 import * as roles from '../../src/app/api/v1/admin/users/[id]/roles/route';
 import * as status from '../../src/app/api/v1/admin/users/[id]/status/route';
+import * as email from '../../src/app/api/v1/admin/users/[id]/email/route';
 import { setUserRoles, setUserStatus } from '../../src/server/users';
 
 const ctx = setupTestDatabase();
@@ -60,6 +61,12 @@ const ROUTES: [string, Call, boolean][] = [
   [
     'PUT status',
     (u, t) => send(u, status.PUT, `${BASE}/${t.id}/status`, 'PUT', { status: 'disabled' }),
+    false,
+  ],
+  [
+    'PUT email',
+    (u, t) =>
+      send(u, email.PUT, `${BASE}/${t.id}/email`, 'PUT', { email: 'm@elevateeducation.in' }),
     false,
   ],
 ];
@@ -306,5 +313,62 @@ describe('list and detail', () => {
       ['user.roles_changed', a.displayName],
     ]);
     expect((await send(a, detail.GET, `${BASE}/${crypto.randomUUID()}`)).status).toBe(404);
+  });
+});
+
+describe('change login email (brief §3: same person, same account)', () => {
+  const put = (actor: TestUser, id: string, value: string) =>
+    send<{ id: string; email: string; sessionsRevoked: number }>(
+      actor,
+      email.PUT,
+      `${BASE}/${id}/email`,
+      'PUT',
+      { email: value },
+    );
+
+  it('keeps the account id, staff record and history; ends sessions; audits old → new', async () => {
+    const a = await admin();
+    const target = await createTestUser(ctx.db, { roles: ['teacher'] });
+    const [staff] = await ctx.db
+      .insert(staffMembers)
+      .values({ userId: target.id, fullName: 'Sample Moving Teacher' })
+      .returning();
+    const res = await put(a, target.id, ' Moved.Teacher@ElevateEducation.in ');
+    expect(res).toMatchObject({
+      status: 200,
+      data: { id: target.id, email: 'moved.teacher@elevateeducation.in', sessionsRevoked: 1 },
+    });
+    const [row] = await ctx.db.select().from(users).where(eq(users.id, target.id));
+    expect(row?.email).toBe('moved.teacher@elevateeducation.in');
+    const [linked] = await ctx.db.select().from(staffMembers).where(eq(staffMembers.id, staff!.id));
+    expect(linked?.userId).toBe(target.id);
+    expect(await validateSession(ctx.db, target.token, testSessionSecret())).toBeNull();
+    expect((await audits(target.id, 'user.email_changed'))[0]).toMatchObject({
+      actorUserId: a.id,
+      before: { email: target.email },
+      after: { email: 'moved.teacher@elevateeducation.in' },
+    });
+    expect(await ctx.db.select().from(users).where(eq(users.email, target.email))).toHaveLength(0);
+  });
+
+  it('refuses an email another account uses (409), another domain (403) and your own (403)', async () => {
+    const a = await admin();
+    const target = await createTestUser(ctx.db, { roles: ['teacher'] });
+    const other = await createTestUser(ctx.db, { roles: ['teacher'] });
+    expect((await put(a, target.id, other.email)).status).toBe(409);
+    expect((await put(a, target.id, 'someone@gmail.com')).status).toBe(403);
+    expect((await put(a, a.id, 'me.new@elevateeducation.in')).status).toBe(403);
+    const [row] = await ctx.db.select().from(users).where(eq(users.id, target.id));
+    expect(row?.email).toBe(target.email);
+    expect(await audits(target.id, 'user.email_changed')).toHaveLength(0);
+  });
+
+  it('404 for an unknown account', async () => {
+    const res = await put(
+      await admin(),
+      '00000000-0000-4000-8000-000000000000',
+      'x1@elevateeducation.in',
+    );
+    expect(res.status).toBe(404);
   });
 });

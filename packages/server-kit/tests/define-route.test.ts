@@ -194,6 +194,36 @@ describe('defineRoute', () => {
     expect((await callRoute(either, authedRequest(marketer, '/x'))).status).toBe(403);
   });
 
+  it('maxBodyBytes: 413 past the cap, by declared length or by bytes actually sent', async () => {
+    const capped = defineRoute(
+      { permission: 'authenticated', body: z.object({ s: z.string() }), maxBodyBytes: 2048 },
+      async ({ body }) => body.s,
+    );
+    const user = await createTestUser(ctx.db, { roles: ['teacher'] });
+    const send = (s: string, headers?: Record<string, string>) =>
+      callRoute(capped, authedRequest(user, '/x', { json: { s }, headers }));
+    expect((await send('ok')).data).toBe('ok');
+    const streamed = await send('x'.repeat(3000));
+    expect(streamed.status).toBe(413);
+    expect(streamed.error!.message).toBe('The request is larger than the 2 KB limit.');
+    expect((await send('ok', { 'content-length': '99999' })).status).toBe(413);
+    // A stream that breaks mid-upload (client abort) is a 400, not a 500.
+    const broken = new ReadableStream<Uint8Array>({
+      pull: (c) => c.error(new Error('connection reset')),
+    });
+    const { headers } = authedRequest(user, '/x', { json: {} });
+    const aborted = await callRoute(
+      capped,
+      new Request('http://localhost:3000/x', {
+        method: 'POST',
+        headers,
+        body: broken,
+        duplex: 'half',
+      } as RequestInit),
+    );
+    expect(aborted.status).toBe(400);
+  });
+
   it('created() returns 201', async () => {
     const make = defineRoute({ permission: 'authenticated' }, async () => created({ id: ID }));
     const user = await createTestUser(ctx.db, { roles: ['teacher'] });

@@ -1,10 +1,9 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { can } from '@elevate/authorization';
+import { can, scopeFor } from '@elevate/authorization';
 import type { Metric } from '@elevate/shared-contracts';
 import { formatMetricValue, PageHeader } from '@elevate/shared-ui';
 import { rangeOf, reviewsInRange } from '../../server/overview';
 import { fetchAcademicSummary } from '../../server/summaries';
-import { HR_UNAVAILABLE } from '../../server/teacher-ops';
 import { AcademicPanel, Unavailable } from '../../ui/cross-module';
 import { fmtDateTime } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
@@ -104,7 +103,14 @@ async function Summary({
       ) : null}
       <Segment title="Teacher attendance">
         <p className="el-field-hint">
-          {HR_UNAVAILABLE}. Missing teaching logs are not treated as absence.
+          Staff attendance is kept by HR
+          {scopeFor(user, 'ops:attendance:read') === 'all' ? (
+            <>
+              {' '}
+              (<a href="/ops/hr/attendance">HR → Attendance</a>)
+            </>
+          ) : null}
+          . Class delivery is not attendance, and missing teaching logs are not treated as absence.
         </p>
       </Segment>
       <Segment

@@ -2,8 +2,10 @@ import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
 import { Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import type { PageAccess } from '@elevate/server-kit/next';
-import { listTeachers, todayIst, unavailableOn } from '../../server';
+import { can } from '@elevate/authorization';
+import { assignmentOptions, listBatches, listStaff, listTeachers, todayIst, unavailableOn } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
+import { RecordAssignmentForm } from '../../ui/assignments';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -25,9 +27,12 @@ async function Body({ access }: { access: PageAccess }) {
     const teachers = await listTeachers(db, actorFor(access.user));
     return { teachers, away: await unavailableOn(db, teachers.map((t) => t.staffId), today) };
   });
+  const forms = can(access.user, 'academic:assignments:write')
+    ? await load(async () => ({ staff: await listStaff(db), options: await assignmentOptions(db), batches: await listBatches(db, actorFor(access.user)) }))
+    : null;
   return (
     <>
-      <PageHeader title="Teachers" description="Staff with a teaching assignment. Names come from the staff record; subjects and batches from current assignments. No ratings or rankings." />
+      <PageHeader title="Teachers" description="Staff with a teaching assignment, current or pending. Names come from the staff record; subjects and batches from assignments. Open a teacher to record or change assignments. No ratings or rankings." />
       {!data.ok ? (
         <LoadError error={data.error} />
       ) : (
@@ -36,10 +41,10 @@ async function Body({ access }: { access: PageAccess }) {
             compact
             rows={data.data.teachers}
             rowKey={(t) => t.staffId}
-            empty={<EmptyState title="No teachers yet" description="Assign a staff member to a batch and subject from the batch page; they appear here." />}
+            empty={<EmptyState title="No teachers yet" description="Assign a staff member to a subject from the batch page; they appear here." />}
             columns={[
               { key: 'name', header: 'Teacher', render: (t) => <><a href={MODULE_PATHS.teacher(t.staffId)}><strong>{t.name}</strong></a> {data.data.away.has(t.staffId) ? <StatusBadge tone="warning">Unavailable today (academic record)</StatusBadge> : null}</> },
-              { key: 'subjects', header: 'Subjects', render: (t) => t.subjects.join(', ') || 'No current assignment' },
+              { key: 'subjects', header: 'Subjects', render: (t) => <>{t.subjects.join(', ') || 'No current assignment'}{t.pendingSubjects.length ? <><br />Pending, no batch yet: {t.pendingSubjects.join(', ')}</> : null}</> },
               { key: 'batches', header: 'Batches', render: (t) => t.batches.join(', ') || '—' },
               { key: 'today', header: `Classes today (${today})`, numeric: true, render: (t) => t.todayClasses },
               { key: 'logs', header: 'Logs not submitted', numeric: true, render: (t) => <span title={`Delivered classes ${t.pendingLogsRange.from} to ${t.pendingLogsRange.to}`}>{t.pendingLogs}</span> },
@@ -47,8 +52,9 @@ async function Body({ access }: { access: PageAccess }) {
           />
           <details className="el-explain">
             <summary>How this list is defined</summary>
-            <p>Logs not submitted counts classes this teacher delivered in the last 14 days without a submitted class record. HR attendance and leave are not shown: there is no HR source yet (HR attendance unavailable).</p>
+            <p>Logs not submitted counts classes this teacher delivered in the last 14 days without a submitted class record. A pending assignment has no batch yet and opens no students. HR attendance and leave are kept by HR in Business Operations and are not shown here.</p>
           </details>
+          {forms ? forms.ok ? <RecordAssignmentForm {...forms.data} /> : <LoadError error={forms.error} /> : null}
         </Card>
       )}
     </>

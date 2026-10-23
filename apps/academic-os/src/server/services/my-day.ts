@@ -3,7 +3,8 @@
  * Coordinator: planned vs delivered vs cancelled vs not-yet-recorded, uncovered classes,
  * conflicts, missing attendance/logs, awaiting-batch enrolments, pending marking. Every
  * figure carries the date range it counts; missing is never zero; delivery ≠ attendance ≠
- * log (R12). HR attendance has no source (R2), so it is always "HR attendance unavailable".
+ * log (R12). Every teacher gets the same view, filled from their own assignments (brief
+ * 23 Oct 2026 §7); staff attendance lives in HR (My attendance), never inferred from classes.
  */
 import { and, count, eq, gte, inArray, isNull, notExists, or } from 'drizzle-orm';
 import {
@@ -22,13 +23,13 @@ import { can } from '@elevate/authorization';
 import { addDays, type BatchId, type IsoDate } from '@elevate/shared-types';
 import { parseClock } from '../../domain';
 import { resolveScope, todayIst, type Actor } from '../context';
+import { listAssignmentsFor } from './assignments';
 import { listBatches } from './batches';
 import { getBatchCoverage } from './curriculum';
 import { listInterventions } from './progress';
 import { checkTimetableFor, listSessions, weekRange, type SessionListRow } from './timetable';
 import { uncoveredSessions } from './unavailability';
 
-export const HR_UNAVAILABLE = 'HR attendance unavailable';
 export const LOOKBACK_DAYS = 13;
 
 /** Minutes after midnight now, Asia/Kolkata. */
@@ -105,7 +106,8 @@ export async function teacherDay(db: Database, actor: Actor, now = new Date()) {
     demoAwaitingFeedback: demoRows.filter((d) => !reviewed.has(d.opsDemoSessionId)).map((d) => ({ ...d, session: past.find((s) => s.id === d.sessionId)! })),
     assessmentsToMark: assessments,
     support: support.map((r) => ({ ...r.intervention, studentName: r.studentName, due: r.intervention.dueDate !== null && r.intervention.dueDate <= today })),
-    hrAttendance: HR_UNAVAILABLE,
+    /** Current and pending assignments (pending: no batch yet, opens nothing). */
+    assignments: await listAssignmentsFor(db, { staffIds: [staffId] }),
   };
 }
 

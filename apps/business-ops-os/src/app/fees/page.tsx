@@ -13,9 +13,11 @@ import { listHref, options } from '../../ui/list-controls';
 import { FormModal, RecordModal } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
 import { DetailTable, Segment } from '../../ui/sections';
+import { AnnualTuition } from './_components/annual-tuition';
+import { plural } from './_components/owing-dialog';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Fee structure' };
+export const metadata = { title: 'Fees' };
 
 type Params = Record<string, string | undefined>;
 type Fee = Awaited<ReturnType<typeof listFeeStructures>>['items'][number];
@@ -49,7 +51,7 @@ const amount = (f: Fee) =>
 
 const instalments = (f: Fee) =>
   f.instalmentCount
-    ? `${f.instalmentCount} instalment${f.instalmentCount === 1 ? '' : 's'}${f.instalmentNote ? `: ${f.instalmentNote}` : ''}`
+    ? `${plural(f.instalmentCount, 'instalment')}${f.instalmentNote ? `: ${f.instalmentNote}` : ''}`
     : (f.instalmentNote ?? 'Not set');
 
 export default async function FeesPage({ searchParams }: { searchParams: Promise<Params> }) {
@@ -58,10 +60,13 @@ export default async function FeesPage({ searchParams }: { searchParams: Promise
   return (
     <Frame access={access} active="fees">
       <PageHeader
-        title="Fee structure"
-        description="Course fees by programme and mode; sample figures until the owner approves them."
+        title="Fees"
+        description="Annual tuition billed, paid and outstanding for an academic year, then course fees by programme and mode."
         tabs={<FeesNav current="structure" user={access.user} />}
       />
+      <Section label="Loading annual tuition…">
+        <AnnualTuition user={access.user} sp={sp} />
+      </Section>
       <Section label="Loading the fee structure…">
         <Fees user={access.user} sp={sp} />
       </Section>
@@ -165,7 +170,7 @@ async function Fees({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
         flush
         description="One row per combination and mode, in programme-list order. Fees are course totals unless marked / month."
       >
-        {table(inCatalog, `${inCatalog.length} fee row${inCatalog.length === 1 ? '' : 's'}`)}
+        {table(inCatalog, plural(inCatalog.length, 'fee row'))}
       </Segment>
       {missing.length ? (
         <Alert tone="warning" title="No fee recorded for these combinations">
@@ -178,7 +183,7 @@ async function Fees({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
           flush
           description="Figures that do not match one of the allowed combinations (for example website batches). Kept as drafts for reference."
         >
-          {table(others, `${others.length} row${others.length === 1 ? '' : 's'}`)}
+          {table(others, plural(others.length, 'row'))}
         </Segment>
       ) : null}
       {open && sp.act === 'edit' && edit ? (

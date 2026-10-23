@@ -1,10 +1,44 @@
 # Elevate OS — handoff
 
-_Last updated 23 Oct 2026. Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
+_Last updated 23 Oct 2026 (HR area). Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
 
 ## For the owner (plain language)
 
 **What it is.** Elevate OS is the internal system your staff sign in to. Since 22 Oct 2026 it has three **workspaces**, one per kind of work, each at its own address: Business Operations (enquiries, demos, admissions, students, fees, staff tasks), Academic (teachers and coordinators) and Marketing. A fourth address holds Users & roles. Only `@elevateeducation.in` accounts can use it (D-030).
+
+### Status report — 23 Oct 2026 (HR area)
+
+```
+What's live now: nothing on the internet yet. On this computer, the same four addresses
+  (Business Operations :3000, Academic :3001, Marketing :3002, Users & roles :3003). The new
+  HR screens need one database update first (step 7 below); until then they do not open.
+What I did:
+- HR is back inside Business Operations, as you asked: a new "HR manager" role with its own
+  menu — staff records (with private contact details only HR can see), who teaches what,
+  staff attendance, giving work to people and checking what they hand in, daily, weekly and
+  monthly work reports, and student feedback about teachers. Every new permission is marked
+  "Proposed" until you confirm it.
+- Attendance never guesses: a day with no check-in says "not marked", never "absent"; only HR
+  can mark someone absent, and nobody can mark or approve their own attendance. Check-ins are
+  typed in or imported from a file; no machine is connected.
+- Work handed in is frozen as a version; nobody can approve their own work, and a task's
+  owner cannot switch its review off. Teachers see only approved summaries of student
+  feedback about them, never the raw comments, and nobody sees feedback about themselves.
+- Your staff answers are in: the two Somas are two people; Satish teaches IPMAT Quant on the
+  April 2027 Class 12 batch from today, with Class 11/12 Maths waiting for a batch; Nikunj's
+  CA Accounting is recorded as waiting for a batch (my pick — please confirm).
+- Also new: files can be attached to tasks (on this computer only), a notifications page in
+  every workspace, AI drafting buttons (OpenAI writes a first draft; a person always checks
+  and saves it), the dark charcoal sidebar you chose, and marketing employees now see only
+  the campaigns they are members of.
+What I need from you: step 7 (the database update) and the new rows at the top of
+  "Decisions waiting for you" — first, whether the new HR permissions are right.
+What's next:
+- After step 7, open Business Operations as the HR sample user and as yourself, and tell me
+  what looks wrong; the check in a real browser is still to be done.
+- Choose where uploaded files will be kept once the system is on the internet.
+Placeholders still to replace: see PLACEHOLDERS.md.
+```
 
 ### Status report — 22–23 Oct 2026 (new look, dashboards, cross-workspace checks, reports)
 
@@ -158,12 +192,40 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 
 **6. Database update for the teacher report — done on your computer on 23 Oct 2026** (database change `0014_teacher_reports`, which only adds the table that keeps generated teacher reports; `db:check` passed 19/19). On another computer: with `npm run db:start` running, type `! npm run db:migrate` in the Claude Code chat (or run `npm run db:migrate` in a terminal in the `elevate-os` folder).
 
+**7. Database update for the HR area (this computer only) — not done yet.** The HR screens need database change `0015`. It also rewrites some existing task and report rows (a task marked "blocked" keeps that as a flag instead of a status; every old end-of-day report becomes a day report), so take a backup first. Only you can do this, because it changes the database on your computer.
+1. Make sure the database is running (`npm run db:start` in a terminal in the `elevate-os` folder, left open).
+2. In the Claude Code chat type `! npm run db:backup`. If it says `pg_dump` is not installed (likely on this computer), stop and ask the developer to take a backup for you before going on.
+3. Type `! npm run db:migrate`. It should say the migrations were applied.
+4. Type `! npm run db:check`. It should end with all checks passed.
+5. Type `! npm run db:seed`. This adds the Sikar centre, the fictional HR sample user `hr-manager@example.test` and the teaching assignments you gave today. Running it again is safe.
+6. Optional: type `! npm run db:seed-demo-accounts` to refresh the demo sign-ins; it also sets up `satish@elevateeducation.in` as a teacher sign-in for testing on this computer only (we assumed the `.in` ending; tell me if his address is different).
+If any step shows an error, stop and send the developer the last lines; nothing is half-applied (the update runs as one step).
+
+**8. AI drafting: add credit to your OpenAI account.** The AI buttons use your OpenAI account, which needs credit; only you can pay for it.
+1. Open https://platform.openai.com and sign in with the account the key came from.
+2. Click the gear icon (**Settings**) at the top right, then **Billing** in the left menu.
+3. Click **Add to credit balance**, choose an amount, and confirm with your card.
+4. If the key is not yet in the `.env` file in the `elevate-os` folder, open `.env` in Notepad and add two lines: `OPENAI_API_KEY=` followed by your key, and `OPENAI_MODEL=gpt-5.4-mini`. Save. Never paste the key in chat or anywhere else; the code checks refuse any code file that contains a key like it.
+5. Before staff use these buttons, please answer the AI data-sharing question in "Decisions waiting for you" (names, phone numbers and codes are hidden before anything is sent, but a name typed in lower case can still slip through).
+
 ### Decisions waiting for you
 
 Until you answer, the system uses the safe choice shown and marks it "Proposed".
 
 | Question | Safe choice used today |
 |---|---|
+| **New 23 Oct (HR).** Are the new HR permissions right? The HR manager runs staff records, attendance, task review, work reports and teacher feedback; every staff member sees their own attendance; the director, coordinators and the marketing manager review their own team's tasks (D-080) | As built, all marked Proposed |
+| **New 23 Oct (HR).** Which staff does HR look after? Today: the Academics and Marketing & Growth departments, plus anyone with no department yet (so HR can place them) | As stated (Proposed) |
+| **New 23 Oct (HR).** May an operations manager end the employment of another operations manager? (Directors and platform administrators can never be changed from HR) | Yes |
+| **New 23 Oct (HR).** HR staff who also teach: they cannot read raw student feedback about teachers and must pass that work to a colleague (D-088) | As stated (Proposed) |
+| **New 23 Oct (HR).** When the person who creates a task gives it to themselves, should they be allowed to switch its review off? | No — the owner of a task can never switch its review off |
+| **New 23 Oct (HR).** Attendance and report settings: 10 minutes' grace before "late"; half day 4 hours, full day 8 hours; the week starts on Monday; no deadline for weekly or monthly reports; feedback shown only for groups of at least 5 students; ratings 1 to 5; six feedback categories (explanation clarity, pace, doubt resolution, preparedness, classroom engagement, helpfulness of materials); an approved task can be reopened by its reviewer or HR; AI drafts limited to 50 per person per day | As stated (all Proposed) |
+| **New 23 Oct (AI).** May student feedback, work reports and task text be sent to OpenAI to draft summaries (Digital Personal Data Protection Act)? Names, phone numbers, emails and codes are hidden first, but a name the system does not know, typed in lower case, can still get through (D-092) | AI buttons on, marked Proposed — please confirm before staff use them |
+| **New 23 Oct (Marketing).** Marketing employees cannot assign people to content (only the marketing manager can), and they still see the weekly figures of every social account | As stated (Proposed) |
+| **New 23 Oct (staff).** Nikunj Bindal: is CA Foundation Accounting (course `CAF-ACC-SEP27`) right as "waiting for a batch"? This was my pick; on 21 Oct no assignment was made (D-082) | Recorded as waiting, opens nothing |
+| **New 23 Oct (staff).** The sign-in `soma@…`: which Soma is it — "Soma" (CLAT Current Affairs) or "Soma Tiwari" (Economics)? The other session made a ruling; please confirm it | As ruled in the other session |
+| **New 23 Oct (files).** Where should uploaded files be kept once the system is on the internet? Until you choose, uploads work only on this computer (D-085) | Uploads refused online |
+| **New 23 Oct (samples).** The fictional sample teacher is also the main Quant teacher on the real IPMAT April 2027 batch, beside Satish. Run `npm run db:clear-samples` before real use (step 4.5) | Sample stays until you clear samples |
 | **New 23 Oct.** Is the new light look right? Open each workspace on your own screen and phone (D-074) | As built; the dark look is kept as a backup |
 | **New 23 Oct.** Users & roles still has an "Overview" page for signed-in people, left from before the workspaces. Keep it, or delete it and keep only Users & roles? | Kept |
 | **New 23 Oct.** May counsellors see the three staff-only parts of a teacher review (attendance evidence, homework evidence, academic concerns) for their own students? | Yes (Proposed) |
@@ -173,11 +235,9 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | **New 23 Oct.** Will another system ever send leads into Elevate OS (a website form, a CRM, Meta lead ads)? The unfinished Marketing-to-Business-Operations lead connection was retired (D-075) | No connection; leads are typed in or worked on the shared lead list |
 | **New 23 Oct.** Who may generate and read the new internal teacher report, and should the auditor see it? | Operations manager and director (Proposed); the auditor cannot |
 | **New 22 Oct (workspaces).** Who opens which workspace: teachers only Academic; academic coordinators Academic and Business Operations; marketing staff only Marketing, with leads, lead contact details and their own tasks (D-073)? | As stated (Proposed) |
-| **New 22 Oct.** Staff attendance (OD-026): should the system keep staff attendance? Until then teachers have no "My Attendance" page and the Overview says "no HR module" | Not built; hidden |
 | **New 22 Oct.** Should Marketing see Events and Webinars? It needs a new permission that covers only events, because today's meeting permission also covers private counselling | Hidden in Marketing |
 | **New 22 Oct.** An enquiry's campaign is typed as free text. Should it be chosen from the list of campaigns, so results by campaign (leads → demos → admissions) can be counted? | Free text; results by campaign not shown |
 | **New 22 Oct.** When a lead comes in several times from different sources, which source counts in "leads by source": the first enquiry, or every enquiry? | Not decided; shown as recorded |
-| **New 22 Oct.** Should teachers see approved feedback about themselves inside Academic? They saw it in Business Operations before | Not shown |
 | **New 22 Oct.** Keep a student's guardian name and relationship hidden from teachers, directors and auditors in Academic (phone and email were already hidden)? | Hidden |
 | **New 22 Oct.** Menu names and defaults: Business Operations groups "Teaching and work" and "Insight"; the Overview opens on this month to date; in Marketing, Ideas is a tab under Content Calendar and Accounts a tab under Campaigns | As built |
 | **New 22 Oct.** Google sign-in now returns to `http://localhost:3003/api/v1/auth/google/callback` (step 5 above), so the admin app must run for Google sign-in | As built |
@@ -215,9 +275,9 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | A staff account cannot be deleted while it is the only person on a Marketing content assignment (writer, reviewer and so on). Keep refusing, or should the system first ask you to hand that work to someone else? | Refused; reassign the work first, then delete |
 | The audit history (who changed what) is never changed by the system, but the database itself does not forbid it. Add a database rule later so even a developer mistake cannot edit or delete it? | No database rule yet (the code only adds rows) |
 
-Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), a new layout (D-054, D-059; the dark look itself was replaced on 22 Oct, D-074), teacher reviews written in Academic (D-058), demo attendance marked by the teacher in Academic (D-060), sample staff named "Sample …" with `@example.test` sign-ins (D-061).
+Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), a new layout (D-054, D-059; the dark look itself was replaced on 22 Oct, D-074), teacher reviews written in Academic (D-058), demo attendance marked by the teacher in Academic (D-060), sample staff named "Sample …" with `@example.test` sign-ins (D-061). On 23 Oct 2026: HR back inside Business Operations, including staff attendance (D-080, D-086; answers the old staff-attendance question OD-026), teachers see approved feedback summaries in Academic (D-088), the charcoal sidebar (D-081), your staff answers on Soma, Satish and Nikunj (D-082), directors make student reports (D-079), AI drafting with the model you chose (D-092).
 
-**What is not connected yet.** Email and text messages, event invitations, the social-media publishing tool, document uploads, a biometric device and a CRM are "pretend" connections: they record what would happen and never claim it happened. Hindi (Devanagari) text does not print in PDFs yet; it shows as "?" with a note.
+**What is not connected yet.** Email and text messages, event invitations, the social-media publishing tool, a biometric device and a CRM are "pretend" connections or not connected at all; file uploads work only on this computer until you choose where files are kept online (D-085): they record what would happen and never claim it happened. Hindi (Devanagari) text does not print in PDFs yet; it shows as "?" with a note.
 
 **Security.** Every page checks who is signed in and what they may see. Most students are minors, so phone numbers, addresses and documents are shown only to staff with the private-data permission, and every contact search is logged. Passwords and keys stay in a private settings file (`.env`) that is never uploaded.
 

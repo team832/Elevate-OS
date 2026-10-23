@@ -13,7 +13,7 @@ import {
 } from '@elevate/shared-ui';
 import { addDays, isIsoDate, toIsoDate, type IsoDate } from '@elevate/shared-types';
 import { formatIst, istDate, istMidnightUtc, modulePath, weekdayIndex } from '../../domain';
-import { listCalendar, listPlannedPlacements } from '../../server';
+import { contentFilter, listCalendar, listPlannedPlacements } from '../../server';
 import { ContentStateBadge, PlacementBadge } from '../../ui/badges';
 import { MarketingPage, Section, param, type SearchParams } from '../../ui/shell';
 
@@ -50,16 +50,21 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
       description="Scheduled and published posts by date (IST) and account. Clashes block scheduling."
       searchParams={sp}
     >
-      {() => (
+      {(user) => (
         <Section
           load={async () => {
             const db = getDb();
-            const rows = await listCalendar(db, {
-              from: istMidnightUtc(from),
-              to: istMidnightUtc(addDays(to, 1)),
-              accountCode: account,
-            });
-            const planned = await listPlannedPlacements(db);
+            const scope = await contentFilter(db, user);
+            const rows = await listCalendar(
+              db,
+              {
+                from: istMidnightUtc(from),
+                to: istMidnightUtc(addDays(to, 1)),
+                accountCode: account,
+              },
+              scope,
+            );
+            const planned = await listPlannedPlacements(db, scope);
             const byDay = new Map<string, Row[]>();
             for (const r of rows) {
               const day = istDate(at(r) ?? new Date(0));
@@ -68,6 +73,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
             const clashes = rows.filter(conflictCount);
             return (
               <div className="el-stack">
+                {scope ? (
+                  <p className="el-field-hint">
+                    Clashes are checked only against posts in your campaigns.
+                  </p>
+                ) : null}
                 <form method="get" className="el-inline-form">
                   <Field id="from" label="From (IST)">
                     <TextInput id="from" name="from" type="date" defaultValue={from} />

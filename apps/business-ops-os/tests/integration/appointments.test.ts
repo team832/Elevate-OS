@@ -230,10 +230,18 @@ describe('PATCH /ops/api/v1/appointments/:id', () => {
 });
 
 describe('teacher seed (owner-supplied, brief §12)', () => {
-  it('creates 7 name-confirmed staff with no login or contact data, idempotently; Nikunj Bindal teaches Accounts (D-047)', async () => {
+  it('creates 8 owner-supplied staff with no login or contact data, idempotently; Nikunj Bindal teaches Accounts (D-047); Soma and Soma Tiwari stay two people (OA-2)', async () => {
     // A database seeded before D-047 holds "Accountancy / CA" with no teacher; re-seeding removes it.
     await ctx.db.insert(opsStaffSubjectCapabilities).values({ subject: 'Accountancy / CA' });
     await seedTeachers(ctx.db);
+    // A database seeded before OA-2 holds Soma Tiwari's old subject; re-seeding retires it.
+    const [tiwari] = await ctx.db
+      .select({ id: staffMembers.id })
+      .from(staffMembers)
+      .where(eq(staffMembers.fullName, 'Soma Tiwari'));
+    await ctx.db
+      .insert(opsStaffSubjectCapabilities)
+      .values({ staffId: tiwari!.id, subject: 'Current Affairs' });
     await seedTeachers(ctx.db);
     const names = OWNER_SUPPLIED_STAFF.map((t) => t.fullName);
     const rows = await ctx.db
@@ -241,10 +249,10 @@ describe('teacher seed (owner-supplied, brief §12)', () => {
       .from(staffMembers)
       .innerJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id))
       .where(inArray(staffMembers.fullName, names));
-    expect(rows).toHaveLength(7);
+    expect(rows).toHaveLength(8);
     for (const { s, p } of rows) {
       expect(s.userId).toBeNull();
-      expect(p.verificationStatus).toBe('confirmed');
+      expect(p.verificationStatus).toBe(s.fullName === 'Soma' ? 'unverified' : 'confirmed');
       // The random staff id can hold 10 digits in a row; only the other fields matter here.
       expect(JSON.stringify({ ...p, staffId: null })).not.toMatch(/@|\+91|\d{10}/);
     }
@@ -254,6 +262,18 @@ describe('teacher seed (owner-supplied, brief §12)', () => {
       'CEO / director of coaching',
     );
     const caps = await ctx.db.select().from(opsStaffSubjectCapabilities);
+    const subjectsOf = (name: string) =>
+      caps
+        .filter((c) => c.staffId === rows.find((r) => r.s.fullName === name)!.s.id)
+        .map((c) => c.subject)
+        .sort();
+    expect(subjectsOf('Soma')).toEqual(['CLAT Current Affairs']);
+    expect(subjectsOf('Soma Tiwari')).toEqual(['Economics']);
+    expect(subjectsOf('Satish Raghuvanshi')).toEqual([
+      'Class 11 Mathematics',
+      'Class 12 Mathematics',
+      'IPMAT Quantitative Aptitude',
+    ]);
     const nikunj = rows.find((r) => r.s.fullName === 'Nikunj Bindal')!;
     expect(nikunj.p.roleNote).toBe('Head of Business Operations');
     expect(

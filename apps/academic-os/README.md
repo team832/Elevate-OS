@@ -77,7 +77,7 @@ Permissions: `module:access`, `programmes:manage`, `courses:read|write`, `curric
 
 **Own scope** (`src/server/context.ts → resolveScope`): the teacher's `core.staff_members` row is found by `user_id`.
 - Sessions, class records, attendance: sessions the teacher teaches — the planned `teacher_staff_id`, or an active co-teacher / substitute / actual row in `session_teachers`. A teacher can mark delivered, log a class or take attendance only for those sessions.
-- Batches and assessments: batches where the teacher's assignment is open on the day (by dates, not status; D-065). Marks entry also needs the assessment's subject.
+- Batches and assessments: batches where the teacher has a non-pending assignment with a batch whose dates cover the day (D-065, D-083: a `pending` row — no batch yet — opens nothing; an `ended` row only up to its end date). Marks entry also needs the assessment's subject.
 - Students, progress, reviews: students placed in those batches (batch placements, D-064) during the assignment window.
 - Rules: `docs/ALGORITHMS.md` A18.
 - A user without a staff record has an empty scope (sees nothing), never "all".
@@ -85,6 +85,8 @@ Permissions: `module:access`, `programmes:manage`, `courses:read|write`, `curric
 - Student contact details (student email and phone, date of birth, and every guardian field: name, relationship, email, phone) are returned only to holders of `academic:students:write` (the coordinator); teachers, directors and auditors get `null` and `contactsHidden: true` (PLT-014; guardian name and relationship hidden since 22 Oct 2026, owner to confirm; test `teacher-privacy.test.ts`).
 
 Every route checks its permission on the server (`defineRoute`), every page with `requirePageAccess`; every business-state change runs in `withTransaction` with `recordAudit` (and `publishEvent` / `notify` where others must react).
+
+**Added 23 Oct 2026 (D-080 … D-093, grants Proposed):** teaching assignments carry `academic_year`, `branch_id`, `course_id` and status `pending | active | ended`; HR in Business Operations reads them through `GET /academic/api/internal/v1/teaching-assignments` (caller `ops`). Seed `academic.owner-assignments` records the owner's 23 Oct answers (Satish: IPMAT Quant active on `IPMAT-C12-APR27` from 23 Oct, Class 11/12 Maths pending; Nikunj: CA Accounting pending on `CAF-ACC-SEP27`, the agent's pick; Soma: CLAT Current Affairs pending; D-082). New pages for staff, mounted from Business Operations: `/academic/my-attendance` (own staff attendance and correction requests), `/academic/my-feedback` (approved feedback summaries only), `/academic/my-reports` (day, week and month reports), `/academic/notifications`; the task pages gain submission versions, checklist and review (D-084). Tests: `tests/integration/teacher-workspace.test.ts`, `owner-assignments-seed.test.ts`.
 
 ## 4. Commands
 Run from the repository root.

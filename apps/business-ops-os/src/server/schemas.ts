@@ -181,9 +181,15 @@ export const createStaffBody = z.object({
   employmentType: z.enum(EMPLOYMENT_TYPES).default('not_recorded'),
   roleLabels: z.array(text(100).min(1)).max(20).default([]),
 });
+/** Department and manager change only through HR, which keeps their history (hr-staff-actions.ts). */
 export const updateStaffBody = createStaffBody
+  .omit({ departmentId: true, managerId: true })
   .extend({ status: z.enum(['active', 'on_leave', 'inactive']) })
-  .partial();
+  .partial()
+  .extend({
+    departmentId: z.never({ error: 'Use Change department on the HR staff record.' }).optional(),
+    managerId: z.never({ error: 'Use Change manager on the HR staff record.' }).optional(),
+  });
 export const updateDepartmentBody = z
   .object({
     name: text(200).min(1),

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import type { AuthenticatedUser } from '@elevate/authentication';
+import { ORGANISATION_EMAIL_DOMAIN, type AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { currentRequestId, requirePageAccess } from '@elevate/server-kit/next';
@@ -98,6 +98,7 @@ async function Account({ viewer, id }: { viewer: AuthenticatedUser; id: Authenti
   const api = `/api/v1/admin/users/${user.id}`;
   const canRoles = can(viewer, 'platform:roles:manage') && !self;
   const canStatus = can(viewer, 'platform:users:manage') && !self;
+  const canEmail = canStatus;
   return (
     <>
       <PageHeader
@@ -169,6 +170,34 @@ async function Account({ viewer, id }: { viewer: AuthenticatedUser; id: Authenti
             </div>
           </dl>
         </Card>
+        {canEmail ? (
+          <Card
+            title="Login email"
+            description={`Signs in as ${user.email}. A new address keeps this account, its roles, staff record and history, and signs ${user.displayName} out everywhere.`}
+          >
+            <JsonForm action={`${api}/email`} method="PUT" submitLabel="Change login email">
+              <div className="el-field">
+                <label htmlFor="new-email">New login email</label>
+                <input
+                  id="new-email"
+                  name="email"
+                  type="email"
+                  className="el-input"
+                  required
+                  maxLength={254}
+                  autoComplete="off"
+                  pattern={`[^@\\s]+@${ORGANISATION_EMAIL_DOMAIN.replace('.', '\\.')}`}
+                  title={`An @${ORGANISATION_EMAIL_DOMAIN} address`}
+                  aria-describedby="new-email-hint"
+                />
+                <p className="el-field-hint" id="new-email-hint">
+                  name@{ORGANISATION_EMAIL_DOMAIN} only. Use this when a person&apos;s address
+                  changes: adding them again would create a second account.
+                </p>
+              </div>
+            </JsonForm>
+          </Card>
+        ) : null}
         <Card
           title="Roles"
           description={
@@ -206,14 +235,17 @@ async function Account({ viewer, id }: { viewer: AuthenticatedUser; id: Authenti
                 key: 'action',
                 header: 'What happened',
                 render: (h) => {
-                  const before = (h.before as { roles?: string[] } | null)?.roles;
-                  const after = (h.after as { roles?: string[] } | null)?.roles;
+                  const b = h.before as { roles?: string[]; email?: string } | null;
+                  const a = h.after as { roles?: string[]; email?: string } | null;
+                  const before = b?.roles;
+                  const after = a?.roles;
                   return (
                     <>
                       {auditLabel(h.action)}
                       {after && h.action !== 'user.created_via_google'
                         ? `: ${before ? `${roleLabels(before) || 'none'} → ` : ''}${roleLabels(after) || 'none'}`
                         : ''}
+                      {h.action === 'user.email_changed' ? `: ${b?.email} → ${a?.email}` : ''}
                     </>
                   );
                 },

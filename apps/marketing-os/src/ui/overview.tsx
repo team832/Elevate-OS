@@ -67,6 +67,22 @@ export function OverviewTiles({
         href={modulePath('ideas')}
         note={`${quarantined} quarantined, waiting for OD-003`}
       />
+      <PersonalTiles followUps={followUps} tasks={tasks} />
+    </section>
+  );
+}
+
+/** The signed-in person's follow-ups, tasks and EOD status (Overview and My day). */
+export function PersonalTiles({
+  followUps,
+  tasks,
+}: {
+  /** Omitted when the person may not read leads / tasks: the tiles are not shown. */
+  followUps?: FollowUpSummary | undefined;
+  tasks?: TaskSummary | undefined;
+}) {
+  return (
+    <>
       {followUps === undefined ? null : followUps === 'failed' || followUps === null ? (
         missing(
           'Follow-ups',
@@ -109,7 +125,7 @@ export function OverviewTiles({
           />
         </>
       )}
-    </section>
+    </>
   );
 }
 

@@ -264,11 +264,11 @@ describe('links a recipient opens later', () => {
   it('teacher gets Academic links, a coordinator (also an Ops member) Ops links; a marketing owner gets a Marketing link', async () => {
     const day = new Date().toISOString().slice(0, 10);
     const r = workRoutes;
-    await callRoute(
-      r['staff-tasks/[id]'].PATCH,
-      post(teacher, { status: 'done', expectedVersion: 1 }, 'PATCH'),
-      { id: teacherTask },
-    );
+    // Status changes go through the task actions only (review round 1, C1).
+    await callRoute(r['staff-tasks/[id]/[action]'].POST, post(teacher, { expectedVersion: 1 }), {
+      id: teacherTask,
+      action: 'complete',
+    });
     const draft = await callRoute<{ id: string; version: number }>(
       r['eod-reports'].POST,
       post(teacher, { reportDate: day, summary: 'Sample day' }),

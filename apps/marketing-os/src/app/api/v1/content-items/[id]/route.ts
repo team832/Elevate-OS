@@ -8,5 +8,5 @@ const idParams = z.object({ id: z.uuid() });
 /** GET /marketing/api/v1/content-items/:id — versions, rule check, approvals, comments, placements. */
 export const GET = defineRoute(
   { permission: 'marketing:content:read', params: idParams },
-  async ({ db, params }) => getContentItemDetail(db, params.id),
+  async ({ db, params, user }) => getContentItemDetail(db, params.id, user),
 );

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { reviewFields } from '../../src/app/reviews/review-fields';
 import { ApiForm, describeDetails } from '../../src/ui/api-form';
+import { AssignmentForms, RecordAssignmentForm } from '../../src/ui/assignments';
 import { AttendanceForm } from '../../src/ui/attendance-form';
 import { fmtDateTime, fmtHours, Maybe, PlanBadge, StateBadge } from '../../src/ui/badges';
 import { CoverageSection, FeasibilitySection } from '../../src/ui/batch-sections';
@@ -171,7 +172,7 @@ describe('Batch, support and teacher views', () => {
     ).not.toContain('Update plan');
   });
 
-  it('teacher home: sample demo students are badged and HR attendance is never claimed', () => {
+  it('teacher home: sample demo students are badged, pending assignments say "No batch yet", HR attendance is never claimed', () => {
     const day = {
       today: '2026-10-22',
       window: { from: '2026-10-15', to: '2026-10-22' },
@@ -192,9 +193,12 @@ describe('Batch, support and teacher views', () => {
       ],
       assessmentsToMark: [],
       support: [],
-      batches: [],
+      batches: [{ id: 'b1', activeEnrolments: 4 }],
       draftReviews: 2,
-      hrAttendance: 'Not available',
+      assignments: [
+        { id: 'a1', subjectName: 'Quant', programmeName: 'IPMAT preparation', courseCode: 'IPMAT-C12', batchId: 'b1', batchCode: 'IPMAT-B1', role: 'primary', academicYear: '2027-28', branchName: null, startDate: null, endDate: null, status: 'active' },
+        { id: 'a2', subjectName: 'Mathematics', programmeName: 'Class 11', courseCode: 'COM-C11', batchId: null, batchCode: null, role: 'primary', academicYear: null, branchName: null, startDate: null, endDate: null, status: 'pending' },
+      ],
     };
     const out = html(<TeacherHome day={day as never} />);
     expect(out).toContain('Tanisha Demo Student');
@@ -203,10 +207,12 @@ describe('Batch, support and teacher views', () => {
       'Write review<span class="el-visually-hidden"> for Tanisha Demo Student</span>',
     );
     expect(out).toContain('No more classes today');
-    expect(out).toContain('Marking a class delivered is not HR attendance.');
+    expect(out).not.toContain('HR attendance');
     expect(out).toContain('Student attendance not recorded (0)');
-    expect(out).toContain('Your batches (0)');
-    expect(out).toContain('No batch is assigned to you today');
+    expect(out).toContain('Your subjects and batches (2)');
+    expect(out).toContain('<a href="/academic/batches/b1">IPMAT-B1</a>');
+    expect(out).toContain('No batch yet — a coordinator will assign one');
+    expect(out).toContain('Not recorded'); // academic year / branch unknown, never blank
     expect(out).toContain('2 review drafts not submitted yet</a>');
   });
 });
@@ -219,16 +225,18 @@ describe('Academic navigation (brief §6)', () => {
       [
         'My day',
         'My meetings',
-        'Timetable',
+        'My timetable',
         'My batches',
-        'Students',
-        'Student attendance',
-        'Teaching logs',
+        'My students',
         'Curriculum',
+        'Teaching logs',
+        'Student attendance',
         'Assessments',
         'Student reviews',
         'My tasks',
-        'My EOD report',
+        'My attendance',
+        'My reports',
+        'Feedback and development',
       ],
     ],
     [
@@ -238,13 +246,14 @@ describe('Academic navigation (brief §6)', () => {
         'Timetable',
         'Batches',
         'Students',
-        'Student attendance',
-        'Teaching logs',
         'Curriculum',
+        'Teaching logs',
+        'Student attendance',
         'Assessments',
         'Student reviews',
         'My tasks',
-        'My EOD report',
+        'My attendance',
+        'My reports',
         'Teachers',
         'Enrolments',
         'Enrolment intake',
@@ -253,12 +262,12 @@ describe('Academic navigation (brief §6)', () => {
         'Academic settings',
       ],
     ],
-    ['marketing_manager', ['My tasks', 'My EOD report']], // own tasks only; the workspace gate keeps them out of this shell
+    ['marketing_manager', ['My tasks', 'My attendance', 'My reports']], // own items only; the workspace gate keeps them out of this shell
   ])('%s sees its items in order; Coordination only with all-scope permissions', (role, labels) => {
     expect(navFor(as(role)).map((n) => n.label)).toEqual(labels);
   });
 
-  it('renders the teacher sidebar with Tasks and EOD under /academic, never /ops', () => {
+  it('renders the teacher sidebar with My tasks, My attendance, My reports and Feedback under /academic, never /ops', () => {
     const teacher = {
       id: 'u1',
       roles: ['teacher'],
@@ -279,7 +288,9 @@ describe('Academic navigation (brief §6)', () => {
     for (const [href, label] of [
       ['/academic/meetings', 'My meetings'],
       ['/academic/tasks', 'My tasks'],
-      ['/academic/tasks?tab=eod', 'My EOD report'],
+      ['/academic/my-attendance', 'My attendance'],
+      ['/academic/my-reports', 'My reports'],
+      ['/academic/my-feedback', 'Feedback and development'],
     ]) {
       expect(out).toContain(
         `href="${href}"><span class="el-nav-mark" aria-hidden="true"></span><span>${label}</span>`,
@@ -322,7 +333,7 @@ describe('Academic dashboards (22 Oct 2026 redesign)', () => {
     support: [],
     batches: [],
     draftReviews: 0,
-    hrAttendance: 'Not available',
+    assignments: [],
   };
 
   it('teacher hero: the next class shows its time, room and state with one primary "Open class" action', () => {
@@ -349,7 +360,7 @@ describe('Academic dashboards (22 Oct 2026 redesign)', () => {
         <MeetingsDay day="2026-10-22" total={null} />
       </>,
     );
-    expect(none.match(/No staff record/g)).toHaveLength(3);
+    expect(none.match(/No staff record/g)).toHaveLength(5);
     expect(none).not.toMatch(/>0</);
     const ok = html(
       <TasksDay
@@ -360,14 +371,19 @@ describe('Academic dashboards (22 Oct 2026 redesign)', () => {
             open: 3,
             overdue: 1,
             dueToday: 2,
+            submitted: 0,
             eod: 'draft',
           } as never
         }
       />,
     );
-    expect(ok).toContain('<span class="el-stat-value">3</span>');
+    expect(ok).toContain('href="/academic/tasks?due=today"');
+    expect(ok).toContain('<span class="el-stat-value">2</span>');
+    expect(ok).toContain('<span class="el-stat-value">1</span>');
     expect(ok).toContain('<span class="el-stat-value">Draft</span>');
-    expect(ok).toContain('1 overdue · 2 due today');
+    expect(ok).toContain('3 open in all');
+    const reviewed = html(<TasksDay summary={{ day: '2026-10-22', asOf: '2026-10-22T04:30:00Z', open: 3, overdue: 1, dueToday: 2, submitted: 4, eod: 'draft' } as never} />);
+    expect(reviewed).toContain('<span class="el-stat-value">4</span>');
   });
 
   const overview = {
@@ -512,5 +528,40 @@ describe('Review form (D-058)', () => {
     );
     expect(out).toContain('Business Operations feedback readers');
     expect(out).toContain('may use only strengths, areas needing support and suggested action');
+  });
+});
+
+describe('assignment forms (brief 23 Oct 2026 §4, R9)', () => {
+  const options = { subjects: [{ id: 'sub1', name: 'Mathematics', courseId: 'c11', courseCode: 'COM-C11', programmeName: 'Class 11' }], branches: [{ id: 'br1', name: 'Sample centre', status: 'provisional' }] } as never;
+  const batches = [
+    { id: 'b11', code: 'C11-A', name: 'Class 11 A', courseId: 'c11', courseCode: 'COM-C11' },
+    { id: 'bX', code: 'IPMAT-A', name: 'IPMAT A', courseId: 'cX', courseCode: 'IPMAT' },
+  ];
+  const row = { subjectName: 'Mathematics', courseId: 'c11', courseCode: 'COM-C11', role: 'primary', academicYear: '2026-27', branchId: null, startDate: null, endDate: null };
+
+  it('a pending row offers only batches of its course and a withdraw; an active row offers an end date', () => {
+    const out = html(
+      <AssignmentForms
+        staffId="s1"
+        today="2026-10-23"
+        options={options}
+        batches={batches as never}
+        rows={[{ ...row, id: 'p1', batchId: null, batchCode: null, status: 'pending' }, { ...row, id: 'a1', batchId: 'b11', batchCode: 'C11-A', status: 'active' }] as never}
+      />,
+    );
+    const pending = out.slice(out.indexOf('Set batch or edit'), out.indexOf('Edit or end'));
+    expect(pending).toContain('C11-A — Class 11 A');
+    expect(pending).not.toContain('IPMAT-A');
+    expect(pending).toContain('Withdraw pending assignment');
+    expect(out).toContain('Edit or end: Mathematics (COM-C11, C11-A)');
+    expect(out).toContain('End assignment');
+    expect(out).toContain('Sample centre (provisional)');
+  });
+
+  it('the Teachers page form picks the teacher; a profile form does not', () => {
+    const picked = html(<RecordAssignmentForm staff={[{ id: 's9', fullName: 'Sample Teacher', title: null }]} options={options} batches={batches as never} />);
+    expect(picked).toContain('Sample Teacher');
+    expect(picked).toContain('Leave empty to record it pending');
+    expect(html(<RecordAssignmentForm staffId="s1" options={options} batches={batches as never} />)).not.toContain('Sample Teacher');
   });
 });

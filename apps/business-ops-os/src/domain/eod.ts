@@ -1,191 +1,47 @@
 /**
- * End-of-day facts (owner brief 2 §9, ruling R2). Pure.
+ * Work-report facts: end-of-day (owner brief 2 §9, ruling R2), weekly and monthly (brief 23 Oct
+ * 2026 §13–14, R7). Pure.
  * A-TSK-4 "My day" grouping (from current task state, used by the day view) and A-TSK-8, the
- * EOD snapshot, built ONLY from task events and work updates dated inside the IST report day:
- * a task finished the next day is not completed today, a five-day task counts once, the open
- * backlog is replayed from events as of the cut-off (never the current status), class time from
- * Academic is never added to task time, and HR attendance is always unavailable (no HR module).
+ * report snapshot, built ONLY from task events and work updates dated inside the IST period: a
+ * task finished after the period is not completed in it, a five-day task counts once, the open
+ * backlog and the blocked flag are replayed from events as of the cut-off (never the current
+ * status), and class time from Academic is never added to task time. Week and month reports add
+ * the timeliness figures of domain/work-report.ts.
  */
 import type { AcademicTeacherActivityV1, SourceResult } from '@elevate/shared-contracts';
+import type { AttendanceSummary } from './attendance';
 import { addDays, istInstant, istToday, type IsoDate } from './dates';
+import { byPriority } from './eod-day';
 import {
-  isOverdue,
-  type EodTask,
-  type TaskEventKind,
-  type TaskPriority,
-  type TaskState,
-  type TaskStatus,
-} from './staff-tasks';
-
-export interface EodItem extends TaskState {
-  id: string;
-  title: string;
-  priority: TaskPriority;
-  dueOn: string;
-  dueTime: string | null;
-  overdue: boolean;
-}
-
-/** "My day" view of the owner's tasks (current state). */
-export interface EodSnapshot {
-  reportDate: string;
-  generatedAt: string;
-  /** Completed on the report day. */
-  done: EodItem[];
-  /** Due on the report day and not done. */
-  open: EodItem[];
-  /** Due before the report day and still not done. */
-  carried: EodItem[];
-  counts: { done: number; open: number; carried: number; overdue: number };
-}
-
-const RANK: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
-const byPriority = (
-  a: { priority: TaskPriority; dueTime: string | null },
-  b: { priority: TaskPriority; dueTime: string | null },
-) => RANK[a.priority] - RANK[b.priority] || (a.dueTime ?? '99').localeCompare(b.dueTime ?? '99');
-
-/**
- * A-TSK-4: the day's tasks from the owner's current task state (the "My day" view). Overdue is
- * judged at `now`, or at the end of the day when that day is over.
- */
-export function buildEodSnapshot(tasks: EodTask[], reportDate: string, now: Date): EodSnapshot {
-  const endOfDay = new Date(istInstant(addDays(reportDate as IsoDate, 1)).getTime() - 1);
-  const asOf = now < endOfDay ? now : endOfDay;
-  const item = (t: EodTask): EodItem => ({
-    id: t.id,
-    title: t.title,
-    priority: t.priority,
-    status: t.status,
-    progressPercent: t.progressPercent,
-    reason: t.reason,
-    dueOn: t.dueOn,
-    dueTime: t.dueTime,
-    overdue: isOverdue(t, asOf),
-  });
-  const notDone = tasks.filter((t) => t.status !== 'done').sort(byPriority);
-  const done = tasks
-    .filter((t) => t.completedAt && istToday(t.completedAt) === reportDate)
-    .sort((a, b) => a.completedAt!.getTime() - b.completedAt!.getTime())
-    .map(item);
-  const open = notDone.filter((t) => t.dueOn === reportDate).map(item);
-  const carried = notDone.filter((t) => t.dueOn < reportDate).map(item);
-  return {
-    reportDate,
-    generatedAt: now.toISOString(),
-    done,
-    open,
-    carried,
-    counts: {
-      done: done.length,
-      open: open.length,
-      carried: carried.length,
-      overdue: [...open, ...carried].filter((t) => t.overdue).length,
-    },
-  };
-}
-
-/** Tasks the day view lists as not done that still have no reason. */
-export const missingReasons = (s: EodSnapshot) =>
-  [...s.open, ...s.carried].filter((t) => !t.reason);
-
-// --- A-TSK-8: event-based EOD facts ---------------------------------------------------------
-
-export interface FactTask {
-  id: string;
-  title: string;
-  priority: TaskPriority;
-  dueOn: string;
-  dueTime: string | null;
-  /** Current owner, status and reason (used only where no event says otherwise). */
-  staffId: string;
-  status: TaskStatus;
-  reason: string | null;
-  linkedRef: string | null;
-  createdAt: Date;
-  completedAt: Date | null;
-}
-
-export interface FactEvent {
-  taskId: string;
-  kind: TaskEventKind;
-  toStatus: TaskStatus | null;
-  fromStatus: TaskStatus | null;
-  fromStaffId: string | null;
-  toStaffId: string | null;
-  occurredAt: Date;
-  reason: string | null;
-  /** due_changed: { fromDueOn, toDueOn, fromDueTime, toDueTime }. */
-  data: Record<string, unknown> | null;
-}
-
-export interface FactUpdate {
-  id: string;
-  taskId: string;
-  occurredOn: string;
-  recordedAt: Date;
-  workPerformed: string;
-  result: string | null;
-  blocker: string | null;
-  nextStep: string | null;
-  durationMinutes: number | null;
-  startedAt: Date | null;
-  endedAt: Date | null;
-  correctsUpdateId: string | null;
-}
-
-const OWNERSHIP: readonly TaskEventKind[] = ['created', 'assigned', 'reassigned', 'imported'];
-const byTime = (a: FactEvent, b: FactEvent) => a.occurredAt.getTime() - b.occurredAt.getTime();
-
-/** Events grouped by task, oldest first (group once, then replay each task cheaply). */
-export function eventsByTask(events: readonly FactEvent[]) {
-  const out = new Map<string, FactEvent[]>();
-  for (const e of [...events].sort(byTime)) out.set(e.taskId, [...(out.get(e.taskId) ?? []), e]);
-  return out;
-}
-
-/**
- * A task's owner, status, reason and due day at instant `t`, replayed from its own events (oldest
- * first); null when it did not exist yet. Before the first event that sets a value, its `from…`
- * side holds the earlier value; a task without any status event (legacy rows) falls back to its
- * completion time and otherwise its current status.
- */
-export function taskStateAt(task: FactTask, mine: readonly FactEvent[] = [], t: Date) {
-  const born = Math.min(task.createdAt.getTime(), ...mine.map((e) => e.occurredAt.getTime()));
-  if (born > t.getTime()) return null;
-  const before = mine.filter((e) => e.occurredAt <= t);
-  const after = mine.filter((e) => e.occurredAt > t);
-  const owners = (list: FactEvent[]) =>
-    list.filter((e) => OWNERSHIP.includes(e.kind) && e.toStaffId);
-  const statuses = (list: FactEvent[]) => list.filter((e) => e.toStatus);
-  const dues = (list: FactEvent[]) => list.filter((e) => e.kind === 'due_changed' && e.data);
-  const lastOwner = owners(before).at(-1);
-  const lastStatus = statuses(before).at(-1);
-  const lastDue = dues(before).at(-1)?.data;
-  const nextDue = dues(after)[0]?.data;
-  const status: TaskStatus =
-    lastStatus?.toStatus ??
-    statuses(after)[0]?.fromStatus ??
-    (task.completedAt && task.completedAt <= t
-      ? 'done'
-      : task.status === 'done'
-        ? 'pending'
-        : task.status);
-  const due = (d: Record<string, unknown> | null | undefined, side: 'to' | 'from') =>
-    d && typeof d[`${side}DueOn`] === 'string'
-      ? {
-          dueOn: d[`${side}DueOn`] as string,
-          dueTime: (d[`${side}DueTime`] as string | null) ?? null,
-        }
-      : null;
-  return {
-    owner: lastOwner?.toStaffId ?? owners(after)[0]?.fromStaffId ?? task.staffId,
-    status,
-    reason: lastStatus?.reason ?? (task.status === status ? task.reason : null),
-    since: lastStatus?.occurredAt ?? null,
-    ...(due(lastDue, 'to') ?? due(nextDue, 'from') ?? { dueOn: task.dueOn, dueTime: task.dueTime }),
-  };
-}
+  blockOf,
+  byTime,
+  eventsByTask,
+  isReceipt,
+  OWNERSHIP,
+  taskStateAt,
+  type FactEvent,
+  type FactTask,
+  type FactUpdate,
+} from './eod-replay';
+import { isOverdue, type TaskEventKind, type TaskPriority, type TaskStatus } from './staff-tasks';
+import {
+  onTimeRate,
+  reviewTurnaround,
+  type DueTask,
+  type PeriodKind,
+  type Timeliness,
+} from './work-report';
+export { buildEodSnapshot, missingReasons, type EodItem, type EodSnapshot } from './eod-day';
+export {
+  eventsByTask,
+  isReceipt,
+  taskStateAt,
+  type EventStatus,
+  type FactEvent,
+  type FactTask,
+  type FactUpdate,
+} from './eod-replay';
+export { eodPlainText, fmtMinutes } from './eod-text';
 
 export interface FactItem {
   taskId: string;
@@ -201,9 +57,9 @@ export interface WorkItem {
   result: string | null;
   blocker: string | null;
   nextStep: string | null;
-  /** Minutes inside the report day; null = no time recorded. */
+  /** Minutes inside the report period; null = no time recorded. */
   minutes: number | null;
-  /** IST day it was entered, when later than the work day. */
+  /** IST day it was entered, when after the report period. */
   enteredOn: string | null;
   /** The task's Academic link: the same activity as the class, never added twice. */
   sameActivity: string | null;
@@ -215,6 +71,8 @@ export interface BacklogItem {
   priority: TaskPriority;
   status: TaskStatus;
   reason: string | null;
+  /** Blocked or on hold at the cut-off (the flag keeps the lifecycle status). */
+  blocked: boolean;
   dueOn: string;
   dueTime: string | null;
   overdue: boolean;
@@ -235,23 +93,43 @@ export type AcademicFacts =
       logsPending: Metric;
       markingPending: Metric;
       reviewsSubmitted: Metric;
+      /** Optional in the contract (23 Oct 2026): absent = Academic did not report it. */
+      topicsCovered?: AcademicTeacherActivityV1['topicsCovered'];
+      assessmentsPrepared?: Metric;
+      assessmentsMarked?: Metric;
     };
 
-export const EOD_FACTS_FORMAT = 'eod-facts/1';
+/** HR attendance for the period (domain/attendance.ts); never derived from tasks or classes. */
+export type AttendanceFacts =
+  { status: 'unavailable'; reason: string } | ({ status: 'available' } & AttendanceSummary);
+export interface DevelopmentItem {
+  action: string;
+  dueOn: string | null;
+  status: string;
+}
+
+export const EOD_FACTS_FORMAT = 'eod-facts/2';
+const FORMATS = ['eod-facts/1', EOD_FACTS_FORMAT];
 export const DURATION_DEFINITION =
-  'Minutes recorded on task updates for this day. Start/stop entries count only the part inside the day (IST). Shift hours and Academic class time are not included.';
+  'Minutes recorded on task updates for this period. Start/stop entries count only the part inside the period (IST). Attendance hours and Academic class time are not included.';
 
 export interface EodFacts {
   format: typeof EOD_FACTS_FORMAT;
   staffId: string;
+  /** Day = the report day; week / month = the first day of the period. */
   reportDate: string;
-  /** IST report day as instants: [from, to). */
+  periodKind?: PeriodKind;
+  periodEnd?: string;
+  /** IST period as instants: [from, to). */
   window: { from: string; to: string };
-  /** Backlog and overdue are judged at this instant (end of the day, or the generation time). */
+  /** Backlog and overdue are judged at this instant (end of the period, or the generation time). */
   asOf: string;
   generatedAt: string;
   received: FactItem[];
   acknowledged: FactItem[];
+  /** Sent for review in the period (absent in reports made before 23 Oct 2026). */
+  submitted?: FactItem[];
+  /** Approved, or done when no review is needed. */
   completed: FactItem[];
   blocked: FactItem[];
   /** Help asked for: clarification requested (sending for review is not a request for help). */
@@ -260,11 +138,15 @@ export interface EodFacts {
   backlog: BacklogItem[];
   duration: { minutes: number | null; definition: string; overlaps: boolean; sameActivity: number };
   academic: AcademicFacts;
-  hr: { status: 'unavailable' };
+  timeliness?: Timeliness;
+  turnaround?: ReturnType<typeof reviewTurnaround>;
+  attendance?: AttendanceFacts;
+  development?: DevelopmentItem[] | null;
   counts: {
     received: number;
     acknowledged: number;
     worked: number;
+    submitted?: number;
     completed: number;
     blocked: number;
     decisions: number;
@@ -272,17 +154,25 @@ export interface EodFacts {
     overdue: number;
   };
   noActivity: boolean;
+  /** Report deadline in force when this version was submitted (late is judged from it). */
+  deadline?: string | null;
 }
 
 export interface EodInput {
   staffId: string;
+  /** First day of the period (the report day for an EOD). */
   reportDate: string;
+  periodKind?: PeriodKind;
+  /** Last day of the period; default = reportDate. */
+  periodEnd?: string;
   now: Date;
   tasks: readonly FactTask[];
   events: readonly FactEvent[];
   /** Updates written by the staff member (the query may include neighbouring days). */
   updates: readonly FactUpdate[];
   academic: SourceResult<AcademicTeacherActivityV1>;
+  attendance?: AttendanceFacts;
+  development?: DevelopmentItem[] | null;
 }
 
 const metric = (m: { status: string; value: number | null }): Metric =>
@@ -302,6 +192,13 @@ export function academicFacts(r: SourceResult<AcademicTeacherActivityV1>): Acade
     logsPending: metric(d.logsPending),
     markingPending: metric(d.markingPending),
     reviewsSubmitted: metric(d.reviews.submitted),
+    ...(d.topicsCovered ? { topicsCovered: d.topicsCovered } : {}),
+    ...(d.assessments
+      ? {
+          assessmentsPrepared: metric(d.assessments.prepared),
+          assessmentsMarked: metric(d.assessments.marked),
+        }
+      : {}),
   };
 }
 
@@ -317,24 +214,51 @@ const minutesInside = (start: Date, end: Date, from: Date, to: Date) =>
     ),
   );
 
-/** A-TSK-8: the EOD facts for one staff member and IST day. */
+const SUBMITS = (e: FactEvent) => e.kind === 'submitted_for_review' || e.toStatus === 'done';
+const DECIDES = (e: FactEvent) => e.kind === 'review_approved' || e.kind === 'changes_requested';
+
+/** A task at the cut-off: its replayed state and its A-REP-2 input (null = not created yet). */
+export function dueTaskAt(t: FactTask, mine: readonly FactEvent[] = [], asOf: Date) {
+  const s = taskStateAt(t, mine, asOf);
+  if (!s) return null;
+  const firstAt =
+    mine.find((e) => SUBMITS(e) && e.occurredAt <= asOf)?.occurredAt ??
+    (t.firstSubmittedAt && t.firstSubmittedAt <= asOf ? t.firstSubmittedAt : null);
+  const due: DueTask = {
+    taskId: t.id,
+    title: t.title,
+    status: s.status,
+    dueOn: s.dueOn,
+    dueTime: s.dueTime,
+    originalDueOn: t.originalDueOn ?? s.dueOn,
+    originalDueTime: t.originalDueOn ? (t.originalDueTime ?? null) : s.dueTime,
+    firstSubmittedAt: firstAt,
+    dueAtSubmission: firstAt && taskStateAt(t, mine, firstAt),
+    dueChangeReason: s.dueChangeReason,
+  };
+  return { s, due };
+}
+
+/** A-TSK-8: the report facts for one staff member and IST period (an EOD by default). */
 export function buildEodFacts(input: EodInput): EodFacts {
   const { staffId, reportDate: day, now } = input;
+  const last = input.periodEnd ?? day;
   const from = istInstant(day);
-  const to = istInstant(addDays(day as IsoDate, 1));
+  const to = istInstant(addDays(last as IsoDate, 1));
   const asOf = now < to ? now : new Date(to.getTime() - 1);
   const task = new Map(input.tasks.map((t) => [t.id, t]));
   const byTask = eventsByTask(input.events);
-  const ownerAt = (id: string, at: Date) => taskStateAt(task.get(id)!, byTask.get(id), at)?.owner;
+  const stateAt = (id: string, at: Date) => taskStateAt(task.get(id)!, byTask.get(id), at);
   const inWindow = input.events
     .filter((e) => task.has(e.taskId) && e.occurredAt >= from && e.occurredAt < to)
     .filter((e) => e.occurredAt <= now)
     .sort(byTime);
-  const mine = inWindow.filter((e) =>
-    OWNERSHIP.includes(e.kind)
-      ? e.toStaffId === staffId
-      : ownerAt(e.taskId, e.occurredAt) === staffId,
-  );
+  // A draft is not the employee's work yet: nothing that happens while it is a draft counts.
+  const mine = inWindow.filter((e) => {
+    const s = stateAt(e.taskId, e.occurredAt);
+    if (!s || s.status === 'draft') return false;
+    return OWNERSHIP.includes(e.kind) ? e.toStaffId === staffId : s.owner === staffId;
+  });
   const item = (e: FactEvent): FactItem => ({
     taskId: e.taskId,
     title: task.get(e.taskId)!.title,
@@ -349,7 +273,7 @@ export function buildEodFacts(input: EodInput): EodFacts {
     .map((u) => {
       const interval = u.startedAt && u.endedAt ? ([u.startedAt, u.endedAt] as const) : null;
       const inside = interval ? minutesInside(interval[0], interval[1], from, to) : 0;
-      const onDay = interval ? inside > 0 : u.occurredOn === day;
+      const onDay = interval ? inside > 0 : u.occurredOn >= day && u.occurredOn <= last;
       return { u, interval, onDay, minutes: interval ? inside : u.durationMinutes };
     })
     .filter((x) => x.onDay)
@@ -378,57 +302,75 @@ export function buildEodFacts(input: EodInput): EodFacts {
       blocker: u.blocker,
       nextStep: u.nextStep,
       minutes,
-      enteredOn: entered > day ? entered : null,
+      enteredOn: entered > last ? entered : null,
       sameActivity: link && /^academic\b/i.test(link) ? link : null,
       overlaps: overlapping.has(u.id),
     };
   });
   const timed = work.filter((w) => w.minutes !== null);
 
-  const backlog = input.tasks
-    .flatMap((t) => {
-      const s = taskStateAt(t, byTask.get(t.id), asOf);
-      if (!s || s.owner !== staffId || s.status === 'done' || s.status === 'cancelled') return [];
-      const b: BacklogItem = {
-        taskId: t.id,
-        title: t.title,
-        priority: t.priority,
-        status: s.status,
-        reason: s.reason,
-        dueOn: s.dueOn,
-        dueTime: s.dueTime,
-        overdue: isOverdue(s, asOf),
-        closedLater: t.status === 'done' || t.status === 'cancelled',
-      };
-      return [b];
-    })
+  const owned = input.tasks.flatMap((t) => {
+    const at = dueTaskAt(t, byTask.get(t.id), asOf);
+    return at && at.s.owner === staffId ? [{ t, ...at }] : [];
+  });
+  const backlog = owned
+    .filter(({ s }) => !['done', 'cancelled', 'draft'].includes(s.status))
+    .map(({ t, s }): BacklogItem => ({
+      taskId: t.id,
+      title: t.title,
+      priority: t.priority,
+      status: s.status,
+      reason: s.reason ?? s.blocked?.reason ?? null,
+      blocked: Boolean(s.blocked),
+      dueOn: s.dueOn,
+      dueTime: s.dueTime,
+      overdue: isOverdue(s, asOf),
+      closedLater: t.status === 'done' || t.status === 'cancelled',
+    }))
     .sort(byPriority);
 
   const blockedNow = backlog
-    .filter((b) => b.status === 'blocked')
+    .filter((b) => b.blocked)
     .map((b) => ({ taskId: b.taskId, title: b.title, at: asOf.toISOString(), detail: b.reason }));
   const blockers = work
     .filter((w) => w.blocker)
     .map((w) => ({ taskId: w.taskId, title: w.title, at: from.toISOString(), detail: w.blocker }));
   const facts = {
-    received: section((e) => OWNERSHIP.includes(e.kind)),
+    received: section(isReceipt),
     acknowledged: section((e) => e.kind === 'acknowledged'),
+    submitted: section((e) => e.kind === 'submitted_for_review'),
     completed: section((e) => e.toStatus === 'done'),
-    blocked: firstPerTask([
-      ...section((e) => e.toStatus === 'blocked'),
-      ...blockers,
-      ...blockedNow,
-    ]),
+    blocked: firstPerTask([...section((e) => blockOf(e)?.on === true), ...blockers, ...blockedNow]),
     decisions: firstPerTask(
       mine
         .filter((e) => e.kind === 'clarification_requested')
         .map((e) => ({ ...item(e), kind: e.kind })),
     ),
   };
+  const timeliness = onTimeRate(
+    owned.map((o) => o.due),
+    { start: day, end: last },
+  );
+  const turnaround = reviewTurnaround(
+    mine
+      .filter((e) => e.kind === 'submitted_for_review')
+      .map((e) => ({
+        taskId: e.taskId,
+        title: task.get(e.taskId)!.title,
+        submittedAt: e.occurredAt,
+        decidedAt:
+          byTask
+            .get(e.taskId)!
+            .find((x) => DECIDES(x) && x.occurredAt > e.occurredAt && x.occurredAt <= asOf)
+            ?.occurredAt ?? null,
+      })),
+  );
   return {
     format: EOD_FACTS_FORMAT,
     staffId,
     reportDate: day,
+    periodKind: input.periodKind ?? 'day',
+    periodEnd: last,
     window: { from: from.toISOString(), to: to.toISOString() },
     asOf: asOf.toISOString(),
     generatedAt: now.toISOString(),
@@ -442,11 +384,15 @@ export function buildEodFacts(input: EodInput): EodFacts {
       sameActivity: work.filter((w) => w.sameActivity).length,
     },
     academic: academicFacts(input.academic),
-    hr: { status: 'unavailable' },
+    timeliness,
+    turnaround,
+    ...(input.attendance ? { attendance: input.attendance } : {}),
+    ...(input.development !== undefined ? { development: input.development } : {}),
     counts: {
       received: facts.received.length,
       acknowledged: facts.acknowledged.length,
       worked: new Set(work.map((w) => w.taskId)).size,
+      submitted: facts.submitted.length,
       completed: facts.completed.length,
       blocked: facts.blocked.length,
       decisions: facts.decisions.length,
@@ -457,9 +403,11 @@ export function buildEodFacts(input: EodInput): EodFacts {
   };
 }
 
-/** Backlog tasks due by the report day, still open now, without a reason (submit needs one each). */
+/** EOD only: backlog tasks due by the report day, still open now, without a reason. */
 export const factsMissingReasons = (f: EodFacts) =>
-  f.backlog.filter((b) => b.dueOn <= f.reportDate && !b.reason && !b.closedLater);
+  (f.periodKind ?? 'day') === 'day'
+    ? f.backlog.filter((b) => b.dueOn <= f.reportDate && !b.reason && !b.closedLater)
+    : [];
 
 /** A report imported from the old task tracker (O4): history only, never sent or reviewed. */
 export const isImportedReport = (s: unknown) =>
@@ -467,58 +415,4 @@ export const isImportedReport = (s: unknown) =>
 
 /** True for a snapshot built by buildEodFacts (older reports stored the "My day" shape). */
 export const isEodFacts = (s: unknown): s is EodFacts =>
-  (s as { format?: string } | null)?.format === EOD_FACTS_FORMAT;
-
-const hm = (iso: string) =>
-  new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(iso));
-export const fmtMinutes = (m: number | null) =>
-  m === null ? 'Not recorded' : `${Math.floor(m / 60)} h ${m % 60} min`;
-
-/**
- * The report as plain text for "Copy summary" (no external delivery is configured). Counts,
- * task titles and the employee's own words only; no student details.
- */
-export function eodPlainText(
-  f: EodFacts,
-  narrative: { summary: string | null; nextDayPlan: string | null; notes: string | null },
-  meta: { staffName: string; version: number | null; recipient: string | null },
-) {
-  const list = (title: string, items: { title: string; detail?: string | null }[]) =>
-    items.length
-      ? [`${title}:`, ...items.map((i) => `- ${i.title}${i.detail ? ` (${i.detail})` : ''}`)]
-      : [];
-  const a = f.academic;
-  return [
-    `End-of-day report: ${meta.staffName}, ${f.reportDate} (IST)`,
-    meta.version
-      ? `Version ${meta.version}${meta.recipient ? `, to ${meta.recipient}` : ''}`
-      : 'Draft — not submitted',
-    f.noActivity ? 'No task activity recorded on this day.' : '',
-    `Completed: ${f.counts.completed} · Worked on: ${f.counts.worked} · Open at cut-off: ${f.counts.backlog} (${f.counts.overdue} overdue) · Blocked: ${f.counts.blocked}`,
-    `Recorded time: ${fmtMinutes(f.duration.minutes)}`,
-    ...list('Completed', f.completed),
-    ...list(
-      'Work done',
-      f.work.map((w) => ({
-        title: `${w.title}: ${w.workPerformed}`,
-        detail: w.minutes ? fmtMinutes(w.minutes) : null,
-      })),
-    ),
-    ...list('Blocked', f.blocked),
-    ...list('Decisions or help needed', f.decisions),
-    a.status === 'available'
-      ? `Academic: ${a.delivered ?? 'not recorded'} of ${a.planned ?? 'not recorded'} planned classes delivered`
-      : 'Academic OS unavailable',
-    'HR attendance unavailable',
-    narrative.summary ? `Summary: ${narrative.summary}` : '',
-    narrative.nextDayPlan ? `Plan for next day: ${narrative.nextDayPlan}` : '',
-    narrative.notes ? `Notes: ${narrative.notes}` : '',
-    `Facts as of ${hm(f.asOf)} IST.`,
-  ]
-    .filter(Boolean)
-    .join('\n');
-}
+  FORMATS.includes((s as { format?: string } | null)?.format ?? '');

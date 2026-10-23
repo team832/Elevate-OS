@@ -8,45 +8,39 @@
  * (sha256, staff). A record whose content changed since the last import is reported as
  * `changed` and Elevate keeps its own value. Nothing here notifies anyone.
  */
-import { createHash } from 'node:crypto';
-import { and, desc, eq, inArray, isNotNull, or } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   opsEodReports,
   opsEodReportVersions,
   opsStaffProfiles,
-  opsStaffTasks as tasks,
   opsTaskImportBatches as batches,
   opsTaskImportRows as importRows,
   staffMembers,
   users,
   isUniqueViolation,
   type Database,
-  type OpsEodReportId,
-  type OpsStaffTaskId,
-  type OpsTaskImportOutcome,
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ForbiddenError } from '@elevate/shared-contracts';
-import type { StaffMemberId } from '@elevate/shared-types';
 import {
   exportDateFromName,
   mapBackup,
   MAX_BACKUP_CHARS,
   parseTrackerBackup,
-  taskDifferences,
   TRACKER_SOURCE_KIND,
   UTC_DAY_NOTE,
   type ImportedReportValues,
   type ImportedTaskValues,
-  type MappedRecord,
   type StaffOption,
-  type TrackerBackup,
 } from '../domain/task-import';
 import { istInstant } from '../domain/dates';
 import { accessScope, activeStaff, notFound, type Actor } from './context';
 import { fieldError, opsAudit, rowById } from './ops-common';
+import { countOf, legacyRefOf, outcomes, sha256 } from './task-import-outcomes';
 import { insertTaskWithEvent } from './task-store';
+
+export { legacyRefOf, type ImportRow } from './task-import-outcomes';
 
 const audit = opsAudit('task_import');
 
@@ -59,190 +53,11 @@ export const importBody = z.object({
     .max(MAX_BACKUP_CHARS, 'The file is larger than 5 MB; a tracker backup is much smaller.'),
 });
 
-export interface ImportRow {
-  kind: 'task' | 'report';
-  legacyId: string;
-  title: string;
-  outcome: OpsTaskImportOutcome;
-  message: string | null;
-  contentHash: string;
-  taskId: OpsStaffTaskId | null;
-  eodReportId: OpsEodReportId | null;
-  /** False for a repeat of a legacy id inside the same file (one row per record). */
-  store: boolean;
-  values: ImportedTaskValues | ImportedReportValues | null;
-}
-
-const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
-export const legacyRefOf = (staffId: string, legacyId: string) =>
-  `${TRACKER_SOURCE_KIND}:${staffId}:${legacyId}`;
-
 async function requireImporter(db: Database, actor: Actor) {
   // Imports cross every staff member's data: all scope only.
   if ((await accessScope(db, actor, 'ops:tasks:import')).scope !== 'all')
     throw new ForbiddenError('Tracker imports need the operations manager’s import access.');
 }
-
-/** Latest stored hash per legacy id for this staff member and kind. */
-async function previousRows(db: Database, staffId: string, kind: 'task' | 'report', ids: string[]) {
-  if (!ids.length) return new Map<string, typeof importRows.$inferSelect>();
-  const rows = await db
-    .select({ row: importRows })
-    .from(importRows)
-    .innerJoin(batches, eq(batches.id, importRows.batchId))
-    .where(
-      and(
-        eq(batches.staffId, staffId as StaffMemberId),
-        eq(batches.status, 'committed'),
-        eq(importRows.kind, kind),
-        inArray(importRows.legacyId, ids),
-        // Only a row that produced a task or report means "already imported".
-        or(isNotNull(importRows.taskId), isNotNull(importRows.eodReportId)),
-      ),
-    )
-    .orderBy(desc(importRows.createdAt));
-  const latest = new Map<string, typeof importRows.$inferSelect>();
-  for (const { row } of rows) if (!latest.has(row.legacyId)) latest.set(row.legacyId, row);
-  return latest;
-}
-
-/** Each record's outcome against the database now (preview and commit share it). */
-async function outcomes(
-  db: Database,
-  staffId: string,
-  backup: TrackerBackup,
-): Promise<ImportRow[]> {
-  const refs = backup.tasks.map((t) => legacyRefOf(staffId, t.legacyId));
-  const existing = refs.length
-    ? await db.select().from(tasks).where(inArray(tasks.legacyRef, refs))
-    : [];
-  const byRef = new Map(existing.map((t) => [t.legacyRef, t]));
-  const prevTasks = await previousRows(
-    db,
-    staffId,
-    'task',
-    backup.tasks.map((t) => t.legacyId),
-  );
-  const prevReports = await previousRows(
-    db,
-    staffId,
-    'report',
-    backup.reports.map((r) => r.legacyId),
-  );
-  const dates = backup.reports.flatMap((r) => (r.values ? [r.values.reportDate] : []));
-  const eodDays = new Set(
-    dates.length
-      ? (
-          await db
-            .select({ d: opsEodReports.reportDate })
-            .from(opsEodReports)
-            .where(
-              and(
-                eq(opsEodReports.staffId, staffId as StaffMemberId),
-                inArray(opsEodReports.reportDate, dates),
-              ),
-            )
-        ).map((r) => r.d)
-      : [],
-  );
-  const seen = new Set<string>();
-  const row = <V extends ImportRow['values']>(
-    kind: ImportRow['kind'],
-    r: MappedRecord<NonNullable<V>>,
-    decide: () => Pick<ImportRow, 'outcome' | 'message' | 'taskId' | 'eodReportId'>,
-  ): ImportRow => {
-    const key = `${kind}:${r.legacyId}`;
-    const repeat = seen.has(key);
-    seen.add(key);
-    const base = {
-      kind,
-      legacyId: r.legacyId,
-      title: r.title,
-      contentHash: sha256(r.canonical),
-      values: r.values,
-    };
-    const none = { taskId: null, eodReportId: null };
-    if (repeat)
-      return {
-        ...base,
-        ...none,
-        store: false,
-        outcome: 'failed',
-        message: 'Appears twice in the file; the first copy is used.',
-      };
-    if (r.problem)
-      return {
-        ...base,
-        ...none,
-        store: true,
-        outcome: r.problem.outcome,
-        message: r.problem.message,
-      };
-    const decided = decide();
-    const notes = [decided.message, ...r.notes].filter(Boolean).join(' ');
-    return { ...base, ...decided, message: notes || null, store: true };
-  };
-  return [
-    ...backup.tasks.map((t) =>
-      row('task', t, () => {
-        const ref = legacyRefOf(staffId, t.legacyId);
-        const current = byRef.get(ref);
-        if (!current)
-          return { outcome: 'accepted', message: null, taskId: null, eodReportId: null };
-        const same = prevTasks.get(t.legacyId)?.contentHash === sha256(t.canonical);
-        const diff = taskDifferences(t.values!, current);
-        return same
-          ? {
-              outcome: 'duplicate',
-              message: 'Already imported.',
-              taskId: current.id,
-              eodReportId: null,
-            }
-          : {
-              outcome: 'changed',
-              message: `Changed in the tracker since the last import (${diff.join(', ') || 'details only'}). Elevate keeps its own task; update it there if needed.`,
-              taskId: current.id,
-              eodReportId: null,
-            };
-      }),
-    ),
-    ...backup.reports.map((r) =>
-      row('report', r, () => {
-        const prev = prevReports.get(r.legacyId);
-        if (prev)
-          return prev.contentHash === sha256(r.canonical)
-            ? {
-                outcome: 'duplicate',
-                message: 'Already imported.',
-                taskId: null,
-                eodReportId: prev.eodReportId,
-              }
-            : {
-                outcome: 'changed',
-                message:
-                  'Changed in the tracker since the last import. Elevate keeps the report it imported.',
-                taskId: null,
-                eodReportId: prev.eodReportId,
-              };
-        if (eodDays.has(r.values!.reportDate))
-          return {
-            outcome: 'skipped',
-            message: 'An Elevate end-of-day report already exists for this day; it is kept.',
-            taskId: null,
-            eodReportId: null,
-          };
-        eodDays.add(r.values!.reportDate);
-        return { outcome: 'accepted', message: null, taskId: null, eodReportId: null };
-      }),
-    ),
-  ];
-}
-
-const countOf = (rows: ImportRow[]) => {
-  const counts: Partial<Record<OpsTaskImportOutcome | 'parsed', number>> = { parsed: rows.length };
-  for (const r of rows) counts[r.outcome] = (counts[r.outcome] ?? 0) + 1;
-  return counts;
-};
 
 const batchColumns = {
   id: batches.id,
@@ -403,6 +218,14 @@ export async function commitImport(db: Database, actor: Actor, id: string, reque
             status: v.status,
             progressPercent: v.progressPercent,
             reason: v.reason,
+            // R4: the tracker's Blocked / On-hold is the flag (blocked since the import).
+            ...(v.blockedKind
+              ? {
+                  blockedAt: new Date(),
+                  blockedKind: v.blockedKind,
+                  blockedReason: v.blockedReason,
+                }
+              : {}),
             recurrence: v.recurrence,
             completedAt: v.completedOn ? istInstant(v.completedOn) : null,
             legacyRef: legacyRefOf(batch.staffId, r.legacyId),
@@ -450,6 +273,9 @@ export async function commitImport(db: Database, actor: Actor, id: string, reque
           .values({
             staffId: batch.staffId,
             reportDate: v.reportDate,
+            periodKind: 'day',
+            periodStart: v.reportDate,
+            periodEnd: v.reportDate,
             status: 'submitted',
             snapshot,
             summary: v.text,

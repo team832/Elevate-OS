@@ -74,5 +74,10 @@ export const platformPermissions = definePermissions<PlatformPermission>({
       'platform:module:access',
       { permission: 'platform:notifications:read', scope: 'own' },
     ],
+    // PROPOSED-GRANTS-2026-10-23
+    hr_manager: [
+      'platform:module:access',
+      { permission: 'platform:notifications:read', scope: 'own' },
+    ],
   },
 });

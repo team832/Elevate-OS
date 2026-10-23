@@ -21,6 +21,7 @@ import {
 } from '@elevate/shared-ui';
 import { MODULE, modulePath } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
+import { teamWide } from '../server/scope';
 
 type NavEntry = {
   key: string;
@@ -28,31 +29,117 @@ type NavEntry = {
   /** Null = hidden slot. */
   path: string | null;
   permission: Permission;
+  /** `team` = managers, director, auditor (all campaigns); `own` = marketing employees. Omitted = both. */
+  audience?: 'team' | 'own';
 };
 
-/** Sidebar, in the order a marketing manager works. Every item is filtered by its permission. */
+/**
+ * Sidebar in the order each audience works (brief 23 Oct 2026 §16). Every item is also
+ * filtered by its permission; pages re-check on the server.
+ */
 const NAV: readonly NavEntry[] = [
-  { key: 'overview', label: 'Overview', path: '', permission: 'marketing:module:access' },
-  // Leads, follow-ups, tasks and EOD are Business Ops screens mounted from its shared entries.
-  { key: 'leads', label: 'Leads', path: 'leads', permission: 'ops:leads:read' },
-  { key: 'follow-ups', label: 'Follow-ups', path: 'follow-ups', permission: 'ops:leads:read' },
-  { key: 'campaigns', label: 'Campaigns', path: 'campaigns', permission: 'marketing:content:read' },
+  {
+    key: 'overview',
+    label: 'Overview',
+    path: '',
+    permission: 'marketing:module:access',
+    audience: 'team',
+  },
+  {
+    key: 'my-day',
+    label: 'My Day',
+    path: 'my-day',
+    permission: 'marketing:module:access',
+    audience: 'own',
+  },
+  // Leads, follow-ups, tasks and reports are Business Ops screens mounted from its shared entries.
+  { key: 'tasks', label: 'My Tasks', path: 'tasks', permission: 'ops:tasks:read', audience: 'own' },
+  {
+    key: 'my-campaigns',
+    label: 'Assigned Campaigns',
+    path: 'my-campaigns',
+    permission: 'marketing:campaigns:read',
+    audience: 'own',
+  },
+  {
+    key: 'deliverables',
+    label: 'Deliverables',
+    path: 'deliverables',
+    permission: 'marketing:module:access',
+    audience: 'own',
+  },
+  { key: 'leads', label: 'Leads', path: 'leads', permission: 'ops:leads:read', audience: 'team' },
+  {
+    key: 'follow-ups',
+    label: 'Follow-ups',
+    path: 'follow-ups',
+    permission: 'ops:leads:read',
+    audience: 'team',
+  },
+  {
+    key: 'campaigns',
+    label: 'Campaigns',
+    path: 'campaigns',
+    permission: 'marketing:campaigns:read',
+    audience: 'team',
+  },
   {
     key: 'calendar',
     label: 'Content Calendar',
     path: 'calendar',
     permission: 'marketing:content:read',
   },
+  {
+    key: 'follow-ups',
+    label: 'Follow-ups',
+    path: 'follow-ups',
+    permission: 'ops:leads:read',
+    audience: 'own',
+  },
   // Hidden: every events service needs ops:appointments:*, which also covers private
   // counselling; Events and Webinars waits for a new owner-approved permission.
-  { key: 'events', label: 'Events and Webinars', path: null, permission: 'ops:leads:read' },
-  { key: 'tasks', label: 'Tasks', path: 'tasks', permission: 'ops:tasks:read' },
-  { key: 'eod', label: 'EOD Reports', path: 'tasks?tab=eod', permission: 'ops:tasks:read' },
+  {
+    key: 'events',
+    label: 'Events and Webinars',
+    path: null,
+    permission: 'ops:leads:read',
+    audience: 'team',
+  },
+  { key: 'tasks', label: 'Tasks', path: 'tasks', permission: 'ops:tasks:read', audience: 'team' },
+  // Own scope of ops:tasks:review = the manager chain: their team's submitted tasks.
+  {
+    key: 'team-review',
+    label: 'Team review',
+    path: 'tasks?tab=all&status=in_review',
+    permission: 'ops:tasks:review',
+    audience: 'team',
+  },
+  {
+    key: 'eod',
+    label: 'EOD Reports',
+    path: 'tasks?tab=eod',
+    permission: 'ops:tasks:read',
+    audience: 'team',
+  },
+  {
+    key: 'my-attendance',
+    label: 'My Attendance',
+    path: 'my-attendance',
+    permission: 'ops:attendance:read',
+  },
+  {
+    key: 'my-reports',
+    label: 'My Reports',
+    path: 'my-reports',
+    permission: 'ops:tasks:read',
+    audience: 'own',
+  },
   {
     key: 'reports',
     label: 'Reports',
     path: 'metrics/weekly',
     permission: 'marketing:metrics:read',
+    audience: 'team',
   },
 ];
 
@@ -63,7 +150,7 @@ const TABS: Partial<Record<string, readonly Omit<NavEntry, 'key'>[]>> = {
     { label: 'Follow-ups', path: 'follow-ups', permission: 'ops:leads:read' },
   ],
   campaigns: [
-    { label: 'Campaigns', path: 'campaigns', permission: 'marketing:content:read' },
+    { label: 'Campaigns', path: 'campaigns', permission: 'marketing:campaigns:read' },
     { label: 'Accounts', path: 'accounts', permission: 'marketing:accounts:read' },
   ],
   calendar: [
@@ -83,7 +170,11 @@ const allowed = <T extends { path: string | null; permission: Permission }>(
 
 /** Sidebar items this user may open (hiding is presentation; every page re-checks on the server). */
 export function navFor(user: Principal, active: string): NavItem[] {
-  return allowed(user, NAV).map((n) => ({
+  const audience = teamWide(user) ? 'team' : 'own';
+  return allowed(
+    user,
+    NAV.filter((n) => !n.audience || n.audience === audience),
+  ).map((n) => ({
     href: modulePath(n.path),
     label: n.label,
     active: n.key === active,

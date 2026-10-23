@@ -3,21 +3,30 @@
  * core.departments and core.staff_members: these are the only writers.
  * Out of scope (D-015, OD-026): payroll, biometrics, leave, appraisal, HRIS.
  */
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, count, eq, exists, ilike, inArray, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import {
+  branches,
   departments,
+  opsStaffDepartments,
+  opsStaffManagerHistory,
   opsStaffProfiles,
   staffMembers,
+  userRoles,
   users,
+  type CoreBranchId,
   type Database,
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ValidationError } from '@elevate/shared-contracts';
 import type { DepartmentId, StaffMemberId, UserId } from '@elevate/shared-types';
 import type { z } from 'zod';
-import { checkReportingLine } from '../domain';
+import { checkReportingLine, istToday } from '../domain';
 import { accessScope, activeStaff, type Actor } from './context';
+import { directoryQuery } from './hr-schemas';
+import { assertRemit } from './hr-staff-actions';
 import { defined, opsAudit, rowById } from './ops-common';
+import { hrReachWhere, hrScopeFor, hrScopeWhere, inDepartments } from './hr-scope';
 import type {
   createDepartmentBody,
   createStaffBody,
@@ -25,33 +34,140 @@ import type {
   updateStaffBody,
 } from './schemas';
 
+export {
+  hrReachWhere,
+  hrScopeDepartments,
+  hrScopeFor,
+  hrScopeWhere,
+  inDepartments,
+  isHrScoped,
+} from './hr-scope';
+
 const auditStaff = opsAudit('staff_member');
 const auditDepartment = opsAudit('department');
 
-export async function getDirectory(db: Database, actor: Actor) {
-  await accessScope(db, actor, 'ops:organisation:read');
-  const [depts, staff, profiles] = await Promise.all([
-    db.select().from(departments).orderBy(asc(departments.name)),
-    db.select().from(staffMembers).orderBy(asc(staffMembers.fullName)),
-    db.select().from(opsStaffProfiles),
+const managers = alias(staffMembers, 'managers');
+const PAGE_SIZE = 25;
+
+/**
+ * Staff directory, filtered and paginated on the server (25 a page). `hr` = the HR view
+ * (ops:hr:read, limited to HR's department scope); otherwise the organisation view
+ * (ops:organisation:read, everyone). Filters only narrow; none of them grants access.
+ */
+export async function getDirectory(
+  db: Database,
+  actor: Actor,
+  query: Record<string, unknown> = {},
+  view: 'organisation' | 'hr' = 'organisation',
+) {
+  await accessScope(db, actor, view === 'hr' ? 'ops:hr:read' : 'ops:organisation:read');
+  // A GET filter form sends empty fields; they mean "any".
+  const f = directoryQuery.parse(Object.fromEntries(Object.entries(query).filter(([, v]) => v)));
+  const scope = view === 'hr' ? await hrScopeFor(db, actor) : null;
+  const q = f.q ? `%${f.q.replace(/[\\%_]/g, '\\$&')}%` : null;
+  const where = and(
+    hrReachWhere(actor, scope),
+    q
+      ? or(
+          ilike(staffMembers.fullName, q),
+          ilike(opsStaffProfiles.displayName, q),
+          ilike(opsStaffProfiles.staffCode, q),
+        )
+      : undefined,
+    f.department ? inDepartments([f.department as DepartmentId]) : undefined,
+    f.manager ? eq(staffMembers.managerId, f.manager as StaffMemberId) : undefined,
+    f.branch ? eq(opsStaffProfiles.branchId, f.branch as CoreBranchId) : undefined,
+    f.role
+      ? exists(
+          db
+            .select({ x: sql`1` })
+            .from(userRoles)
+            .where(and(eq(userRoles.userId, staffMembers.userId), eq(userRoles.role, f.role))),
+        )
+      : undefined,
+    f.employment
+      ? sql`coalesce(${opsStaffProfiles.employmentStatus}, 'not_recorded') = ${f.employment}`
+      : undefined,
+    f.status ? eq(staffMembers.status, f.status) : undefined,
+  );
+  const base = () =>
+    db
+      .select({
+        s: staffMembers,
+        p: opsStaffProfiles,
+        departmentName: departments.name,
+        managerName: managers.fullName,
+        branchName: branches.name,
+      })
+      .from(staffMembers)
+      .leftJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id))
+      .leftJoin(departments, eq(departments.id, staffMembers.departmentId))
+      .leftJoin(managers, eq(managers.id, staffMembers.managerId))
+      .leftJoin(branches, eq(branches.id, opsStaffProfiles.branchId));
+  const [rows, [counted], depts, heads, branchRows, managerRows] = await Promise.all([
+    base()
+      .where(where)
+      .orderBy(asc(staffMembers.fullName), asc(staffMembers.id))
+      .limit(PAGE_SIZE)
+      .offset((f.page - 1) * PAGE_SIZE),
+    db
+      .select({ n: count() })
+      .from(staffMembers)
+      .leftJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id))
+      .where(where),
+    db
+      .select()
+      .from(departments)
+      .where(scope ? inArray(departments.id, scope) : undefined)
+      .orderBy(asc(departments.name)),
+    db
+      .select({ id: staffMembers.departmentId, n: count() })
+      .from(staffMembers)
+      .where(sql`${staffMembers.status} <> 'inactive'`)
+      .groupBy(staffMembers.departmentId),
+    db.select().from(branches).orderBy(asc(branches.name)),
+    db
+      .selectDistinct({ id: managers.id, fullName: managers.fullName })
+      .from(staffMembers)
+      .innerJoin(managers, eq(managers.id, staffMembers.managerId))
+      .where(
+        scope
+          ? inArray(
+              managers.id,
+              db.select({ id: staffMembers.id }).from(staffMembers).where(hrScopeWhere(scope)),
+            )
+          : undefined,
+      )
+      .orderBy(asc(managers.fullName)),
   ]);
-  const byId = new Map(staff.map((s) => [s.id as string, s]));
-  const deptName = new Map(depts.map((d) => [d.id as string, d.name]));
-  const profile = new Map(profiles.map((p) => [p.staffId as string, p]));
-  const name = (id: string | null) => (id ? (byId.get(id)?.fullName ?? null) : null);
-  const dept = (id: string | null) => (id ? (deptName.get(id) ?? null) : null);
+  const userIds = rows.map((r) => r.s.userId).filter((u): u is UserId => Boolean(u));
+  const roles = userIds.length
+    ? await db.select().from(userRoles).where(inArray(userRoles.userId, userIds))
+    : [];
   return {
+    page: f.page,
+    pageSize: PAGE_SIZE,
+    total: counted?.n ?? 0,
+    /** Department scope applied (HR view); null = none. */
+    scope,
     departments: depts.map((d) => ({
       ...d,
-      headcount: staff.filter((s) => s.departmentId === d.id && s.status !== 'inactive').length,
+      headcount: heads.find((h) => h.id === d.id)?.n ?? 0,
     })),
-    staff: staff.map((s) => ({
+    branches: branchRows,
+    managers: managerRows,
+    staff: rows.map(({ s, p, departmentName, managerName, branchName }) => ({
       ...s,
-      departmentName: dept(s.departmentId),
-      managerName: name(s.managerId),
+      displayName: p?.displayName ?? s.fullName,
+      staffCode: p?.staffCode ?? null,
+      departmentName,
+      managerName,
+      branchName,
       hasLogin: Boolean(s.userId),
-      employmentType: profile.get(s.id)?.employmentType ?? 'not_recorded',
-      roleLabels: profile.get(s.id)?.roleLabels ?? [],
+      employmentType: p?.employmentType ?? 'not_recorded',
+      employmentStatus: p?.employmentStatus ?? 'not_recorded',
+      roleLabels: p?.roleLabels ?? [],
+      roles: roles.filter((r) => r.userId === s.userId).map((r) => r.role),
     })),
   };
 }
@@ -114,6 +230,23 @@ export async function createStaff(
     await tx
       .insert(opsStaffProfiles)
       .values({ staffId: row.id, employmentType, roleLabels, updatedBy: actor.id });
+    // History starts with the record; later changes go through HR (hr-staff-actions.ts).
+    const fromDate = istToday(new Date());
+    if (row.departmentId)
+      await tx.insert(opsStaffDepartments).values({
+        staffId: row.id,
+        departmentId: row.departmentId,
+        isPrimary: true,
+        fromDate,
+        createdBy: actor.id,
+      });
+    if (row.managerId)
+      await tx.insert(opsStaffManagerHistory).values({
+        staffId: row.id,
+        managerStaffId: row.managerId,
+        fromDate,
+        changedBy: actor.id,
+      });
     const after = { ...row, employmentType, roleLabels };
     await auditStaff(tx, actor, row.id, 'staff.created', { after }, requestId);
     return row;
@@ -130,14 +263,20 @@ export async function updateStaff(
   await accessScope(db, actor, 'ops:organisation:manage');
   return withTransaction(db, async (tx) => {
     const before = await staffRow(tx, id);
-    if ('managerId' in input) await assertManager(tx, before.id, input.managerId);
     if ('userId' in input) await assertUserFree(tx, input.userId, before.id);
+    // Re-hiring is not supported: an exited person's record stays inactive.
+    if (input.status) {
+      await assertRemit(tx, actor, before);
+      const [p] = await tx
+        .select({ employmentStatus: opsStaffProfiles.employmentStatus })
+        .from(opsStaffProfiles)
+        .where(eq(opsStaffProfiles.staffId, before.id));
+      if (p?.employmentStatus === 'exited')
+        throw new ConflictError('Employment has ended; the record status cannot be changed.');
+    }
     const patch: Partial<typeof staffMembers.$inferInsert> = {};
     if (input.fullName) patch.fullName = input.fullName;
-    if ('departmentId' in input)
-      patch.departmentId = (input.departmentId as DepartmentId | null) ?? null;
     if ('title' in input) patch.title = input.title ?? null;
-    if ('managerId' in input) patch.managerId = (input.managerId as StaffMemberId | null) ?? null;
     if ('userId' in input) patch.userId = (input.userId as UserId | null) ?? null;
     if (input.status) patch.status = input.status;
     const [after] = Object.keys(patch).length

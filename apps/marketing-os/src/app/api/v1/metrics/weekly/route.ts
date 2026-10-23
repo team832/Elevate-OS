@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { defineRoute } from '@elevate/server-kit';
+import { ForbiddenError, defineRoute } from '@elevate/server-kit';
 import { isIsoDate, toIsoDate, type IsoDate } from '@elevate/shared-types';
-import { weeklyReport } from '../../../../../server';
+import { teamWide, weeklyReport } from '../../../../../server';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +13,13 @@ const query = z.object({
 /** GET /marketing/api/v1/metrics/weekly?week=YYYY-MM-DD&groupBy=account|campaign (IST Monday–Sunday). */
 export const GET = defineRoute(
   { permission: 'marketing:metrics:read', query },
-  async ({ db, query }) =>
-    weeklyReport(db, { weekOf: (query.week ?? toIsoDate()) as IsoDate, groupBy: query.groupBy }),
+  async ({ db, query, user }) => {
+    // Per-campaign figures cover every campaign, so only team-wide readers get them.
+    if (query.groupBy === 'campaign' && !teamWide(user))
+      throw new ForbiddenError('Results by campaign are for managers; open Assigned campaigns.');
+    return weeklyReport(db, {
+      weekOf: (query.week ?? toIsoDate()) as IsoDate,
+      groupBy: query.groupBy,
+    });
+  },
 );

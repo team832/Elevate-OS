@@ -3,6 +3,7 @@ import * as academicSchema from './academic';
 import * as academicAssessmentsSchema from './academic-assessments';
 import * as academicDeliverySchema from './academic-delivery';
 import * as academicReviewsSchema from './academic-reviews';
+import * as academicAssessmentAdminSchema from './academic-assessment-admin';
 import * as coreSchema from './core';
 import * as marketingSchema from './marketing';
 import * as opsSchema from './ops';
@@ -17,6 +18,14 @@ import * as opsEodSchema from './ops-eod';
 import * as opsTaskImportsSchema from './ops-task-imports';
 import * as opsReviewAcksSchema from './ops-review-acks';
 import * as opsTeacherReportsSchema from './ops-teacher-reports';
+import * as opsAttachmentsSchema from './ops-attachments';
+import * as opsHrSchema from './ops-hr';
+import * as opsAttendanceSchema from './ops-attendance';
+import * as opsTaskWorkSchema from './ops-task-work';
+import * as opsFeedbackSchema from './ops-feedback';
+import * as opsHrRequestsSchema from './ops-hr-requests';
+import * as opsScoreImportsSchema from './ops-score-imports';
+import * as opsLeadStagesSchema from './ops-lead-stages';
 
 export * from './core';
 export * from './marketing';
@@ -25,6 +34,7 @@ export * from './academic';
 export * from './academic-assessments';
 export * from './academic-delivery';
 export * from './academic-reviews';
+export * from './academic-assessment-admin';
 export * from './ops';
 export * from './ops-demos';
 export * from './ops-students';
@@ -37,6 +47,14 @@ export * from './ops-eod';
 export * from './ops-task-imports';
 export * from './ops-review-acks';
 export * from './ops-teacher-reports';
+export * from './ops-attachments';
+export * from './ops-hr';
+export * from './ops-attendance';
+export * from './ops-task-work';
+export * from './ops-feedback';
+export * from './ops-hr-requests';
+export * from './ops-score-imports';
+export * from './ops-lead-stages';
 
 /**
  * The schema files in load order, keyed by file name.
@@ -49,6 +67,7 @@ export const SCHEMA_MODULES = {
   'academic-assessments': academicAssessmentsSchema,
   'academic-delivery': academicDeliverySchema,
   'academic-reviews': academicReviewsSchema,
+  'academic-assessment-admin': academicAssessmentAdminSchema,
   ops: opsSchema,
   'ops-demos': opsDemosSchema,
   'ops-students': opsStudentsSchema,
@@ -61,6 +80,14 @@ export const SCHEMA_MODULES = {
   'ops-task-imports': opsTaskImportsSchema,
   'ops-review-acks': opsReviewAcksSchema,
   'ops-teacher-reports': opsTeacherReportsSchema,
+  'ops-attachments': opsAttachmentsSchema,
+  'ops-hr': opsHrSchema,
+  'ops-attendance': opsAttendanceSchema,
+  'ops-task-work': opsTaskWorkSchema,
+  'ops-feedback': opsFeedbackSchema,
+  'ops-hr-requests': opsHrRequestsSchema,
+  'ops-score-imports': opsScoreImportsSchema,
+  'ops-lead-stages': opsLeadStagesSchema,
 } as const;
 
 export const MANAGED_SCHEMAS = ['core', 'marketing', 'academic', 'ops'] as const;
@@ -95,6 +122,7 @@ export const schema = merged as typeof coreSchema &
   typeof academicAssessmentsSchema &
   typeof academicDeliverySchema &
   typeof academicReviewsSchema &
+  typeof academicAssessmentAdminSchema &
   typeof opsSchema &
   typeof opsDemosSchema &
   typeof opsStudentsSchema &
@@ -106,6 +134,14 @@ export const schema = merged as typeof coreSchema &
   typeof opsEodSchema &
   typeof opsTaskImportsSchema &
   typeof opsReviewAcksSchema &
-  typeof opsTeacherReportsSchema;
+  typeof opsTeacherReportsSchema &
+  typeof opsAttachmentsSchema &
+  typeof opsHrSchema &
+  typeof opsAttendanceSchema &
+  typeof opsTaskWorkSchema &
+  typeof opsFeedbackSchema &
+  typeof opsHrRequestsSchema &
+  typeof opsScoreImportsSchema &
+  typeof opsLeadStagesSchema;
 
 export type Schema = typeof schema;

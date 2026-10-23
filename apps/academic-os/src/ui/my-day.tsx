@@ -27,6 +27,7 @@ import type {
   teacherDay,
 } from '../server';
 import { MODULE_PATHS } from '../server/paths';
+import { AssignmentTable } from './assignments';
 import { StateBadge, fmtDateTime } from './badges';
 
 type TeacherDay = Extract<Awaited<ReturnType<typeof teacherDay>>, { kind: 'teacher' }>;
@@ -44,29 +45,22 @@ const EOD: Record<NonNullable<TaskDay>['eod'], [word: string, note: string]> = {
   acknowledged: ['Acknowledged', 'Reviewed and accepted.'],
 };
 
-/** Open tasks and today's EOD report as tiles (shared Ops task service, D-073). No staff record is missing, never 0. */
+/** Tasks due today, overdue, awaiting HR review, and today's EOD report as tiles (shared Ops task service, D-073). No staff record is missing, never 0. */
 export function TasksDay({ summary }: { summary: TaskDay }) {
   const [eod, eodNote] = summary ? EOD[summary.eod] : [null, LINK_STAFF];
+  const asOf = summary ? `As of ${fmtDateTime(summary.asOf)}; ${summary.open} open in all.` : LINK_STAFF;
   return (
     <>
+      <StatCard label="Tasks due today" value={summary?.dueToday ?? null} missingLabel={NO_STAFF} note={asOf} href={`${MODULE_PATHS.tasks}?due=today`} />
+      <StatCard label="Overdue tasks" value={summary?.overdue ?? null} missingLabel={NO_STAFF} note="Open tasks past their deadline. Submitted work is not overdue." href={`${MODULE_PATHS.tasks}?due=overdue`} />
       <StatCard
-        label="Open tasks"
-        value={summary?.open ?? null}
+        label="Work awaiting HR review"
+        value={summary?.submitted ?? null}
         missingLabel={NO_STAFF}
-        note={
-          summary
-            ? `${summary.overdue} overdue · ${summary.dueToday} due today · as of ${fmtDateTime(summary.asOf)}`
-            : LINK_STAFF
-        }
-        href={MODULE_PATHS.tasks}
+        note={summary ? 'Your tasks you submitted that a reviewer has not decided yet.' : LINK_STAFF}
+        href={`${MODULE_PATHS.tasks}?status=in_review`}
       />
-      <StatCard
-        label={`EOD report, ${summary?.day ?? 'today'}`}
-        value={eod}
-        missingLabel={NO_STAFF}
-        note={eodNote}
-        href={`${MODULE_PATHS.tasks}?tab=eod`}
-      />
+      <StatCard label={`EOD report, ${summary?.day ?? 'today'}`} value={eod} missingLabel={NO_STAFF} note={eodNote} href={`${MODULE_PATHS.tasks}?tab=eod`} />
     </>
   );
 }
@@ -174,6 +168,12 @@ function NextClass({ next, today }: { next: SessionListRow | null; today: string
   );
 }
 
+const ListLink = ({ href, children }: { href: string; children: ReactNode }) => (
+  <p>
+    <a href={href}>{children}</a>
+  </p>
+);
+
 /** `tiles`: the tasks, EOD and meetings tiles (null when the user holds no such permission). */
 export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: ReactNode }) {
   const recent = `Classes from ${range(day.window)} that have ended.`;
@@ -187,6 +187,13 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
           empty="No other classes today"
           action={(s) => ({ href: MODULE_PATHS.attendance(s.id), label: 'Open class' })}
         />
+        <ListLink href={MODULE_PATHS.timetable}>My timetable</ListLink>
+      </Card>
+      <Card
+        title={`Your subjects and batches (${day.assignments.length})`}
+        description={`Assignments open on ${day.today}, and pending ones recorded without a batch. A pending assignment opens no students until a coordinator sets its batch.`}
+      >
+        <AssignmentTable rows={day.assignments} today={day.today} placed={new Map(day.batches.map((b) => [b.id as string, b.activeEnrolments]))} empty="No subject or batch is assigned to you yet; an academic coordinator assigns them" />
       </Card>
       {tiles}
       <Card
@@ -205,44 +212,6 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
         ) : null}
       </Card>
       <Card
-        title={`Your batches (${day.batches.length})`}
-        description={`Batches with a teaching assignment of yours open on ${day.today}.`}
-      >
-        <DataTable
-          compact
-          rows={day.batches}
-          rowKey={(b) => b.id}
-          empty={
-            <EmptyState
-              title="No batch is assigned to you today"
-              description="An academic coordinator assigns teachers to batches."
-            />
-          }
-          columns={[
-            {
-              key: 'code',
-              header: 'Batch',
-              render: (b) => (
-                <a href={MODULE_PATHS.batch(b.id)}>
-                  <strong>{b.code}</strong>
-                </a>
-              ),
-            },
-            {
-              key: 'course',
-              header: 'Course',
-              render: (b) => `${b.programmeCode} · ${b.courseName}`,
-            },
-            {
-              key: 'placed',
-              header: 'Students placed',
-              numeric: true,
-              render: (b) => b.activeEnrolments,
-            },
-          ]}
-        />
-      </Card>
-      <Card
         title={`Teaching logs not submitted (${day.logsMissing.length})`}
         description={`${recent} No submitted class record yet.`}
       >
@@ -251,6 +220,7 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
           empty="All your ended classes have a submitted log"
           action={(s) => ({ href: MODULE_PATHS.teachingLog(s.id), label: 'Write log' })}
         />
+        <ListLink href={MODULE_PATHS.teaching}>All teaching logs</ListLink>
       </Card>
       <Card
         title={`Demo students awaiting your feedback (${day.demoAwaitingFeedback.length})`}
@@ -324,6 +294,7 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
             },
           ]}
         />
+        <ListLink href={MODULE_PATHS.assessments}>All assessments</ListLink>
       </Card>
       <Card
         title={`Support follow-ups (${day.support.filter((s) => s.due).length} due)`}
@@ -357,13 +328,6 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
             },
           ]}
         />
-      </Card>
-      <Card title="Your HR attendance">
-        <p>
-          <StatusBadge tone="neutral">{day.hrAttendance}</StatusBadge> Elevate OS has no HR
-          attendance source yet, so nothing here says whether you were present or on leave. Marking
-          a class delivered is not HR attendance.
-        </p>
       </Card>
     </div>
   );

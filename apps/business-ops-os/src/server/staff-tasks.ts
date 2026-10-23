@@ -1,66 +1,56 @@
 /**
- * Staff daily tasks (owner decision 21 Oct 2026; brief 2 §5–6): log work received by call,
- * WhatsApp or in person, update it through the day, list it. Own scope = your tasks and your
- * reports' (R3, task-store.ts); anything else answers 404. History = `ops.task_events` (+ audit).
- * Status changes follow the lifecycle (domain/task-lifecycle.ts); lifecycle actions, reassignment
- * and dependencies are in task-actions.ts. Completing a recurring task creates its next occurrence
- * once (unique `recurrence_parent_id`).
+ * Staff tasks (owner decision 21 Oct 2026; brief 2 §5–6; brief 23 Oct 2026 §8–§10): list, day
+ * view and edits. Read scope = task-store `canSee` / `visibleFilter`; anything else answers 404.
+ * History = `ops.task_events` (+ audit). Creating (incl. HR multi-assign) is in task-create.ts;
+ * lifecycle actions, reassignment and dependencies in task-actions.ts; submission and review in
+ * task-submissions.ts. Completing a recurring task creates its next occurrence once (unique
+ * `recurrence_parent_id`).
  */
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  gte,
-  ilike,
-  inArray,
-  isNull,
-  lt,
-  lte,
-  notInArray,
-  or,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, lte, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import {
   opsEodReports as eodReports,
   opsStaffTasks as tasks,
-  staffMembers,
   type Database,
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
 import { ForbiddenError } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
-import { addDays, istToday, istWeekContaining, type IsoDate } from '../domain/dates';
+import { addDays, istToday, type IsoDate } from '../domain/dates';
 import {
   buildEodSnapshot,
   nextOccurrence,
+  WORK_STATUSES,
   resolveTaskState,
   type EodTask,
   type TaskStatus,
 } from '../domain/staff-tasks';
-import { actionForStatus, decide, GATE_ROLES } from '../domain/task-lifecycle';
+import { BRIEF_ROLES, GATE_ROLES } from '../domain/task-lifecycle';
 import { accessScope, activeStaff, staffIdForUser, type Actor } from './context';
 import { defined, fieldError, rowById } from './ops-common';
-import type { TaskInput, TaskListQuery, TaskPatch } from './staff-tasks-schemas';
+import type { TaskPatch } from './staff-tasks-schemas';
+import { isGroup, overdueSql } from './task-list';
 import {
-  addDependencyRow,
   assertVersion,
-  coversOwner,
-  ctxOf,
+  editsTask,
   insertTaskWithEvent,
   loadTaskFor,
-  refuse,
-  taskAccess,
   writeTaskChange,
-  type TaskAccess,
   type TaskEventInput,
   type TaskRow,
 } from './task-store';
 
+export { createTask } from './task-create';
+export {
+  dueFilter,
+  isGroup,
+  listTasks,
+  listWhere,
+  overdueSql,
+  TASK_PAGE_SIZE,
+  type TaskListRow,
+} from './task-list';
+
 type Row = TaskRow;
-export const TASK_PAGE_SIZE = 25;
 const CLOSED: TaskStatus[] = ['done', 'cancelled'];
 export const NO_STAFF_RECORD =
   'Your account is not linked to a staff record, so you have no tasks of your own. Staff records are linked in the Staff directory.';
@@ -74,7 +64,7 @@ export async function ownStaffId(db: Database, actor: Actor): Promise<StaffMembe
 
 const istStart = (day: string) => new Date(`${day}T00:00:00+05:30`);
 
-/** Tasks that belong in a day's view: not done and due by then, or completed that day. */
+/** Tasks that belong in a day's view: open work due by then, or completed that day (no drafts or groups). */
 export async function dayTasks(db: Database, staffId: string, day: string): Promise<EodTask[]> {
   return db
     .select()
@@ -82,8 +72,9 @@ export async function dayTasks(db: Database, staffId: string, day: string): Prom
     .where(
       and(
         eq(tasks.staffId, staffId as StaffMemberId),
+        sql`not ${isGroup}`,
         or(
-          and(notInArray(tasks.status, CLOSED), lte(tasks.dueOn, day)),
+          and(notInArray(tasks.status, [...CLOSED, 'draft']), lte(tasks.dueOn, day)),
           and(
             gte(tasks.completedAt, istStart(day)),
             lt(tasks.completedAt, istStart(addDays(day as IsoDate, 1))),
@@ -104,44 +95,9 @@ export async function myDay(db: Database, actor: Actor, day: string, staffId?: s
   return buildEodSnapshot(await dayTasks(db, owner, day), day, new Date());
 }
 
-/** Own scope = task-store `canSee`: your and your reports' tasks (R3), and where you review, back up or assigned. */
-function ownerFilter(a: TaskAccess, staffId?: string): SQL | undefined {
-  const owner = staffId ? eq(tasks.staffId, staffId as StaffMemberId) : undefined;
-  if (a.all) return owner;
-  if (!a.self) return sql`false`;
-  // `?staffId=` narrows what you may see; it never widens it (a reviewer still sees the owner's tasks they review).
-  return and(
-    owner,
-    or(
-      inArray(tasks.staffId, [a.self, ...a.managed] as StaffMemberId[]),
-      eq(tasks.reviewerStaffId, a.self),
-      eq(tasks.backupStaffId, a.self),
-      eq(tasks.assignedByStaffId, a.self),
-    ),
-  );
-}
-
-/** Due filters in IST: overdue = open and due before today (or today past its time). */
-function dueFilter(due: TaskListQuery['due'], now: Date): SQL | undefined {
-  const today = istToday(now);
-  const open = notInArray(tasks.status, CLOSED);
-  if (due === 'today') return eq(tasks.dueOn, today);
-  if (due === 'week') {
-    const w = istWeekContaining(today);
-    return and(gte(tasks.dueOn, w.from), lte(tasks.dueOn, w.to));
-  }
-  if (due === 'overdue') {
-    const clock = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false });
-    return and(
-      open,
-      or(lt(tasks.dueOn, today), and(eq(tasks.dueOn, today), lte(tasks.dueTime, clock))),
-    );
-  }
-  return undefined;
-}
-
 /**
- * Home-page figures for the caller's own tasks: open, overdue and due today (IST), and the status
+ * Home-page figures for the caller's own tasks: open (still with them, as teacher-ops taskFacts),
+ * overdue, due today (IST), submitted and waiting for review, and the status
  * of today's EOD report ('not_started' when there is none). Two aggregate queries, no lists; null
  * without a staff record.
  */
@@ -155,65 +111,33 @@ export async function taskDaySummary(db: Database, actor: Actor, now = new Date(
   const [[c], [eod]] = await Promise.all([
     db
       .select({
-        open: count(),
-        overdue: where(dueFilter('overdue', now)),
+        open: where(inArray(tasks.status, WORK_STATUSES as TaskStatus[])),
+        overdue: where(overdueSql(now)),
         dueToday: where(eq(tasks.dueOn, day)),
+        /** Submitted, waiting for review (ACAD My Day "Work awaiting HR review"). */
+        submitted: where(eq(tasks.status, 'in_review')),
       })
       .from(tasks)
-      .where(and(eq(tasks.staffId, staffId), notInArray(tasks.status, CLOSED))),
+      .where(
+        and(
+          eq(tasks.staffId, staffId),
+          notInArray(tasks.status, [...CLOSED, 'draft']),
+          sql`not ${isGroup}`,
+        ),
+      ),
     db
       .select({ status: eodReports.status })
       .from(eodReports)
-      .where(and(eq(eodReports.staffId, staffId), eq(eodReports.reportDate, day)))
+      .where(
+        and(
+          eq(eodReports.staffId, staffId),
+          eq(eodReports.periodKind, 'day'),
+          eq(eodReports.periodStart, day),
+        ),
+      )
       .limit(1),
   ]);
   return { day, asOf: now, ...c!, eod: eod?.status ?? ('not_started' as const) };
-}
-
-/** All tasks the caller may read, newest due day first. */
-export async function listTasks(
-  db: Database,
-  actor: Actor,
-  q: TaskListQuery,
-  pageSize = TASK_PAGE_SIZE,
-) {
-  const access = await taskAccess(db, actor, 'ops:tasks:read');
-  const where = and(
-    ownerFilter(access, q.staffId),
-    q.q ? ilike(tasks.title, `%${q.q.replace(/[%_\\]/g, '\\$&')}%`) : undefined,
-    q.status ? eq(tasks.status, q.status) : undefined,
-    q.priority ? eq(tasks.priority, q.priority) : undefined,
-    q.departmentId ? eq(tasks.departmentId, q.departmentId as never) : undefined,
-    q.from ? gte(tasks.dueOn, q.from) : undefined,
-    q.to ? lte(tasks.dueOn, q.to) : undefined,
-    dueFilter(q.due, new Date()),
-    q.ack ? and(isNull(tasks.acknowledgedAt), notInArray(tasks.status, CLOSED)) : undefined,
-  );
-  const [rows, [total]] = await Promise.all([
-    db
-      .select({
-        id: tasks.id,
-        title: tasks.title,
-        priority: tasks.priority,
-        status: tasks.status,
-        progressPercent: tasks.progressPercent,
-        reason: tasks.reason,
-        dueOn: tasks.dueOn,
-        dueTime: tasks.dueTime,
-        recurrence: tasks.recurrence,
-        acknowledgedAt: tasks.acknowledgedAt,
-        isSample: tasks.isSample,
-        staffName: staffMembers.fullName,
-      })
-      .from(tasks)
-      .innerJoin(staffMembers, eq(staffMembers.id, tasks.staffId))
-      .where(where)
-      .orderBy(desc(tasks.dueOn), asc(tasks.dueTime), desc(tasks.createdAt))
-      .limit(pageSize)
-      .offset((q.page - 1) * pageSize),
-    db.select({ n: count() }).from(tasks).where(where),
-  ]);
-  return { rows, total: total?.n ?? 0, page: q.page, pageSize };
 }
 
 /** Staff fields that must name an active staff member when given. */
@@ -224,69 +148,19 @@ const STAFF_FIELDS = [
   'reviewerStaffId',
 ] as const;
 
-async function checkPeople(
-  db: Database,
-  owner: string,
-  v: Partial<Record<(typeof STAFF_FIELDS)[number], string | null>>,
-) {
-  for (const f of STAFF_FIELDS) if (v[f]) await activeStaff(db, v[f], f);
-  if (v.reviewerStaffId === owner)
-    throw fieldError('reviewerStaffId', 'The reviewer must be someone other than the owner.');
-  if (v.backupStaffId === owner)
-    throw fieldError('backupStaffId', 'The backup must be someone other than the owner.');
-}
+type People = Partial<Record<(typeof STAFF_FIELDS)[number], string | null>>;
 
-/** Log a task: for yourself, a direct or indirect report (R3), or anyone with all-scope write. */
-export async function createTask(db: Database, actor: Actor, input: TaskInput, requestId?: string) {
-  const access = await taskAccess(db, actor, 'ops:tasks:write');
-  const staffId = input.staffId ?? (await ownStaffId(db, actor));
-  if (!coversOwner(access, staffId))
-    throw new ForbiddenError(
-      'You can assign tasks only to yourself and the people who report to you.',
-    );
-  await activeStaff(db, staffId);
-  const forOther = staffId !== access.self;
-  // Only all scope may record someone else as the assigner; otherwise it is you.
-  const assignedByStaffId = (access.all && input.assignedByStaffId) || access.self;
-  await checkPeople(db, staffId, { ...input, assignedByStaffId });
-  const source =
-    forOther && (input.source ?? 'self') === 'self' ? 'manager' : (input.source ?? 'self');
-  const closedBy = (await ctxOf(db, [])).closedBy;
-  const doneOk = !forOther && !input.reviewRequired && closedBy === 'owner' && source === 'self';
-  if (['in_review', 'cancelled'].includes(input.status) || (input.status === 'done' && !doneOk))
+/** Given people are active; the reviewer is independent of the owner side (N2); `current` = the task's. */
+export async function checkPeople(db: Database, owner: string, v: People, current: People = {}) {
+  for (const f of STAFF_FIELDS) if (v[f]) await activeStaff(db, v[f], f);
+  const p = { ...current, ...v };
+  if (p.reviewerStaffId && [owner, p.backupStaffId].includes(p.reviewerStaffId))
     throw fieldError(
-      'status',
-      'Start a task as not started, in progress, blocked or on hold. Only work you log for yourself, without review, can start as done.',
+      v.reviewerStaffId ? 'reviewerStaffId' : 'backupStaffId',
+      'The reviewer must be someone other than the owner and the backup.',
     );
-  const { state, error } = resolveTaskState(null, input);
-  if (error) throw fieldError(error.field, error.message);
-  const { dependsOn = [], ...values } = input;
-  const now = new Date();
-  return withTransaction(db, async (tx) => {
-    const row = (await insertTaskWithEvent(
-      tx,
-      actor,
-      {
-        ...(values as Partial<typeof tasks.$inferInsert>),
-        ...state,
-        title: input.title,
-        staffId: staffId as StaffMemberId,
-        assignedByStaffId: assignedByStaffId as StaffMemberId | null,
-        source,
-        dueOn: input.dueOn ?? istToday(now),
-        receivedAt: input.receivedAt ?? now,
-        // Work you log for yourself is acknowledged by logging it; assigned work is not (§5).
-        acknowledgedAt: forOther ? null : now,
-        acknowledgedByUserId: forOther ? null : actor.id,
-        completedAt: state.status === 'done' ? now : null,
-        createdBy: actor.id,
-      },
-      { requestId },
-    ))!;
-    for (const dep of dependsOn) await addDependencyRow(tx, actor, access, row, dep);
-    if (row.status === 'done') await createNext(tx, actor, row, requestId);
-    return row;
-  });
+  if (p.backupStaffId === owner)
+    throw fieldError('backupStaffId', 'The backup must be someone other than the owner.');
 }
 
 /** The next occurrence of a completed recurring task; at most one per task, so retries are safe. */
@@ -301,6 +175,8 @@ async function createNext(tx: Database, actor: Actor, done: Row, requestId?: str
     'staffId',
     'title',
     'details',
+    'category',
+    'expectedDeliverable',
     'assignedByStaffId',
     'departmentId',
     'reviewerStaffId',
@@ -350,9 +226,25 @@ const sameValue = (k: string, a: unknown, b: unknown) =>
     ? String(a ?? '').slice(0, 5) === String(b ?? '').slice(0, 5)
     : String(a ?? '') === String(b ?? '');
 
+/** The brief of assigned work: set by whoever assigns it (BRIEF_ROLES), asked about by the assignee. */
+const BRIEF_FIELDS = new Set([
+  'title',
+  'details',
+  'expectedDeliverable',
+  'acceptanceCriteria',
+  'category',
+  'linkedRef',
+  'reviewerStaffId',
+  'dueOn',
+  'dueTime',
+]);
+
 /**
- * Change a task's fields (owner, a manager up the chain, all scope). A status change goes through
- * the lifecycle; review and cancel only via their actions. One event per kind of change.
+ * Change a task's fields (owner, a manager up the chain, all scope). Never its status: every
+ * status change goes through the task actions (task-actions.ts), the one gate for review rows,
+ * approval and notifications. On assigned work the brief and deadline are the assigner's; on
+ * self-logged work the owner's. A deadline change needs a reason and keeps the original deadline
+ * (a draft's deadline is still its original). One event per kind of change.
  */
 export async function updateTask(
   db: Database,
@@ -362,9 +254,14 @@ export async function updateTask(
   requestId?: string,
 ) {
   const { expectedVersion, changeReason, ...fields } = patch;
+  if (fields.status !== undefined)
+    throw fieldError(
+      'status',
+      'Use the task actions (start, submit, approve, cancel…) to change its status.',
+    );
   return withTransaction(db, async (tx) => {
     const { row: before, roles, life } = await loadTaskFor(tx, actor, id, true);
-    if (!roles.some((r) => r !== 'reviewer'))
+    if (!editsTask(roles))
       throw new ForbiddenError('Only the owner or their manager can change this task.');
     assertVersion(before, expectedVersion);
     const set = Object.fromEntries(
@@ -378,27 +275,33 @@ export async function updateTask(
       !GATE_ROLES.some((r) => roles.includes(r))
     )
       throw new ForbiddenError('Only the person who logged this task can change its review step.');
-    await checkPeople(tx, before.staffId, set);
+    if (set.reviewRequired === false && roles.includes('owner'))
+      throw new ForbiddenError('You cannot turn off the review of your own task.');
+    if (
+      !life.selfLogged &&
+      keys.some((k) => BRIEF_FIELDS.has(k)) &&
+      !BRIEF_ROLES.some((r) => roles.includes(r))
+    )
+      throw new ForbiddenError(
+        'Whoever assigned this task sets its brief and deadline. Ask for clarification instead.',
+      );
+    await checkPeople(tx, before.staffId, set, before);
     const events: TaskEventInput[] = [];
-    if (set.status) {
-      const map = actionForStatus(before.status, set.status, before.reviewRequired);
-      if (map.error) throw fieldError('status', map.error);
-      const d = decide(map.action!, life, await ctxOf(tx, roles), patch.reason);
-      refuse(d);
-      events.push({
-        kind: d.event,
-        fromStatus: before.status,
-        toStatus: set.status,
-        reason: patch.reason ?? null,
-      });
-    }
     const { state, error } = resolveTaskState(before, patch);
     if (error) throw fieldError(error.field, error.message);
     const after = { ...before, ...set };
-    if ('dueOn' in set || 'dueTime' in set)
+    const dueMoved = 'dueOn' in set || 'dueTime' in set;
+    if (dueMoved && before.status === 'draft')
+      Object.assign(set, { originalDueOn: after.dueOn, originalDueTime: after.dueTime });
+    else if (dueMoved) {
+      if (!changeReason)
+        throw fieldError(
+          'changeReason',
+          'Say why the deadline changed (it is kept in the history).',
+        );
       events.push({
         kind: 'due_changed',
-        reason: changeReason ?? null,
+        reason: changeReason,
         data: {
           fromDueOn: before.dueOn,
           toDueOn: after.dueOn,
@@ -406,24 +309,24 @@ export async function updateTask(
           toDueTime: after.dueTime,
         },
       });
+    }
     if (set.priority)
       events.push({
         kind: 'priority_changed',
         reason: changeReason ?? null,
         data: { from: before.priority, to: set.priority },
       });
-    const edited = keys.filter((k) => !['status', 'dueOn', 'dueTime', 'priority'].includes(k));
+    const edited = keys.filter((k) => !['dueOn', 'dueTime', 'priority'].includes(k));
     if (edited.length) events.push({ kind: 'edited', data: { edited } });
-    const done = state.status === 'done';
     const saved = await writeTaskChange(
       tx,
       actor,
       before,
-      { ...set, ...state, completedAt: done ? (before.completedAt ?? new Date()) : null },
+      { ...set, ...state },
       events,
-      done && before.status !== 'done' ? 'staff_task.completed' : 'staff_task.updated',
+      'staff_task.updated',
       requestId,
     );
-    return afterChange(tx, actor, before, saved, requestId);
+    return { ...saved, nextTaskId: null };
   });
 }

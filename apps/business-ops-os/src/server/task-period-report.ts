@@ -1,8 +1,10 @@
 /**
  * Team / period report (owner brief 2 §12 C): date-aware counts replayed from task events, EOD
- * coverage per person-day, blockers and unresolved decisions. Scope (R3): all-scope task readers
- * see everyone; others see themselves and the people who report to them now. Downloads (PDF,
- * CSV) use the same scope and are audited.
+ * coverage per person-day, blockers and unresolved decisions, and (brief 23 Oct 2026 §14) each
+ * person's submissions and on-time rate side by side — never a ranking or a combined score (R13).
+ * Scope (R3): all-scope task readers see everyone; others see themselves and the people who
+ * report to them now. The HR view (`hr: true`, ops:work_reports:read) covers the staff HR manages
+ * (hr.staff_scope_departments). Downloads (PDF, CSV) use the same scope and are audited.
  */
 import { and, eq, gte, inArray, lte, max, ne, sql, type SQL } from 'drizzle-orm';
 import {
@@ -12,16 +14,25 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import { recordAudit, toCsv } from '@elevate/server-kit';
 import type { DepartmentId, StaffMemberId } from '@elevate/shared-types';
 import { addDays, daysBetween, istInstant, istToday, type IsoDate } from '../domain/dates';
-import { eventsByTask, taskStateAt } from '../domain/eod';
-import { isOverdue } from '../domain/staff-tasks';
-import { fmtDate, fmtDateTime } from '../ui/format';
+import { dueTaskAt, eventsByTask, isReceipt, taskStateAt } from '../domain/eod';
+import {
+  isExpectedDay,
+  METRIC_DEFINITIONS,
+  onTimeRate,
+  periodOf,
+  reviewTurnaround,
+} from '../domain/work-report';
+import { deadlineInstant, isOverdue } from '../domain/staff-tasks';
 import { accessScope, managedStaffIds, staffIdForUser, type Actor } from './context';
+import { attendanceStaff, deriveDays } from './attendance';
 import { taskHistory } from './eod-facts';
+import { reportSettings } from './eod-reports';
+import { hrScopeFor, hrScopeWhere } from './organisation';
 import { fieldError } from './ops-common';
-import { createPdf } from './pdf/document';
+
+export { periodReportCsv, periodReportPdf } from './task-period-export';
 
 export const MAX_PERIOD_DAYS = 92;
 
@@ -30,10 +41,12 @@ export const PERIOD_DEFINITIONS = [
     'Assigned during period',
     'Tasks given to the person (created, assigned or reassigned to them, or imported) by an event dated in the period. Each task counts once.',
   ],
+  ['Submitted during period', METRIC_DEFINITIONS.submitted],
   [
     'Completed during period',
-    'Tasks marked done by an event dated in the period. A task finished after the period is not counted; this is not the same as "currently done".',
+    'Tasks approved, or marked done when no review is needed, by an event dated in the period. A task finished after the period is not counted; this is not the same as "currently done".',
   ],
+  ['On time', METRIC_DEFINITIONS.onTime],
   [
     'Open at cut-off',
     'Tasks not done and not cancelled at the cut-off, replayed from their history (not their status today).',
@@ -45,28 +58,44 @@ export const PERIOD_DEFINITIONS = [
   ['Blocker age', 'Whole days from when the task became blocked to the cut-off.'],
   [
     'EOD coverage',
-    'Per person and calendar day up to today (no working-days policy exists): submitted (any version), acknowledged by the manager, missing (no submitted report). A missing report is not absence; there is no HR attendance source.',
+    'Per person, on the finished days of the period that are scheduled workdays by HR attendance rules (approved holidays, approved leave and weekly offs are not expected): submitted (any version), reviewed by the manager, missing (no submitted report). With no work schedule the expectation is unknown and nothing is counted missing. A missing report is not an absence.',
   ],
+  ['No ranking', 'Figures are per person, side by side. There is no combined score or ranking.'],
   ['Cut-off', 'The end of the last day of the period (IST), or now if that day has not ended.'],
 ] as const;
+
+/** Who the reader may report on: undefined = everyone; the HR view = the staff HR manages. */
+export async function staffScope(
+  db: Database,
+  actor: Actor,
+  hr: boolean,
+): Promise<SQL | undefined> {
+  if (hr) {
+    await accessScope(db, actor, 'ops:work_reports:read');
+    return hrScopeWhere(await hrScopeFor(db, actor));
+  }
+  const access = await accessScope(db, actor, 'ops:tasks:read');
+  if (access.scope === 'all') return undefined;
+  const self = await staffIdForUser(db, actor.id);
+  const ids = self ? [self, ...(await managedStaffIds(db, self))] : [];
+  return ids.length ? inArray(staffMembers.id, ids) : sql`false`;
+}
 
 export async function periodReport(
   db: Database,
   actor: Actor,
   q: { from: string; to: string; staffId?: string; departmentId?: string },
+  { hr = false } = {},
 ) {
-  const access = await accessScope(db, actor, 'ops:tasks:read');
+  const scope = await staffScope(db, actor, hr);
   if (daysBetween(q.from as IsoDate, q.to as IsoDate) >= MAX_PERIOD_DAYS)
     throw fieldError('to', `Choose a period of ${MAX_PERIOD_DAYS} days or fewer.`);
-  const self = await staffIdForUser(db, actor.id);
-  const scope =
-    access.scope === 'all' ? null : self ? [self, ...(await managedStaffIds(db, self))] : [];
   const now = new Date();
   const start = istInstant(q.from);
   const end = istInstant(addDays(q.to as IsoDate, 1));
   const asOf = now < end ? now : new Date(end.getTime() - 1);
   const filters: (SQL | undefined)[] = [
-    scope ? (scope.length ? inArray(staffMembers.id, scope) : sql`false`) : undefined,
+    scope,
     q.staffId ? eq(staffMembers.id, q.staffId as StaffMemberId) : undefined,
     q.departmentId ? eq(staffMembers.departmentId, q.departmentId as DepartmentId) : undefined,
   ];
@@ -84,24 +113,26 @@ export async function periodReport(
     .orderBy(staffMembers.fullName);
   const ids = staff.map((s) => s.staffId as string);
   const history = ids.length ? await taskHistory(db, ids, now) : { tasks: [], events: [] };
-  const eodRows = ids.length
+  const reportRows = ids.length
     ? await db
         .select({
           staffId: reports.staffId,
           id: reports.id,
-          reportDate: reports.reportDate,
+          kind: reports.periodKind,
+          reportDate: reports.periodStart,
           status: reports.status,
         })
         .from(reports)
         .where(
           and(
             inArray(reports.staffId, ids as StaffMemberId[]),
-            gte(reports.reportDate, q.from),
-            lte(reports.reportDate, q.to),
+            gte(reports.periodStart, q.from),
+            lte(reports.periodStart, q.to),
             ne(reports.status, 'draft'),
           ),
         )
     : [];
+  const eodRows = reportRows.filter((r) => r.kind === 'day');
 
   const inPeriod = history.events.filter((e) => e.occurredAt >= start && e.occurredAt < end);
   const byId = new Map(history.tasks.map((t) => [t.id as string, t]));
@@ -114,59 +145,100 @@ export async function periodReport(
       m.set(staffId, (m.get(staffId) ?? new Set()).add(taskId));
     return m;
   };
+  // Received while not a draft (a draft counts when it is published), by the owner then.
   const assigned = tally(
-    inPeriod
-      .filter(
-        (e) => ['created', 'assigned', 'reassigned', 'imported'].includes(e.kind) && e.toStaffId,
-      )
-      .map((e) => [e.toStaffId!, e.taskId]),
+    inPeriod.flatMap((e) => {
+      const s = stateAt(e.taskId, e.occurredAt);
+      return isReceipt(e) && s && s.status !== 'draft'
+        ? [[e.toStaffId ?? s.owner, e.taskId] as [string, string]]
+        : [];
+    }),
   );
   const completed = tally(
     inPeriod
       .filter((e) => e.toStatus === 'done')
       .map((e) => [stateAt(e.taskId, e.occurredAt)?.owner ?? '', e.taskId]),
   );
-  const open = history.tasks.flatMap((t) => {
-    const s = stateAt(t.id, asOf);
-    return s && ids.includes(s.owner) && s.status !== 'done' && s.status !== 'cancelled'
-      ? [{ t, s }]
-      : [];
+  const owned = history.tasks.flatMap((t) => {
+    const at = dueTaskAt(t, byTask.get(t.id), asOf);
+    return at && ids.includes(at.s.owner) ? [{ t, ...at }] : [];
   });
+  const open = owned.filter(({ s }) => !['done', 'cancelled', 'draft'].includes(s.status));
+  const submissions = inPeriod.filter(
+    (e) =>
+      e.kind === 'submitted_for_review' &&
+      ids.includes(stateAt(e.taskId, e.occurredAt)?.owner ?? ''),
+  );
+  const submitted = tally(
+    submissions.map((e) => [stateAt(e.taskId, e.occurredAt)!.owner, e.taskId]),
+  );
+  const timeliness = (staffId?: string) =>
+    onTimeRate(
+      owned.filter((o) => !staffId || o.s.owner === staffId).map((o) => o.due),
+      { start: q.from, end: q.to },
+    );
+  const figures = ({ rows: _r, ...t }: ReturnType<typeof timeliness>) => t;
   const name = new Map(staff.map((s) => [s.staffId as string, s.name]));
   const lastDay = q.to < istToday(now) ? q.to : istToday(now);
   const days = lastDay < q.from ? 0 : daysBetween(q.from as IsoDate, lastDay as IsoDate) + 1;
+  // Expected EOD days: finished days (before today) that are scheduled workdays (ATT's rules).
+  const yesterday = addDays(istToday(now), -1);
+  const derived = await deriveDays(
+    db,
+    ids.length ? await attendanceStaff(db, { ids }) : [],
+    q.from as IsoDate,
+    (q.to < yesterday ? q.to : yesterday) as IsoDate,
+  );
 
   const people = staff.map((p) => {
     const mine = open.filter((o) => o.s.owner === p.staffId);
     const eod = eodRows.filter((r) => r.staffId === p.staffId);
-    const expected = p.status !== 'inactive' && p.hasLogin ? days : null;
+    const mineDays = derived.get(p.staffId) ?? [];
+    const note =
+      p.status === 'inactive' || !p.hasLogin
+        ? ('no_login' as const)
+        : mineDays.length && mineDays.every((d) => d.scheduled === null)
+          ? ('no_schedule' as const)
+          : null;
+    const expectedDays = note ? null : mineDays.filter(isExpectedDay).map((d) => d.date as string);
     return {
       staffId: p.staffId,
       name: p.name,
       department: p.department,
       assigned: assigned.get(p.staffId)?.size ?? 0,
+      submitted: submitted.get(p.staffId)?.size ?? 0,
       completed: completed.get(p.staffId)?.size ?? 0,
       open: mine.length,
       overdue: mine.filter((o) => isOverdue(o.s, asOf)).length,
-      blocked: mine.filter((o) => o.s.status === 'blocked').length,
+      blocked: mine.filter((o) => o.s.blocked).length,
+      onTime: figures(timeliness(p.staffId)),
+      periodic: reportRows.filter((r) => r.staffId === p.staffId && r.kind !== 'day').length,
       eod: {
-        days: expected,
+        days: expectedDays?.length ?? null,
+        /** Why nothing is expected: no sign-in / inactive, or no work schedule known. */
+        note,
         submitted: eod.length,
         acknowledged: eod.filter((r) => r.status === 'acknowledged').length,
-        missing: expected === null ? null : Math.max(0, expected - eod.length),
+        missing:
+          expectedDays && expectedDays.filter((d) => !eod.some((r) => r.reportDate === d)).length,
       },
     };
   });
   const blockers = open
-    .filter((o) => o.s.status === 'blocked')
-    .map((o) => ({
-      taskId: o.t.id,
-      title: o.t.title,
-      owner: name.get(o.s.owner) ?? '',
-      reason: o.s.reason,
-      since: o.s.since?.toISOString() ?? null,
-      ageDays: o.s.since ? daysBetween(istToday(o.s.since), istToday(asOf)) : null,
-    }))
+    .flatMap(({ t, s: { blocked: b, owner } }) =>
+      b
+        ? [
+            {
+              taskId: t.id,
+              title: t.title,
+              owner: name.get(owner) ?? '',
+              reason: b.reason,
+              since: b.since?.toISOString() ?? null,
+              ageDays: b.since ? daysBetween(istToday(b.since), istToday(asOf)) : null,
+            },
+          ]
+        : [],
+    )
     .sort((a, b) => (b.ageDays ?? -1) - (a.ageDays ?? -1));
   const clarifications = inPeriod.filter(
     (e) =>
@@ -217,20 +289,63 @@ export async function periodReport(
     reportDate: r.reportDate,
     since: requests.find((x) => x.reportId === r.id)?.at?.toISOString() ?? null,
   }));
-  const sum = (k: 'assigned' | 'completed' | 'open' | 'overdue' | 'blocked') =>
+  const sum = (k: 'assigned' | 'submitted' | 'completed' | 'open' | 'overdue' | 'blocked') =>
     people.reduce((n, p) => n + p[k], 0);
+  const all = timeliness();
+  const turnaround = reviewTurnaround(
+    submissions.map((e) => ({
+      taskId: e.taskId,
+      title: byId.get(e.taskId)!.title,
+      submittedAt: e.occurredAt,
+      decidedAt:
+        byTask
+          .get(e.taskId)!
+          .find(
+            (x) =>
+              (x.kind === 'review_approved' || x.kind === 'changes_requested') &&
+              x.occurredAt > e.occurredAt &&
+              x.occurredAt <= asOf,
+          )?.occurredAt ?? null,
+    })),
+  );
+  // Weeks (from reports.week_start) when the period is longer than a month: never 90 slivers.
+  const { weekStart } = await reportSettings(db);
+  const bucket = (day: string) =>
+    days > 31 ? periodOf('week', day as IsoDate, weekStart).start : day;
+  const buckets = [
+    ...new Set(
+      Array.from({ length: Math.max(days, 1) }, (_, i) => bucket(addDays(q.from as IsoDate, i))),
+    ),
+  ];
+  const series = buckets.map((b) => ({
+    bucket: b,
+    due: all.rows.filter((r) => bucket(r.dueOn) === b).length,
+    submitted: submissions.filter((e) => bucket(istToday(e.occurredAt)) === b).length,
+  }));
   return {
     window: { from: q.from, to: q.to },
     asOf: asOf.toISOString(),
     people,
     totals: {
       assigned: sum('assigned'),
+      submitted: sum('submitted'),
       completed: sum('completed'),
       open: sum('open'),
       overdue: sum('overdue'),
       blocked: sum('blocked'),
       eodSubmitted: people.reduce((n, p) => n + p.eod.submitted, 0),
       eodMissing: people.reduce((n, p) => n + (p.eod.missing ?? 0), 0),
+      onTime: figures(all),
+      turnaround,
+    },
+    series,
+    backlog: {
+      dueNotSubmitted: all.rows.filter(
+        (r) => r.outcome === 'not_submitted' && deadlineInstant(r.dueOn, r.dueTime) <= asOf,
+      ).length,
+      awaitingReview: open.filter((o) => o.s.status === 'in_review').length,
+      changesRequested: open.filter((o) => o.s.status === 'changes_requested').length,
+      reportsAwaitingReview: reportRows.filter((r) => r.status === 'submitted').length,
     },
     blockers,
     decisions,
@@ -239,164 +354,14 @@ export async function periodReport(
 }
 export type PeriodReport = Awaited<ReturnType<typeof periodReport>>;
 
-const filterLine = (r: PeriodReport, q: { staffId?: string; departmentId?: string }) =>
-  `${fmtDate(r.window.from)} – ${fmtDate(r.window.to)} · cut-off ${fmtDateTime(r.asOf)}${q.staffId ? ' · one person' : ''}${q.departmentId ? ' · one department' : ''}`;
-
-const PEOPLE_HEADER = [
-  'Person',
-  'Department',
-  'Assigned',
-  'Completed',
-  'Open at cut-off',
-  'Overdue at cut-off',
-  'Blocked',
-  'EOD calendar days',
-  'EOD submitted',
-  'EOD acknowledged',
-  'EOD missing',
-];
-const personRow = (p: PeriodReport['people'][number]) => [
-  p.name,
-  p.department,
-  p.assigned,
-  p.completed,
-  p.open,
-  p.overdue,
-  p.blocked,
-  p.eod.days,
-  p.eod.submitted,
-  p.eod.acknowledged,
-  p.eod.missing,
-];
-
-async function exported(db: Database, actor: Actor, format: string, q: object) {
-  await recordAudit(db, {
-    actorUserId: actor.id,
-    module: 'ops',
-    action: 'task_report.exported',
-    entityType: 'task_report',
-    entityId: null,
-    metadata: { format, ...q },
-  });
-}
-
-export async function periodReportCsv(
-  db: Database,
-  actor: Actor,
-  q: Parameters<typeof periodReport>[2],
-) {
-  const r = await periodReport(db, actor, q);
-  await exported(db, actor, 'csv', q);
-  const blank = PEOPLE_HEADER.map(() => '');
-  return {
-    csv: toCsv(PEOPLE_HEADER, [
-      ...r.people.map(personRow),
-      blank,
-      ['Blocked task', 'Owner', 'Blocked since', 'Age (days)', 'Reason'],
-      ...r.blockers.map((b) => [
-        b.title,
-        b.owner,
-        b.since ? fmtDateTime(b.since) : '',
-        b.ageDays,
-        b.reason,
-      ]),
-      blank,
-      ['Unresolved decision', 'Owner', 'What', 'Since', 'Detail'],
-      ...r.decisions.map((d) => [
-        d.title,
-        d.owner,
-        d.what,
-        d.since ? fmtDateTime(d.since) : '',
-        d.detail,
-      ]),
-      blank,
-      ['EOD revision requested', 'Report day', 'Since'],
-      ...r.revisions.map((x) => [x.name, x.reportDate, fmtDateTime(x.since)]),
-    ]),
-    filename: `task-report-${q.from}-to-${q.to}.csv`,
-  };
-}
-
-export async function periodReportPdf(
-  db: Database,
-  actor: Actor,
-  q: Parameters<typeof periodReport>[2],
-) {
-  const r = await periodReport(db, actor, q);
-  const pdf = await createPdf({
-    title: 'Task and EOD report',
-    reference: filterLine(r, q),
-    templateVersion: 'task-period-report v1',
-  });
-  pdf.keyValues([
-    ['Period', `${fmtDate(r.window.from)} – ${fmtDate(r.window.to)} (IST)`],
-    ['Cut-off', fmtDateTime(r.asOf)],
-    ['People', r.people.length],
-    [
-      'Source',
-      'Task events and work updates; EOD reports in Business Ops. HR attendance unavailable.',
-    ],
-  ]);
-  pdf.heading('By person');
-  pdf.table(
-    PEOPLE_HEADER.filter((h) => h !== 'Department').map((header, i) => ({
-      header,
-      width: i === 0 ? 0.28 : 0.08,
-      align: i ? ('right' as const) : undefined,
-    })),
-    r.people.map((p) => personRow(p).filter((_, i) => i !== 1)),
-  );
-  pdf.heading(`Blocked at cut-off (${r.blockers.length})`);
-  if (r.blockers.length)
-    pdf.table(
-      [
-        { header: 'Task', width: 0.35 },
-        { header: 'Owner', width: 0.2 },
-        { header: 'Age (days)', width: 0.12, align: 'right' },
-        { header: 'Reason', width: 0.33 },
-      ],
-      r.blockers.map((b) => [b.title, b.owner, b.ageDays, b.reason]),
-    );
-  else pdf.paragraph('None.', { muted: true });
-  pdf.heading(`Unresolved decisions (${r.decisions.length})`);
-  if (r.decisions.length)
-    pdf.table(
-      [
-        { header: 'Task', width: 0.35 },
-        { header: 'Owner', width: 0.2 },
-        { header: 'What', width: 0.2 },
-        { header: 'Detail', width: 0.25 },
-      ],
-      r.decisions.map((d) => [d.title, d.owner, d.what, d.detail]),
-    );
-  else pdf.paragraph('None.', { muted: true });
-  pdf.heading(`EOD revisions requested (${r.revisions.length})`);
-  if (r.revisions.length)
-    pdf.table(
-      [
-        { header: 'Person', width: 0.5 },
-        { header: 'Report day', width: 0.5 },
-      ],
-      r.revisions.map((x) => [x.name, fmtDate(x.reportDate)]),
-    );
-  else pdf.paragraph('None.', { muted: true });
-  pdf.heading('How these are counted');
-  pdf.keyValues(PERIOD_DEFINITIONS.map(([k, v]) => [k, v]));
-  await exported(db, actor, 'pdf', q);
-  return { bytes: await pdf.finish(), filename: `task-report-${q.from}-to-${q.to}.pdf` };
-}
-
 /** People and departments the reader may filter the period report by (same scope as the report). */
-export async function reportFilterOptions(db: Database, actor: Actor) {
-  const access = await accessScope(db, actor, 'ops:tasks:read');
-  const self = await staffIdForUser(db, actor.id);
-  const scope =
-    access.scope === 'all' ? null : self ? [self, ...(await managedStaffIds(db, self))] : [];
+export async function reportFilterOptions(db: Database, actor: Actor, { hr = false } = {}) {
+  const scope = await staffScope(db, actor, hr);
   const [staff, depts] = await Promise.all([
     db
       .select({ value: staffMembers.id, label: staffMembers.fullName })
       .from(staffMembers)
-      .where(scope ? (scope.length ? inArray(staffMembers.id, scope) : sql`false`) : undefined)
+      .where(scope)
       .orderBy(staffMembers.fullName),
     db
       .select({ value: departments.id, label: departments.name })

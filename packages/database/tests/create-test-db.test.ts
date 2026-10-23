@@ -28,6 +28,7 @@ describe('createTestDb', () => {
     expect(result.rows.map((r) => r.table_name)).toEqual([
       'approvals',
       'audit_events',
+      'branches',
       'departments',
       'event_deliveries',
       'idempotency_keys',
@@ -37,6 +38,7 @@ describe('createTestDb', () => {
       'sessions',
       'staff_members',
       'students',
+      'user_preferences',
       'user_roles',
       'users',
     ]);

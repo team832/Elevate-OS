@@ -27,6 +27,7 @@ import {
   lifecycleLinks,
   NO_LIFECYCLE,
   PrimaryAction,
+  ReportButtons,
   ProfileForm,
   programmesLine,
   ProgrammesTable,
@@ -116,7 +117,12 @@ async function StudentProfile({
           a.academicYear ? `Academic year ${a.academicYear}` : 'Academic year not recorded',
           pc ? `${pc.label}: ${pc.phone ?? 'no phone'}` : 'No contact recorded',
         ].join(' · ')}
-        actions={<PrimaryAction d={d} base={base} />}
+        actions={
+          <>
+            <PrimaryAction d={d} base={base} />
+            <ReportButtons d={d} />
+          </>
+        }
         tabs={
           <SectionNav label={`${d.person.fullName}: record sections`}>
             {TABS.map(([key, label]) => (

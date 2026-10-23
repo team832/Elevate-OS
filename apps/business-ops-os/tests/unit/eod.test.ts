@@ -167,9 +167,9 @@ describe('A-TSK-8 EOD facts from events', () => {
     expect(f.duration).toMatchObject({ minutes: 135, overlaps: true });
   });
 
-  it('test 6: HR attendance is always unavailable and a failed Academic call says so', () => {
+  it('test 6: a day report has no attendance figure and a failed Academic call says so', () => {
     const f = facts({});
-    expect(f.hr).toEqual({ status: 'unavailable' });
+    expect(f.attendance).toBeUndefined();
     expect(f.academic).toMatchObject({
       status: 'unavailable',
       reason: 'Could not reach the source',
@@ -238,7 +238,7 @@ describe('A-TSK-8 EOD facts from events', () => {
   });
 
   it('received, acknowledged, blocked and decisions come only from events inside the day, for the owner then', () => {
-    const tasks = [task('r', { status: 'blocked', reason: 'Waiting for parent' }), task('away')];
+    const tasks = [task('r', { status: 'pending' }), task('away')];
     const events = [
       ev('r', 'created', ist(D, '09:00'), { toStaffId: S, toStatus: 'pending' }),
       ev('r', 'acknowledged', ist(D, '09:10')),
@@ -318,7 +318,10 @@ describe('A-TSK-8 EOD facts from events', () => {
   });
 
   it('an immediate re-check is not "changed": jsonb key order and the moving cut-off are ignored', () => {
-    const blocked = task('b', { status: 'blocked', reason: 'Waiting for parent' });
+    const blocked = task('b', {
+      blockedAt: ist(PREV, '10:00'),
+      blockedReason: 'Waiting for parent',
+    });
     const at = (time: string) => facts({ tasks: [blocked], now: ist(D, time) });
     // Postgres jsonb returns object keys in its own order, not the order they were written in.
     const reorder = (v: unknown): unknown =>
@@ -341,5 +344,132 @@ describe('A-TSK-8 EOD facts from events', () => {
     );
     const f = facts({ tasks: [task('t0'), task('t1')], events });
     expect(f.decisions.map((d) => d.kind)).toEqual(['clarification_requested']);
+  });
+});
+
+describe('work-report facts for a week (brief 23 Oct 2026 §13–14)', () => {
+  const MON = '2026-10-19';
+  const SUN = '2026-10-25';
+  const week = (over: Partial<EodInput>) =>
+    facts({
+      reportDate: MON,
+      periodKind: 'week',
+      periodEnd: SUN,
+      now: ist('2026-10-28', '10:00'),
+      ...over,
+    });
+
+  it('submitted and approved are separate sections; approval next week is not in this week', () => {
+    const tasks = [
+      task('s', { status: 'done', dueOn: '2026-10-23' }),
+      task('n', { status: 'done' }),
+    ];
+    const events = [
+      ev('s', 'submitted_for_review', ist('2026-10-22', '16:00'), {
+        fromStatus: 'in_progress',
+        toStatus: 'in_review',
+      }),
+      ev('s', 'review_approved', ist('2026-10-26', '11:00'), {
+        fromStatus: 'in_review',
+        toStatus: 'done',
+      }),
+      ev('n', 'status_changed', ist('2026-10-21', '12:00'), {
+        fromStatus: 'in_progress',
+        toStatus: 'done',
+      }),
+    ];
+    const f = week({ tasks, events });
+    expect(f.submitted!.map((x) => x.taskId)).toEqual(['s']);
+    expect(f.completed.map((x) => x.taskId)).toEqual(['n']);
+    expect(f.timeliness!.rows.find((r) => r.taskId === 's')).toMatchObject({
+      outcome: 'on_time',
+      delivered: false,
+    });
+    expect(f.turnaround).toEqual({ decided: 0, waiting: 1, medianHours: null });
+  });
+
+  it('the on-time rate uses the deadline in force at the first submission and lists the change', () => {
+    const t = task('m', {
+      dueOn: '2026-10-24',
+      originalDueOn: '2026-10-22',
+      originalDueTime: null,
+    });
+    const events = [
+      ev('m', 'submitted_for_review', ist('2026-10-23', '09:00'), { toStatus: 'in_review' }),
+      ev('m', 'due_changed', ist('2026-10-23', '10:00'), {
+        reason: 'Sample: extra pages',
+        data: {
+          fromDueOn: '2026-10-22',
+          toDueOn: '2026-10-24',
+          fromDueTime: null,
+          toDueTime: null,
+        },
+      }),
+    ];
+    const r = week({ tasks: [t], events }).timeliness!;
+    expect(r).toMatchObject({ eligible: 1, late: 1, rate: 0 });
+    expect(r.revisions).toEqual([
+      {
+        taskId: 'm',
+        title: 'Sample task m',
+        from: '2026-10-22',
+        to: '2026-10-24',
+        reason: 'Sample: extra pages',
+      },
+    ]);
+  });
+
+  it('blocked is a flag replayed from blocked_set / blocked_cleared; the status is kept', () => {
+    const t = task('b', { status: 'in_progress', dueOn: '2026-10-30' });
+    const events = [
+      ev('b', 'blocked_set', ist('2026-10-20', '10:00'), { reason: 'Sample: waiting for a file' }),
+      ev('b', 'blocked_cleared', ist('2026-10-27', '10:00')),
+    ];
+    const f = week({ tasks: [t], events });
+    expect(f.backlog[0]).toMatchObject({
+      status: 'in_progress',
+      blocked: true,
+      reason: 'Sample: waiting for a file',
+    });
+    expect(taskStateAt(t, events, ist('2026-10-28', '10:00'))!.blocked).toBeNull();
+    expect(taskStateAt(t, events, ist('2026-10-19', '10:00'))!.blocked).toBeNull();
+  });
+
+  it('work updates across the week count; EOD reasons are not required for a week report', () => {
+    const f = week({
+      tasks: [task('a', { dueOn: '2026-10-20' })],
+      updates: [upd('u1', 'a', { occurredOn: '2026-10-20' }), upd('u2', 'a', { occurredOn: SUN })],
+    });
+    expect(f.work.map((w) => w.updateId)).toEqual(['u1', 'u2']);
+    expect(factsMissingReasons(f)).toEqual([]);
+  });
+});
+
+describe('drafts are not the employee’s work yet', () => {
+  it('a draft is ignored while it is a draft; publishing it counts as received', () => {
+    const t = task('d', { status: 'pending' });
+    const events = [
+      ev('d', 'created', ist(PREV, '10:00'), { toStaffId: S, toStatus: 'draft' }),
+      ev('d', 'status_changed', ist(D, '11:00'), { fromStatus: 'draft', toStatus: 'pending' }),
+    ];
+    const onPrev = facts({ reportDate: PREV, now: ist(PREV, '20:00'), tasks: [t], events });
+    expect(onPrev.received).toEqual([]);
+    expect(onPrev.backlog).toEqual([]);
+    expect(facts({ tasks: [t], events }).received.map((x) => x.taskId)).toEqual(['d']);
+  });
+});
+
+describe('a draft cancelled before it was published', () => {
+  it('never reached anyone: not received', () => {
+    const t = task('x', { status: 'cancelled', reason: 'Sample: not needed' });
+    const events = [
+      ev('x', 'created', ist(PREV, '10:00'), { toStaffId: S, toStatus: 'draft' }),
+      ev('x', 'cancelled', ist(D, '11:00'), {
+        fromStatus: 'draft',
+        toStatus: 'cancelled',
+        reason: 'Sample: not needed',
+      }),
+    ];
+    expect(facts({ tasks: [t], events }).received).toEqual([]);
   });
 });

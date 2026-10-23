@@ -209,3 +209,20 @@ Changed and added on 22 Oct 2026 (D-072):
 
 ## 10. Tasks and EOD reports mounted from Business Ops (22 Oct 2026, D-073)
 Fifteen route files under `/academic/api/v1/` re-export Business Ops' handlers (`workRoutes` from `@elevate/business-ops-os/work`): `staff-tasks`, `staff-tasks/:id`, `staff-tasks/:id/:action`, `staff-tasks/:id/dependencies`, `staff-tasks/:id/reassign`, `staff-tasks/:id/report`, `staff-tasks/:id/updates`, `eod-reports`, `eod-reports/:id`, `eod-reports/:id/csv`, `eod-reports/:id/follow-up`, `eod-reports/:id/pdf`, `eod-reports/:id/review`, `eod-reports/:id/submit`, `task-reports`. Permissions (`ops:tasks:read/write`, own scope for teachers; `ops:eod:review` for reviewers), requests, responses and errors are exactly those in `apps/business-ops-os/docs/API.md` ("Daily tasks, end-of-day reports, imports"); the workspace check here is `academic:module:access`. The records are the same `ops.staff_tasks` / `ops.eod_*` rows: nothing is copied. Tracker imports are not mounted. Test: `tests/integration/work-mount.test.tsx`.
+
+## 11. Added on 23 Oct 2026 (HR area, D-080 … D-093; grants Proposed)
+### Internal: teaching assignments for HR (D-083)
+`GET /academic/api/internal/v1/teaching-assignments?staffId=&status=&q=&page=&pageSize=` — callers `['ops']` only (bearer token + `X-Elevate-Caller: ops`); one page of `academic.teaching_assignments` v1 for Business Operations' HR Teaching Assignments page. Pending rows (no batch yet) are included; page size at most 100. Assignment statuses are `pending | active | ended`; only a non-pending row with a batch whose dates cover the day gives a teacher access (`assignmentActiveOn`).
+
+### Mounted from Business Operations (same handlers and permissions as `apps/business-ops-os/docs/API.md`, "Routes added or changed on 23 Oct 2026")
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/academic/api/v1/attendance` | `ops:attendance:read` (own) | Your own staff attendance days |
+| GET, POST | `/academic/api/v1/attendance/corrections` | `ops:attendance:read` / `ops:attendance:request` (own) | Ask HR to correct one of your days |
+| GET | `/academic/api/v1/feedback/mine`, `…/mine/{id}` | `ops:teacher_feedback_summaries:read` (own) | Your approved feedback summaries and agreed actions, never raw rows |
+| POST | `/academic/api/v1/ai/report-draft` | `ops:tasks:write` | AI draft of your own report's narrative (nothing saved) |
+| POST, GET, DELETE | `/academic/api/v1/attachments`, `…/{id}` | the owning record's rule | Files on your tasks and submissions |
+| GET, POST | `/academic/api/v1/notifications` | `platform:notifications:read` (own) | Your notifications; the bell links to `/academic/notifications` |
+| — | `/academic/api/v1/staff-tasks/{id}/checklist` | `ops:tasks:write` | Plus the task actions, reassign, dependencies, updates and report already mounted (D-073) |
+
+Pages: `/academic/my-attendance`, `/academic/my-feedback`, `/academic/my-reports` (day, week and month reports), `/academic/notifications`.

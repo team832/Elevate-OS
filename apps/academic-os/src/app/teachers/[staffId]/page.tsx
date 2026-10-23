@@ -9,13 +9,13 @@ import {
   EmptyState,
   MetricStrip,
   PageHeader,
-  StatusBadge,
 } from '@elevate/shared-ui';
 import { addDays, isIsoDate, type IsoDate } from '@elevate/shared-types';
-import { teacherProfile, todayIst, UNAVAILABILITY_LABEL } from '../../../server';
+import { assignmentOptions, listBatches, teacherProfile, todayIst, UNAVAILABILITY_LABEL } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
-import { PlanBadge, StateBadge } from '../../../ui/badges';
+import { AssignmentForms, AssignmentTable } from '../../../ui/assignments';
+import { PlanBadge } from '../../../ui/badges';
 import { Filter } from '../../../ui/filters';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 
@@ -48,8 +48,9 @@ export default async function TeacherPage({
   const pick = (v: unknown) => (typeof v === 'string' && isIsoDate(v) ? v : undefined);
   const to = pick(sp.to) ?? todayIst();
   const from = pick(sp.from) ?? addDays(to as IsoDate, -29);
+  const db = getDb();
   const data = await load(() =>
-    teacherProfile(getDb(), actorFor(access.user), staffId, { from, to: to < from ? from : to }),
+    teacherProfile(db, actorFor(access.user), staffId, { from, to: to < from ? from : to }),
   );
   if (!data.ok)
     return (
@@ -59,6 +60,10 @@ export default async function TeacherPage({
     );
   const p = data.data;
   const canManage = can(access.user, 'academic:timetable:write');
+  const today = todayIst();
+  const forms = can(access.user, 'academic:assignments:write')
+    ? await load(async () => ({ options: await assignmentOptions(db), batches: await listBatches(db, actorFor(access.user)) }))
+    : null;
   const window = { from, to };
   const hours = [
     [
@@ -86,7 +91,6 @@ export default async function TeacherPage({
     <AcademicShell access={access} active="teachers">
       <PageHeader
         title={p.staff.name}
-        meta={<StatusBadge tone="neutral">{p.hrAttendance}</StatusBadge>}
         description={`${p.staff.title ?? 'Teacher'} · figures for ${from} to ${p.window.to}. Operational hours, not payroll.`}
       />
       <div className="el-stack">
@@ -107,29 +111,10 @@ export default async function TeacherPage({
         />
         <Card
           title="Assignments"
-          description="Effective-dated batch and subject assignments, including ended ones. Reassigning never changes who taught a past class."
+          description="Effective-dated subject and batch assignments, including ended and pending ones. Only a current assignment with a batch opens students; reassigning never changes who taught a past class."
         >
-          <DataTable
-            compact
-            rows={p.assignments}
-            rowKey={(a) => a.id}
-            empty={<EmptyState title="No assignments" />}
-            columns={[
-              {
-                key: 'batch',
-                header: 'Batch',
-                render: (a) => <a href={MODULE_PATHS.batch(a.batchId)}>{a.batchCode}</a>,
-              },
-              { key: 'subject', header: 'Subject', render: (a) => a.subjectName },
-              { key: 'role', header: 'Role', render: (a) => a.role.replace('_', '-') },
-              {
-                key: 'dates',
-                header: 'Dates',
-                render: (a) => `${a.startDate ?? 'from the start'} to ${a.endDate ?? 'open'}`,
-              },
-              { key: 'status', header: 'Status', render: (a) => <StateBadge state={a.status} /> },
-            ]}
-          />
+          <AssignmentTable rows={p.assignments} today={today} empty="No assignments" />
+          {forms ? forms.ok ? <AssignmentForms staffId={staffId} rows={p.assignments} options={forms.data.options} batches={forms.data.batches} today={today} /> : <LoadError error={forms.error} /> : null}
         </Card>
         <Card title="Classes" description={`${from} to ${p.window.to}`}>
           <DataTable
@@ -221,10 +206,7 @@ export default async function TeacherPage({
           ) : null}
         </Card>
         <Card title="HR attendance">
-          <p>
-            {p.hrAttendance}. Elevate OS has no HR attendance or leave source; delivery records are
-            not HR attendance.
-          </p>
+          <p>HR keeps staff attendance and leave in Business Operations. Delivered classes here are not HR attendance.</p>
         </Card>
       </div>
     </AcademicShell>

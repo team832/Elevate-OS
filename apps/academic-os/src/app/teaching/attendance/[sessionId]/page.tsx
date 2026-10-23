@@ -218,8 +218,8 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
                 </details>
               ))}
             {candidates.status === 'unavailable' ? (
-              <Alert tone="warning" title="Business Ops unavailable">
-                Demo bookings could not be loaded ({candidates.reason}). Try again later.
+              <Alert tone="warning" title="Source unavailable">
+                Business Ops demo bookings could not be loaded ({candidates.reason}). Try again later.
               </Alert>
             ) : candidates.data.items.length === 0 ? (
               <EmptyState

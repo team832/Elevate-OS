@@ -53,12 +53,20 @@ import type {
   StudentId,
   UserId,
 } from '@elevate/shared-types';
-import { integrationEvents, programmes, staffMembers, users } from './core';
+import {
+  branches,
+  integrationEvents,
+  programmes,
+  staffMembers,
+  users,
+  type CoreBranchId,
+} from './core';
 import {
   createdAt,
   inList,
   instant,
   isoDate,
+  OPS_DECISION_STATES,
   ops,
   staffRef,
   staffRefRestrict,
@@ -66,10 +74,13 @@ import {
   updatedAt,
   userRef,
 } from './ops-columns';
+import { opsWorkSchedules } from './ops-attendance';
 // Cycle on purpose (admissions.application_id): used only in a lazy FK callback; see ops-columns.ts.
 import { opsApplications, type OpsApplicationId } from './ops-applications';
+// Cycle on purpose (leads.stage_key): lazy FK callback only.
+import { opsLeadStages } from './ops-lead-stages';
 
-export { ops };
+export { ops, OPS_DECISION_STATES };
 
 // --- branded ids for ops-only entities (LeadId, AdmissionId live in shared-types) ---
 export type OpsSettingId = Brand<string, 'OpsSettingId'>;
@@ -82,14 +93,6 @@ export type OpsFollowUpId = Brand<string, 'OpsFollowUpId'>;
 export type OpsEnrolmentAttemptId = Brand<string, 'OpsEnrolmentAttemptId'>;
 
 // --- status vocabularies (mirrored by the pure domain in apps/business-ops-os/src/domain) ---
-export const OPS_DECISION_STATES = [
-  'proposed',
-  'approved',
-  'locked',
-  'open',
-  'pending_verification',
-  'superseded',
-] as const;
 export const OPS_ADMISSION_STATUSES = [
   'new',
   'contacted',
@@ -143,6 +146,7 @@ export const OPS_ACTIVITY_OUTCOMES = [
   'message_sent',
   'other',
 ] as const;
+export const OPS_CALL_DIRECTIONS = ['inbound', 'outbound'] as const;
 export const OPS_ADMISSION_CHECK_ITEMS = [
   'admission_form',
   'documents_verified',
@@ -169,6 +173,8 @@ export const OPS_HANDOFF_ATTEMPT_OUTCOMES = [
   'superseded',
 ] as const;
 export const OPS_CONSENT_STATUSES = ['given', 'refused', 'withdrawn'] as const;
+/** Employment state kept by HR; `not_recorded` until HR records it (missing is not active). */
+export const OPS_EMPLOYMENT_STATUSES = ['active', 'on_notice', 'exited', 'not_recorded'] as const;
 export const OPS_CONTACT_CHANNELS = ['call', 'whatsapp', 'sms', 'email'] as const;
 
 /**
@@ -295,6 +301,13 @@ export const opsLeads = ops.table(
       .$type<LeadId>(),
     mergedAt: instant('merged_at'),
     notes: text('notes'),
+    /** Lead stage (ops.lead_stages key); null = not staged yet. History: ops.lead_stage_history. */
+    stageKey: text('stage_key').references((): AnyPgColumn => opsLeadStages.key, {
+      onDelete: 'restrict',
+    }),
+    stageChangedAt: instant('stage_changed_at'),
+    /** Do not contact: a flag Marketing may see; the consent record stays private (contact_preferences). */
+    doNotContact: boolean('do_not_contact').notNull().default(false),
     /** Sample record for development (D-036): shown with a SAMPLE DATA badge, removed by `npm run db:clear-samples`. */
     isSample: boolean('is_sample').notNull().default(false),
     createdBy: userRef('created_by').notNull(),
@@ -303,6 +316,11 @@ export const opsLeads = ops.table(
   },
   (t) => [
     uniqueIndex('leads_code_key').on(t.code),
+    index('leads_stage_idx').on(t.stageKey),
+    check(
+      'leads_stage_changed_check',
+      sql`(${t.stageKey} IS NULL) = (${t.stageChangedAt} IS NULL)`,
+    ),
     index('leads_owner_idx').on(t.ownerStaffId),
     index('leads_student_phone_idx').on(t.studentPhone),
     index('leads_student_email_idx').on(t.studentEmail),
@@ -404,6 +422,12 @@ export const opsLeadActivities = ops.table(
     note: text('note'),
     /** Staff member who made the contact. */
     staffId: staffRef('staff_id'),
+    /** Who started the contact, when recorded. */
+    direction: text('direction', { enum: OPS_CALL_DIRECTIONS }),
+    /** Call length as reported by the staff member (calls are not placed or recorded by the app). */
+    durationSeconds: integer('duration_seconds'),
+    nextAction: text('next_action'),
+    nextFollowUpOn: isoDate('next_follow_up_on'),
     createdBy: userRef('created_by').notNull(),
     createdAt: createdAt(),
   },
@@ -411,6 +435,14 @@ export const opsLeadActivities = ops.table(
     index('lead_activities_lead_idx').on(t.leadId, t.occurredAt),
     check('lead_activities_kind_check', sql`${t.kind} IN ${inList(OPS_ACTIVITY_KINDS)}`),
     check('lead_activities_outcome_check', sql`${t.outcome} IN ${inList(OPS_ACTIVITY_OUTCOMES)}`),
+    check(
+      'lead_activities_direction_check',
+      sql`${t.direction} IS NULL OR ${t.direction} IN ${inList(OPS_CALL_DIRECTIONS)}`,
+    ),
+    check(
+      'lead_activities_duration_check',
+      sql`${t.durationSeconds} IS NULL OR (${t.kind} = 'call' AND ${t.durationSeconds} BETWEEN 0 AND 86400)`,
+    ),
   ],
 );
 
@@ -832,7 +864,10 @@ export const opsContactPreferences = ops.table(
 
 // --- organisation (Ops-owned extensions of core.staff_members) -----------------------------------
 
-/** Operational profile of a staff member. No payroll, biometrics, leave or HR records (D-015, OD-026). */
+/**
+ * Employee profile of a staff member (ruling R1: `staff_code` is the Employee ID). HR-private
+ * contact details live in `staff_private_details` (ops-hr.ts). No payroll or biometrics (D-015).
+ */
 export const opsStaffProfiles = ops.table(
   'staff_profiles',
   {
@@ -867,12 +902,36 @@ export const opsStaffProfiles = ops.table(
     sourceNote: text('source_note'),
     /** Sample staff member for development (D-036); removed by `npm run db:clear-samples`. */
     isSample: boolean('is_sample').notNull().default(false),
+    employmentStatus: text('employment_status', { enum: OPS_EMPLOYMENT_STATUSES })
+      .notNull()
+      .default('not_recorded'),
+    joinedOn: isoDate('joined_on'),
+    /** Last working day; set once notice is given, required when exited. */
+    leftOn: isoDate('left_on'),
+    branchId: uuid('branch_id')
+      .references(() => branches.id, { onDelete: 'restrict' })
+      .$type<CoreBranchId>(),
+    /** null = the default schedule (ops.work_schedules.is_default). */
+    workScheduleId: uuid('work_schedule_id').references((): AnyPgColumn => opsWorkSchedules.id, {
+      onDelete: 'restrict',
+    }),
+    timezone: text('timezone').notNull().default('Asia/Kolkata'),
     updatedBy: uuid('updated_by')
       .references(() => users.id, { onDelete: 'set null' })
       .$type<UserId>(),
     updatedAt: updatedAt(),
   },
   (t) => [
+    check(
+      'staff_profiles_employment_status_check',
+      sql`${t.employmentStatus} IN ${inList(OPS_EMPLOYMENT_STATUSES)}`,
+    ),
+    check(
+      'staff_profiles_left_check',
+      sql`(${t.leftOn} IS NULL OR ${t.joinedOn} IS NULL OR ${t.leftOn} >= ${t.joinedOn}) AND (${t.employmentStatus} <> 'exited' OR ${t.leftOn} IS NOT NULL) AND (${t.leftOn} IS NULL OR ${t.employmentStatus} IN ('on_notice', 'exited'))`,
+    ),
+    check('staff_profiles_timezone_check', sql`length(${t.timezone}) > 0`),
+    index('staff_profiles_branch_idx').on(t.branchId),
     check(
       'staff_profiles_employment_check',
       sql`${t.employmentType} IN ('full_time', 'part_time', 'contract', 'visiting', 'not_recorded')`,

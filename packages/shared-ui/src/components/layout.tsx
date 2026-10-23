@@ -210,7 +210,7 @@ function WorkspaceSwitcher({ modules, current, moduleHrefs }: AppShellProps) {
         {name}
         <Icon name="chevron-down" />
       </summary>
-      <ul className="el-ws-panel el-glass" aria-label="Workspaces">
+      <ul className="el-ws-panel" aria-label="Workspaces">
         {current === 'platform' ? (
           <li>
             <a className="el-ws-option" href="/" aria-current="true">
@@ -318,6 +318,45 @@ function Sidebar(props: AppShellProps) {
   );
 }
 
+/**
+ * Unread count in the top bar. In a workspace it links to that workspace's inbox
+ * (`<base>/notifications`); without a base path (the platform) it is a status count only.
+ */
+function Bell({ count, base }: { count: number; base: string }) {
+  const content = (
+    <>
+      <Icon name="bell" />
+      <span className="el-visually-hidden">
+        {base
+          ? `Notifications, ${count} unread`
+          : count === 1
+            ? '1 unread notification'
+            : `${count} unread notifications`}
+      </span>
+      {count > 0 ? (
+        <span className="el-notify-count" aria-hidden="true">
+          {count > 99 ? '99+' : count}
+        </span>
+      ) : null}
+    </>
+  );
+  const unread = count > 0 ? 'true' : undefined;
+  return base ? (
+    <a className="el-notify" href={`${base}/notifications`} data-unread={unread}>
+      {content}
+    </a>
+  ) : (
+    <span
+      className="el-notify"
+      role="status"
+      data-unread={unread}
+      title="Unread in-app notifications"
+    >
+      {content}
+    </span>
+  );
+}
+
 function TopBar(props: AppShellProps) {
   const { user, current, nav, breadcrumbs, search, unreadNotifications, logoutAction } = props;
   const crumbs = breadcrumbs ?? defaultBreadcrumbs(current, nav);
@@ -344,24 +383,7 @@ function TopBar(props: AppShellProps) {
           </form>
         ) : null}
         {typeof unreadNotifications === 'number' ? (
-          <span
-            className="el-notify"
-            role="status"
-            data-unread={unreadNotifications > 0 ? 'true' : undefined}
-            title="Unread in-app notifications"
-          >
-            <Icon name="bell" />
-            <span className="el-visually-hidden">
-              {unreadNotifications === 1
-                ? '1 unread notification'
-                : `${unreadNotifications} unread notifications`}
-            </span>
-            {unreadNotifications > 0 ? (
-              <span className="el-notify-count" aria-hidden="true">
-                {unreadNotifications > 99 ? '99+' : unreadNotifications}
-              </span>
-            ) : null}
-          </span>
+          <Bell count={unreadNotifications} base={MODULES[current].basePath} />
         ) : null}
         <details className="el-user-menu">
           <summary className="el-avatar-button">
@@ -394,7 +416,7 @@ function TopBar(props: AppShellProps) {
 }
 
 /**
- * Page frame used by all four apps: a floating white rail (logo, workspace switcher, the
+ * Page frame used by all four apps: a floating charcoal rail (logo, workspace switcher, the
  * current module's sections in foldable groups, Settings and the profile) and a frosted
  * top bar (breadcrumbs, search, notifications, account popover with sign-out). Workspace
  * links are plain <a> because each workspace is a separate zone. On small screens the rail

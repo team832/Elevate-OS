@@ -3,7 +3,14 @@ import { getDb } from '@elevate/database';
 import { Card, DataTable, EmptyState, ErrorState } from '@elevate/shared-ui';
 import type { CampaignId } from '@elevate/shared-types';
 import { METRIC_KEYS, coverageLabel, formatIst, modulePath } from '../../../domain';
-import { getCampaignDetail } from '../../../server';
+import { can } from '@elevate/authorization';
+import {
+  assertCampaignVisible,
+  getCampaignDetail,
+  listCampaignMembers,
+  memberOptions,
+} from '../../../server';
+import { CampaignMembers } from '../../../ui/campaign-members';
 import { MetricCell, PlacementBadge } from '../../../ui/badges';
 import { campaignDates } from '../../../ui/campaigns';
 import { MarketingPage, Section, type SearchParams } from '../../../ui/shell';
@@ -21,17 +28,21 @@ export default async function CampaignPage({
   const { id } = await params;
   return (
     <MarketingPage
-      permission="marketing:content:read"
+      permission="marketing:campaigns:read"
       path={modulePath(`campaigns/${id}`)}
       active="campaigns"
       title="Campaign"
       searchParams={await searchParams}
     >
-      {() => (
+      {(user) => (
         <Section
           load={async () => {
             if (!/^[0-9a-f-]{36}$/i.test(id)) return <ErrorState title="Campaign not found" />;
-            const { campaign: c, placements } = await getCampaignDetail(getDb(), id as CampaignId);
+            const db = getDb();
+            await assertCampaignVisible(db, user, id);
+            const { campaign: c, placements } = await getCampaignDetail(db, id as CampaignId);
+            const members = await listCampaignMembers(db, id);
+            const options = can(user, 'marketing:campaigns:write') ? await memberOptions(db) : null;
             const r = c.results;
             return (
               <div className="el-stack">
@@ -44,6 +55,7 @@ export default async function CampaignPage({
                     published with a live link.
                   </p>
                 </Card>
+                <CampaignMembers campaignId={c.id} members={members} options={options} />
                 <Card
                   title="Results from imported numbers"
                   description={

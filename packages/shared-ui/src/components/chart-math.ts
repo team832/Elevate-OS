@@ -6,7 +6,7 @@
 export interface Datum {
   label: string;
   value: number | null;
-  /** Link to the filtered list behind this value (horizontal bars only). */
+  /** Link to the filtered list behind this value (horizontal bars and donut segments). */
   href?: string;
   /** Extra words for the tooltip, e.g. "4 of 10 chapters". */
   note?: string;
@@ -26,6 +26,26 @@ export function percent(part: number | null, whole: number | null): number | nul
 export function fmtPercent(p: number | null): string {
   if (p === null) return '—';
   return p > 0 && p < 1 ? '<1%' : `${Math.round(p)}%`;
+}
+
+/**
+ * Each value's share of the known positive total as words that add up to 100%: one
+ * largest-remainder rounding, "<1%" for a share that rounds to 0 and ">99%" for one that rounds
+ * to 100 without being everything. "—" when the share cannot be computed.
+ */
+export function shareLabels(values: readonly (number | null)[]): string[] {
+  const parts = values.map((v) => (isKnown(v) && v > 0 ? v : 0));
+  const total = parts.reduce((a, b) => a + b, 0);
+  if (total <= 0) return values.map(() => '—');
+  const exact = parts.map((v) => (v * 100) / total);
+  const whole = exact.map(Math.floor);
+  const order = [...exact.keys()].sort((a, b) => exact[b]! - whole[b]! - (exact[a]! - whole[a]!));
+  for (const i of order.slice(0, 100 - whole.reduce((a, b) => a + b, 0))) whole[i]! += 1;
+  return values.map((v, i) => {
+    if (!isKnown(v)) return '—';
+    const [e, w] = [exact[i]!, whole[i]!];
+    return e > 0 && w === 0 ? '<1%' : e < 100 && w === 100 ? '>99%' : `${w}%`;
+  });
 }
 
 /** Axis top: the smallest 1, 2, 2.5, 5 or 10 × 10^k at or above `max` (1 when max ≤ 0). */

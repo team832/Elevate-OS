@@ -17,7 +17,7 @@ import {
   users,
   type Database,
 } from '@elevate/database';
-import { defineSeed, type SeedContext } from '@elevate/database/seed';
+import { defineSeed, syncStaffHistory, type SeedContext } from '@elevate/database/seed';
 import type { DepartmentId, RoleKey, StaffMemberId } from '@elevate/shared-types';
 import { isIsoDate, istToday } from '../src/domain/dates';
 
@@ -117,7 +117,7 @@ export async function seedSampleStaff({ db, seedUserPassword, hashPassword, log 
     .from(departments)
     .where(eq(departments.code, 'ACADEMICS'));
   const [director] = await db
-    .select({ id: staffMembers.id })
+    .select({ id: staffMembers.id, userId: users.id })
     .from(staffMembers)
     .innerJoin(users, eq(users.id, staffMembers.userId))
     .where(eq(users.email, 'director@example.test'));
@@ -129,6 +129,7 @@ export async function seedSampleStaff({ db, seedUserPassword, hashPassword, log 
     managerId: director?.id ?? null,
   });
   await sampleProfile(db, managerId, null);
+  const ids = [managerId];
   for (const [code, name, subject] of SAMPLE_TEACHER_STAFF) {
     const staffId = await upsertLoginStaff(db, passwordHash, {
       email: sampleTeacherEmail(name),
@@ -138,12 +139,14 @@ export async function seedSampleStaff({ db, seedUserPassword, hashPassword, log 
       departmentId,
       managerId: code === NO_MANAGER_CODE ? null : managerId,
     });
+    ids.push(staffId);
     await sampleProfile(db, staffId, code);
     await db
       .insert(opsStaffSubjectCapabilities)
       .values({ staffId, subject, sourceNote: SAMPLE_STAFF_LABEL })
       .onConflictDoNothing();
   }
+  if (director) await syncStaffHistory(db, ids, director.userId);
   log(`ops.sample-staff: ${SAMPLE_TEACHER_STAFF.length} sample teachers + ${SAMPLE_MANAGER.name}`);
 }
 

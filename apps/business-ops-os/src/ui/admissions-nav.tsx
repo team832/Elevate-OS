@@ -43,5 +43,5 @@ export const FeesNav = areaNav('Fee areas', [
 /** Teachers and the staff directory. */
 export const PeopleNav = areaNav('People areas', [
   ['teachers', 'Teachers', '/ops/teachers', 'ops:teachers:read'],
-  ['staff', 'Staff directory', '/ops/staff', 'ops:organisation:read'],
+  ['staff', 'All staff', '/ops/staff', 'ops:organisation:read'],
 ] as const);

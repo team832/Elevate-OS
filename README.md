@@ -5,6 +5,8 @@ Elevate OS is the internal operating system for **Elevate Education**, a coachin
 > Status (22 Oct 2026): Foundation, Marketing OS, Academic OS and Business Ops OS are built and tested; nothing is deployed. The latest work added the Academic teacher workspace (placements, classes and attendance, delivery, timetable patterns, teaching log, reviews, marks, progress, reports) and the Business Ops task tracker, end-of-day versions and teacher operations (D-058 … D-071). `npm run validate` passed: 158 test files, 2,069 tests, secret scan 1,166 files; `npm run build` passed for all four apps. Migrations `0009`–`0012` are applied on the owner's computer (`0012` adds 22 missing database checks, 22 Oct; next = `0013`); both milestones were checked live over HTTP and in Chrome (1440 px). Details: `IMPLEMENTATION_STATUS.md`.
 >
 > Later on 22 Oct 2026 (D-072, D-073): the three modules became three **role workspaces** on their own ports — Business Operations http://localhost:3000/ops, Academic OS http://localhost:3001/academic, Marketing OS http://localhost:3002/marketing — with the platform admin on http://localhost:3003. One sign-in and one database serve all of them. Migration `0013` (remembered workspace) is applied locally; the next is `0014`. Guide: `docs/WORKSPACES.md`. Test and build results of this round: `IMPLEMENTATION_STATUS.md`, section "Role workspaces".
+>
+> 23 Oct 2026 (D-080 … D-093): an **HR area** in Business Operations (new role HR manager; staff records and HR-only details, teaching assignments, staff attendance, task assignment and submission review, day/week/month work reports, student feedback about teachers, HR settings), file attachments, a notifications inbox in every workspace, AI draft helpers (OpenAI, drafts only), a charcoal sidebar and campaign membership for marketing employees. All new grants are **Proposed**. Migration `0015_hr_staff_workspaces` is written and tested but **not applied**; the next is `0016`. Startup commands are unchanged. Details: `IMPLEMENTATION_STATUS.md`, section "HR area".
 
 ## Contents
 1. [The three modules and their boundaries](#1-the-three-modules-and-their-boundaries)
@@ -94,7 +96,7 @@ npm run db:seed
 npm run dev:all               # terminal 2 — the three workspaces (:3000, :3001, :3002)
 ```
 `npm run dev:business`, `dev:academic`, `dev:marketing` or `dev:platform` start one app each; each starts the local database if nothing is listening on the `DATABASE_URL` port and otherwise reuses it (with several terminals, run `npm run db:start` yourself first). Sign in on the workspace you need, e.g. http://localhost:3000, as one of the fictional seed users (password = `SEED_USER_PASSWORD`):
-`platform-admin@`, `director@`, `marketing-manager@`, `marketing-contributor@`, `academic-coordinator@`, `teacher@`, `admissions-counsellor@`, `operations-manager@`, `auditor@` — all `…@example.test`.
+`platform-admin@`, `director@`, `marketing-manager@`, `marketing-contributor@`, `academic-coordinator@`, `teacher@`, `admissions-counsellor@`, `operations-manager@`, `auditor@`, `hr-manager@` — all `…@example.test`.
 
 **Demo sign-ins (development only, D-072):** set `LOCAL_DEMO_PASSWORD` (at least 12 characters) in `.env`, then `npm run db:seed-demo-accounts`. It creates `business@elevateeducation.in` (operations manager, :3000), `teacher@elevateeducation.in` (teacher, :3001) and `marketing@elevateeducation.in` (marketing manager, :3002). It refuses production and any non-local database; `npm run db:clear-samples` switches them off before real use.
 
@@ -111,6 +113,9 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `BUSINESS_OPS_OS_URL`, `ACADEMIC_OS_URL`, `MARKETING_OS_URL`, `PLATFORM_URL` | all | Origin of each app (defaults `http://localhost:3000`, `:3001`, `:3002`, `:3003`; `appOrigin()` in `packages/configuration/src/workspaces.ts`). The dev commands take the port from them; they are the only places a sign-in may redirect to and the only origins whose state-changing requests are accepted (D-072) |
 | `SEED_USER_PASSWORD` | `db:seed` | ≥ 12 chars; password of the fictional seed users |
 | `LOCAL_DEMO_PASSWORD` | `db:seed-demo-accounts` | ≥ 12 chars; shared password of the three local demo sign-ins; never printed |
+| `ATTACHMENTS_DIR` | Business Operations (and the mounted task pages) | Folder for uploaded files in development; empty = `.data/attachments` (git-ignored). Production refuses uploads until a storage provider is chosen (D-085) |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | AI draft helpers | Secret key from platform.openai.com (only in the git-ignored `.env`; the secret scan blocks `sk-` keys) and the model name (no default in code). Without both the AI buttons say "AI drafting is not set up" (D-092) |
+| `OPENAI_TIMEOUT_MS`, `OPENAI_BASE_URL` | AI draft helpers | Optional: give up after this many milliseconds (default 20000); API address (default `https://api.openai.com/v1`) |
 | `MARKETING_PUBLISHING_ADAPTER`, `MARKETING_METRICS_ADAPTER`, `NOTIFICATIONS_EMAIL_ADAPTER` | modules | `mock` (default) or `disabled` — no live adapters exist (D-014) |
 | `LOG_LEVEL` | all | `debug`, `info`, `warn` or `error` |
 
@@ -147,7 +152,7 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 - Schemas: `core` (shared, Foundation) and `marketing`, `academic`, `ops` — one file each in `packages/database/src/schema/`, owned by the module team. Design: `DATABASE_DESIGN.md`; columns: `docs/DATA_DICTIONARY.md`.
 - Tests never need migrations: `createTestDb()` builds the live schema in in-memory PGlite.
 - Migrations are central: **module teams do not run `db:generate`** during wave 2; wave 3 generates the baseline. Process, rollback and the backup-before-destructive rule: `docs/DATABASE_MIGRATION_PLAN.md`; backups/restore: `infrastructure/database/README.md`.
-- Seeds are idempotent and **fictional** (D-016): 9 users (one per role), 8 staff, 13 provisional departments from the legacy model, 5 programmes. Modules add seeds in `apps/<module>/seed/index.ts`.
+- Seeds are idempotent and **fictional** (D-016): 10 users (one per role except the finance-authorised user; `hr-manager@example.test` added 23 Oct), 8 staff, 13 provisional departments from the legacy model, 5 programmes. Modules add seeds in `apps/<module>/seed/index.ts`.
 
 ## 9. Tests
 `npm test` runs 158 files / 2,069 tests as of 22 Oct 2026 (foundation + all three modules + platform). Strategy, layers and inventory: `docs/TESTING_STRATEGY.md`. Write module tests with `@elevate/testing` (`setupTestDatabase`, `createTestUser`, `authedRequest`, `callRoute`). One project: `npx vitest run --project academic-os`.
@@ -181,7 +186,7 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `INTEGRATION_CONTRACT.md` | Identities, IDs, ownership, permissions, API, events, summaries, versioning, failure behaviour |
 | `DATABASE_DESIGN.md` | Schemas, conventions, core tables |
 | `IMPLEMENTATION_STATUS.md` | What is built and the evidence |
-| `docs/DECISIONS.md` | Decision log (D-001 … D-078) |
+| `docs/DECISIONS.md` | Decision log (D-001 … D-093) |
 | `docs/WORKSPACES.md` | The three role workspaces: URLs, dev commands, demo sign-ins, sign-in and access rules, role × workspace matrix |
 | `docs/BUILD_PLAN.md` | Waves, ownership, module layout, definition of done |
 | `docs/EXISTING_PROJECT_AUDIT.md` | Audit of the legacy material |

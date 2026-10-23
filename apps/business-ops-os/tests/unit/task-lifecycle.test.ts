@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  actionForStatus,
   isSelfLogged,
   allowedActions,
   createsCycle,
@@ -10,6 +9,7 @@ import {
   taskTimeSummary,
   type LifecycleTask,
   type TaskAction,
+  nextAction,
   type TaskRole,
 } from '../../src/domain/task-lifecycle';
 import type { TaskStatus } from '../../src/domain/staff-tasks';
@@ -19,6 +19,7 @@ const task = (status: TaskStatus, more: Partial<LifecycleTask> = {}): LifecycleT
   status,
   reviewRequired: false,
   acknowledged: true,
+  blocked: false,
   selfLogged: false,
   ...more,
 });
@@ -66,6 +67,31 @@ describe('A-TSK-5 task lifecycle', () => {
       task('in_review', { reviewRequired: true }),
       ['reviewer'],
       'Add receipts',
+      'changes_requested',
+    ],
+    [
+      'owner responds to changes (resubmits)',
+      'submit',
+      task('changes_requested', { reviewRequired: true }),
+      ['owner'],
+      null,
+      'in_review',
+    ],
+    [
+      'owner marks blocked: status kept (R4)',
+      'block',
+      task('in_progress'),
+      ['owner'],
+      'Room',
+      null,
+    ],
+    ['manager assigns a draft', 'publish', task('draft'), ['creator'], null, 'pending'],
+    [
+      'reviewer reopens an approved task (setting tasks.reopen_roles)',
+      'reopen',
+      task('done', { reviewRequired: true }),
+      [],
+      'Answer key wrong',
       'in_progress',
     ],
     ['owner completes a no-review task', 'complete', task('in_progress'), ['owner'], null, 'done'],
@@ -77,10 +103,17 @@ describe('A-TSK-5 task lifecycle', () => {
       null,
       'done',
     ],
-    ['resume from blocked', 'resume', task('blocked'), ['owner'], null, 'in_progress'],
+    [
+      'clear a blocker: status kept',
+      'resume',
+      task('in_progress', { blocked: true }),
+      ['owner'],
+      null,
+      null,
+    ],
     ['reopen a done task', 'reopen', task('done'), ['owner'], 'Parent called back', 'in_progress'],
     [
-      'reopen a cancelled task',
+      'a manager reopens a cancelled task',
       'reopen',
       task('cancelled'),
       ['manager'],
@@ -96,7 +129,8 @@ describe('A-TSK-5 task lifecycle', () => {
       'cancelled',
     ],
   ])('%s', (_, action, t, roles, reason, to) => {
-    expect(decide(action, t, as(...roles), reason)).toMatchObject({ ok: true, to });
+    const ctx = { ...as(...roles), mayReopenApproved: true };
+    expect(decide(action, t, ctx, reason)).toMatchObject({ ok: true, to });
   });
 
   it.each<
@@ -174,6 +208,39 @@ describe('A-TSK-5 task lifecycle', () => {
     ],
     ['a stranger cannot start', 'start', task('pending'), [], null, 'forbidden'],
     ['done cannot be started again', 'start', task('done'), ['owner'], null, 'state'],
+    [
+      'submit refused while blocked',
+      'submit',
+      task('in_progress', { reviewRequired: true, blocked: true }),
+      ['owner'],
+      null,
+      'state',
+    ],
+    [
+      'blocking twice is refused',
+      'block',
+      task('in_progress', { blocked: true }),
+      ['owner'],
+      'x',
+      'state',
+    ],
+    [
+      'an approved task is reopened only per tasks.reopen_roles',
+      'reopen',
+      task('done', { reviewRequired: true }),
+      ['owner', 'manager', 'admin'],
+      'x',
+      'forbidden',
+    ],
+    ['the assignee cannot assign a draft', 'publish', task('draft'), ['owner'], null, 'forbidden'],
+    [
+      'a submitted task cannot be submitted again',
+      'submit',
+      task('in_review', { reviewRequired: true }),
+      ['owner'],
+      null,
+      'state',
+    ],
   ])('%s', (_, action, t, roles, reason, code) => {
     expect(decide(action, t, as(...roles), reason)).toMatchObject({ ok: false, code });
   });
@@ -193,29 +260,64 @@ describe('A-TSK-5 task lifecycle', () => {
       'start',
       'block',
       'hold',
+      'comment',
       'complete',
     ]);
     expect(allowedActions(task('in_review', { reviewRequired: true }), as('reviewer'))).toEqual([
       'approve',
       'request_changes',
+      'comment',
     ]);
   });
 
-  it.each<[TaskStatus, TaskStatus, boolean, TaskAction | null, boolean]>([
-    ['pending', 'in_progress', false, 'start', false],
-    ['blocked', 'in_progress', false, 'resume', false],
-    ['done', 'in_progress', false, 'reopen', false],
-    ['in_progress', 'done', false, 'complete', false],
-    ['in_review', 'done', true, 'approve', false],
-    ['in_progress', 'on_hold', false, 'hold', false],
-    ['done', 'done', false, null, false],
-    ['in_progress', 'in_review', true, null, true],
-    ['in_progress', 'cancelled', false, null, true],
-    ['in_progress', 'pending', false, null, true],
-  ])('PATCH status %s → %s maps to an action', (from, to, review, action, refused) => {
-    const out = actionForStatus(from, to, review);
-    expect(out.action ?? null).toBe(action);
-    expect(Boolean(out.error)).toBe(refused);
+  it.each<[string, LifecycleTask, TaskRole[], boolean]>([
+    [
+      'the owner cannot reopen assigned work that was cancelled (I4)',
+      task('cancelled'),
+      ['owner'],
+      false,
+    ],
+    ['the creator reopens cancelled work', task('cancelled'), ['creator'], true],
+    ['a manager of the owner reopens cancelled work', task('cancelled'), ['manager'], true],
+    [
+      'the owner reopens their own self-logged cancelled work',
+      task('cancelled', { selfLogged: true }),
+      ['owner'],
+      true,
+    ],
+  ])('%s', (_n, t, roles, ok) => {
+    expect(decide('reopen', t, as(...roles), 'Needed after all').ok).toBe(ok);
+  });
+
+  it('collaborators may comment and nothing else (M1)', () => {
+    expect(allowedActions(task('in_progress'), as('collaborator'))).toEqual(['comment']);
+  });
+});
+
+describe('My Tasks: the one next action (brief §18)', () => {
+  it.each<[string, LifecycleTask, string | null]>([
+    ['not acknowledged', task('pending', { acknowledged: false }), 'Acknowledge'],
+    ['acknowledged', task('pending'), 'Start'],
+    ['in progress, review', task('in_progress', { reviewRequired: true }), 'Submit'],
+    ['in progress, no review', task('in_progress'), 'Mark done'],
+    [
+      'changes requested',
+      task('changes_requested', { reviewRequired: true }),
+      'Respond to changes',
+    ],
+    ['blocked', task('in_progress', { blocked: true }), 'Clear blocker'],
+    ['submitted', task('in_review', { reviewRequired: true }), null],
+    ['approved', task('done', { reviewRequired: true }), null],
+    ['draft', task('draft'), null],
+  ])('%s → %s', (_n, t, label) => {
+    expect(nextAction(t)?.label ?? null).toBe(label);
+  });
+
+  it('respects tasks.completion_without_reviewer: the owner cannot mark it done (M5)', () => {
+    expect(nextAction(task('in_progress'), 'manager')).toBeNull();
+    expect(nextAction(task('in_progress', { reviewRequired: true }), 'manager')?.label).toBe(
+      'Submit',
+    );
   });
 });
 
@@ -338,7 +440,7 @@ describe('end-to-end report wording', () => {
         toStatus: 'in_progress',
         reason: 'Add receipts',
       }),
-    ).toBe('In review to In progress · Reason: Add receipts');
+    ).toBe('Submitted to In progress · Reason: Add receipts');
   });
 });
 

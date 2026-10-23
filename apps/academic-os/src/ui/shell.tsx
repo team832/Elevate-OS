@@ -32,31 +32,38 @@ export type Section =
   | 'reviews'
   | 'meetings'
   | 'tasks'
-  | 'eod'
   | 'reports'
-  | 'settings';
+  | 'settings'
+  | 'my-attendance'
+  | 'my-reports'
+  | 'my-feedback'
+  | 'notifications';
 
 const WORK = 'Teaching';
+const MINE = 'My work';
 /** Coordination items need the permission at `all` scope: a teacher's own-scope grant never shows them. */
 const COORDINATION = 'Coordination';
 
 /**
- * Teacher order first (brief §6). Not listed, on purpose: "My attendance" (no HR attendance source
- * exists, R2) and "Resources" (no teaching-material store; concept-book indices are a Curriculum tab).
- * Tasks and the EOD report come from the shared Ops entry; its Inbox and Reports are tabs inside Tasks.
+ * Teacher order (brief 23 Oct 2026 §7). My tasks comes from the shared Ops entry (its EOD report,
+ * Inbox and Reports are tabs inside Tasks); My attendance, My reports and Feedback and development
+ * are HR bodies mounted here (R11). Not listed: "Resources" (no teaching-material store).
  */
 const NAV: { key: Section; label: string; ownLabel?: string; href: string; permission: Permission; group: string }[] = [
   { key: 'home', label: 'My day', href: MODULE_PATHS.home, permission: 'academic:module:access', group: 'Today' },
   { key: 'meetings', label: 'My meetings', href: MODULE_PATHS.meetings, permission: 'ops:appointments:read', group: 'Today' },
-  { key: 'timetable', label: 'Timetable', href: MODULE_PATHS.timetable, permission: 'academic:timetable:read', group: WORK },
+  { key: 'timetable', label: 'Timetable', ownLabel: 'My timetable', href: MODULE_PATHS.timetable, permission: 'academic:timetable:read', group: WORK },
   { key: 'batches', label: 'Batches', ownLabel: 'My batches', href: MODULE_PATHS.batches, permission: 'academic:batches:read', group: WORK },
-  { key: 'students', label: 'Students', href: MODULE_PATHS.students, permission: 'academic:students:read', group: WORK },
-  { key: 'attendance', label: 'Student attendance', href: MODULE_PATHS.studentAttendance, permission: 'academic:attendance:read', group: WORK },
-  { key: 'teaching', label: 'Teaching logs', href: MODULE_PATHS.teaching, permission: 'academic:classes:read', group: WORK },
+  { key: 'students', label: 'Students', ownLabel: 'My students', href: MODULE_PATHS.students, permission: 'academic:students:read', group: WORK },
   { key: 'curriculum', label: 'Curriculum', href: MODULE_PATHS.curriculum, permission: 'academic:courses:read', group: WORK },
+  { key: 'teaching', label: 'Teaching logs', href: MODULE_PATHS.teaching, permission: 'academic:classes:read', group: WORK },
+  { key: 'attendance', label: 'Student attendance', href: MODULE_PATHS.studentAttendance, permission: 'academic:attendance:read', group: WORK },
   { key: 'assessments', label: 'Assessments', href: MODULE_PATHS.assessments, permission: 'academic:assessments:read', group: WORK },
   { key: 'reviews', label: 'Student reviews', href: MODULE_PATHS.reviews, permission: 'academic:reviews:read', group: WORK },
-  ...workNav(MODULE.basePath).flatMap((r) => (r.key === 'tasks' || r.key === 'eod' ? [{ ...r, key: r.key as Section, group: WORK }] : [])),
+  ...workNav(MODULE.basePath).flatMap((r) => (r.key === 'tasks' ? [{ ...r, key: 'tasks' as const, group: MINE }] : [])),
+  { key: 'my-attendance', label: 'My attendance', href: MODULE_PATHS.myAttendance, permission: 'ops:attendance:read', group: MINE },
+  { key: 'my-reports', label: 'My reports', href: MODULE_PATHS.myReports, permission: 'ops:tasks:read', group: MINE },
+  { key: 'my-feedback', label: 'Feedback and development', href: MODULE_PATHS.myFeedback, permission: 'ops:teacher_feedback_summaries:read', group: MINE },
   { key: 'teachers', label: 'Teachers', href: MODULE_PATHS.teachers, permission: 'academic:assignments:read', group: COORDINATION },
   { key: 'enrolments', label: 'Enrolments', href: MODULE_PATHS.enrolments, permission: 'academic:enrolments:read', group: COORDINATION },
   { key: 'intake', label: 'Enrolment intake', href: MODULE_PATHS.intake, permission: 'academic:enrolments:read', group: COORDINATION },

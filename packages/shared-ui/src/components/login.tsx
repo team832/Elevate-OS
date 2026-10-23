@@ -12,6 +12,8 @@ const ERROR_TEXT: Record<string, string> = {
   google_cancelled: 'Google sign-in was cancelled.',
   google_expired: 'Sign-in link expired — try again.',
   google_disabled: 'This account is switched off. Ask a platform administrator.',
+  google_alias:
+    'You already have an Elevate account under another email. Ask a platform administrator to change its login email.',
   google_failed: 'Google sign-in did not work. Try again, or use your email and password.',
 };
 

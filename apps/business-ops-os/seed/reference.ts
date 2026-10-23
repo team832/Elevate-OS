@@ -14,7 +14,7 @@ import {
   users,
   type Database,
 } from '@elevate/database';
-import { defineSeed } from '@elevate/database/seed';
+import { defineSeed, syncStaffHistory } from '@elevate/database/seed';
 import type { StaffMemberId } from '@elevate/shared-types';
 
 /** Legacy label → stable code. "Unknown" stays its own source (BR-OPS-5). */
@@ -89,10 +89,11 @@ export async function seedStaff(db: Database) {
     .from(departments)
     .where(eq(departments.code, 'ACADEMICS'));
   const [coordinator] = await db
-    .select({ id: staffMembers.id })
+    .select({ id: staffMembers.id, userId: users.id })
     .from(staffMembers)
     .innerJoin(users, eq(users.id, staffMembers.userId))
     .where(eq(users.email, 'academic-coordinator@example.test'));
+  const ids: StaffMemberId[] = [];
   for (const [fullName, subject] of SAMPLE_TEACHERS) {
     const [existing] = await db
       .select({ id: staffMembers.id })
@@ -111,9 +112,11 @@ export async function seedStaff(db: Database) {
           })
           .returning({ id: staffMembers.id })
       )[0]!.id;
+    ids.push(id);
     await sampleProfile(db, id, ['Faculty']);
     await sampleCapability(db, id, subject);
   }
+  if (coordinator) await syncStaffHistory(db, ids, coordinator.userId);
   const linked = await db
     .select({ id: staffMembers.id, email: users.email })
     .from(staffMembers)

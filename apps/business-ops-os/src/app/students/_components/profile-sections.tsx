@@ -17,7 +17,7 @@ import {
   type JourneyStage,
 } from '@elevate/shared-ui';
 import { ADMISSION_STATUS_LABELS, type AdmissionStatus } from '../../../domain';
-import { istToday } from '../../../domain/dates';
+import { addDays, istToday } from '../../../domain/dates';
 import { ACTIVE_CASE_STATUSES } from '../../../domain/student-lifecycle';
 import type { getStudent } from '../../../server/students';
 import { ActionForm, type FieldSpec } from '../../../ui/action-form';
@@ -26,6 +26,7 @@ import { listHref } from '../../../ui/list-controls';
 import { FormModal } from '../../../ui/record-modal';
 import { RecordTable } from '../../../ui/record-table';
 import { DetailTable, Segment, Timeline } from '../../../ui/sections';
+import { ReportDownload } from './report-download';
 
 export type Profile = Awaited<ReturnType<typeof getStudent>>;
 type Level = { level?: 2 | 3 };
@@ -345,6 +346,13 @@ export function PrimaryAction({ d, base }: { d: Profile; base: string }) {
       {label}
     </ButtonLink>
   ) : null;
+}
+
+/** Internal / PTM report PDF in one click, for the last twelve months (profile and pop-up). */
+export function ReportButtons({ d }: { d: Profile }) {
+  if (!d.actions.report || !d.identity) return null;
+  const today = istToday(new Date());
+  return <ReportDownload studentId={d.identity.id} from={addDays(today, -365)} to={today} />;
 }
 
 const RELATIONSHIPS = ['mother', 'father', 'guardian', 'other'];

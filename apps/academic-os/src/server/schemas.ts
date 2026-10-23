@@ -142,15 +142,24 @@ export const updateBatchBody = z
   })
   .strict();
 
+/** Academic year `2026-27` (the second part is the next year). */
+export const academicYearSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}$/, { error: 'Use the form 2026-27' })
+  .refine((v) => (Number(v.slice(0, 4)) + 1) % 100 === Number(v.slice(5)), { error: 'The second year must follow the first, e.g. 2026-27' });
+
+/** No `batchId` = a pending assignment (R9): recorded, grants no access until a batch is set. */
 export const createAssignmentBody = z
   .object({
-    batchId: z.uuid(),
+    batchId: z.uuid().optional(),
     subjectId: z.uuid(),
     staffMemberId: z.uuid(),
     employmentType: z.enum(['full_time', 'part_time']).optional(),
     role: z.enum(['primary', 'co_teacher', 'substitute']).default('primary'),
     startDate: isoDateSchema.optional(),
     endDate: isoDateSchema.optional(),
+    academicYear: academicYearSchema.optional(),
+    branchId: z.uuid().optional(),
   })
   .strict()
   .refine((a) => !a.startDate || !a.endDate || a.startDate <= a.endDate, { error: 'The end date cannot be before the start date.', path: ['endDate'] });

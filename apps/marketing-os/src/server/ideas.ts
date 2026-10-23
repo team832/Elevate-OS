@@ -15,6 +15,7 @@ import {
 } from '@elevate/database';
 import {
   ConflictError,
+  ForbiddenError,
   InvalidStateTransitionError,
   ValidationError,
   withTransaction,
@@ -35,6 +36,7 @@ import { assertCan, type Actor } from './access';
 import { auditMarketing, rowById } from './common';
 import { allocateIdeaCode, type CodeAllocator } from './codes';
 import { loadPolicy } from './policy';
+import { myStaffId } from './scope';
 
 export type IdeaRow = typeof marketingIdeas.$inferSelect;
 
@@ -71,12 +73,16 @@ export const ideaStatusBody = z
 
 /** MKT-004 lifecycle: which status changes a person may make. */
 const IDEA_TRANSITIONS: Record<IdeaStatus, readonly IdeaStatus[]> = {
-  idea: ['in_development', 'ready', 'held', 'rejected', 'archived'],
+  idea: ['in_development', 'ready', 'held', 'rejected', 'archived', 'submitted'],
   in_development: ['ready', 'held', 'rejected', 'archived', 'idea'],
   ready: ['in_development', 'held', 'archived'],
   held: ['idea', 'in_development', 'ready', 'rejected', 'archived'],
   rejected: ['idea', 'archived'],
   archived: [],
+  // Review (brief §13): approving or requesting changes needs marketing:content:approve.
+  submitted: ['approved', 'changes_requested', 'idea'],
+  changes_requested: ['submitted', 'idea', 'archived'],
+  approved: ['in_development', 'ready', 'held', 'archived'],
 };
 
 export function canChangeIdeaStatus(from: IdeaStatus, to: IdeaStatus): boolean {
@@ -254,13 +260,15 @@ export async function listIdeas(db: Database, filters: IdeaListFilters = {}): Pr
 export const getIdea = (db: Database, id: string): Promise<IdeaRow> =>
   rowById(db, marketingIdeas, id, 'Idea not found.');
 
-export async function getIdeaDetail(db: Database, id: string) {
+/** The idea with its content items and placements; `contentScope` (scope.ts contentFilter) narrows both. */
+export async function getIdeaDetail(db: Database, id: string, contentScope?: SQL) {
   const idea = await getIdea(db, id);
   const items = await db
     .select()
     .from(marketingContentItems)
-    .where(eq(marketingContentItems.ideaId, idea.id))
+    .where(and(eq(marketingContentItems.ideaId, idea.id), contentScope))
     .orderBy(desc(marketingContentItems.createdAt));
+  // Placements follow their content item's scope; unlinked ones only for team-wide readers.
   const placements = await db
     .select({ placement: marketingPlacements, accountCode: marketingSocialAccounts.code })
     .from(marketingPlacements)
@@ -268,13 +276,20 @@ export async function getIdeaDetail(db: Database, id: string) {
       marketingSocialAccounts,
       eq(marketingSocialAccounts.id, marketingPlacements.accountId),
     )
+    .leftJoin(
+      marketingContentItems,
+      eq(marketingContentItems.id, marketingPlacements.contentItemId),
+    )
     .where(
-      idea.legacyCode && idea.quarantineState === 'quarantined'
-        ? or(
-            eq(marketingPlacements.ideaId, idea.id),
-            eq(marketingPlacements.legacyIdeaCode, idea.legacyCode),
-          )
-        : eq(marketingPlacements.ideaId, idea.id),
+      and(
+        idea.legacyCode && idea.quarantineState === 'quarantined'
+          ? or(
+              eq(marketingPlacements.ideaId, idea.id),
+              eq(marketingPlacements.legacyIdeaCode, idea.legacyCode),
+            )
+          : eq(marketingPlacements.ideaId, idea.id),
+        contentScope,
+      ),
     )
     .orderBy(asc(marketingPlacements.code), asc(marketingPlacements.legacyCode));
   const duplicates = await checkIdeaDuplicates(db, {
@@ -372,6 +387,16 @@ export async function changeIdeaStatus(
       throw new InvalidStateTransitionError(
         `An idea cannot go from ${before.status} to ${input.status}.`,
       );
+    }
+    if (input.status === 'approved' || input.status === 'changes_requested') {
+      assertCan(actor, 'marketing:content:approve');
+      const mine =
+        before.createdBy === actor.id ||
+        (before.ownerStaffId !== null && before.ownerStaffId === (await myStaffId(tx, actor.id)));
+      if (mine)
+        throw new ForbiddenError(
+          'Another approver must review an idea you own (no self-approval).',
+        );
     }
     if ((input.status === 'rejected' || input.status === 'held') && !input.reason) {
       throw new ValidationError('Give a reason when holding or rejecting an idea.');

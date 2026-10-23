@@ -16,7 +16,7 @@ export default async function TasksPage({
     <MarketingPage
       permission="ops:tasks:read"
       path={modulePath('tasks')}
-      active={sp.tab === 'eod' ? 'eod' : 'tasks'}
+      active={sp.tab === 'eod' ? 'eod' : sp.status === 'in_review' ? 'team-review' : 'tasks'}
     >
       {(user) => <TasksBody user={user} base={MODULE.basePath} searchParams={sp} />}
     </MarketingPage>

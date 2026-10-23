@@ -53,18 +53,30 @@ describe('parseTrackerBackup', () => {
   });
 
   it.each([
-    ['Not started', 'pending'],
-    ['Not Started', 'pending'],
-    ['In progress', 'in_progress'],
-    ['In Progress', 'in_progress'],
-    ['Done', 'done'],
-    ['Blocked', 'blocked'],
-    ['On-hold', 'on_hold'],
-    ['On-Hold', 'on_hold'],
-  ])('maps status %s → %s', (status, mapped) => {
+    ['Not started', 'pending', null],
+    ['Not Started', 'pending', null],
+    ['In progress', 'in_progress', null],
+    ['In Progress', 'in_progress', null],
+    ['Done', 'done', null],
+    // R4: Blocked / On-hold become the flag; the status follows progress (40% here).
+    ['Blocked', 'in_progress', 'blocked'],
+    ['On-hold', 'in_progress', 'on_hold'],
+    ['On-Hold', 'in_progress', 'on_hold'],
+  ])('maps status %s → %s (flag %s)', (status, mapped, flag) => {
     const t = one({ status, completedAt: status === 'Done' ? '2026-10-19' : null, reason: 'x' });
     expect(t.problem).toBeNull();
     expect(t.values?.status).toBe(mapped);
+    expect(t.values?.blockedKind).toBe(flag);
+    expect(t.values?.blockedReason).toBe(flag ? 'x' : null);
+  });
+
+  it('a blocked task with no progress stays assigned', () => {
+    expect(one({ status: 'Blocked', prog: 0, reason: null }).values).toMatchObject({
+      status: 'pending',
+      blockedKind: 'blocked',
+      blockedReason: NO_REASON,
+      reason: null,
+    });
   });
 
   it.each([
@@ -102,6 +114,8 @@ describe('parseTrackerBackup', () => {
       status: 'in_progress',
       progressPercent: 40,
       reason: null,
+      blockedKind: null,
+      blockedReason: null,
       recurrence: 'none',
       dueOn: '2026-10-20',
       dueTime: '18:00',
@@ -109,7 +123,7 @@ describe('parseTrackerBackup', () => {
       completedOn: null,
     });
     const blocked = one({ status: 'Blocked', reason: '' });
-    expect(blocked.values?.reason).toBe(NO_REASON);
+    expect(blocked.values?.blockedReason).toBe(NO_REASON);
     expect(blocked.notes[0]).toContain(NO_REASON);
     expect(one({ status: 'Done', completedAt: '2026-10-19', prog: 50 }).values).toMatchObject({
       progressPercent: 100,

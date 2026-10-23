@@ -258,14 +258,28 @@ describe('AppShell landmarks and controls', () => {
   });
 
   it.each([
-    [0, '0 unread notifications', null],
-    [1, '1 unread notification', '1'],
-    [120, '120 unread notifications', '99+'],
-  ])('%i unread: screen readers hear "%s", the badge shows %s', (n, spoken, badge) => {
-    const out = shell({ unreadNotifications: n });
-    expect(out).toContain(`<span class="el-visually-hidden">${spoken}</span>`);
-    const count = out.match(/<span class="el-notify-count" aria-hidden="true">(.*?)<\/span>/);
-    expect(count?.[1] ?? null).toBe(badge);
+    ['ops', 0, 'Notifications, 0 unread', null],
+    ['ops', 1, 'Notifications, 1 unread', '1'],
+    ['ops', 120, 'Notifications, 120 unread', '99+'],
+    ['platform', 1, '1 unread notification', '1'],
+    ['platform', 120, '120 unread notifications', '99+'],
+  ] as const)(
+    '%s, %i unread: screen readers hear "%s", the badge shows %s',
+    (current, n, spoken, badge) => {
+      const out = shell({ current, unreadNotifications: n });
+      expect(out).toContain(`<span class="el-visually-hidden">${spoken}</span>`);
+      const count = out.match(/<span class="el-notify-count" aria-hidden="true">(.*?)<\/span>/);
+      expect(count?.[1] ?? null).toBe(badge);
+    },
+  );
+
+  it('in a workspace the bell links to its inbox; on the platform it is a status count', () => {
+    expect(shell({ unreadNotifications: 3 })).toContain(
+      '<a class="el-notify" href="/ops/notifications" data-unread="true">',
+    );
+    const platform = shell({ current: 'platform', unreadNotifications: 3 });
+    expect(platform).toContain('<span class="el-notify" role="status" data-unread="true"');
+    expect(platform).not.toContain('/notifications"');
   });
 });
 

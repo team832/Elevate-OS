@@ -10,7 +10,6 @@ import { MetricStrip, type MetricStripItem } from '@elevate/shared-ui';
 import type { Metric } from '@elevate/shared-contracts';
 import type { activitySeries } from '../../server/dashboard';
 import type { Overview } from '../../server/overview';
-import { HR_UNAVAILABLE } from '../../server/teacher-ops';
 import { BarChart, LineChart, StatCard } from '../../ui/charts';
 import { ACADEMIC_LABELS, MARKETING_LABELS, Unavailable } from '../../ui/cross-module';
 import { fmtDate, fmtDateTime, fmtPaise } from '../../ui/format';
@@ -369,9 +368,6 @@ export function OverviewBlocks({ o }: { o: Overview }) {
                   },
                 ]}
               />
-            ) : null}
-            {crossModule ? (
-              <p className="el-field-hint">Teacher attendance: {HR_UNAVAILABLE}.</p>
             ) : null}
           </Block>
         ) : null}

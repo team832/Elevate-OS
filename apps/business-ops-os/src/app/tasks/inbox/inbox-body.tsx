@@ -6,14 +6,16 @@ import { EOD_STATUS_LABELS } from '../../../server/eod-export';
 import { eodInbox, hasInbox } from '../../../server/eod-review';
 import { eodInboxQuery } from '../../../server/eod-schemas';
 import { reportFilterOptions } from '../../../server/task-period-report';
-import { fmtDate, fmtDateTime } from '../../../ui/format';
+import { fmtDateTime } from '../../../ui/format';
 import { load, Section } from '../../../ui/frame';
 import { listHref, Pager, SearchPanel } from '../../../ui/list-controls';
 import { RecordTable } from '../../../ui/record-table';
 import { TasksHeader, type BodyProps } from '../_components/bodies';
-import { ReviewPane } from '../_components/eod-review';
 import { EOD_TONES } from '../_components/eod-views';
-import { taskPaths, type Params } from '../_components/task-views';
+import { taskPaths, type Params } from '../_components/task-common';
+import { ReportPane } from '../reports/_components/report-views';
+import { KIND_LABELS, PERIOD_KINDS, periodLabel } from '../../../domain/work-report';
+import { periodOfRow } from '../../../server/eod-reports';
 
 async function Inbox({ user, sp, base }: { user: AuthenticatedUser; sp: Params; base: string }) {
   const BASE = `${taskPaths(base).tasks}/inbox`;
@@ -31,8 +33,15 @@ async function Inbox({ user, sp, base }: { user: AuthenticatedUser; sp: Params; 
         action={BASE}
         search={{ name: 'q', label: 'Employee name', value: sp.q }}
         filters={[
-          { name: 'from', label: 'Report day from', type: 'date', value: sp.from },
-          { name: 'to', label: 'Report day to', type: 'date', value: sp.to },
+          {
+            name: 'kind',
+            label: 'Report',
+            type: 'select',
+            options: PERIOD_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] })),
+            value: sp.kind,
+          },
+          { name: 'from', label: 'Period from', type: 'date', value: sp.from },
+          { name: 'to', label: 'Period to', type: 'date', value: sp.to },
           {
             name: 'departmentId',
             label: 'Department',
@@ -78,7 +87,11 @@ async function Inbox({ user, sp, base }: { user: AuthenticatedUser; sp: Params; 
         columns={[
           { key: 'staffName', header: 'Employee' },
           { key: 'department', header: 'Department', render: (x) => x.department ?? 'Not set' },
-          { key: 'reportDate', header: 'Report day', render: (x) => fmtDate(x.reportDate) },
+          {
+            key: 'period',
+            header: 'Period',
+            render: (x) => `${KIND_LABELS[x.periodKind]}: ${periodLabel(periodOfRow(x))}`,
+          },
           {
             key: 'status',
             header: 'Status',
@@ -123,7 +136,7 @@ async function Inbox({ user, sp, base }: { user: AuthenticatedUser; sp: Params; 
         total={inbox.total}
       />
       {sp.open ? (
-        <ReviewPane
+        <ReportPane
           user={user}
           id={sp.open}
           base={base}
@@ -145,7 +158,7 @@ export async function InboxBody({ user, base, searchParams: sp }: BodyProps) {
         current="inbox"
         inbox={inbox}
         title="Manager inbox"
-        description="End-of-day reports sent to you. Read each one, then acknowledge it or ask for a revision."
+        description="End-of-day, weekly and monthly reports sent to you. Read each one, then mark it reviewed or request changes."
       />
       <Section>
         {inbox ? (

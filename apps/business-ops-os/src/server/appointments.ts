@@ -7,56 +7,37 @@
  * The assigned teacher is notified in-app; no email/SMS is sent ("simulated — not sent").
  * Events and webinars (audience, participants, messages) are ./events; they share these reads.
  */
-import { and, asc, count, eq, gte, inArray, lt, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import {
   opsAdmissions,
   opsAppointmentChanges,
   opsAppointmentParticipants,
   opsAppointments as appointments,
-  opsDemoSessions,
-  opsEventMessages,
   opsLeads,
-  staffMembers,
   students,
-  users,
   type Database,
   type OpsGuardianId,
 } from '@elevate/database';
-import { scopeFor } from '@elevate/authorization';
 import { withTransaction } from '@elevate/server-kit';
-import {
-  ConflictError,
-  ForbiddenError,
-  InvalidStateTransitionError,
-} from '@elevate/shared-contracts';
+import { InvalidStateTransitionError } from '@elevate/shared-contracts';
 import type { LeadId, StaffMemberId, StudentIdentityId } from '@elevate/shared-types';
-import { addDays } from '../domain';
 import {
   APPOINTMENT_TYPE_LABELS,
   BLOCKING_STATUSES,
   DEFAULT_OFFLINE_LOCATION,
   PIPELINE_COUNSELLING_TYPES,
   canMoveAppointment,
-  findClash,
   type AppointmentStatus,
-  type TimeSlot,
 } from '../domain/appointments';
 import { fmtDateTime, humanise } from '../ui/format';
 import { lockAccessible } from './admissions';
-import type {
-  AppointmentChange,
-  AppointmentFilters,
-  AppointmentInput,
-} from './appointments-schemas';
+import type { AppointmentChange, AppointmentInput } from './appointments-schemas';
 import {
   accessScope,
   activeStaff,
   assertScope,
-  notFound,
   programmeByCode,
-  staffIdForUser,
   userIdsForStaff,
-  type AccessScope,
   type Actor,
 } from './context';
 import { createRuleFollowUp } from './follow-ups';
@@ -64,16 +45,19 @@ import { fieldError, opsAudit, rowById } from './ops-common';
 import { applyTransition } from './pipeline';
 import { loadSettings } from './settings';
 import { notifyHosted } from './task-links';
+import { assertFree, MEETINGS, ownStaff } from './appointments-slots';
 
-/**
- * Meeting notifications open `/meetings` in the recipient's workspace: Ops (schedule and change)
- * or Academic ("My meetings", read-only, D-073).
- */
-export const MEETINGS = 'meetings';
+export { assertFree, involving, MEETINGS, ownStaff } from './appointments-slots';
+export {
+  getAppointment,
+  listAppointments,
+  listMyMeetings,
+  studentPickerOptions,
+  type AppointmentListRow,
+} from './appointments-read';
 
 type Row = typeof appointments.$inferSelect;
 const audit = opsAudit('appointment');
-const DAY_MS = 86_400_000;
 const PIPELINE_ALLOWED = [
   'contacted',
   'counselling_scheduled',
@@ -105,102 +89,6 @@ async function participantStaff(db: Database, appointmentId: string) {
     .from(opsAppointmentParticipants)
     .where(eq(opsAppointmentParticipants.appointmentId, appointmentId as Row['id']));
   return rows.map((r) => r.staffId).filter((s): s is StaffMemberId => Boolean(s));
-}
-
-/** Appointment ids where any of `staffIds` takes part (assigned or as a participant). */
-export const involving = (db: Database, staffIds: StaffMemberId[]) =>
-  or(
-    inArray(appointments.staffId, staffIds),
-    inArray(
-      appointments.id,
-      db
-        .select({ id: opsAppointmentParticipants.appointmentId })
-        .from(opsAppointmentParticipants)
-        .where(inArray(opsAppointmentParticipants.staffId, staffIds)),
-    ),
-  );
-
-/**
- * Refuse a slot that overlaps another blocking appointment or a scheduled demo class of
- * the same staff. Bookings for a staff member are serialised by a transaction-scoped
- * advisory lock, so two concurrent bookings cannot both pass; nearby rows are also
- * locked FOR UPDATE.
- */
-export async function assertFree(
-  tx: Database,
-  staffIds: StaffMemberId[],
-  slot: TimeSlot,
-  rule: { bufferMinutes: number; defaultDurationMinutes: number },
-  excludeId?: string,
-) {
-  const ids = [...new Set(staffIds)].sort();
-  for (const id of ids)
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`ops.appointments.${id}`}))`);
-  const from = new Date(slot.startsAt.getTime() - DAY_MS);
-  const to = new Date(slot.endsAt.getTime() + DAY_MS);
-  const nearby = await tx
-    .select({
-      id: appointments.id,
-      startsAt: appointments.startsAt,
-      endsAt: appointments.endsAt,
-      status: appointments.status,
-      type: appointments.type,
-      staffId: appointments.staffId,
-    })
-    .from(appointments)
-    .where(
-      and(
-        involving(tx, ids),
-        inArray(appointments.status, [...BLOCKING_STATUSES]),
-        gte(appointments.startsAt, from),
-        lt(appointments.startsAt, to),
-      ),
-    )
-    .for('update');
-  const demos = await tx
-    .select({
-      id: opsDemoSessions.id,
-      startsAt: opsDemoSessions.startsAt,
-      endsAt: opsDemoSessions.endsAt,
-      staffId: opsDemoSessions.teacherStaffId,
-    })
-    .from(opsDemoSessions)
-    .where(
-      and(
-        inArray(opsDemoSessions.teacherStaffId, ids),
-        inArray(opsDemoSessions.attendance, ['scheduled', 'rescheduled']),
-        gte(opsDemoSessions.startsAt, from),
-        lt(opsDemoSessions.startsAt, to),
-      ),
-    );
-  const busy = [
-    ...nearby.map((a) => ({ ...a, label: APPOINTMENT_TYPE_LABELS[a.type].toLowerCase() })),
-    ...demos.map((d) => ({
-      ...d,
-      endsAt: d.endsAt ?? new Date(d.startsAt.getTime() + rule.defaultDurationMinutes * 60_000),
-      status: 'scheduled' as const,
-      label: 'demo class',
-    })),
-  ];
-  const clash = findClash({ ...slot, id: excludeId }, busy, rule.bufferMinutes);
-  if (!clash) return;
-  const [who] = clash.staffId
-    ? await tx
-        .select({ name: staffMembers.fullName })
-        .from(staffMembers)
-        .where(eq(staffMembers.id, clash.staffId))
-    : [];
-  const message = `Clashes with ${who?.name ?? 'another'}'s ${clash.label} ${fmtDateTime(clash.startsAt)} – ${fmtDateTime(clash.endsAt)} (${humanise(clash.status)}).`;
-  throw new ConflictError(message, {
-    details: [{ location: 'body', path: ['startsAt'], message }],
-  });
-}
-
-export async function ownStaff(db: Database, actor: Actor, access: AccessScope) {
-  const staffId = access.scope === 'own' ? access.staffId : await staffIdForUser(db, actor.id);
-  if (access.scope === 'own' && !staffId)
-    throw new ForbiddenError('Your login is not linked to a staff record.');
-  return staffId;
 }
 
 const isPipeline = (row: Pick<Row, 'type' | 'admissionId'>) =>
@@ -509,181 +397,4 @@ async function pipelineAfterChange(
       to: 'contacted',
       reason: `Counselling cancelled: ${change.reason}`,
     });
-}
-
-// --- reads ----------------------------------------------------------------------------------
-
-const listColumns = {
-  a: appointments,
-  staffName: staffMembers.fullName,
-  studentName: students.fullName,
-  studentSample: students.isSample,
-  leadName: opsLeads.studentName,
-  // Events: people listed (staff and removed excluded, as on the event page) and the latest message.
-  participantCount: sql<number>`(SELECT count(*)::int FROM ${opsAppointmentParticipants} WHERE ${opsAppointmentParticipants.appointmentId} = ${appointments.id} AND ${opsAppointmentParticipants.kind} <> 'staff' AND ${opsAppointmentParticipants.removedAt} IS NULL)`,
-  latestMessageStatus: sql<
-    (typeof opsEventMessages.$inferSelect)['status'] | null
-  >`(SELECT ${opsEventMessages.status} FROM ${opsEventMessages} WHERE ${opsEventMessages.appointmentId} = ${appointments.id} ORDER BY ${opsEventMessages.createdAt} DESC, ${opsEventMessages.id} DESC LIMIT 1)`,
-};
-
-const baseSelect = (db: Database) =>
-  db
-    .select(listColumns)
-    .from(appointments)
-    .innerJoin(staffMembers, eq(staffMembers.id, appointments.staffId))
-    .leftJoin(students, eq(students.id, appointments.studentId))
-    .leftJoin(opsLeads, eq(opsLeads.id, appointments.leadId));
-
-const flatten = ({
-  a,
-  ...r
-}: Awaited<ReturnType<ReturnType<typeof baseSelect>['execute']>>[number]) => ({
-  ...a,
-  ...r,
-  personName: a.title ?? r.studentName ?? r.leadName ?? 'Unknown student',
-});
-export type AppointmentListRow = ReturnType<typeof flatten>;
-
-function ownFilter(db: Database, access: AccessScope): SQL | undefined {
-  if (access.scope === 'all') return undefined;
-  if (!access.staffId) return sql`false`;
-  return or(eq(appointments.organiserStaffId, access.staffId), involving(db, [access.staffId]));
-}
-
-/** Appointments whose student or lead name contains `q` (subqueries, so the count query needs no joins). */
-function nameMatches(db: Database, q: string) {
-  const like = `%${q.replace(/[%_]/g, '')}%`;
-  return or(
-    inArray(
-      appointments.studentId,
-      db
-        .select({ id: students.id })
-        .from(students)
-        .where(sql`${students.fullName} ILIKE ${like}`),
-    ),
-    inArray(
-      appointments.leadId,
-      db
-        .select({ id: opsLeads.id })
-        .from(opsLeads)
-        .where(sql`${opsLeads.studentName} ILIKE ${like}`),
-    ),
-  );
-}
-
-export async function listAppointments(
-  db: Database,
-  actor: Actor,
-  filters: Partial<AppointmentFilters> = {},
-  pageSize = 25,
-) {
-  const access = await accessScope(db, actor, 'ops:appointments:read');
-  const where = and(
-    ownFilter(db, access),
-    filters.type ? eq(appointments.type, filters.type) : undefined,
-    filters.status ? eq(appointments.status, filters.status) : undefined,
-    filters.staffId ? involving(db, [filters.staffId as StaffMemberId]) : undefined,
-    filters.studentId
-      ? eq(appointments.studentId, filters.studentId as StudentIdentityId)
-      : undefined,
-    filters.q ? nameMatches(db, filters.q) : undefined,
-    filters.from
-      ? gte(appointments.startsAt, new Date(`${filters.from}T00:00:00+05:30`))
-      : undefined,
-    filters.to
-      ? lt(appointments.startsAt, new Date(`${addDays(filters.to, 1)}T00:00:00+05:30`))
-      : undefined,
-  );
-  if (filters.from && filters.to && filters.from > filters.to)
-    throw fieldError('to', '"To" must not be before "from".');
-  const page = filters.page ?? 1;
-  const [rows, [total]] = await Promise.all([
-    baseSelect(db)
-      .where(where)
-      .orderBy(asc(appointments.startsAt), asc(appointments.id))
-      .limit(pageSize)
-      .offset((page - 1) * pageSize),
-    db.select({ n: count() }).from(appointments).where(where),
-  ]);
-  return { rows: rows.map(flatten), total: total?.n ?? 0, page, pageSize };
-}
-
-/**
- * "My meetings" (D-073): appointments and events the caller takes part in (assigned or as a
- * participant), whatever their scope; null when their login has no staff record.
- */
-export async function listMyMeetings(
-  db: Database,
-  actor: Actor,
-  filters: Partial<Pick<AppointmentFilters, 'from' | 'to' | 'page'>>,
-  pageSize = 25,
-) {
-  const staffId = await staffIdForUser(db, actor.id);
-  return staffId ? listAppointments(db, actor, { ...filters, staffId }, pageSize) : null;
-}
-
-export async function getAppointment(db: Database, actor: Actor, id: string) {
-  const access = await accessScope(db, actor, 'ops:appointments:read');
-  const [found] = await baseSelect(db).where(eq(appointments.id, id as Row['id']));
-  if (!found) notFound('Appointment');
-  const row = flatten(found);
-  const [participants, messages] = await Promise.all([
-    db
-      .select({
-        p: opsAppointmentParticipants,
-        staffName: staffMembers.fullName,
-        studentName: students.fullName,
-      })
-      .from(opsAppointmentParticipants)
-      .leftJoin(staffMembers, eq(staffMembers.id, opsAppointmentParticipants.staffId))
-      .leftJoin(students, eq(students.id, opsAppointmentParticipants.studentId))
-      .where(eq(opsAppointmentParticipants.appointmentId, row.id))
-      .orderBy(asc(opsAppointmentParticipants.addedAt)),
-    db
-      .select()
-      .from(opsEventMessages)
-      .where(eq(opsEventMessages.appointmentId, row.id))
-      .orderBy(asc(opsEventMessages.createdAt)),
-  ]);
-  assertScope(
-    access,
-    [row.staffId, row.organiserStaffId, ...participants.map((p) => p.p.staffId)],
-    'appointments',
-  );
-  const changes = await db
-    .select({ c: opsAppointmentChanges, actorName: users.displayName })
-    .from(opsAppointmentChanges)
-    .leftJoin(users, eq(users.id, opsAppointmentChanges.actorUserId))
-    .where(eq(opsAppointmentChanges.appointmentId, row.id))
-    .orderBy(asc(opsAppointmentChanges.at));
-  // Names only, never a contact; a guardian's name needs ops:student_private:read.
-  // All-scope only: an own-scope holder may see private data of their own students, not of a cohort.
-  const privateData = scopeFor(actor, 'ops:student_private:read') === 'all';
-  return {
-    ...row,
-    participants: participants.map(({ p, staffName, studentName }) => ({
-      ...p,
-      name:
-        p.kind === 'guardian' && !privateData
-          ? 'Guardian (restricted)'
-          : (p.nameSnapshot ?? staffName ?? studentName ?? 'Not recorded'),
-      nameSnapshot: p.kind === 'guardian' && !privateData ? null : p.nameSnapshot,
-    })),
-    messages,
-    changes: changes.map(({ c, actorName }) => ({ ...c, actorName })),
-  };
-}
-
-/** Student options for the schedule form (canonical identities; names only, no contacts). */
-export async function studentPickerOptions(db: Database, actor: Actor) {
-  await accessScope(db, actor, 'ops:appointments:manage');
-  const rows = await db
-    .select({ id: students.id, fullName: students.fullName, isSample: students.isSample })
-    .from(students)
-    .orderBy(asc(students.fullName))
-    .limit(500);
-  return rows.map((s) => ({
-    value: s.id,
-    label: s.isSample ? `${s.fullName} — sample` : s.fullName,
-  }));
 }

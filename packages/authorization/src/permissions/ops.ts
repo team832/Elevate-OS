@@ -22,6 +22,11 @@
  *   `ops:feedback:write` and `ops:feedback:manage` are held by no role (kept until their routes go).
  * - every staff role that opens Ops logs its own daily tasks and EOD report (own scope);
  *   operations_manager, director and auditor read everyone's; EOD review = manager + director.
+ * - HR (brief 23 Oct 2026, supersedes D-032 in part): hr_manager runs HR for teachers and
+ *   marketing staff. Staff-private details are held only by hr_manager, raw student feedback about
+ *   teachers only by hr_manager + operations_manager; neither is in the broad `reads`. Teachers
+ *   and marketing roles get own-scope HR grants only.
+ *   PROPOSED-GRANTS-2026-10-23 marks every grant that is Proposed (owner to confirm).
  */
 import { definePermissions, type PermissionDefinition } from '../types';
 
@@ -212,29 +217,157 @@ export const opsPermissionList = [
     description:
       'Preview and commit imports of the original task tracker’s backup files, and read the protected source copy.',
   },
+  // --- HR for teachers and marketing staff (brief 23 Oct 2026) --------------------------------
+  {
+    key: 'ops:tasks:review',
+    description:
+      'Approve a submitted task, request changes or comment (own = tasks you review or that belong to people who report to you).',
+  },
+  { key: 'ops:hr:read', description: 'Open HR: overview, staff directory and staff records.' },
+  {
+    key: 'ops:staff:manage',
+    description:
+      'Maintain employee records: employment status and dates, branch, schedule, departments, reporting line, end of employment.',
+  },
+  {
+    key: 'ops:staff_private:read',
+    description:
+      'See staff-private details: personal phone and email, address, emergency contact, photo.',
+  },
+  { key: 'ops:staff_private:manage', description: 'Edit staff-private details.' },
+  {
+    key: 'ops:teaching_assignments:read',
+    description: 'Read teachers’ teaching assignments (from Academic OS).',
+  },
+  {
+    key: 'ops:attendance:read',
+    description:
+      'Read staff attendance: punches, daily status, leave, corrections (own = your own).',
+  },
+  {
+    key: 'ops:attendance:manage',
+    description:
+      'Enter and import punches, decide daily status, record leave, holidays and schedules, decide correction requests.',
+  },
+  {
+    key: 'ops:attendance:request',
+    description: 'Ask HR to correct a day’s attendance (own = your own days).',
+  },
+  {
+    key: 'ops:work_reports:read',
+    description:
+      'Read the consolidated EOD, weekly and monthly work reports of every staff member.',
+  },
+  {
+    key: 'ops:teacher_feedback:read',
+    description:
+      'Read raw student feedback about teachers, including student identities where collected.',
+  },
+  {
+    key: 'ops:teacher_feedback:manage',
+    description:
+      'Record and review student feedback about teachers, write and approve summaries, agree development actions.',
+  },
+  {
+    key: 'ops:teacher_feedback:import',
+    description: 'Preview and commit imports of student feedback files.',
+  },
+  {
+    key: 'ops:teacher_feedback_summaries:read',
+    description:
+      'Read approved feedback summaries and development actions (own = about yourself). Never raw rows.',
+  },
+  { key: 'ops:hr_settings:manage', description: 'Change HR, report and feedback settings.' },
+  // --- requests through HR, tests (brief 23 Oct 2026 §6, §17–§21) PROPOSED-GRANTS-2026-10-23b ---
+  {
+    key: 'ops:hr_requests:create',
+    description:
+      'Send a request through HR and follow it; read and answer what HR forwards to you (own).',
+  },
+  {
+    key: 'ops:hr_requests:read',
+    description: 'Read the HR request queue: every request, its routing log and replies.',
+  },
+  {
+    key: 'ops:hr_requests:manage',
+    description:
+      'Review, forward, resolve or decline requests sent through HR, relay replies, create a task from one.',
+  },
+  {
+    key: 'ops:assessments:read',
+    description:
+      'Read Tests and Mock Tests: tests, rosters, papers, score imports and results (the Academic record).',
+  },
+  {
+    key: 'ops:assessments:manage',
+    description:
+      'Plan tests, upload and release papers and answer keys, import and confirm scores (writes the Academic record).',
+  },
+  {
+    key: 'ops:assessments:publish',
+    description: 'Publish or correct a test’s results and ranks after the completeness checks.',
+  },
 ] as const satisfies readonly PermissionDefinition[];
 
 export type OpsPermission = (typeof opsPermissionList)[number]['key'];
 
 const keys: OpsPermission[] = opsPermissionList.map((p) => p.key);
 
-/** Read/access permissions except contact details (director and auditor baseline). */
-const CONTACTS: readonly OpsPermission[] = ['ops:student_private:read', 'ops:lead_contacts:read'];
+/** Reads kept out of the director/auditor baseline: contacts, staff-private, raw feedback. */
+const PRIVATE_READS: readonly OpsPermission[] = [
+  'ops:student_private:read',
+  'ops:lead_contacts:read',
+  'ops:staff_private:read',
+  'ops:teacher_feedback:read',
+  'ops:hr_requests:read',
+];
 const reads = keys.filter(
-  (k) => (k.endsWith(':read') || k.endsWith(':access')) && !CONTACTS.includes(k),
+  (k) => (k.endsWith(':read') || k.endsWith(':access')) && !PRIVATE_READS.includes(k),
 );
 
 /** Retired keys still referenced by code awaiting removal; no role may hold them. */
 const RETIRED: readonly OpsPermission[] = ['ops:feedback:write', 'ops:feedback:manage'];
+/** Held by hr_manager alone (PROPOSED-GRANTS-2026-10-23). */
+const HR_ONLY: readonly OpsPermission[] = ['ops:staff_private:read', 'ops:staff_private:manage'];
 
 const own = (permission: OpsPermission) => ({ permission, scope: 'own' as const });
 const ownTasks = [own('ops:tasks:read'), own('ops:tasks:write')];
+/** A staff member's own attendance and correction requests (PROPOSED-GRANTS-2026-10-23). */
+const ownAttendance = [own('ops:attendance:read'), own('ops:attendance:request')];
+/** Send requests through HR and answer what HR forwards (PROPOSED-GRANTS-2026-10-23b). */
+const ownHrRequests = own('ops:hr_requests:create');
 
 export const opsPermissions = definePermissions<OpsPermission>({
   module: 'ops',
   permissions: opsPermissionList,
   grants: {
-    operations_manager: keys.filter((k) => !RETIRED.includes(k)),
+    operations_manager: keys.filter((k) => !RETIRED.includes(k) && !HR_ONLY.includes(k)),
+    // PROPOSED-GRANTS-2026-10-23 (the whole role).
+    hr_manager: [
+      'ops:module:access',
+      'ops:hr:read',
+      'ops:organisation:read',
+      'ops:teachers:read',
+      'ops:staff:manage',
+      ...HR_ONLY,
+      'ops:teaching_assignments:read',
+      'ops:tasks:read',
+      'ops:tasks:write',
+      'ops:tasks:review',
+      'ops:eod:review',
+      'ops:work_reports:read',
+      'ops:attendance:read',
+      'ops:attendance:manage',
+      'ops:attendance:request',
+      'ops:teacher_feedback:read',
+      'ops:teacher_feedback:manage',
+      'ops:teacher_feedback:import',
+      'ops:teacher_feedback_summaries:read',
+      'ops:settings:read',
+      'ops:hr_settings:manage',
+      'ops:hr_requests:read', // PROPOSED-GRANTS-2026-10-23b
+      'ops:hr_requests:manage', // PROPOSED-GRANTS-2026-10-23b
+    ],
     admissions_counsellor: [
       'ops:module:access',
       own('ops:leads:read'),
@@ -257,6 +390,8 @@ export const opsPermissions = definePermissions<OpsPermission>({
       own('ops:feedback:read'),
       own('ops:feedback:acknowledge'),
       ...ownTasks,
+      ...ownAttendance,
+      ownHrRequests,
     ],
     // ops:admissions:confirm holders are PROPOSED (brief §1: "who may finalize admissions"; D-041).
     director: [
@@ -264,8 +399,12 @@ export const opsPermissions = definePermissions<OpsPermission>({
       'ops:admissions:approve',
       'ops:admissions:confirm',
       'ops:teacher_reports:generate',
+      // Owner, 23 Oct 2026 (D-079): directors download Internal and PTM student reports.
+      'ops:student_reports:generate',
       own('ops:tasks:write'),
       'ops:eod:review',
+      own('ops:tasks:review'), // PROPOSED-GRANTS-2026-10-23
+      ownHrRequests,
     ],
 
     auditor: reads,
@@ -278,9 +417,19 @@ export const opsPermissions = definePermissions<OpsPermission>({
       'ops:students:read',
       'ops:teachers:read',
       'ops:feedback:read',
+      'ops:assessments:read', // PROPOSED-GRANTS-2026-10-23b
       ...ownTasks,
+      ...ownAttendance,
+      ownHrRequests,
+      own('ops:tasks:review'), // PROPOSED-GRANTS-2026-10-23
     ],
-    teacher: [own('ops:appointments:read'), ...ownTasks],
+    teacher: [
+      own('ops:appointments:read'),
+      ...ownTasks,
+      ...ownAttendance,
+      ownHrRequests,
+      own('ops:teacher_feedback_summaries:read'), // PROPOSED-GRANTS-2026-10-23
+    ],
     // PROPOSED (owner to confirm, D-073): Marketing OS works leads, sources and follow-ups on the
     // one lead record, plus its own tasks/EOD. No ops:module:access, no student-private, KYC,
     // fee or review permissions.
@@ -288,14 +437,20 @@ export const opsPermissions = definePermissions<OpsPermission>({
       'ops:leads:read',
       'ops:leads:write',
       'ops:leads:assign',
+      'ops:leads:merge', // PROPOSED-GRANTS-2026-10-23b: explicit merge review (brief §11)
       'ops:lead_contacts:read',
       ...ownTasks,
+      ...ownAttendance,
+      ownHrRequests,
+      own('ops:tasks:review'), // PROPOSED-GRANTS-2026-10-23: their team's work
     ],
     marketing_contributor: [
       own('ops:leads:read'),
       own('ops:leads:write'),
       own('ops:lead_contacts:read'),
       ...ownTasks,
+      ...ownAttendance,
+      ownHrRequests,
     ],
     finance_officer: [
       'ops:module:access',
@@ -303,6 +458,8 @@ export const opsPermissions = definePermissions<OpsPermission>({
       'ops:fees:record',
       'ops:admissions:read',
       ...ownTasks,
+      ...ownAttendance,
+      ownHrRequests,
     ],
   },
 });

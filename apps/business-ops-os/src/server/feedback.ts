@@ -3,8 +3,7 @@
  * - teacher → student: written, versioned and withdrawn in Academic OS (owner answer 21 Oct 2026,
  *   supersedes D-043) and read through server/academic-reviews.ts. `ops.teacher_student_feedback`
  *   keeps the reviews recorded in Business Ops before 21 Oct 2026 as read-only history.
- * - student/guardian → teacher: recorded by staff on their behalf, moderated; no route
- *   edits it and the teacher it is about can neither edit nor moderate it.
+ * - student/guardian → teacher: HR's raw rows, in feedback-responses.ts (ops:teacher_feedback:*).
  */
 import { and, asc, desc, eq, gte, inArray, lt, or } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
@@ -13,25 +12,20 @@ import {
   opsDemos,
   opsDemoSessions,
   opsLeads,
-  opsStudentTeacherFeedback as aboutTeachers,
   opsTeacherStudentFeedback as aboutStudents,
   staffMembers,
   students,
   type Database,
 } from '@elevate/database';
-import { withTransaction } from '@elevate/server-kit';
-import { ForbiddenError, InvalidStateTransitionError } from '@elevate/shared-contracts';
+import { ForbiddenError } from '@elevate/shared-contracts';
 import type { StaffMemberId, StudentIdentityId } from '@elevate/shared-types';
-import type { z } from 'zod';
 import { istToday } from '../domain';
 import {
-  canModerate,
   demoReviewGrid,
   matchDemoReviews,
   reviewSessions,
   type ReviewState,
 } from '../domain/feedback';
-import type { moderationBody, studentTeacherFeedbackBody } from './appointments-schemas';
 import {
   counselledStudents,
   reviewsAuthored,
@@ -45,9 +39,7 @@ import {
   type AcademicDemoMarks,
 } from './academic-summary';
 import { accessScope, scopeCovers, staffIdForUser, type Actor } from './context';
-import { opsAudit, rowById } from './ops-common';
-
-const auditAboutTeacher = opsAudit('student_teacher_feedback');
+import { rowById } from './ops-common';
 
 /** Older Ops reviews a reader may see: submitted ones, and their own drafts. */
 const legacyVisible = (me: StaffMemberId | null) =>
@@ -310,114 +302,5 @@ export async function listFeedbackByTeacher(db: Database, actor: Actor, teacherS
   return withSuperseded(rows.map(({ f, ...s }) => ({ ...f, ...s }))).filter((r) => !r.superseded);
 }
 
-export async function recordStudentTeacherFeedback(
-  db: Database,
-  actor: Actor,
-  input: z.output<typeof studentTeacherFeedbackBody>,
-  requestId?: string,
-) {
-  await accessScope(db, actor, 'ops:feedback:record');
-  const teacher = await rowById(db, staffMembers, input.teacherStaffId, 'Teacher');
-  if (input.studentId) await rowById(db, students, input.studentId, 'Student');
-  return withTransaction(db, async (tx) => {
-    const [row] = await tx
-      .insert(aboutTeachers)
-      .values({
-        ...input,
-        teacherStaffId: teacher.id,
-        studentId: (input.studentId ?? null) as StudentIdentityId | null,
-        recordedBy: actor.id,
-      })
-      .returning();
-    await auditAboutTeacher(
-      tx,
-      actor,
-      row?.id,
-      'feedback.student_teacher.recorded',
-      { after: row },
-      requestId,
-    );
-    return row;
-  });
-}
-
-export async function moderateStudentTeacherFeedback(
-  db: Database,
-  actor: Actor,
-  id: string,
-  input: z.output<typeof moderationBody>,
-  requestId?: string,
-) {
-  await accessScope(db, actor, 'ops:feedback:moderate');
-  const me = await staffIdForUser(db, actor.id);
-  return withTransaction(db, async (tx) => {
-    const row = await rowById(tx, aboutTeachers, id, 'Feedback', true);
-    const check = canModerate(
-      row.moderationStatus,
-      input.action,
-      { staffId: me },
-      row.teacherStaffId,
-    );
-    if (!check.ok)
-      throw check.reason === 'own_feedback'
-        ? new ForbiddenError('Feedback about you must be moderated by someone else.')
-        : new InvalidStateTransitionError(
-            `Feedback that is ${row.moderationStatus} cannot be changed that way.`,
-          );
-    const [after] = await tx
-      .update(aboutTeachers)
-      .set({
-        moderationStatus: check.to,
-        moderationNote: input.note ?? row.moderationNote,
-        visibility: input.visibility ?? row.visibility,
-        moderatedBy: actor.id,
-        moderatedAt: new Date(),
-      })
-      .where(eq(aboutTeachers.id, row.id))
-      .returning();
-    await auditAboutTeacher(
-      tx,
-      actor,
-      row.id,
-      `feedback.student_teacher.${input.action}`,
-      { before: row, after },
-      requestId,
-    );
-    return after;
-  });
-}
-
-/**
- * Feedback about a teacher. Moderators see everything; the teacher (own scope) sees only
- * approved rows shared with them; other readers see approved rows. The summary averages
- * only rated, approved rows and states the denominator.
- */
-export async function listFeedbackAboutTeacher(db: Database, actor: Actor, teacherStaffId: string) {
-  const access = await accessScope(db, actor, 'ops:feedback:read');
-  const moderator = can(actor, 'ops:feedback:moderate');
-  if (access.scope === 'own' && access.staffId !== teacherStaffId)
-    return { rows: [], summary: { approved: 0, rated: 0, averageRating: null } };
-  const rows = await db
-    .select()
-    .from(aboutTeachers)
-    .where(
-      and(
-        eq(aboutTeachers.teacherStaffId, teacherStaffId as StaffMemberId),
-        moderator ? undefined : eq(aboutTeachers.moderationStatus, 'approved'),
-        access.scope === 'own' ? eq(aboutTeachers.visibility, 'teacher_and_staff') : undefined,
-      ),
-    )
-    .orderBy(asc(aboutTeachers.moderationStatus), desc(aboutTeachers.feedbackOn));
-  const approved = rows.filter((r) => r.moderationStatus === 'approved');
-  const rated = approved.filter((r) => r.rating !== null);
-  return {
-    rows,
-    summary: {
-      approved: approved.length,
-      rated: rated.length,
-      averageRating: rated.length
-        ? rated.reduce((s, r) => s + (r.rating ?? 0), 0) / rated.length
-        : null,
-    },
-  };
-}
+/** Student/guardian → teacher rows moved to feedback-responses.ts (HR, brief 23 Oct 2026 §15). */
+export { listFeedbackAboutTeacher } from './feedback-responses';

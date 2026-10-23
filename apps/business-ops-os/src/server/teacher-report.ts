@@ -9,7 +9,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { and, desc, eq } from 'drizzle-orm';
-import { can } from '@elevate/authorization';
+import { can, scopeFor } from '@elevate/authorization';
 import {
   opsTeacherReportExports,
   users,
@@ -31,7 +31,8 @@ import {
 import { fmtDateTime } from '../ui/format';
 import { reviewDate } from './academic-reviews';
 import { fetchTeacherActivity } from './academic-summary';
-import { accessScope, assertScope, type Actor } from './context';
+import { accessScope, assertScope, staffIdForUser, type Actor } from './context';
+import { isConflicted } from './feedback-access';
 import { teacherReportPdf as renderPdf } from './pdf/teacher-report';
 import { MAX_PERIOD_DAYS, PERIOD_DEFINITIONS, periodReport } from './task-period-report';
 import { getTeacherProfile } from './teachers';
@@ -121,7 +122,9 @@ async function buildSnapshot(db: Database, actor: Actor, staffId: string, period
           approved: moderated.filter((f) => f.moderationStatus === 'approved').length,
           rejected: moderated.filter((f) => f.moderationStatus === 'rejected').length,
           hidden: moderated.filter((f) => f.moderationStatus === 'hidden').length,
-          scope: can(actor, 'ops:feedback:moderate') ? 'all moderated states' : 'approved only',
+          scope: can(actor, 'ops:teacher_feedback:manage')
+            ? 'all moderated states'
+            : 'approved only',
         }
       : null,
     work: person
@@ -217,6 +220,23 @@ export async function listTeacherReports(db: Database, actor: Actor, staffId: st
     .orderBy(desc(e.createdAt));
 }
 
+/**
+ * The stored snapshot as this reader may see it now: feedback counts only for all-scope readers
+ * of raw feedback who do not teach and are not that teacher (round 8).
+ */
+export async function snapshotFor(
+  db: Database,
+  actor: Actor,
+  staffId: string,
+  snapshot: TeacherReportSnapshot,
+) {
+  const sees =
+    scopeFor(actor, 'ops:teacher_feedback:read') === 'all' &&
+    !(await isConflicted(db, actor)) &&
+    (await staffIdForUser(db, actor.id)) !== staffId;
+  return sees ? snapshot : { ...snapshot, feedback: null };
+}
+
 /** GET /teachers/{id}/report/{ref}/pdf — the stored snapshot as a PDF; audited. */
 export async function teacherReportPdf(
   db: Database,
@@ -240,7 +260,10 @@ export async function teacherReportPdf(
       ),
     );
   if (!row) throw new NotFoundError('Report reference not found for this teacher.');
-  const pdf = await renderPdf(row.snapshot as TeacherReportSnapshot, row);
+  const pdf = await renderPdf(
+    await snapshotFor(db, actor, staffId, row.snapshot as TeacherReportSnapshot),
+    row,
+  );
   await recordAudit(db, {
     actorUserId: actor.id,
     module: 'ops',

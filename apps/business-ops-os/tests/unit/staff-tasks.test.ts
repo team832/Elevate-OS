@@ -16,7 +16,9 @@ import {
   missingReasons,
   nextOccurrence,
   resolveTaskState,
+  submittedOnTime,
   TASK_EVENT_KINDS,
+  taskStatusLabel,
   TASK_PRIORITIES,
   TASK_RECURRENCES,
   TASK_SOURCES,
@@ -44,7 +46,7 @@ describe('staff task vocabularies match the database', () => {
 describe('A-TSK-1 task status rules', () => {
   const pending: TaskState = { status: 'pending', progressPercent: 30, reason: null };
   const blocked: TaskState = {
-    status: 'blocked',
+    status: 'cancelled',
     progressPercent: 30,
     reason: 'Waiting for fee slip',
   };
@@ -64,37 +66,30 @@ describe('A-TSK-1 task status rules', () => {
         { progressPercent: 100 },
         null,
       ],
-      ['blocked without a reason is refused', pending, { status: 'blocked' }, null, 'reason'],
+      ['cancelled without a reason is refused', pending, { status: 'cancelled' }, null, 'reason'],
       [
-        'on hold with a blank reason is refused',
+        'cancelled with a blank reason is refused',
         pending,
-        { status: 'on_hold', reason: '  ' },
+        { status: 'cancelled', reason: '  ' },
         null,
         'reason',
       ],
       [
-        'blocked with a reason is accepted',
+        'cancelled with a reason is accepted',
         pending,
-        { status: 'blocked', reason: ' Parent away ' },
+        { status: 'cancelled', reason: ' Parent away ' },
         { reason: 'Parent away' },
         null,
       ],
       [
-        'moving blocked → on hold needs a fresh reason',
-        blocked,
-        { status: 'on_hold' },
-        null,
-        'reason',
-      ],
-      [
-        'progress change keeps the blocked reason',
+        'progress change keeps the reason',
         blocked,
         { progressPercent: 50 },
-        { status: 'blocked', reason: 'Waiting for fee slip' },
+        { status: 'cancelled', reason: 'Waiting for fee slip' },
         null,
       ],
       [
-        'clearing the reason of a blocked task is refused',
+        'clearing the reason of a cancelled task is refused',
         blocked,
         { reason: null },
         null,
@@ -157,9 +152,21 @@ describe('A-TSK-2 overdue (IST)', () => {
       false,
     ],
     [
-      'due today 10:30, now 10:30',
+      'due today 10:30, now 10:30 (at the deadline is not late)',
       { status: 'in_progress', dueOn: '2026-10-21', dueTime: '10:30' },
       ist('2026-10-21', '10:30'),
+      false,
+    ],
+    [
+      'due today 10:30, now 10:31',
+      { status: 'in_progress', dueOn: '2026-10-21', dueTime: '10:30' },
+      ist('2026-10-21', '10:31'),
+      true,
+    ],
+    [
+      'no time: 23:59 IST is the deadline, 00:00 next day is late',
+      { status: 'pending', dueOn: '2026-10-21', dueTime: null },
+      ist('2026-10-22', '00:00'),
       true,
     ],
     [
@@ -169,10 +176,22 @@ describe('A-TSK-2 overdue (IST)', () => {
       false,
     ],
     [
-      'blocked past its due day is overdue',
-      { status: 'blocked', dueOn: '2026-10-19', dueTime: '18:00' },
+      'changes requested past its deadline is overdue',
+      { status: 'changes_requested', dueOn: '2026-10-19', dueTime: '18:00' },
       ist('2026-10-20', '09:00'),
       true,
+    ],
+    [
+      'submitted is never overdue (R5)',
+      { status: 'in_review', dueOn: '2026-10-19', dueTime: null },
+      ist('2026-10-21', '09:00'),
+      false,
+    ],
+    [
+      'a draft is never overdue',
+      { status: 'draft', dueOn: '2026-10-19', dueTime: null },
+      ist('2026-10-21', '09:00'),
+      false,
     ],
   ])('%s', (_name, task, now, expected) => {
     expect(isOverdue(task, now)).toBe(expected);
@@ -254,7 +273,7 @@ describe('A-TSK-4 EOD snapshot', () => {
       id: 'e',
       title: 'Carried from Monday',
       priority: 'low',
-      status: 'blocked',
+      status: 'in_progress',
       dueOn: '2026-10-19',
       reason: 'Parent away',
     },
@@ -306,5 +325,45 @@ describe('A-TSK-4 EOD snapshot', () => {
 
   it('lists tasks still not done that have no reason (submit needs one each)', () => {
     expect(missingReasons(snap).map((t) => t.id)).toEqual(['c']);
+  });
+});
+
+describe('R4 labels and R5 on-time submission', () => {
+  it.each([
+    ['pending', false, 'Assigned'],
+    ['in_review', true, 'Submitted'],
+    ['changes_requested', true, 'Changes requested'],
+    ['done', true, 'Approved'],
+    ['done', false, 'Done'],
+    ['draft', false, 'Draft'],
+  ] as const)('%s (review %s) reads "%s"', (status, review, label) => {
+    expect(taskStatusLabel(status, review)).toBe(label);
+  });
+
+  const t = { originalDueOn: '2026-10-24', originalDueTime: '17:00' };
+  const moved = (at: string, toDueOn: string, toDueTime: string | null) => ({
+    occurredAt: new Date(at),
+    data: { toDueOn, toDueTime },
+  });
+  it.each([
+    ['not submitted yet', null, [], null],
+    ['before the original deadline', '2026-10-24T16:59:00+05:30', [], true],
+    ['after the original deadline', '2026-10-24T17:01:00+05:30', [], false],
+    [
+      'judged on the deadline in force when first submitted (extended earlier)',
+      '2026-10-25T10:00:00+05:30',
+      [moved('2026-10-23T09:00:00+05:30', '2026-10-26', null)],
+      true,
+    ],
+    [
+      'a later extension does not excuse a late first submission',
+      '2026-10-25T10:00:00+05:30',
+      [moved('2026-10-26T09:00:00+05:30', '2026-10-30', null)],
+      false,
+    ],
+  ] as const)('%s', (_n, first, changes, expected) => {
+    expect(
+      submittedOnTime({ ...t, firstSubmittedAt: first ? new Date(first) : null }, changes),
+    ).toBe(expected);
   });
 });

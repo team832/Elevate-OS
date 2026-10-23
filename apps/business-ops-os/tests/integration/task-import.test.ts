@@ -211,7 +211,10 @@ describe('tracker import (brief 2 §13, tests 15–16)', () => {
       'report:900': 'duplicate',
       'report:901': 'accepted', // failed before: never counts as already imported
     });
-    expect(preview.data!.rows.find((r) => r.legacyId === '1')!.message).toContain('Status');
+    // R4: Blocked is a flag now, so the change shows as the blocker, not the status.
+    expect(preview.data!.rows.find((r) => r.legacyId === '1')!.message).toContain(
+      'Blocked or on hold',
+    );
     await commit(preview.data!.id);
     const [kept] = await ctx.db
       .select()

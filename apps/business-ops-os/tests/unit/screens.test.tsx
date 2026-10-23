@@ -25,7 +25,6 @@ import {
 } from '../../src/app/students/_components/student-list';
 import { TasksNav } from '../../src/app/tasks/_components/eod-nav';
 import { EodFactsView, EodHistory } from '../../src/app/tasks/_components/eod-facts';
-import { ReviewPane } from '../../src/app/tasks/_components/eod-review';
 import { EodStatus } from '../../src/app/tasks/_components/eod-views';
 import { QuickAdd } from '../../src/app/tasks/_components/quick-add';
 import { AckBadge, TaskFacts, WaitingAlert } from '../../src/app/tasks/_components/task-detail';
@@ -295,21 +294,20 @@ describe('tasks and end-of-day reports', () => {
   it.each([
     ['draft', false, 'neutral', 'Draft'],
     ['submitted', true, 'info', 'Submitted'],
-    ['revision_requested', false, 'warning', 'Revision requested'],
-    ['acknowledged', false, 'success', 'Acknowledged'],
+    ['revision_requested', false, 'warning', 'Changes requested'],
+    ['acknowledged', false, 'success', 'Reviewed'],
   ] as const)('EOD %s reads in words (late flagged: %s)', (status, late, tone, text) => {
     const out = html(<EodStatus r={{ status, late }} />);
     expect(out).toContain(`<span class="el-badge el-tone-${tone}">${text}</span>`);
     expect(out.includes('Submitted later')).toBe(late);
   });
 
-  it('EOD facts: Academic down and HR unknown are said, never shown as 0 or absence', () => {
+  it('EOD facts (REP WorkReportFacts): Academic down is said, never shown as 0 or absence', () => {
     const out = html(<EodFactsView f={facts()} base="/ops" />);
     expect(out).toContain('No task activity recorded');
-    expect(out).toContain('Academic OS unavailable');
-    expect(out).toContain('HR attendance unavailable');
-    expect(out).toContain('this is not a record of absence');
-    expect(out).toContain('None recorded on this day.');
+    expect(out).toContain('Source unavailable: Academic OS');
+    expect(out).not.toContain('confirmed absences');
+    expect(out).toContain('None recorded in this period.');
   });
 
   it('EOD facts: missing Academic counts read "Not recorded"', () => {
@@ -325,7 +323,7 @@ describe('tasks and end-of-day reports', () => {
       reviewsSubmitted: 0,
     } as const;
     const out = html(<EodFactsView f={facts({ academic })} base="/ops" />);
-    expect(out).toContain('2 of 3 planned classes delivered');
+    expect(out).toContain('2 of 3 scheduled classes delivered');
     expect(out).toContain('marking pending Not recorded');
   });
 
@@ -353,38 +351,8 @@ describe('tasks and end-of-day reports', () => {
         }
       />,
     );
-    expect(out).toContain('Revision requested by Sample Manager');
+    expect(out).toContain('Changes requested by Sample Manager');
     expect(out).toContain('&lt;b&gt;Add times&lt;/b&gt;');
-  });
-
-  it('EOD review pane: sample reports carry the full SAMPLE DATA badge', async () => {
-    loaded.data = {
-      id: 'r1',
-      staffName: 'Sample Counsellor',
-      reportDate: '2026-10-20',
-      status: 'submitted',
-      late: false,
-      isSample: true,
-      current: null,
-      summary: null,
-      nextDayPlan: null,
-      notes: null,
-      sourceChanged: false,
-      versions: [],
-      trail: [],
-      facts: facts(),
-      canReview: false,
-    };
-    const out = html(
-      await ReviewPane({
-        user: as('director'),
-        id: 'r1',
-        closeHref: '/ops/tasks/inbox',
-        base: '/ops',
-      }),
-    );
-    expect(out).toContain(`${SAMPLE}SAMPLE DATA</span>`);
-    expect(out).toContain('Not written');
   });
 
   it('teacher reports segment fails on its own: error inside it, the generate form still renders', async () => {
@@ -407,6 +375,7 @@ describe('tasks and end-of-day reports', () => {
     const out = html(<TasksNav user={as(role)} current="day" inbox={inbox} base="/ops" />);
     for (const t of ['Inbox', 'Imports']) expect(out.includes(`>${t}</a>`)).toBe(extra.includes(t));
     expect(out).toContain('>My day</a>');
+    expect(out).toContain('href="/ops/my-reports"');
   });
 
   it('quick add: labelled, required marked, button names the action', () => {
@@ -443,6 +412,11 @@ describe('tasks and end-of-day reports', () => {
     leadId: null,
     admissionId: null,
     waitingOn: [],
+    status: 'pending',
+    expectedDeliverable: null,
+    collaborators: [],
+    deliveredAt: null,
+    originalDueOn: '2026-10-22',
   } as unknown as TaskDetail;
 
   it('task facts: missing people and text are named, progress is marked self-reported', () => {
@@ -454,6 +428,8 @@ describe('tasks and end-of-day reports', () => {
       'Not yet',
       '0% (self-reported)',
       'No review step: the owner marks it done',
+      'Not specified',
+      'Not delivered in-app · Not yet acknowledged',
     ])
       expect(out).toContain(t);
     expect(out).not.toContain('Related lead');

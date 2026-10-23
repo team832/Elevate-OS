@@ -9,6 +9,7 @@ const AREAS = [
   ['reports', 'Reports', '/tasks/reports'],
   ['imports', 'Imports', '/tasks/imports'],
   ['eod', 'End-of-day report', '/tasks?tab=eod'],
+  ['my-reports', 'My reports', '/my-reports'],
 ] as const;
 export type TasksArea = (typeof AREAS)[number][0];
 

@@ -171,3 +171,130 @@ export function matchDemoReviews(
       : [];
   });
 }
+
+// --- student feedback about teachers: summaries for HR and the teacher (brief 23 Oct 2026 §15) ---
+
+/** Name of a mean: its category's label, or "Overall rating" for the overall one (code null). */
+export const meanLabel = (
+  code: string | null,
+  categories: readonly { code: string; label: string }[],
+) => (code === null ? 'Overall rating' : (categories.find((c) => c.code === code)?.label ?? code));
+
+/** One stored figure: the mean and how many responses gave it. */
+export interface MeanFigure {
+  mean: number;
+  n: number;
+}
+/** Stored per-summary figures: the overall rating apart from the categories (no key encoding). */
+export interface StoredMeans {
+  overall?: MeanFigure;
+  categories: Record<string, MeanFigure>;
+}
+
+const figure = (sum: number, n: number): MeanFigure => ({
+  mean: Math.round((sum / n) * 100) / 100,
+  n,
+});
+
+/**
+ * Mean rating and count per category and overall, over rows on the summary's scale, to 2
+ * decimals. Rows on another scale are left out (their count is returned); a category nobody
+ * rated is absent, never 0.
+ */
+export function categoryMeans(
+  rows: readonly {
+    ratingScaleMax: number;
+    rating: number | null;
+    categoryRatings: Record<string, number> | null;
+  }[],
+  scaleMax: number,
+): { means: StoredMeans; otherScale: number } {
+  const onScale = rows.filter((r) => r.ratingScaleMax === scaleMax);
+  const sums = new Map<string, { sum: number; n: number }>();
+  for (const r of onScale)
+    for (const [k, v] of Object.entries(r.categoryRatings ?? {})) {
+      const s = sums.get(k) ?? { sum: 0, n: 0 };
+      sums.set(k, { sum: s.sum + v, n: s.n + 1 });
+    }
+  const rated = onScale.flatMap((r) => (r.rating === null ? [] : [r.rating]));
+  return {
+    means: {
+      ...(rated.length
+        ? {
+            overall: figure(
+              rated.reduce((a, b) => a + b, 0),
+              rated.length,
+            ),
+          }
+        : {}),
+      categories: Object.fromEntries([...sums].map(([k, s]) => [k, figure(s.sum, s.n)])),
+    },
+    otherScale: rows.length - onScale.length,
+  };
+}
+
+const isFigure = (v: unknown): v is MeanFigure =>
+  typeof v === 'object' &&
+  v !== null &&
+  Number.isFinite((v as MeanFigure).mean) &&
+  Number.isInteger((v as MeanFigure).n);
+
+/** Stored figures as rows (`code` null = overall); anything malformed is left out, never guessed. */
+export function readMeans(stored: unknown): { code: string | null; mean: number; n: number }[] {
+  const s = (stored ?? {}) as { overall?: unknown; categories?: unknown };
+  const cats = typeof s.categories === 'object' && s.categories !== null ? s.categories : {};
+  return [
+    ...(isFigure(s.overall) ? [{ code: null, ...s.overall }] : []),
+    ...Object.entries(cats).flatMap(([code, v]) =>
+      isFigure(v) ? [{ code, mean: v.mean, n: v.n }] : [],
+    ),
+  ];
+}
+
+/**
+ * What a teacher sees of an approved summary (setting feedback.teacher_visibility). Below the
+ * minimum group size no figure, strength, area or comment is shown — only that there were too
+ * few responses; a single mean rated by fewer than that many is dropped too, so no mean can be
+ * one student's rating. Raw rows and student identities are never part of it.
+ */
+export function teacherFacing<
+  S extends {
+    id: string;
+    periodStart: string;
+    periodEnd: string;
+    responseCount: number;
+    eligiblePopulation: number | null;
+    ratingScaleMax: number;
+    categoryMeans: unknown;
+    strengths: string | null;
+    areasToImprove: string | null;
+    summaryText: string | null;
+    approvedAt: Date | null;
+  },
+>(s: S, policy: { minGroupSize: number; showComments: boolean }) {
+  const enough = s.responseCount >= policy.minGroupSize;
+  const shown = readMeans(s.categoryMeans).filter((m) => m.n >= policy.minGroupSize);
+  return {
+    id: s.id,
+    periodStart: s.periodStart,
+    periodEnd: s.periodEnd,
+    approvedAt: s.approvedAt,
+    ratingScaleMax: s.ratingScaleMax,
+    enough,
+    minGroupSize: policy.minGroupSize,
+    responseCount: enough ? s.responseCount : null,
+    eligiblePopulation: enough ? s.eligiblePopulation : null,
+    categoryMeans: enough
+      ? {
+          overall: shown.find((m) => m.code === null)?.mean ?? null,
+          categories: Object.fromEntries(
+            shown.flatMap((m) => (m.code === null ? [] : [[m.code, m.mean]])),
+          ),
+        }
+      : null,
+    strengths: enough ? s.strengths : null,
+    areasToImprove: enough ? s.areasToImprove : null,
+    summaryText: enough && policy.showComments ? s.summaryText : null,
+  };
+}
+export type TeacherFacingSummary = ReturnType<typeof teacherFacing>;

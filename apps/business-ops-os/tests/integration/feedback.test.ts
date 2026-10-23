@@ -14,6 +14,7 @@ import { setupReference, staffUser, type StaffUser } from './fixtures';
 const ctx = setupTestDatabase();
 let manager: StaffUser;
 let counsellor: StaffUser;
+let hr: StaffUser;
 let teacher: StaffUser;
 let otherTeacher: StaffUser;
 let taught: string;
@@ -26,6 +27,7 @@ beforeAll(async () => {
   await setupReference(ctx.db);
   manager = await staffUser(ctx.db, ['operations_manager']);
   counsellor = await staffUser(ctx.db, ['admissions_counsellor']);
+  hr = await staffUser(ctx.db, ['hr_manager']);
   teacher = await staffUser(ctx.db, ['teacher']);
   otherTeacher = await staffUser(ctx.db, ['teacher']);
   const rows = await ctx.db
@@ -133,9 +135,11 @@ describe('student/guardian → teacher feedback (opposite direction)', () => {
       summary: { approved: number; rated: number; averageRating: number | null };
     }>(listAboutTeacher, req(user, `/ops/api/v1/feedback/about-teachers?teacherStaffId=${id}`));
 
-  it('recorded by staff as pending; the teacher can neither record, edit nor moderate it (403)', async () => {
+  it('recorded by HR as pending; the teacher can neither record, edit nor moderate it (403)', async () => {
     expect((await record(teacher, teacher.staffId)).status).toBe(403);
-    const row = (await record(counsellor, teacher.staffId)).data!;
+    // Raw feedback moved to ops:teacher_feedback:* (HR + operations manager, brief 23 Oct 2026 §15).
+    expect((await record(counsellor, teacher.staffId)).status).toBe(403);
+    const row = (await record(hr, teacher.staffId)).data!;
     expect(row.moderationStatus).toBe('pending');
     expect((await mod(teacher, row.id, { action: 'approve' })).status).toBe(403);
     expect((await about(teacher, teacher.staffId)).status).toBe(403);
@@ -149,7 +153,7 @@ describe('student/guardian → teacher feedback (opposite direction)', () => {
   });
 
   it('a moderator cannot moderate feedback about themselves', async () => {
-    const row = (await record(counsellor, manager.staffId)).data!;
+    const row = (await record(hr, manager.staffId)).data!;
     expect((await mod(manager, row.id, { action: 'approve' })).status).toBe(403);
   });
 

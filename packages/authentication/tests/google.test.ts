@@ -1,7 +1,14 @@
 import { createHash, generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { auditEvents, sessions, userRoles, users, type Database } from '@elevate/database';
+import {
+  auditEvents,
+  sessions,
+  staffMembers,
+  userRoles,
+  users,
+  type Database,
+} from '@elevate/database';
 import { createTestDb, type TestDatabase } from '@elevate/database/testing';
 import {
   LoginThrottle,
@@ -320,6 +327,24 @@ describe('Google sign-in: callback', () => {
       },
     });
     expect(location).toBe('/login?error=google_cancelled&next=%2Fdashboard');
+  });
+
+  it('no second account for staff already linked to another email (brief §3)', async () => {
+    const [old] = await db
+      .insert(users)
+      .values({
+        email: 'fictional.moved.old@elevateeducation.in',
+        displayName: 'Moved (fictional)',
+      })
+      .returning();
+    await db.insert(staffMembers).values({ userId: old!.id, fullName: 'Moved Person (fictional)' });
+    const newEmail = 'fictional.moved.new@elevateeducation.in';
+    issue = (nonce) =>
+      idToken(claims(nonce, { email: newEmail, name: ' moved person (FICTIONAL) ' }));
+    const { location, session } = await signIn();
+    expect(location).toBe('/login?error=google_alias&next=%2Fdashboard');
+    expect(session).toBeUndefined();
+    expect(await db.select().from(users).where(eq(users.email, newEmail))).toHaveLength(0);
   });
 
   it('a disabled account is refused', async () => {

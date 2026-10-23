@@ -15,6 +15,7 @@ import {
   opsEodReviewEvents,
   opsStaffTasks,
   opsTaskEvents,
+  opsWorkSchedules,
 } from '@elevate/database';
 import { GET as reportRoute } from '../../src/app/api/v1/task-reports/route';
 import type { PeriodReport } from '../../src/server/task-period-report';
@@ -39,6 +40,14 @@ beforeAll(async () => {
   });
   b = await staffUser(ctx.db, ['admissions_counsellor'], { name: 'Sample B' });
   outsider = await createTestUser(ctx.db, { roles: ['platform_admin'] }); // no Ops task access (marketing has its own tasks since D-073)
+  // Monday–Saturday 9 to 5, Sunday off: the default schedule HR attendance derives workdays from.
+  const nine = { start: '09:00', end: '17:00' };
+  await ctx.db.insert(opsWorkSchedules).values({
+    name: 'Sample default schedule',
+    weeklyPattern: { mon: nine, tue: nine, wed: nine, thu: nine, fri: nine, sat: nine, sun: null },
+    isDefault: true,
+    createdBy: manager.id,
+  });
   const add = async (
     owner: StaffUser,
     title: string,
@@ -51,6 +60,7 @@ beforeAll(async () => {
           staffId: owner.staffId,
           title,
           dueOn: '2026-09-14',
+          originalDueOn: '2026-09-14',
           createdBy: owner.id,
           createdAt: ist('2026-09-14', '09:00'),
           ...over,
@@ -95,10 +105,7 @@ beforeAll(async () => {
     toStatus: 'done',
   });
   // Blocked since the 15th; clarification asked and never answered.
-  const t3 = await add(a, 'Sample parent visit', {
-    status: 'blocked',
-    reason: 'Parent travelling',
-  });
+  const t3 = await add(a, 'Sample parent visit');
   await ev(t3.id, 'created', ist('2026-09-14', '09:00'), {
     toStaffId: a.staffId,
     toStatus: 'pending',
@@ -124,6 +131,8 @@ beforeAll(async () => {
   await add(b, 'Sample other team task');
   await ctx.db.insert(opsEodReports).values({
     staffId: a.staffId,
+    periodStart: '2026-09-15',
+    periodEnd: '2026-09-15',
     reportDate: '2026-09-15',
     status: 'acknowledged',
     snapshot: {},
@@ -137,6 +146,8 @@ beforeAll(async () => {
     .insert(opsEodReports)
     .values({
       staffId: a.staffId,
+      periodStart: '2026-09-16',
+      periodEnd: '2026-09-16',
       reportDate: '2026-09-16',
       status: 'revision_requested',
       snapshot: {},
@@ -172,7 +183,9 @@ describe('team / period report', () => {
     expect(r.status).toBe(200);
     const row = r.data!.people.find((p) => p.staffId === a.staffId)!;
     expect(row).toMatchObject({ assigned: 4, completed: 1, open: 3, overdue: 3, blocked: 1 });
-    expect(row.eod).toEqual({ days: 3, submitted: 2, acknowledged: 1, missing: 1 });
+    expect(row.eod).toEqual({ days: 3, note: null, submitted: 2, acknowledged: 1, missing: 1 });
+    // Due 14 Sep: one done late (the 15th), three never submitted; none excluded.
+    expect(row.onTime).toMatchObject({ eligible: 4, onTime: 0, late: 1, notSubmitted: 3, rate: 0 });
     expect(r.data!.revisions).toEqual([
       expect.objectContaining({ since: ist('2026-09-16', '21:00').toISOString() }),
     ]);
@@ -202,7 +215,7 @@ describe('team / period report', () => {
     expect(csv.headers.get('content-type')).toContain('text/csv');
     const text = await csv.text();
     expect(text).toContain('Sample A');
-    expect(text).toContain('EOD calendar days');
+    expect(text).toContain('EOD expected workdays');
     expect(text).not.toContain('Sample B');
     const pdf = await reportRoute(authedRequest(lead, `/ops/api/v1/task-reports${Q}&format=pdf`), {
       params: Promise.resolve({}),

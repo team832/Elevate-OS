@@ -1,7 +1,7 @@
 /**
  * Placements, scheduling and publishing (MKT-002, MKT-008, MKT-014–MKT-017, MKT-024–MKT-026).
  */
-import { and, asc, eq, gte, inArray, lt, ne, or } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lt, ne, or, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   approvals,
@@ -43,6 +43,7 @@ import { getPublishingAdapter, type PublishResult } from './adapters/publishing'
 import { getContentItem, getVersion, type ContentItemRow } from './content';
 import { loadPolicy } from './policy';
 import { runRuleCheck } from './rules';
+import { assertPlacementVisible } from './scope';
 
 export type PlacementRow = typeof marketingPlacements.$inferSelect;
 
@@ -146,7 +147,7 @@ export async function createPlacement(
 ) {
   assertCan(actor, 'marketing:content:write');
   return withTransaction(db, async (tx) => {
-    const item = await getContentItem(tx, itemId);
+    const item = await getContentItem(tx, itemId, false, actor);
     if (item.state === 'archived')
       throw new InvalidStateTransitionError('Archived content cannot be placed.');
     const [idea] = await tx.select().from(marketingIdeas).where(eq(marketingIdeas.id, item.ideaId));
@@ -402,6 +403,7 @@ export async function cancelPlacement(
 ) {
   return withTransaction(db, async (tx) => {
     const placement = await lockPlacement(tx, placementId);
+    await assertPlacementVisible(tx, actor, placement, 'Placement not found.');
     assertCan(
       actor,
       placement.status === 'scheduled' ? 'marketing:schedule:manage' : 'marketing:content:write',
@@ -713,6 +715,7 @@ export async function recordManualPublication(
 export async function listCalendar(
   db: Database,
   range: { from: Date; to: Date; accountCode?: string },
+  scope?: SQL,
 ) {
   const rows = await db
     .select({
@@ -744,6 +747,7 @@ export async function listCalendar(
           ),
         ),
         range.accountCode ? eq(marketingSocialAccounts.code, range.accountCode) : undefined,
+        scope,
       ),
     )
     .orderBy(asc(marketingPlacements.scheduledAt), asc(marketingPlacements.code));
@@ -775,8 +779,8 @@ export async function listCalendar(
   }));
 }
 
-/** Placements not yet scheduled (planning board). */
-export async function listPlannedPlacements(db: Database) {
+/** Placements not yet scheduled (planning board), narrowed by a content `scope` when given. */
+export async function listPlannedPlacements(db: Database, scope?: SQL) {
   return db
     .select({ p: marketingPlacements, accountCode: marketingSocialAccounts.code })
     .from(marketingPlacements)
@@ -784,6 +788,10 @@ export async function listPlannedPlacements(db: Database) {
       marketingSocialAccounts,
       eq(marketingSocialAccounts.id, marketingPlacements.accountId),
     )
-    .where(eq(marketingPlacements.status, 'planned'))
+    .leftJoin(
+      marketingContentItems,
+      eq(marketingContentItems.id, marketingPlacements.contentItemId),
+    )
+    .where(and(eq(marketingPlacements.status, 'planned'), scope))
     .orderBy(asc(marketingPlacements.originalPublishAt), asc(marketingPlacements.code));
 }

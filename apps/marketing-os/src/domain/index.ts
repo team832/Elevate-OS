@@ -23,3 +23,4 @@ export * from './publishing';
 export * from './metrics-csv';
 export * from './metrics-aggregate';
 export * from './legacy-mapping';
+export * from './deliverables';

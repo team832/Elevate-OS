@@ -8,7 +8,7 @@ import {
 } from '@elevate/testing';
 import { GET as directory } from '../../src/app/api/v1/organisation/route';
 import { POST as createStaff } from '../../src/app/api/v1/staff/route';
-import { PATCH as patchStaff } from '../../src/app/api/v1/staff/[id]/route';
+import { POST as hrAction } from '../../src/app/api/v1/hr/staff/[id]/[action]/route';
 import { GET as listSettings } from '../../src/app/api/v1/settings/route';
 import { PUT as putSetting } from '../../src/app/api/v1/settings/[key]/route';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
@@ -48,17 +48,11 @@ describe('staff directory (steward of core tables)', () => {
       req(manager, { fullName: 'Member B', managerId: a.data!.id }),
     );
     expect(b.status).toBe(201);
-    const loop = await callRoute(patchStaff, req(manager, { managerId: b.data!.id }, 'PATCH'), {
-      id: a.data!.id,
-    });
-    expect(loop.status).toBe(409);
-    expect(
-      (
-        await callRoute(patchStaff, req(manager, { managerId: a.data!.id }, 'PATCH'), {
-          id: a.data!.id,
-        })
-      ).status,
-    ).toBe(409);
+    // Manager changes go through HR (history kept); a loop is refused either way round.
+    const setManager = (id: string, managerId: string) =>
+      callRoute(hrAction, req(manager, { managerId }), { id, action: 'manager' });
+    expect((await setManager(a.data!.id, b.data!.id)).status).toBe(409);
+    expect((await setManager(a.data!.id, a.data!.id)).status).toBe(409);
   });
 });
 
