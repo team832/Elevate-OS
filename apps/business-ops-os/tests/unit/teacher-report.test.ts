@@ -185,8 +185,15 @@ describe('teacher report PDF', () => {
     expect(lines[lines.indexOf('Marking pending') + 1]).toBe('Not reported');
     expect(lines[lines.indexOf('EOD reports submitted') + 1]).toBe('22 of 30 days');
     expect(lines.join(' ')).toContain('• 3 teaching logs pending');
+    expect(lines).not.toContain('Overall comment');
     expect(lines).not.toContain('SR-');
     expect(pdf.unsupportedCharacters).toBe(false);
+  });
+
+  it('prints the saved overall comment as written (D-111); the definitions may run onto a third page', async () => {
+    const comment = 'Sample overall comment written by a person after checking an AI draft.';
+    const { lines } = await teacherReportPdf(snapshot({ comment }), meta);
+    expect(lines.slice(lines.indexOf('Overall comment'))).toContain(comment);
   });
 
   it('says Academic OS was unavailable instead of printing zeros, and names withheld sections', async () => {

@@ -253,6 +253,19 @@ export function finaliseBounds(
     : scoreBounds(input.sections, rules, input.key?.answers ?? null);
 }
 
+/** Bounds of an assessment for entering totals, or null while its maximum is not known. */
+export function assessmentBounds(input: {
+  assessmentRule: RuleValues;
+  sections: readonly SectionSpec[];
+  key: Responses | null;
+  maxMarks: string | null;
+}): ScoreBounds | null {
+  if (input.sections.length === 0)
+    return input.maxMarks ? totalOnlyBounds(input.maxMarks, input.assessmentRule.marksPerWrong) : null;
+  const { rules, problems } = resolveRules(input.assessmentRule, input.sections);
+  return problems.length > 0 ? null : scoreBounds(input.sections, rules, input.key);
+}
+
 /** Competition ranking (1, 2, 2, 4): one more than the number of strictly higher totals. */
 export const competitionRank = (total: MarkUnits, totals: readonly MarkUnits[]): number =>
   totals.filter((t) => t > total).length + 1;

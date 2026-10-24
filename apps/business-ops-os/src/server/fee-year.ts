@@ -128,6 +128,10 @@ export async function feeYear(
     changesPending: filtered(changing).length,
     /** Accepted agreements without an academic year (made before D-039): in no year's figures. */
     withoutYear: counted.filter((p) => !p.academicYear).length,
+    /** Own scope: students whose counted version lives on a case the reader cannot see (count only, any course). */
+    continuedElsewhere: new Set(
+      inYear(v.counted.filter((p) => !seen.has(p.id))).map((p) => p.studentId),
+    ).size,
   };
 }
 export type FeeYear = Awaited<ReturnType<typeof feeYear>>;

@@ -159,9 +159,9 @@ Configurable lead-source list (OPS-002).
 
 One person who enquired (usually a student, often through a parent): contact details, programme interest, owner and first contact. Every lead has at least one contact; a duplicate is merged into another lead, never deleted. Restricted contact fields are masked in lists. Each enquiry is a row of `ops.enquiries`; the pipeline is `ops.admissions`.
 
-- **Written by:** `src/server/applications.ts`, `src/server/demos-intake.ts`, `src/server/leads-actions.ts`, `src/server/leads.ts`
+- **Written by:** `src/server/applications.ts`, `src/server/demos-intake.ts`, `src/server/lead-stages.ts`, `src/server/leads-actions.ts`, `src/server/leads.ts`
 - **Sample or real:** Own flag: `is_sample = true` marks a sample row.
-- **Links to:** `programme_id` → `core.programmes` (on delete restrict); `owner_staff_id` → `core.staff_members` (on delete set null); `merged_into_lead_id` → `ops.leads` (on delete restrict); `created_by` → `core.users` (on delete restrict)
+- **Links to:** `programme_id` → `core.programmes` (on delete restrict); `owner_staff_id` → `core.staff_members` (on delete set null); `merged_into_lead_id` → `ops.leads` (on delete restrict); `stage_key` → `ops.lead_stages` (on delete restrict); `created_by` → `core.users` (on delete restrict)
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
 |---|---|---|---|---|---|
@@ -194,6 +194,9 @@ One person who enquired (usually a student, often through a parent): contact det
 | `merged_into_lead_id` | uuid | no |  | (id) | Set when this lead was a duplicate and was merged into another (kept for history). → `ops.leads` |
 | `merged_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was merged (UTC). |
 | `notes` | text | no |  |  | Free-text notes. |
+| `stage_key` | text | no |  |  | Lead stage (ops.lead_stages key); null = not staged yet. History: ops.lead_stage_history. → `ops.lead_stages` |
+| `stage_changed_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was stage changed (UTC). |
+| `do_not_contact` | boolean | yes (default false) |  | false | Do not contact: a flag Marketing may see; the consent record stays private (contact_preferences). |
 | `is_sample` | boolean | yes (default false) |  | false | Sample record for development (D-036): shown with a SAMPLE DATA badge, removed by `npm run db:clear-samples`. |
 | `created_by` | uuid | yes |  | (id) | User who created the row. → `core.users` |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
@@ -241,6 +244,10 @@ Contact attempts and notes (OPS-006).
 | `occurred_at` | timestamp with time zone | yes |  | 2026-10-21T10:30:00Z | When it happened (UTC). |
 | `note` | text | no |  |  | Free-text notes. |
 | `staff_id` | uuid | no |  | (id) | Staff member who made the contact. → `core.staff_members` |
+| `direction` | text | no | `inbound`, `outbound` | inbound | Who started the contact, when recorded. |
+| `duration_seconds` | integer | no |  | 1 | Call length as reported by the staff member (calls are not placed or recorded by the app). |
+| `next_action` | text | no |  |  | Next action. |
+| `next_follow_up_on` | date | no |  | 2026-10-21 | Next follow up day (Asia/Kolkata calendar day). |
 | `created_by` | uuid | yes |  | (id) | User who created the row. → `core.users` |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
 
@@ -359,7 +366,7 @@ Admission checklist (OPS-010/011): status and references only, never documents o
 
 Follow-ups (OPS-007, BR-OPS-9: every follow-up has an owner and a due date).
 
-- **Written by:** `src/server/follow-ups.ts`, `src/server/leads-actions.ts`, `src/server/pipeline.ts`
+- **Written by:** `src/server/follow-ups.ts`, `src/server/lead-calls.ts`, `src/server/leads-actions.ts`, `src/server/pipeline.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `lead_id` → `ops.leads` (on delete restrict); `admission_id` → `ops.admissions` (on delete restrict); `owner_staff_id` → `core.staff_members` (on delete restrict); `completed_by` → `core.users` (on delete restrict); `created_by` → `core.users` (on delete restrict)
 
@@ -1274,7 +1281,7 @@ Work a staff member received (manager, HR, self, verbal request, another module,
 | `admission_id` | uuid | no |  | (id) | The admission case this belongs to. → `ops.admissions` |
 | `student_id` | uuid | no |  | (id) | The student (canonical identity, core.students). → `core.students` |
 | `linked_ref` | text | no |  |  | Plain reference to a record in another module (e.g. an Academic support case); no FK (R8). |
-| `related_kind` | text | no | `batch`, `subject`, `campaign`, `event` | batch | Batch, subject, campaign or event the task is about (other module's UUID; no FK). |
+| `related_kind` | text | no | `batch`, `subject`, `campaign`, `event`, `test`, `hr_request` | batch | Batch, subject, campaign or event the task is about (other module's UUID; no FK). |
 | `related_id` | uuid | no |  | (id) | Related id. |
 | `related_label` | text | no |  |  | Label as shown when linked (e.g. "IPMAT-C12-APR27 · QUANT"). |
 | `category` | text | no |  |  | Category. |
@@ -1380,6 +1387,23 @@ Task A waits on task B. Self-links are refused here; cycles are refused by the s
 | `depends_on_task_id` | uuid | yes |  | (id) | Depends on task id. → `ops.staff_tasks` |
 | `created_by_user_id` | uuid | yes |  | (id) | Created by user id. → `core.users` |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+
+### `ops.task_reminders`
+
+One reminder sent to one person about one task in one window (e.g. the IST day, or the interval number from setting `tasks.reminders`). The unique key suppresses duplicates.
+
+- **Written by:** `src/server/task-reminders.ts`
+- **Sample or real:** Reference or configuration data (not person data).
+- **Links to:** `task_id` → `ops.staff_tasks` (on delete cascade); `staff_id` → `core.staff_members` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `task_id` | uuid | yes |  | (id) | Task id. → `ops.staff_tasks` |
+| `staff_id` | uuid | yes |  | (id) | Staff member. → `core.staff_members` |
+| `kind` | text | yes | `due_soon`, `overdue`, `unacknowledged` | due_soon | What kind of row this is (allowed values listed). |
+| `window_key` | text | yes |  |  | Window key. |
+| `sent_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When it was sent (UTC). |
 
 ### `ops.eod_reports`
 

@@ -32,7 +32,8 @@ export type TaskAction = (typeof TASK_ACTIONS)[number];
  * (neither manager nor admin on a task you own or back up);
  * reviewer = the named reviewer or a holder of ops:tasks:review covering the owner;
  * creator = the user who logged the task (R18: the gate and cancel of assigned work are theirs);
- * collaborator = named on a task shared with collaborators (may comment).
+ * collaborator = named on a task shared with collaborators (reads; comments only when the
+ * setting tasks.peer_discussion is `allowed`).
  */
 export type TaskRole = 'owner' | 'manager' | 'admin' | 'reviewer' | 'creator' | 'collaborator';
 
@@ -51,6 +52,8 @@ export interface ActionContext {
   closedBy: 'owner' | 'manager';
   /** Setting tasks.reopen_roles (proposed) applied to this caller and task. */
   mayReopenApproved?: boolean;
+  /** Setting tasks.peer_discussion (owner-approved 23 Oct 2026); unset = hr_and_reviewer_only. */
+  peerDiscussion?: 'hr_and_reviewer_only' | 'allowed';
 }
 
 /** Work still with the assignee; `in_review` waits on the reviewer. */
@@ -208,7 +211,9 @@ const allowedBy = (action: TaskAction, t: LifecycleTask, ctx: ActionContext) => 
         ? ['owner', 'creator', 'admin']
         : action === 'reopen' && t.status === 'cancelled'
           ? cancelWho
-          : ACTION_RULES[action].who;
+          : action === 'comment' && ctx.peerDiscussion !== 'allowed'
+            ? ACTION_RULES.comment.who.filter((r) => r !== 'collaborator')
+            : ACTION_RULES[action].who;
   return who.some((r) => ctx.roles.includes(r as TaskRole));
 };
 

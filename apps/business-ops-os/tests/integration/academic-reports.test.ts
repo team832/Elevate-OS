@@ -485,7 +485,7 @@ describe('student reports (acceptance 5, 17, 21)', () => {
       status: 'final',
       reviewedBy: manager2.id,
       finalisedBy: manager.id,
-      templateVersion: 'progress-report/2',
+      templateVersion: 'progress-report/3',
     });
     const actions = (
       await ctx.db

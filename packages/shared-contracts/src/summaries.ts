@@ -349,7 +349,7 @@ export const academicTeacherActivityV1Schema = z.object({
   topicsCovered: z
     .array(z.object({ batchCode: z.string().min(1), subjectName: z.string().min(1), chapterTitle: z.string().min(1), classes: z.int().min(1) }))
     .optional(),
-  /** Added 23 Oct 2026 (optional): assessments created, and assessments with marks entered, by this teacher's sign-in in the window. */
+  /** Added 23 Oct 2026 (optional): assessments created, and assessments with marks entered or roster scores verified, by this teacher's sign-in in the window. */
   assessments: z
     .object({
       prepared: metricSchema,

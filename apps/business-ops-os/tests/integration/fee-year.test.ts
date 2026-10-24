@@ -196,9 +196,22 @@ describe('A-FEE-9 annual tuition: chart totals = drill-down', () => {
   });
 
   it('a chain continued on another admission counts once, for whoever sees its newest version', async () => {
-    expect((await feeYear(db(), counsellor, { year: '2022-23' })).rows).toHaveLength(0);
-    expect((await feeYear(db(), colleague, { year: '2022-23' })).rows).toHaveLength(1);
-    expect((await feeYear(db(), finance, { year: '2022-23' })).totals.students).toBe(1);
+    // The first counsellor is told how many students left the view (a count, no names).
+    expect(await feeYear(db(), counsellor, { year: '2022-23' })).toMatchObject({
+      rows: [],
+      continuedElsewhere: 1,
+    });
+    expect(await feeYear(db(), counsellor, { year: YEAR })).toMatchObject({
+      continuedElsewhere: 0,
+    });
+    expect(await feeYear(db(), colleague, { year: '2022-23' })).toMatchObject({
+      rows: [expect.anything()],
+      continuedElsewhere: 0,
+    });
+    expect(await feeYear(db(), finance, { year: '2022-23' })).toMatchObject({
+      totals: { students: 1 },
+      continuedElsewhere: 0,
+    });
   });
 
   it('with only drafts, the empty view still reports them', async () => {

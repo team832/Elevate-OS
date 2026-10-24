@@ -133,3 +133,7 @@ Format per `docs/BUILD_PLAN.md`: 1 Purpose · 2 Inputs · 3 Output · 4 Precondi
 8. **Permissions:** internal route (token + caller); `marketing:summary:read` exists for a future browser view.
 9. **Tests:** `integration/legacy-metrics-summary.test.ts` (“requires the service token and returns a valid contract …”).
 10. **Limitations:** MKT-037’s per-week “on time to original” and “overdue” are not in the v1 contract.
+
+
+## §12 Lead stage funnel, targets and conversion credit (owner brief 23 Oct 2026 §11, §15) — pointer
+The rules live in Business Operations, which owns leads: `apps/business-ops-os/docs/ALGORITHMS.md` → **A-LST-1** (stages, Converted only with a confirmed admission, first entry per lead and stage, credit to the owner at that moment from the ownership trail, fallback to the current owner with a note, own-view redaction). Marketing only counts the records Business Operations returns (`leadStageFunnel`, `leadMetricRecords`), so every funnel bar and target actual equals its drill-down. Attribution of verified admissions: policy `marketing.targets.admission_attribution` = `lead_owner_at_confirmation` (**Proposed**, `src/server/policy.ts`). Tests: `tests/integration/targets.test.ts`, `shell-overview.test.tsx`.

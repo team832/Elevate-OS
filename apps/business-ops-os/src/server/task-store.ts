@@ -74,7 +74,7 @@ export async function loadTaskFor(db: Database, actor: Actor, id: string, write:
   };
 }
 
-/** Edits, dependencies and work: any role but a mere reviewer or collaborator (they read and comment). */
+/** Edits, dependencies and work: any role but a mere reviewer or collaborator (they read; see ctxOf for comments). */
 export const editsTask = (roles: readonly TaskRole[]) =>
   roles.some((r) => r !== 'reviewer' && r !== 'collaborator');
 
@@ -186,7 +186,8 @@ export const mayReassign = (roles: readonly TaskRole[], life: LifecycleTask) =>
   REASSIGN_ROLES.some((r) => roles.includes(r)) || (life.selfLogged && roles.includes('owner'));
 
 /**
- * Roles plus the settings tasks.completion_without_reviewer and tasks.reopen_roles (proposed):
+ * Roles plus the settings tasks.completion_without_reviewer, tasks.reopen_roles (proposed) and
+ * tasks.peer_discussion (approved):
  * the named reviewer, the owner's line manager, or a holder of a listed role key who covers the
  * task may reopen an approved task.
  */
@@ -201,6 +202,7 @@ export async function ctxOf(
   return {
     roles,
     closedBy: s['tasks.completion_without_reviewer'].value.closedBy,
+    peerDiscussion: s['tasks.peer_discussion'].value.mode,
     mayReopenApproved:
       (who.includes('reviewer') && roles.includes('reviewer')) ||
       (who.includes('line_manager') && roles.includes('manager')) ||

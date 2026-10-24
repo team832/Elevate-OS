@@ -10,11 +10,11 @@ import { MANUAL_FEE_DISCLAIMER } from '../../../domain/fees';
 import { feeYear, owingStudents, OWING_SORTS, type OwingSort } from '../../../server/fee-year';
 import { DonutChart, StatCard } from '../../../ui/charts';
 import { shareLabels } from '../../../ui/chart-math';
-import { fmtPaise } from '../../../ui/format';
+import { fmtPaise, plural } from '../../../ui/format';
 import { load } from '../../../ui/frame';
 import { FilterForm, listHref } from '../../../ui/list-controls';
 import { Segment } from '../../../ui/sections';
-import { OwingDialog, plural } from './owing-dialog';
+import { OwingDialog } from './owing-dialog';
 
 type Params = Record<string, string | undefined>;
 const BASE = '/ops/fees';
@@ -46,6 +46,18 @@ export async function AnnualTuition({ user, sp }: { user: AuthenticatedUser; sp:
           title={`${plural(d.changesPending, 'agreement')} ${d.changesPending === 1 ? 'has' : 'have'} a change waiting for approval`}
         >
           Figures use the last approved version until the change is approved and activated.
+        </Alert>
+      ) : null}
+      {d.continuedElsewhere ? (
+        <Alert
+          title={
+            d.continuedElsewhere === 1
+              ? '1 student’s agreement continues under another counsellor'
+              : `${d.continuedElsewhere} students’ agreements continue under another counsellor`
+          }
+        >
+          Their current agreement is on an admission case you do not counsel, so they are not in
+          these figures.
         </Alert>
       ) : null}
       {d.withoutYear ? (

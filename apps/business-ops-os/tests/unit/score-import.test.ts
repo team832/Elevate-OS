@@ -148,7 +148,8 @@ describe('score import — reading the file', () => {
     const [row] = stage([',,Aarav Sample,,,5,,late entry']);
     expect(row!.errors).toEqual([]);
     expect(row!.warnings).toEqual([
-      { code: 'extra_cells', message: expect.stringContaining('late entry') },
+      // The value itself is never repeated in a message (raw cells are not stored).
+      { code: 'extra_cells', message: 'Cells beyond the last column were ignored.' },
     ]);
     expect(Object.values(row!.original)).toContain('late entry');
   });
@@ -192,6 +193,13 @@ describe('score import — marking schemes (Academic scoreBounds)', () => {
       ['estimated_floor'],
     ],
     ['the maximum still blocks', 'A,5.5', ['out_of_range'], []],
+    [
+      'a loose hard floor (10 × the maximum below 0) still blocks',
+      'A,-999999',
+      ['out_of_range'],
+      [],
+    ],
+    ['just above the loose floor only warns', 'A,-50', [], ['estimated_floor']],
     ['positive marks need no warning', 'A,3', [], []],
   ])('unknown question count: %s', (_, line, codes, warnings) => {
     // Really 10 questions at +1/−1 capped at 5: the estimate (5 questions, floor −5) is too high.

@@ -18,10 +18,10 @@ const ctx = setupTestDatabase();
 const PRIVATE = /guardian|email|phone|dateOfBirth/i;
 const NEVER = /kyc|aadhaar|pan|fee|paise|amount|document/i;
 
-/** Every private field is present but null, and no KYC/fee field exists at all. */
+/** No private, KYC or fee field exists at all (allow-list, brief §5): absent, not null. */
 function assertMinimised(student: Record<string, unknown>) {
   expect(Object.keys(student).filter((k) => NEVER.test(k))).toEqual([]);
-  expect(Object.fromEntries(Object.entries(student).filter(([k]) => PRIVATE.test(k)))).toEqual({ dateOfBirth: null, email: null, phone: null, guardianName: null, guardianRelationship: null, guardianEmail: null, guardianPhone: null });
+  expect(Object.keys(student).filter((k) => PRIVATE.test(k))).toEqual([]);
   expect(student.contactsHidden).toBe(true);
 }
 

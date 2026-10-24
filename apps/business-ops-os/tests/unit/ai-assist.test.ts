@@ -1,9 +1,16 @@
 /** AI draft helpers: redaction, value shapes, the adapter's not-set-up state, client imports. */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { namesToMask, redact, redactContacts, shapeOf } from '../../src/domain/ai-assist';
-import { aiAssist } from '../../src/server/adapters/ai-assist';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  AI_FAILED,
+  namesToMask,
+  redact,
+  redactContacts,
+  shapeOf,
+} from '../../src/domain/ai-assist';
+import { AI_FAILED as SHARED_AI_FAILED, aiAssist } from '@elevate/server-kit/ai';
+import { resolveSettings } from '../../src/domain/policies';
 
 describe('redact (feedback text before it is sent)', () => {
   it.each([
@@ -89,29 +96,108 @@ describe('shapeOf (a CSV value is never sent, only its shape)', () => {
   ])('%s → %s', (v, shape) => expect(shapeOf(v)).toBe(shape));
 });
 
-describe('aiAssist adapter', () => {
-  it.each([{}, { OPENAI_API_KEY: 'test-only-k' }, { OPENAI_MODEL: 'test-model' }])(
-    'not configured without both key and model (no default model): %o',
+describe('aiAssist adapter (D-110: Groq, then Gemini, then OpenRouter)', () => {
+  const all = {
+    GROQ_API_KEY: 'test-only-groq',
+    GROQ_MODEL: 'g',
+    GROQ_BASE_URL: 'https://groq.test/v1',
+    GEMINI_API_KEY: 'test-only-gemini',
+    GEMINI_MODEL: 'm',
+    GEMINI_BASE_URL: 'https://gemini.test/v1beta',
+    OPENROUTER_API_KEY: 'test-only-or',
+    OPENROUTER_MODEL: 'o',
+    OPENROUTER_BASE_URL: 'https://or.test/v1',
+  };
+  const req = { name: 'x', instructions: 'i', input: 'in', schema: {} };
+  const chatOk = () =>
+    Response.json({ choices: [{ finish_reason: 'stop', message: { content: '{"a":1}' } }] });
+  const geminiOk = () =>
+    Response.json({
+      candidates: [
+        { finishReason: 'STOP', content: { parts: [{ text: '```json\n{"a":2}\n```' }] } },
+      ],
+    });
+  const hosts: string[] = [];
+  const fake = (replies: Record<string, () => Response>) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const host = new URL(String(input)).host;
+        hosts.push(host);
+        return replies[host]?.() ?? new Response('down', { status: 503 });
+      }),
+    );
+  afterEach(() => {
+    hosts.length = 0;
+    vi.unstubAllGlobals();
+  });
+
+  it.each([{}, { GROQ_API_KEY: 'test-only-k' }, { GEMINI_MODEL: 'test-model' }])(
+    'not configured without a key and model for some provider (no default model): %o',
     (env) => expect(aiAssist(env).status).toBe('not_configured'),
   );
   it.each(['http://ai.example.test/v1', 'ftp://x'])('refuses a non-https address %s', (url) =>
     expect(
-      aiAssist({ OPENAI_API_KEY: 'test-only-k', OPENAI_MODEL: 'm', OPENAI_BASE_URL: url }).status,
+      aiAssist({ GROQ_API_KEY: 'test-only-k', GROQ_MODEL: 'm', GROQ_BASE_URL: url }).status,
     ).toBe('not_configured'),
   );
-  it('configured with both', () =>
-    expect(aiAssist({ OPENAI_API_KEY: 'test-only-k', OPENAI_MODEL: 'test-model' }).status).toBe(
+  it('the shared failure message is the one the screens show', () =>
+    expect(SHARED_AI_FAILED).toBe(AI_FAILED));
+  it('configured with one provider', () =>
+    expect(aiAssist({ OPENROUTER_API_KEY: 'test-only-k', OPENROUTER_MODEL: 'o' }).status).toBe(
       'configured',
     ));
+  it('asks Groq first', async () => {
+    fake({ 'groq.test': chatOk });
+    expect(await aiAssist(all).draft(req)).toEqual({ a: 1 });
+    expect(hosts).toEqual(['groq.test']);
+  });
+  it('moves on to Gemini when Groq fails, and reads a fenced answer', async () => {
+    fake({ 'gemini.test': geminiOk });
+    expect(await aiAssist(all).draft(req)).toEqual({ a: 2 });
+    expect(hosts).toEqual(['groq.test', 'gemini.test']);
+  });
+  it('a PDF skips Groq (it cannot read files)', async () => {
+    fake({ 'or.test': chatOk });
+    await aiAssist(all).draft({ ...req, file: { name: 'f.pdf', base64: 'eA==' } });
+    expect(hosts).toEqual(['gemini.test', 'or.test']);
+  });
+  it('all fail: the last failure, with every provider tried once', async () => {
+    fake({ 'or.test': () => Response.json({ choices: [{ finish_reason: 'length' }] }) });
+    await expect(aiAssist(all).draft(req)).rejects.toMatchObject({ reason: 'invalid_output' });
+    expect(hosts).toEqual(['groq.test', 'gemini.test', 'or.test']);
+  });
 });
 
 describe('client components never import server code', () => {
   const src = path.resolve(__dirname, '../../src');
-  it.each(['ui/ai-draft.tsx', 'app/hr/attendance/_components/import-upload.tsx'])('%s', (file) => {
+  it.each([
+    'ui/ai-draft.tsx',
+    'app/hr/attendance/_components/import-upload.tsx',
+    'app/tests/_components/score-upload.tsx',
+    'app/tests/_components/import-review.tsx',
+  ])('%s', (file) => {
     const code = readFileSync(path.join(src, file), 'utf8');
     expect(code.startsWith("'use client'")).toBe(true);
     const imports = [...code.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
     expect(imports.filter((i) => /server|adapters/.test(i!))).toEqual([]);
     expect(code).not.toContain('process.env');
+  });
+});
+
+describe('ai.features setting (D-111)', () => {
+  it('a value stored before studentSummary existed still loads, with the new helper on', () => {
+    const stored = { feedbackSummary: false, reportDraft: true, taskBrief: true, csvMapping: true };
+    const s = resolveSettings([
+      {
+        key: 'ai.features',
+        value: { ...stored, scoreSheet: true },
+        decisionState: 'approved',
+        source: null,
+        ownerDecision: null,
+      },
+    ])['ai.features'];
+    expect(s.origin).toBe('stored');
+    expect(s.value).toEqual({ ...stored, scoreSheet: true, studentSummary: true });
   });
 });

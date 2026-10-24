@@ -1,4 +1,4 @@
-import { DataTable, EmptyState } from '@elevate/shared-ui';
+import { DataTable, EmptyState, SourceBadge } from '@elevate/shared-ui';
 import { formatIst, modulePath, type AggregateGroup } from '../domain';
 import { MetricCell } from './badges';
 
@@ -9,10 +9,18 @@ export interface CampaignRow {
   startsOn: string | null;
   endsOn: string | null;
   status: string;
+  isSample?: boolean;
   placements: number;
   publishedLive: number;
   results: AggregateGroup;
 }
+
+export const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  active: 'Active',
+  ended: 'Ended',
+  cancelled: 'Cancelled',
+};
 
 export const campaignDates = (c: Pick<CampaignRow, 'startsOn' | 'endsOn'>) =>
   `${c.startsOn ?? 'no start date'} to ${c.endsOn ?? 'no end date'}`;
@@ -40,12 +48,16 @@ export function CampaignResultsTable({
               <a href={modulePath(`campaigns/${c.id}`)}>
                 <strong>{c.code}</strong>
               </a>{' '}
-              {c.name}
+              {c.name} {c.isSample ? <SourceBadge source="sample" /> : null}
             </>
           ),
         },
         { key: 'dates', header: 'Dates', render: campaignDates },
-        { key: 'status', header: 'Status', render: (c) => c.status },
+        {
+          key: 'status',
+          header: 'Status',
+          render: (c) => CAMPAIGN_STATUS_LABELS[c.status] ?? c.status,
+        },
         { key: 'placements', header: 'Placements', numeric: true, render: (c) => c.placements },
         {
           key: 'live',

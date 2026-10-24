@@ -6,7 +6,8 @@
   "description": "defineRoute for Next.js route handlers (session, permission, zod validation, envelope, requestId, JSON logs), transactions, audit, approvals, transactional outbox, internal-service auth, idempotency keys, health handler.",
   "exports": {
     ".": "./src/index.ts",
-    "./next": "./src/next.ts"
+    "./next": "./src/next.ts",
+    "./ai": "./src/ai.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

@@ -41,6 +41,8 @@ export const reportBody = z
       ])
       .optional(),
     acknowledgement: z.boolean().default(false),
+    /** Written by a person, perhaps from an AI draft (D-111); printed as "Overall comment". */
+    comment: optText(2000),
   })
   .strict()
   .refine((b) => b.from <= b.to, { error: 'The start must be on or before the end', path: ['to'] });

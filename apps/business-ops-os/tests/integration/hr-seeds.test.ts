@@ -39,7 +39,7 @@ beforeAll(async () => {
   await setupReference(db());
 });
 
-describe('satish@elevateeducation.in (development assumption)', () => {
+describe('teacher logins (development assumptions)', () => {
   it('refuses before the owner-supplied staff exist', async () => {
     await expect(seedDevAssumptionAccounts(db(), 'test-only-hash-1')).rejects.toThrow(/db:seed/);
   });
@@ -56,8 +56,29 @@ describe('satish@elevateeducation.in (development assumption)', () => {
     expect(roles.map((r) => r.role)).toEqual(['teacher']);
   });
 
+  it.each([
+    ['soma@elevateeducation.in', 'Soma'],
+    ['nikunjbindal@elevateeducation.in', 'Nikunj Bindal'],
+    ['tushar@elevateeducation.in', 'Tushar Bhakte'],
+  ])('%s is linked to the staff record "%s" only, as a teacher', async (email, name) => {
+    const [u] = await db().select().from(users).where(eq(users.email, email));
+    const linked = await db().select().from(staffMembers).where(eq(staffMembers.userId, u!.id));
+    expect(linked.map((s) => s.fullName)).toEqual([name]);
+    const roles = await db().select().from(userRoles).where(eq(userRoles.userId, u!.id));
+    expect(roles.map((r) => r.role)).toEqual(['teacher']);
+    if (name === 'Soma') expect(u!.displayName).toMatch(/owner to confirm/);
+  });
+
+  it('never links soma@ to Soma Tiwari', async () => {
+    const [tiwari] = await db()
+      .select()
+      .from(staffMembers)
+      .where(eq(staffMembers.fullName, 'Soma Tiwari'));
+    expect(tiwari!.userId).toBeNull();
+  });
+
   it('db:clear-samples disables and unlinks it; Satish’s record stays active', async () => {
-    expect(await disableDemoAccounts(db())).toBe(1);
+    expect(await disableDemoAccounts(db())).toBe(DEV_ASSUMPTION_ACCOUNTS.length);
     const [u] = await db().select().from(users).where(eq(users.email, EMAIL));
     expect(u).toMatchObject({ status: 'disabled', passwordHash: null });
     expect(await satish()).toMatchObject({ userId: null, status: 'active' });
@@ -102,16 +123,18 @@ describe('db:clear-samples and the HR sample tables', () => {
       isSample: true,
       approvedBy: hr.id,
     });
-    await db().insert(opsTeacherFeedbackSummaries).values({
-      teacherStaffId: sample!.id,
-      periodStart: '2026-09-01',
-      periodEnd: '2026-09-30',
-      responseCount: 6,
-      ratingScaleMax: 5,
-      categoryMeans: { categories: {} },
-      isSample: true,
-      createdBy: hr.id,
-    });
+    await db()
+      .insert(opsTeacherFeedbackSummaries)
+      .values({
+        teacherStaffId: sample!.id,
+        periodStart: '2026-09-01',
+        periodEnd: '2026-09-30',
+        responseCount: 6,
+        ratingScaleMax: 5,
+        categoryMeans: { categories: {} },
+        isSample: true,
+        createdBy: hr.id,
+      });
     const counts = await clearSamples(db());
     expect(counts).toMatchObject({
       'ops.daily_attendance': 1,

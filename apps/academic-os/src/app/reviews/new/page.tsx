@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
 import { ButtonLink, Card, EmptyState, PageHeader } from '@elevate/shared-ui';
-import { reviewTarget, reviewableStudents } from '../../../server';
+import { reviewChoices, reviewTarget, reviewableStudents } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
@@ -22,9 +22,9 @@ export default async function NewReviewPage({ searchParams }: { searchParams: Pr
   const db = getDb();
   const actor = actorFor(access.user);
   const prefilled = Boolean(ref.studentId || ref.coreStudentId);
-  const data = await load(async () => (prefilled ? { target: await reviewTarget(db, actor, ref), students: [] } : { target: null, students: await reviewableStudents(db, actor) }));
+  const data = await load(async () => ({ ...(prefilled ? { target: await reviewTarget(db, actor, ref), students: [] } : { target: null, students: await reviewableStudents(db, actor) }), choices: ref.coreStudentId ? undefined : await reviewChoices(db, actor) }));
   if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError error={data.error} /></AcademicShell>;
-  const { target, students } = data.data;
+  const { target, students, choices } = data.data;
   const extra = target?.demo
     ? { coreStudentId: ref.coreStudentId, opsDemoSessionId: ref.opsDemoSessionId, sessionId: target.sessionId ?? undefined }
     : target
@@ -35,7 +35,7 @@ export default async function NewReviewPage({ searchParams }: { searchParams: Pr
     <AcademicShell access={access} active="reviews">
       <PageHeader
         title={target ? `Review — ${target.name}` : 'Write a review'}
-        description="Write what you saw in class. A draft is visible only to you; once submitted it is shared with coordinators and authorised Business Ops staff, and it is never edited — you can revise it as a new version or withdraw it."
+        description="Write what you saw in class. A draft is visible only to you. Once published it is shared with coordinators, the student’s other teachers of the same subject and authorised Business Operations staff, and it is never edited: revise it as a new version or withdraw it. Student feedback about teachers is a separate record."
         actions={<ButtonLink href={MODULE_PATHS.reviews}>All reviews</ButtonLink>}
       />
       <Card>
@@ -45,10 +45,10 @@ export default async function NewReviewPage({ searchParams }: { searchParams: Pr
           <ApiForm
             action={MODULE_PATHS.api('reviews')}
             extra={extra}
-            fields={[...studentField, typeField(Boolean(target?.demo)), ...reviewFields()]}
-            submitLabel="Submit review"
+            fields={[...studentField, typeField(Boolean(target?.demo)), ...reviewFields({}, choices)]}
+            submitLabel="Publish review"
             draftLabel="Save draft"
-            successMessage="Submitted."
+            successMessage="Published."
             stickyActions
             goTo="/reviews/{id}"
             idPrefix="review"

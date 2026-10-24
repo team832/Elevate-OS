@@ -58,8 +58,10 @@ export interface MarkingRules {
 export interface MarkRange {
   minUnits: MarkUnits;
   maxUnits: MarkUnits;
-  /** A question count is unknown, so the floor is only an estimate: negatives warn, never block. */
+  /** A question count is unknown, so the floor is only an estimate: negatives warn above `floorUnits`. */
   estimated: boolean;
+  /** Below this nothing is possible: `minUnits`, or when estimated 10 × the larger of max and |estimate| below 0. */
+  floorUnits: MarkUnits;
 }
 export type ScoreRanges =
   | { ok: true; total: MarkRange; sections: Record<string, MarkRange> }
@@ -99,10 +101,15 @@ export function scoreRanges(rules: MarkingRules): ScoreRanges {
     if (problems.length || perCorrect === null) continue;
     // shortcut: unknown count → cap ÷ perCorrect questions; the floor is then only an estimate.
     const n = s.questionCount ?? Math.ceil(cap! / perCorrect);
+    const minUnits = n * worst;
+    const maxUnits = cap === null ? n * perCorrect : Math.min(n * perCorrect, cap);
+    const estimated = s.questionCount === null && worst < 0;
+    // A loose hard floor for estimates, so a stray "-999999" is still blocked.
     const range = {
-      minUnits: n * worst,
-      maxUnits: cap === null ? n * perCorrect : Math.min(n * perCorrect, cap),
-      estimated: s.questionCount === null && worst < 0,
+      minUnits,
+      maxUnits,
+      estimated,
+      floorUnits: estimated ? -10 * Math.max(maxUnits, -minUnits) : minUnits,
     };
     if (range.maxUnits < range.minUnits)
       fail(
@@ -119,6 +126,7 @@ export function scoreRanges(rules: MarkingRules): ScoreRanges {
       minUnits: all.reduce((a, r) => a + r.minUnits, 0),
       maxUnits: all.reduce((a, r) => a + r.maxUnits, 0),
       estimated: all.some((r) => r.estimated),
+      floorUnits: all.reduce((a, r) => a + r.floorUnits, 0),
     },
   };
 }
@@ -314,20 +322,19 @@ export function stageScoreRows(
     if (original[EXTRA_CELLS])
       warnings.push({
         code: 'extra_cells',
-        message: `Cells beyond the last column were ignored: ${original[EXTRA_CELLS]}.`,
+        message: "Cells beyond the last column were ignored.",
       });
     const inRange = (u: MarkUnits | null, what: string, r: MarkRange) => {
       if (u === null) return;
-      if (u < 0 && r.estimated) {
-        if (!warnings.some((w) => w.code === 'estimated_floor'))
-          warnings.push({
-            code: 'estimated_floor',
-            message: `${what} ${formatUnits(u)} is negative and a question count is unknown, so the lowest possible mark cannot be checked (estimate: ${formatUnits(r.minUnits)}).`,
-          });
-      } else if (u < r.minUnits || u > r.maxUnits)
+      if (u < r.floorUnits || u > r.maxUnits)
         errors.push({
           code: 'out_of_range',
-          message: `${what} ${formatUnits(u)} is outside ${formatUnits(r.minUnits)} to ${formatUnits(r.maxUnits)}.`,
+          message: `${what} ${formatUnits(u)} is outside ${formatUnits(r.floorUnits)} to ${formatUnits(r.maxUnits)}.`,
+        });
+      else if (u < 0 && r.estimated && !warnings.some((w) => w.code === 'estimated_floor'))
+        warnings.push({
+          code: 'estimated_floor',
+          message: `${what} ${formatUnits(u)} is negative and a question count is unknown, so the lowest possible mark cannot be checked (estimate: ${formatUnits(r.minUnits)}).`,
         });
     };
     const mark = (f: ScoreField, what: string) => {

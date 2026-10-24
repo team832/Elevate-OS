@@ -55,6 +55,7 @@ import {
   signedApplication,
   type People,
 } from './application-fixtures';
+import { istToday } from '../../src/domain/dates';
 
 const ctx = setupTestDatabase();
 let manager: StaffUser;
@@ -539,7 +540,7 @@ describe('documents (acceptance 18, 21)', () => {
       post(counsellor, {
         version: draft.currentVersion,
         formId: printed.form.id,
-        signedOn: new Date().toISOString().slice(0, 10),
+        signedOn: istToday(new Date()),
         studentSigned: true,
         guardianSigned: true,
       }),

@@ -20,6 +20,13 @@ import { createdAt, filled, inList, instant, ops, userRef } from './ops-columns'
 
 export type OpsAttachmentId = Brand<string, 'OpsAttachmentId'>;
 
+/** Added in 0016: HR requests, question papers, answer keys, score files. */
+export const OPS_ATTACHMENT_0016_OWNER_KINDS = [
+  'hr_request',
+  'assessment_paper',
+  'assessment_key',
+  'score_import',
+] as const;
 export const OPS_ATTACHMENT_OWNER_KINDS = [
   'task',
   'task_submission',
@@ -29,17 +36,7 @@ export const OPS_ATTACHMENT_OWNER_KINDS = [
   'feedback_evidence',
   'work_report',
   'staff_private',
-] as const;
-/**
- * Accepted by the database since 0016 (HR requests, question papers, answer keys, score files).
- * shortcut: kept out of the column's TypeScript type until ATTACHMENT_ACCESS has a rule for each;
- * move them into OPS_ATTACHMENT_OWNER_KINDS when wave 3 adds those rules.
- */
-export const OPS_ATTACHMENT_PENDING_OWNER_KINDS = [
-  'hr_request',
-  'assessment_paper',
-  'assessment_key',
-  'score_import',
+  ...OPS_ATTACHMENT_0016_OWNER_KINDS,
 ] as const;
 export const OPS_ATTACHMENT_PURPOSES = [
   'reference',
@@ -87,7 +84,7 @@ export const opsAttachments = ops.table(
       .where(sql`${t.supersedesAttachmentId} IS NOT NULL`),
     check(
       'attachments_owner_kind_check',
-      sql`${t.ownerKind} IN ${inList([...OPS_ATTACHMENT_OWNER_KINDS, ...OPS_ATTACHMENT_PENDING_OWNER_KINDS])}`,
+      sql`${t.ownerKind} IN ${inList(OPS_ATTACHMENT_OWNER_KINDS)}`,
     ),
     check(
       'attachments_version_check',

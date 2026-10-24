@@ -1,0 +1,14 @@
+/* Marketing calendar additions to marketing.css: empty days stay quiet (hidden in the phone list),
+ * movable cards show they can be dragged. */
+.mkt-day[data-empty] .mkt-day-head {
+  color: var(--el-text-muted);
+  font-weight: 500;
+}
+.mkt-slot[draggable='true'] {
+  cursor: grab;
+}
+@media (max-width: 719px) {
+  .mkt-day[data-empty] {
+    display: none;
+  }
+}

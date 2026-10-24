@@ -13,6 +13,7 @@ import { defineSeed, type SeedDefinition } from '@elevate/database/seed';
 import { runEnrolmentIntake } from '@elevate/academic-os/server';
 import { processEnrolmentReplies } from '@elevate/business-ops-os/server';
 import { seedSampleLifecycle } from '@elevate/business-ops-os/seed';
+import { sampleTestSeed } from './sample-tests';
 
 export const seeds: readonly SeedDefinition[] = [
   defineSeed({
@@ -38,4 +39,5 @@ export const seeds: readonly SeedDefinition[] = [
       await seedSampleLifecycle(db, log);
     },
   }),
+  sampleTestSeed,
 ];

@@ -1,0 +1,53 @@
+/* New-notification toasts (components/notify.tsx): bottom corner, above the page, never modal. */
+.el-toasts {
+  position: fixed;
+  inset-inline-end: var(--el-space-4);
+  inset-block-end: var(--el-space-4);
+  z-index: 45;
+  display: grid;
+  gap: var(--el-space-2);
+  width: min(22rem, calc(100vw - 2 * var(--el-space-4)));
+  pointer-events: none;
+}
+.el-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--el-space-3);
+  padding: var(--el-space-3) var(--el-space-4);
+  background: var(--el-overlay);
+  border: 1px solid var(--el-border);
+  border-radius: var(--el-radius);
+  box-shadow: var(--el-shadow-overlay);
+  color: var(--el-text);
+  pointer-events: auto;
+  animation: el-toast-in var(--el-dur) var(--el-ease);
+}
+.el-toast-link {
+  flex: 1;
+  min-width: 0;
+  color: var(--el-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.el-toast-close {
+  flex: none;
+  min-height: 2.75rem;
+  padding: 0 var(--el-space-2);
+  border: 0;
+  background: none;
+  color: var(--el-text-muted);
+  font: inherit;
+  font-size: var(--el-text-sm);
+  cursor: pointer;
+}
+@keyframes el-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .el-toast {
+    animation: none;
+  }
+}

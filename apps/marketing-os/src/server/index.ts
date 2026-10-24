@@ -22,6 +22,8 @@ export * from './metrics';
 export * from './reports';
 export * from './summary';
 export * from './dashboard';
+export * from './calendar';
+export * from './calendar-plan';
 export * from './legacy';
 export {
   MockPublishingAdapter,

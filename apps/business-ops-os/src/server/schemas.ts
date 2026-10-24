@@ -79,7 +79,9 @@ export const updateLeadBody = z
     interestMode: z.enum(['offline', 'online', 'undecided']).optional(),
     notes: optText(2000),
   })
-  .partial();
+  .partial()
+  // Unknown keys → 400: a stage sent here would be silently dropped; stages change via the stage route.
+  .strict();
 export type UpdateLeadInput = z.output<typeof updateLeadBody>;
 
 export const listLeadsQuery = z.object({
@@ -209,6 +211,7 @@ export const OPS_JOBS = [
   'follow-up-reminders',
   'enrolment-replies',
   'demo-academic-marks',
+  'task-reminders',
 ] as const;
 export const jobParams = z.object({ job: z.enum(OPS_JOBS) });
 export const dashboardQuery = z.object({

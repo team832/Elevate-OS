@@ -17,7 +17,7 @@ import { withTransaction } from '@elevate/server-kit';
 import { NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import type { BatchId, StudentId } from '@elevate/shared-types';
 import type { z } from 'zod';
-import { assertStudentInScope, audit, resolveScope, studentIdsInScope, todayIst, type Actor } from '../context';
+import { assertStudentInScope, audit, resolveScope, studentIdsInScope, todayIst, type Actor, type Scope } from '../context';
 import type { createStudentBody, manualEnrolmentBody } from '../schemas';
 import { lockOpenBatch, placementHistory, startPlacement, withReasons } from './placements';
 
@@ -28,11 +28,19 @@ export function newStudentCode(): string {
   return `STU-${crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 }
 
-export function presentStudent(row: StudentRow, showContacts: boolean) {
-  const { email, phone, guardianName, guardianRelationship, guardianEmail, guardianPhone, dateOfBirth, ...rest } = row;
-  return showContacts
-    ? { ...rest, dateOfBirth, email, phone, guardianName, guardianRelationship, guardianEmail, guardianPhone, contactsHidden: false }
-    : { ...rest, dateOfBirth: null, email: null, phone: null, guardianName: null, guardianRelationship: null, guardianEmail: null, guardianPhone: null, contactsHidden: true };
+/** Brief §5 allow-lists for teachers (own scope): no contact, guardian, Ops reference, city, school board or manual reason. */
+const STUDENT_FIELDS = ['id', 'code', 'fullName', 'preferredName', 'currentStage', 'status', 'isSample'] as const;
+const ENROLMENT_FIELDS = ['id', 'programmeId', 'courseId', 'batchId', 'status', 'startDate', 'academicYear', 'lateJoiner', 'source'] as const;
+const pick = <T, K extends keyof T>(row: T, keys: readonly K[]) => Object.fromEntries(keys.map((k) => [k, row[k]])) as Pick<T, K>;
+
+/** full = academic:students:write; teacher = own scope (allow-lists); hidden = other read-only roles (director, auditor): the record with contacts nulled (PLT-014). */
+type View = 'full' | 'teacher' | 'hidden';
+const viewFor = (actor: Actor, scope: Scope): View => (can(actor.user, 'academic:students:write') ? 'full' : scope.kind === 'own' ? 'teacher' : 'hidden');
+
+export function presentStudent(row: StudentRow, view: View) {
+  if (view === 'full') return { ...row, contactsHidden: false as const };
+  if (view === 'teacher') return { ...pick(row, STUDENT_FIELDS), contactsHidden: true as const };
+  return { ...row, dateOfBirth: null, email: null, phone: null, guardianName: null, guardianRelationship: null, guardianEmail: null, guardianPhone: null, contactsHidden: true as const };
 }
 
 export async function listStudents(db: Database, actor: Actor, filter: { batchId?: string; q?: string } = {}) {
@@ -58,9 +66,9 @@ export async function listStudents(db: Database, actor: Actor, filter: { batchId
         .leftJoin(academicBatches, eq(academicBatches.id, academicEnrolments.batchId))
         .where(inArray(academicEnrolments.studentId, rows.map((r) => r.id)))
     : [];
-  const showContacts = can(actor.user, 'academic:students:write');
+  const view = viewFor(actor, scope);
   return rows.map((r) => ({
-    ...presentStudent(r, showContacts),
+    ...presentStudent(r, view),
     batches: enrolments.filter((e) => e.studentId === r.id && e.status === 'active').map((e) => e.batchCode ?? '(awaiting batch)'),
   }));
 }
@@ -79,12 +87,13 @@ export async function getStudentRecord(db: Database, actor: Actor, studentId: st
     .where(eq(academicEnrolments.studentId, row.id));
   const visibleBatches = scope.kind === 'own' ? new Set<string>(scope.batchIds) : null;
   const placements = withReasons(actor, (await placementHistory(db, { studentId: row.id })).filter((p) => !visibleBatches || visibleBatches.has(p.batchId)));
+  const view = viewFor(actor, scope);
   return {
     placements,
-    student: presentStudent(row, can(actor.user, 'academic:students:write')),
+    student: presentStudent(row, view),
     enrolments: enrolments
       .filter((e) => !visibleBatches || (e.enrolment.batchId && visibleBatches.has(e.enrolment.batchId)))
-      .map((e) => ({ ...e.enrolment, batchCode: e.batchCode, courseCode: e.courseCode, programmeCode: e.programmeCode })),
+      .map((e) => ({ ...(view === 'teacher' ? pick(e.enrolment, ENROLMENT_FIELDS) : e.enrolment), batchCode: e.batchCode, courseCode: e.courseCode, programmeCode: e.programmeCode })),
   };
 }
 
@@ -109,7 +118,7 @@ export async function createStudent(db: Database, actor: Actor, input: z.output<
       })
       .returning();
     await audit(tx, actor, { action: 'student.created', entityType: 'student', entityId: row!.id, after: { id: row!.id, code: row!.code } });
-    return presentStudent(row!, true);
+    return presentStudent(row!, 'full');
   });
 }
 

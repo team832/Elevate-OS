@@ -35,6 +35,7 @@ import {
 } from './context';
 import { opsAudit } from './ops-common';
 import { createRuleFollowUp } from './follow-ups';
+import { setInitialLeadStage } from './lead-stages';
 import { createAdmissionRecord } from './pipeline';
 import { lockWorkableLead, maskedLead, notifyAssigned, type LeadRow } from './leads-access';
 import type { CreateLeadInput, EnquiryInput, UpdateLeadInput } from './schemas';
@@ -123,7 +124,7 @@ export async function createLead(
     }
     const code = await nextCode(tx, 'lead', 'ops.leads');
     const now = new Date();
-    const [lead] = await tx
+    const [inserted] = await tx
       .insert(opsLeads)
       .values({
         code,
@@ -147,7 +148,8 @@ export async function createLead(
         createdBy: actor.id,
       })
       .returning();
-    if (!lead) throw new Error('lead insert returned no row');
+    if (!inserted) throw new Error('lead insert returned no row');
+    const lead = await setInitialLeadStage(tx, actor, inserted, requestId);
     await tx
       .insert(opsEnquiries)
       .values(enquiryValues(lead.id, input, programme?.id ?? null, receivedAt, actor.id));

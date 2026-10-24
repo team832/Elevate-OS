@@ -425,11 +425,12 @@ describe('tasks and end-of-day reports', () => {
     for (const t of [
       'None recorded',
       'No acceptance criteria recorded',
-      'Not yet',
       '0% (self-reported)',
       'No review step: the owner marks it done',
       'Not specified',
-      'Not delivered in-app · Not yet acknowledged',
+      'Delivered: not yet',
+      'Read: not yet',
+      'Acknowledged: not yet',
     ])
       expect(out).toContain(t);
     expect(out).not.toContain('Related lead');

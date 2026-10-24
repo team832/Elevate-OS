@@ -6,6 +6,8 @@ import {
   recordScoresBody,
   rosterCorrectionBody,
   rosterFactsProblem,
+  rosterRowSchema,
+  rosterSnapshotBody,
   updateAssessmentInternalBody,
 } from '../src/index';
 
@@ -164,4 +166,44 @@ it('teacher activity v1 stays valid without the new assessment counts', () => {
       assessments: { prepared: m, marked: m, assigned: m, published: m },
     }).success,
   ).toBe(true);
+});
+
+describe('import source vocabulary and roster rows (R-FND fixes)', () => {
+  it.each([
+    ['csv', true],
+    ['pdf_ai', true],
+    ['manual', true],
+    ['pdf_assisted', false],
+  ])('recordScoresBody source %s', (source, ok) => {
+    expect(recordScoresBody.safeParse({ source, rows: [row] }).success).toBe(ok);
+  });
+
+  it('roster rows carry the student code (nullable), snapshot bodies carry Ops admission numbers', () => {
+    const r = {
+      rosterId: uuid(1),
+      studentId: uuid(2),
+      coreStudentId: null,
+      admissionNumber: null,
+      displayName: 'Sample A (fictional)',
+      batchId: uuid(3),
+      batchCode: 'B-1',
+      attendance: 'present',
+      marksState: 'verified',
+      score: '0',
+      rank: 1,
+      addedReason: null,
+      removedAt: null,
+      removedReason: null,
+      version: 1,
+      isSample: true,
+    };
+    expect(rosterRowSchema.safeParse(r).success).toBe(false);
+    expect(rosterRowSchema.safeParse({ ...r, studentCode: 'STU-1' }).success).toBe(true);
+    expect(rosterRowSchema.safeParse({ ...r, studentCode: null }).success).toBe(true);
+    expect(rosterSnapshotBody.parse({})).toEqual({ admissionNumbers: [] });
+    expect(
+      rosterSnapshotBody.safeParse({ admissionNumbers: [{ coreStudentId: uuid(4), admissionNumber: '' }] })
+        .success,
+    ).toBe(false);
+  });
 });

@@ -3,40 +3,11 @@
 import {
   changeIdeaStatus,
   createContentItem,
-  createIdea,
-  createIdeaBody,
   createContentItemBody,
   ideaStatusBody,
   verifyAccountConnection,
 } from '../../server';
-import { go, run, str, strs } from './common';
-
-export async function createIdeaAction(form: FormData): Promise<void> {
-  const parsed = createIdeaBody.safeParse({
-    coursePrefix: str(form, 'coursePrefix'),
-    title: str(form, 'title'),
-    pillar: str(form, 'pillar') ?? null,
-    series: str(form, 'series') ?? null,
-    objective: str(form, 'objective') ?? null,
-    audience: str(form, 'audience') ?? null,
-    brief: str(form, 'brief') ?? null,
-    source: str(form, 'source') ?? null,
-    masterAsset: str(form, 'masterAsset') ?? null,
-    scope: str(form, 'scope'),
-    scopePrefixes: strs(form, 'scopePrefixes').length ? strs(form, 'scopePrefixes') : undefined,
-  });
-  if (!parsed.success) {
-    go('ideas/new', {
-      error: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
-    });
-  }
-  const res = await run((db, user) => createIdea(db, user, parsed.data));
-  if (!res.ok) go('ideas/new', { error: res.error });
-  const warn = res.value.duplicates.candidates.length;
-  go(`ideas/${res.value.idea.id}`, {
-    notice: `Created ${res.value.idea.code}.${warn ? ` ${warn} possible duplicate(s) listed below — check them.` : ''}`,
-  });
-}
+import { go, run, str } from './common';
 
 export async function changeIdeaStatusAction(form: FormData): Promise<void> {
   const id = str(form, 'ideaId') ?? '';

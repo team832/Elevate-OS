@@ -5,6 +5,7 @@ import { syncDemosFromAcademic } from '../../../../../server/demos';
 import { processEnrolmentReplies } from '../../../../../server/enrolment';
 import { runFollowUpReminders } from '../../../../../server/follow-ups';
 import { jobParams, type OPS_JOBS } from '../../../../../server/schemas';
+import { runTaskReminders } from '../../../../../server/task-reminders';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,7 @@ const JOBS: Record<(typeof OPS_JOBS)[number], Run> = {
   'follow-up-reminders': (db, actor, requestId) => runFollowUpReminders(db, { actor, requestId }),
   'enrolment-replies': (db, actor) => processEnrolmentReplies(db, { actor }),
   'demo-academic-marks': (db, actor, requestId) => syncDemosFromAcademic(db, actor, requestId),
+  'task-reminders': (db, actor, requestId) => runTaskReminders(db, { actor, requestId }),
 };
 
 /**

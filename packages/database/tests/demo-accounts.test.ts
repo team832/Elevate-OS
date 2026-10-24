@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
-import { departments, staffMembers, userRoles, users } from '../src/index';
+import { departments, opsStaffProfiles, staffMembers, userRoles, users } from '../src/index';
 import {
   DEMO_ACCOUNTS,
   DEMO_EMAILS,
+  MARKETING_EMPLOYEES,
   assertDemoSeedAllowed,
   disableDemoAccounts,
+  ensureDemoStaff,
   seedDemoAccounts,
 } from '../src/seed';
 import { createTestDb, type TestDatabase } from '../src/testing';
@@ -14,7 +16,7 @@ let t: TestDatabase;
 beforeAll(async () => {
   t = await createTestDb();
   await t.db.insert(departments).values(
-    ['LEADERSHIP_OPERATIONS', 'ACADEMICS', 'MARKETING_GROWTH'].map((code) => ({
+    ['LEADERSHIP_OPERATIONS', 'ACADEMICS', 'MARKETING_GROWTH', 'HUMAN_RESOURCES'].map((code) => ({
       code,
       name: code,
     })),
@@ -43,14 +45,38 @@ describe('demo account seed guard (D-072)', () => {
 });
 
 describe('seedDemoAccounts', () => {
-  it('creates one account per workspace, with role and staff record, and is repeatable', async () => {
+  it('db:seed makes the marketing employees without a password and never takes a foreign email', async () => {
+    const [manager] = await t.db.insert(staffMembers).values({ fullName: 'Manager' }).returning();
+    await t.db
+      .insert(users)
+      .values({ email: MARKETING_EMPLOYEES[1].email, displayName: 'Real Person' });
+    const made = await ensureDemoStaff(t.db, MARKETING_EMPLOYEES, manager!.id);
+    expect([...made.keys()]).toEqual([MARKETING_EMPLOYEES[0].email]);
+    const { staffId, userId } = made.get(MARKETING_EMPLOYEES[0].email)!;
+    const [user] = await t.db.select().from(users).where(eq(users.id, userId));
+    expect(user!.passwordHash).toBeNull();
+    const [staff] = await t.db.select().from(staffMembers).where(eq(staffMembers.id, staffId));
+    expect(staff).toMatchObject({ managerId: manager!.id, fullName: 'Sample Pooja Verma' });
+    const [profile] = await t.db
+      .select()
+      .from(opsStaffProfiles)
+      .where(eq(opsStaffProfiles.staffId, staffId));
+    expect(profile!.isSample).toBe(true);
+    await t.db.delete(users).where(eq(users.email, MARKETING_EMPLOYEES[1].email));
+  });
+
+  it('creates every demo account with its stored role and staff record, and is repeatable', async () => {
+    // The business account made under its old name is still ours (renamed, not refused).
+    await t.db
+      .insert(users)
+      .values({ email: 'business@elevateeducation.in', displayName: 'Sample Business Demo' });
     await seedDemoAccounts(t.db, 'test-only-hash-1');
     await seedDemoAccounts(t.db, 'test-only-hash-2');
     const rows = await t.db
       .select()
       .from(users)
       .where(inArray(users.email, [...DEMO_EMAILS]));
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(DEMO_ACCOUNTS.length);
     expect(new Set(rows.map((r) => r.passwordHash))).toEqual(new Set(['test-only-hash-2']));
     for (const a of DEMO_ACCOUNTS) {
       const user = rows.find((r) => r.email === a.email)!;
@@ -58,12 +84,13 @@ describe('seedDemoAccounts', () => {
       expect(roles.map((r) => r.role)).toEqual([a.role]);
       const staff = await t.db.select().from(staffMembers).where(eq(staffMembers.userId, user.id));
       expect(staff).toHaveLength(1);
-      expect(user.displayName).toMatch(/^Sample /);
+      expect(user.displayName).toBe(a.displayName);
+      expect(user.displayName).toMatch(/^Sample |\(demo\)$/);
     }
   });
 
   it('db:clear-samples switches them off: no password, disabled', async () => {
-    expect(await disableDemoAccounts(t.db)).toBe(3);
+    expect(await disableDemoAccounts(t.db)).toBe(DEMO_ACCOUNTS.length);
     const rows = await t.db
       .select()
       .from(users)

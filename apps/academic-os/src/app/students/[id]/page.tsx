@@ -32,7 +32,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
   if (!data.ok) return <AcademicShell access={access} active="students"><LoadError error={data.error} /></AcademicShell>;
   const { record, progress, staff } = data.data;
   const s = record.student;
-  const opsRef = can(access.user, 'academic:enrolments:read') ? (s.coreStudentId ?? s.sourceAdmissionId) : null;
+  const opsRef = 'coreStudentId' in s && can(access.user, 'academic:enrolments:read') ? (s.coreStudentId ?? s.sourceAdmissionId) : null;
   const opsHref = opsRef ? workspaceLink(access.user, 'ops', `/students/${opsRef}`) : null;
   return (
     <AcademicShell access={access} active="students">
@@ -60,7 +60,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
               { key: 'batch', header: 'Batch', render: (e) => (e.batchId ? <a href={MODULE_PATHS.batch(e.batchId)}>{e.batchCode}</a> : 'awaiting batch allocation') },
               { key: 'start', header: 'Start', render: (e) => e.startDate ?? '—' },
               { key: 'late', header: 'Late joiner', render: (e) => (e.lateJoiner ? 'yes' : 'no') },
-              { key: 'source', header: 'Source', render: (e) => (e.source === 'manual' ? `manual: ${e.manualReason}` : 'Business Ops admission') },
+              { key: 'source', header: 'Source', render: (e) => (e.source === 'manual' ? ('manualReason' in e ? `manual: ${e.manualReason}` : 'manual') : 'Business Ops admission') },
               { key: 'status', header: 'Status', render: (e) => <StateBadge state={e.status} /> },
             ]}
           />

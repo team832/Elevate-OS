@@ -64,6 +64,9 @@ const rightsOn = (db: Database, user: Actor, kind: AttachmentOwnerKind, ownerId:
 };
 
 const TASK_KINDS: readonly AttachmentOwnerKind[] = ['task', 'task_submission', 'task_update'];
+/** Question papers and answer keys: each upload is a new version; unreleased ones open only for writers. */
+const RELEASED_KINDS: readonly string[] = ['assessment_paper', 'assessment_key'];
+const released = (r: { releasedAt: Date | null }) => !!r.releasedAt && r.releasedAt <= new Date();
 /** X3: the files of a finished or cancelled task stay with it. */
 const frozen = async (db: Database, kind: AttachmentOwnerKind, ownerId: string) =>
   TASK_KINDS.includes(kind) && !!(await ATTACHMENT_ACCESS[kind].closed?.(db, ownerId));
@@ -105,6 +108,9 @@ export async function listAttachments(
       uploadedByUserId: opsAttachments.uploadedByUserId,
       uploaderName: users.displayName,
       isSample: opsAttachments.isSample,
+      version: opsAttachments.version,
+      releasedAt: opsAttachments.releasedAt,
+      supersedes: opsAttachments.supersedesAttachmentId,
     })
     .from(opsAttachments)
     .leftJoin(users, eq(users.id, opsAttachments.uploadedByUserId))
@@ -117,10 +123,19 @@ export async function listAttachments(
     )
     .orderBy(desc(opsAttachments.createdAt))
     .limit(100);
-  return rows.map((r) => ({
-    ...r,
-    canDelete: !locked && (mayManage || (mayWrite && r.uploadedByUserId === user.id)),
-  }));
+  const next = new Map(rows.map((r) => [r.supersedes, r.version]));
+  return rows
+    .map((r) => ({
+      ...r,
+      supersededByVersion: next.get(r.id) ?? null,
+      canDelete: !locked && (mayManage || (mayWrite && r.uploadedByUserId === user.id)),
+    }))
+    .filter(
+      (r) =>
+        mayWrite ||
+        !RELEASED_KINDS.includes(kind) ||
+        (released(r) && r.supersededByVersion === null),
+    );
 }
 export type AttachmentListRow = Awaited<ReturnType<typeof listAttachments>>[number];
 
@@ -153,6 +168,8 @@ export async function uploadAttachment(
   const storage = attachmentStorage();
   if (!storage) throw new ConflictError(STORAGE_NOT_SET_UP);
   const name = cleanFileName(input.name);
+  if (RELEASED_KINDS.includes(input.ownerKind) && !/\.pdf$/i.test(name))
+    throw fieldError('file', 'Upload question papers and answer keys as PDF files.');
   const bytes = Buffer.from(input.dataBase64, 'base64');
   const problem = attachmentProblem(name, input.mime, bytes);
   if (problem) throw fieldError('file', problem);
@@ -179,6 +196,21 @@ export async function uploadAttachment(
           .limit(1),
       );
       if (dup) return { id: dup.id as string, duplicate: true };
+      const previous = RELEASED_KINDS.includes(input.ownerKind)
+        ? await first(
+            tx
+              .select({ id: opsAttachments.id, version: opsAttachments.version })
+              .from(opsAttachments)
+              .where(
+                and(
+                  eq(opsAttachments.ownerKind, input.ownerKind),
+                  eq(opsAttachments.ownerId, input.ownerId),
+                ),
+              )
+              .orderBy(desc(opsAttachments.version))
+              .limit(1),
+          )
+        : undefined;
       const [row] = await tx
         .insert(opsAttachments)
         .values({
@@ -191,6 +223,9 @@ export async function uploadAttachment(
           sha256,
           storageKey,
           uploadedByUserId: user.id,
+          ...(previous
+            ? { version: previous.version + 1, supersedesAttachmentId: previous.id }
+            : {}),
         })
         .returning();
       await audit(tx, user, row!.id, 'attachment.uploaded', { after: row }, requestId);
@@ -220,7 +255,26 @@ export async function attachmentDownload(db: Database, user: Actor, id: string) 
       .where(and(eq(opsAttachments.id, id as never), isNull(opsAttachments.deletedAt)))
       .limit(1),
   );
-  if (!row || !(await rightsOn(db, user, row.ownerKind, row.ownerId)('read'))) notFound('File');
+  const may = row && rightsOn(db, user, row.ownerKind, row.ownerId);
+  if (!row || !may || !(await may('read'))) notFound('File');
+  // Readers get a paper or key only once released, and never a replaced version.
+  if (
+    RELEASED_KINDS.includes(row.ownerKind) &&
+    !(await may('write')) &&
+    (!released(row) ||
+      (await first(
+        db
+          .select({ id: opsAttachments.id })
+          .from(opsAttachments)
+          .where(
+            and(
+              eq(opsAttachments.supersedesAttachmentId, row.id),
+              isNull(opsAttachments.deletedAt),
+            ),
+          ),
+      )))
+  )
+    notFound('File');
   const storage = attachmentStorage();
   if (!storage) throw new ConflictError(STORAGE_NOT_SET_UP);
   const bytes = await storage.get(row.storageKey).catch(() => notFound('File'));

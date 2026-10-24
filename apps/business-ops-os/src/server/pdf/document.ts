@@ -130,7 +130,8 @@ export class PdfBuilder extends PdfCanvas {
     { max, missingText = 'Not recorded' }: { max?: number; missingText?: string } = {},
   ) {
     const known = rows.map((r) => r.value).filter((v): v is number => v !== null);
-    const full = max ?? Math.max(1, ...known);
+    // An explicit max of 0 (nothing expected, nothing done) would divide by zero.
+    const full = Math.max(1, max ?? Math.max(...known));
     const size = this.p.body;
     const rowH = size * LEAD + 5;
     const labelW = this.width * 0.34;

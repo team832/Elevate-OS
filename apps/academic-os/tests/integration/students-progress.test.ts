@@ -53,7 +53,7 @@ describe('students and manual enrolment', () => {
   it('teachers see only students of their batches, without contact details; counsellors and marketing see none', async () => {
     const t = await callRoute<{ id: string; email: string | null; contactsHidden: boolean }[]>(listStudentsRoute, authedRequest(u.teacher, '/academic/api/v1/students'));
     expect(t.data!.map((s) => s.id).sort()).toEqual([asha.id, ravi.id].sort());
-    expect(t.data!.every((s) => s.contactsHidden && s.email === null)).toBe(true);
+    expect(t.data!.every((s) => s.contactsHidden && !('email' in s))).toBe(true);
     const c = await callRoute<{ id: string; email: string | null }[]>(listStudentsRoute, authedRequest(u.coordinator, '/academic/api/v1/students'));
     expect(c.data!).toHaveLength(3);
     expect(c.data!.find((s) => s.id === asha.id)!.email).toBe('asha@example.test');

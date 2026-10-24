@@ -2,7 +2,7 @@ import { can, scopeFor } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Alert, PageHeader } from '@elevate/shared-ui';
 import { addDays, type IsoDate } from '@elevate/shared-types';
-import { listMyMeetings, taskDaySummary } from '@elevate/business-ops-os/work';
+import { DueWork, listMyMeetings, myReports, taskDaySummary } from '@elevate/business-ops-os/work';
 import {
   buildAcademicDeliverySummary,
   coordinatorOverview,
@@ -49,7 +49,16 @@ export default async function HomePage() {
   const summary = can(user, 'academic:summary:read')
     ? await load(() => buildAcademicDeliverySummary(db, window))
     : null;
-  const tasks = can(user, 'ops:tasks:read') ? await load(() => taskDaySummary(db, user)) : null;
+  const tasks = can(user, 'ops:tasks:read')
+    ? await load(async () => {
+        const [summary, week, month] = await Promise.all([
+          taskDaySummary(db, user),
+          myReports(db, user, 'week'),
+          myReports(db, user, 'month'),
+        ]);
+        return { summary, week, month };
+      })
+    : null;
   const meetings = can(user, 'ops:appointments:read')
     ? await load(() =>
         listMyMeetings(db, user, { from: today as IsoDate, to: today as IsoDate }, 1),
@@ -61,7 +70,7 @@ export default async function HomePage() {
   const tiles = [
     tasks ? (
       tasks.ok ? (
-        <TasksDay key="tasks" summary={tasks.data} />
+        <TasksDay key="tasks" {...tasks.data} />
       ) : (
         <LoadError key="tasks" error={tasks.error} />
       )
@@ -84,6 +93,7 @@ export default async function HomePage() {
         description={`Today is ${today} (IST). Every count names its dates; missing is never zero and planned is never delivered.`}
       />
       <div className="el-stack">
+        <DueWork user={user} base={MODULE_PATHS.home} />
         {day ? (
           !day.ok ? (
             <LoadError error={day.error} />

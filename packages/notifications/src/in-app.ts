@@ -18,14 +18,21 @@ export interface NotifyInput {
 export type NotificationRow = typeof notifications.$inferSelect;
 
 /**
+ * The notifications_link_relative CHECK ("//host" and "/\host" open another site) plus no control
+ * characters, which would break a Location header. shortcut: the CHECK still allows control
+ * characters; tighten it in the next migration (0016 is frozen).
+ */
+// eslint-disable-next-line no-control-regex -- refusing control characters is the point
+export const isRelativeLink = (link: string) => /^\/(?![/\\])[^\x00-\x1f\x7f]*$/.test(link);
+
+/**
  * Write in-app notifications. Call inside the transaction of the change that
  * caused them so they appear only if it commits.
  */
 export async function notify(tx: Database, input: NotifyInput): Promise<NotificationId[]> {
   const recipients = [...new Set(input.userIds)];
   if (recipients.length === 0) return [];
-  // Same rule as the notifications_link_relative CHECK: "//host" and "/\host" open another site.
-  if (input.link && !/^\/([^/\\]|$)/.test(input.link))
+  if (input.link && !isRelativeLink(input.link))
     throw new Error('Notification links must be relative paths starting with a single "/"');
   const rows = await tx
     .insert(notifications)

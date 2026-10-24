@@ -15,6 +15,8 @@
  *   academic.students                  3 sample batches + 6 sample students (is_sample, no phones) — ./samples.ts
  *   academic.sample-teaching           sample teachers' classes, attendance, logs, demo attendee, reviews
  *                                      (needs the Ops seeds ops.sample-staff and ops.samples)
+ *   ./sample-tests.ts                  sample tests, run by the platform seed platform.sample-tests
+ *                                      (needs Ops admission numbers and the enrolled sample admissions)
  */
 import type { SeedDefinition } from '@elevate/database/seed';
 import { batchesSeed } from './batches';
@@ -24,6 +26,14 @@ import { ipmatBaselineSeed, ipmatClass12Seed } from './ipmat';
 import { ownerAssignmentsSeed } from './owner-assignments';
 import { sampleTeachingSeed, studentsSeed } from './samples';
 import { syllabusDraftsSeed } from './syllabus';
+
+export {
+  getAssessmentDetail,
+  PENDING_IMPORT_TEST,
+  placeSampleEnrolments,
+  SAMPLE_TESTS,
+  seedSampleTests,
+} from './sample-tests';
 
 export const seeds: readonly SeedDefinition[] = [
   ipmatBaselineSeed,

@@ -63,6 +63,9 @@ const reviewContent = {
   academicConcerns: optionalText(4000),
   suggestedAction: optionalText(4000),
   followUpOn: isoDateSchema.optional(),
+  /** Brief §16: the day the teacher observed it, and the batch the review is about. */
+  observationOn: isoDateSchema.optional(),
+  batchId: z.uuid().optional(),
   visibility: z.enum(ACADEMIC_REVIEW_VISIBILITIES).default('internal'),
   submit: z.boolean().optional(),
 };

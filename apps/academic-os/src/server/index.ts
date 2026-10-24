@@ -28,3 +28,4 @@ export * from './services/demo-attendees';
 export * from './services/my-day';
 export * from './services/teacher-activity';
 export * from './services/reports';
+export * from './services/timetable-builder';

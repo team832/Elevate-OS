@@ -191,6 +191,8 @@ export const assessmentListQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
 
+const filterOption = z.object({ id: z.uuid(), label: z.string().min(1) });
+
 export const academicAssessmentListV1Schema = z.object({
   contract: z.literal('academic.assessments'),
   version: z.literal(1),
@@ -201,6 +203,11 @@ export const academicAssessmentListV1Schema = z.object({
   pageSize: z.int().min(1),
   /** Stored-record counts per view under the same filters (a previous test can also await publication). */
   viewCounts: z.record(z.enum(ASSESSMENT_VIEWS), count),
+  /**
+   * Filter choices over every assessment in the view (all pages) under the teacher and date filters;
+   * the course and batch filters themselves are not applied, so other choices stay selectable.
+   */
+  filterOptions: z.object({ courses: z.array(filterOption), batches: z.array(filterOption) }),
   items: z.array(assessmentSummary),
 });
 export type AcademicAssessmentListV1 = z.output<typeof academicAssessmentListV1Schema>;
@@ -271,6 +278,12 @@ export const academicAssessmentDetailV1Schema = z.object({
         questionCount: z.int().min(1),
         /** null = not known (rule incomplete). */
         maxMarks: markTextSchema.nullable(),
+        /** Effective rule of the section (its override, else the assessment's); null = unknown. Same values as Academic scoring. */
+        perCorrect: markTextSchema.nullable(),
+        perWrong: markTextSchema.nullable(),
+        perUnattempted: markTextSchema.nullable(),
+        /** Section cap; null = no cap. */
+        capMarks: markTextSchema.nullable(),
       }),
     ),
     rosterSnapshotAt: isoDateTimeSchema.nullable(),

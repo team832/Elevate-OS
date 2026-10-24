@@ -10,6 +10,7 @@ import type { TaskDetail } from '../../../server/task-detail';
 import { ActionForm, type FieldSpec } from '../../../ui/action-form';
 import { fmtDate, fmtDateTime, humanise } from '../../../ui/format';
 import { DetailTable, Segment } from '../../../ui/sections';
+import { NoticeStates } from '../../../ui/task-notices';
 import { deliveryText, dueText, PRIORITY_OPTIONS, TASK_LABEL, taskPaths } from './task-common';
 
 type Option = { value: string; label: string };
@@ -42,7 +43,15 @@ export function TaskFacts({ d, base, level = 2 }: { d: TaskDetail; base: string;
           { label: 'Expected deliverable', value: d.expectedDeliverable ?? 'Not specified' },
           { label: 'Done when', value: d.acceptanceCriteria ?? 'No acceptance criteria recorded' },
           { label: 'Accountable owner', value: d.staffName ?? 'Not recorded' },
-          { label: 'Delivery', value: deliveryText(d) },
+          {
+            label: 'Notification',
+            value:
+              d.status === 'draft' ? (
+                deliveryText(d)
+              ) : (
+                <NoticeStates f={{ ...d, readAt: d.noticeReadAt }} />
+              ),
+          },
           d.parent && {
             label: 'Part of',
             value: <a href={`${taskPaths(base).tasks}/${d.parent.id}`}>{d.parent.title}</a>,
@@ -95,10 +104,6 @@ export function TaskFacts({ d, base, level = 2 }: { d: TaskDetail; base: string;
               value: istWhen(d.lastSubmittedAt),
             },
           d.approvedAt && { label: 'Approved', value: istWhen(d.approvedAt) },
-          {
-            label: 'Acknowledged',
-            value: d.acknowledgedAt ? fmtDateTime(d.acknowledgedAt) : 'Not yet',
-          },
           { label: '% done', value: `${d.progressPercent}% (self-reported)` },
           d.reason && { label: 'Reason', value: d.reason },
           d.completedAt && { label: 'Completed', value: fmtDateTime(d.completedAt) },

@@ -7,9 +7,12 @@
 import type { ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { AI_SUMMARY_LABEL } from '../../../domain/ai-assist';
 import { fetchAcademicStudentSummary } from '../../../server/academic-summary';
+import { aiBlocked } from '../../../server/ai-drafts';
 import { getStudent } from '../../../server/students';
 import { fmtDateTime, humanise } from '../../../ui/format';
+import { AiDraft } from '../../../ui/ai-draft';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref } from '../../../ui/list-controls';
 import { RecordTable } from '../../../ui/record-table';
@@ -96,9 +99,12 @@ async function StudentProfile({
   const base = `/ops/students/${id}`;
   const tab: TabKey = TABS.some(([k]) => k === query.tab) ? (query.tab as TabKey) : 'overview';
   const pc = d.primaryContact;
+  const summary = d.academic.studentId
+    ? fetchAcademicStudentSummary(d.academic.studentId)
+    : Promise.resolve(null);
   const [content, academic] = await Promise.all([
-    panel(tab, d, user, query, base),
-    d.academic.studentId ? fetchAcademicStudentSummary(d.academic.studentId) : null,
+    panel(tab, d, user, query, base, summary),
+    summary,
   ]);
   const placed = new Map(
     academic?.status === 'available'
@@ -153,6 +159,7 @@ async function panel(
   user: AuthenticatedUser,
   query: Query,
   base: string,
+  summary: Promise<Awaited<ReturnType<typeof fetchAcademicStudentSummary>> | null>,
 ): Promise<ReactNode> {
   const links = lifecycleLinks(d, base);
   const studentId = d.identity?.id;
@@ -162,7 +169,8 @@ async function panel(
     </Segment>
   );
   switch (tab) {
-    case 'overview':
+    case 'overview': {
+      const ai = await load((db) => aiBlocked(db, user, 'studentSummary'));
       return (
         <>
           <div className="ops-panels">
@@ -179,8 +187,21 @@ async function panel(
             </Segment>
           </div>
           <ExitRecords d={d} />
+          <Segment
+            title="AI summary"
+            description="One paragraph from this record: admission, the fees, attendance, results and shareable teacher reviews you are allowed to see. Names and contacts are hidden before sending. Not saved."
+          >
+            <AiDraft
+              api="/ops/api/v1/ai/student-summary"
+              body={{ studentId: studentId ?? d.admission.id }}
+              blocked={ai.ok ? ai.data : 'AI summary could not be checked. Reload the page.'}
+              buttonLabel="Write an AI summary"
+              note={AI_SUMMARY_LABEL}
+            />
+          </Segment>
         </>
       );
+    }
     case 'kyc':
       return <KycTab d={d} user={user} action={query.action} documentId={query.doc} base={base} />;
     case 'enrolments':
@@ -234,6 +255,16 @@ async function panel(
           studentId={studentId}
           academicStudentId={d.academic.studentId}
           user={user}
+          batchNames={summary.then(
+            (s) =>
+              new Map(
+                s?.status === 'available'
+                  ? s.data.enrolments.flatMap((e) =>
+                      e.batchId && e.batchName ? [[e.batchId as string, e.batchName] as const] : [],
+                    )
+                  : [],
+              ),
+          )}
         />
       ) : (
         noIdentity('Feedback')

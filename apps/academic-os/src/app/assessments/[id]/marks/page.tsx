@@ -49,7 +49,12 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
             Enter a total from {bounds.min} to {bounds.max}. {bounds.negativeAllowed ? 'This scheme has negative marking, so a total below 0 is allowed.' : 'This scheme has no negative marking, so totals cannot go below 0.'} Absent, exempt and withheld students get no score (never 0); pending means not marked yet.
           </p>
         )}
-        {a.status === 'finalised' ? (
+        {a.rosterManaged ? (
+          <Alert tone="info" title="Roster from Business Operations">
+            This test was scheduled in Tests and Mock Tests. Saving a score records a verified mark for a present student. To change a verified mark, or any mark once results are final, ask the academic coordinator: the change needs a reason.
+          </Alert>
+        ) : null}
+        {a.status === 'finalised' && !a.rosterManaged ? (
           <Alert tone="info" title="Results are final">
             Changes saved here take effect when a coordinator re-scores the assessment with a reason; that creates a new result version and keeps the old one.
           </Alert>
@@ -59,17 +64,17 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
             compact
             rows={rows}
             rowKey={(r) => r.studentId}
-            empty={<EmptyState title="No students in this batch" description="Students appear here once they are placed in the assessment's batch." />}
+            empty={a.rosterManaged ? <EmptyState title="No students on the roster" description="The roster was empty when it was taken. Ask the academic coordinator to add students, with a reason." /> : <EmptyState title="No students in this batch" description="Students appear here once they are placed in the assessment's batch." />}
             columns={[
               { key: 'student', header: 'Student', render: (r) => `${r.fullName} (${r.code})` },
               { key: 'state', header: 'Result', render: (r) => <StateBadge state={r.state} /> },
-              { key: 'score', header: 'Score', numeric: true, render: (r) => (r.state === 'scored' ? (r.manualScore ?? (r.hasResponses ? 'from responses' : 'Not recorded')) : '—') },
+              { key: 'score', header: 'Score', numeric: true, render: (r) => (r.state === 'scored' ? `${r.manualScore ?? (r.hasResponses ? 'from responses' : 'Not recorded')}${r.marksState === 'imported' ? ' (imported, not verified)' : ''}` : '—') },
               { key: 'updated', header: 'Last change', render: (r) => (r.updatedAt ? fmtDateTime(r.updatedAt) : '—') },
               {
                 key: 'enter',
                 header: '',
                 render: (r) =>
-                  bounds ? (
+                  bounds && !(a.rosterManaged && a.status === 'finalised') ? (
                     <details>
                       <summary>Enter mark</summary>
                       <ApiForm

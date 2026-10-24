@@ -12,9 +12,17 @@ import {
   StatusBadge,
   TextInput,
 } from '@elevate/shared-ui';
-import { COURSE_PREFIXES, IDEA_STATUSES, isOneOf, modulePath } from '../../domain';
+import {
+  COURSE_PREFIXES,
+  IDEA_SCOPE_LABELS,
+  IDEA_STATUS_LABELS,
+  IDEA_STATUSES,
+  isOneOf,
+  modulePath,
+} from '../../domain';
 import { listIdeas, listQuarantine } from '../../server';
 import { MarketingPage, Section, param, type SearchParams } from '../../ui/shell';
+import { SampleBadge } from '../calendar/item-ui';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Ideas' };
@@ -28,9 +36,9 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
     <MarketingPage
       permission="marketing:ideas:read"
       path={modulePath('ideas')}
-      active="calendar"
+      active="ideas"
       title="Ideas"
-      description="Every idea gets a code (COURSE-NNN) that is never reused."
+      description="Every idea gets a code (COURSE-NNN) that is never reused. Submit an idea for review; once approved, plan it onto the calendar."
       searchParams={sp}
       actions={
         <ButtonLink variant="primary" href={modulePath('ideas/new')}>
@@ -112,21 +120,27 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
                     {
                       key: 'title',
                       header: 'Title',
-                      render: (i) => <a href={modulePath(`ideas/${i.id}`)}>{i.title}</a>,
+                      render: (i) => (
+                        <>
+                          <a href={modulePath(`ideas/${i.id}`)}>{i.title}</a>{' '}
+                          <SampleBadge sample={i.isSample} />
+                        </>
+                      ),
                     },
+                    { key: 'owner', header: 'Owner', render: (i) => i.ownerName ?? 'No owner yet' },
                     { key: 'pillar', header: 'Pillar', render: (i) => i.pillar ?? '—' },
                     {
                       key: 'scope',
                       header: 'Scope',
                       render: (i) =>
-                        `${i.scope.replace('_', ' ')}${i.scopePrefixes.length ? ` (${i.scopePrefixes.join(', ')})` : ''}`,
+                        `${IDEA_SCOPE_LABELS[i.scope]}${i.scopePrefixes.length ? ` (${i.scopePrefixes.join(', ')})` : ''}`,
                     },
                     {
                       key: 'status',
                       header: 'Status',
                       render: (i) => (
                         <>
-                          {i.status.replace('_', ' ')}
+                          {IDEA_STATUS_LABELS[i.status]}
                           {i.legacyStatus && i.legacyStatus !== i.status ? (
                             <span className="el-field-hint"> (legacy: {i.legacyStatus})</span>
                           ) : null}

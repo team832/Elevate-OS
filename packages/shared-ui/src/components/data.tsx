@@ -183,9 +183,11 @@ export interface MetricStripItem {
 export function MetricStrip({
   items,
   label,
+  missingLabel = 'Not available',
 }: {
   items: readonly MetricStripItem[];
   label: string;
+  missingLabel?: string;
 }) {
   return (
     <ul className="el-metric-strip" aria-label={label}>
@@ -193,7 +195,7 @@ export function MetricStrip({
         const m = item.metric;
         const value =
           m.status === 'missing'
-            ? 'Not available'
+            ? missingLabel
             : m.status === 'estimated'
               ? `≈ ${formatMetricValue(m)}`
               : formatMetricValue(m);

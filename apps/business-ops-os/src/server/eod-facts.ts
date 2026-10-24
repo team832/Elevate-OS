@@ -8,7 +8,10 @@
  */
 import { createHash } from 'node:crypto';
 import { and, between, eq, gte, inArray, lte, ne, or } from 'drizzle-orm';
+import { appOrigin } from '@elevate/configuration/workspaces';
 import {
+  departments,
+  staffMembers,
   opsStaffTasks as tasks,
   opsTaskEvents as events,
   opsTaskUpdates as updates,
@@ -16,9 +19,17 @@ import {
   opsTeacherFeedbackSummaries as summaries,
   type Database,
 } from '@elevate/database';
+import { fetchInternal } from '@elevate/server-kit';
+import { marketingMonthlySnapshotV1Schema } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import { addDays, istInstant, istToday } from '../domain/dates';
-import { buildEodFacts, type AttendanceFacts, type EodFacts } from '../domain/eod';
+import {
+  buildEodFacts,
+  marketingFacts,
+  type AttendanceFacts,
+  type EodFacts,
+  type MarketingFacts,
+} from '../domain/eod';
 import type { Period } from '../domain/work-report';
 import { fetchTeacherActivity } from './academic-summary';
 import { attendanceSummary } from './attendance';
@@ -98,6 +109,36 @@ const developmentActions = (db: Database, staffId: string, p: Period) =>
     )
     .orderBy(actions.dueOn);
 
+/**
+ * Marketing facts for a Marketing & Growth person's monthly report, counted by Marketing OS up to
+ * `now` (fetchInternal never throws: a failure is stored as missing). Others get none.
+ */
+async function monthlyMarketing(
+  db: Database,
+  staffId: string,
+  p: Period,
+  now: Date,
+): Promise<MarketingFacts | undefined> {
+  const [row] = await db
+    .select({ code: departments.code })
+    .from(staffMembers)
+    .innerJoin(departments, eq(departments.id, staffMembers.departmentId))
+    .where(eq(staffMembers.id, staffId as StaffMemberId));
+  if (row?.code !== 'MARKETING_GROWTH') return undefined;
+  const query = new URLSearchParams({
+    staffId,
+    month: p.start.slice(0, 7),
+    cutoffAt: now.toISOString(),
+  });
+  return marketingFacts(
+    await fetchInternal(
+      `${appOrigin('marketing')}/marketing/api/internal/v1/reports/monthly?${query}`,
+      marketingMonthlySnapshotV1Schema,
+      { caller: 'ops', timeoutMs: 3000 },
+    ),
+  );
+}
+
 export async function collectFacts(
   db: Database,
   staffId: string,
@@ -130,7 +171,8 @@ export async function collectFacts(
     now,
     near.map((u) => u.taskId),
   );
-  return buildEodFacts({
+  const marketing = p.kind === 'month' ? await monthlyMarketing(db, staffId, p, now) : undefined;
+  const facts = buildEodFacts({
     staffId,
     reportDate: p.start,
     periodKind: p.kind,
@@ -143,6 +185,7 @@ export async function collectFacts(
     attendance: await periodAttendance(db, staffId, p, now),
     ...(p.kind === 'month' ? { development: await developmentActions(db, staffId, p) } : {}),
   });
+  return marketing ? { ...facts, marketing } : facts;
 }
 
 /** Hash of the facts without values that change only with time (generation and fetch times,
@@ -159,8 +202,14 @@ export function factsHash(f: EodFacts) {
     blocked,
     counts,
     timeliness,
+    marketing,
     ...rest
   } = f;
+  // Only the counted facts: when Marketing was asked and its cut-off change with every build.
+  const mkt =
+    marketing?.status === 'available'
+      ? { ...marketing.snapshot, cutoffAt: null }
+      : (marketing?.status ?? null);
   const { checkedAt: _c, ...acad } = academic;
   const { overdue: _o, ...stableCounts } = counts;
   const stableBacklog = backlog.map(({ overdue: _v, closedLater: _l, ...b }) => b);
@@ -176,7 +225,15 @@ export function factsHash(f: EodFacts) {
   return createHash('sha256')
     .update(
       JSON.stringify(
-        { ...rest, acad, stableCounts, stableBacklog, stableBlocked, due: timeliness?.rows.length },
+        {
+          ...rest,
+          acad,
+          mkt,
+          stableCounts,
+          stableBacklog,
+          stableBlocked,
+          due: timeliness?.rows.length,
+        },
         sortKeys,
       ),
     )

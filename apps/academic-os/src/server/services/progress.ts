@@ -4,7 +4,7 @@
  * (interventions: evidence → goal → action → responsible → due → review → outcome).
  * Teachers (own scope) see only students in their assigned batches.
  */
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, inArray, isNull, or, sql } from 'drizzle-orm';
 import {
   academicAssessments,
   academicAttendance,
@@ -17,6 +17,7 @@ import {
   academicEnrolments,
   academicInterventions,
   academicResultRuns,
+  academicAssessmentRoster,
   academicResults,
   academicStudents,
   academicSubjects,
@@ -30,8 +31,9 @@ import { ForbiddenError, NotFoundError, ValidationError } from '@elevate/shared-
 import { addDays, type BatchId, type IsoDate, type StaffMemberId, type StudentId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { assessmentTrend, attendanceDefinition, findMissedClasses, formatMarks, parseMarks, prioritiseCatchup, summariseAttendance, supportSignals, type AttendanceStatus } from '../../domain';
-import { assertBatchInScope, assertStudentInScope, audit, getBatchOrThrow, resolveScope, staffIdForUser, studentIdsInScope, todayIst, type Actor } from '../context';
+import { assertBatchInScope, assertStudentInScope, assessmentInScope, audit, getBatchOrThrow, resolveScope, staffIdForUser, studentIdsInScope, todayIst, type Actor } from '../context';
 import type { catchupUpdateBody, createInterventionBody, updateInterventionBody } from '../schemas';
+import { markStudentIds } from './assessment-scope';
 import { getBatchCoverage } from './curriculum';
 import { assessmentsBetween, rankVisible } from './results';
 import { getSetting } from './settings';
@@ -102,9 +104,12 @@ export async function getStudentProgress(db: Database, actor: Actor, studentId: 
         .innerJoin(academicResultRuns, and(eq(academicResultRuns.id, academicResults.runId), eq(academicResultRuns.status, 'final')))
         .innerJoin(academicAssessments, eq(academicAssessments.id, academicResults.assessmentId))
         .leftJoin(academicSubjects, eq(academicSubjects.id, academicAssessments.subjectId))
-        .where(and(eq(academicResults.studentId, student.id), eq(academicAssessments.batchId, batchId)))
+        // The student's result sits in the batch they took it with: the roster batch (roster-managed) or the assessment's batch.
+        .where(and(eq(academicResults.studentId, student.id), or(and(isNull(academicAssessments.rosterSnapshotAt), eq(academicAssessments.batchId, batchId)), exists(db.select({ one: sql`1` }).from(academicAssessmentRoster).where(and(eq(academicAssessmentRoster.assessmentId, academicAssessments.id), eq(academicAssessmentRoster.studentId, student.id), eq(academicAssessmentRoster.batchId, batchId))))), assessmentInScope(scope)))
         .orderBy(asc(academicAssessments.scheduledDate));
-      const results = finals.map(({ r, run, a, subject }) => ({
+      const shown = [];
+      for (const f of finals) if ((await markStudentIds(db, scope, f.a))?.includes(student.id) ?? true) shown.push(f); // teachers: their batch + subject only (brief §5)
+      const results = shown.map(({ r, run, a, subject }) => ({
         assessmentId: a.id,
         code: a.code,
         kind: a.kind,

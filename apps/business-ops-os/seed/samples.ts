@@ -364,12 +364,13 @@ export const SAMPLE_STUDENTS: readonly SampleStudent[] = [
     first: 'Vihaan',
     stage: 'class_12',
     programme: 'CUET',
-    shows: 'active: Class 12 Commerce + CUET; fee plan with a payment',
+    shows:
+      'active: Class 12 Commerce + CUET; fee agreement active, nothing paid yet (instalment 1 overdue)',
     days: [-15, -14, -13],
     hour: 12,
     steps: allPresent,
     convert: enrol(['CLASS_12', 'CUET']),
-    fees: { dueIn: [-12, 3, 50], paid: 1 },
+    fees: { dueIn: [-12, 3, 50], paid: 0 },
   },
   {
     first: 'Myra',
@@ -882,6 +883,7 @@ export const sampleSeeds = [
       'core.staff_members',
       'core.programmes',
       'ops.lead-sources',
+      'ops.lead-stages',
       'ops.staff',
     ],
     description: `The sample set (D-036): ${SAMPLE_STUDENTS.length} demo cases (demo, conversion, enrolment, hold and exit cases)`,

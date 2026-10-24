@@ -48,7 +48,7 @@ export function AcademicEvidenceView({
           level={level}
           flush
           title="Results"
-          description={`From Academic OS for ${period}, checked ${fmtDateTime(e.checkedAt)}. Final results only.`}
+          description={`From Academic OS for ${period}, checked ${fmtDateTime(e.checkedAt)}. Published test results only; provisional ones say so in Academic OS, and ranks show only where Academic’s rank setting allows.`}
         >
           <RecordTable
             rows={e.results}

@@ -73,6 +73,8 @@ export function Maybe({ value, suffix = '' }: { value: number | string | null | 
   );
 }
 
+/** "2026-10-01" or "2026-10-01 to 2026-10-07". */
+export const fmtRange = (r: { from: string; to: string }) => (r.from === r.to ? r.from : `${r.from} to ${r.to}`);
 export const fmtHours = (minutes: number) => `${Math.round((minutes / 60) * 100) / 100} h`;
 export const fmtDateTime = (d: Date | string | null | undefined) =>
   d ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(d)) : '—';

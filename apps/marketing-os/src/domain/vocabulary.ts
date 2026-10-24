@@ -37,6 +37,17 @@ export const IDEA_STATUSES = [
   'changes_requested',
 ] as const;
 export type IdeaStatus = (typeof IDEA_STATUSES)[number];
+export const IDEA_STATUS_LABELS: Record<IdeaStatus, string> = {
+  idea: 'Idea',
+  in_development: 'In development',
+  ready: 'Ready',
+  held: 'On hold',
+  rejected: 'Rejected',
+  archived: 'Archived',
+  submitted: 'Submitted for review',
+  approved: 'Approved',
+  changes_requested: 'Changes requested',
+};
 
 /** MKT-014 idea scope, used by the collab rule. */
 export const IDEA_SCOPES = [
@@ -47,6 +58,13 @@ export const IDEA_SCOPES = [
   'general',
 ] as const;
 export type IdeaScope = (typeof IDEA_SCOPES)[number];
+export const IDEA_SCOPE_LABELS: Record<IdeaScope, string> = {
+  single_exam: 'Single exam',
+  cross_exam: 'Cross exam',
+  founder: 'Founder',
+  local_sikar: 'Local (Sikar)',
+  general: 'General',
+};
 
 export const QUARANTINE_STATES = ['none', 'quarantined', 'resolved'] as const;
 export type QuarantineState = (typeof QUARANTINE_STATES)[number];

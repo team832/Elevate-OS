@@ -5,7 +5,7 @@
  * it as plain text labelled as an AI draft, and only when the person chooses "Use this draft"
  * puts it into the fields (by name) of the form it wraps, or hands it to `onUse`. It never saves,
  * submits or sends anything: the person checks, edits and saves with the form's own button.
- * Imports only domain constants — never server code or the OpenAI adapter.
+ * Imports only domain constants — never server code or the AI adapter.
  */
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { AI_DRAFT_LABEL, AI_FAILED, type DraftItem } from '../domain/ai-assist';
@@ -15,6 +15,7 @@ type Field = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 export function AiDraft({
   api,
   body,
+  fields = [],
   blocked,
   buttonLabel = 'Draft with AI',
   note = AI_DRAFT_LABEL,
@@ -25,11 +26,13 @@ export function AiDraft({
   api: string;
   /** Request body, or a function giving it when the button is pressed (null = nothing to send). */
   body: Record<string, unknown> | (() => Record<string, unknown> | null);
+  /** Names of wrapped form fields whose current values join the body (e.g. the period). */
+  fields?: readonly string[];
   /** Why it can't be used now (not set up, turned off, today's limit); null = ready. */
   blocked?: string | null;
   buttonLabel?: string;
   note?: string;
-  /** Instead of filling the wrapped form's fields by name. */
+  /** Instead of filling the wrapped form's fields by name. Neither this nor children = read only. */
   onUse?: (items: DraftItem[]) => void;
   /** The form whose fields the draft fills. */
   children?: ReactNode;
@@ -41,10 +44,14 @@ export function AiDraft({
   const [message, setMessage] = useState('');
   const [stop, setStop] = useState<string | null>(null);
   const reason = blocked ?? stop;
+  const fills = Boolean(onUse || children);
+  const field = (name: string) =>
+    box.current?.querySelector<Field>(`[name="${CSS.escape(name)}"]`) ?? null;
 
   async function ask() {
-    const payload = typeof body === 'function' ? body() : body;
-    if (!payload) return;
+    const base = typeof body === 'function' ? body() : body;
+    if (!base) return;
+    const payload = { ...base, ...Object.fromEntries(fields.map((n) => [n, field(n)?.value])) };
     setBusy(true);
     setItems(null);
     setMessage('Asking for a draft…');
@@ -63,7 +70,7 @@ export function AiDraft({
         setItems(out.data.items);
         setMessage(
           out.data.items.length
-            ? 'Draft ready below. Check it before using it.'
+            ? `${fills ? 'Draft' : 'Summary'} ready below. Check it before ${fills ? 'using' : 'relying on'} it.`
             : 'No suggestion this time.',
         );
       } else if (res.status === 409 || res.status === 429) {
@@ -82,7 +89,7 @@ export function AiDraft({
     if (onUse) onUse(draft);
     else {
       const fields = draft.flatMap((i) => {
-        const el = box.current?.querySelector<Field>(`[name="${CSS.escape(i.name)}"]`);
+        const el = field(i.name);
         if (!el) return [];
         el.value = i.value;
         el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -126,22 +133,24 @@ export function AiDraft({
             </div>
           ))}
           <div className="el-inline-form">
-            <button
-              type="button"
-              className="el-button el-button-primary"
-              onClick={() => use(items)}
-            >
-              Use this draft
-            </button>
+            {fills ? (
+              <button
+                type="button"
+                className="el-button el-button-primary"
+                onClick={() => use(items)}
+              >
+                Use this draft
+              </button>
+            ) : null}
             <button
               type="button"
               className="el-button el-button-secondary"
               onClick={() => {
                 setItems(null);
-                setMessage('Draft discarded.');
+                setMessage(fills ? 'Draft discarded.' : '');
               }}
             >
-              Discard
+              {fills ? 'Discard' : 'Hide'}
             </button>
           </div>
         </section>

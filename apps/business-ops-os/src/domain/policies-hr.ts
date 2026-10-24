@@ -18,6 +18,7 @@ export const FEEDBACK_TEACHER_VISIBILITY = [
   'approved_summaries_and_comments',
   'nothing',
 ] as const;
+export const PEER_DISCUSSION_MODES = ['hr_and_reviewer_only', 'allowed'] as const;
 export const TASK_REOPENERS = [
   'reviewer',
   'hr_manager',
@@ -88,9 +89,29 @@ export const hrSettingSchemas = {
       reportDraft: z.boolean(),
       taskBrief: z.boolean(),
       csvMapping: z.boolean(),
+      /** Reading a score sheet PDF with AI (owner answer 6, 23 Oct 2026; Gemini or OpenRouter, D-110); results are always checked. */
+      scoreSheet: z.boolean(),
+      /** Added 24 Oct 2026 (D-111): stored values from before lack it, so it defaults to on. */
+      studentSummary: z.boolean().default(true),
     })
     .strict(),
   'ai.daily_limit_per_user': z.object({ limit: z.int().min(0).max(1000) }).strict(),
+  /** Configured request recipients: key → staff id, null = not set up yet (stays with HR). */
+  'hr.request_recipients': z.record(
+    z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+    z.uuid().nullable(),
+  ),
+  'hr.request_categories': z.object({ categories: codeList.min(1) }).strict(),
+  /** Who may comment on a task besides HR and the reviewer (owner answer 23 Oct 2026). */
+  'tasks.peer_discussion': z.object({ mode: z.enum(PEER_DISCUSSION_MODES) }).strict(),
+  /** In-app task reminder intervals, hours (NOTIFY; server/task-reminders.ts). */
+  'tasks.reminders': z
+    .object({
+      dueSoonHours: z.int().min(1).max(168),
+      overdueRepeatHours: z.int().min(1).max(168),
+      unacknowledgedHours: z.int().min(1).max(168),
+    })
+    .strict(),
 } as const;
 
 export const HR_SETTING_DEFINITIONS: DefinitionsFor<typeof hrSettingSchemas> = {
@@ -262,12 +283,20 @@ export const HR_SETTING_DEFINITIONS: DefinitionsFor<typeof hrSettingSchemas> = {
   'ai.features': {
     label: 'AI draft features',
     description:
-      'Which AI draft helpers are on: feedback summaries, work reports, task briefs, CSV column matching. Each sends the data it needs to OpenAI and only suggests text; a person checks, edits and saves it.',
-    defaultValue: { feedbackSummary: true, reportDraft: true, taskBrief: true, csvMapping: true },
-    defaultState: 'proposed',
-    source: 'owner request 2026-10-23 (AI drafting inside the app).',
+      'Which AI draft helpers are on: feedback summaries, report comments (work reports, student progress reports, teacher reports), task briefs, CSV column matching, reading score sheet PDFs, the AI summary on a student page. Each sends the data it needs to a free AI service (Groq, then Gemini, then OpenRouter) and only suggests text: a person checks it, and edits and saves it where it fills a form (the student summary is never saved).',
+    defaultValue: {
+      feedbackSummary: true,
+      reportDraft: true,
+      taskBrief: true,
+      csvMapping: true,
+      scoreSheet: true,
+      studentSummary: true,
+    },
+    defaultState: 'approved',
+    source:
+      'owner request 2026-10-23; data sharing with free AI services approved 2026-10-24 (D-110).',
     ownerDecision:
-      'Owner asked for these four AI draft features on 23 Oct 2026; confirm data sharing with OpenAI (DPDP). Names, contacts and codes are masked before sending, but a name the system does not know, written in lower case, can still get through in feedback comments or task titles.',
+      'Approved 24 Oct 2026 (D-110): all features on, with names hidden. Free plans may keep or learn from what is sent. Names, contacts and codes are masked before sending, but a name the system does not know, written in lower case, can still get through in feedback comments or task titles.',
     editable: true,
   },
   'ai.daily_limit_per_user': {
@@ -278,6 +307,52 @@ export const HR_SETTING_DEFINITIONS: DefinitionsFor<typeof hrSettingSchemas> = {
     defaultState: 'proposed',
     source: 'owner request 2026-10-23 (AI drafting inside the app).',
     ownerDecision: 'Owner to confirm the daily limit',
+    editable: true,
+  },
+  'hr.request_recipients': {
+    label: 'Named request recipients',
+    description:
+      'People staff can send a request to by role (for example Schar), each set to a staff record. Not set up: the request waits in the HR queue marked "Recipient not set up". Nothing is ever sent outside Elevate OS.',
+    defaultValue: { schar: null },
+    defaultState: 'proposed',
+    source: 'owner answer 2026-10-23 (Schar: configurable recipient, empty).',
+    ownerDecision: 'Owner to name the staff record for Schar',
+    editable: true,
+  },
+  'hr.request_categories': {
+    label: 'Request categories',
+    description: 'Categories staff choose when they send a request through HR.',
+    defaultValue: {
+      categories: [
+        { code: 'tasks', label: 'Tasks and deadlines' },
+        { code: 'classes', label: 'Classes and batches' },
+        { code: 'students', label: 'Students' },
+        { code: 'other', label: 'Something else' },
+      ],
+    },
+    defaultState: 'proposed',
+    source: 'owner brief 2026-10-23 §6.',
+    ownerDecision: 'Owner to confirm the categories',
+    editable: true,
+  },
+  'tasks.peer_discussion': {
+    label: 'Who may comment on a task',
+    description:
+      'HR and reviewer only: the owner, the reviewer, the assigning manager and HR comment; people a task is shared with can read it but not comment. Allowed: they may comment too.',
+    defaultValue: { mode: 'hr_and_reviewer_only' },
+    defaultState: 'approved',
+    source: 'owner answer 2026-10-23 (task discussion: HR and reviewer only).',
+    ownerDecision: null,
+    editable: true,
+  },
+  'tasks.reminders': {
+    label: 'Task reminders',
+    description:
+      'In-app reminders about open assigned work: once when a task is due within the due-soon hours, again every overdue-repeat hours while it is overdue, and every unacknowledged hours until the person acknowledges it. Personal settings can only space out the unacknowledged reminders or turn off pop-ups; they never stop overdue reminders or change a deadline. Nothing is sent outside Elevate OS.',
+    defaultValue: { dueSoonHours: 24, overdueRepeatHours: 24, unacknowledgedHours: 4 },
+    defaultState: 'proposed',
+    source: 'owner brief 2026-10-23 §8 (configurable reminder intervals).',
+    ownerDecision: 'Owner to confirm the reminder intervals',
     editable: true,
   },
   'reports.timezone': {

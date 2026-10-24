@@ -37,7 +37,7 @@ Full text of each row lives in the file of the owner who must act; this table is
 | IR-OPS-MTG-2 | Academic OS + owner | Who owns teacher → student feedback after enrolment | same | **Done 21 Oct 2026 (D-058):** reviews are written in Academic OS and read by Ops through `GET /academic/api/internal/v1/reviews`; Ops write routes removed, old rows read-only. Evidence: `apps/academic-os/tests/integration/reviews.test.ts`; Ops `tests/integration/academic-reviews.test.ts`, `feedback.test.ts`. |
 | IR-MKT-OPS-HANDOFF | Marketing OS | Produce `marketing.lead.handed_off` v1 (supersedes the IR-MKT-05 / IR-OPS-07 event proposal) | `apps/marketing-os/docs/INTEGRATION_REQUESTS.md` | Open; Ops consumer tested with mock events |
 | IR-OPS-PLT-1 | Platform | System actor for job- and consumer-created records | `apps/platform/docs/INTEGRATION_REQUESTS.md` | Open |
-| IR-OPS-PLT-2 | Platform | Scheduler for `lead-intake`, `enrolment-replies`, `follow-up-reminders` (extends IR-OPS-02) | same | Open |
+| IR-OPS-PLT-2 | Platform | Scheduler for `lead-intake`, `enrolment-replies`, `follow-up-reminders` and, since 24 Oct 2026, `task-reminders` (extends IR-OPS-02) | same | Open |
 | IR-OPS-PLT-3 | Platform / Foundation | Theme block and `Drawer` into `@elevate/shared-ui` | same | Open |
 | IR-OPS-13 | Integration | Regenerate the permission matrix: 35 `ops:*` keys after the admissions brief (18 + 17) | this file (extends IR-OPS-04) | Open |
 | IR-OPS-14 | Prototype owner (`Elevate\`) | Port the admissions workspace rules (3-class demos, conversion, admission numbers, student lifecycle, guardians, appointments, teacher feedback, fee plans, Marketing handoff) to `Elevate.html` and the 17 new keys to `src/data/permissions.json` (extends IR-OPS-10) | this file | Open |

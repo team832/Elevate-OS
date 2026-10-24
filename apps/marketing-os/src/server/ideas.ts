@@ -3,14 +3,16 @@
  * duplicate check is domain/duplicates.ts (warn; block only an exact normalised match in
  * the same course, backed by the unique index ideas_course_title_key).
  */
-import { and, asc, desc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, ilike, inArray, or, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import {
+  isForeignKeyViolation,
   isUniqueViolation,
   marketingContentItems,
   marketingIdeas,
   marketingPlacements,
   marketingSocialAccounts,
+  staffMembers,
   type Database,
 } from '@elevate/database';
 import {
@@ -32,11 +34,13 @@ import {
   type IdeaScope,
   type IdeaStatus,
 } from '../domain';
-import { assertCan, type Actor } from './access';
+import { CALENDAR_ITEM_TYPES, CHANNELS, EFFORT_SIZES } from '../domain/calendar';
+import { actorCan as can, assertCan, type Actor } from './access';
+import { memberOptions } from './campaign-members';
 import { auditMarketing, rowById } from './common';
 import { allocateIdeaCode, type CodeAllocator } from './codes';
 import { loadPolicy } from './policy';
-import { myStaffId } from './scope';
+import { myStaffId, teamWide } from './scope';
 
 export type IdeaRow = typeof marketingIdeas.$inferSelect;
 
@@ -55,7 +59,59 @@ export const ideaFieldsSchema = z.object({
   notes: optionalText(2000),
   scope: z.enum(IDEA_SCOPES).optional(),
   scopePrefixes: z.array(z.enum(EXAM_PREFIXES)).max(4).optional(),
+  // Ideas board (brief §13); `audience` is the target audience.
+  problemNeed: optionalText(2000),
+  hypothesis: optionalText(2000),
+  effort: z.enum(EFFORT_SIZES).nullish(),
+  expectedOutcome: optionalText(1000),
+  proposedFormat: z.enum(CALENDAR_ITEM_TYPES).nullish(),
+  proposedChannel: z.enum(CHANNELS).nullish(),
+  programmeId: z.uuid().nullish(),
+  ownerStaffId: z.uuid().nullish(),
+  campaignId: z.uuid().nullish(),
 });
+
+/** §13 fields copied as they are (null clears). */
+const BOARD_FIELDS = [
+  'problemNeed',
+  'hypothesis',
+  'effort',
+  'expectedOutcome',
+  'proposedFormat',
+  'proposedChannel',
+  'programmeId',
+  'ownerStaffId',
+  'campaignId',
+] as const;
+type IdeaInsert = typeof marketingIdeas.$inferInsert;
+const boardValues = (input: Partial<Record<(typeof BOARD_FIELDS)[number], unknown>>) =>
+  Object.fromEntries(
+    BOARD_FIELDS.filter((k) => input[k] !== undefined).map((k) => [k, input[k] ?? null]),
+  ) as Partial<IdeaInsert>;
+
+/** The owner must be active Marketing & Growth staff; a vanished course or campaign is a 400. */
+async function checkIdeaRefs(db: Database, ownerStaffId: string | null | undefined) {
+  if (ownerStaffId && !(await memberOptions(db, ownerStaffId)).length)
+    throw new ValidationError('The owner must be active Marketing & Growth staff.');
+}
+/** Who may name an idea's owner: a reviewer anyone; everyone else only themselves (I1). */
+async function checkOwnerChange(db: Database, actor: Actor, ownerStaffId: string | null) {
+  if (can(actor, 'marketing:content:approve')) return;
+  if (!ownerStaffId || ownerStaffId !== (await myStaffId(db, actor.id)))
+    throw new ForbiddenError('Only a reviewer can give an idea to someone else.');
+}
+
+/** The team-wide contributor grant edits and moves only ideas they created or own (I1, round 2). */
+async function assertIdeaChangeable(db: Database, actor: Actor, idea: IdeaRow) {
+  if (teamWide(actor) || idea.createdBy === actor.id) return;
+  if (idea.ownerStaffId && idea.ownerStaffId === (await myStaffId(db, actor.id))) return;
+  throw new ForbiddenError('You can change only ideas you created or own.');
+}
+
+const refError = (error: unknown) =>
+  isForeignKeyViolation(error)
+    ? new ValidationError('The course or campaign chosen no longer exists.')
+    : error;
 
 export const createIdeaBody = ideaFieldsSchema
   .extend({ coursePrefix: z.enum(COURSE_PREFIXES) })
@@ -167,6 +223,8 @@ export async function createIdea(
     input.scopePrefixes,
   );
   return withTransaction(db, async (tx) => {
+    if (input.ownerStaffId) await checkOwnerChange(tx, actor, input.ownerStaffId);
+    await checkIdeaRefs(tx, input.ownerStaffId);
     const duplicates = await checkIdeaDuplicates(tx, {
       title: input.title,
       coursePrefix: input.coursePrefix,
@@ -194,6 +252,7 @@ export async function createIdea(
               notes: input.notes ?? null,
               scope,
               scopePrefixes,
+              ...boardValues(input),
               status: 'idea',
               createdBy: actor.id,
             })
@@ -213,7 +272,7 @@ export async function createIdea(
         if (isUniqueViolation(error, 'ideas_course_title_key'))
           throw exactDuplicateError(duplicates);
         if (isUniqueViolation(error, 'ideas_code_key') && attempt < maxAttempts) continue;
-        throw error;
+        throw refError(error);
       }
     }
     throw new ConflictError('Could not allocate a free idea code; try again.');
@@ -228,7 +287,11 @@ export interface IdeaListFilters {
   limit?: number;
 }
 
-export async function listIdeas(db: Database, filters: IdeaListFilters = {}): Promise<IdeaRow[]> {
+/** Ideas with their owner's name (null = no owner). */
+export async function listIdeas(
+  db: Database,
+  filters: IdeaListFilters = {},
+): Promise<(IdeaRow & { ownerName: string | null })[]> {
   const where: SQL[] = [];
   if (filters.coursePrefix) where.push(eq(marketingIdeas.coursePrefix, filters.coursePrefix));
   if (filters.status) where.push(eq(marketingIdeas.status, filters.status));
@@ -246,8 +309,9 @@ export async function listIdeas(db: Database, filters: IdeaListFilters = {}): Pr
     );
   }
   return db
-    .select()
+    .select({ ...getTableColumns(marketingIdeas), ownerName: staffMembers.fullName })
     .from(marketingIdeas)
+    .leftJoin(staffMembers, eq(staffMembers.id, marketingIdeas.ownerStaffId))
     .where(where.length ? and(...where) : undefined)
     .orderBy(
       asc(marketingIdeas.coursePrefix),
@@ -315,10 +379,20 @@ export async function updateIdea(
   assertCan(actor, 'marketing:ideas:write');
   return withTransaction(db, async (tx) => {
     const before = await getIdea(tx, id);
+    await assertIdeaChangeable(tx, actor, before);
+    if (patch.ownerStaffId !== undefined && patch.ownerStaffId !== before.ownerStaffId) {
+      await checkOwnerChange(tx, actor, patch.ownerStaffId);
+      await checkIdeaRefs(tx, patch.ownerStaffId);
+    }
     if (before.status === 'archived')
       throw new InvalidStateTransitionError('Archived ideas cannot be edited.');
+    // Approval covers what was reviewed; change the status to In development to edit again.
+    if (before.status === 'approved')
+      throw new InvalidStateTransitionError(
+        'An approved idea is locked. Move it to In development to edit it; it then needs review again.',
+      );
     let duplicates: DuplicateCheckResult | null = null;
-    const set: Partial<typeof marketingIdeas.$inferInsert> = {};
+    const set: Partial<IdeaInsert> = boardValues(patch);
     if (patch.title !== undefined && patch.title !== before.title) {
       duplicates = await checkIdeaDuplicates(tx, {
         title: patch.title,
@@ -368,7 +442,7 @@ export async function updateIdea(
     } catch (error) {
       if (isUniqueViolation(error, 'ideas_course_title_key') && duplicates)
         throw exactDuplicateError(duplicates);
-      throw error;
+      throw refError(error);
     }
   });
 }
@@ -383,6 +457,7 @@ export async function changeIdeaStatus(
   assertCan(actor, 'marketing:ideas:write');
   return withTransaction(db, async (tx) => {
     const before = await getIdea(tx, id);
+    await assertIdeaChangeable(tx, actor, before);
     if (!canChangeIdeaStatus(before.status, input.status)) {
       throw new InvalidStateTransitionError(
         `An idea cannot go from ${before.status} to ${input.status}.`,
@@ -398,8 +473,8 @@ export async function changeIdeaStatus(
           'Another approver must review an idea you own (no self-approval).',
         );
     }
-    if ((input.status === 'rejected' || input.status === 'held') && !input.reason) {
-      throw new ValidationError('Give a reason when holding or rejecting an idea.');
+    if (['rejected', 'held', 'changes_requested'].includes(input.status) && !input.reason) {
+      throw new ValidationError('Give a reason when holding, rejecting or sending back an idea.');
     }
     const [after] = await tx
       .update(marketingIdeas)

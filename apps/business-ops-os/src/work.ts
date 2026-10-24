@@ -21,7 +21,11 @@ import * as eodReportSubmit from './app/api/v1/eod-reports/[id]/submit/route';
 import * as eodReports from './app/api/v1/eod-reports/route';
 import * as feedbackMine from './app/api/v1/feedback/mine/route'; // FB
 import * as feedbackMineOne from './app/api/v1/feedback/mine/[id]/route'; // FB
+import * as hrRequest from './app/api/v1/hr-requests/[id]/route'; // HR-REQ
+import * as hrRequestAction from './app/api/v1/hr-requests/[id]/[action]/route'; // HR-REQ
+import * as hrRequests from './app/api/v1/hr-requests/route'; // HR-REQ
 import * as notifications from './app/api/v1/notifications/route';
+import * as notificationOpen from './app/notifications/[id]/open/route'; // NOTIFY
 import * as staffTask from './app/api/v1/staff-tasks/[id]/route';
 import * as staffTaskAction from './app/api/v1/staff-tasks/[id]/[action]/route';
 import * as staffTaskChecklist from './app/api/v1/staff-tasks/[id]/checklist/route';
@@ -35,6 +39,7 @@ import * as taskReports from './app/api/v1/task-reports/route';
 export { MeetingsBody } from './app/meetings/meetings-body';
 export { MyAttendanceBody } from './app/my-attendance/my-attendance-body'; // ATT
 export { NotificationsBody } from './app/notifications/notifications-body';
+export { DueWork } from './ui/task-notices'; // NOTIFY
 export { TaskBody, TasksBody, type BodyProps } from './app/tasks/_components/bodies';
 export { InboxBody } from './app/tasks/inbox/inbox-body';
 export { TaskReportsBody } from './app/tasks/reports/reports-body';
@@ -44,11 +49,17 @@ export { hasInbox } from './server/eod-review';
 export { taskDaySummary } from './server/staff-tasks';
 export { listTasks } from './server/staff-tasks'; // MKT: Deliverables + My Day lists
 export { taskListQuery } from './server/staff-tasks-schemas'; // MKT
+export { myReports } from './server/work-reports'; // MKT-PERF: monthly report status for a period
+export { STANDING_LABELS } from './domain/work-report';
 export { taskStatusLabel } from './domain/staff-tasks'; // MKT (TASKS: do not add a second copy)
 export { linkUrl } from './server/task-links';
 export { listAttachments } from './server/attachments'; // ATTACH
 export { AttachmentList, AttachmentUpload } from './ui/attachments'; // ATTACH
 export { FeedbackDevelopmentBody } from './ui/feedback-development'; // FB
+export { HrRequestsBody } from './app/hr-requests/hr-requests-body'; // HR-REQ
+
+/** GET <base>/notifications/{id}/open (a page route, not under api/v1): `export const { GET } = notificationOpen;` */
+export { notificationOpen }; // NOTIFY
 
 /** Route handlers by path under `<base>/api/v1/` (tracker imports stay in Ops). */
 export const workRoutes = {
@@ -76,6 +87,9 @@ export const workRoutes = {
   attendance, // ATT
   'attendance/corrections': attendanceCorrections, // ATT
   'ai/report-draft': aiReportDraft, // AI
+  'hr-requests': hrRequests, // HR-REQ
+  'hr-requests/[id]': hrRequest, // HR-REQ
+  'hr-requests/[id]/[action]': hrRequestAction, // HR-REQ
 };
 
 export interface NavRow {
@@ -107,3 +121,5 @@ export const workNav = (base: string): NavRow[] => [
     permission: 'ops:tasks:read',
   },
 ];
+export { createTask } from './server/staff-tasks'; // MKT-PLAN: calendar item → Ops task
+export { taskBody } from './server/staff-tasks-schemas'; // MKT-PLAN

@@ -37,7 +37,7 @@ export default async function AssessmentPage({ params, searchParams }: { params:
       validation: await validateAssessment(db, actor, id),
       results: await getResults(db, actor, id, version),
       analysis: await getAssessmentAnalysis(db, actor, id),
-      schedule: await checkAssessmentScheduleFor(db, actor, { batchId: a.batchId }),
+      schedule: await checkAssessmentScheduleFor(db, actor, { batchId: a.scheduleBatchId }),
     };
   });
   if (!data.ok) return <AcademicShell access={access} active="assessments"><LoadError error={data.error} /></AcademicShell>;
@@ -45,7 +45,7 @@ export default async function AssessmentPage({ params, searchParams }: { params:
   const canWrite = can(access.user, 'academic:assessments:write') && a.status !== 'cancelled';
   const canFinalise = can(access.user, 'academic:assessments:finalise');
   const canMark = can(access.user, 'academic:assessments:mark') && a.status !== 'cancelled';
-  const canPublish = can(access.user, 'academic:assessments:publish') && a.status === 'finalised' && !a.publishedAt;
+  const canPublish = can(access.user, 'academic:assessments:publish') && a.status === 'finalised' && !a.publishedAt && !a.roster;
   const api = (p: string) => MODULE_PATHS.api(`assessments/${a.id}/${p}`);
   const mine = schedule.hard.filter((c) => c.candidateId === a.id || c.otherId === a.id);
   return (
@@ -58,6 +58,13 @@ export default async function AssessmentPage({ params, searchParams }: { params:
       />
       <div className="el-stack">
         <ScoringSection a={a} />
+        {a.roster ? (
+          <Card title="Roster" description="Run from Business Operations (Tests and Mock Tests). The roster was fixed from the selected batches when it was taken; later batch changes do not alter it.">
+            <p>
+              {a.roster.counts.active} students{a.roster.counts.removed ? ` (${a.roster.counts.removed} removed, with reasons)` : ''}. Attendance: {a.roster.counts.present} present, {a.roster.counts.absent} absent, {a.roster.counts.excused} excused, {a.roster.counts.unmarked} not marked. Marks: {a.roster.counts.verified} verified, {a.roster.counts.imported} imported for review, {a.roster.counts.notEntered} not entered.
+            </p>
+          </Card>
+        ) : null}
         {canWrite && a.status !== 'finalised' ? (
           <Card title="Configure scoring" description="Sections cannot be restructured once responses exist. Marks are exact decimals (max 4 places).">
             <ApiForm
@@ -108,7 +115,13 @@ export default async function AssessmentPage({ params, searchParams }: { params:
           ) : null}
         </Card>
         <Card title="Publication" description="Publishing is separate from finalising. Only published results reach Business Ops, students and parents; a later re-score publishes its new version.">
-          {a.publishedAt ? <p>Published {fmtDateTime(a.publishedAt)}.</p> : <p>Not published. Students, parents and Business Ops do not see these results.</p>}
+          {a.roster ? (
+            <p>Publication: {a.roster.publicationState.replace(/_/g, ' ')}. Results of this test are published, re-published and withdrawn in Business Operations, with a version and ranking scope.</p>
+          ) : a.publishedAt ? (
+            <p>Published {fmtDateTime(a.publishedAt)}.</p>
+          ) : (
+            <p>Not published. Students, parents and Business Ops do not see these results.</p>
+          )}
           {canPublish ? <ApiButton action={api('publish')} label="Publish results" variant="primary" successMessage="Results published." /> : null}
         </Card>
         <ResultsSection r={results} assessmentId={a.id} />

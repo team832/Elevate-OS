@@ -98,7 +98,7 @@ export function AttachmentList({
   );
 }
 
-const readBase64 = (file: File) =>
+export const readBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''));
@@ -112,12 +112,17 @@ export function AttachmentUpload({
   ownerId,
   purpose,
   label = 'Add a file',
+  accept = ATTACHMENT_ACCEPT,
+  hint = ATTACHMENT_LIMITS_TEXT,
 }: {
   apiBase: string;
   ownerKind: string;
   ownerId: string;
   purpose: string;
   label?: string;
+  /** Narrower file types for this record (the server checks them again). */
+  accept?: string;
+  hint?: string;
 }) {
   const router = useRouter();
   const id = useId();
@@ -152,13 +157,13 @@ export function AttachmentUpload({
   }
 
   return (
-    <Field id={id} label={label} hint={ATTACHMENT_LIMITS_TEXT} error={error}>
+    <Field id={id} label={label} hint={hint} error={error}>
       <input
         id={id}
         type="file"
-        accept={ATTACHMENT_ACCEPT}
+        accept={accept}
         disabled={busy}
-        aria-describedby={fieldDescribedBy(id, ATTACHMENT_LIMITS_TEXT, error)}
+        aria-describedby={fieldDescribedBy(id, hint, error)}
         aria-invalid={error ? true : undefined}
         onChange={(e) => void upload(e)}
       />

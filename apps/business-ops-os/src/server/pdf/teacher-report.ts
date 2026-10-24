@@ -120,6 +120,10 @@ export async function teacherReportPdf(
 
   list(pdf, 'Where to work on', s.workOn);
   list(pdf, 'What the records show', s.summary);
+  if (s.comment) {
+    pdf.heading('Overall comment');
+    pdf.paragraph(s.comment);
+  }
   pdf.heading('How these figures are counted');
   for (const [k, v] of s.definitions) pdf.paragraph(`${k}: ${v}`, { muted: true });
   const bytes = await pdf.finish();

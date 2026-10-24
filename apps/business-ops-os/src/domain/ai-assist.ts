@@ -5,7 +5,15 @@
  * masked, a name should not get through.
  */
 
-export const AI_FEATURES = ['feedbackSummary', 'reportDraft', 'taskBrief', 'csvMapping'] as const;
+export const AI_FEATURES = [
+  'feedbackSummary',
+  'reportDraft',
+  'taskBrief',
+  'csvMapping',
+  'scoreSheet',
+  /** The AI summary on the student page (D-111); progress and teacher report comments use reportDraft. */
+  'studentSummary',
+] as const;
 export type AiFeature = (typeof AI_FEATURES)[number];
 
 /** One suggested value: `name` is the form field it fills; `shown` is how it reads, if not `value`. */
@@ -19,6 +27,7 @@ export interface DraftItem {
 export const AI_NOT_SET_UP = 'AI drafting is not set up.';
 export const AI_FAILED = "AI drafting didn't respond. Try again or write it yourself.";
 export const AI_DRAFT_LABEL = 'AI draft — check before saving';
+export const AI_SUMMARY_LABEL = 'AI summary — check before relying on it';
 
 const EMAIL = /[\w.+-]+@[\w-]+(\.[\w-]+)+/g;
 const PHONE = /(?:\(\+?|\+)?\d[\d\s().-]{7,}\d/g;
@@ -181,3 +190,12 @@ export function shapeOf(raw: string): ValueShape {
 
 /** The punch file's columns (domain/attendance.ts parsePunchCsv reads these headings). */
 export const PUNCH_COLUMNS = { staffCode: 'Staff code', at: 'Date-time', direction: 'Direction' };
+
+/** Headings of the cells read from a score sheet PDF (a section's is `Section <code>`). */
+export const SHEET_COLUMNS = {
+  admission_number: 'Admission number',
+  student_code: 'Student code',
+  name: 'Name',
+  total: 'Total',
+  attendance: 'Attendance',
+} as const;

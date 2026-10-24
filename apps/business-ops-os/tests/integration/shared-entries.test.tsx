@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import { prerender } from 'react-dom/static';
 import { and, eq } from 'drizzle-orm';
 import { authedRequest, callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
-import { notifications } from '@elevate/database';
+import { notifications, opsStaffTasks } from '@elevate/database';
 import { GET as studentsRoute } from '../../src/app/api/v1/students/route';
 import { GET as kycRoute } from '../../src/app/api/v1/students/[id]/kyc/route';
 import { GET as feesRoute } from '../../src/app/api/v1/fees/route';
@@ -25,6 +25,7 @@ import {
   workNav,
   workRoutes,
 } from '../../src/work';
+import { istToday } from '../../src/domain/dates';
 import { setupReference, staffUser, phone, type StaffUser } from './fixtures';
 
 vi.mock('next/navigation', () => ({
@@ -41,6 +42,8 @@ vi.mock('../../src/ui/lead-create-form', () => ({
   LeadCreateForm: (p: { base: string }) => <form action={`${p.base}/api/v1/leads`} />,
 }));
 
+// Reporting days are Asia/Kolkata: 02:00 IST is still the previous day in UTC.
+vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-24T02:00:00+05:30') });
 const ctx = setupTestDatabase();
 const html = async (node: ReactNode) => new Response((await prerender(node)).prelude).text();
 const post = (u: StaffUser, json: unknown, method = 'POST') =>
@@ -170,7 +173,7 @@ describe('routes through the entries keep the Ops permission checks', () => {
     ).toBe(404);
     const draft = await callRoute<{ id: string }>(
       r['eod-reports'].POST,
-      post(teacher, { reportDate: new Date().toISOString().slice(0, 10), summary: 'Sample day' }),
+      post(teacher, { reportDate: istToday(new Date()), summary: 'Sample day' }),
     );
     expect(draft.status).toBe(200);
     expect(
@@ -202,7 +205,9 @@ describe('routes through the entries keep the Ops permission checks', () => {
       history: { entityType: string }[];
       privateVisible: boolean;
     };
+    // Brief §11: the admission number links a converted lead (read-only), nothing more.
     expect(Object.keys(d.admissions[0]!).sort()).toEqual([
+      'admissionNumber',
       'code',
       'createdAt',
       'id',
@@ -262,7 +267,7 @@ describe('links a recipient opens later', () => {
     ).map((n) => n.link);
 
   it('teacher gets Academic links, a coordinator (also an Ops member) Ops links; a marketing owner gets a Marketing link', async () => {
-    const day = new Date().toISOString().slice(0, 10);
+    const day = istToday(new Date());
     const r = workRoutes;
     // Status changes go through the task actions only (review round 1, C1).
     await callRoute(r['staff-tasks/[id]/[action]'].POST, post(teacher, { expectedVersion: 1 }), {
@@ -303,5 +308,29 @@ describe('taskDaySummary', () => {
     expect(
       await taskDaySummary(ctx.db, await createTestUser(ctx.db, { roles: ['teacher'] })),
     ).toBeNull();
+  });
+});
+
+describe('task tracker ?flag=blocked (the Marketing Overview blocked tile links here)', () => {
+  it('lists only open blocked tasks, and its caption is the tile’s count', async () => {
+    const create = async (title: string) =>
+      (
+        await callRoute<{ id: string }>(
+          workRoutes['staff-tasks'].POST,
+          post(mc, { title, priority: 'medium', recurrence: 'none' }),
+        )
+      ).data!.id;
+    const blocked = await create('Sample: waiting on the poster design');
+    await create('Sample: caption draft');
+    await ctx.db
+      .update(opsStaffTasks)
+      .set({ blockedAt: new Date(), blockedKind: 'blocked', blockedReason: 'Sample reason' })
+      .where(eq(opsStaffTasks.id, blocked as never));
+    const out = await html(
+      <TasksBody user={mc} base="/marketing" searchParams={{ tab: 'all', flag: 'blocked' }} />,
+    );
+    expect(out).toContain('Sample: waiting on the poster design');
+    expect(out).not.toContain('Sample: caption draft');
+    expect(out).toContain('<caption>1 task</caption>');
   });
 });

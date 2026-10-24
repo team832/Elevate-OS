@@ -9,6 +9,9 @@ import { formatPaise } from '../domain/fees';
 export const routerPath = (path: string) =>
   path.replace(/^\/(?:ops|academic|marketing)(?=[/?]|$)/, '') || '/';
 
+/** "1 student", "3 students". */
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 /** Money on screens: "₹1,00,000" for whole rupees, "₹1,500.50" otherwise. PDFs keep `formatPaise` ("₹1,00,000.00"). */
 export const fmtPaise = (paise: number | null | undefined) =>
   formatPaise(paise).replace(/\.00$/, '');

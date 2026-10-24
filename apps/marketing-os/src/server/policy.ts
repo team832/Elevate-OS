@@ -106,6 +106,16 @@ export const POLICY_DEFINITIONS = {
       'The registry follows the Content OS model (9 approved accounts + IGN later). The handover lists "Elevate CA" and "Elevate Online" pages (ACC-CONFLICT-001); they are not created until the owner decides.',
     source: 'data/legacy/marketing/accounts.json conflicts',
   }),
+  admissionAttribution: def<'lead_owner_at_confirmation'>({
+    key: 'marketing.targets.admission_attribution',
+    schema: z.enum(['lead_owner_at_confirmation']),
+    defaultValue: 'lead_owner_at_confirmation',
+    status: 'proposed',
+    ownerDecision: null,
+    description:
+      'Who is credited with a verified admission in marketing targets. Proposed: the lead owner at the moment Business Operations confirmed the admission.',
+    source: 'Owner brief 23 Oct 2026 §15; SCHEMA-CONTRACT-MKT',
+  }),
   ipmatCaComparison: def<string>({
     key: 'rules.no_ca_comparison_covers_ipmat',
     schema: z.string(),

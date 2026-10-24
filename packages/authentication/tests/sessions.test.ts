@@ -97,6 +97,9 @@ describe('cookie', () => {
     const prod = serializeCookie(SESSION_COOKIE, 'abc', sessionCookieOptions(60, 'production'));
     expect(prod).toContain('; Secure');
     expect(clearSessionCookie('development')).toContain('Max-Age=0');
+    // Office Wi-Fi mode (D-110): plain http address → no Secure, or browsers drop the cookie.
+    expect(sessionCookieOptions(60, 'production', 'http://192.168.1.5:3003').secure).toBe(false);
+    expect(sessionCookieOptions(60, 'production', 'https://ops.example.test').secure).toBe(true);
     expect(parseCookieHeader('a=1; elevate_session=xyz; b=2').get(SESSION_COOKIE)).toBe('xyz');
   });
 });

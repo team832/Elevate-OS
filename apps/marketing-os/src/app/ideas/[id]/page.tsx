@@ -5,6 +5,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   DataTable,
   EmptyState,
   ErrorState,
@@ -14,9 +15,27 @@ import {
   TextArea,
   TextInput,
 } from '@elevate/shared-ui';
-import { CONTENT_FORMATS, IDEA_STATUSES, formatIst, modulePath } from '../../../domain';
-import { contentFilter, getIdeaDetail } from '../../../server';
+import {
+  CONTENT_FORMATS,
+  formatIst,
+  IDEA_SCOPE_LABELS,
+  IDEA_STATUS_LABELS,
+  IDEA_STATUSES,
+  modulePath,
+} from '../../../domain';
+import { contentFilter, getIdeaDetail, myStaffId } from '../../../server';
+import {
+  CALENDAR_ITEM_TYPES,
+  CHANNEL_LABELS,
+  EFFORT_LABELS,
+  ITEM_TYPE_LABELS,
+} from '../../../domain/calendar';
+import { calendarOptions, listCalendarItems } from '../../../server/calendar';
 import { changeIdeaStatusAction, createContentItemAction } from '../../actions/ideas';
+import { CalendarStatusBadge, Choice, SampleBadge } from '../../calendar/item-ui';
+import { planIdeaAction, updateIdeaAction } from '../actions';
+import { IdeaBoardFields } from '../idea-fields';
+import { IdeaReview } from '../idea-review';
 import { ContentStateBadge, PlacementBadge } from '../../../ui/badges';
 import { MarketingPage, Section, type SearchParams } from '../../../ui/shell';
 
@@ -35,7 +54,7 @@ export default async function IdeaDetailPage({
     <MarketingPage
       permission="marketing:ideas:read"
       path={modulePath(`ideas/${id}`)}
-      active="calendar"
+      active="ideas"
       title="Idea"
       searchParams={await searchParams}
     >
@@ -54,9 +73,23 @@ export default async function IdeaDetailPage({
             const { idea } = d;
             const write = can(user, 'marketing:ideas:write');
             const contentWrite = can(user, 'marketing:content:write');
+            const options = await calendarOptions(db);
+            const [onCalendar] = await listCalendarItems(db, { ideaId: idea.id });
+            const mine =
+              idea.createdBy === user.id ||
+              (idea.ownerStaffId !== null && idea.ownerStaffId === (await myStaffId(db, user.id)));
+            const nameOf = (
+              list: { id: string; name: string }[],
+              id: string | null,
+              none: string,
+            ) => (id ? (list.find((x) => x.id === id)?.name ?? 'Not in the current list') : none);
+            const hidden = <input type="hidden" name="ideaId" value={idea.id} />;
             return (
               <div className="el-stack">
-                <Card title={`${idea.code ?? `${idea.legacyCode} (quarantined)`} — ${idea.title}`}>
+                <Card
+                  title={`${idea.code ?? `${idea.legacyCode} (quarantined)`} — ${idea.title}`}
+                  meta={<SampleBadge sample={idea.isSample} />}
+                >
                   {idea.quarantineState === 'quarantined' ? (
                     <Alert tone="warning" title="Quarantined (OD-003)">
                       {idea.quarantineReason}{' '}
@@ -70,13 +103,13 @@ export default async function IdeaDetailPage({
                     <dd>{idea.coursePrefix}</dd>
                     <dt>Status</dt>
                     <dd>
-                      {idea.status.replace('_', ' ')}
+                      {IDEA_STATUS_LABELS[idea.status]}
                       {idea.statusReason ? ` — ${idea.statusReason}` : ''}
                       {idea.legacyStatus ? ` (legacy: ${idea.legacyStatus})` : ''}
                     </dd>
                     <dt>Scope</dt>
                     <dd>
-                      {idea.scope.replace('_', ' ')} {idea.scopePrefixes.join(', ')}
+                      {IDEA_SCOPE_LABELS[idea.scope]} {idea.scopePrefixes.join(', ')}
                     </dd>
                     <dt>Pillar / series</dt>
                     <dd>
@@ -84,8 +117,38 @@ export default async function IdeaDetailPage({
                     </dd>
                     <dt>Objective</dt>
                     <dd>{idea.objective ?? '—'}</dd>
-                    <dt>Audience</dt>
+                    <dt>Problem or audience need</dt>
+                    <dd>{idea.problemNeed ?? '—'}</dd>
+                    <dt>Target audience</dt>
                     <dd>{idea.audience ?? '—'}</dd>
+                    <dt>Relevant course</dt>
+                    <dd>{nameOf(options.courses, idea.programmeId, 'Not tied to one course')}</dd>
+                    <dt>Proposed format and channel</dt>
+                    <dd>
+                      {idea.proposedFormat
+                        ? ITEM_TYPE_LABELS[idea.proposedFormat]
+                        : 'Format not decided'}{' '}
+                      ·{' '}
+                      {idea.proposedChannel
+                        ? CHANNEL_LABELS[idea.proposedChannel]
+                        : 'channel not decided'}
+                    </dd>
+                    <dt>Hypothesis</dt>
+                    <dd>{idea.hypothesis ?? '—'}</dd>
+                    <dt>Effort estimate</dt>
+                    <dd>{idea.effort ? EFFORT_LABELS[idea.effort] : 'Not estimated'}</dd>
+                    <dt>Expected outcome</dt>
+                    <dd>{idea.expectedOutcome ?? '—'}</dd>
+                    <dt>Owner</dt>
+                    <dd>{nameOf(options.owners, idea.ownerStaffId, 'No owner yet')}</dd>
+                    <dt>Related campaign</dt>
+                    <dd>
+                      {nameOf(
+                        options.campaigns.map((c) => ({ id: c.id, name: `${c.code} · ${c.name}` })),
+                        idea.campaignId,
+                        'No campaign',
+                      )}
+                    </dd>
                     <dt>Brief</dt>
                     <dd>{idea.brief ?? '—'}</dd>
                     <dt>Source</dt>
@@ -99,6 +162,87 @@ export default async function IdeaDetailPage({
                     </dd>
                   </dl>
                 </Card>
+
+                <IdeaReview
+                  status={idea.status}
+                  hidden={hidden}
+                  canSubmit={write}
+                  reviewer={can(user, 'marketing:content:approve') && !mine}
+                  mine={mine}
+                />
+
+                {idea.status === 'approved' || onCalendar ? (
+                  <Card
+                    title="On the calendar"
+                    description="Planning links one calendar item to this idea. The idea's history stays here; it is not copied."
+                  >
+                    {onCalendar ? (
+                      <p>
+                        <a href={modulePath(`calendar/${onCalendar.id}`)}>{onCalendar.title}</a>{' '}
+                        <CalendarStatusBadge status={onCalendar.status} />{' '}
+                        {formatIst(onCalendar.plannedAt)}
+                      </p>
+                    ) : can(user, 'marketing:calendar:write') ? (
+                      <form action={planIdeaAction} className="el-stack">
+                        {hidden}
+                        <Field id="plannedAt" label="Planned date and time (IST, optional)">
+                          <TextInput id="plannedAt" name="plannedAt" type="datetime-local" />
+                        </Field>
+                        {idea.proposedFormat ? null : (
+                          <Choice
+                            id="itemType"
+                            label="Calendar item type"
+                            value={null}
+                            options={CALENDAR_ITEM_TYPES.map((t) => [t, ITEM_TYPE_LABELS[t]])}
+                          />
+                        )}
+                        {can(user, 'ops:tasks:write') ? (
+                          <Checkbox
+                            name="createTask"
+                            label="Also create a task for the owner in My Tasks"
+                          />
+                        ) : null}
+                        <div>
+                          <Button type="submit">Plan it</Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <p>Not planned yet. A marketing manager or the idea's owner can plan it.</p>
+                    )}
+                  </Card>
+                ) : null}
+
+                {write && idea.status !== 'archived' ? (
+                  <details className="el-explain">
+                    <summary>Edit idea details</summary>
+                    <form action={updateIdeaAction} className="el-stack">
+                      {hidden}
+                      <Field id="title" label="Title">
+                        <TextInput
+                          id="title"
+                          name="title"
+                          required
+                          minLength={3}
+                          maxLength={300}
+                          defaultValue={idea.title}
+                        />
+                      </Field>
+                      <IdeaBoardFields options={options} idea={idea} />
+                      <Field id="brief" label="Brief">
+                        <TextArea
+                          id="brief"
+                          name="brief"
+                          rows={4}
+                          maxLength={5000}
+                          defaultValue={idea.brief ?? ''}
+                        />
+                      </Field>
+                      <div>
+                        <Button type="submit">Save idea</Button>
+                      </div>
+                    </form>
+                  </details>
+                ) : null}
 
                 <Card
                   title="Possible duplicates"
@@ -128,7 +272,12 @@ export default async function IdeaDetailPage({
                     compact
                     rows={d.contentItems}
                     rowKey={(i) => i.id}
-                    empty={<EmptyState title="No content items yet" />}
+                    empty={
+                      <EmptyState
+                        title="No content items yet"
+                        description="Draft the copy as a content item: give it a title and a format below."
+                      />
+                    }
                     columns={[
                       {
                         key: 'title',
@@ -185,7 +334,12 @@ export default async function IdeaDetailPage({
                     compact
                     rows={d.placements}
                     rowKey={(p) => p.id}
-                    empty={<EmptyState title="Not placed on any account yet" />}
+                    empty={
+                      <EmptyState
+                        title="Not placed on any account yet"
+                        description="Open a content item of this idea and plan a placement on an account."
+                      />
+                    }
                     columns={[
                       {
                         key: 'code',
@@ -229,7 +383,7 @@ export default async function IdeaDetailPage({
                         <Select id="st" name="status">
                           {IDEA_STATUSES.map((s) => (
                             <option key={s} value={s}>
-                              {s.replace('_', ' ')}
+                              {IDEA_STATUS_LABELS[s]}
                             </option>
                           ))}
                         </Select>

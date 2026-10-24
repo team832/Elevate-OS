@@ -9,7 +9,7 @@ import {
 } from '@elevate/testing';
 import { opsAdmissions, opsDuplicateFlags, opsFollowUps, opsLeads } from '@elevate/database';
 import { GET as listLeads, POST as createLead } from '../../src/app/api/v1/leads/route';
-import { GET as getLead } from '../../src/app/api/v1/leads/[id]/route';
+import { GET as getLead, PATCH as patchLead } from '../../src/app/api/v1/leads/[id]/route';
 import { POST as checkDuplicates } from '../../src/app/api/v1/leads/check-duplicates/route';
 import { POST as assign } from '../../src/app/api/v1/leads/[id]/assign/route';
 import { POST as accept } from '../../src/app/api/v1/leads/[id]/accept/route';
@@ -186,6 +186,17 @@ describe('own scope, assignment and contact', () => {
     expect(await status(getLead, authedRequest(counsellor, '/x'), id)).toBe(403);
     expect(await status(getLead, authedRequest(manager, '/x'), id)).toBe(200);
   });
+
+  it.each([{ stageKey: 'contacted' }, { stage: 'contacted' }])(
+    'PATCH refuses %o with 400 (stage changes go through the stage route); details still save',
+    async (stage) => {
+      const id = { id: (await newLead(counsellor)).data!.lead.id };
+      const patch = (json: unknown) =>
+        callRoute(patchLead, authedRequest(counsellor, '/x', { method: 'PATCH', json }), id);
+      expect((await patch({ notes: 'Sample note', ...stage })).status).toBe(400);
+      expect((await patch({ notes: 'Sample note' })).status).toBe(200);
+    },
+  );
 
   it('campaign references show only to roles allowed to see marketing attribution', async () => {
     const lead = await newLead(counsellor, { campaignRef: 'test-only-campaign' });

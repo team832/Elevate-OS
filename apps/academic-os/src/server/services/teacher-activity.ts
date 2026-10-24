@@ -7,6 +7,7 @@
  */
 import { and, asc, countDistinct, eq, gte, inArray, isNull, lt, lte } from 'drizzle-orm';
 import {
+  academicAssessmentRoster,
   academicAssessments,
   academicAttempts,
   academicBatches,
@@ -23,9 +24,10 @@ import {
 import { NotFoundError, academicTeacherActivityV1Schema, metric, type AcademicTeacherActivityV1 } from '@elevate/shared-contracts';
 import { addDays, type IsoDate, type StaffMemberId } from '@elevate/shared-types';
 import { assignmentPhase } from '../../domain/placements';
-import { resolveScope, todayIst, type Actor } from '../context';
+import { ownScope, resolveScope, todayIst, type Actor } from '../context';
 import { listAssignmentsFor, type AssignmentRow } from './assignments';
 import { LOOKBACK_DAYS, sessionWork } from './my-day';
+import { countAssessments, teacherAssessments } from './teacher-assessment-counts';
 import { sessionRows, teachersBySession, type SessionListRow } from './timetable';
 
 /** Every assignment row of these teachers (history and pending included). */
@@ -142,8 +144,23 @@ export async function teacherActivity(db: Database, staffId: string, window: { f
     },
     unavailability,
     topicsCovered: await topicsCovered(db, staffId, window),
-    assessments: await assessmentWork(db, staff.userId, window, teaching),
+    assessments: { ...(await assessmentWork(db, staff.userId, window, teaching)), ...(await assessmentCounts(db, staff.id, window, today, teaching)) },
   });
+}
+
+const SCOPE_NOTE = 'Not cancelled, dated in the window or not yet dated, in a batch and subject of an assignment open today, with this teacher responsible, evaluator, or neither named.';
+/** Brief §21 counts from the same rows as the teacher's My day (teacher-assessment-counts.ts). No teaching = missing, never 0. */
+async function assessmentCounts(db: Database, staffId: StaffMemberId, window: { from: string; to: string }, today: string, teaching: boolean) {
+  const rows = await teacherAssessments(db, await ownScope(db, staffId, today), { window, today });
+  const counts = rows && countAssessments(rows);
+  const defs = {
+    assigned: `Assessments assigned to this teacher. ${SCOPE_NOTE}`,
+    completed: 'Of those, conducted or finalised.',
+    awaitingMarking: 'Of those this teacher marks (as evaluator, else responsible teacher): held, with a roster row unmarked or not verified (assessments without a roster: conducted, not finalised).',
+    published: 'Of those, with results published (final or provisional).',
+  } as const;
+  const meta = (definition: string) => ({ definition, window, unit: 'count' as const });
+  return Object.fromEntries(Object.entries(defs).map(([k, d]) => [k, counts && teaching ? metric.ok(counts[k as keyof typeof defs], meta(d)) : metric.missing(counts ? 'No teaching assignments' : 'No teaching assignment open today', meta(d))]));
 }
 
 /** Chapters of this teacher's verified class records whose class date is in the window, with the number of classes. */
@@ -161,18 +178,24 @@ async function topicsCovered(db: Database, staffId: string, window: { from: stri
     .orderBy(asc(academicBatches.code), asc(academicSubjects.name), asc(academicChapters.sortOrder));
 }
 
-/** Assessments created / with marks entered by the teacher's sign-in, timestamps in the IST window. No sign-in or no teaching = missing, never 0. */
+/** Assessments created / with marks entered or verified by the teacher's sign-in, timestamps in the IST window. No sign-in or no teaching = missing, never 0. */
 async function assessmentWork(db: Database, userId: string | null, window: { from: string; to: string }, teaching: boolean) {
   const meta = (definition: string) => ({ definition, window, unit: 'count' as const });
   const prepared = meta('Assessments created by this teacher’s sign-in in the window (drafted, not necessarily held).');
-  const marked = meta('Assessments in which this teacher’s sign-in entered or changed marks in the window.');
+  const marked = meta('Assessments in which this teacher’s sign-in entered or changed per-question marks, or verified a roster score, in the window.');
   const reason = !userId ? 'No sign-in linked to this staff record' : !teaching ? 'No teaching assignments' : null;
   if (reason) return { prepared: metric.missing(reason, prepared), marked: metric.missing(reason, marked) };
   const from = new Date(`${window.from}T00:00:00+05:30`);
   const to = new Date(`${addDays(window.to as IsoDate, 1)}T00:00:00+05:30`);
   const a = academicAssessments;
   const at = academicAttempts;
+  const ro = academicAssessmentRoster;
   const [made] = await db.select({ n: countDistinct(a.id) }).from(a).where(and(eq(a.createdByUserId, userId as never), gte(a.createdAt, from), lt(a.createdAt, to)));
-  const [entered] = await db.select({ n: countDistinct(at.assessmentId) }).from(at).where(and(eq(at.enteredByUserId, userId as never), gte(at.updatedAt, from), lt(at.updatedAt, to)));
-  return { prepared: metric.ok(made!.n, prepared), marked: metric.ok(entered!.n, marked) };
+  // union de-duplicates: an assessment marked both ways counts once
+  const entered = await db
+    .select({ id: at.assessmentId })
+    .from(at)
+    .where(and(eq(at.enteredByUserId, userId as never), gte(at.updatedAt, from), lt(at.updatedAt, to)))
+    .union(db.select({ id: ro.assessmentId }).from(ro).where(and(eq(ro.verifiedByUserId, userId as never), gte(ro.verifiedAt, from), lt(ro.verifiedAt, to))));
+  return { prepared: metric.ok(made!.n, prepared), marked: metric.ok(entered.length, marked) };
 }

@@ -16,7 +16,12 @@ import {
 import { coreSeeds, runSeeds } from '@elevate/database/seed';
 import { setupTestDatabase } from '@elevate/testing';
 import { seeds } from '../../seed';
-import { SAMPLE_SESSIONS, SAMPLE_TEACHING_EMAILS, sampleAnchorDate } from '../../seed/samples';
+import {
+  SAMPLE_BATCHES,
+  SAMPLE_SESSIONS,
+  SAMPLE_TEACHING_EMAILS,
+  sampleAnchorDate,
+} from '../../seed/samples';
 import { opsSeedStubs } from './sample-seed-stubs';
 
 const ctx = setupTestDatabase();
@@ -95,7 +100,7 @@ describe('academic.sample-teaching (brief 2 §14, owner answer 4)', () => {
         academicBatchPlacements,
         and(eq(academicBatchPlacements.isSample, true), isNull(academicBatchPlacements.endDate)),
       ),
-    ).toBe(6);
+    ).toBe(SAMPLE_BATCHES.flatMap((b) => b.students).length);
     const reviews = await ctx.db.select().from(academicTeacherReviews);
     expect(reviews.map((r) => r.status).sort()).toEqual(['draft', 'submitted']);
     expect(reviews.every((r) => r.isSample)).toBe(true);

@@ -13,19 +13,19 @@ import {
   type FollowUpKind,
 } from '../../domain';
 import type { getLead } from '../../server/leads';
-import type { formOptions } from '../../server/options';
 import { CLASS_CATEGORY_LABELS, CLASS_CATEGORY_OPTIONS } from '../../domain/demos';
-import { ActionForm, type ActionFormProps, type FieldSpec } from '../../ui/action-form';
+import { ActionForm, type FieldSpec } from '../../ui/action-form';
 import { fmtDate, fmtDateTime, humanise, statusTone } from '../../ui/format';
 import { options as optionList } from '../../ui/list-controls';
-import { FormModal, type ModalTab } from '../../ui/record-modal';
+import type { ModalTab } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
 import { DetailTable, Segment } from '../../ui/sections';
 import { SampleBadge } from '../admissions/_components/demo-bits';
+import type { LeadAct } from './lead-acts';
+import { callColumns, StageMeta, StageSegment } from './lead-stage-record';
 
 export type LeadDetail = Awaited<ReturnType<typeof getLead>>;
 type CaseRow = LeadDetail['admissions'][number];
-type Options = Awaited<ReturnType<typeof formOptions>>;
 
 const RESTRICTED = 'Restricted (needs permission to see private details)';
 const known = (v: string | null | undefined) => v || 'Not recorded';
@@ -78,7 +78,7 @@ export function LeadMeta({ d }: { d: LeadDetail }) {
       ) : (
         <StatusBadge tone="neutral">No case yet</StatusBadge>
       )}{' '}
-      {d.lead.code} <SampleBadge show={d.lead.isSample} />
+      <StageMeta d={d} /> {d.lead.code} <SampleBadge show={d.lead.isSample} />
     </>
   );
 }
@@ -112,6 +112,9 @@ export function leadTabs(
   const cases = can(user, 'ops:admissions:read');
   const write = can(user, 'ops:leads:write');
   const contact = (v: string | null | undefined) => (d.privateVisible ? known(v) : RESTRICTED);
+  // Click-to-call opens the staff member's own phone; the app never dials or records.
+  const phone = (v: string | null | undefined) =>
+    d.privateVisible && v ? <a href={`tel:${v}`}>{v}</a> : contact(v);
   const firstEnquiry = d.enquiries.at(-1);
   const attribution = can(user, 'ops:lead_attribution:read');
   const action = (act: LeadAct, label: string, allowed: boolean) =>
@@ -166,6 +169,7 @@ export function leadTabs(
                 ) : null}
               </Alert>
             ))}
+          <StageSegment d={d} user={user} level={level} base={base} changeHref={actHref('stage')} />
           <Segment
             title="Contact"
             level={level}
@@ -175,7 +179,7 @@ export function leadTabs(
           >
             <DetailTable
               rows={[
-                { label: 'Student phone', value: contact(lead.studentPhone) },
+                { label: 'Student phone', value: phone(lead.studentPhone) },
                 { label: 'Student email', value: contact(lead.studentEmail) },
                 {
                   label: 'Parent / guardian',
@@ -183,7 +187,7 @@ export function leadTabs(
                     ? `${known(lead.guardianName)}${lead.guardianRelationship ? ` (${humanise(lead.guardianRelationship)})` : ''}`
                     : RESTRICTED,
                 },
-                { label: 'Guardian phone', value: contact(lead.guardianPhone) },
+                { label: 'Guardian phone', value: phone(lead.guardianPhone) },
                 { label: 'Guardian email', value: contact(lead.guardianEmail) },
                 { label: 'School', value: contact(lead.previousSchool) },
                 { label: 'City', value: contact(lead.city) },
@@ -420,6 +424,7 @@ export function leadTabs(
                 { key: 'occurredAt', header: 'When', render: (a) => fmtDateTime(a.occurredAt) },
                 { key: 'kind', header: 'Channel', render: (a) => humanise(a.kind) },
                 { key: 'outcome', header: 'Outcome', render: (a) => humanise(a.outcome) },
+                ...callColumns<(typeof d.activities)[number]>(),
                 { key: 'staffName', header: 'By', render: (a) => a.staffName ?? 'Not recorded' },
               ]}
             />
@@ -458,164 +463,4 @@ export function leadTabs(
       ),
     },
   ];
-}
-
-export const LEAD_ACTS = ['details', 'assign', 'follow_up', 'contact', 'enquiry'] as const;
-export type LeadAct = (typeof LEAD_ACTS)[number];
-
-/** The FormModal of one lead flow, or null when the user may not run it. */
-export function LeadActModal({
-  act,
-  d,
-  options,
-  user,
-  closeHref,
-  base,
-}: {
-  act: LeadAct;
-  d: LeadDetail;
-  options: Options;
-  user: AuthenticatedUser;
-  closeHref: string;
-  base: string;
-}) {
-  const api = `${base}/api/v1/leads/${d.lead.id}`;
-  const flows: Record<LeadAct, { title: string; allowed: boolean; form: ActionFormProps }> = {
-    details: {
-      title: 'Edit contact details',
-      allowed: can(user, 'ops:leads:write') && d.privateVisible,
-      form: {
-        action: api,
-        method: 'PATCH',
-        submitLabel: 'Save contact details',
-        fields: LEAD_CONTACT_FIELDS.map((f) => ({
-          ...f,
-          defaultValue: (d.lead[f.name as keyof typeof d.lead] as string | null) ?? undefined,
-        })),
-      },
-    },
-    assign: {
-      title: 'Assign owner',
-      allowed: can(user, 'ops:leads:assign'),
-      form: {
-        action: `${api}/assign`,
-        submitLabel: 'Assign owner',
-        fields: [
-          {
-            name: 'ownerStaffId',
-            label: 'New owner',
-            type: 'select',
-            required: true,
-            options: options.staff,
-            section: 'Owner',
-          },
-        ],
-      },
-    },
-    follow_up: {
-      title: 'Add follow-up',
-      allowed: can(user, 'ops:leads:write'),
-      form: {
-        action: `${base}/api/v1/follow-ups`,
-        submitLabel: 'Add follow-up',
-        extra: { leadId: d.lead.id },
-        fields: [
-          { name: 'title', label: 'Next action', section: 'Follow-up' },
-          {
-            name: 'dueDate',
-            label: 'Due date',
-            type: 'date',
-            required: true,
-            section: 'Follow-up',
-          },
-          {
-            name: 'ownerStaffId',
-            label: 'Owner',
-            type: 'select',
-            options: options.staff,
-            section: 'Follow-up',
-          },
-        ],
-      },
-    },
-    contact: {
-      title: 'Log contact',
-      allowed: can(user, 'ops:leads:write'),
-      form: {
-        action: `${api}/activities`,
-        submitLabel: 'Log contact',
-        fields: [
-          {
-            name: 'kind',
-            label: 'Channel',
-            type: 'select',
-            required: true,
-            options: optionList(['call', 'whatsapp', 'sms', 'email', 'visit', 'note']),
-            section: 'Contact attempt',
-          },
-          {
-            name: 'outcome',
-            label: 'Outcome',
-            type: 'select',
-            required: true,
-            options: optionList([
-              'connected_two_way',
-              'replied',
-              'visited',
-              'no_answer',
-              'busy',
-              'wrong_number',
-              'message_sent',
-              'other',
-            ]),
-            section: 'Contact attempt',
-          },
-          { name: 'note', label: 'Note', type: 'textarea', section: 'Contact attempt' },
-        ],
-      },
-    },
-    enquiry: {
-      title: 'Add enquiry',
-      allowed: can(user, 'ops:leads:write'),
-      form: {
-        action: `${api}/enquiries`,
-        submitLabel: 'Add enquiry',
-        fields: [
-          {
-            name: 'sourceCode',
-            label: 'Source',
-            type: 'select',
-            required: true,
-            defaultValue: 'UNKNOWN',
-            options: options.sources,
-            section: 'Enquiry',
-          },
-          {
-            name: 'programmeCode',
-            label: 'Programme',
-            type: 'select',
-            options: options.programmes,
-            section: 'Enquiry',
-          },
-          { name: 'notes', label: 'Notes', type: 'textarea', section: 'Enquiry' },
-        ],
-      },
-    },
-  };
-  const flow = flows[act];
-  if (!flow.allowed) return null;
-  return (
-    <FormModal
-      id={`lead-${act}`}
-      title={`${flow.title}: ${d.lead.studentName}`}
-      meta={d.lead.code}
-      closeHref={closeHref}
-    >
-      <ActionForm
-        {...flow.form}
-        redirectTo={closeHref}
-        secondary={<a href={closeHref}>Cancel</a>}
-      />
-    </FormModal>
-  );
 }

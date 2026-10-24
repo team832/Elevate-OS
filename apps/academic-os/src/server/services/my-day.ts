@@ -6,7 +6,7 @@
  * log (R12). Every teacher gets the same view, filled from their own assignments (brief
  * 23 Oct 2026 §7); staff attendance lives in HR (My attendance), never inferred from classes.
  */
-import { and, count, eq, gte, inArray, isNull, notExists, or } from 'drizzle-orm';
+import { and, asc, count, eq, gte, inArray, isNull, notExists, or } from 'drizzle-orm';
 import {
   academicAssessments,
   academicAttendance,
@@ -22,8 +22,9 @@ import {
 import { can } from '@elevate/authorization';
 import { addDays, type BatchId, type IsoDate } from '@elevate/shared-types';
 import { parseClock } from '../../domain';
-import { resolveScope, todayIst, type Actor } from '../context';
+import { resolveScope, studentIdsInScope, todayIst, type Actor } from '../context';
 import { listAssignmentsFor } from './assignments';
+import { countAssessments, teacherAssessments } from './teacher-assessment-counts';
 import { listBatches } from './batches';
 import { getBatchCoverage } from './curriculum';
 import { listInterventions } from './progress';
@@ -84,8 +85,12 @@ export async function teacherDay(db: Database, actor: Actor, now = new Date()) {
     .from(academicTeacherReviews)
     .where(and(eq(academicTeacherReviews.authorStaffId, staffId), inArray(academicTeacherReviews.status, ['submitted', 'draft'])));
   const reviewed = new Set(ownReviews.filter((r) => r.status === 'submitted').map((r) => r.id));
-  const assessments = scope.batchIds.length
-    ? await db.select().from(academicAssessments).where(and(inArray(academicAssessments.batchId, scope.batchIds), eq(academicAssessments.status, 'conducted')))
+  // null = not available (no assessments permission or no assignment open today), never zeros.
+  const assessments = can(actor.user, 'academic:assessments:read') ? await teacherAssessments(db, scope, { today }) : null;
+  const studentIds = can(actor.user, 'academic:students:read') ? await studentIdsInScope(db, scope, today) : [];
+  // Names and student codes only (brief §5): no contact, guardian or Ops data on My day.
+  const students = studentIds?.length
+    ? await db.select({ id: academicStudents.id, code: academicStudents.code, fullName: academicStudents.fullName, isSample: academicStudents.isSample }).from(academicStudents).where(inArray(academicStudents.id, studentIds)).orderBy(asc(academicStudents.fullName))
     : [];
   const support = await db
     .select({ intervention: academicInterventions, studentName: academicStudents.fullName })
@@ -104,7 +109,10 @@ export async function teacherDay(db: Database, actor: Actor, now = new Date()) {
     attendanceMissing: past.filter((s) => (work.get(s.id)?.attendanceMissing ?? 0) > 0).map((s) => ({ ...s, missing: work.get(s.id)!.attendanceMissing })),
     logsMissing: past.filter((s) => !work.get(s.id)?.logSubmitted),
     demoAwaitingFeedback: demoRows.filter((d) => !reviewed.has(d.opsDemoSessionId)).map((d) => ({ ...d, session: past.find((s) => s.id === d.sessionId)! })),
-    assessmentsToMark: assessments,
+    students,
+    assessmentCounts: assessments && countAssessments(assessments),
+    assessmentsToMark: assessments?.filter((a) => a.awaitingMarking) ?? [],
+    resultsToReview: assessments?.filter((a) => a.awaitingReview > 0) ?? [],
     support: support.map((r) => ({ ...r.intervention, studentName: r.studentName, due: r.intervention.dueDate !== null && r.intervention.dueDate <= today })),
     /** Current and pending assignments (pending: no batch yet, opens nothing). */
     assignments: await listAssignmentsFor(db, { staffIds: [staffId] }),

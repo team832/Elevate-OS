@@ -32,6 +32,21 @@ Demo sign-ins (development only):
 
 The demo teacher has no batches until a coordinator places them on one; the sample teacher `teacher@example.test` (password `SEED_USER_PASSWORD`) has sample classes.
 
+## Office Wi-Fi: several people at once (D-110)
+
+Staff use the app from their own laptops and phones on the office Wi-Fi while it runs on the owner's computer.
+
+| Command | Does |
+|---|---|
+| `npm run office:build` | builds the four apps (after every code change; a few minutes) |
+| `npm run office` | starts the database and the four built apps for the whole Wi-Fi; prints the addresses |
+
+- The app URLs become this computer's Wi-Fi address (for example `http://192.168.1.5:3000`), found at start; set `OFFICE_HOST` in `.env` to fix it. Everyone, including the owner on this computer, uses that address: one sign-in then covers all workspaces.
+- The database is reachable from this computer only. Each app keeps up to 10 database connections; edits that could clash (tasks, reviews, admission confirmation, marks) are checked so one person cannot silently overwrite another.
+- Over plain `http` the session cookie is not marked Secure (browsers would drop it); on an https deployment it is. Google sign-in does not work on a Wi-Fi address; staff use their password.
+- Windows must allow it once (owner step in `HANDOFF.md`): the Wi-Fi set to **Private**, and a firewall rule for ports 3000–3003.
+- Plain `npm run dev` keeps the `.env` (localhost) addresses: it is for this computer only.
+
 ## How sign-in and access work
 
 **Identity.** One person = one `core.users` row with their own password (or Google sign-in) and their stored roles. Every change is audited with that user's id. Staff never share an account; the demo accounts exist only on development machines.

@@ -1,7 +1,7 @@
 /** Phase 2 (D-073): the shared Ops task/EOD service mounted under /academic for teachers. */
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { taskDaySummary } from '@elevate/business-ops-os/work';
+import { myReports, taskDaySummary } from '@elevate/business-ops-os/work';
 import { authedRequest, callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import { GET as listRoute, POST as createRoute } from '../../src/app/api/v1/staff-tasks/route';
 import { TasksDay } from '../../src/ui/my-day';
@@ -48,15 +48,27 @@ describe('tasks and EOD inside Academic OS', () => {
     ).toBe(403);
 
     const block = renderToStaticMarkup(
-      <TasksDay summary={await taskDaySummary(ctx.db, u.teacher)} />,
+      <TasksDay
+        summary={await taskDaySummary(ctx.db, u.teacher)}
+        week={await myReports(ctx.db, u.teacher, 'week')}
+        month={await myReports(ctx.db, u.teacher, 'month')}
+      />,
     );
     expect(block).toContain('href="/academic/tasks?due=today"');
     expect(block).toContain('<span class="el-stat-value">1</span>'); // due today
     expect(block).toContain('1 open in all');
     expect(block).toContain('Not started');
     expect(block).toContain('href="/academic/tasks?tab=eod"');
+    expect(block).toContain('href="/academic/my-reports?kind=week"');
+    expect(block).not.toContain('Open My reports');
     expect(
-      renderToStaticMarkup(<TasksDay summary={await taskDaySummary(ctx.db, u.coordinator)} />),
+      renderToStaticMarkup(
+        <TasksDay
+          summary={await taskDaySummary(ctx.db, u.coordinator)}
+          week={await myReports(ctx.db, u.coordinator, 'week')}
+          month={null}
+        />,
+      ),
     ).toContain('No staff record');
   });
 });

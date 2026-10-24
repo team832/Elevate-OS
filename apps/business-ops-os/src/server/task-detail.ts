@@ -30,6 +30,7 @@ import { dependenciesOf } from './task-actions';
 import { isCollaborator } from './task-access';
 import { checklistOf } from './task-checklist';
 import { submissionHistory } from './task-submissions';
+import { assignmentReadAt } from './task-reminders';
 import {
   ctxOf,
   editsTask,
@@ -43,7 +44,7 @@ import {
 const FIRST = new Set(['created', 'imported']);
 
 export async function taskDetail(db: Database, actor: Actor, id: string, now = new Date()) {
-  const { row, access: read, life } = await loadTaskFor(db, actor, id, false);
+  const { row, access: read, life, ownerUserId } = await loadTaskFor(db, actor, id, false);
   // Actions follow write scope (an all-scope reader such as the auditor may not act).
   const access = can(actor, 'ops:tasks:write')
     ? await taskAccess(db, actor, 'ops:tasks:write')
@@ -168,6 +169,8 @@ export async function taskDetail(db: Database, actor: Actor, id: string, now = n
     ),
     dueChanges: evs.filter((e) => e.kind === 'due_changed'),
     selfLogged: life.selfLogged,
+    /** NOTIFY: when the owner first read the assignment notification (the Read state). */
+    noticeReadAt: await assignmentReadAt(db, row.id, ownerUserId),
     canEdit: editor,
     /** I1: the brief and deadline of assigned work are the assigner's. */
     canEditBrief: editor && (life.selfLogged || BRIEF_ROLES.some((r) => roles.includes(r))),

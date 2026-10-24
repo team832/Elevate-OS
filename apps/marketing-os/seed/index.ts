@@ -4,11 +4,13 @@
  * conflict, 45 brand rules, 59 ideas (8 quarantined, OD-003), 36 placements as content
  * items + placements (2 ambiguous), the 60-post manual audit as historical snapshots, and
  * the proposed policy settings. No people, no invented metrics, no fictional "results".
- * Idempotent: re-running inserts nothing new.
+ * Plus the SEO/AIO/GEO categories (reference) and the labelled sample set of ./samples.ts
+ * (brief 23 Oct 2026 §25). Idempotent: re-running inserts nothing new.
  */
 import { defineSeed, type SeedDefinition } from '@elevate/database/seed';
 import { importLegacyMarketing } from '../src/server/legacy';
 import { loadLegacyMarketingData } from '../src/server/legacy/load';
+import { marketingSampleSeeds } from './samples';
 
 export const seeds: readonly SeedDefinition[] = [
   defineSeed({
@@ -22,4 +24,5 @@ export const seeds: readonly SeedDefinition[] = [
       log(`marketing.legacy — ${JSON.stringify(result)}`);
     },
   }),
+  ...marketingSampleSeeds,
 ];

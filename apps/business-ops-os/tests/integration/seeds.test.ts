@@ -41,6 +41,7 @@ import { coreSeeds, runSeeds } from '@elevate/database/seed';
 import { setupTestDatabase } from '@elevate/testing';
 import { clearSamples, seeds } from '../../seed';
 import { SAMPLE_LEAD_COUNT, SAMPLE_STUDENTS } from '../../seed/samples';
+import { SAMPLE_MARKETING_LEADS } from '../../seed/sample-leads';
 import { ALLOWED_PROGRAMME_COMBINATIONS } from '../../src/domain/catalog';
 import { istToday } from '../../src/domain';
 import { OWNER_SUPPLIED_STAFF } from '../../seed/teachers';
@@ -64,7 +65,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     expect((await ctx.db.select().from(opsLeadSources)).map((s) => s.code)).toContain('UNKNOWN');
 
     const leads = await ctx.db.select().from(opsLeads);
-    expect(leads).toHaveLength(SAMPLE_LEAD_COUNT);
+    expect(leads).toHaveLength(SAMPLE_LEAD_COUNT + SAMPLE_MARKETING_LEADS.length);
     expect(new Set(leads.map((l) => l.studentName)).size).toBe(leads.length);
     for (const l of leads) {
       expect(l).toMatchObject({ isSample: true, studentPhone: null, guardianPhone: null });
@@ -96,11 +97,11 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     // HR history (open rows) equals the current department and manager after seeding twice.
     expect(await ctx.db.$count(opsStaffDepartments)).toBeGreaterThan(0);
     expect(await ctx.db.$count(opsStaffManagerHistory)).toBeGreaterThan(0);
-    const drift = await ctx.db.execute(sql`SELECT m.full_name FROM core.staff_members m
+    const drift = (await ctx.db.execute(sql`SELECT m.full_name FROM core.staff_members m
       LEFT JOIN ops.staff_departments d ON d.staff_id = m.id AND d.is_primary AND d.to_date IS NULL
       LEFT JOIN ops.staff_manager_history h ON h.staff_id = m.id AND h.to_date IS NULL
       WHERE m.department_id IS DISTINCT FROM d.department_id
-        OR m.manager_id IS DISTINCT FROM h.manager_staff_id`);
+        OR m.manager_id IS DISTINCT FROM h.manager_staff_id`)) as { rows: unknown[] };
     expect(drift.rows).toEqual([]);
 
     // Real teachers are never given a sample class or meeting.
@@ -159,7 +160,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
           .from(opsFeeRecords)
           .groupBy(opsFeeRecords.kind),
       ),
-    ).toEqual({ received: 9 });
+    ).toEqual({ received: 8 }); // Vihaan's agreement is active with nothing paid yet
     expect(ledger.every((r) => r.status === 'recorded' && r.notes?.includes('not a payment'))).toBe(
       true,
     );
@@ -249,7 +250,12 @@ describe('Business Ops seeds (D-036 sample set)', () => {
       expect(t.managerId).toBe(t.code === NO_MANAGER_CODE ? null : manager!.staffId);
     }
 
-    const tasks = await ctx.db.select().from(opsStaffTasks);
+    // The sample teachers' work (the marketing team's tasks are in seeds-marketing-team.test.ts).
+    const teacherIds = new Set<string>(teachers.map((t) => t.staffId));
+    const tasks = (await ctx.db.select().from(opsStaffTasks)).filter((t) =>
+      teacherIds.has(t.staffId),
+    );
+    const taskIds = new Set<string>(tasks.map((t) => t.id));
     expect(tasks).toHaveLength(SAMPLE_TASKS.length); // not doubled by the second run
     expect(tasks.every((t) => t.isSample)).toBe(true);
     expect(new Set(tasks.map((t) => t.status))).toEqual(
@@ -259,11 +265,14 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     expect(tasks.filter((t) => t.blockedAt)).toEqual([
       expect.objectContaining({ status: 'in_progress', blockedKind: 'blocked' }),
     ]);
-    expect((await ctx.db.select().from(opsTaskSubmissions)).map((v) => v.version).sort()).toEqual([
-      1, 1, 2,
-    ]);
+    expect(
+      (await ctx.db.select().from(opsTaskSubmissions))
+        .filter((v) => taskIds.has(v.taskId))
+        .map((v) => v.version)
+        .sort(),
+    ).toEqual([1, 1, 2]);
     expect(tasks.filter((t) => t.status === 'pending' && !t.acknowledgedAt)).toHaveLength(1);
-    const events = await ctx.db.select().from(opsTaskEvents);
+    const events = (await ctx.db.select().from(opsTaskEvents)).filter((e) => taskIds.has(e.taskId));
     const kinds = events.map((e) => e.kind);
     // Same shapes as the task services: `created` names owner and status; no separate `assigned`.
     expect(kinds).not.toContain('assigned');
@@ -322,7 +331,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
       createdByUserId: sample!.createdBy,
     });
     await expect(clearSamples(ctx.db)).rejects.toThrow();
-    expect(await ctx.db.$count(opsLeads)).toBe(SAMPLE_LEAD_COUNT);
+    expect(await ctx.db.$count(opsLeads)).toBe(SAMPLE_LEAD_COUNT + SAMPLE_MARKETING_LEADS.length);
     await ctx.db.delete(opsTaskDependencies).where(eq(opsTaskDependencies.taskId, real!.id));
     await ctx.db.delete(opsStaffTasks).where(eq(opsStaffTasks.id, real!.id));
   });
@@ -352,7 +361,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     const counts = await clearSamples(ctx.db);
     expect(counts['academic.batches']).toBe(1);
     expect(counts['academic.students']).toBe(1);
-    expect(counts['ops.leads']).toBe(SAMPLE_LEAD_COUNT);
+    expect(counts['ops.leads']).toBe(SAMPLE_LEAD_COUNT + SAMPLE_MARKETING_LEADS.length);
     expect(counts['core.staff_members']).toBe(6); // the sample teachers without logins
     expect(counts['ops.fee_structures']).toBe(ALLOWED_PROGRAMME_COMBINATIONS.length);
     for (const table of [

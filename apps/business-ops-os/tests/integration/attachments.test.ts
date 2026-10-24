@@ -11,6 +11,7 @@ import {
   departments,
   opsEodReports,
   opsEodReportVersions,
+  opsHrRequests,
   opsStaffTasks,
   opsTaskCollaborators,
   staffMembers,
@@ -141,7 +142,25 @@ beforeAll(async () => {
     submittedByUserId: owner.id,
     submittedToStaffId: manager.staffId,
   });
+  const [request] = await ctx.db
+    .insert(opsHrRequests)
+    .values({
+      senderStaffId: owner.staffId,
+      category: 'other',
+      subject: 'Sample request',
+      message: 'Sample message',
+      status: 'submitted',
+      submittedAt: new Date(),
+      createdBy: owner.id,
+      isSample: true,
+    })
+    .returning();
+  const test = crypto.randomUUID(); // an Academic assessment id (no Ops row)
   Object.assign(owners, {
+    hr_request: request!.id,
+    assessment_paper: test,
+    assessment_key: test,
+    score_import: test,
     task: task!.id,
     task_submission: submission!.id,
     task_update: update!.id,
@@ -228,6 +247,23 @@ const MATRIX: [Kind, Record<Actor, [read: boolean, write: boolean]>][] = [
   [
     'staff_private',
     { owner: [!R, !R], colleague: [!R, !R], manager: [!R, !R], hr: [R, R], teacher: [!R, !R] },
+  ],
+  // HR-REQ: a sent request's files: its sender reads (adds only while a draft), HR manages.
+  [
+    'hr_request',
+    { owner: [R, !R], colleague: [!R, !R], manager: [!R, !R], hr: [R, R], teacher: [!R, !R] },
+  ],
+  // Papers and keys: ops:assessments:read (the coordinator) reads, manage adds; score files: manage only.
+  ...(['assessment_paper', 'assessment_key'] as const).map(
+    (k) =>
+      [
+        k,
+        { owner: [!R, !R], colleague: [!R, !R], manager: [R, !R], hr: [!R, !R], teacher: [!R, !R] },
+      ] as [Kind, Record<Actor, [boolean, boolean]>],
+  ),
+  [
+    'score_import',
+    { owner: [!R, !R], colleague: [!R, !R], manager: [!R, !R], hr: [!R, !R], teacher: [!R, !R] },
   ],
 ];
 const CASES = MATRIX.flatMap(([kind, row]) =>

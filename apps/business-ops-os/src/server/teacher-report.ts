@@ -51,9 +51,16 @@ const WORK_DEFINITIONS = PERIOD_DEFINITIONS.filter(([k]) =>
 );
 
 type Period = { from: IsoDate; to: IsoDate };
+/** The overall comment a person wrote (or edited from an AI draft, D-111) when generating. */
+type Input = Period & { comment?: string | null };
 const inPeriod = (day: string, p: Period) => day >= p.from && day <= p.to;
 
-async function buildSnapshot(db: Database, actor: Actor, staffId: string, period: Period) {
+export async function buildSnapshot(
+  db: Database,
+  actor: Actor,
+  staffId: string,
+  { comment, ...period }: Input,
+) {
   const t = await getTeacherProfile(db, actor, staffId);
   const activity = await fetchTeacherActivity(t.staff.id, period);
   const delivery = activity.status === 'available' ? deliveryFacts(activity.data) : null;
@@ -139,6 +146,8 @@ async function buildSnapshot(db: Database, actor: Actor, staffId: string, period
         },
     workOn: workOn(delivery, person),
     summary: teacherSummary({ delivery, unavailableAt, reviews, work: person }),
+    // Optional in the type: snapshots stored before teacher-report/2 have none.
+    ...(comment ? { comment } : {}),
     definitions: [
       ...(delivery
         ? [...delivery.classes, delivery.deliveredShare, ...delivery.pending].map(
@@ -162,12 +171,13 @@ export async function generateTeacherReport(
   db: Database,
   actor: Actor,
   staffId: string,
-  period: Period,
+  input: Input,
   requestId?: string,
 ) {
   const access = await accessScope(db, actor, 'ops:teacher_reports:generate');
   assertScope(access, [staffId], 'teacher reports');
-  const { snapshot, sourceRefs } = await buildSnapshot(db, actor, staffId, period);
+  const { snapshot, sourceRefs } = await buildSnapshot(db, actor, staffId, input);
+  const period = snapshot.period;
   const json = JSON.stringify(snapshot);
   return withTransaction(db, async (tx) => {
     const [row] = await tx

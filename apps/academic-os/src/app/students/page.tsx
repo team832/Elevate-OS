@@ -100,7 +100,7 @@ async function Body({
                         key: 'contact',
                         header: 'Contact',
                         render: (s: (typeof data.data.students)[number]) =>
-                          [s.email, s.phone, s.guardianPhone].filter(Boolean).join(' · ') || '—',
+                          (s.contactsHidden ? null : [s.email, s.phone, s.guardianPhone].filter(Boolean).join(' · ')) || '—',
                       },
                     ]
                   : []),

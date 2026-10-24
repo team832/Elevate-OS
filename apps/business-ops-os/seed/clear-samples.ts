@@ -1,5 +1,9 @@
 /**
- * Remove every SAMPLE record before real use (`npm run db:clear-samples`, D-036).
+ * Remove every SAMPLE record before real use (`npm run db:clear-samples`, D-036). Brief 23 Oct 2026
+ * §25 adds: requests through HR, staged score imports, sample tests (roster, results,
+ * publications), lead stage history, task reminders and the Marketing samples (campaigns and
+ * members, ideas, calendar items, SEO/AIO/GEO items and observations, targets). Reference data
+ * (lead stages, SEO/AIO/GEO categories) is not sample and stays.
  * Sample = `ops.leads.is_sample`, `core.students.is_sample`, `ops.fee_structures.is_sample`,
  * `is_sample` tasks, EOD reports and import batches, Academic `is_sample` batches (with their
  * sessions, logs and teachers), students, placements, demo attendees and reviews, `is_sample`
@@ -13,11 +17,17 @@
  * records point at them; production refuses @example.test sign-in, D-030) and their
  * in-app notifications, the audit trail and the integration-event outbox (append-only
  * history; unfinished enrolment handoffs of removed admissions are only closed), and the
- * owner-supplied staff. Real rows (is_sample = false) are never touched.
+ * owner-supplied staff. A real record is never deleted (R-SEED): its optional link to a sample
+ * record is emptied (logged and audited), and a real record that needs a sample one stops the
+ * command before anything changes (./clear-samples-guards.ts). Rows deleted are sample records and
+ * the rows that belong to them (their history, members, roster, placements).
  */
 import { sql } from 'drizzle-orm';
 import type { Database } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
+import { RELATED_SET, refuseRequiredLinks, unlinkRealRows } from './clear-samples-guards';
+
+export { ClearSamplesRefused } from './clear-samples-guards';
 
 /** Temporary id sets, built once: [name, SELECT]. */
 const SETS: readonly [string, string][] = [
@@ -53,6 +63,12 @@ const SETS: readonly [string, string][] = [
     's_academic_sessions',
     `SELECT id FROM academic.class_sessions WHERE batch_id IN (SELECT id FROM s_academic_batches)`,
   ],
+  [
+    's_assessments',
+    // Only tests marked sample; a test mixing real and sample batches stops the clear (guards).
+    `SELECT id FROM academic.assessments WHERE is_sample`,
+  ],
+  ['s_score_imports', `SELECT id FROM ops.score_imports WHERE is_sample`],
   ['s_import_batches', `SELECT id FROM ops.task_import_batches WHERE is_sample`],
   [
     's_tasks',
@@ -65,6 +81,11 @@ const SETS: readonly [string, string][] = [
     `SELECT p.staff_id AS id FROM ops.staff_profiles p JOIN core.staff_members m ON m.id = p.staff_id
      WHERE p.is_sample AND m.user_id IS NULL`,
   ],
+  ['s_hr_requests', `SELECT id FROM ops.hr_requests WHERE is_sample`],
+  ['s_campaigns', `SELECT id FROM marketing.campaigns WHERE is_sample`],
+  ['s_ideas', `SELECT id FROM marketing.ideas WHERE is_sample`],
+  ['s_opt_items', `SELECT id FROM marketing.optimisation_items WHERE is_sample`],
+  RELATED_SET,
 ];
 
 const IN = (set: string) => `IN (SELECT id FROM ${set})`;
@@ -80,8 +101,39 @@ const DELETES: readonly [string, string][] = [
        OR (owner_kind = 'task_submission' AND owner_id IN (SELECT id FROM ops.task_submissions WHERE task_id ${IN('s_tasks')}))
        OR (owner_kind = 'task_update' AND owner_id IN (SELECT id FROM ops.task_updates WHERE task_id ${IN('s_tasks')}))
        OR (owner_kind = 'attendance_correction' AND owner_id IN (SELECT id FROM ops.attendance_corrections WHERE is_sample OR staff_id ${IN('s_staff')}))
-       OR (owner_kind = 'work_report' AND owner_id ${IN('s_eods')})`,
+       OR (owner_kind = 'work_report' AND owner_id ${IN('s_eods')})
+       OR (owner_kind = 'hr_request' AND owner_id ${IN('s_hr_requests')})
+       OR (owner_kind IN ('assessment_paper', 'assessment_key', 'score_import') AND owner_id ${IN('s_assessments')})`,
   ],
+  // Requests through HR (brief 23 Oct 2026 §6): events first; before tasks (linked_task_id).
+  [
+    'ops.hr_request_events',
+    `DELETE FROM ops.hr_request_events WHERE request_id ${IN('s_hr_requests')}`,
+  ],
+  ['ops.hr_requests', `DELETE FROM ops.hr_requests WHERE id ${IN('s_hr_requests')}`],
+  // Score imports staged for sample tests (rows go with the import).
+  [
+    'ops.score_import_rows',
+    `DELETE FROM ops.score_import_rows WHERE import_id ${IN('s_score_imports')}`,
+  ],
+  ['ops.score_imports', `DELETE FROM ops.score_imports WHERE id ${IN('s_score_imports')}`],
+  // Marketing samples (brief 23 Oct 2026 §12–§15): children first.
+  [
+    'marketing.optimisation_observations',
+    `DELETE FROM marketing.optimisation_observations WHERE item_id ${IN('s_opt_items')}`,
+  ],
+  [
+    'marketing.optimisation_items',
+    `DELETE FROM marketing.optimisation_items WHERE id ${IN('s_opt_items')}`,
+  ],
+  ['marketing.targets', `DELETE FROM marketing.targets WHERE is_sample`],
+  ['marketing.calendar_items', `DELETE FROM marketing.calendar_items WHERE is_sample`],
+  ['marketing.ideas', `DELETE FROM marketing.ideas WHERE id ${IN('s_ideas')}`],
+  [
+    'marketing.campaign_members',
+    `DELETE FROM marketing.campaign_members WHERE campaign_id ${IN('s_campaigns')}`,
+  ],
+  ['marketing.campaigns', `DELETE FROM marketing.campaigns WHERE id ${IN('s_campaigns')}`],
   ...(
     ['attendance_corrections', 'daily_attendance', 'attendance_punches', 'leave_records'] as const
   ).map((t): [string, string] => [
@@ -119,7 +171,7 @@ const DELETES: readonly [string, string][] = [
     // Only a sample task's own links: a real task waiting on a sample one blocks the clear.
     `DELETE FROM ops.task_dependencies WHERE task_id ${IN('s_tasks')}`,
   ],
-  ...(['task_updates', 'task_events'] as const).map((t): [string, string] => [
+  ...(['task_updates', 'task_events', 'task_reminders'] as const).map((t): [string, string] => [
     `ops.${t}`,
     `DELETE FROM ops.${t} WHERE task_id ${IN('s_tasks')}`,
   ]),
@@ -222,11 +274,27 @@ const DELETES: readonly [string, string][] = [
   ['ops.report_exports', `DELETE FROM ops.report_exports WHERE student_id ${IN('s_students')}`],
   ['ops.contact_preferences', `DELETE FROM ops.contact_preferences WHERE lead_id ${IN('s_leads')}`],
   ['ops.lead_activities', `DELETE FROM ops.lead_activities WHERE lead_id ${IN('s_leads')}`],
+  ['ops.lead_stage_history', `DELETE FROM ops.lead_stage_history WHERE lead_id ${IN('s_leads')}`],
   [
     'ops.duplicate_flags',
     `DELETE FROM ops.duplicate_flags WHERE lead_id ${IN('s_leads')} OR matched_lead_id ${IN('s_leads')}`,
   ],
   ['ops.enquiries', `DELETE FROM ops.enquiries WHERE lead_id ${IN('s_leads')}`],
+  // Sample tests (apps/academic-os/seed/sample-tests.ts), results before their runs and attempts;
+  // sections, answer keys and eligible batches go with the assessment (ON DELETE CASCADE).
+  ...(
+    [
+      ['results', 'assessment_id'],
+      ['result_publications', 'assessment_id'],
+      ['result_runs', 'assessment_id'],
+      ['attempts', 'assessment_id'],
+      ['assessment_roster', 'assessment_id'],
+      ['assessments', 'id'],
+    ] as const
+  ).map(([t, col]): [string, string] => [
+    `academic.${t}`,
+    `DELETE FROM academic.${t} WHERE ${col} ${IN('s_assessments')}`,
+  ]),
   // Academic sample teaching (apps/academic-os/seed/samples.ts). A real student's row in a
   // sample session or batch is not deleted: its foreign key rolls the whole command back.
   [
@@ -347,11 +415,20 @@ const affected = (r: unknown) =>
       0,
   );
 
-/** Delete all sample rows; returns rows deleted per table (tables with 0 left out). */
-export function clearSamples(db: Database): Promise<Record<string, number>> {
+/**
+ * Delete all sample rows; returns rows deleted per table (tables with 0 left out). Refuses
+ * (ClearSamplesRefused, nothing changed) when a real record needs a sample one; real rows that only
+ * point at a sample row are unlinked first and each table's line goes to `log`.
+ */
+export function clearSamples(
+  db: Database,
+  log: (line: string) => void = () => {},
+): Promise<Record<string, number>> {
   return withTransaction(db, async (tx) => {
     for (const [name, select] of SETS)
       await tx.execute(sql.raw(`CREATE TEMP TABLE ${name} ON COMMIT DROP AS ${select}`));
+    await refuseRequiredLinks(tx);
+    for (const line of await unlinkRealRows(tx)) log(line);
     for (const statement of UNLINK) await tx.execute(sql.raw(statement));
     const counts: Record<string, number> = {};
     for (const [table, statement] of DELETES) {

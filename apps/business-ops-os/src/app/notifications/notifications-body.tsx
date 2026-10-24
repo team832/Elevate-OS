@@ -1,19 +1,26 @@
 /**
  * `<base>/notifications` (brief §9): the signed-in person's in-app notifications, shared by every
- * workspace (D-073). Stored links are relative; one in another workspace opens on its own origin.
+ * workspace (D-073). Every link opens through `<base>/notifications/{id}/open`, which marks it read
+ * and re-checks access first (one in another workspace then opens on its own origin).
  */
-import { PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { linkUrl } from '../../server/task-links';
+import { Alert, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import { ActionForm } from '../../ui/action-form';
 import { fmtDateTime } from '../../ui/format';
 import { load, Section } from '../../ui/frame';
 import { Pager } from '../../ui/list-controls';
 import { RecordTable } from '../../ui/record-table';
+import { NoticeStates } from '../../ui/task-notices';
 import type { BodyProps } from '../tasks/_components/bodies';
 import '../ops.css';
 import { inboxPage, inboxQuery } from './inbox';
 
 type Row = Awaited<ReturnType<typeof inboxPage>>['items'][number];
+
+/** Why <base>/notifications/{id}/open sent the person back here. */
+const REFUSED: Record<string, string> = {
+  denied: 'You no longer have access to this item.',
+  missing: 'That notification is not in your list.',
+};
 
 export function NotificationsBody(props: BodyProps) {
   return (
@@ -29,7 +36,7 @@ async function Inbox({ user, base, searchParams }: BodyProps) {
   if (!result.ok) return result.view;
   const { items, total, unread, pageSize } = result.data;
   const api = `${base}/api/v1/notifications`;
-  const href = (link: string) => (link.startsWith(`${base}/`) ? link : linkUrl(link));
+  const refused = REFUSED[searchParams.open ?? ''];
   return (
     <>
       <PageHeader
@@ -48,6 +55,7 @@ async function Inbox({ user, base, searchParams }: BodyProps) {
           ) : null
         }
       />
+      {refused ? <Alert tone="warning">{refused}</Alert> : null}
       <RecordTable<Row>
         rows={items}
         rowKey={(n) => n.id}
@@ -59,8 +67,9 @@ async function Inbox({ user, base, searchParams }: BodyProps) {
             header: 'Notification',
             render: (n) => (
               <>
-                {n.link ? <a href={href(n.link)}>{n.title}</a> : n.title}
+                {n.link ? <a href={`${base}/notifications/${n.id}/open`}>{n.title}</a> : n.title}
                 {n.body ? <p className="el-field-hint">{n.body}</p> : null}
+                {n.task ? <NoticeStates f={{ ...n.task, readAt: n.readAt }} /> : null}
               </>
             ),
           },

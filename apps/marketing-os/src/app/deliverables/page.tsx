@@ -5,9 +5,10 @@ import { getDb } from '@elevate/database';
 import { listTasks, taskListQuery } from '@elevate/business-ops-os/work';
 import { Card } from '@elevate/shared-ui';
 import { modulePath } from '../../domain';
-import { myContentItems, myStaffId } from '../../server';
+import { myContentItems, myStaffId, teamWide } from '../../server';
 import { ContentDeliverables, PageLinks, TaskDeliverables } from '../../ui/my-work';
 import { MarketingPage, Section, param, type SearchParams } from '../../ui/shell';
+import { TeamDeliverables } from './team-deliverables';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Deliverables' };
@@ -24,10 +25,26 @@ export default async function DeliverablesPage({ searchParams }: { searchParams:
       path={PATH}
       active="deliverables"
       title="Deliverables"
-      description="What you owe from your tasks and the content you work on. Approved and published externally are separate: approving never publishes or sends anything."
+      description="What is owed from tasks, content and the calendar. Approved and published externally are separate: approving never publishes or sends anything."
       searchParams={sp}
     >
-      {(user) => <Section load={async () => <Deliverables user={user} pages={pages} />} />}
+      {(user) => (
+        <>
+          {teamWide(user) ? (
+            <Section
+              load={async () => (
+                <TeamDeliverables
+                  db={getDb()}
+                  sp={Object.fromEntries(
+                    ['from', 'to', 'owner', 'status', 'campaign'].map((k) => [k, param(sp, k)]),
+                  )}
+                />
+              )}
+            />
+          ) : null}
+          <Section load={async () => <Deliverables user={user} pages={pages} />} />
+        </>
+      )}
     </MarketingPage>
   );
 }

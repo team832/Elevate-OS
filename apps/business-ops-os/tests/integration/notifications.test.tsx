@@ -19,6 +19,7 @@ import {
   type TestUser,
 } from '@elevate/testing';
 import { GET, POST } from '../../src/app/api/v1/notifications/route';
+import { GET as open } from '../../src/app/notifications/[id]/open/route';
 import { NotificationsBody } from '../../src/work';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh() {}, push() {} }) }));
@@ -113,8 +114,9 @@ describe('POST /api/v1/notifications (mark read)', () => {
 describe('NotificationsBody', () => {
   it('resolves links for the host workspace and pages the list', async () => {
     const out = await html(<NotificationsBody user={teacher} base="/academic" searchParams={{}} />);
-    expect(out).toContain('href="/academic/tasks/abc"');
-    expect(out).toContain(`href="${appOrigin('ops')}/ops/admissions/xyz"`);
+    // Every link opens through the permission-checked redirect (NOTIFY), never the stored path.
+    expect(out).toMatch(/href="\/academic\/notifications\/[0-9a-f-]{36}\/open"/);
+    expect(out).not.toContain('/ops/admissions/xyz');
     expect(out.replaceAll('<!-- -->', '')).toContain('Showing 1–25 of 30');
     expect(out).toContain('href="/academic/notifications?page=2"');
     expect(out).not.toContain('Sample private notice');
@@ -140,5 +142,30 @@ describe('NotificationsBody', () => {
     const empty = await createTestUser(ctx.db, { roles: ['teacher'] });
     const out = await html(<NotificationsBody user={empty} base="/ops" searchParams={{}} />);
     expect(out).toContain('No notifications yet');
+  });
+});
+
+describe('GET <base>/notifications/{id}/open across workspaces (NOTIFY)', () => {
+  it('a link into another workspace the person belongs to opens on that origin', async () => {
+    const both = await createTestUser(ctx.db, { roles: ['teacher', 'operations_manager'] });
+    const [id] = await notify(ctx.db, {
+      userIds: [both.id],
+      module: 'ops',
+      kind: 'x',
+      title: 'Sample cross-workspace notice',
+      link: '/ops/admissions',
+    });
+    const res = await callRoute(open, authedRequest(both, `/academic/notifications/${id}/open`), {
+      id: id!,
+    });
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(`${appOrigin('ops')}/ops/admissions`);
+  });
+
+  it('says "You no longer have access to this item" when sent back refused', async () => {
+    const out = await html(
+      <NotificationsBody user={teacher} base="/academic" searchParams={{ open: 'denied' }} />,
+    );
+    expect(out).toContain('You no longer have access to this item.');
   });
 });

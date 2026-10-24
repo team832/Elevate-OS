@@ -2,18 +2,28 @@ import type { Metadata } from 'next';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { followUpDaySummary } from '@elevate/business-ops-os/leads';
-import { listTasks, taskDaySummary, taskListQuery } from '@elevate/business-ops-os/work';
-import { Card, DataTable, StatCard } from '@elevate/shared-ui';
-import { CONTENT_STATES, modulePath } from '../../domain';
+import { followUpDaySummary, listLeads } from '@elevate/business-ops-os/leads';
+import { DueWork, listTasks, taskDaySummary, taskListQuery } from '@elevate/business-ops-os/work';
+import {
+  Card,
+  DataTable,
+  EmptyState,
+  SourceBadge,
+  StatCard,
+  StatusBadge,
+} from '@elevate/shared-ui';
+import { CONTENT_STATES, MODULE, formatIst, istMidnightUtc, modulePath } from '../../domain';
+import { addDays, toIsoDate } from '@elevate/shared-types';
 import { myContentByState, myStaffId } from '../../server';
 import { ContentStateBadge } from '../../ui/badges';
 import { TaskTable } from '../../ui/my-work';
+import { calendarListHref, listCalendarItems } from '../../server/calendar-queries';
+import { CALENDAR_STATUS_LABELS } from '../../domain/calendar';
 import { PersonalTiles } from '../../ui/overview';
 import { MarketingPage, Section, type SearchParams } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'My day' };
+export const metadata: Metadata = { title: 'My Day' };
 
 export default async function MyDayPage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -21,8 +31,9 @@ export default async function MyDayPage({ searchParams }: { searchParams: Search
       permission="marketing:module:access"
       path={modulePath('my-day')}
       active="my-day"
-      title="My day"
-      description="Your tasks, content, follow-ups and end-of-day report for today (IST)."
+      title="My Day"
+      description="Your tasks, calendar items, follow-ups and end-of-day report for today (IST)."
+      actions={<a href={modulePath('my-attendance')}>My attendance</a>}
       searchParams={await searchParams}
     >
       {(user) => <Section load={async () => <MyDay user={user} />} />}
@@ -42,16 +53,30 @@ async function MyDay({ user }: { user: AuthenticatedUser }) {
     staffId && tasksOk
       ? listTasks(db, user, taskListQuery.parse({ staffId, ...q }), LIST).then((r) => r.rows)
       : Promise.resolve([]);
-  const [followUps, summary, content, overdue, today, submitted] = await Promise.all([
-    can(user, 'ops:leads:read') ? followUpDaySummary(db, user).catch(failed) : undefined,
+  const leadsOk = can(user, 'ops:leads:read');
+  // The last 30 days (late items) to 7 days ahead; the calendar link opens the same window.
+  const window = { from: addDays(toIsoDate(), -30), to: addDays(toIsoDate(), 7) };
+  const [followUps, summary, content, submitted, calendar, leads] = await Promise.all([
+    leadsOk ? followUpDaySummary(db, user).catch(failed) : undefined,
     tasksOk ? taskDaySummary(db, user).catch(failed) : undefined,
     myContentByState(db, user),
-    tasks({ due: 'overdue' }),
-    tasks({ due: 'today' }),
     tasks({ status: 'in_review' }),
+    staffId && can(user, 'marketing:calendar:read')
+      ? listCalendarItems(db, {
+          from: istMidnightUtc(window.from),
+          to: istMidnightUtc(addDays(window.to, 1)),
+          ownerStaffId: staffId,
+          due: true,
+        })
+      : null,
+    leadsOk && staffId ? listLeads(db, user) : null,
   ]);
-  // A task due today and already late is in both lists; show it once.
-  const due = [...new Map([...overdue, ...today].map((t) => [t.id, t])).values()];
+  const toContact = leads?.filter(
+    (l) =>
+      l.ownerStaffId === staffId &&
+      (l.flags.awaitingContact || l.flags.overdue || l.flags.dueToday),
+  );
+  const now = new Date();
   const states = CONTENT_STATES.filter((s) => s !== 'archived');
   return (
     <div className="el-stack">
@@ -66,13 +91,7 @@ async function MyDay({ user }: { user: AuthenticatedUser }) {
       </section>
       {tasksOk ? (
         <>
-          <Card
-            title="Tasks overdue or due today"
-            description="Open tasks past their deadline, and tasks due today (IST)."
-            actions={<a href={modulePath('tasks')}>All my tasks</a>}
-          >
-            <TaskTable rows={due} empty="Nothing overdue or due today" />
-          </Card>
+          <DueWork user={user} base={MODULE.basePath} />
           <Card
             title="Submitted, waiting for review"
             description="Your tasks a reviewer has not decided on yet. Submitting is not approval."
@@ -80,6 +99,96 @@ async function MyDay({ user }: { user: AuthenticatedUser }) {
             <TaskTable rows={submitted} empty="No submission is waiting for review" />
           </Card>
         </>
+      ) : null}
+      {calendar ? (
+        <Card
+          title={`Calendar items due (${calendar.length})`}
+          description="Calendar items you own, not yet published or cancelled, planned in the last 30 days or the next 7 (IST)."
+          actions={
+            <a href={calendarListHref({ ...window, owner: staffId ?? undefined, due: true })}>
+              Open in the calendar
+            </a>
+          }
+        >
+          <DataTable
+            compact
+            rows={calendar}
+            rowKey={(i) => i.id}
+            empty={
+              <EmptyState
+                title="Nothing of yours is due"
+                description="Plan an item on the Marketing Calendar, or pick up an approved idea."
+              />
+            }
+            columns={[
+              {
+                key: 'when',
+                header: 'Planned (IST)',
+                render: (i) =>
+                  i.plannedAt! < now ? (
+                    <StatusBadge tone="warning">Past date · {formatIst(i.plannedAt)}</StatusBadge>
+                  ) : (
+                    formatIst(i.plannedAt)
+                  ),
+              },
+              {
+                key: 'title',
+                header: 'Item',
+                render: (i) => (
+                  <>
+                    <a href={modulePath(`calendar/${i.id}`)}>{i.title}</a>{' '}
+                    {i.isSample ? <SourceBadge source="sample" /> : null}
+                  </>
+                ),
+              },
+              { key: 'status', header: 'Status', render: (i) => CALENDAR_STATUS_LABELS[i.status] },
+            ]}
+          />
+        </Card>
+      ) : null}
+      {toContact ? (
+        <Card
+          title="Leads to contact"
+          meta={toContact.some((l) => l.isSample) ? <SourceBadge source="sample" /> : undefined}
+          description={`Your leads nobody has reached yet, or with a follow-up due today or overdue: ${toContact.length}. Showing up to ${LIST}.`}
+          actions={<a href={modulePath('leads?flag=awaiting_contact')}>Awaiting first contact</a>}
+        >
+          <DataTable
+            compact
+            rows={toContact.slice(0, LIST)}
+            rowKey={(l) => l.id}
+            empty={
+              <EmptyState
+                title="No lead is waiting for you"
+                description="Leads assigned to you appear here until you reach them; log each call on the lead."
+              />
+            }
+            columns={[
+              {
+                key: 'lead',
+                header: 'Lead',
+                render: (l) => (
+                  <a href={modulePath(`leads/${l.id}`)}>
+                    {l.code}: {l.studentName}
+                  </a>
+                ),
+              },
+              {
+                key: 'why',
+                header: 'Why',
+                render: (l) =>
+                  [
+                    l.flags.awaitingContact && 'Not reached yet',
+                    l.flags.overdue && 'Follow-up overdue',
+                    l.flags.dueToday && 'Follow-up due today',
+                  ]
+                    .filter(Boolean)
+                    .join(' · '),
+              },
+              { key: 'received', header: 'Received (IST)', render: (l) => formatIst(l.receivedAt) },
+            ]}
+          />
+        </Card>
       ) : null}
       <Card
         title="My content by state"

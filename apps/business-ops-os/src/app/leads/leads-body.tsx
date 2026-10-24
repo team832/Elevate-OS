@@ -2,8 +2,10 @@ import type { ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { ButtonLink, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { ADMISSION_STATUS_LABELS, type AdmissionStatus } from '../../domain';
+import { ADMISSION_STATUS_LABELS, isIsoDate, type AdmissionStatus } from '../../domain';
 import { listDuplicateQueue } from '../../server/lead-duplicates';
+import { NOT_STAGED } from '../../server/lead-funnel';
+import { listLeadStages, type LeadStage } from '../../server/lead-stages';
 import { getLead, LEAD_LIST_FLAGS, listLeads } from '../../server/leads';
 import { formOptions } from '../../server/options';
 import { StatCard } from '../../ui/charts';
@@ -15,15 +17,11 @@ import { FormModal, RecordModal } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
 import { Segment } from '../../ui/sections';
 import { SampleBadge } from '../admissions/_components/demo-bits';
-import {
-  BookDemoLink,
-  LEAD_ACTS,
-  LEAD_CONTACT_FIELDS,
-  LeadActModal,
-  LeadMeta,
-  leadTabs,
-  type LeadAct,
-} from './lead-record';
+import { LEAD_ACTS, LeadActModal, type LeadAct } from './lead-acts';
+import { BookDemoLink, LEAD_CONTACT_FIELDS, LeadMeta, leadTabs } from './lead-record';
+import { FunnelDrill } from './funnel-drill';
+import { stageLabel } from './lead-stage-record';
+import { salesCallsPath } from './sales-calls-body';
 import '../ops.css';
 
 type Params = Record<string, string | undefined>;
@@ -65,7 +63,13 @@ export function LeadsBody({ user, base, searchParams: sp, tabs }: LeadsBodyProps
     <>
       <PageHeader
         title="Leads"
-        description="Enquiries and who owns them. Duplicates are flagged for review, never merged automatically."
+        description={
+          <>
+            Enquiries and who owns them. Duplicates are flagged for review, never merged
+            automatically. <a href={salesCallsPath(base)}>Sales calls</a> ·{' '}
+            <a href={`${base}/leads/stages`}>Lead stages</a>
+          </>
+        }
         actions={
           can(user, 'ops:leads:write') ? (
             <ButtonLink
@@ -87,18 +91,22 @@ export function LeadsBody({ user, base, searchParams: sp, tabs }: LeadsBodyProps
 
 async function Body({ user, sp, base }: { user: AuthenticatedUser; sp: Params; base: string }) {
   const BASE = `${base}/leads`;
+  // Funnel drill-down from a dashboard figure: the same query that counted it.
+  if (sp.from && sp.to && isIsoDate(sp.from) && isIsoDate(sp.to))
+    return <FunnelDrill user={user} base={base} sp={sp} from={sp.from} to={sp.to} />;
   const act = LEAD_ACTS.find((a) => a === sp.act);
   const r = await load(async (db) => {
-    const [leads, duplicates, open, opts] = await Promise.all([
+    const [leads, duplicates, open, opts, stages] = await Promise.all([
       listLeads(db, user, { q: sp.q }),
       can(user, 'ops:leads:merge') ? listDuplicateQueue(db, user) : null,
       sp.open ? getLead(db, user, sp.open) : null,
       sp.new || act ? formOptions(db) : null,
+      listLeadStages(db, user),
     ]);
-    return { leads, duplicates, open, opts };
+    return { leads, duplicates, open, opts, stages };
   });
   if (!r.ok) return r.view;
-  const { leads, duplicates, open, opts } = r.data;
+  const { leads, duplicates, open, opts, stages } = r.data;
   const closeHref = listHref(BASE, sp, { open: undefined, act: undefined });
   return (
     <div className="el-stack">
@@ -114,7 +122,7 @@ async function Body({ user, sp, base }: { user: AuthenticatedUser; sp: Params; b
           </li>
         ))}
       </ul>
-      <LeadList sp={sp} rows={leads} base={base} />
+      <LeadList sp={sp} rows={leads} base={base} stages={stages} />
       {duplicates ? (
         <Segment
           title="Merge review"
@@ -189,11 +197,27 @@ async function Body({ user, sp, base }: { user: AuthenticatedUser; sp: Params; b
 
 type LeadRow = Awaited<ReturnType<typeof listLeads>>[number];
 
-function LeadList({ sp, rows: all, base }: { sp: Params; rows: LeadRow[]; base: string }) {
+function LeadList({
+  sp,
+  rows: all,
+  base,
+  stages,
+}: {
+  sp: Params;
+  rows: LeadRow[];
+  base: string;
+  stages: LeadStage[];
+}) {
   const BASE = `${base}/leads`;
   const flag = LEAD_LIST_FLAGS.get(sp.flag ?? '');
   const stage = sp.stage && sp.stage in ADMISSION_STATUS_LABELS ? sp.stage : undefined;
-  const rows = all.filter((l) => (!flag || flag(l)) && (!stage || l.status === stage));
+  const leadStage = sp.leadStage === NOT_STAGED ? null : sp.leadStage;
+  const rows = all.filter(
+    (l) =>
+      (!flag || flag(l)) &&
+      (!stage || l.status === stage) &&
+      (!sp.leadStage || l.stageKey === leadStage),
+  );
   const page = Math.max(1, Number(sp.page) || 1);
   return (
     <div className="el-stack">
@@ -202,8 +226,18 @@ function LeadList({ sp, rows: all, base }: { sp: Params; rows: LeadRow[]; base: 
         search={{ name: 'q', label: 'Student name or lead code', value: sp.q }}
         filters={[
           {
+            name: 'leadStage',
+            label: 'Lead stage',
+            type: 'select',
+            value: sp.leadStage,
+            options: [
+              ...stages.map((s) => ({ value: s.key, label: s.label })),
+              { value: NOT_STAGED, label: 'Not staged' },
+            ],
+          },
+          {
             name: 'stage',
-            label: 'Stage',
+            label: 'Admission status',
             type: 'select',
             value: stage,
             options: Object.entries(ADMISSION_STATUS_LABELS).map(([value, label]) => ({
@@ -246,8 +280,18 @@ function LeadList({ sp, rows: all, base }: { sp: Params; rows: LeadRow[]; base: 
             render: (l) => l.programmeName ?? 'Undecided',
           },
           {
+            key: 'stageKey',
+            header: 'Lead stage',
+            render: (l) => (
+              <>
+                {stageLabel(stages, l.stageKey)}{' '}
+                {l.doNotContact ? <StatusBadge tone="danger">Do not contact</StatusBadge> : null}
+              </>
+            ),
+          },
+          {
             key: 'status',
-            header: 'Stage',
+            header: 'Admission',
             render: (l) =>
               l.status ? (
                 <StatusBadge tone={statusTone(l.status)}>

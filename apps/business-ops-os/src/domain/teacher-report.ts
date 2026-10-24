@@ -11,7 +11,8 @@
 import type { AcademicTeacherActivityV1, Metric } from '@elevate/shared-contracts';
 import { windowLabel, type IsoDate } from './dates';
 
-export const TEACHER_REPORT_TEMPLATE_VERSION = 'teacher-report/1';
+/** /2 (D-111): adds the overall comment a person writes or edits from an AI draft. */
+export const TEACHER_REPORT_TEMPLATE_VERSION = 'teacher-report/2';
 
 /** A count with its definition; `value` null = not measured. `text` overrides how it prints. */
 export interface Figure {

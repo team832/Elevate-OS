@@ -7,14 +7,13 @@ import { formOptions } from '../../server/options';
 import { ActionForm } from '../../ui/action-form';
 import { FeesNav } from '../../ui/admissions-nav';
 import { StatCard } from '../../ui/charts';
-import { fmtDateTime, fmtPaise } from '../../ui/format';
+import { fmtDateTime, fmtPaise, plural } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
 import { listHref, options } from '../../ui/list-controls';
 import { FormModal, RecordModal } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
 import { DetailTable, Segment } from '../../ui/sections';
 import { AnnualTuition } from './_components/annual-tuition';
-import { plural } from './_components/owing-dialog';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Fees' };

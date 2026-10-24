@@ -33,7 +33,10 @@ const RULES = [
   { name: 'slack-token', re: /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/ },
   { name: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
   { name: 'stripe-live-key', re: /\b[rs]k_live_[0-9A-Za-z]{20,}\b/ },
-  { name: 'llm-api-key', re: /\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}\b/ },
+  // OpenAI, Anthropic and OpenRouter (sk-or-v1-…) keys.
+  { name: 'llm-api-key', re: /\bsk-(?:ant-|proj-|or-)?[A-Za-z0-9_-]{32,}\b/ },
+  { name: 'groq-api-key', re: /\bgsk_[A-Za-z0-9]{40,}\b/ },
+  { name: 'google-ai-studio-key', re: /\bAQ\.[A-Za-z0-9_-]{40,}\b/ },
   { name: 'jwt', re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/ },
   {
     name: 'database-url-with-password',

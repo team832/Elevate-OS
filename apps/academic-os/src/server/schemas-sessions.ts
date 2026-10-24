@@ -1,6 +1,7 @@
 /** Request schemas for delivery, substitution, availability, patterns, teachers and demo attendees (A2). */
 import { z } from 'zod';
 import { isIsoDate } from '@elevate/shared-types';
+import { eachDate } from '../domain';
 
 const isoDate = z.string().refine((v: string): boolean => Boolean(isIsoDate(v)), { error: 'Expected a calendar date in YYYY-MM-DD form' });
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: 'Use HH:MM (24 h)' });
@@ -68,6 +69,22 @@ export const seriesEditBody = z
     version: z.int().min(1),
   })
   .strict();
+
+/** Build draft patterns for one batch (ACD-029): the coordinator enters the day window and classes per week. */
+export const buildTimetableBody = z
+  .object({
+    batchId: z.uuid(),
+    from: isoDate,
+    to: isoDate,
+    dayStart: clock,
+    dayEnd: clock,
+    subjects: z.array(z.object({ subjectId: z.uuid(), weeklyClasses: z.int().min(1).max(14) }).strict()).min(1, { error: 'Enter classes per week for at least one subject.' }).max(40),
+  })
+  .strict()
+  .refine((b) => b.from <= b.to, { error: 'from must not be after to', path: ['to'] })
+  .refine((b) => b.from > b.to || eachDate(b.from, b.to).length <= 400, { error: 'Build at most 400 days at a time.', path: ['to'] })
+  .refine((b) => b.dayStart < b.dayEnd, { error: 'The day must end after it starts.', path: ['dayEnd'] })
+  .refine((b) => new Set(b.subjects.map((s) => s.subjectId)).size === b.subjects.length, { error: 'Each subject may appear once.', path: ['subjects'] });
 
 export const patternsQuery = z.object({ batchId: z.uuid().optional() });
 

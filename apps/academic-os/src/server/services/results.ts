@@ -5,8 +5,6 @@
  */
 import { and, asc, desc, eq, gte, inArray, lte, ne } from 'drizzle-orm';
 import {
-  academicAnswerKeys,
-  academicAssessmentSections,
   academicAssessments,
   academicAttempts,
   academicBatches,
@@ -19,15 +17,16 @@ import {
 } from '@elevate/database';
 import { publishEvent, withTransaction } from '@elevate/server-kit';
 import { ConflictError, InvalidStateTransitionError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
+import type { StudentId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import {
   aggregateResults,
   analyseAssessment,
   assessmentTrend,
   checkAssessmentSchedule,
+  finaliseBounds,
   formatMarks,
   parseMarks,
-  scoreBounds,
   splitComparable,
   toNumericString,
   validateForFinalise,
@@ -36,9 +35,12 @@ import {
   type FinaliseInput,
   type SectionSpec,
 } from '../../domain';
-import { assertBatchInScope, audit, getBatchOrThrow, resolveScope, studentIdsInScope, type Actor } from '../context';
+import { assertBatchInScope, assessmentInScope, audit, getBatchOrThrow, resolveScope, type Actor } from '../context';
 import type { scheduleCheckBody } from '../schemas';
-import { eligibleStudentIds, getAssessmentOrThrow } from './assessments';
+import { mirrorRosterToAttempts, sectionsAndKey } from './assessment-roster';
+import { republishIfCurrent } from './assessment-publish';
+import { assertAssessmentInScope, markStudentIds } from './assessment-scope';
+import { getAssessmentOrThrow, populationIds } from './assessments';
 import { currentPlanForBatch } from './curriculum';
 import { getSetting } from './settings';
 import { batchClassesBetween, datedExclusionsFor } from './timetable';
@@ -49,13 +51,12 @@ export async function rankVisible(db: Database): Promise<boolean> {
   return s.status === 'approved' && s.value.show;
 }
 
-/** Load everything validateForFinalise needs (latest answer key = current key). */
+/** Load everything validateForFinalise needs (latest answer key = current key; roster-managed: the active roster is the population). */
 async function finaliseInput(db: Database, assessmentId: string) {
   const assessment = await getAssessmentOrThrow(db, assessmentId);
-  const sectionRows = await db.select().from(academicAssessmentSections).where(eq(academicAssessmentSections.assessmentId, assessment.id)).orderBy(asc(academicAssessmentSections.sortOrder));
-  const [key] = await db.select().from(academicAnswerKeys).where(eq(academicAnswerKeys.assessmentId, assessment.id)).orderBy(desc(academicAnswerKeys.version)).limit(1);
-  const attempts = await db.select().from(academicAttempts).where(eq(academicAttempts.assessmentId, assessment.id));
-  const enrolled = await eligibleStudentIds(db, assessment);
+  const { sections: sectionRows, key } = await sectionsAndKey(db, assessment.id);
+  const enrolled = await populationIds(db, assessment);
+  const attempts = (await db.select().from(academicAttempts).where(eq(academicAttempts.assessmentId, assessment.id))).filter((t) => !assessment.rosterSnapshotAt || enrolled.includes(t.studentId));
   const sections: SectionSpec[] = sectionRows.map((s) => ({
     code: s.code,
     name: s.name,
@@ -73,6 +74,7 @@ async function finaliseInput(db: Database, assessmentId: string) {
     key: key ? { version: key.version, answers: key.answers } : null,
     attempts: attempts.map((a) => ({ attemptId: a.id, studentId: a.studentId, status: a.status, responses: a.responses, keyVersion: a.keyVersion, manualScore: a.manualScore })),
     enrolledStudentIds: enrolled,
+    maxMarks: assessment.maxMarks,
   };
   return { assessment, input, keyId: key?.id ?? null };
 }
@@ -80,9 +82,11 @@ async function finaliseInput(db: Database, assessmentId: string) {
 export async function validateAssessment(db: Database, actor: Actor, assessmentId: string) {
   const scope = await resolveScope(db, actor, 'academic:assessments:read');
   const { assessment, input } = await finaliseInput(db, assessmentId);
-  assertBatchInScope(scope, assessment.batchId);
+  await assertAssessmentInScope(db, scope, assessment.id);
   const v = validateForFinalise(input);
-  return { ok: v.ok, issues: v.issues, keyVersion: input.key?.version ?? null, attempts: input.attempts.length, enrolled: input.enrolledStudentIds.length };
+  const visible = await markStudentIds(db, scope, assessment);
+  const issues = visible ? v.issues.filter((i) => !i.studentId || visible.includes(i.studentId)) : v.issues;
+  return { ok: v.ok, issues, keyVersion: input.key?.version ?? null, attempts: input.attempts.length, enrolled: input.enrolledStudentIds.length };
 }
 
 /** Score, write an immutable result version, publish academic.assessment.finalised v1. */
@@ -91,13 +95,14 @@ async function writeRun(tx: Database, actor: Actor, assessmentId: string, versio
   const v = validateForFinalise(input);
   if (!v.ok) throw new ValidationError('The assessment is not ready to finalise; fix every issue first.', { details: v.issues });
   // No key only when every submitted attempt is a manual total (validateForFinalise).
-  const agg = aggregateResults(input.sections, v.rules, input.key?.answers ?? null, input.attempts);
+  const bounds = finaliseBounds(input, v.rules);
+  const agg = aggregateResults(input.sections, v.rules, input.key?.answers ?? null, input.attempts, bounds);
   const snapshot = { assessmentRule: input.assessmentRule, sections: input.sections, keyVersion: input.key?.version ?? null };
   const [run] = await tx
     .insert(academicResultRuns)
     .values({ assessmentId: assessment.id, version, answerKeyId: keyId, status: 'final', ruleSnapshot: snapshot, reason, studentsScored: agg.scored, studentsAbsent: agg.absent, finalisedByUserId: actor.user.id })
     .returning();
-  const maxUnits = scoreBounds(input.sections, v.rules, input.key?.answers ?? null).maxUnits;
+  const maxUnits = bounds.maxUnits;
   if (agg.results.length > 0) {
     await tx.insert(academicResults).values(
       agg.results.map((r) => ({
@@ -143,6 +148,7 @@ export async function finaliseAssessment(db: Database, actor: Actor, assessmentI
     if (!locked) throw new NotFoundError('Assessment not found.');
     if (locked.status === 'finalised') throw new InvalidStateTransitionError('Results are already final; re-score to create a new version.');
     if (locked.status === 'cancelled') throw new InvalidStateTransitionError('The assessment is cancelled.');
+    if (locked.rosterSnapshotAt) await mirrorRosterToAttempts(tx, actor, locked.id);
     const { run, aggregate } = await writeRun(tx, actor, locked.id, 1, null);
     await audit(tx, actor, { action: 'assessment.finalised', entityType: 'assessment', entityId: locked.id, before: { status: locked.status }, after: { status: 'finalised', runId: run.id, version: 1, scored: aggregate.scored, absent: aggregate.absent } });
     return { run, scored: aggregate.scored, absent: aggregate.absent, sectionStats: aggregate.sectionStats };
@@ -154,38 +160,45 @@ export async function rescoreAssessment(db: Database, actor: Actor, assessmentId
   return withTransaction(db, async (tx) => {
     const [locked] = await tx.select().from(academicAssessments).where(eq(academicAssessments.id, assessmentId as never)).for('update');
     if (!locked) throw new NotFoundError('Assessment not found.');
-    if (locked.status !== 'finalised') throw new InvalidStateTransitionError('Only finalised results can be re-scored; finalise first.');
-    const [previous] = await tx.select().from(academicResultRuns).where(and(eq(academicResultRuns.assessmentId, locked.id), eq(academicResultRuns.status, 'final'))).for('update');
-    if (!previous) throw new InvalidStateTransitionError('No final result version exists.');
-    const previousResults = await tx.select({ studentId: academicResults.studentId, totalScore: academicResults.totalScore }).from(academicResults).where(eq(academicResults.runId, previous.id));
-    await tx.update(academicResultRuns).set({ status: 'superseded', supersededAt: new Date() }).where(eq(academicResultRuns.id, previous.id));
-    const { run, aggregate } = await writeRun(tx, actor, locked.id, previous.version + 1, reason);
-    await audit(tx, actor, {
-      action: 'assessment.rescored',
-      entityType: 'assessment',
-      entityId: locked.id,
-      before: { runId: previous.id, version: previous.version, totals: previousResults },
-      after: { runId: run.id, version: run.version, totals: aggregate.results.map((r) => ({ studentId: r.studentId, totalScore: r.score?.total ?? null })) },
-      metadata: { reason },
-    });
-    return { run, previousVersion: previous.version, scored: aggregate.scored, absent: aggregate.absent };
+    return rescoreLocked(tx, actor, locked, reason);
   });
+}
+
+/** Re-score a locked assessment; roster-managed: mirror the roster first and re-publish (version + 1) when published. */
+export async function rescoreLocked(tx: Database, actor: Actor, locked: Awaited<ReturnType<typeof getAssessmentOrThrow>>, reason: string) {
+  if (locked.status !== 'finalised') throw new InvalidStateTransitionError('Only finalised results can be re-scored; finalise first.');
+  const [previous] = await tx.select().from(academicResultRuns).where(and(eq(academicResultRuns.assessmentId, locked.id), eq(academicResultRuns.status, 'final'))).for('update');
+  if (!previous) throw new InvalidStateTransitionError('No final result version exists.');
+  if (locked.rosterSnapshotAt) await mirrorRosterToAttempts(tx, actor, locked.id);
+  const previousResults = await tx.select({ studentId: academicResults.studentId, totalScore: academicResults.totalScore }).from(academicResults).where(eq(academicResults.runId, previous.id));
+  await tx.update(academicResultRuns).set({ status: 'superseded', supersededAt: new Date() }).where(eq(academicResultRuns.id, previous.id));
+  const { run, aggregate } = await writeRun(tx, actor, locked.id, previous.version + 1, reason);
+  await audit(tx, actor, {
+    action: 'assessment.rescored',
+    entityType: 'assessment',
+    entityId: locked.id,
+    before: { runId: previous.id, version: previous.version, totals: previousResults },
+    after: { runId: run.id, version: run.version, totals: aggregate.results.map((r) => ({ studentId: r.studentId, totalScore: r.score?.total ?? null })) },
+    metadata: { reason },
+  });
+  const publication = locked.rosterSnapshotAt ? await republishIfCurrent(tx, actor, locked) : null;
+  return { run, previousVersion: previous.version, scored: aggregate.scored, absent: aggregate.absent, publicationVersion: publication?.version ?? null };
 }
 
 export async function getResults(db: Database, actor: Actor, assessmentId: string, version?: number) {
   const scope = await resolveScope(db, actor, 'academic:assessments:read');
   const assessment = await getAssessmentOrThrow(db, assessmentId);
-  assertBatchInScope(scope, assessment.batchId);
+  await assertAssessmentInScope(db, scope, assessment.id);
   const runs = await db.select().from(academicResultRuns).where(eq(academicResultRuns.assessmentId, assessment.id)).orderBy(desc(academicResultRuns.version));
   const run = version ? runs.find((r) => r.version === version) : runs.find((r) => r.status === 'final');
   if (!run) return { assessment, run: null, versions: runs.map((r) => ({ version: r.version, status: r.status, reason: r.reason, finalisedAt: r.finalisedAt })), results: [] };
-  const visible = await studentIdsInScope(db, scope);
+  const visible = await markStudentIds(db, scope, assessment);
   const showRank = await rankVisible(db);
   const rows = await db
     .select({ result: academicResults, code: academicStudents.code, fullName: academicStudents.fullName })
     .from(academicResults)
     .innerJoin(academicStudents, eq(academicStudents.id, academicResults.studentId))
-    .where(and(eq(academicResults.runId, run.id), visible ? inArray(academicResults.studentId, visible.length ? visible : ['00000000-0000-4000-8000-000000000000' as never]) : undefined))
+    .where(and(eq(academicResults.runId, run.id), visible ? inArray(academicResults.studentId, (visible.length ? visible : ['00000000-0000-4000-8000-000000000000']) as StudentId[]) : undefined))
     .orderBy(...(showRank ? [asc(academicResults.rank)] : []), asc(academicStudents.fullName));
   return {
     assessment,
@@ -209,6 +222,7 @@ export async function publishResults(db: Database, actor: Actor, assessmentId: s
     const [a] = await tx.select().from(academicAssessments).where(eq(academicAssessments.id, assessmentId as never)).for('update');
     if (!a) throw new NotFoundError('Assessment not found.');
     if (a.status !== 'finalised') throw new InvalidStateTransitionError('Finalise the results before publishing them.');
+    if (a.rosterSnapshotAt) throw new InvalidStateTransitionError('This assessment has a roster: publish it from Tests and Mock Tests in Business Operations (publication versions and ranking scope).');
     if (a.publishedAt) throw new ConflictError('These results are already published; a regrade publishes its new result version automatically.');
     const [row] = await tx.update(academicAssessments).set({ publishedAt: new Date(), publishedByUserId: actor.user.id }).where(eq(academicAssessments.id, a.id)).returning();
     await audit(tx, actor, { action: 'assessment.published', entityType: 'assessment', entityId: a.id, before: { publishedAt: null }, after: { publishedAt: row!.publishedAt } });
@@ -226,17 +240,22 @@ const percentOf = (total: number, max: number) => Math.round((total / max) * 100
 export async function getAssessmentAnalysis(db: Database, actor: Actor, assessmentId: string) {
   const scope = await resolveScope(db, actor, 'academic:assessments:read');
   const a = await getAssessmentOrThrow(db, assessmentId);
-  assertBatchInScope(scope, a.batchId);
-  const finals = await db
-    .select({ r: academicResults, kind: academicAssessments.kind, subjectId: academicAssessments.subjectId, code: academicAssessments.code, date: academicAssessments.scheduledDate })
+  await assertAssessmentInScope(db, scope, a.id);
+  const allFinals = await db
+    .select({ r: academicResults, a: academicAssessments, kind: academicAssessments.kind, subjectId: academicAssessments.subjectId, code: academicAssessments.code, date: academicAssessments.scheduledDate })
     .from(academicResults)
     .innerJoin(academicResultRuns, and(eq(academicResultRuns.id, academicResults.runId), eq(academicResultRuns.status, 'final')))
     .innerJoin(academicAssessments, eq(academicAssessments.id, academicResults.assessmentId))
-    .where(eq(academicAssessments.batchId, a.batchId));
+    .where(and(eq(academicAssessments.batchId, a.batchId), assessmentInScope(scope)));
+  // A teacher's figures use only the rows they may see (assessments and students in their batch + subject).
+  const visibleOf = new Map<string, string[] | null>();
+  for (const f of allFinals) if (!visibleOf.has(f.a.id)) visibleOf.set(f.a.id, await markStudentIds(db, scope, f.a));
+  const finals = allFinals.filter((f) => visibleOf.get(f.a.id)?.includes(f.r.studentId) ?? true);
   const mine = finals.filter((f) => f.r.assessmentId === a.id);
   const topics = { mapped: false, chapterIds: a.chapterIds, note: 'Questions are not mapped to chapters, so marks cannot be split by topic.' };
   if (mine.length === 0) return { assessmentId: a.id, analysis: null, sections: [], topics, comparison: null };
-  const eligible = new Set([...(await eligibleStudentIds(db, a)), ...mine.map((m) => m.r.studentId as string)]).size;
+  const visible = visibleOf.get(a.id) ?? null;
+  const eligible = new Set([...(await populationIds(db, a)).filter((id) => !visible || visible.includes(id)), ...mine.map((m) => m.r.studentId as string)]).size;
   const units = (v: string | null) => (v === null ? null : parseMarks(v)!);
   const analysis = analyseAssessment(
     mine.map((m) => ({ state: m.r.state, totalUnits: units(m.r.totalScore), maxUnits: units(m.r.maxScore)! })),

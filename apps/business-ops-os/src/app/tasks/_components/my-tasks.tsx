@@ -20,6 +20,7 @@ import { listHref, SearchPanel } from '../../../ui/list-controls';
 import { FormModal } from '../../../ui/record-modal';
 import { RecordTable } from '../../../ui/record-table';
 import { Segment } from '../../../ui/sections';
+import { DueWork } from '../../../ui/task-notices';
 import { logTaskFields, relatable, relatedFields, scopedStaff } from './log-task';
 import { QuickAdd } from './quick-add';
 import { Deadline, NextActionButton, TaskBadge, taskPaths, type Params } from './task-common';
@@ -151,6 +152,7 @@ export async function MyDay({
           <StatCard label="Done today" value={c.done} />
         </li>
       </ul>
+      <DueWork user={user} base={base} />
       {write ? <QuickAdd action={API} version={`${open.total}-${c.done}`} /> : null}
       <Segment title={`To do (${todo.length})`} flush>
         <MyTaskTable

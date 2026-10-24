@@ -11,18 +11,24 @@
  *   by their teacher).
  * - students / progress: students placed (from on or before the date) in a batch where that
  *   staff member's assignment window is open on the date, with overlapping dates.
+ * - assessments and reviews also follow the SUBJECT (brief §5): see `assessmentInScope`; several
+ *   assignments = the union. Course is enforced when an assignment is written (subject ∈ the
+ *   batch's course); batches carry no branch, so an assignment's branch narrows nothing yet.
  * A user with no staff record has an empty scope (sees nothing), never "all".
  * A `pending` assignment (no batch yet, R9) and a subject capability grant nothing.
  */
-import { and, eq, gte, isNotNull, isNull, lte, ne, or } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { scopeFor, type GrantScope, type Permission } from '@elevate/authorization';
 import {
+  academicAssessmentBatches,
+  academicAssessments,
   academicBatchPlacements,
   academicBatches,
   academicEnrolments,
   academicTeacherAssignments,
   staffMembers,
+  type AcademicSubjectId,
   type Database,
 } from '@elevate/database';
 import { recordAudit } from '@elevate/server-kit';
@@ -34,9 +40,10 @@ export interface Actor {
   requestId?: string | null;
 }
 
-export type Scope =
-  | { kind: 'all' }
-  | { kind: 'own'; staffId: StaffMemberId | null; batchIds: BatchId[] };
+/** One teaching assignment open on the scope's day. */
+export type TeachingFact = { batchId: BatchId; subjectId: AcademicSubjectId; academicYear: string | null };
+export type OwnScope = { kind: 'own'; staffId: StaffMemberId | null; batchIds: BatchId[]; assignments: TeachingFact[] };
+export type Scope = { kind: 'all' } | OwnScope;
 
 export async function staffIdForUser(db: Database, userId: string): Promise<StaffMemberId | null> {
   const [row] = await db
@@ -55,13 +62,24 @@ const assignmentOpenOrEndsOnOrAfter = (day: string | typeof academicBatchPlaceme
 /** SQL: the assignment window is open on `day` (start ≤ day ≤ end; open ends allowed); pending rows never count. */
 export const assignmentActiveOn = (day: string) => and(ne(ta.status, 'pending'), isNotNull(ta.batchId), or(isNull(ta.startDate), lte(ta.startDate, day)), assignmentOpenOrEndsOnOrAfter(day));
 
-/** Batches where the staff member has an assignment active on `day` (YYYY-MM-DD, default today IST). */
-export async function assignedBatchIds(db: Database, staffId: StaffMemberId, day: string = todayIst()): Promise<BatchId[]> {
+/** The staff member's assignments active on `day` (YYYY-MM-DD, default today IST). */
+export async function activeAssignments(db: Database, staffId: StaffMemberId, day: string = todayIst()): Promise<TeachingFact[]> {
   const rows = await db
-    .selectDistinct({ batchId: ta.batchId })
+    .selectDistinct({ batchId: ta.batchId, subjectId: ta.subjectId, academicYear: ta.academicYear })
     .from(ta)
     .where(and(eq(ta.staffMemberId, staffId), assignmentActiveOn(day)));
-  return rows.map((r) => r.batchId!); // assignmentActiveOn excludes rows without a batch
+  return rows as TeachingFact[]; // assignmentActiveOn excludes rows without a batch
+}
+
+/** Batches where the staff member has an assignment active on `day`. */
+export async function assignedBatchIds(db: Database, staffId: StaffMemberId, day?: string): Promise<BatchId[]> {
+  return (await ownScope(db, staffId, day)).batchIds;
+}
+
+/** A staff member's own scope on `day` (also for internal summaries, which have no signed-in actor). */
+export async function ownScope(db: Database, staffId: StaffMemberId | null, day?: string): Promise<OwnScope> {
+  const assignments = staffId ? await activeAssignments(db, staffId, day) : [];
+  return { kind: 'own', staffId, batchIds: [...new Set(assignments.map((a) => a.batchId))], assignments };
 }
 
 /** Resolve the actor's scope for a permission (own scope: assignments active on `day`); throws FORBIDDEN when it is not held. */
@@ -69,8 +87,28 @@ export async function resolveScope(db: Database, actor: Actor, permission: Permi
   const scope: GrantScope | null = scopeFor(actor.user, permission);
   if (scope === null) throw new ForbiddenError('You do not have permission to do this.', { details: { permission } });
   if (scope === 'all') return { kind: 'all' };
-  const staffId = await staffIdForUser(db, actor.user.id);
-  return { kind: 'own', staffId, batchIds: staffId ? await assignedBatchIds(db, staffId, day) : [] };
+  return ownScope(db, await staffIdForUser(db, actor.user.id), day);
+}
+
+const aa = academicAssessments;
+const ab = academicAssessmentBatches;
+/**
+ * SQL over academic.assessments (undefined for `all`): some own assignment covers one of the
+ * assessment's batches (primary or assessment_batches) and its subject — an assessment without a
+ * subject belongs to every subject of the batch — and its academic year when both carry one.
+ */
+export function assessmentInScope(scope: Scope): SQL | undefined {
+  if (scope.kind === 'all') return undefined;
+  return or(
+    sql`false`,
+    ...scope.assignments.map((f) =>
+      and(
+        or(eq(aa.batchId, f.batchId), sql`exists (select 1 from ${ab} where ${ab.assessmentId} = ${aa.id} and ${ab.batchId} = ${f.batchId})`),
+        or(isNull(aa.subjectId), eq(aa.subjectId, f.subjectId)),
+        f.academicYear ? or(isNull(aa.academicYear), eq(aa.academicYear, f.academicYear)) : undefined,
+      ),
+    ),
+  );
 }
 
 /** Throw NOT_FOUND (not FORBIDDEN — do not leak existence) unless the batch is in scope. */

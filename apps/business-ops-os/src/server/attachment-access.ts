@@ -18,8 +18,10 @@ import {
 } from '@elevate/database';
 import { isAppError } from '@elevate/shared-contracts';
 import { accessScope, scopeCovers, staffIdForUser, type Actor } from './context';
+import { assessmentFileAccess } from './assessment-file-access';
 import { readerOf } from './eod-reports';
 import { feedbackEvidenceRule, feedbackImportRule } from './feedback-access';
+import { hrRequestFileAccess } from './hr-requests-read';
 import { loadTaskFor, mayLogWork } from './task-store';
 
 export type AttachmentOwnerKind = (typeof OPS_ATTACHMENT_OWNER_KINDS)[number];
@@ -131,6 +133,14 @@ async function coversCorrection(db: Database, user: Actor, id: string, permissio
   return !!c && !!access && scopeCovers(access, [c.staffId]);
 }
 
+type AccessFn = NonNullable<OwnerRule['access']>;
+/** A rule decided by one access function (the owning record's own). */
+const byAccess = (access: AccessFn): OwnerRule => ({
+  access,
+  canRead: async (db, user, id) => (await access(db, user, id)).canRead,
+  canWrite: async (db, user, id) => (await access(db, user, id)).canWrite,
+});
+
 const report = (db: Database, id: string) =>
   first(
     db
@@ -191,4 +201,8 @@ export const ATTACHMENT_ACCESS: Record<AttachmentOwnerKind, OwnerRule> = {
         : 'This report has been submitted. Files can be added while it is a draft or when changes are requested.',
   },
   staff_private: byPermission(staffMembers, 'ops:staff_private:read', 'ops:staff_private:manage'),
+  hr_request: byAccess(hrRequestFileAccess), // HR-REQ: sender, HR scope; recipient only HR's shared files
+  assessment_paper: byAccess(assessmentFileAccess('assessment_paper')),
+  assessment_key: byAccess(assessmentFileAccess('assessment_key')),
+  score_import: byAccess(assessmentFileAccess('score_import')),
 };

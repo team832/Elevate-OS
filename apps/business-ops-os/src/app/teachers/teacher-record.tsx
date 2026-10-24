@@ -7,7 +7,7 @@
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can, scopeFor } from '@elevate/authorization';
-import type { Metric } from '@elevate/shared-contracts';
+import { metric, type AcademicTeacherActivityV1, type Metric } from '@elevate/shared-contracts';
 import { Alert, MetricStrip, StatusBadge } from '@elevate/shared-ui';
 import { REVIEW_STATE_LABELS } from '../../domain/feedback';
 import { writeReviewHref } from '../../server/academic-reviews';
@@ -40,6 +40,33 @@ const needs = (permission: string) => (
 /** A metric as a short cell value: missing stays "Not recorded", never 0. */
 export const metricText = (m: Metric) =>
   m.status === 'missing' ? 'Not recorded' : String(m.value);
+
+const ASSESSMENT_COUNTS = [
+  ['assigned', 'Assessments assigned'],
+  ['completed', 'Completed'],
+  ['awaitingMarking', 'Awaiting marking'],
+  ['published', 'Results published'],
+] as const;
+
+/** Academic's assessment counts; a count an older Academic does not send is "Not recorded", never 0. */
+export function AssessmentCounts({ a }: { a: AcademicTeacherActivityV1 }) {
+  return (
+    <MetricStrip
+      label="Assessments"
+      missingLabel="Not recorded"
+      items={ASSESSMENT_COUNTS.map(([key, label]) => ({
+        label,
+        metric:
+          a.assessments?.[key] ??
+          metric.missing('Academic OS did not send this count.', {
+            definition: label,
+            window: a.window,
+            unit: 'count',
+          }),
+      }))}
+    />
+  );
+}
 
 export function teacherTabs(
   t: TeacherProfile,
@@ -217,18 +244,21 @@ export function teacherTabs(
           description={`From Academic OS, ${fmtDate(t.activityWindow.from)} to ${fmtDate(t.activityWindow.to)}. Planned is not delivered; delivered counts classes marked delivered with this teacher as an actual teacher.`}
         >
           {a ? (
-            <MetricStrip
-              label="Academic activity"
-              items={[
-                { label: 'Planned classes', metric: a.sessions.planned },
-                { label: 'Delivered', metric: a.sessions.delivered },
-                { label: 'Cancelled', metric: a.sessions.cancelled },
-                { label: 'Substituted', metric: a.sessions.substituted },
-                { label: 'Teaching logs pending', metric: a.logsPending },
-                { label: 'Attendance not recorded', metric: a.attendancePending },
-                { label: 'Marking pending', metric: a.markingPending },
-              ]}
-            />
+            <>
+              <MetricStrip
+                label="Academic activity"
+                items={[
+                  { label: 'Planned classes', metric: a.sessions.planned },
+                  { label: 'Delivered', metric: a.sessions.delivered },
+                  { label: 'Cancelled', metric: a.sessions.cancelled },
+                  { label: 'Substituted', metric: a.sessions.substituted },
+                  { label: 'Teaching logs pending', metric: a.logsPending },
+                  { label: 'Attendance not recorded', metric: a.attendancePending },
+                  { label: 'Marking pending', metric: a.markingPending },
+                ]}
+              />
+              <AssessmentCounts a={a} />
+            </>
           ) : t.activity.status === 'unavailable' ? (
             <Unavailable name="Academic OS" result={t.activity} />
           ) : null}
@@ -320,6 +350,11 @@ export function teacherTabs(
               user={user}
               showStudent
               heading={level === 3 ? 'h4' : 'h3'}
+              batchNames={
+                new Map(
+                  a?.assignments.flatMap((x) => (x.batchId ? [[x.batchId, x.batchCode]] : [])),
+                )
+              }
             />
           </Segment>
           {t.reviewsAuthored ? (

@@ -87,6 +87,14 @@ Generated from the code by `npm run docs:permissions` (check with `npm run docs:
 | `marketing:accounts:manage` |  |  | ✓ |  |  |  |  |  |  |  |  |
 | `marketing:campaigns:write` |  |  | ✓ |  |  |  |  |  |  |  |  |
 | `marketing:campaigns:read` |  | ✓ | ✓ | own |  |  |  |  | ✓ |  |  |
+| `marketing:calendar:read` |  | ✓ | ✓ | ✓ |  |  |  |  | ✓ |  |  |
+| `marketing:calendar:write` |  |  | ✓ | own |  |  |  |  |  |  |  |
+| `marketing:optimisation:read` |  | ✓ | ✓ | ✓ |  |  |  |  | ✓ |  |  |
+| `marketing:optimisation:write` |  |  | ✓ | own |  |  |  |  |  |  |  |
+| `marketing:optimisation:review` |  |  | ✓ |  |  |  |  |  |  |  |  |
+| `marketing:targets:read` |  | ✓ | ✓ | own |  |  |  |  | ✓ |  |  |
+| `marketing:targets:manage` |  |  | ✓ |  |  |  |  |  |  |  |  |
+| `marketing:reports:read` |  | ✓ | ✓ | own |  |  |  |  | ✓ |  |  |
 | `marketing:summary:read` |  | ✓ | ✓ |  |  |  |  |  | ✓ |  |  |
 | `academic:module:access` |  | ✓ |  |  | ✓ | ✓ |  |  | ✓ |  |  |
 | `academic:programmes:manage` |  |  |  |  | ✓ |  |  |  |  |  |  |
@@ -126,7 +134,7 @@ Generated from the code by `npm run docs:permissions` (check with `npm run docs:
 | `ops:leads:write` |  |  | ✓ | own |  |  | own | ✓ |  |  |  |
 | `ops:leads:assign` |  |  | ✓ |  |  |  |  | ✓ |  |  |  |
 | `ops:lead_contacts:read` |  |  | ✓ | own |  |  |  | ✓ |  |  |  |
-| `ops:leads:merge` |  |  |  |  |  |  |  | ✓ |  |  |  |
+| `ops:leads:merge` |  |  | ✓ |  |  |  |  | ✓ |  |  |  |
 | `ops:admissions:read` |  | ✓ |  |  |  |  | own | ✓ | ✓ | ✓ |  |
 | `ops:admissions:write` |  |  |  |  |  |  | own | ✓ |  |  |  |
 | `ops:admissions:approve` |  | ✓ |  |  |  |  |  | ✓ |  |  |  |
@@ -180,6 +188,12 @@ Generated from the code by `npm run docs:permissions` (check with `npm run docs:
 | `ops:teacher_feedback:import` |  |  |  |  |  |  |  | ✓ |  |  | ✓ |
 | `ops:teacher_feedback_summaries:read` |  | ✓ |  |  |  | own |  | ✓ | ✓ |  | ✓ |
 | `ops:hr_settings:manage` |  |  |  |  |  |  |  | ✓ |  |  | ✓ |
+| `ops:hr_requests:create` |  | own | own | own | own | own | own | ✓ |  | own |  |
+| `ops:hr_requests:read` |  |  |  |  |  |  |  | ✓ |  |  | ✓ |
+| `ops:hr_requests:manage` |  |  |  |  |  |  |  | ✓ |  |  | ✓ |
+| `ops:assessments:read` |  | ✓ |  |  | ✓ |  |  | ✓ | ✓ |  |  |
+| `ops:assessments:manage` |  |  |  |  |  |  |  | ✓ |  |  |  |
+| `ops:assessments:publish` |  |  |  |  |  |  |  | ✓ |  |  |  |
 <!-- permission-matrix:end -->
 
 ## 4. Server-to-server calls

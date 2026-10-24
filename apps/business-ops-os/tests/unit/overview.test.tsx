@@ -59,6 +59,7 @@ describe('Business Operations navigation (brief 22 Oct 2026 §5)', () => {
       'Overview',
       'My attendance',
       'My reports',
+      'Requests through HR', // HR-REQ
       'Admissions',
       'Demo Students',
       'Active Students',
@@ -66,6 +67,7 @@ describe('Business Operations navigation (brief 22 Oct 2026 §5)', () => {
       'Fees and Collections',
       'Teachers',
       'Academic Summary',
+      'Tests and Mock Tests', // TESTS-OPS
       'Tasks and EOD Reports',
       // HR section (brief 23 Oct 2026 §6)
       'HR Overview',
@@ -74,6 +76,7 @@ describe('Business Operations navigation (brief 22 Oct 2026 §5)', () => {
       'Attendance',
       'Tasks',
       'Submission Review',
+      'Staff Requests', // HR-REQ
       'Work Reports',
       'Student Feedback about Teachers',
       'HR Settings',

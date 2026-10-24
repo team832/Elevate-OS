@@ -35,9 +35,12 @@ export function AcademicReviewList({
   user,
   showStudent = false,
   heading: Heading = 'h3',
+  batchNames,
 }: {
   result: ReviewsResult | null;
   user: AuthenticatedUser;
+  /** Academic batch id → name, from what this page already received from Academic. */
+  batchNames?: ReadonlyMap<string, string>;
   /** On a teacher's profile each review names its student. */
   showStudent?: boolean;
   /** One level below the surrounding Segment's heading. */
@@ -78,6 +81,11 @@ export function AcademicReviewList({
                 { label: 'Teacher', value: r.authorName },
                 showStudent && { label: 'Student', value: r.studentName },
                 { label: 'Type', value: humanise(r.reviewType) },
+                !!r.observationOn && { label: 'Observed on', value: fmtDate(r.observationOn) },
+                !!r.batchId && {
+                  label: 'Batch',
+                  value: batchNames?.get(r.batchId) ?? 'Batch recorded in Academic',
+                },
                 { label: 'Strengths', value: r.strengths ?? 'None recorded' },
                 { label: 'Areas needing support', value: r.areasForSupport ?? 'None recorded' },
                 !!r.attendanceEvidence && {
@@ -184,11 +192,13 @@ export async function StudentFeedbackSection({
   studentId,
   academicStudentId,
   user,
+  batchNames,
 }: {
   studentId: StudentIdentityId;
   /** The Academic student record, once the student is enrolled there (the review form needs it). */
   academicStudentId: string | null;
   user: AuthenticatedUser;
+  batchNames?: Promise<ReadonlyMap<string, string>>;
 }) {
   const write =
     isTeacher(user) && academicStudentId ? (
@@ -214,7 +224,7 @@ export async function StudentFeedbackSection({
   return (
     <>
       <Segment title={TITLE} description={WHERE_OTHER} actions={write}>
-        <AcademicReviewList result={academic} user={user} />
+        <AcademicReviewList result={academic} user={user} batchNames={await batchNames} />
       </Segment>
       {legacy.length ? (
         <Segment title={`Earlier reviews — ${LEGACY}`} flush description="Read-only history.">

@@ -8,9 +8,11 @@ import {
   RuleCheckSummary,
 } from '../../src/ui/badges';
 import { VersionsPanel } from '../../src/ui/content-panels';
-import { OverviewTiles, PipelineCharts } from '../../src/ui/overview';
-import { CONTENT_STATES, type ContentState, type RuleCheckResult } from '../../src/domain';
-import type { IsoDate } from '@elevate/shared-types';
+import { DecisionTiles, LeadFunnel, Provenance } from '../../src/ui/overview';
+import type { DashboardFilters } from '../../src/server/dashboard-filters';
+import { CampaignResultsTable, type CampaignRow } from '../../src/ui/campaigns';
+import type { Overview } from '../../src/server/dashboard-overview';
+import type { RuleCheckResult } from '../../src/domain';
 
 vi.mock('../../src/app/actions/content', () => ({}));
 
@@ -126,95 +128,149 @@ describe('VersionsPanel', () => {
   });
 });
 
-describe('OverviewTiles', () => {
-  const base = { due: 2, awaiting: 1, running: 0, ideas: 59, quarantined: 8 };
-  const label = (text: string) => `<span class="el-stat-label">${text}</span>`;
+const tasks = (total: number, href = '/marketing/tasks?tab=all&due=overdue') => ({
+  rows: [],
+  total,
+  page: 1,
+  pageSize: 1,
+  href,
+});
+const overview = (over: Partial<Overview> = {}) =>
+  ({
+    filters: { from: '2026-10-01', to: '2026-10-31', fromDefaults: true },
+    leads: {
+      awaitingContact: 4,
+      awaitingHref: '/marketing/leads?flag=awaiting_contact',
+      hasSample: false,
+      funnel: [],
+    },
+    followUps: undefined,
+    awaitingReview: [{}, {}],
+    dashboard: { upcomingScheduled: [{}], overdueScheduled: [] },
+    tasks: {
+      overdue: tasks(3),
+      dueInPeriod: tasks(5),
+      blocked: tasks(1, '/marketing/tasks?tab=all&flag=blocked'),
+    },
+    ...over,
+  }) as unknown as Overview;
+const tile = (label: string, value: string) =>
+  `<span class="el-stat-label">${label}</span><span class="el-stat-value">${value}</span>`;
 
-  it('shows every figure with its label and links to the list behind it', () => {
-    const out = html(<OverviewTiles {...base} />);
-    for (const t of ['Content due this week', 'Awaiting approval', 'Campaigns running', 'Ideas'])
-      expect(out).toContain(label(t));
-    expect(out).toContain('href="/marketing/ideas"');
-    expect(out).toContain('<span class="el-stat-value">59</span>');
-    expect(out).toContain('8 quarantined');
-    expect(out).not.toContain('Follow-ups');
-    expect(out).not.toContain('tasks');
+describe('Overview decision tiles (§10)', () => {
+  it('counts link to the list they count', () => {
+    const out = html(<DecisionTiles o={overview()} />);
+    expect(out).toContain(
+      `href="/marketing/leads?flag=awaiting_contact" class="el-stat el-kpi">${tile('Leads awaiting first contact', '4')}`,
+    );
+    expect(out).toContain(
+      `href="#awaiting" class="el-stat el-kpi">${tile('Content awaiting review', '2')}`,
+    );
+    expect(out).toContain(
+      `href="/marketing/tasks?tab=all&amp;due=overdue" class="el-stat el-kpi">${tile('Overdue tasks', '3')}`,
+    );
+    expect(out).toContain(
+      `href="/marketing/tasks?tab=all&amp;flag=blocked" class="el-stat el-kpi">${tile('Blocked tasks', '1')}`,
+    );
+    expect(out).toContain('2026-10-01 to 2026-10-31 (IST) · everyone in your scope');
   });
 
   it.each([
     ['failed', 'Follow-up counts could not be loaded.'],
     [null, 'so your follow-ups cannot be shown'],
   ] as const)('follow-ups %s: "Not available" with the reason, never 0', (state, text) => {
-    const out = html(<OverviewTiles {...base} followUps={state} />);
-    expect(out).toContain('el-stat-missing');
-    expect(out).toContain('Not available');
+    const out = html(<DecisionTiles o={overview({ followUps: state })} />);
+    expect(out).toContain(tile('Follow-ups', 'Not available'));
     expect(out).toContain(text);
     expect(out).not.toContain('follow-ups?view=');
   });
 
-  it('tasks: the open count, due and overdue in the note, the EOD state in words', () => {
-    const out = html(
-      <OverviewTiles
-        {...base}
-        tasks={{
-          day: '2026-10-22' as IsoDate,
-          asOf: new Date('2026-10-22T04:00:00Z'),
-          open: 3,
-          overdue: 1,
-          dueToday: 2,
-          submitted: 0,
-          eod: 'not_started',
-        }}
+  it('a failed task load is said in words; without task access the tiles are not shown', () => {
+    const failed = html(
+      <DecisionTiles
+        o={overview({ tasks: { overdue: 'failed', dueInPeriod: undefined, blocked: undefined } })}
       />,
     );
-    expect(out).toContain(`${label('Open tasks')}<span class="el-stat-value">3</span>`);
-    expect(out).toContain('2 due today · 1 overdue · as of 22 Oct 2026, 09:30 IST');
-    expect(out).toContain(`${label('EOD report')}<span class="el-stat-value">not started</span>`);
+    expect(failed).toContain('Task counts could not be loaded.');
+    expect(failed).not.toContain('Blocked tasks');
+  });
+
+  it('a failed lead load is said in words, never 0', () => {
+    const out = html(<DecisionTiles o={overview({ leads: 'failed' })} />);
+    expect(out).toContain(tile('Leads awaiting first contact', 'Not available'));
+    expect(out).toContain('Lead figures could not be loaded.');
   });
 });
 
-describe('PipelineCharts', () => {
-  const byState = (over: Partial<Record<ContentState, number>>) =>
-    Object.fromEntries(CONTENT_STATES.map((s) => [s, over[s] ?? 0])) as Record<
-      ContentState,
-      number
-    >;
-  const none = { not_configured: 0, sandbox: 0, connected: 0, error: 0 };
+const f = { from: '2026-10-01', to: '2026-10-31', fromDefaults: false } as DashboardFilters;
+const stage = (key: string, label: string, count: number) => ({
+  key,
+  label,
+  active: true,
+  count,
+  href: `/marketing/leads?from=2026-10-01&to=2026-10-31&leadStage=${key}&reached=1`,
+});
 
-  it('bars from the state counts (legacy in the note) and status bars from the integration counts', () => {
-    const out = html(
-      <PipelineCharts
-        d={{
-          totalItems: 5,
-          itemsByState: byState({ draft: 3, published: 2 }),
-          legacyItemsByState: byState({ published: 2 }),
-          accountsByIntegration: { ...none, not_configured: 9, sandbox: 1 },
-        }}
-      />,
-    );
-    expect(out).toContain(
-      '5 items. Imported from the legacy tracker, keeping its status: published 2.',
-    );
-    expect(out).toContain('data-tip="draft: 3"');
-    expect(out).toContain('<span class="el-hbar-value">3</span>');
-    expect(out).toContain('sandbox (mock only)');
-    expect(out).toContain('<span class="el-hbar-value">9</span>');
-    expect(out).toContain('data-tip="not configured: 9"');
+describe('LeadFunnel', () => {
+  it.each([
+    ['no stages configured', { funnel: [] }, 'Lead stages are not set up yet.'],
+    ['a failed load', 'failed', 'Lead figures could not be loaded.'],
+  ] as const)('%s: says so, no chart', (_, leads, text) => {
+    const out = html(<LeadFunnel leads={leads as never} f={f} />);
+    expect(out).toContain(text);
+    expect(out).not.toContain('el-funnel');
   });
 
-  it('with no accounts every status bar reads its counted 0 and keeps its name', () => {
+  it('stages in order, each row of the table opens exactly that stage’s leads', () => {
     const out = html(
-      <PipelineCharts
-        d={{
-          totalItems: 0,
-          itemsByState: byState({}),
-          legacyItemsByState: byState({}),
-          accountsByIntegration: none,
+      <LeadFunnel
+        f={f}
+        leads={{
+          awaitingContact: 0,
+          awaitingHref: '',
+          hasSample: true,
+          funnel: [stage('new', 'New', 4), stage('demo_booked', 'Demo booked', 2)],
         }}
       />,
     );
-    expect(out).toContain('data-tip="not configured: 0"');
-    expect(out).toContain('data-tip="sandbox (mock only): 0"');
-    expect(out).not.toContain('Not enough data');
+    expect(out).toContain('class="el-funnel"');
+    expect(out).toContain('Show as table');
+    expect(out).toContain(
+      'href="/marketing/leads?from=2026-10-01&amp;to=2026-10-31&amp;leadStage=demo_booked&amp;reached=1">Demo booked</a>',
+    );
+    expect(out).toContain('Sample data');
+  });
+});
+
+describe('Provenance and campaign rows', () => {
+  it.each([
+    [{}, 'Elevate OS records', false],
+    [{ manual: true }, 'Manual import', false],
+    [{ sample: true }, 'Elevate OS records', true],
+  ] as const)('%o names its source', (props, text, sample) => {
+    const out = html(<Provenance {...props} />);
+    expect(out).toContain(text);
+    expect(out.includes('el-badge-sample')).toBe(sample);
+  });
+
+  it('a sample campaign carries the SAMPLE DATA badge and its status in words', () => {
+    const row = {
+      id: 'c1',
+      code: 'IPMAT-OCT',
+      name: 'Sample IPMAT push',
+      startsOn: null,
+      endsOn: null,
+      status: 'active',
+      isSample: true,
+      placements: 0,
+      publishedLive: 0,
+      results: { posts: 0, latestCaptureAt: null, metrics: {} },
+    } as unknown as CampaignRow;
+    const out = html(<CampaignResultsTable rows={[row]} empty="None" />);
+    expect(out).toContain('el-badge-sample');
+    expect(out).toContain('>Active<');
+    expect(html(<CampaignResultsTable rows={[]} empty="No campaign is active" />)).toContain(
+      'No campaign is active',
+    );
   });
 });

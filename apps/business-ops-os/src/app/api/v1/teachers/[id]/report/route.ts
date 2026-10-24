@@ -7,7 +7,11 @@ import { generateTeacherReport, listTeacherReports } from '../../../../../../ser
 export const dynamic = 'force-dynamic';
 
 const periodBody = z
-  .object({ from: isoDateSchema, to: isoDateSchema })
+  .object({
+    from: isoDateSchema,
+    to: isoDateSchema,
+    comment: z.string().trim().max(2000).nullish(),
+  })
   .strict()
   .refine((b) => b.from <= b.to, { error: 'The start must be on or before the end', path: ['to'] });
 

@@ -200,7 +200,7 @@ describe('teacher reports (owner brief 22 Oct 2026)', () => {
     reference = made.data!.referenceCode;
     const row = await storedSnapshot(reference);
     expect(row.snapshotSha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(row.templateVersion).toBe('teacher-report/1');
+    expect(row.templateVersion).toBe('teacher-report/2');
     const s = row.snapshot as TeacherReportSnapshot;
     expect(s.teacher).toMatchObject({
       name: 'Sample Quant Teacher',

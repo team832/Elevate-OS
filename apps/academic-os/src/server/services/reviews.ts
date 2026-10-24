@@ -14,13 +14,14 @@
  * - No ratings, scores or labels: structured evidence fields only. No submitted review =
  *   "pending", never negative.
  */
-import { and, desc, eq, gte, inArray, lte, max, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lte, max, ne, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { scopeFor } from '@elevate/authorization';
 import {
   academicBatches,
   academicBatchPlacements,
   academicClassSessions,
+  academicCourses,
   academicEnrolments,
   academicSessionDemoAttendees,
   academicStudents,
@@ -35,9 +36,9 @@ import {
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
 import { academicStudentReviewsV1Schema, ConflictError, ForbiddenError, InvalidStateTransitionError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
-import type { StaffMemberId, StudentId, StudentIdentityId } from '@elevate/shared-types';
+import type { BatchId, StaffMemberId, StudentId, StudentIdentityId } from '@elevate/shared-types';
 import type { z } from 'zod';
-import { assignmentActiveOn, audit, resolveScope, staffIdForUser, todayIst, type Actor } from '../context';
+import { activeAssignments, assignmentActiveOn, audit, resolveScope, staffIdForUser, todayIst, type Actor, type TeachingFact } from '../context';
 import { MODULE_PATHS } from '../paths';
 import { taughtBy } from './session-guards';
 import type { createReviewBody, internalReviewsQuery, reviewsQuery, updateReviewBody } from '../schemas-teaching';
@@ -51,12 +52,12 @@ const TEXT_FIELDS = ['strengths', 'areasForSupport', 'attendanceEvidence', 'home
 const openEnded = (col: unknown, op: '<=' | '>=', value: string) => sql`(${col} IS NULL OR ${col} ${sql.raw(op)} ${value})`;
 
 /**
- * Academic students the staff member may review TODAY (open placement × assignment active today).
+ * (student, batch) pairs the staff member may review TODAY (open placement × assignment active today).
  * Not context.studentIdsInScope: that one keeps students of ended assignment windows (read history).
  */
-async function placedStudentIds(db: Database, staffId: StaffMemberId, today: string): Promise<StudentId[]> {
-  const rows = await db
-    .selectDistinct({ id: academicEnrolments.studentId })
+async function placedPairs(db: Database, staffId: StaffMemberId, today: string): Promise<{ id: StudentId; batchId: BatchId }[]> {
+  return db
+    .selectDistinct({ id: academicEnrolments.studentId, batchId: academicBatchPlacements.batchId })
     .from(academicBatchPlacements)
     .innerJoin(academicEnrolments, eq(academicEnrolments.id, academicBatchPlacements.enrolmentId))
     .innerJoin(academicTeacherAssignments, eq(academicTeacherAssignments.batchId, academicBatchPlacements.batchId))
@@ -68,7 +69,6 @@ async function placedStudentIds(db: Database, staffId: StaffMemberId, today: str
         openEnded(academicBatchPlacements.endDate, '>=', today),
       ),
     );
-  return rows.map((r) => r.id);
 }
 
 const attendeeRef = { coreStudentId: academicSessionDemoAttendees.coreStudentId, opsDemoSessionId: academicSessionDemoAttendees.opsDemoSessionId, sessionId: academicSessionDemoAttendees.sessionId };
@@ -78,17 +78,26 @@ async function demoAttendeesOf(db: Database, staffId: StaffMemberId) {
   return db.selectDistinct(attendeeRef).from(academicSessionDemoAttendees).innerJoin(academicClassSessions, eq(academicClassSessions.id, academicSessionDemoAttendees.sessionId)).where(taughtBy(db, staffId));
 }
 
-/** Who the actor is and which students they may review / read right now. `null` sets = any student. */
+/**
+ * Who the actor is and which students they may review / read right now. `null` sets = any student.
+ * `teaches`: the assignments open today and `placedIn` the (student, batch) pairs, for the (batch, subject) scope of brief §5; null = any.
+ */
 async function reviewer(db: Database, actor: Actor, now: Date) {
   const staffId = await staffIdForUser(db, actor.user.id);
-  if (scopeFor(actor.user, 'academic:students:read') === 'all') return { staffId, placed: null, demos: null };
-  if (!staffId) return { staffId, placed: [] as StudentId[], demos: [] as Awaited<ReturnType<typeof demoAttendeesOf>> };
-  return { staffId, placed: await placedStudentIds(db, staffId, todayIst(now)), demos: await demoAttendeesOf(db, staffId) };
+  if (scopeFor(actor.user, 'academic:students:read') === 'all') return { staffId, placed: null, placedIn: null, demos: null, teaches: null };
+  if (!staffId) return { staffId, placed: [] as StudentId[], placedIn: [] as { id: StudentId; batchId: BatchId }[], demos: [] as Awaited<ReturnType<typeof demoAttendeesOf>>, teaches: [] as TeachingFact[] };
+  const today = todayIst(now);
+  const placedIn = await placedPairs(db, staffId, today);
+  return { staffId, placed: [...new Set(placedIn.map((p) => p.id))], placedIn, demos: await demoAttendeesOf(db, staffId), teaches: await activeAssignments(db, staffId, today) };
 }
 
-type StudentRef = { academicStudentId: string | null; coreStudentId: string | null; opsDemoSessionId: string | null; sessionId: string | null; subjectId?: string | null };
+type StudentRef = { academicStudentId: string | null; coreStudentId: string | null; opsDemoSessionId: string | null; sessionId: string | null; subjectId?: string | null; batchId?: string | null };
 
-/** The actor may review this student now; a named class must be one they taught; the subject must be in the student's course. */
+/**
+ * The actor may review this student now; a named class must be one they taught; the subject must be
+ * in the student's course; a teacher names only a batch and subject they teach, and the student must
+ * be placed in that batch (a demo review's batch is its class's).
+ */
 async function assertMayReview(db: Database, actor: Actor, ref: StudentRef, now: Date) {
   const who = await reviewer(db, actor, now);
   if (!who.staffId) throw new ForbiddenError('Only a staff member can write teacher reviews.');
@@ -100,11 +109,28 @@ async function assertMayReview(db: Database, actor: Actor, ref: StudentRef, now:
       const [taught] = await db.select({ id: academicClassSessions.id }).from(academicClassSessions).where(and(eq(academicClassSessions.id, sessionId as never), taughtBy(db, who.staffId)));
       if (!taught) throw new ValidationError('Link the review to a class you taught.');
     }
+    if (ref.batchId) {
+      if (who.teaches && !who.teaches.some((t) => t.batchId === ref.batchId)) throw new ValidationError('Choose a batch you teach.');
+      const [placed] = await db
+        .select({ id: academicBatchPlacements.id })
+        .from(academicBatchPlacements)
+        .innerJoin(academicEnrolments, eq(academicEnrolments.id, academicBatchPlacements.enrolmentId))
+        .where(and(eq(academicEnrolments.studentId, student.id), eq(academicBatchPlacements.batchId, ref.batchId as BatchId)))
+        .limit(1);
+      if (!placed) throw new ValidationError('The student is not placed in this batch.');
+    }
+    // (batch, subject) pairs: the named batch, else a batch of theirs the student is placed in now.
+    const here = (t: TeachingFact) => (ref.batchId ? t.batchId === ref.batchId : who.placedIn!.some((p) => p.id === student.id && p.batchId === t.batchId));
+    if (ref.subjectId && who.teaches && !who.teaches.some((t) => t.subjectId === ref.subjectId && here(t))) throw new ValidationError('Choose a subject you teach in this batch.');
   } else {
     const attendees = who.demos ?? (await db.select(attendeeRef).from(academicSessionDemoAttendees).where(eq(academicSessionDemoAttendees.coreStudentId, ref.coreStudentId as StudentIdentityId)));
     const match = attendees.find((a) => a.coreStudentId === ref.coreStudentId && a.opsDemoSessionId === ref.opsDemoSessionId && (!ref.sessionId || a.sessionId === ref.sessionId));
     if (!match) throw new NotFoundError('Demo student not found on any of your classes.');
     sessionId = match.sessionId;
+    if (ref.batchId) {
+      const [session] = await db.select({ batchId: academicClassSessions.batchId }).from(academicClassSessions).where(eq(academicClassSessions.id, sessionId as never));
+      if (session?.batchId !== ref.batchId) throw new ValidationError('A demo student review takes the batch of its class.');
+    }
   }
   if (ref.subjectId) {
     const courses = ref.academicStudentId
@@ -123,6 +149,8 @@ function assertSubmittable(review: Pick<Review, 'reviewType' | 'periodFrom' | 'p
 
 const contentOf = (input: Content) => ({
   subjectId: (input.subjectId as never) ?? null,
+  batchId: (input.batchId as BatchId) ?? null,
+  observationOn: input.observationOn ?? null,
   periodFrom: input.periodFrom ?? null,
   periodTo: input.periodTo ?? null,
   ...Object.fromEntries(TEXT_FIELDS.map((f) => [f, input[f] || null])),
@@ -145,7 +173,7 @@ async function assertNotStale(tx: Database, draft: Review) {
 export async function createReview(db: Database, actor: Actor, input: z.output<typeof createReviewBody>, now = new Date()) {
   await resolveScope(db, actor, 'academic:reviews:write');
   if (input.coreStudentId && input.reviewType !== 'demo_session') throw new ValidationError('A review of a demo student must be a demo-session review.');
-  const { staffId, sessionId } = await assertMayReview(db, actor, { academicStudentId: input.academicStudentId ?? null, coreStudentId: input.coreStudentId ?? null, opsDemoSessionId: input.opsDemoSessionId ?? null, sessionId: input.sessionId ?? null, subjectId: input.subjectId }, now);
+  const { staffId, sessionId } = await assertMayReview(db, actor, { academicStudentId: input.academicStudentId ?? null, coreStudentId: input.coreStudentId ?? null, opsDemoSessionId: input.opsDemoSessionId ?? null, sessionId: input.sessionId ?? null, subjectId: input.subjectId, batchId: input.batchId }, now);
   const values = {
     ...contentOf(input),
     reviewKey: crypto.randomUUID() as AcademicReviewKey,
@@ -162,9 +190,10 @@ export async function createReview(db: Database, actor: Actor, input: z.output<t
   if (input.submit) assertSubmittable(values as never);
   return withTransaction(db, async (tx) => {
     if (sessionId) {
-      const [session] = await tx.select({ subjectId: academicClassSessions.subjectId }).from(academicClassSessions).where(eq(academicClassSessions.id, sessionId as never));
+      const [session] = await tx.select({ subjectId: academicClassSessions.subjectId, batchId: academicClassSessions.batchId }).from(academicClassSessions).where(eq(academicClassSessions.id, sessionId as never));
       if (!session) throw new ValidationError('Session not found.');
       values.subjectId ??= session.subjectId as never;
+      values.batchId ??= session.batchId;
     }
     const [row] = await tx.insert(academicTeacherReviews).values(values).returning();
     await audit(tx, actor, { action: input.submit ? 'teacher_review.submitted' : 'teacher_review.draft_saved', entityType: 'teacher_review', entityId: row!.id, after: row });
@@ -189,15 +218,16 @@ export async function updateReview(db: Database, actor: Actor, id: string, { upd
     const draft = await lockOwn(tx, actor, id);
     if (draft.status !== 'draft') throw new InvalidStateTransitionError('A submitted review is never edited. Use "Revise" to write a new version.');
     if (new Date(updatedAt).getTime() !== draft.updatedAt.getTime()) throw new ConflictError('This draft changed since you opened it. Reload the page to see the latest text.');
-    await assertMayReview(tx, actor, { ...draft, subjectId: input.subjectId }, now);
-    const next = { ...draft, ...contentOf(input), subjectId: (input.subjectId as never) ?? draft.subjectId };
+    const kept = { subjectId: (input.subjectId as never) ?? draft.subjectId, batchId: (input.batchId as BatchId) ?? draft.batchId };
+    await assertMayReview(tx, actor, { ...draft, ...kept }, now);
+    const next = { ...draft, ...contentOf(input), ...kept };
     if (input.submit) {
       assertSubmittable(next);
       await assertNotStale(tx, draft);
     }
     const [row] = await tx
       .update(academicTeacherReviews)
-      .set({ ...contentOf(input), subjectId: next.subjectId, ...(input.submit ? { status: 'submitted' as const, submittedAt: now } : {}) })
+      .set({ ...contentOf(input), ...kept, ...(input.submit ? { status: 'submitted' as const, submittedAt: now } : {}) })
       .where(eq(academicTeacherReviews.id, draft.id))
       .returning();
     await audit(tx, actor, { action: input.submit ? 'teacher_review.submitted' : 'teacher_review.draft_saved', entityType: 'teacher_review', entityId: draft.id, before: draft, after: row });
@@ -247,7 +277,16 @@ async function visibility(db: Database, actor: Actor, now: Date) {
   const own = who.staffId ? eq(academicTeacherReviews.authorStaffId, who.staffId) : sql`false`;
   if (scope.kind === 'all') return { scope, who, own, visible: or(own, ne(academicTeacherReviews.status, 'draft')) };
   const inScope = who.placed === null ? undefined : or(inArray(academicTeacherReviews.academicStudentId, who.placed), inArray(academicTeacherReviews.coreStudentId, who.demos.map((d) => d.coreStudentId)));
-  return { scope, who, own, visible: or(own, and(eq(academicTeacherReviews.status, 'submitted'), inScope)) };
+  // Others' reviews only for a (batch, subject) pair the teacher teaches; a review without a batch counts as the student's batches here.
+  const R = academicTeacherReviews;
+  const pairs = who.teaches?.map((t) =>
+    and(
+      or(isNull(R.subjectId), eq(R.subjectId, t.subjectId)),
+      or(eq(R.batchId, t.batchId), and(isNull(R.batchId), or(inArray(R.academicStudentId, who.placedIn!.filter((p) => p.batchId === t.batchId).map((p) => p.id)), inArray(R.coreStudentId, who.demos!.map((d) => d.coreStudentId))))),
+    ),
+  );
+  const subject = pairs ? or(sql`false`, ...pairs) : undefined;
+  return { scope, who, own, visible: or(own, and(eq(academicTeacherReviews.status, 'submitted'), inScope, subject)) };
 }
 
 const author = alias(staffMembers, 'review_author');
@@ -259,6 +298,7 @@ function selectReviews(db: Database) {
       review: academicTeacherReviews,
       authorName: author.fullName,
       subjectName: academicSubjects.name,
+      batchCode: academicBatches.code,
       sessionDate: academicClassSessions.date,
       studentName: sql<string>`coalesce(${academicStudents.fullName}, ${coreStudent.fullName})`,
       studentCoreId: sql<StudentIdentityId | null>`coalesce(${academicTeacherReviews.coreStudentId}, ${academicStudents.coreStudentId})`,
@@ -266,6 +306,7 @@ function selectReviews(db: Database) {
     .from(academicTeacherReviews)
     .innerJoin(author, eq(author.id, academicTeacherReviews.authorStaffId))
     .leftJoin(academicSubjects, eq(academicSubjects.id, academicTeacherReviews.subjectId))
+    .leftJoin(academicBatches, eq(academicBatches.id, academicTeacherReviews.batchId))
     .leftJoin(academicClassSessions, eq(academicClassSessions.id, academicTeacherReviews.sessionId))
     .leftJoin(academicStudents, eq(academicStudents.id, academicTeacherReviews.academicStudentId))
     .leftJoin(coreStudent, eq(coreStudent.id, academicTeacherReviews.coreStudentId));
@@ -354,6 +395,8 @@ export async function buildStudentReviewsV1(db: Database, query: z.output<typeof
         periodTo: r.periodTo,
         ...Object.fromEntries(TEXT_FIELDS.map((f) => [f, withdrawn ? null : r[f]])),
         followUpOn: withdrawn ? null : r.followUpOn,
+        observationOn: withdrawn ? null : r.observationOn,
+        batchId: r.batchId,
         visibility: r.visibility,
         submittedAt: iso(r.submittedAt),
         withdrawnAt: iso(r.withdrawnAt),
@@ -374,6 +417,24 @@ export async function reviewableStudents(db: Database, actor: Actor, now = new D
     .where(placed ? inArray(academicStudents.id, placed) : undefined)
     .orderBy(academicStudents.fullName)
     .limit(1000);
+}
+
+/** Batches and subjects the actor may name on a review: a teacher's assignments open today; a coordinator's, every active batch and its course's subjects. */
+export async function reviewChoices(db: Database, actor: Actor, now = new Date()) {
+  await resolveScope(db, actor, 'academic:reviews:write');
+  const { teaches } = await reviewer(db, actor, now);
+  const batches = await db
+    .select({ value: academicBatches.id, label: academicBatches.code, courseId: academicBatches.courseId })
+    .from(academicBatches)
+    .where(teaches ? inArray(academicBatches.id, teaches.map((t) => t.batchId)) : eq(academicBatches.status, 'active'))
+    .orderBy(academicBatches.code);
+  const subjects = await db
+    .select({ value: academicSubjects.id, label: sql<string>`${academicSubjects.name} || ' (' || ${academicCourses.code} || ')'` })
+    .from(academicSubjects)
+    .innerJoin(academicCourses, eq(academicCourses.id, academicSubjects.courseId))
+    .where(teaches ? inArray(academicSubjects.id, teaches.map((t) => t.subjectId)) : inArray(academicSubjects.courseId, batches.map((b) => b.courseId)))
+    .orderBy(academicSubjects.name, academicCourses.code);
+  return { batches: batches.map(({ value, label }) => ({ value, label })), subjects };
 }
 
 /** The prefilled student of /reviews/new, checked against the actor's current scope. */

@@ -274,6 +274,10 @@ export async function progressReportPdf(
     list(pdf, h.areas, s.summary.areas);
     list(pdf, h.nextSteps, s.summary.nextSteps);
   }
+  if (s.comment) {
+    pdf.heading('Overall comment');
+    pdf.paragraph(s.comment);
+  }
 
   if (s.history) {
     pdf.heading('Status changes in the period');

@@ -1,10 +1,40 @@
 # Elevate OS — handoff
 
-_Last updated 23 Oct 2026 (HR area). Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
+_Last updated 24 Oct 2026 (tests, requests through HR, marketing, fees milestone). Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
 
 ## For the owner (plain language)
 
 **What it is.** Elevate OS is the internal system your staff sign in to. Since 22 Oct 2026 it has three **workspaces**, one per kind of work, each at its own address: Business Operations (enquiries, demos, admissions, students, fees, staff tasks), Academic (teachers and coordinators) and Marketing. A fourth address holds Users & roles. Only `@elevateeducation.in` accounts can use it (D-030).
+
+### Status report — 23–24 Oct 2026 (tests, requests through HR, marketing, fees)
+
+```
+What's live now: nothing on the internet yet. On this computer, the same four addresses
+  (Business Operations :3000, Academic :3001, Marketing :3002, Users & roles :3003). Both
+  database updates (0015 and 0016) are applied on your computer.
+What I did:
+- Tests and Mock Tests now live in Business Operations: schedule a test for one or more
+  batches, upload the question paper and answer key (hidden until you release them), import
+  scores from a CSV file or from a PDF that the AI reads (you tick "I confirm" each time, and a
+  person checks every row), then publish results with ranks. Teachers see the same test in
+  Academic; there is only one copy.
+- Staff can send a request through HR from any workspace; HR reads it, answers it or passes it
+  on to the right person. "Schar" is a setting HR fills in once you tell us who it is.
+- Leads have marketing stages (New → Contacted → … → Converted). A lead becomes Converted only
+  after the admission is confirmed in Business Operations. Calls are logged with their outcome.
+- Marketing has a content calendar (plan → make → approve → publish by hand), the ideas plan,
+  SEO / AI-search work items, targets and a monthly report. Every dashboard tile says plainly
+  when a filter does not apply to it.
+- Task reminders and pop-up notices; the fee page has a paid-versus-outstanding chart for the
+  year whose total always equals the list of students behind it.
+- A fuller set of sample records and ten demo sign-ins, all marked "Sample", removable in one step.
+What I need from you: step 9 below (load the new sample records), then the rows marked
+  "New 24 Oct" at the top of "Decisions waiting for you".
+What's next:
+- The browser check of every flow below (results go in the "Checks" line of the milestone section).
+- Your answers on Schar, the reminder intervals and who runs the reminder job.
+Placeholders still to replace: see PLACEHOLDERS.md.
+```
 
 ### Status report — 23 Oct 2026 (HR area)
 
@@ -28,7 +58,7 @@ What I did:
   April 2027 Class 12 batch from today, with Class 11/12 Maths waiting for a batch; Nikunj's
   CA Accounting is recorded as waiting for a batch (my pick — please confirm).
 - Also new: files can be attached to tasks (on this computer only), a notifications page in
-  every workspace, AI drafting buttons (OpenAI writes a first draft; a person always checks
+  every workspace, AI drafting buttons (a free AI service writes a first draft; a person always checks
   and saves it), the dark charcoal sidebar you chose, and marketing employees now see only
   the campaigns they are members of.
 What I need from you: step 7 (the database update) and the new rows at the top of
@@ -192,7 +222,7 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 
 **6. Database update for the teacher report — done on your computer on 23 Oct 2026** (database change `0014_teacher_reports`, which only adds the table that keeps generated teacher reports; `db:check` passed 19/19). On another computer: with `npm run db:start` running, type `! npm run db:migrate` in the Claude Code chat (or run `npm run db:migrate` in a terminal in the `elevate-os` folder).
 
-**7. Database update for the HR area (this computer only) — not done yet.** The HR screens need database change `0015`. It also rewrites some existing task and report rows (a task marked "blocked" keeps that as a flag instead of a status; every old end-of-day report becomes a day report), so take a backup first. Only you can do this, because it changes the database on your computer.
+**7. Database update for the HR area (this computer only) — done on your computer on 23 Oct 2026** (`0015` and then `0016` applied after a backup; `db:check` 19/19). The steps below are kept for another computer. The HR screens need database change `0015`. It also rewrites some existing task and report rows (a task marked "blocked" keeps that as a flag instead of a status; every old end-of-day report becomes a day report), so take a backup first. Only you can do this, because it changes the database on your computer.
 1. Make sure the database is running (`npm run db:start` in a terminal in the `elevate-os` folder, left open).
 2. In the Claude Code chat type `! npm run db:backup`. If it says `pg_dump` is not installed (likely on this computer), stop and ask the developer to take a backup for you before going on.
 3. Type `! npm run db:migrate`. It should say the migrations were applied.
@@ -201,12 +231,37 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 6. Optional: type `! npm run db:seed-demo-accounts` to refresh the demo sign-ins; it also sets up `satish@elevateeducation.in` as a teacher sign-in for testing on this computer only (we assumed the `.in` ending; tell me if his address is different).
 If any step shows an error, stop and send the developer the last lines; nothing is half-applied (the update runs as one step).
 
-**8. AI drafting: add credit to your OpenAI account.** The AI buttons use your OpenAI account, which needs credit; only you can pay for it.
-1. Open https://platform.openai.com and sign in with the account the key came from.
-2. Click the gear icon (**Settings**) at the top right, then **Billing** in the left menu.
-3. Click **Add to credit balance**, choose an amount, and confirm with your card.
-4. If the key is not yet in the `.env` file in the `elevate-os` folder, open `.env` in Notepad and add two lines: `OPENAI_API_KEY=` followed by your key, and `OPENAI_MODEL=gpt-5.4-mini`. Save. Never paste the key in chat or anywhere else; the code checks refuse any code file that contains a key like it.
-5. Before staff use these buttons, please answer the AI data-sharing question in "Decisions waiting for you" (names, phone numbers and codes are hidden before anything is sent, but a name typed in lower case can still slip through).
+**8. AI keys and office Wi-Fi (24 Oct 2026, D-110).** The AI buttons now use free services (Groq first, then Gemini, then OpenRouter) instead of OpenAI, and staff can use the app from their own devices on the office Wi-Fi. Four things only you can do:
+
+*8a. Make new Groq and Gemini keys.* Both were shown in the build chat on 24 Oct, so treat them as seen; the Gemini key is also refused by Google ("Your project has been denied access").
+1. Groq: open https://console.groq.com/keys, click **Create API Key**, name it "Elevate OS", copy it. Then delete the old key in the same list (trash icon).
+2. Gemini: open https://aistudio.google.com/apikey, click **Create API key**, choose **Create API key in new project**, copy it. Delete the old key.
+3. Open `C:OPENBOTelevate-os.env` in Notepad. Replace the text after `GROQ_API_KEY=` and after `GEMINI_API_KEY=` with the new keys (no spaces, no quotes). Save.
+4. Never paste a key into a chat, an email or a code file. The checks refuse a commit that contains one.
+
+*8b. Let staff devices reach this computer (once, as administrator).*
+1. Click **Start** → **Settings** → **Network & internet** → **Wi-Fi** → click your Wi-Fi name (**Airtel_Airte_anan_2026**) → under **Network profile type** pick **Private network**.
+2. Click **Start**, type `PowerShell`, right-click **Windows PowerShell** → **Run as administrator** → **Yes**.
+3. Paste this line and press Enter: `New-NetFirewallRule -DisplayName "Elevate OS office Wi-Fi" -Direction Inbound -Protocol TCP -LocalPort 3000-3003 -Action Allow -Profile Private`
+4. It prints the new rule. Close the window.
+
+*8c. Start the app for the office.*
+1. In the Claude Code chat type `! npm run office:build` (a few minutes; again after any update).
+2. Type `! npm run office` in a separate terminal in the `elevate-os` folder and leave it open. It prints the addresses, for example `http://192.168.1.5:3000`.
+3. On a staff phone or laptop on the same Wi-Fi, open that address and sign in with that person's own account. Use the same address on this computer too.
+4. Google sign-in does not work on a Wi-Fi address; staff use their password.
+
+*8d. Optional: turn on GitHub's own key blocker, if your plan has it.*
+1. Open https://github.com/team832/Elevate-OS → **Settings** → **Code security** (left menu, under "Security").
+2. If you see **Secret Protection** with an **Enable** button, click it, then enable **Push protection** below it. On some plans GitHub charges for this on private repositories, so it may not be offered; the check on this computer still applies.
+3. When on, GitHub refuses any push that contains a key, as a second lock.
+
+**9. Load the new sample records and demo sign-ins (this computer only).** The database updates are already applied. This adds the fictional sample tests, leads, marketing work and requests used in the walkthrough below. Only you can do it, because it changes the database on your computer.
+1. Make sure the database is running (`npm run db:start` in a terminal in the `elevate-os` folder, left open).
+2. In the Claude Code chat type `! node .data/json-backup.mjs` (a copy of every table, kept on this computer; the file is not in git).
+3. Type `! npm run db:seed`. Running it again is safe.
+4. Check that `.env` has a line `LOCAL_DEMO_PASSWORD=` followed by a password of at least 12 characters (step 4 above). Then type `! npm run db:seed-demo-accounts`. It prints the sign-ins, never the password.
+5. Before real staff use the system, type `! npm run db:clear-samples` (removes every sample record and switches the demo sign-ins off).
 
 ### Decisions waiting for you
 
@@ -214,13 +269,33 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 
 | Question | Safe choice used today |
 |---|---|
+| **New 24 Oct (staff).** Is `soma@elevateeducation.in` the "Soma" who teaches CLAT Current Affairs (not Soma Tiwari)? I assumed so for the demo sign-in | Linked to "Soma" (CLAT Current Affairs), marked as an assumption |
+| **New 24 Oct (requests).** Which staff record is Schar? (D-096) | Not set: requests for Schar wait in HR's queue |
+| **New 24 Oct (leads).** Does an admission that was later withdrawn, transferred or completed still count as a conversion? (D-105) | Yes, with a flag (Proposed). Cancelled before enrolment and lost never count |
+| **New 24 Oct (reminders).** Task reminders: once 24 hours before the due time, every 24 hours while overdue, every 4 hours until a new task is acknowledged? (D-108) | As stated (Proposed) |
+| **New 24 Oct (reminders).** There is no automatic timer yet, so task reminders and follow-up reminders go out only when someone starts them, and only the operations manager may start them. Who should run them, and how often? | Run by hand by the operations manager |
+| **New 24 Oct (requests).** May HR pass a request to staff outside the departments it looks after? | No, except to the person the request was meant for; the operations manager may pass it to anyone |
+| **New 24 Oct (marketing).** Should monthly marketing reports go to HR (as the brief says) or to the employee's reporting manager? (D-109) | Reporting manager |
+| **New 24 Oct (tests).** When a teacher types scores, are they verified at once, or "imported" until someone else checks them? | Verified at once (as built) |
+| **New 24 Oct (tests).** Show ranks the competition way (1, 2, 2, 4), counting only students who were present with checked marks? (D-103) | Built that way; display Proposed |
+| **New 24 Oct (tests).** When may a question paper and answer key be released: from the test day, or any time? (D-094) | From the test day (Proposed) |
+| **New 24 Oct (tests).** A score arrives for a student recorded absent: refuse it, or let a person overwrite after confirming? | The whole import is refused until the attendance is corrected |
+| **New 24 Oct (marketing).** For admission targets, who gets the credit: the lead's owner when the admission is confirmed? | Lead owner at confirmation (Proposed) |
+| **New 24 Oct (marketing).** May employees move their own calendar items to another date? May someone cancel an approved item they own? | Employees cannot move dates (needs the scheduling permission); they can cancel any open item they own, approved ones included (Proposed) |
+| **New 24 Oct (teachers).** May teachers see published reviews that have no subject? | As built (Proposed) |
+| **New 24 Oct (tasks).** May a task's backup person comment on it? | No (HR and reviewer only, D-098) |
+| **New 24 Oct (requests).** Request categories: Tasks and deadlines, Classes and batches, Students, Something else? | As stated (Proposed) |
+| **New 24 Oct (fees).** A closed fee agreement with money unpaid: does it stay "outstanding" until someone waives it? Is "due now" today only, or should it include the next few days? May the finance officer open a student's record from the fee list? (D-101) | Stays outstanding; today only; no |
+| **New 24 Oct (requests).** May the operations manager read every request through HR, including complaints about administrators? | Yes |
+| **New 24 Oct (samples).** May a sample admission be confirmed, so a sample lead can reach Converted in the demo? | No: sample leads stop at "Admission in progress" |
+| **New 24 Oct (marketing).** Every marketing employee can read every calendar item and every SEO / AI-search work item, even outside the campaigns they belong to (they can change only their own). Keep that, or limit reading to their campaigns like content (D-093, D-107)? | Everyone in Marketing reads all (Proposed) |
+| **New 24 Oct.** Every new permission from this milestone (tests, requests through HR, lead merge, calendar, SEO/AI-search work, targets, reports) is marked Proposed (`PROPOSED-GRANTS-2026-10-23b`). Are they right? | As built, all Proposed |
 | **New 23 Oct (HR).** Are the new HR permissions right? The HR manager runs staff records, attendance, task review, work reports and teacher feedback; every staff member sees their own attendance; the director, coordinators and the marketing manager review their own team's tasks (D-080) | As built, all marked Proposed |
 | **New 23 Oct (HR).** Which staff does HR look after? Today: the Academics and Marketing & Growth departments, plus anyone with no department yet (so HR can place them) | As stated (Proposed) |
 | **New 23 Oct (HR).** May an operations manager end the employment of another operations manager? (Directors and platform administrators can never be changed from HR) | Yes |
 | **New 23 Oct (HR).** HR staff who also teach: they cannot read raw student feedback about teachers and must pass that work to a colleague (D-088) | As stated (Proposed) |
 | **New 23 Oct (HR).** When the person who creates a task gives it to themselves, should they be allowed to switch its review off? | No — the owner of a task can never switch its review off |
 | **New 23 Oct (HR).** Attendance and report settings: 10 minutes' grace before "late"; half day 4 hours, full day 8 hours; the week starts on Monday; no deadline for weekly or monthly reports; feedback shown only for groups of at least 5 students; ratings 1 to 5; six feedback categories (explanation clarity, pace, doubt resolution, preparedness, classroom engagement, helpfulness of materials); an approved task can be reopened by its reviewer or HR; AI drafts limited to 50 per person per day | As stated (all Proposed) |
-| **New 23 Oct (AI).** May student feedback, work reports and task text be sent to OpenAI to draft summaries (Digital Personal Data Protection Act)? Names, phone numbers, emails and codes are hidden first, but a name the system does not know, typed in lower case, can still get through (D-092) | AI buttons on, marked Proposed — please confirm before staff use them |
 | **New 23 Oct (Marketing).** Marketing employees cannot assign people to content (only the marketing manager can), and they still see the weekly figures of every social account | As stated (Proposed) |
 | **New 23 Oct (staff).** Nikunj Bindal: is CA Foundation Accounting (course `CAF-ACC-SEP27`) right as "waiting for a batch"? This was my pick; on 21 Oct no assignment was made (D-082) | Recorded as waiting, opens nothing |
 | **New 23 Oct (staff).** The sign-in `soma@…`: which Soma is it — "Soma" (CLAT Current Affairs) or "Soma Tiwari" (Economics)? The other session made a ruling; please confirm it | As ruled in the other session |
@@ -275,13 +350,90 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | A staff account cannot be deleted while it is the only person on a Marketing content assignment (writer, reviewer and so on). Keep refusing, or should the system first ask you to hand that work to someone else? | Refused; reassign the work first, then delete |
 | The audit history (who changed what) is never changed by the system, but the database itself does not forbid it. Add a database rule later so even a developer mistake cannot edit or delete it? | No database rule yet (the code only adds rows) |
 
-Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), a new layout (D-054, D-059; the dark look itself was replaced on 22 Oct, D-074), teacher reviews written in Academic (D-058), demo attendance marked by the teacher in Academic (D-060), sample staff named "Sample …" with `@example.test` sign-ins (D-061). On 23 Oct 2026: HR back inside Business Operations, including staff attendance (D-080, D-086; answers the old staff-attendance question OD-026), teachers see approved feedback summaries in Academic (D-088), the charcoal sidebar (D-081), your staff answers on Soma, Satish and Nikunj (D-082), directors make student reports (D-079), AI drafting with the model you chose (D-092).
+Decided by you on 24 Oct 2026 (D-110): no OpenAI; free AI services Groq, then Gemini, then OpenRouter; student feedback, work reports and task text may be sent with names hidden; staff use the app over the office Wi-Fi.
+
+New on 24 Oct 2026 (D-111): **Build draft timetable** in Academic (Timetable → Patterns; drafts only, you publish), an AI-drafted **Overall comment** on the progress and teacher reports, the monthly marketing report draft now uses the marketing figures, and **Write an AI summary** on a student's Overview. Admission documents got no AI: every field is personal or your fixed legal text. Questions for you: (1) a standard school day (for example 09:00–17:00) to prefill the timetable form? (2) a daily AI limit per person in Academic too? (3) may the AI-drafted comment on the PTM report go to parents, or internal only? (4) a generated report's comment cannot be edited; a new report is needed. Is that acceptable?
+
+Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), a new layout (D-054, D-059; the dark look itself was replaced on 22 Oct, D-074), teacher reviews written in Academic (D-058), demo attendance marked by the teacher in Academic (D-060), sample staff named "Sample …" with `@example.test` sign-ins (D-061). On 23 Oct 2026: HR back inside Business Operations, including staff attendance (D-080, D-086; answers the old staff-attendance question OD-026), teachers see approved feedback summaries in Academic (D-088), the charcoal sidebar (D-081), your staff answers on Soma, Satish and Nikunj (D-082), directors make student reports (D-079), AI drafting with the model you chose (D-092). Later on 23 Oct 2026: tests are one record in Academic run from Business Operations (D-094), score sheets as CSV or PDF only (D-095), Schar as a setting (D-096), "business administrator" = operations manager (D-097), task comments by HR and the reviewer only (D-098), AI reading of PDF score sheets with your tick each time (D-099).
 
 **What is not connected yet.** Email and text messages, event invitations, the social-media publishing tool, a biometric device and a CRM are "pretend" connections or not connected at all; file uploads work only on this computer until you choose where files are kept online (D-085): they record what would happen and never claim it happened. Hindi (Devanagari) text does not print in PDFs yet; it shows as "?" with a note.
 
 **Security.** Every page checks who is signed in and what they may see. Most students are minors, so phone numbers, addresses and documents are shown only to staff with the private-data permission, and every contact search is logged. Passwords and keys stay in a private settings file (`.env`) that is never uploaded.
 
 ---
+
+## Milestone 23–24 Oct 2026 — tests, requests through HR, marketing workflows, fee chart
+
+_Decisions D-094 … D-109. Status words per D-013; nothing is Deployed. Details and test files: `IMPLEMENTATION_STATUS.md`, section "Milestone 23–24 Oct 2026"._
+
+### What was built (plain words)
+- **Tests and Mock Tests** (Business Operations → Tests): schedule a test for one or more batches with sections and negative marking; a roster taken from the batches; upload the question paper and answer key (each upload a new version, hidden until released); import scores from CSV, or from a PDF read by AI after a tick; review matches (unclear rows wait for a person); publish results with ranks; correct and withdraw. The record lives in Academic, so teachers see the same test (D-094, D-102, D-103).
+- **Requests through HR** in every workspace: write, submit, follow; HR reviews, answers, declines or passes it on; the person it is passed to sees only what HR forwards (D-096, D-106).
+- **Lead stages and sales calls** in Business Operations and Marketing: 12 stages, history, reasons for Lost / Duplicate / Do not contact, Converted only after a confirmed admission, calls with outcome and length, a duplicate-merge review (D-105).
+- **Marketing**: content calendar with item types, briefs, owners and a linked task; the ideas plan; SEO / AIO / GEO work items with observations; targets with defined measures; a monthly report; personal notification settings; honest dashboard filters (D-107, D-109).
+- **Notifications**: task reminders (due soon, overdue, not acknowledged), pop-up notices, and opening a notice re-checks access (D-108).
+- **Fees**: the year's tuition as a paid-versus-outstanding chart with tiles; clicking "outstanding" lists the students behind it, and the two totals always match (D-101).
+- **Task discussion**: HR and the reviewer only (D-098). **Teachers** see marks only for their own batch and subject (D-104).
+- **Sample data**: about 36 fictional students, about 40 fictional leads, two fictional marketing employees, tests with ties, absences and a pending import, fee cases (paid, part paid, unpaid, future instalments), tasks in every state, all marked Sample.
+
+### Workspace addresses (this computer only)
+| Workspace | Address |
+|---|---|
+| Business Operations (incl. HR, Tests, Fees) | http://localhost:3000/ops |
+| Academic | http://localhost:3001/academic |
+| Marketing | http://localhost:3002/marketing |
+| Users & roles (and Google sign-in) | http://localhost:3003 |
+
+### Demo sign-ins (development only)
+All share one password, `LOCAL_DEMO_PASSWORD`, which you set yourself in the git-ignored `.env` file in the `elevate-os` folder (at least 12 characters, used nowhere else). It is never written in the code, never printed and never sent in chat. `npm run db:seed-demo-accounts` refuses production and any non-local database; `npm run db:clear-samples` switches all of them off.
+
+| Email | Role (from the stored roles) | Opens |
+|---|---|---|
+| `business@elevateeducation.in` | Operations manager, "Business administrator (demo)" (D-097) | :3000 |
+| `hr@elevateeducation.in` | HR manager | :3000 |
+| `teacher@elevateeducation.in` | Teacher (co-teaches Quant on `SAMPLE-IPMAT-B`) | :3001 |
+| `marketing@elevateeducation.in` | Marketing manager (the two employees below report to it) | :3002 |
+| `pooja.verma@example.test`, `rohit.saini@example.test` | Marketing employees (fictional) | :3002 |
+| `satish@`, `soma@`, `nikunjbindal@`, `tushar@elevateeducation.in` | Teachers — development assumptions (real assignments only: Satish 3, Nikunj 1, Soma 1, Tushar 0; `soma@` = "Soma", CLAT Current Affairs, to confirm) | :3001 |
+
+These email addresses are sign-in names only; no mailbox receives anything.
+
+### Startup
+`npm run db:start` (terminal 1, leave open), then `npm run dev:all` (terminal 2), or one workspace: `npm run dev:business`, `dev:academic`, `dev:marketing`, `dev:platform`.
+
+### Database and sample data
+- Migrations: `0015_hr_staff_workspaces` and `0016_milestone_hr_marketing_tests` are applied on the owner's computer (23 Oct; `npm run db:check` 19/19). `0016` is frozen (sha256 `87d96f7f…eec`); the next change is `0017`. On another computer: `npm run db:migrate`, then `npm run db:check`.
+- Seeds (local only): `node .data/json-backup.mjs` (a local, git-ignored backup helper; `pg_dump` is not installed, D-024) → `npm run db:seed` → `npm run db:seed-demo-accounts` (after `db:seed`). Before real use: `npm run db:clear-samples`.
+
+### Connections
+- **AI (D-110)**: Groq connected and working (checked 24 Oct); OpenRouter connected as the backup (slower); Gemini connected but its key is refused by Google until you make a new one (step 8a). OpenAI is no longer used. Data sharing approved by you on 24 Oct, names hidden.
+- **External analytics** (social, search, website): **not connected**; dashboards say "Not connected". SEO / AIO / GEO observations are typed in by staff.
+- **Email, text messages, calls, social publishing**: none. Reminders and notices are inside Elevate OS only; "Published" on a calendar item is recorded by a person with a link or evidence.
+
+### Limitations
+- No scheduler: task reminders and follow-up reminders run only when the operations manager starts them (`POST /ops/api/v1/jobs/task-reminders`).
+- Nothing is deployed; sign-in emails are not mailboxes; no outbound email, calls or publishing.
+- A request through HR cannot link a campaign or a test (Business Operations cannot check them); HR's "create task from request" cannot carry a batch link.
+- Between uploading a new paper or key version and releasing it, readers see no version at all.
+- The sales-calls list shows at most the newest 500 calls for any filter, and the Tests page lists at most the newest 200 pending imports (shortcuts).
+- The database rule on notification links (`notifications_link_relative`) does not yet refuse control characters (the code does); planned for migration `0017`.
+- Sample leads never reach Converted (sample admissions still need legacy verification).
+- The prototype `Elevate.html` does not show this milestone.
+- Browser pass: results to be added below.
+
+### Decisions waiting for you
+The 21 questions from this milestone are the rows marked **New 24 Oct** at the top of "Decisions waiting for you" above.
+
+### Walkthrough of the main flows
+1. **HR task to a teacher.** Sign in as `hr@` on :3000 → HR → Tasks → new task, owner a teacher, reviewer HR → Assign. Sign in as `teacher@` on :3001 → Tasks: the task is there (with a notice) → Start → Submit. Back as `hr@` → HR → Submission Review → Approve or Request changes. Collaborators can read but not comment (D-098). Reminders appear only after `business@` runs the task-reminders job.
+2. **A request through HR.** As `teacher@` on :3001 → Requests through HR → new request (category, message, meant for HR or a named person) → Submit. As `hr@` on :3000 → HR → Requests → open it → mark reviewed, then answer and resolve, decline, or forward to a person in HR's scope. The person it is forwarded to sees only the forwarded note on their own Requests page and replies; HR relays the answer. The sender's message cannot be edited after submitting.
+3. **Lead → admission.** As `business@` on :3000 → Leads → a lead → change stage (Contacted, Qualified, Demo booked …; Lost, Duplicate and Do not contact ask for a reason) and log a call. Book the demo and start the admission as before; once the admission is confirmed and has an admission number, Converted becomes available on the lead. Marketing (`marketing@` on :3002) sees the same stages, the funnel and the sales calls; stage credit goes to whoever owned the lead when it entered the stage.
+4. **Calendar item to published.** As `pooja.verma@example.test` on :3002 → Content calendar → New item (type, channel, date, brief) → plan → start → submit. As `marketing@` → open it → Approve (nobody approves their own item) → Schedule → Publish, giving the post's link or evidence. Nothing is posted automatically.
+5. **A test from schedule to published.** As `business@` on :3000 → Tests → New (batches, date, sections and marking) → open it → roster (taken from the batches) → upload paper and key → import scores (CSV, or PDF with the "I confirm" tick) → review the import (fix ambiguous and unmatched rows; "mark scored students present" is a separate button) → confirm → Publish. The sample `SAMPLE-CLAT-CA-01` has a pending import with an ambiguous row; `SAMPLE-IPMAT-MOCK-01` shows a tie (ranks 1, 2, 2, 4). The teacher sees the same test in Academic → Assessments.
+6. **Fee donut drill-down.** As `business@` on :3000 → Fees → choose the academic year and course → the chart shows paid and outstanding tuition with due-now, overdue and future tiles → click "outstanding": the list of students and its header total match the chart exactly.
+
+### Checks
+Checks (24 Oct 2026, run by the coordinator): typecheck PASS; lint PASS (0 warnings); tests 4,074 of 4,075 passed in the full run — the 1 failure was a 30 s timeout under load in `applications.test.ts`, which passes 30/30 on its own; secret scan OK (1,775 files); webpack builds exit 0 for all four apps (platform, marketing-os, academic-os, business-ops-os). **Browser pass: not done** (skipped at the owner's request to save time) — screens are proven by server-rendered markup tests only; check them in a browser before relying on them.
 
 ## 1. What was built and what was not
 
@@ -305,6 +457,8 @@ Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), 
 | Security headers and CSP with per-request nonces (all four apps) | Implemented, Tested (unit test + production smoke, §6) | §5 below |
 | Deployment, hosting, domain, monitoring, backups schedule | **Not built** (Proposed only) | `infrastructure/deployment/README.md` |
 | Password reset / change screen, shared login rate limit, outbox scheduler, Google re-authentication for confirmation | **Not built** | `infrastructure/deployment/README.md`; `C:\OPENBOT\Elevate-Not-Working` |
+| Migrations `0015_hr_staff_workspaces`, `0016_milestone_hr_marketing_tests` | **Applied on the owner's computer** 23 Oct (`db:check` 19/19; frozen) | `packages/database/migrations/` |
+| Milestone 23–24 Oct (D-094 … D-109): Tests and Mock Tests, score import, ranks and publication, requests through HR, lead stages and calls, Marketing calendar / ideas plan / SEO-AIO-GEO / targets / monthly report, reminders and pop-ups, annual fee chart, sample data | Implemented, Tested (rules and API); grants **Proposed**; browser pass pending | "Milestone 23–24 Oct 2026" above; `IMPLEMENTATION_STATUS.md` |
 | Business facts (fees per programme, staff, holidays, targets) | **Missing — owner** | `PLACEHOLDERS.md`; OD-001…OD-048 in `docs/EXISTING_PROJECT_AUDIT.md` §9 |
 
 Status words follow D-013: Proposed → Approved → Implemented → Tested → Deployed. Nothing is Deployed.
@@ -460,6 +614,8 @@ Limitations:
 - The Task Tracker import is tested with made-up backups only; your real browser exports are still needed (`docs/task-tracker-import-guide.md`).
 - The prototype (`C:\OPENBOT\Elevate`) does not show the 21 Oct work or the 22 Oct workspaces, and keeps the old dark look (not redesigned, D-074).
 - Workspaces (22 Oct): a panel that shows another workspace's figures says "source unavailable" while that workspace is not running; Google sign-in needs the admin app (:3003) running; on this computer the sign-in cookie is shared by every local port, so other local programs could see its name (use a separate browser profile if you run unknown local apps). Not built: staff attendance ("My Attendance"), teaching resources, Events and Webinars in Marketing, results by campaign.
+
+- Milestone 23–24 Oct: see "Limitations" in the milestone section above (no scheduler for reminders, request links to campaigns/tests refused, no paper visible between upload and release, list caps of the newest 500 calls and 200 pending imports, `0017` for the notification-link rule).
 
 Next three improvements, in priority order:
 1. **Go-live basics.** The owner chooses hosting. Then build HTTPS, CI deploy, error monitoring, an uptime check and a tested backup and restore (§15.1).

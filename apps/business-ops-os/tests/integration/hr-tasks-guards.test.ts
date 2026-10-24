@@ -263,7 +263,7 @@ describe('M3, M4: parents and the review queue', () => {
 });
 
 describe('M1, M2: collaborators and the brief’s wording', () => {
-  it('a collaborator may read and comment, not log work or submit', async () => {
+  it('a collaborator may read, not comment (tasks.peer_discussion), log work or submit', async () => {
     const t = (
       await create(hr, {
         ...brief(teacher.staffId, { title: 'Sample shared' }),
@@ -273,7 +273,8 @@ describe('M1, M2: collaborators and the brief’s wording', () => {
     ).data!;
     expect(
       (await act(collaborator, t.id, 'comment', { reason: 'Use last year’s key' })).status,
-    ).toBe(200);
+    ).toBe(403);
+    expect((await taskDetail(ctx.db, collaborator, t.id)).title).toBe('Sample shared');
     const logged = await callRoute(
       updateRoute,
       authedRequest(collaborator, url(collaborator, `/${t.id}/updates`), {

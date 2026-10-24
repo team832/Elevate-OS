@@ -1,5 +1,5 @@
 /**
- * AI draft helpers (owner request 23 Oct 2026): OpenAI is simulated (fetch to https://ai.test);
+ * AI draft helpers (owner request 23 Oct 2026; Groq first, D-110): the provider is simulated (fetch to https://ai.test);
  * the real API is never called. Not set up, permissions per feature, min group size, redaction,
  * the key never leaving the server, the daily limit, timeouts and bad output. Fictional people only.
  */
@@ -17,15 +17,14 @@ import { ADMISSION_NUMBER, call, feedbackFixtures } from './feedback-fixtures';
 
 const ctx = setupTestDatabase();
 const { f, record, moderate, newSummary, patchSummary, upload, act } = feedbackFixtures(ctx);
-const KEY = 'test-only-openai-key-123456';
+const KEY = 'test-only-groq-key-123456';
 type Items = { items: { name: string; label: string; value: string; shown?: string }[] };
 
 const sent: { auth: string | null; body: Record<string, string> }[] = [];
 let reply: () => Response | Promise<Response>;
 const answer = (obj: unknown) => () =>
   Response.json({
-    status: 'completed',
-    output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(obj) }] }],
+    choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(obj) } }],
   });
 
 beforeAll(async () => {
@@ -33,17 +32,21 @@ beforeAll(async () => {
   await ctx.db
     .insert(students)
     .values(['Priya Malhotra', 'Rohit Jain', 'Riya Sharma'].map((fullName) => ({ fullName })));
-  vi.stubEnv('OPENAI_API_KEY', KEY);
-  vi.stubEnv('OPENAI_MODEL', 'test-model');
-  vi.stubEnv('OPENAI_BASE_URL', 'https://ai.test/v1');
+  vi.stubEnv('GROQ_API_KEY', KEY);
+  vi.stubEnv('GROQ_MODEL', 'test-model');
+  vi.stubEnv('GROQ_BASE_URL', 'https://ai.test/v1');
   const academic = globalThis.fetch;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (!String(input).startsWith('https://ai.test/')) return academic(input, init);
+      const { model, messages } = JSON.parse(String(init?.body)) as {
+        model: string;
+        messages: { content: string }[];
+      };
       sent.push({
         auth: new Headers(init?.headers).get('authorization'),
-        body: JSON.parse(String(init?.body)),
+        body: { model, instructions: messages[0]!.content, input: messages[1]!.content },
       });
       return reply();
     }),
@@ -76,11 +79,11 @@ async function summaryWith(n: number, month: string) {
 }
 
 describe('AI drafts', () => {
-  it('not set up: refused in plain words, OpenAI never called, nothing audited', async () => {
-    vi.stubEnv('OPENAI_MODEL', '');
+  it('not set up: refused in plain words, no AI provider called, nothing audited', async () => {
+    vi.stubEnv('GROQ_MODEL', '');
     const s = await summaryWith(5, '2026-01');
     const res = await draftSummary(f.u.hr_manager, s.id);
-    vi.stubEnv('OPENAI_MODEL', 'test-model');
+    vi.stubEnv('GROQ_MODEL', 'test-model');
     expect(res.status).toBe(409);
     expect(res.error?.message).toBe('AI drafting is not set up.');
     expect(sent).toHaveLength(0);
@@ -108,7 +111,7 @@ describe('AI drafts', () => {
     ]);
     const [req] = sent;
     expect(req!.auth).toBe(`Bearer ${KEY}`);
-    expect(req!.body).toMatchObject({ model: 'test-model', store: false });
+    expect(req!.body.model).toBe('test-model');
     expect(req!.body.input).toContain('Overall rating: 4 of 5');
     for (const kept of ['The teacher explains integration well', '16-09-2026', '2026-09-16'])
       expect(req!.body.input).toContain(kept);

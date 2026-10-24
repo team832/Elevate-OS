@@ -138,7 +138,9 @@ const sample = (name: string, bytes: Uint8Array) => {
 
 describe('student report PDF (two kinds, D-078)', () => {
   it('PTM report: at most 2 pages for a typical student, bars, affirmative headings, no KYC or guardian data', async () => {
-    const pdf = await progressReportPdf(snapshot('guardian'), meta());
+    const comment =
+      'The student attends regularly and scored 36.7% in the latest sectional test; the next step is steady practice before the next mock.';
+    const pdf = await progressReportPdf({ ...snapshot('guardian'), comment }, meta());
     sample('ptm', pdf.bytes);
     const doc = await PDFDocument.load(pdf.bytes);
     expect(doc.getPageCount()).toBeLessThanOrEqual(2);
@@ -150,8 +152,10 @@ describe('student report PDF (two kinds, D-078)', () => {
         'Where to work on',
         'Next steps',
         'Absent',
+        'Overall comment',
       ]),
     );
+    expect(text).toContain(comment.slice(0, 40));
     expect(text).toContain('36.7% (11/30)');
     expect(text).toContain('not attempted (not counted as zero)');
     expect(text).toContain('Attended 33 of 39 recorded classes');

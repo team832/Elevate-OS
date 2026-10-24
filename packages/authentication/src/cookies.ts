@@ -10,15 +10,19 @@ export interface CookieOptions {
   maxAge?: number;
 }
 
-/** HttpOnly, SameSite=Lax, Secure in production, path `/`. */
+/**
+ * HttpOnly, SameSite=Lax, path `/`; Secure in production unless PLATFORM_URL is plain http
+ * (office Wi-Fi mode, D-110: browsers drop a Secure cookie on http://192.168.x.x).
+ */
 export function sessionCookieOptions(
   maxAgeSeconds?: number,
   nodeEnv: string | undefined = process.env.NODE_ENV,
+  platformUrl: string | undefined = process.env.PLATFORM_URL,
 ): CookieOptions {
   return {
     httpOnly: true,
     sameSite: 'lax',
-    secure: nodeEnv === 'production',
+    secure: nodeEnv === 'production' && !platformUrl?.startsWith('http://'),
     path: '/',
     ...(maxAgeSeconds === undefined ? {} : { maxAge: maxAgeSeconds }),
   };

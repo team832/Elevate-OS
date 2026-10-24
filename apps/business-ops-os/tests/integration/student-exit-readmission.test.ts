@@ -3,16 +3,19 @@
  * student, exit records with their snapshot, readmission as a new application. Cases are written
  * straight to the database (fictional data) so these tests do not depend on the conversion flow.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { opsAdmissions, opsApplications, opsExitRecords } from '@elevate/database';
 import { buildRequest, callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import { GET as listRoute } from '../../src/app/api/v1/students/route';
 import { POST as lifecycle } from '../../src/app/api/v1/admissions/[id]/lifecycle/route';
+import { istToday } from '../../src/domain/dates';
 import { get, post } from './admissions-fixtures';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 import { caseOf as caseIn, identity } from './lifecycle-fixtures';
 
+// Reporting days are Asia/Kolkata: 02:00 IST is still the previous day in UTC.
+vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-24T02:00:00+05:30') });
 const ctx = setupTestDatabase();
 let manager: StaffUser;
 
@@ -25,7 +28,7 @@ const list = async (qs: string) => {
 };
 const act = (user: { token: string }, admissionId: string, body: unknown) =>
   callRoute<Record<string, unknown>>(lifecycle, post(user, body), { id: admissionId });
-const today = new Date().toISOString().slice(0, 10);
+const today = istToday(new Date());
 
 const student = (name: string) => identity(ctx.db, name);
 const caseOf = caseIn;

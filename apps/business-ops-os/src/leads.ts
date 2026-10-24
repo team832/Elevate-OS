@@ -11,6 +11,10 @@ import * as followUps from './app/api/v1/follow-ups/route';
 import * as leadSources from './app/api/v1/lead-sources/route';
 import * as lead from './app/api/v1/leads/[id]/route';
 import * as leadAccept from './app/api/v1/leads/[id]/accept/route';
+import * as leadStage from './app/api/v1/leads/[id]/stage/route';
+import * as leadCalls from './app/api/v1/leads/calls/route';
+import * as leadStages from './app/api/v1/lead-stages/route';
+import * as leadStageByKey from './app/api/v1/lead-stages/[key]/route';
 import * as leadActivities from './app/api/v1/leads/[id]/activities/route';
 import * as leadAssign from './app/api/v1/leads/[id]/assign/route';
 import * as leadEnquiries from './app/api/v1/leads/[id]/enquiries/route';
@@ -25,12 +29,38 @@ import type { NavRow } from './work';
 export { FollowUpsBody } from './app/leads/follow-ups-body';
 export { LeadBody, LeadsBody, type LeadsBodyProps } from './app/leads/leads-body';
 export { followUpDaySummary } from './server/follow-ups';
+// MKT-LEADS (brief §11): call log, lead stages, funnel (one query for figures and drill-down).
+export { SalesCallsBody, salesCallsPath } from './app/leads/sales-calls-body';
+export { LeadStagesBody } from './app/leads/lead-stages-body';
+export {
+  leadFunnel,
+  leadFunnelRows,
+  LEAD_FUNNEL_DEFINITION,
+  NOT_STAGED,
+  type LeadFunnelFilters,
+} from './server/lead-funnel';
+export { listCalls } from './server/lead-calls';
+export {
+  campaignLeadOutcomes,
+  leadMetricRecords,
+  leadStageEntries,
+  leadStageFunnel,
+  type LeadMetric,
+  type LeadMetricQuery,
+  type LeadMetricRecord,
+} from './server/lead-metrics';
+// Dashboard lists: row flags awaitingContact, dueToday, overdue (own scope applied).
+export { LEAD_LIST_FLAGS, listLeads } from './server/leads';
 
 /** Route handlers by path under `<base>/api/v1/`. */
 export const leadsRoutes = {
   leads,
   'leads/[id]': lead,
   'leads/[id]/accept': leadAccept,
+  'leads/[id]/stage': leadStage,
+  'leads/calls': leadCalls,
+  'lead-stages': leadStages,
+  'lead-stages/[key]': leadStageByKey,
   'leads/[id]/activities': leadActivities,
   'leads/[id]/assign': leadAssign,
   'leads/[id]/enquiries': leadEnquiries,

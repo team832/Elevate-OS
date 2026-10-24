@@ -62,6 +62,7 @@ export async function AllTasks({
     departmentId: sp.departmentId || undefined,
     due: view === 'overdue' ? ('overdue' as const) : TASK_DUE_FILTERS.find((d) => d === sp.due),
     ack: view === 'ack' ? ('pending' as const) : undefined,
+    flag: sp.flag === 'blocked' ? ('blocked' as const) : undefined,
     from: isIsoDate(sp.from) ? sp.from : undefined,
     to: isIsoDate(sp.to) ? sp.to : undefined,
     page: Math.max(1, Number(sp.page) || 1),
@@ -116,6 +117,13 @@ export async function AllTasks({
             type: 'select',
             options: PRIORITY_OPTIONS,
             value: filters.priority,
+          },
+          {
+            name: 'flag',
+            label: 'Blocked',
+            type: 'select',
+            options: [{ value: 'blocked', label: 'Blocked only' }],
+            value: filters.flag,
           },
           ...(view === 'overdue'
             ? []

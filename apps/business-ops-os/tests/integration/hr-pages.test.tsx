@@ -100,7 +100,7 @@ describe('HR page gates', () => {
     expect(await html(director, <HrSettingsPage {...sp()} />)).toContain('No access');
   });
 
-  it('the HR nav group lists the nine areas; attendance needs all-scope read', () => {
+  it('the HR nav group lists the ten areas; attendance needs all-scope read', () => {
     const hrRows = NAV.filter((n) => n.group === 'HR');
     expect(hrRows.map((n) => n.href)).toEqual(
       [
@@ -110,6 +110,7 @@ describe('HR page gates', () => {
         '/attendance',
         '/tasks',
         '/review',
+        '/requests', // HR-REQ
         '/reports',
         '/feedback',
         '/settings',

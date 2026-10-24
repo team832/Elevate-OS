@@ -522,3 +522,13 @@ html:has(.ops-modal[open]) {
 .ops-timeline-title {
   font-weight: 600;
 }
+
+/* NOTIFY: the five notification states of a task, one badge each (ui/task-notices.tsx) */
+.ops-notice-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--el-space-1);
+  margin: var(--el-space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}

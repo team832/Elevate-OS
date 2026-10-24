@@ -11,7 +11,7 @@ import { accessScope, type Actor } from './context';
 import { loadSettings, updateSetting } from './settings';
 
 const HR_KEY =
-  /^(hr\.(?!staff_scope_departments$)|feedback\.|reports\.(week_start|weekly_deadline|monthly_deadline|timezone)$|tasks\.reopen_roles$)/;
+  /^(hr\.(?!staff_scope_departments$)|feedback\.|reports\.(week_start|weekly_deadline|monthly_deadline|timezone)$|tasks\.(reopen_roles|peer_discussion|reminders)$)/;
 export const isHrSettingKey = (key: string): key is SettingKey => HR_KEY.test(key);
 
 export async function listHrSettings(db: Database, actor: Actor) {

@@ -8,6 +8,8 @@ Elevate OS is the internal operating system for **Elevate Education**, a coachin
 >
 > 23 Oct 2026 (D-080 … D-093): an **HR area** in Business Operations (new role HR manager; staff records and HR-only details, teaching assignments, staff attendance, task assignment and submission review, day/week/month work reports, student feedback about teachers, HR settings), file attachments, a notifications inbox in every workspace, AI draft helpers (OpenAI, drafts only), a charcoal sidebar and campaign membership for marketing employees. All new grants are **Proposed**. Migration `0015_hr_staff_workspaces` is written and tested but **not applied**; the next is `0016`. Startup commands are unchanged. Details: `IMPLEMENTATION_STATUS.md`, section "HR area".
 
+> 23–24 Oct 2026 (D-094 … D-109): **Tests and Mock Tests** in Business Operations on one Academic test record (roster, score import from CSV or AI-read PDF, ranks, publication versions, paper and answer-key release), **requests through HR** in every workspace, **lead stages** and sales calls with conversion linked to confirmed admissions, the Marketing **calendar, ideas plan, SEO/AIO/GEO work, targets and monthly report**, task **reminders** and notification pop-ups, the **annual fee chart** with a reconciled drill-down, and a larger sample data set with ten demo sign-ins. Migrations `0015` and `0016` are **applied** on the owner's computer (`db:check` 19/19); the next is `0017`. All new grants are **Proposed** (`PROPOSED-GRANTS-2026-10-23b`). Details: `IMPLEMENTATION_STATUS.md`, section "Milestone 23–24 Oct 2026"; walkthrough and accounts: `HANDOFF.md`.
+
 ## Contents
 1. [The three modules and their boundaries](#1-the-three-modules-and-their-boundaries)
 2. [Repository map](#2-repository-map)
@@ -98,7 +100,7 @@ npm run dev:all               # terminal 2 — the three workspaces (:3000, :300
 `npm run dev:business`, `dev:academic`, `dev:marketing` or `dev:platform` start one app each; each starts the local database if nothing is listening on the `DATABASE_URL` port and otherwise reuses it (with several terminals, run `npm run db:start` yourself first). Sign in on the workspace you need, e.g. http://localhost:3000, as one of the fictional seed users (password = `SEED_USER_PASSWORD`):
 `platform-admin@`, `director@`, `marketing-manager@`, `marketing-contributor@`, `academic-coordinator@`, `teacher@`, `admissions-counsellor@`, `operations-manager@`, `auditor@`, `hr-manager@` — all `…@example.test`.
 
-**Demo sign-ins (development only, D-072):** set `LOCAL_DEMO_PASSWORD` (at least 12 characters) in `.env`, then `npm run db:seed-demo-accounts`. It creates `business@elevateeducation.in` (operations manager, :3000), `teacher@elevateeducation.in` (teacher, :3001) and `marketing@elevateeducation.in` (marketing manager, :3002). It refuses production and any non-local database; `npm run db:clear-samples` switches them off before real use.
+**Demo sign-ins (development only, D-072):** set `LOCAL_DEMO_PASSWORD` (at least 12 characters) in `.env`, then `npm run db:seed-demo-accounts`. Run it after `npm run db:seed`. It creates `business@elevateeducation.in` (operations manager, labelled "Business administrator (demo)", D-097, :3000), `hr@elevateeducation.in` (HR manager, :3000), `teacher@elevateeducation.in` (teacher, :3001), `marketing@elevateeducation.in` (marketing manager, :3002), the two fictional marketing employees `pooja.verma@example.test` and `rohit.saini@example.test` (:3002), and the development-assumption teacher sign-ins `satish@`, `soma@`, `nikunjbindal@` and `tushar@elevateeducation.in` (:3001; D-082). All share `LOCAL_DEMO_PASSWORD`. It refuses production and any non-local database; `npm run db:clear-samples` switches them off before real use.
 
 npm 11 runs dependency install scripts only when approved; `package.json → allowScripts` approves embedded-postgres' Windows binaries and esbuild. Details and troubleshooting: `infrastructure/development/README.md`.
 
@@ -112,10 +114,11 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `INTERNAL_SERVICE_TOKEN` | all | ≥ 32 chars; bearer token for `/api/internal/*`; same in every app |
 | `BUSINESS_OPS_OS_URL`, `ACADEMIC_OS_URL`, `MARKETING_OS_URL`, `PLATFORM_URL` | all | Origin of each app (defaults `http://localhost:3000`, `:3001`, `:3002`, `:3003`; `appOrigin()` in `packages/configuration/src/workspaces.ts`). The dev commands take the port from them; they are the only places a sign-in may redirect to and the only origins whose state-changing requests are accepted (D-072) |
 | `SEED_USER_PASSWORD` | `db:seed` | ≥ 12 chars; password of the fictional seed users |
-| `LOCAL_DEMO_PASSWORD` | `db:seed-demo-accounts` | ≥ 12 chars; shared password of the three local demo sign-ins; never printed |
+| `LOCAL_DEMO_PASSWORD` | `db:seed-demo-accounts` | ≥ 12 chars; shared password of the local demo sign-ins; never printed |
 | `ATTACHMENTS_DIR` | Business Operations (and the mounted task pages) | Folder for uploaded files in development; empty = `.data/attachments` (git-ignored). Production refuses uploads until a storage provider is chosen (D-085) |
-| `OPENAI_API_KEY`, `OPENAI_MODEL` | AI draft helpers | Secret key from platform.openai.com (only in the git-ignored `.env`; the secret scan blocks `sk-` keys) and the model name (no default in code). Without both the AI buttons say "AI drafting is not set up" (D-092) |
-| `OPENAI_TIMEOUT_MS`, `OPENAI_BASE_URL` | AI draft helpers | Optional: give up after this many milliseconds (default 20000); API address (default `https://api.openai.com/v1`) |
+| `GROQ_API_KEY`/`GROQ_MODEL`, `GEMINI_API_KEY`/`GEMINI_MODEL`, `OPENROUTER_API_KEY`/`OPENROUTER_MODEL` | AI draft helpers | Free AI providers, tried in this order (D-110); one is used only with both its key and model (no default in code); PDFs skip Groq. Keys only in the git-ignored `.env`; the secret scan blocks `gsk_`, `AQ.` and `sk-` keys. With none set the AI buttons say "AI drafting is not set up" |
+| `AI_TIMEOUT_MS`, `<PROVIDER>_BASE_URL` | AI draft helpers | Optional: give up on one provider after this many milliseconds (default 20000); another https address per provider (tests) |
+| `OFFICE_HOST` | `npm run office` | Optional: the address staff type on the office Wi-Fi; empty = this computer's Wi-Fi address, found at start (D-110) |
 | `MARKETING_PUBLISHING_ADAPTER`, `MARKETING_METRICS_ADAPTER`, `NOTIFICATIONS_EMAIL_ADAPTER` | modules | `mock` (default) or `disabled` — no live adapters exist (D-014) |
 | `LOG_LEVEL` | all | `debug`, `info`, `warn` or `error` |
 
@@ -135,7 +138,7 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `npm run db:generate` | drizzle-kit migration from all schema files (the `ops` schema spans five, D-029) (wave 3 / Integration) |
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:seed` | Core + module seeds (local DBs only) |
-| `npm run db:seed-demo-accounts` | Development only: the three demo sign-ins with `LOCAL_DEMO_PASSWORD` (safe to repeat) |
+| `npm run db:seed-demo-accounts` | Development only: the demo sign-ins with `LOCAL_DEMO_PASSWORD`, after `db:seed` (safe to repeat) |
 | `npm run db:clear-samples` | Before real use: delete every sample row and switch the demo sign-ins off |
 | `npm run db:reset` | Dev only: drop Elevate schemas, migrate, seed (refuses non-local URLs) |
 | `npm run db:check` | Read-only check of the local database: live schema = code schema, all migrations applied, valid indexes and constraints, sample-data rules (D-036) |
@@ -186,7 +189,7 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `INTEGRATION_CONTRACT.md` | Identities, IDs, ownership, permissions, API, events, summaries, versioning, failure behaviour |
 | `DATABASE_DESIGN.md` | Schemas, conventions, core tables |
 | `IMPLEMENTATION_STATUS.md` | What is built and the evidence |
-| `docs/DECISIONS.md` | Decision log (D-001 … D-093) |
+| `docs/DECISIONS.md` | Decision log (D-001 … D-111) |
 | `docs/WORKSPACES.md` | The three role workspaces: URLs, dev commands, demo sign-ins, sign-in and access rules, role × workspace matrix |
 | `docs/BUILD_PLAN.md` | Waves, ownership, module layout, definition of done |
 | `docs/EXISTING_PROJECT_AUDIT.md` | Audit of the legacy material |

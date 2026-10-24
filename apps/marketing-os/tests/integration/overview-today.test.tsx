@@ -74,7 +74,7 @@ describe('Marketing Overview: follow-up counts', () => {
     expect(html).toContain(
       tile('/marketing/follow-ups?view=due_today', 'Follow-ups due today', '1'),
     );
-    expect(html).toContain(tile('/marketing/follow-ups?view=overdue', 'Follow-ups overdue', '1'));
+    expect(html).toContain(tile('/marketing/follow-ups?view=overdue', 'Missed follow-ups', '1'));
     expect(html).toContain('0 upcoming in the next 2 days · as of ');
   });
 
@@ -89,6 +89,6 @@ describe('Marketing Overview: follow-up counts', () => {
       : await render(await createTestUser(ctx.db, { roles: ['marketing_contributor'] }), MyDayPage);
     state.failFollowUps = false;
     expect(html).toContain(text);
-    expect(html).not.toContain('view=due_today');
+    expect(html).not.toContain('view=due_today" class="el-stat');
   });
 });

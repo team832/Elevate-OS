@@ -15,7 +15,8 @@ import {
 import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ForbiddenError, ValidationError } from '@elevate/shared-contracts';
 import type { LeadId } from '@elevate/shared-types';
-import { isOpenStatus } from '../domain';
+import { istToday, isOpenStatus } from '../domain';
+import { callSeconds } from '../domain/lead-stages';
 import {
   accessScope,
   activeStaff,
@@ -28,7 +29,9 @@ import { CONTACT_KEYS, siblingsOnly } from './lead-duplicates';
 import { getLeadRow, lockWorkableLead, notifyAssigned, type LeadRow } from './leads-access';
 import { opsAudit } from './ops-common';
 import { applyTransition, lockAdmission, lockLeadIdentity } from './pipeline';
-import type { ActivityInput } from './schemas';
+import { scheduleCallFollowUp } from './lead-calls';
+import type { ContactActivityInput } from './lead-stages-schemas';
+import { markMergedDnc, markMergedDuplicate } from './lead-stages';
 import { loadSettings } from './settings';
 
 const SUCCESSFUL_OUTCOMES = new Set(['connected_two_way', 'replied', 'visited']);
@@ -137,7 +140,7 @@ export async function logActivity(
   db: Database,
   actor: Actor,
   leadId: string,
-  input: ActivityInput,
+  input: ContactActivityInput,
   requestId?: string,
 ) {
   const access = await accessScope(db, actor, 'ops:leads:write');
@@ -150,9 +153,23 @@ export async function logActivity(
       leadId,
       'This lead was merged into another lead; log the contact on that one.',
     );
+    // Do not contact (brief §11): only what the family started, or a note, may be logged.
+    if (lead.doNotContact && input.kind !== 'note' && input.direction !== 'inbound')
+      throw new ConflictError(
+        'This lead is marked Do not contact, so calls and messages to them cannot be logged. If they contacted you, log it as an inbound call; to contact them again, change the stage with a reason first.',
+      );
     const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
     if (occurredAt.getTime() > Date.now() + 5 * 60_000)
       throw new ValidationError('A contact attempt cannot be in the future.');
+    for (const field of ['durationMinutes', 'direction'] as const)
+      if ((input[field] ?? null) !== null && input.kind !== 'call')
+        throw new ValidationError('Only a call has a direction and a duration.', {
+          details: [{ location: 'body', path: [field], message: 'Calls only' }],
+        });
+    if (input.nextFollowUpOn && input.nextFollowUpOn < istToday(new Date()))
+      throw new ValidationError('The next follow-up cannot be in the past.', {
+        details: [{ location: 'body', path: ['nextFollowUpOn'], message: 'Today or later' }],
+      });
     const [activity] = await tx
       .insert(opsLeadActivities)
       .values({
@@ -162,9 +179,23 @@ export async function logActivity(
         occurredAt,
         note: clean(input.note),
         staffId,
+        direction: input.direction ?? null,
+        durationSeconds: callSeconds(input.durationMinutes),
+        nextAction: clean(input.nextAction),
+        nextFollowUpOn: input.nextFollowUpOn ?? null,
         createdBy: actor.id,
       })
       .returning();
+    const followUp = input.nextFollowUpOn
+      ? await scheduleCallFollowUp(
+          tx,
+          actor,
+          lead,
+          staffId,
+          { dueDate: input.nextFollowUpOn, title: clean(input.nextAction) },
+          requestId,
+        )
+      : null;
     const successful = SUCCESSFUL_OUTCOMES.has(input.outcome) && input.kind !== 'note';
     const moved: string[] = [];
     if (successful) {
@@ -200,7 +231,7 @@ export async function logActivity(
       { after: activity, metadata: { leadId: lead.id, successful } },
       requestId,
     );
-    return { activity, successful, admissionsMovedToContacted: moved };
+    return { activity, successful, admissionsMovedToContacted: moved, followUp };
   });
 }
 
@@ -295,6 +326,10 @@ export async function mergeLeads(
       fill.firstSuccessfulContactAt = source.firstSuccessfulContactAt;
     if (Object.keys(fill).length)
       await tx.update(opsLeads).set(fill).where(eq(opsLeads.id, target.id));
+    // Do not contact is never lost in a merge.
+    if (source.doNotContact && !target.doNotContact)
+      await markMergedDnc(tx, actor, target, source.code, requestId);
+    await markMergedDuplicate(tx, actor, source, target.code, requestId);
     const [mergedSource] = await tx
       .update(opsLeads)
       .set({ mergedIntoLeadId: target.id, mergedAt: new Date() })

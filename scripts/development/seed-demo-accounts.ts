@@ -1,7 +1,8 @@
 /**
- * `npm run db:seed-demo-accounts` — DEVELOPMENT ONLY (D-072). Creates or refreshes three local
- * demo sign-ins, one per workspace, plus satish@elevateeducation.in, a labelled development
- * assumption linked to Satish Raghuvanshi's staff record (brief 23 Oct 2026 §4, R10), all with
+ * `npm run db:seed-demo-accounts` — DEVELOPMENT ONLY (D-072). Creates or refreshes the local
+ * demo sign-ins (business administrator, HR manager, teacher, marketing manager, two marketing
+ * employees) plus the four teacher logins, labelled development assumptions linked to the
+ * owner-supplied staff records (brief 23 Oct 2026 §4, R10; soma@ = "Soma", owner to confirm), all with
  * LOCAL_DEMO_PASSWORD from the root .env (never printed). Refuses NODE_ENV=production and
  * non-local databases. Safe to run again. Run `npm run db:seed` first so the departments and
  * the owner-supplied staff exist.
@@ -43,8 +44,10 @@ try {
   console.log('db:seed-demo-accounts — ready (password = LOCAL_DEMO_PASSWORD):');
   const home = {
     operations_manager: 'ops',
+    hr_manager: 'ops',
     teacher: 'academic',
     marketing_manager: 'marketing',
+    marketing_contributor: 'marketing',
   } as const;
   for (const a of [...DEMO_ACCOUNTS, ...DEV_ASSUMPTION_ACCOUNTS]) {
     const ws = home[a.role];

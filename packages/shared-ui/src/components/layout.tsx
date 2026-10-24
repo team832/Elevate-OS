@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { MODULES, type ModuleKey } from '@elevate/shared-types';
 import { BrandLogo } from './brand';
 import { Icon, type IconName } from './icons';
+import { NotificationToaster } from './notify';
 import { ShellFrame } from './shell-client';
 
 export interface ShellUser {
@@ -384,6 +385,9 @@ function TopBar(props: AppShellProps) {
         ) : null}
         {typeof unreadNotifications === 'number' ? (
           <Bell count={unreadNotifications} base={MODULES[current].basePath} />
+        ) : null}
+        {typeof unreadNotifications === 'number' && MODULES[current].basePath ? (
+          <NotificationToaster base={MODULES[current].basePath} unread={unreadNotifications} />
         ) : null}
         <details className="el-user-menu">
           <summary className="el-avatar-button">

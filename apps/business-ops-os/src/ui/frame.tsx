@@ -57,6 +57,7 @@ export const NAV = [
   ...section('My work', [
     ['my-attendance', 'My attendance', '/ops/my-attendance', 'ops:attendance:read'],
     ['my-reports', 'My reports', '/ops/my-reports', 'ops:tasks:read'],
+    ['hr-requests', 'Requests through HR', '/ops/hr-requests', 'ops:hr_requests:create'], // HR-REQ
   ]),
   ...section('Admissions', [
     [
@@ -78,6 +79,7 @@ export const NAV = [
   ...section('Teaching and work', [
     ['teachers', 'Teachers', '/ops/teachers', 'ops:teachers:read', ['staff']],
     ['academic-summary', 'Academic Summary', '/ops/academic-summary', 'ops:dashboard:read'],
+    ['tests', 'Tests and Mock Tests', '/ops/tests', 'ops:assessments:read'], // TESTS-OPS
     [
       'tasks',
       'Tasks and EOD Reports',
@@ -99,6 +101,7 @@ export const NAV = [
     ['hr-attendance', 'Attendance', '/ops/hr/attendance', 'ops:attendance:read', [], true],
     ['hr-tasks', 'Tasks', '/ops/hr/tasks', 'ops:tasks:review'],
     ['hr-review', 'Submission Review', '/ops/hr/review', 'ops:tasks:review'],
+    ['hr-requests-queue', 'Staff Requests', '/ops/hr/requests', 'ops:hr_requests:read'], // HR-REQ
     ['hr-reports', 'Work Reports', '/ops/hr/reports', 'ops:work_reports:read'],
     [
       'hr-feedback',

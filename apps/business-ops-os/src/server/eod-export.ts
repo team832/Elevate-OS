@@ -8,6 +8,7 @@ import { toCsv } from '@elevate/server-kit';
 import type { Database } from '@elevate/database';
 import type { AttendanceSummary } from '../domain/attendance';
 import { eodPlainText, fmtMinutes, isEodFacts, type EodFacts } from '../domain/eod';
+import { marketingRows } from '../domain/eod-marketing';
 import { deadlineText, TASK_STATUS_LABELS } from '../domain/staff-tasks';
 import {
   METRIC_DEFINITIONS,
@@ -231,14 +232,16 @@ export function contextRows(f: EodFacts): [string, string][] {
     ...(topics !== null
       ? ([['Topics covered (from teaching logs)', topics]] as [string, string][])
       : []),
-    ...(period
-      ? ([
-          [
-            'Marketing work',
-            'Approved marketing deliverables are listed under "Approved or done". Campaign results are not part of this report: only verified results count, and none are linked to work reports. Anything in the employee’s own words is self-reported.',
-          ],
-        ] as [string, string][])
-      : []),
+    ...(f.marketing
+      ? marketingRows(f.marketing, fmtDateTime)
+      : period
+        ? ([
+            [
+              'Marketing work',
+              'Approved marketing deliverables are listed under "Approved or done". Campaign results are not part of this report: only verified results count, and none are linked to work reports. Anything in the employee’s own words is self-reported.',
+            ],
+          ] as [string, string][])
+        : []),
     ...(att
       ? ([
           [
@@ -306,7 +309,7 @@ export async function eodReportPdf(db: Database, actor: Actor, id: string, n?: n
     [
       'Sources',
       isEodFacts(f)
-        ? 'Task events and work updates in Business Ops; Academic OS; HR attendance (monthly)'
+        ? `Task events and work updates in Business Ops; Academic OS; HR attendance (monthly)${f.marketing ? '; Marketing OS' : ''}`
         : r.imported
           ? 'Imported from the old task tracker; not sent through Elevate OS'
           : 'Task status at submission (earlier report format)',

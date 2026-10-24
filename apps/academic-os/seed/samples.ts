@@ -14,7 +14,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
-import { defineSeed } from '@elevate/database/seed';
+import { defineSeed, DEMO_ACCOUNTS, ensureDemoStaff } from '@elevate/database/seed';
 import {
   academicAttendance,
   academicBatches,
@@ -49,13 +49,65 @@ export function sampleAnchorDate(): IsoDate {
 }
 
 const SOURCE = 'Sample data (D-036) — fictional';
+/**
+ * Sample batches and the sample students placed in each (brief 23 Oct 2026 §25: IPMAT, CLAT, CA and
+ * school maths). CLAT and the Class 11/12 batches follow draft syllabus courses, so no teacher is
+ * assigned to them (D-051). Students are numbered STU-DEMO0001… in this order (never reordered).
+ */
 export const SAMPLE_BATCHES = [
-  { code: 'SAMPLE-IPMAT-A', name: 'Sample IPMAT batch A', course: 'IPMAT-BASE', minutes: 75 },
-  { code: 'SAMPLE-IPMAT-B', name: 'Sample IPMAT batch B', course: 'IPMAT-BASE', minutes: 75 },
-  { code: 'SAMPLE-CAF', name: 'Sample CA Foundation batch', course: 'CAF-ACC-SEP27', minutes: 60 },
+  {
+    code: 'SAMPLE-IPMAT-A',
+    name: 'Sample IPMAT batch A',
+    course: 'IPMAT-BASE',
+    minutes: 75,
+    stage: 'class_12',
+    students: ['Nitya', 'Advik', 'Pihu', 'Reva', 'Tejas', 'Yuvan'],
+  },
+  {
+    code: 'SAMPLE-IPMAT-B',
+    name: 'Sample IPMAT batch B',
+    course: 'IPMAT-BASE',
+    minutes: 75,
+    stage: 'class_12',
+    students: ['Arnav', 'Kiara', 'Vivaan', 'Navya', 'Shaurya', 'Anvi'],
+  },
+  {
+    code: 'SAMPLE-CAF',
+    name: 'Sample CA Foundation batch',
+    course: 'CAF-ACC-SEP27',
+    minutes: 60,
+    stage: 'gap_year',
+    students: ['Aadhya', 'Yash', 'Ritika', 'Om', 'Samaira'],
+  },
+  {
+    code: 'SAMPLE-CLAT-A',
+    name: 'Sample CLAT batch A',
+    course: 'CLAT-SYL-2027',
+    minutes: 60,
+    stage: 'class_12',
+    students: ['Prisha', 'Ayaan', 'Sara', 'Rudra', 'Inaya', 'Krish'],
+  },
+  {
+    code: 'SAMPLE-C11-MATH',
+    name: 'Sample Class 11 Mathematics batch',
+    course: 'COM-C11-2627',
+    minutes: 60,
+    stage: 'class_11',
+    students: ['Laksh', 'Mahi', 'Veer', 'Riddhi'],
+  },
+  {
+    code: 'SAMPLE-C12-MATH',
+    name: 'Sample Class 12 Mathematics batch',
+    course: 'COM-C12-2627',
+    minutes: 60,
+    stage: 'class_12',
+    students: ['Ahaan', 'Anika', 'Jai', 'Pari'],
+  },
 ] as const;
 type BatchCode = (typeof SAMPLE_BATCHES)[number]['code'];
-const FIRST_NAMES = ['Nitya', 'Advik', 'Pihu', 'Reva', 'Tejas', 'Yuvan'];
+const SAMPLE_ROSTER = SAMPLE_BATCHES.flatMap((b) =>
+  b.students.map((first) => ({ first, batch: b })),
+);
 
 const userByEmail = async (db: Database, email: string) =>
   (await db.select({ id: users.id }).from(users).where(eq(users.email, email)))[0]?.id ?? null;
@@ -63,8 +115,13 @@ const userByEmail = async (db: Database, email: string) =>
 export const studentsSeed = defineSeed({
   name: 'academic.students',
   module: 'academic',
-  dependsOn: ['academic.ipmat-baseline', 'academic.ca-foundation', 'core.users'],
-  description: `${SAMPLE_BATCHES.length} sample batches + ${FIRST_NAMES.length} sample students placed in SAMPLE-IPMAT-A (no phones)`,
+  dependsOn: [
+    'academic.ipmat-baseline',
+    'academic.ca-foundation',
+    'academic.syllabus-drafts',
+    'core.users',
+  ],
+  description: `${SAMPLE_BATCHES.length} sample batches + ${SAMPLE_ROSTER.length} sample students placed in them (no phones)`,
   async run({ db }) {
     const anchor = sampleAnchorDate();
     const placedBy = await userByEmail(db, 'academic-coordinator@example.test');
@@ -93,15 +150,16 @@ export const studentsSeed = defineSeed({
         })
         .onConflictDoNothing();
     }
-    const [batch] = await db
+    const batches = await db
       .select()
       .from(academicBatches)
-      .where(eq(academicBatches.code, 'SAMPLE-IPMAT-A'));
-    for (const [i, first] of FIRST_NAMES.entries()) {
+      .where(eq(academicBatches.isSample, true));
+    for (const [i, { first, batch: b }] of SAMPLE_ROSTER.entries()) {
+      const batch = batches.find((x) => x.code === b.code);
       const values = {
         code: `STU-DEMO${String(i + 1).padStart(4, '0')}`,
         fullName: `${first} Sample Student`,
-        currentStage: 'class_12',
+        currentStage: b.stage,
         schoolBoard: 'CBSE',
         email: `${first.toLowerCase()}.sample@example.test`,
         phone: null,
@@ -368,12 +426,21 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
     );
   const subjectOf = (code: BatchCode, s: string) =>
     subjects.find((x) => x.courseId === batch(code).courseId && x.code === s)!.id;
-  for (const [t, b, s, role] of ASSIGNMENTS) {
-    const values = {
-      batchId: batch(b).id,
-      subjectId: subjectOf(b, s),
-      staffMemberId: who(t).staffId,
-    };
+  // The demo teacher login (teacher@, D-072) co-teaches Quant in batch B, so its My Day shows a
+  // batch, its students and the IPMAT mock. Its record has no password until db:seed-demo-accounts.
+  const demoTeacher = await ensureDemoStaff(
+    db,
+    DEMO_ACCOUNTS.filter((a) => a.role === 'teacher'),
+    manager.staffId,
+  );
+  const teaching = [
+    ...ASSIGNMENTS.map(([t, b, s, role]) => [who(t).staffId, b, s, role] as const),
+    ...[...demoTeacher.values()].map(
+      (d) => [d.staffId, 'SAMPLE-IPMAT-B', 'QUANT', 'co_teacher'] as const,
+    ),
+  ];
+  for (const [staffMemberId, b, s, role] of teaching) {
+    const values = { batchId: batch(b).id, subjectId: subjectOf(b, s), staffMemberId };
     const found = await db.$count(
       academicTeacherAssignments,
       and(

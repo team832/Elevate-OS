@@ -8,6 +8,7 @@ export * from './components/tab-keys';
 export * from './components/tabs';
 export * from './components/dialog';
 export * from './components/shell-client';
+export * from './components/notify';
 export * from './components/brand';
 export * from './components/workspaces';
 export * from './components/charts';

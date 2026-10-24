@@ -37,8 +37,12 @@ describe('Marketing OS routes (in-memory database)', () => {
     expect(authedRequest(user, '/').headers.get('cookie')).toContain('elevate_session=');
   });
 
-  it('exports the legacy seed', () => {
-    expect(seeds.map((s) => s.name)).toEqual(['marketing.legacy']);
+  it('exports the legacy seed, the SEO/AIO/GEO categories and the sample set', () => {
+    expect(seeds.map((s) => s.name)).toEqual([
+      'marketing.legacy',
+      'marketing.optimisation-categories',
+      'marketing.samples',
+    ]);
     expect(seeds[0]!.dependsOn).toContain('core.users');
   });
 });

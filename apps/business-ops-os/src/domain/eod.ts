@@ -9,9 +9,14 @@
  * the timeliness figures of domain/work-report.ts.
  */
 import type { AcademicTeacherActivityV1, SourceResult } from '@elevate/shared-contracts';
-import type { AttendanceSummary } from './attendance';
 import { addDays, istInstant, istToday, type IsoDate } from './dates';
 import { byPriority } from './eod-day';
+import {
+  academicFacts,
+  type AcademicFacts,
+  type AttendanceFacts,
+  type MarketingFacts,
+} from './eod-sources';
 import {
   blockOf,
   byTime,
@@ -42,6 +47,13 @@ export {
   type FactUpdate,
 } from './eod-replay';
 export { eodPlainText, fmtMinutes } from './eod-text';
+export {
+  academicFacts,
+  marketingFacts,
+  type AcademicFacts,
+  type AttendanceFacts,
+  type MarketingFacts,
+} from './eod-sources';
 
 export interface FactItem {
   taskId: string;
@@ -80,28 +92,6 @@ export interface BacklogItem {
   closedLater: boolean;
 }
 
-type Metric = number | null;
-export type AcademicFacts =
-  | { status: 'unavailable'; reason: string; checkedAt: string }
-  | {
-      status: 'available';
-      checkedAt: string;
-      planned: Metric;
-      delivered: Metric;
-      cancelled: Metric;
-      substituted: Metric;
-      logsPending: Metric;
-      markingPending: Metric;
-      reviewsSubmitted: Metric;
-      /** Optional in the contract (23 Oct 2026): absent = Academic did not report it. */
-      topicsCovered?: AcademicTeacherActivityV1['topicsCovered'];
-      assessmentsPrepared?: Metric;
-      assessmentsMarked?: Metric;
-    };
-
-/** HR attendance for the period (domain/attendance.ts); never derived from tasks or classes. */
-export type AttendanceFacts =
-  { status: 'unavailable'; reason: string } | ({ status: 'available' } & AttendanceSummary);
 export interface DevelopmentItem {
   action: string;
   dueOn: string | null;
@@ -142,6 +132,8 @@ export interface EodFacts {
   turnaround?: ReturnType<typeof reviewTurnaround>;
   attendance?: AttendanceFacts;
   development?: DevelopmentItem[] | null;
+  /** Monthly reports of Marketing & Growth staff only. */
+  marketing?: MarketingFacts;
   counts: {
     received: number;
     acknowledged: number;
@@ -173,33 +165,6 @@ export interface EodInput {
   academic: SourceResult<AcademicTeacherActivityV1>;
   attendance?: AttendanceFacts;
   development?: DevelopmentItem[] | null;
-}
-
-const metric = (m: { status: string; value: number | null }): Metric =>
-  m.status === 'missing' ? null : m.value;
-
-export function academicFacts(r: SourceResult<AcademicTeacherActivityV1>): AcademicFacts {
-  if (r.status === 'unavailable')
-    return { status: 'unavailable', reason: r.reason, checkedAt: r.fetchedAt };
-  const d = r.data;
-  return {
-    status: 'available',
-    checkedAt: r.fetchedAt,
-    planned: metric(d.sessions.planned),
-    delivered: metric(d.sessions.delivered),
-    cancelled: metric(d.sessions.cancelled),
-    substituted: metric(d.sessions.substituted),
-    logsPending: metric(d.logsPending),
-    markingPending: metric(d.markingPending),
-    reviewsSubmitted: metric(d.reviews.submitted),
-    ...(d.topicsCovered ? { topicsCovered: d.topicsCovered } : {}),
-    ...(d.assessments
-      ? {
-          assessmentsPrepared: metric(d.assessments.prepared),
-          assessmentsMarked: metric(d.assessments.marked),
-        }
-      : {}),
-  };
 }
 
 const firstPerTask = <T extends { taskId: string }>(items: T[]) =>

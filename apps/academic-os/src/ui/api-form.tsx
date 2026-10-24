@@ -56,7 +56,7 @@ export interface ApiFormProps {
   goTo?: string;
 }
 
-interface ErrorView {
+export interface ErrorView {
   message: string;
   details: string[];
 }
@@ -121,7 +121,7 @@ function collect(form: HTMLFormElement, fields: readonly FormField[]): Record<st
   return body;
 }
 
-async function send(
+export async function send(
   action: string,
   method: string,
   body: unknown,
@@ -155,7 +155,7 @@ async function send(
   return { ok: true, data: json.data };
 }
 
-function ErrorAlert({ error }: { error: ErrorView }) {
+export function ErrorAlert({ error }: { error: ErrorView }) {
   return (
     <Alert tone="danger" title={error.message}>
       {error.details.length > 0 ? (

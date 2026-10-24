@@ -19,6 +19,7 @@ import {
 import { metric } from '@elevate/shared-contracts';
 import { AppShell } from '@elevate/shared-ui';
 import { navFor, workspaceLink } from '../../src/ui/shell';
+import { BuildResultPanel, BuildTimetableForm, type BuildResult } from '../../src/ui/timetable-builder';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push() {}, refresh() {} }) }));
 
@@ -192,12 +193,56 @@ describe('Batch, support and teacher views', () => {
         },
       ],
       assessmentsToMark: [],
+      resultsToReview: [
+        {
+          id: 'as1',
+          title: 'Sample Quant test',
+          batchCode: 'IPMAT-B1',
+          subjectName: 'Quant',
+          scheduledDate: '2026-10-20',
+          awaitingReview: 3,
+        },
+      ],
+      assessmentCounts: {
+        assigned: 4,
+        completed: 2,
+        awaitingMarking: 1,
+        published: 1,
+        awaitingReview: 1,
+      },
+      students: [{ id: 'st1', code: 'STU-0001', fullName: 'Sample Riya Student', isSample: true }],
       support: [],
       batches: [{ id: 'b1', activeEnrolments: 4 }],
       draftReviews: 2,
       assignments: [
-        { id: 'a1', subjectName: 'Quant', programmeName: 'IPMAT preparation', courseCode: 'IPMAT-C12', batchId: 'b1', batchCode: 'IPMAT-B1', role: 'primary', academicYear: '2027-28', branchName: null, startDate: null, endDate: null, status: 'active' },
-        { id: 'a2', subjectName: 'Mathematics', programmeName: 'Class 11', courseCode: 'COM-C11', batchId: null, batchCode: null, role: 'primary', academicYear: null, branchName: null, startDate: null, endDate: null, status: 'pending' },
+        {
+          id: 'a1',
+          subjectName: 'Quant',
+          programmeName: 'IPMAT preparation',
+          courseCode: 'IPMAT-C12',
+          batchId: 'b1',
+          batchCode: 'IPMAT-B1',
+          role: 'primary',
+          academicYear: '2027-28',
+          branchName: null,
+          startDate: null,
+          endDate: null,
+          status: 'active',
+        },
+        {
+          id: 'a2',
+          subjectName: 'Mathematics',
+          programmeName: 'Class 11',
+          courseCode: 'COM-C11',
+          batchId: null,
+          batchCode: null,
+          role: 'primary',
+          academicYear: null,
+          branchName: null,
+          startDate: null,
+          endDate: null,
+          status: 'pending',
+        },
       ],
     };
     const out = html(<TeacherHome day={day as never} />);
@@ -213,6 +258,19 @@ describe('Batch, support and teacher views', () => {
     expect(out).toContain('<a href="/academic/batches/b1">IPMAT-B1</a>');
     expect(out).toContain('No batch yet — a coordinator will assign one');
     expect(out).toContain('Not recorded'); // academic year / branch unknown, never blank
+    // Brief §16: students as name + code only, the four assessment counts, and imported scores to review.
+    expect(out).toContain(
+      '<span class="acd-day-time">STU-0001</span><a href="/academic/students/st1">Sample Riya Student</a>',
+    );
+    for (const label of [
+      'Assessments assigned',
+      'Completed',
+      'Awaiting marking',
+      'Results published',
+    ])
+      expect(out).toContain(label);
+    expect(out).toContain('Results awaiting review (1)');
+    expect(out).toContain('3 to verify');
     expect(out).toContain('2 review drafts not submitted yet</a>');
   });
 });
@@ -237,6 +295,7 @@ describe('Academic navigation (brief §6)', () => {
         'My attendance',
         'My reports',
         'Feedback and development',
+        'Requests through HR',
       ],
     ],
     [
@@ -254,6 +313,7 @@ describe('Academic navigation (brief §6)', () => {
         'My tasks',
         'My attendance',
         'My reports',
+        'Requests through HR',
         'Teachers',
         'Enrolments',
         'Enrolment intake',
@@ -262,7 +322,7 @@ describe('Academic navigation (brief §6)', () => {
         'Academic settings',
       ],
     ],
-    ['marketing_manager', ['My tasks', 'My attendance', 'My reports']], // own items only; the workspace gate keeps them out of this shell
+    ['marketing_manager', ['My tasks', 'My attendance', 'My reports', 'Requests through HR']], // own items only; the workspace gate keeps them out of this shell
   ])('%s sees its items in order; Coordination only with all-scope permissions', (role, labels) => {
     expect(navFor(as(role)).map((n) => n.label)).toEqual(labels);
   });
@@ -330,6 +390,9 @@ describe('Academic dashboards (22 Oct 2026 redesign)', () => {
     logsMissing: [],
     demoAwaitingFeedback: [],
     assessmentsToMark: [],
+    resultsToReview: [],
+    assessmentCounts: null,
+    students: [],
     support: [],
     batches: [],
     draftReviews: 0,
@@ -351,16 +414,18 @@ describe('Academic dashboards (22 Oct 2026 redesign)', () => {
     expect(out).toContain('Room R2');
     expect(out).toContain('<ul class="acd-day"><li><span class="acd-day-time">14:00</span>');
     expect(out).not.toContain('No more classes today');
+    expect(out).toContain('No students placed in your batches today');
+    expect(out).toContain('Not available'); // no assignment today: counts are not available, never 0
   });
 
   it('work tiles: no staff record is words, never 0; counts come through as figures', () => {
     const none = html(
       <>
-        <TasksDay summary={null} />
+        <TasksDay summary={null} week={null} month={null} />
         <MeetingsDay day="2026-10-22" total={null} />
       </>,
     );
-    expect(none.match(/No staff record/g)).toHaveLength(5);
+    expect(none.match(/No staff record/g)).toHaveLength(7);
     expect(none).not.toMatch(/>0</);
     const ok = html(
       <TasksDay
@@ -375,14 +440,52 @@ describe('Academic dashboards (22 Oct 2026 redesign)', () => {
             eod: 'draft',
           } as never
         }
+        week={
+          {
+            recent: [
+              { label: 'Week of 19 Oct 2026', standing: 'submitted', late: true },
+              { label: 'Week of 12 Oct 2026', standing: 'missing', late: false },
+            ],
+          } as never
+        }
+        month={
+          {
+            recent: [
+              { label: 'October 2026', standing: 'not_started', late: false },
+              { label: 'September 2026', standing: 'acknowledged', late: false },
+            ],
+          } as never
+        }
       />,
     );
+    expect(ok).toContain('<span class="el-stat-value">Submitted (late)</span>');
+    expect(ok).toContain('Week of 12 Oct 2026: Missing');
+    expect(ok).toContain('href="/academic/my-reports?kind=week"');
+    expect(ok).toContain('<span class="el-stat-value">Not started</span>');
+    expect(ok).toContain('September 2026: Reviewed');
+    expect(ok).toContain('href="/academic/my-reports?kind=month"');
     expect(ok).toContain('href="/academic/tasks?due=today"');
     expect(ok).toContain('<span class="el-stat-value">2</span>');
     expect(ok).toContain('<span class="el-stat-value">1</span>');
     expect(ok).toContain('<span class="el-stat-value">Draft</span>');
     expect(ok).toContain('3 open in all');
-    const reviewed = html(<TasksDay summary={{ day: '2026-10-22', asOf: '2026-10-22T04:30:00Z', open: 3, overdue: 1, dueToday: 2, submitted: 4, eod: 'draft' } as never} />);
+    const reviewed = html(
+      <TasksDay
+        summary={
+          {
+            day: '2026-10-22',
+            asOf: '2026-10-22T04:30:00Z',
+            open: 3,
+            overdue: 1,
+            dueToday: 2,
+            submitted: 4,
+            eod: 'draft',
+          } as never
+        }
+        week={null}
+        month={null}
+      />,
+    );
     expect(reviewed).toContain('<span class="el-stat-value">4</span>');
   });
 
@@ -527,17 +630,37 @@ describe('Review form (D-058)', () => {
       /<select[^>]*id="review-visibility"[^>]*aria-describedby="review-visibility-hint"/,
     );
     expect(out).toContain('Business Operations feedback readers');
-    expect(out).toContain('may use only strengths, areas needing support and suggested action');
+    expect(out).toContain('may use only strengths, improvement areas and recommended action');
   });
 });
 
 describe('assignment forms (brief 23 Oct 2026 §4, R9)', () => {
-  const options = { subjects: [{ id: 'sub1', name: 'Mathematics', courseId: 'c11', courseCode: 'COM-C11', programmeName: 'Class 11' }], branches: [{ id: 'br1', name: 'Sample centre', status: 'provisional' }] } as never;
+  const options = {
+    subjects: [
+      {
+        id: 'sub1',
+        name: 'Mathematics',
+        courseId: 'c11',
+        courseCode: 'COM-C11',
+        programmeName: 'Class 11',
+      },
+    ],
+    branches: [{ id: 'br1', name: 'Sample centre', status: 'provisional' }],
+  } as never;
   const batches = [
     { id: 'b11', code: 'C11-A', name: 'Class 11 A', courseId: 'c11', courseCode: 'COM-C11' },
     { id: 'bX', code: 'IPMAT-A', name: 'IPMAT A', courseId: 'cX', courseCode: 'IPMAT' },
   ];
-  const row = { subjectName: 'Mathematics', courseId: 'c11', courseCode: 'COM-C11', role: 'primary', academicYear: '2026-27', branchId: null, startDate: null, endDate: null };
+  const row = {
+    subjectName: 'Mathematics',
+    courseId: 'c11',
+    courseCode: 'COM-C11',
+    role: 'primary',
+    academicYear: '2026-27',
+    branchId: null,
+    startDate: null,
+    endDate: null,
+  };
 
   it('a pending row offers only batches of its course and a withdraw; an active row offers an end date', () => {
     const out = html(
@@ -546,7 +669,12 @@ describe('assignment forms (brief 23 Oct 2026 §4, R9)', () => {
         today="2026-10-23"
         options={options}
         batches={batches as never}
-        rows={[{ ...row, id: 'p1', batchId: null, batchCode: null, status: 'pending' }, { ...row, id: 'a1', batchId: 'b11', batchCode: 'C11-A', status: 'active' }] as never}
+        rows={
+          [
+            { ...row, id: 'p1', batchId: null, batchCode: null, status: 'pending' },
+            { ...row, id: 'a1', batchId: 'b11', batchCode: 'C11-A', status: 'active' },
+          ] as never
+        }
       />,
     );
     const pending = out.slice(out.indexOf('Set batch or edit'), out.indexOf('Edit or end'));
@@ -559,9 +687,43 @@ describe('assignment forms (brief 23 Oct 2026 §4, R9)', () => {
   });
 
   it('the Teachers page form picks the teacher; a profile form does not', () => {
-    const picked = html(<RecordAssignmentForm staff={[{ id: 's9', fullName: 'Sample Teacher', title: null }]} options={options} batches={batches as never} />);
+    const picked = html(
+      <RecordAssignmentForm
+        staff={[{ id: 's9', fullName: 'Sample Teacher', title: null }]}
+        options={options}
+        batches={batches as never}
+      />,
+    );
     expect(picked).toContain('Sample Teacher');
     expect(picked).toContain('Leave empty to record it pending');
-    expect(html(<RecordAssignmentForm staffId="s1" options={options} batches={batches as never} />)).not.toContain('Sample Teacher');
+    expect(
+      html(<RecordAssignmentForm staffId="s1" options={options} batches={batches as never} />),
+    ).not.toContain('Sample Teacher');
+  });
+});
+
+describe('Build draft timetable (ACD-029)', () => {
+  const batches = [{ id: 'b1', code: 'SAMPLE-B1', subjects: [{ id: 's1', name: 'Quant' }, { id: 's2', name: 'Verbal' }] }];
+
+  it('asks for the batch, dates, day window and classes per subject, and names the action', () => {
+    const out = html(<BuildTimetableForm batches={batches} action="/academic/api/v1/timetable/build" patternsPath="/academic/timetable/patterns" />);
+    for (const label of ['Batch', 'First date', 'Last date', 'Day starts', 'Day ends', 'Quant', 'Verbal']) expect(out).toContain(`>${label}</label>`);
+    expect(out).toContain('name="weekly-s1"');
+    expect(out).toContain('Build draft timetable');
+  });
+
+  it('result: drafts link to their pattern, unplaced classes give reasons, and the note says who wrote it', () => {
+    const result: BuildResult = {
+      drafts: [{ id: 'p1', subjectName: 'Quant', weekday: 1, startTime: '09:00', teacherName: 'Sample Teacher', roomCode: null, classes: 2, warnings: [] }],
+      unplaced: [{ subjectId: 's2', subjectName: 'Verbal', missing: 1, reasons: [{ code: 'TEACHER_OVERLAP', text: 'the teacher already has another class then' }] }],
+      notes: ['No active rooms are recorded, so the drafts have no room.'],
+      note: { text: 'Placed 1 of 2 weekly classes as draft patterns; nothing is published yet.', source: 'system', label: 'Summary written by the system; AI note unavailable' },
+    };
+    const out = html(<BuildResultPanel result={result} patternsPath="/academic/timetable/patterns" />);
+    expect(out).toContain('1 draft pattern saved. Nothing is published yet.');
+    expect(out).toContain('href="/academic/timetable/patterns/p1"');
+    expect(out).toContain('Verbal: 1 class a week not placed because the teacher already has another class then.');
+    expect(out).toContain('Summary written by the system; AI note unavailable');
+    expect(out).toContain('No room');
   });
 });

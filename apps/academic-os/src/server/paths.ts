@@ -30,6 +30,7 @@ export const MODULE_PATHS = {
   myAttendance: modulePath('my-attendance'),
   myReports: modulePath('my-reports'),
   myFeedback: modulePath('my-feedback'),
+  hrRequests: modulePath('hr-requests'),
   notifications: modulePath('notifications'),
   /** The caller's own meetings, read-only, from @elevate/business-ops-os/work. */
   meetings: modulePath('meetings'),

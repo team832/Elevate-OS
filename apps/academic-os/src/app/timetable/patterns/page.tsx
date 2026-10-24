@@ -8,6 +8,7 @@ import { getCourse, listBatches, listPatterns, listRooms, listStaff } from '../.
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
 import { PlanBadge } from '../../../ui/badges';
+import { BuildTimetableForm } from '../../../ui/timetable-builder';
 import { AcademicShell, LoadError, TIMETABLE_TABS, actorFor, gate, load } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,10 @@ async function Body({ access }: { access: PageAccess }) {
       const codes = batches.filter((b) => b.courseId === courseIds[i]).map((b) => b.code).join(', ');
       return c.subjects.map((s) => ({ value: s.id, label: `${codes}: ${s.name}` }));
     });
-    return { patterns: await listPatterns(db, actor), batches, subjects, staff: canWrite ? await listStaff(db) : [], rooms: canWrite ? await listRooms(db) : [] };
+    const buildable = batches
+      .filter((b) => b.status !== 'completed' && b.status !== 'cancelled')
+      .map((b) => ({ id: b.id, code: b.code, subjects: courses[courseIds.indexOf(b.courseId)]!.subjects.map((s) => ({ id: s.id, name: s.name })) }));
+    return { patterns: await listPatterns(db, actor), batches, subjects, buildable, staff: canWrite ? await listStaff(db) : [], rooms: canWrite ? await listRooms(db) : [] };
   });
   return (
     <>
@@ -65,6 +69,15 @@ async function Body({ access }: { access: PageAccess }) {
               ]}
             />
           </Card>
+          {canWrite ? (
+            <Card title="Build draft timetable" description="Fills a batch’s week from the classes each subject needs, its teachers, free rooms and holidays. Every slot passes the clash check; the result is saved as drafts for you to check and publish.">
+              {data.data.buildable.length ? (
+                <BuildTimetableForm batches={data.data.buildable} action={MODULE_PATHS.api('timetable/build')} patternsPath={MODULE_PATHS.patterns} />
+              ) : (
+                <EmptyState title="No open batches" description="Create a batch in planning or active status first." />
+              )}
+            </Card>
+          ) : null}
           {canWrite ? (
             <Card title="New draft pattern" description="Nothing is scheduled until you preview and publish the pattern.">
               <ApiForm

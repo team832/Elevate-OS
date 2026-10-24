@@ -7,13 +7,12 @@ import { StatusBadge } from '@elevate/shared-ui';
 import { feeYearTotals } from '../../../domain/fee-year';
 import { FEE_PAGE_SIZE } from '../../../server/fee-collections';
 import type { FeeYearStudent, OwingSort } from '../../../server/fee-year';
-import { fmtDate, fmtPaise } from '../../../ui/format';
+import { fmtDate, fmtPaise, plural } from '../../../ui/format';
 import { listHref, Pager } from '../../../ui/list-controls';
 import { RecordModal } from '../../../ui/record-modal';
 import { RecordTable } from '../../../ui/record-table';
 import { batchLabel } from '../../students/_components/profile-sections';
 
-export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const courseLine = (r: FeeYearStudent) =>
   r.courses
     .map(

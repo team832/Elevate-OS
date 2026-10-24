@@ -6,6 +6,7 @@
 import { and, asc, count, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import {
   academicAnswerKeys,
+  academicAssessmentRoster,
   academicAssessmentSections,
   academicAssessments,
   academicAttempts,
@@ -13,6 +14,7 @@ import {
   academicChapters,
   academicBatchPlacements,
   academicEnrolments,
+  academicResultPublications,
   academicResultRuns,
   academicStudents,
   academicSubjects,
@@ -24,10 +26,13 @@ import { ConflictError, InvalidStateTransitionError, NotFoundError, ValidationEr
 import type { BatchId, StudentId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { parseResponsesCsv, toNumericString, parseMarks } from '../../domain';
-import { assertBatchInScope, audit, getBatchOrThrow, resolveScope, type Actor } from '../context';
+import { assessmentInScope, audit, getBatchOrThrow, resolveScope, type Actor } from '../context';
+import { publicationState } from './assessment-publish';
+import { eligibleBatchIds, rosterFromResponses, rosterMarked, rosterTally } from './assessment-roster';
+import { assertAssessmentInScope, markBatchesInScope } from './assessment-scope';
 import type { answerKeyBody, attemptsBody, createAssessmentBody, scoringBody, sectionBody } from '../schemas';
 
-const dbMark = (v: string | null | undefined) => (v === null || v === undefined ? null : toNumericString(parseMarks(v)!));
+export const dbMark = (v: string | null | undefined) => (v === null || v === undefined ? null : toNumericString(parseMarks(v)!));
 
 /**
  * Students expected to sit an assessment (R13): a placement in its batch covering the scheduled
@@ -45,6 +50,14 @@ export async function eligibleStudentIds(db: Database, a: { batchId: string; sch
   return rows.map((r) => r.id as string);
 }
 
+/** The population: the active roster once snapshotted, else the eligible placements (legacy). */
+export async function populationIds(db: Database, a: { id: AcademicAssessmentId; batchId: string; scheduledDate: string | null; rosterSnapshotAt: Date | null }): Promise<string[]> {
+  if (!a.rosterSnapshotAt) return eligibleStudentIds(db, a);
+  const R = academicAssessmentRoster;
+  const rows = await db.select({ id: R.studentId }).from(R).where(and(eq(R.assessmentId, a.id), isNull(R.removedAt)));
+  return rows.map((r) => r.id as string);
+}
+
 export async function getAssessmentOrThrow(db: Database, id: string) {
   const [row] = await db.select().from(academicAssessments).where(eq(academicAssessments.id, id as AcademicAssessmentId));
   if (!row) throw new NotFoundError('Assessment not found.');
@@ -53,21 +66,19 @@ export async function getAssessmentOrThrow(db: Database, id: string) {
 
 export async function listAssessments(db: Database, actor: Actor, filter: { batchId?: string } = {}) {
   const scope = await resolveScope(db, actor, 'academic:assessments:read');
-  if (scope.kind === 'own' && scope.batchIds.length === 0) return [];
-  const conditions = [];
+  const conditions = [assessmentInScope(scope)];
   if (filter.batchId) conditions.push(eq(academicAssessments.batchId, filter.batchId as BatchId));
-  if (scope.kind === 'own') conditions.push(inArray(academicAssessments.batchId, scope.batchIds));
   const rows = await db
     .select({ a: academicAssessments, batchCode: academicBatches.code })
     .from(academicAssessments)
     .innerJoin(academicBatches, eq(academicBatches.id, academicAssessments.batchId))
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(asc(academicAssessments.scheduledDate), asc(academicAssessments.code))
     .limit(1000);
   return rows.map((r) => ({ ...r.a, batchCode: r.batchCode }));
 }
 
-function sectionValues(assessmentId: AcademicAssessmentId, sections: z.output<typeof sectionBody>[]) {
+export function sectionValues(assessmentId: AcademicAssessmentId, sections: z.output<typeof sectionBody>[]) {
   return sections.map((s, i) => ({
     assessmentId,
     code: s.code,
@@ -125,7 +136,7 @@ export async function createAssessment(db: Database, actor: Actor, input: z.outp
 export async function getAssessment(db: Database, actor: Actor, id: string) {
   const scope = await resolveScope(db, actor, 'academic:assessments:read');
   const assessment = await getAssessmentOrThrow(db, id);
-  assertBatchInScope(scope, assessment.batchId);
+  await assertAssessmentInScope(db, scope, assessment.id);
   const [batch] = await db.select().from(academicBatches).where(eq(academicBatches.id, assessment.batchId));
   const sections = await db.select().from(academicAssessmentSections).where(eq(academicAssessmentSections.assessmentId, assessment.id)).orderBy(asc(academicAssessmentSections.sortOrder));
   const keys = await db
@@ -146,6 +157,15 @@ export async function getAssessment(db: Database, actor: Actor, id: string) {
     answerKeys: keys,
     attempts: Object.fromEntries(attemptCounts.map((a) => [a.status, Number(a.n)])) as Partial<Record<(typeof attemptCounts)[number]['status'], number>>,
     resultRuns: runs.map(({ ruleSnapshot: _r, ...run }) => run),
+    /** The eligible batch the scheduling check runs for: the primary, or the first one in the teacher's scope. */
+    scheduleBatchId: (await eligibleBatchIds(db, assessment)).find((b) => markBatchesInScope(scope, assessment)?.includes(b) ?? true) ?? assessment.batchId,
+    /** Roster-managed (Tests and Mock Tests): counts and publication state; null for legacy assessments. */
+    roster: assessment.rosterSnapshotAt
+      ? {
+          counts: (await rosterTally(db, [assessment.id])).get(assessment.id)!.counts,
+          publicationState: publicationState(await db.select().from(academicResultPublications).where(eq(academicResultPublications.assessmentId, assessment.id)), assessment.publishedAt),
+        }
+      : null,
   };
 }
 
@@ -157,6 +177,7 @@ export async function configureScoring(db: Database, actor: Actor, id: string, i
     if (assessment.status === 'finalised' || assessment.status === 'cancelled') {
       throw new InvalidStateTransitionError(`The assessment is ${assessment.status}; its rule is frozen in the result version (re-score to apply a corrected key).`);
     }
+    if (await rosterMarked(tx, assessment.id)) throw new ConflictError('Roster marks have been entered; the marking rule and sections can no longer change.');
     const codes = input.sections.map((s) => s.code);
     if (new Set(codes).size !== codes.length) throw new ValidationError('Section codes must be unique.');
     const before = await tx.select().from(academicAssessmentSections).where(eq(academicAssessmentSections.assessmentId, assessment.id));
@@ -216,6 +237,8 @@ export async function upsertAttempts(db: Database, actor: Actor, id: string, inp
     const [assessment] = await tx.select().from(academicAssessments).where(eq(academicAssessments.id, id as AcademicAssessmentId)).for('update');
     if (!assessment) throw new NotFoundError('Assessment not found.');
     if (assessment.status === 'cancelled') throw new InvalidStateTransitionError('The assessment is cancelled.');
+    // One writer: after finalisation only the finalise mirror writes attempts of a roster-managed test.
+    if (assessment.rosterSnapshotAt && assessment.status === 'finalised') throw new InvalidStateTransitionError('Results are final: correct marks in Tests and Mock Tests, with a reason.');
     let rows: { studentId: string; status: 'submitted' | 'absent'; keyVersion: number | null; responses: Record<string, (string | null)[]> | null }[];
     if (input.csv !== undefined) {
       const parsed = parseResponsesCsv(input.csv);
@@ -232,9 +255,7 @@ export async function upsertAttempts(db: Database, actor: Actor, id: string, inp
     const ids = rows.map((r) => r.studentId);
     const dupes = ids.filter((v, i) => ids.indexOf(v) !== i);
     if (dupes.length > 0) throw new ValidationError('Duplicate attempts in this import; nothing was saved.', { details: { studentIds: [...new Set(dupes)] } });
-    const enrolled = new Set(
-      await eligibleStudentIds(tx, assessment),
-    );
+    const enrolled = new Set(await populationIds(tx, assessment));
     const outsiders = ids.filter((s) => !enrolled.has(s));
     if (outsiders.length > 0) throw new ValidationError('Some students were not placed in the batch on the assessment date; nothing was saved.', { details: { studentIds: outsiders } });
     const before = await tx.select().from(academicAttempts).where(and(eq(academicAttempts.assessmentId, assessment.id), inArray(academicAttempts.studentId, ids as StudentId[])));
@@ -247,6 +268,7 @@ export async function upsertAttempts(db: Database, actor: Actor, id: string, inp
           set: { status: r.status, responses: r.responses, manualScore: null, keyVersion: r.status === 'absent' ? null : r.keyVersion, enteredByUserId: actor.user.id, version: sql`${academicAttempts.version} + 1` },
         });
     }
+    if (assessment.rosterSnapshotAt) await rosterFromResponses(tx, actor, assessment, rows);
     if (assessment.status === 'draft' || assessment.status === 'scheduled') {
       await tx.update(academicAssessments).set({ status: 'conducted' }).where(eq(academicAssessments.id, assessment.id));
     }

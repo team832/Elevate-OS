@@ -129,6 +129,8 @@ export async function buildSnapshot(
     sections,
     period,
     acknowledgement: input.acknowledgement,
+    // Optional in the type: snapshots stored before progress-report/3 have none.
+    ...(input.comment ? { comment: input.comment } : {}),
     student: {
       name: profile.person.fullName,
       admissionNumber: profile.admission.admissionNumber,

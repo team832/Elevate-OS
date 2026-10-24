@@ -67,3 +67,16 @@ Platform requirements used: PLT-002 (server-side permissions), PLT-004 (no sole 
 | MKT-HR-3 | Only a marketing manager assigns people to content | Tested | `integration/campaign-scope.test.ts` (E4) |
 | MKT-HR-4 | Account-level weekly metrics stay visible to employees | Implemented · Proposed (owner to confirm) | `marketing:metrics:read` unscoped |
 | MKT-HR-5 | My Campaigns, Deliverables, My Attendance, My Reports, Notifications pages | Implemented · not browser-checked | `integration/marketing-staff.test.tsx`, `unit/deliverables.test.ts` |
+
+## Milestone of 23–24 Oct 2026 (D-094 … D-109; grants Proposed, marker `PROPOSED-GRANTS-2026-10-23b`; migration `0016` applied on the owner computer)
+| ID | Requirement (short) | Status | Evidence / notes |
+|---|---|---|---|
+| MKT-MS-1 | Marketing calendar: item types, brief, owner, linked task; workflow idea → planned → in production → submitted → approved → scheduled → published, changes requested, cancelled (reason); no self-approval; publication needs a link or evidence text; drag or "Move to…" keeps the original planned time | Tested · employee rescheduling and cancelling approved items owner question (`MKT-NW-056`) | `integration/calendar.test.ts`, `calendar-screens.test.tsx`; `unit/calendar.test.ts` |
+| MKT-MS-2 | Ideas: review and plan into the calendar; a contributor cannot take over or change an approved idea | Tested | `integration/ideas-plan.test.ts` |
+| MKT-MS-3 | SEO / AIO / GEO work items with hand-typed observations; no analytics connected ("Not connected") | Tested · analytics needs credentials (`MKT-NW-057`) | `integration/optimisation.test.ts` |
+| MKT-MS-4 | Targets by employee, team and campaign with metric definitions; admission credit `marketing.targets.admission_attribution` (Proposed `lead_owner_at_confirmation`); own view keeps credit for reassigned leads with a redacted title | Tested · Proposed | `integration/targets.test.ts` |
+| MKT-MS-5 | Overview dashboard: every tile applies each filter or says "Not filtered by …"; drill-down links carry exactly the applied filters (D-107) | Tested | `integration/shell-overview.test.tsx`, `overview-today.test.tsx` |
+| MKT-MS-6 | Monthly report: frozen marketing facts (aggregates only) in the Ops monthly work report, to the reporting manager (D-109) | Tested · routing owner question (`MKT-NW-054`) | `integration/perf-screens.test.tsx`; `apps/business-ops-os/tests/integration/work-report-marketing.test.ts` |
+| MKT-MS-7 | Leads, lead stages, sales calls and follow-ups mounted from Business Ops; campaign page counts leads, demos and admissions whose enquiry campaign text equals the campaign code | Tested (Ops handlers; the Marketing mounts are checked by navigation only) | `unit/navigation.test.ts`; `apps/business-ops-os/tests/integration/lead-stages.test.ts`, `sales-calls.test.ts`, `lead-metrics.test.ts` |
+| MKT-MS-8 | Personal settings (notification preferences reduce only non-mandatory notices), HR Requests page, My Day | Tested · not browser-checked | `integration/shell-overview.test.tsx`; `unit/navigation.test.ts`, `screens.test.tsx`; `packages/notifications/tests/preferences.test.ts` |
+| MKT-MS-9 | Sample set: campaigns with members, six ideas, calendar items in every state, SEO/AIO/GEO items, targets; all `is_sample` | Tested | `integration/seeds-samples.test.ts` |

@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe } from 'vitest';
 import {
-  OPS_ATTACHMENT_PENDING_OWNER_KINDS,
+  OPS_ATTACHMENT_0016_OWNER_KINDS,
   OPS_HR_REQUEST_EVENT_KINDS,
   OPS_HR_REQUEST_RELATED_KINDS,
   OPS_HR_REQUEST_STATUSES,
@@ -312,9 +312,9 @@ describe('file versions and release (§19)', () => {
     () => ctx.pg,
     [
       vocab(
-        'owner kinds added in 0016 (OPS_ATTACHMENT_PENDING_OWNER_KINDS)',
+        'owner kinds added in 0016 (OPS_ATTACHMENT_0016_OWNER_KINDS)',
         'ops.attachments',
-        OPS_ATTACHMENT_PENDING_OWNER_KINDS,
+        OPS_ATTACHMENT_0016_OWNER_KINDS,
         'attachments_owner_kind_check',
         (v) => attachment({ owner_kind: v }),
       ),

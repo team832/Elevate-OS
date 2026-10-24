@@ -13,6 +13,7 @@
  * - catchup.ts              catch-up prioritisation
  * - intake.ts               enrolment intake decision
  * - plans.ts                curriculum plan status rules
+ * - timetable-builder.ts    draft timetable builder (greedy, every slot checked by checkTimetable)
  */
 export const MODULE = { key: 'academic', label: 'Academic OS', basePath: '/academic' } as const;
 
@@ -36,3 +37,4 @@ export * from './intake';
 export * from './responses-csv';
 export * from './settings';
 export * from './analysis';
+export * from './timetable-builder';

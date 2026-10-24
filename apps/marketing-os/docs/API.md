@@ -95,3 +95,56 @@ Permissions, requests, responses and errors are those in `apps/business-ops-os/d
 | PUT | `/content-items/:id/assignments` | `marketing:content:write` | `assignmentBody` | Only a marketing manager assigns people to content (others → 403) |
 
 Out-of-scope campaigns and content read as 404, never 403. Mounted from Business Operations (same handlers): `/marketing/api/v1/attendance`, `…/attendance/corrections`, `…/ai/report-draft`, `…/attachments`, `…/notifications`, `…/staff-tasks/{id}/checklist`. Pages: `/marketing/my-campaigns`, `/marketing/deliverables`, `/marketing/my-attendance`, `/marketing/my-reports`, `/marketing/notifications`.
+
+## Added on 23–24 Oct 2026 (milestone: content calendar, SEO/AIO/GEO, targets, monthly report, personal settings; grants Proposed)
+Paths are under `/marketing/api/v1` unless shown in full. Every new grant is marked `PROPOSED-GRANTS-2026-10-23b`. Nothing is Deployed.
+
+### Content calendar (Implemented, Tested: `tests/integration/calendar.test.ts`, `ideas-plan.test.ts`, `calendar-screens.test.tsx`, `tests/unit/calendar.test.ts`)
+Schemas: `src/server/calendar.ts`, `calendar-plan.ts`. Statuses: idea, planned, in_production, submitted, approved, scheduled, published, changes_requested, cancelled. Times are entered in IST.
+| Method | Path | Permission | Request | Response / errors |
+|---|---|---|---|---|
+| GET | `/calendar-items` | `marketing:calendar:read` | `?from&to` (ISO with offset; `[from, to)`), `owner`, `status`, `campaign` | items with owner, campaign and course names; every calendar reader sees every item (only writes are limited to own items) |
+| POST | `/calendar-items` | `marketing:calendar:write` (`Idempotency-Key` optional) | `{ title, itemType: social_post\|short_video\|article\|webinar\|seminar\|admission_campaign\|email_draft\|landing_page_update, programmeId?, audience?, channel?, campaignId?, ownerStaffId?, brief?, assetLinks[≤20]?, plannedAt? }` (strict) | 201; starts Planned with `plannedAt`, else Idea. 403 a marketing employee naming another owner or none; 400 owner not active Marketing & Growth staff, course or campaign gone |
+| GET | `/calendar-items/:id` | `marketing:calendar:read` | — | item; 404 |
+| PATCH | `/calendar-items/:id` | `marketing:calendar:write` | the fields above (partial, at least one) | item. 403 not an item you own or created (managers excepted); 409 after submission unless changes were requested |
+| POST | `/calendar-items/:id/:action` | the action's own permission: `plan`, `start`, `submit`, `cancel` → `marketing:calendar:write`; `approve`, `request-changes` → `marketing:content:approve`; `schedule` → `marketing:schedule:manage`; `publish` → `marketing:content:publish`; `move` → `marketing:schedule:manage` | `{ plannedAt?, note?, reason?, publishedAt?, url?, evidence? }` (strict) | item. 400: `plan` / `move` without a date, `request-changes` without a note, `publish` without a link or evidence or with a future time, `cancel` without a reason. 403 approving an item you own or created. 409 `INVALID_STATE_TRANSITION` (e.g. moving a published item). Publishing records what staff did; nothing is posted |
+| POST | `/calendar-items/:id/task` | `marketing:calendar:write` | — | 201 `{ taskId, created: true }` (an Ops task for the item's owner, created once); then 200 with the same id; 409 cancelled or published item |
+| POST | `/ideas/:id/plan` | `marketing:calendar:write` | `{ plannedAt?, itemType? (needed when the idea has no format), createTask? }` (strict) | 201 `{ item, created, taskId }`; 200 with the same item when the idea was already planned; 409 idea not approved |
+
+### SEO / AIO / GEO work (Implemented, Tested: `tests/integration/optimisation.test.ts`, `perf-screens.test.tsx`)
+Schemas: `src/server/optimisation.ts`. Observations are typed in by staff; no analytics tool is connected.
+| Method | Path | Permission | Request | Response / errors |
+|---|---|---|---|---|
+| GET | `/optimisation` | `marketing:optimisation:read` | `?category&state` | work items (all of Marketing reads them) |
+| GET | `/optimisation/categories` | `marketing:optimisation:read` | — | configured categories and their meanings |
+| POST | `/optimisation` | `marketing:optimisation:write` (`Idempotency-Key` optional) | `{ pageUrl, topic, targetQuery?, categoryKey, baselineObservation?, requiredChange?, ownerStaffId?, dueOn?, measurementSource?, observationOn?, checks[] }` (strict) | 201. 400 unknown category, owner not active Marketing & Growth staff; 403 a marketing employee giving work to someone else |
+| GET | `/optimisation/:id` | `marketing:optimisation:read` | — | item, checklist, evidence, review and observations; 404 |
+| PATCH | `/optimisation/:id` | `marketing:optimisation:write` | the fields above, `evidence?`, `done[]` (ticked checks); partial | item. 403 not your own (employees); 409 not a draft or an item sent back |
+| POST | `/optimisation/:id/submit` | `marketing:optimisation:write` | — | item; 400 no evidence; 409 not a draft or sent back |
+| POST | `/optimisation/:id/review` | `marketing:optimisation:review` | `{ decision: approved\|changes_requested, note? }` | item; 403 your own work; 400 changes without a note; 409 not submitted |
+| POST | `/optimisation/:id/observations` | `marketing:optimisation:write` (`Idempotency-Key` optional) | `{ platform, query, observedOn (not in the future), result, note? }` | 201; append-only |
+
+### Targets and the monthly report (Implemented, Tested: `tests/integration/targets.test.ts`, `perf-screens.test.tsx`; internal route also `apps/business-ops-os/tests/integration/work-report-marketing.test.ts`)
+| Method | Path | Permission | Request | Response / errors |
+|---|---|---|---|---|
+| GET | `/targets` | `marketing:targets:read` | `?from&to&scope=employee\|team\|campaign&staffId&campaignId` | targets with actual and remaining (own scope: yours) |
+| POST | `/targets` | `marketing:targets:manage` (`Idempotency-Key` optional) | `{ scope, staffId? (employee only), campaignId? (campaign only), periodStart, periodEnd, metricKey: qualified_leads\|follow_ups_completed\|demo_bookings\|verified_admissions\|approved_content\|published_content\|campaign_deliverables, targetValue (1–100000), note? }` | 201; 400 period order or scope/id mismatch; 409 same target and period exists |
+| GET | `/targets/:id` | `marketing:targets:read` | — | the records behind the actual and the remaining target; 404 |
+| PATCH | `/targets/:id` | `marketing:targets:manage` | `{ periodStart?, periodEnd?, targetValue?, note? }` | target; 409 duplicate period |
+| DELETE | `/targets/:id` | `marketing:targets:manage` | — | removed (audited with its last values) |
+| GET | `/reports/monthly` | `marketing:reports:read` | `?month=YYYY-MM&staffId` (defaults: this month, you) | `{ staffId, month, snapshot }` of live marketing facts; at own scope someone else's report → 404; 404 login not linked to a staff record. Writing and submitting the report is the Business Ops monthly work report (`ops.eod_reports`, period month) |
+| GET | `/marketing/api/internal/v1/reports/monthly` | internal, caller `ops` | `?staffId&month=YYYY-MM&cutoffAt?` | `MarketingMonthlySnapshotV1` (aggregates only), which Business Ops freezes into the monthly report version; 404 unknown staff or month |
+
+### Campaigns, personal settings (changed and added)
+| Method | Path | Permission | Request | Response / errors |
+|---|---|---|---|---|
+| PATCH | `/campaigns/:id` (new method) | `marketing:campaigns:write` | any of `{ name, objective, startsOn, endsOn, status, programmeId, audience, channels[] }` (strict, at least one) | campaign (audited). 400 start after end, unknown or retired course; 409 status change not allowed from the current status. Tested: `integration/shell-overview.test.tsx`, "campaign edit and status change (marketing:campaigns:write)" (401/403/400/404, transitions, channel dedupe, audit) |
+| GET | `/settings/personal` | `marketing:module:access` | — | your own settings `{ marketing: { dashboard, calendarView, workingHours, focusBlocks… }, notifications: { reminderIntervalHours, popUps } }` (defaults when none saved). Tested: `tests/integration/shell-overview.test.tsx` |
+| PUT | `/settings/personal` | `marketing:module:access` | the whole object above (strict; no user id is accepted) | the saved settings. Personal choices only reduce optional notices, never mandatory ones |
+
+### Mounted from Business Operations (same handlers and permissions as `apps/business-ops-os/docs/API.md`, "Routes added or changed on 23–24 Oct 2026")
+- **Leads:** `leads/calls` (GET, POST), `leads/:id/stage` (POST), `lead-stages` (GET, POST), `lead-stages/:key` (PATCH, DELETE) — from `leadsRoutes`. Stage settings need `ops:leads:assign` (marketing manager); employees work stages on their own leads.
+- **Requests through HR:** `hr-requests` (GET, POST), `hr-requests/:id` (GET, PATCH), `hr-requests/:id/:action` (POST) — from `workRoutes`.
+- **Notifications:** `GET /marketing/notifications/:id/open` (page route; `notificationOpen`).
+
+Pages: `/marketing/calendar` (+ `/new`, `/:id`), `/marketing/optimisation` (+ `/:id`), `/marketing/targets` (+ `/:id`), `/marketing/reports/monthly`, `/marketing/sales-calls`, `/marketing/leads/stages`, `/marketing/settings/personal`, `/marketing/hr-requests`.

@@ -6,8 +6,10 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { ErrorState } from '@elevate/shared-ui';
 import { addDays, istToday } from '../../domain';
+import { aiBlocked } from '../../server/ai-drafts';
 import { listTeacherReports } from '../../server/teacher-report';
 import { ActionForm } from '../../ui/action-form';
+import { AiDraft } from '../../ui/ai-draft';
 import { fmtDate, fmtDateTime } from '../../ui/format';
 import { load } from '../../ui/frame';
 import { RecordTable } from '../../ui/record-table';
@@ -20,7 +22,10 @@ export async function TeacherReports({
   user: AuthenticatedUser;
   staffId: string;
 }) {
-  const r = await load((db) => listTeacherReports(db, user, staffId));
+  const r = await load(async (db) => ({
+    list: await listTeacherReports(db, user, staffId),
+    ai: await aiBlocked(db, user, 'reportDraft'),
+  }));
   const today = istToday(new Date());
   return (
     <Segment
@@ -29,35 +34,50 @@ export async function TeacherReports({
       description="An internal folio for BDM meetings and analysis: profile, class delivery, reviews written, moderated feedback counts, tasks and EOD reports for a period. Built once from the records and stored; missing data is shown in words, never as zero. No contact details."
     >
       <div className="el-stack">
-        <ActionForm
-          action={`/ops/api/v1/teachers/${staffId}/report`}
-          submitLabel="Generate teacher report"
-          successText="Report generated. Download it from the list below."
-          fields={[
-            {
-              name: 'from',
-              label: 'From',
-              type: 'date',
-              required: true,
-              defaultValue: addDays(today, -29),
-              section: 'Reporting period',
-            },
-            {
-              name: 'to',
-              label: 'To',
-              type: 'date',
-              required: true,
-              defaultValue: today,
-              section: 'Reporting period',
-            },
-          ]}
-        />
+        <AiDraft
+          api="/ops/api/v1/ai/teacher-report"
+          body={{ staffId }}
+          fields={['from', 'to']}
+          blocked={r.ok ? r.data.ai : null}
+          buttonLabel="Draft the comment with AI"
+        >
+          <ActionForm
+            action={`/ops/api/v1/teachers/${staffId}/report`}
+            submitLabel="Generate teacher report"
+            successText="Report generated. Download it from the list below."
+            fields={[
+              {
+                name: 'from',
+                label: 'From',
+                type: 'date',
+                required: true,
+                defaultValue: addDays(today, -29),
+                section: 'Reporting period',
+              },
+              {
+                name: 'to',
+                label: 'To',
+                type: 'date',
+                required: true,
+                defaultValue: today,
+                section: 'Reporting period',
+              },
+              {
+                name: 'comment',
+                label: 'Overall comment (optional)',
+                type: 'textarea',
+                hint: 'Printed on the report as written. An AI draft uses only the counts for this period, without names; check and edit it before generating.',
+                section: 'Comment',
+              },
+            ]}
+          />
+        </AiDraft>
         {!r.ok ? (
           <ErrorState title="Stored reports could not be loaded" />
         ) : (
           <RecordTable
             caption="Stored reports"
-            rows={r.data}
+            rows={r.data.list}
             rowKey={(x) => x.id}
             empty="No report generated yet."
             columns={[

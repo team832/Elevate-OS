@@ -289,8 +289,17 @@ describe('A-TSK-5 task lifecycle', () => {
     expect(decide('reopen', t, as(...roles), 'Needed after all').ok).toBe(ok);
   });
 
-  it('collaborators may comment and nothing else (M1)', () => {
-    expect(allowedActions(task('in_progress'), as('collaborator'))).toEqual(['comment']);
+  it.each<[string, 'hr_and_reviewer_only' | 'allowed' | undefined, string[]]>([
+    ['hr_and_reviewer_only (owner, 23 Oct 2026): read only', 'hr_and_reviewer_only', []],
+    ['unset: the same as hr_and_reviewer_only', undefined, []],
+    ['allowed: comment and nothing else (M1)', 'allowed', ['comment']],
+  ])('tasks.peer_discussion %s', (_n, peerDiscussion, actions) => {
+    expect(allowedActions(task('in_progress'), { ...as('collaborator'), peerDiscussion })).toEqual(
+      actions,
+    );
+    expect(allowedActions(task('in_review'), { ...as('reviewer'), peerDiscussion })).toContain(
+      'comment',
+    );
   });
 });
 

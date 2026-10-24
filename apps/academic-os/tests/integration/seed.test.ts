@@ -1,7 +1,8 @@
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { hashPassword } from '@elevate/authentication';
 import {
+  academicBatchPlacements,
   academicAttempts,
   academicBatches,
   academicAttendance,
@@ -20,6 +21,7 @@ import {
 import { coreSeeds, runSeeds } from '@elevate/database/seed';
 import { createTestUser, setupTestDatabase } from '@elevate/testing';
 import { seeds } from '../../seed';
+import { SAMPLE_BATCHES } from '../../seed/samples';
 import { readSyllabus } from '../../seed/syllabus';
 import { getBatchFeasibility } from '../../src/server';
 import { opsSeedStubs } from './sample-seed-stubs';
@@ -95,9 +97,10 @@ describe('Academic OS seeds (legacy planning data, fictional people)', () => {
     await seedAll(ctx.db);
     expect(await counts(ctx.db)).toEqual(first);
     expect(first.settings).toBe(0); // defaults stay proposed; no settings rows seeded
-    expect(first.batches).toBe(5); // 2 planning batches + 3 sample batches
-    expect(first.students).toBe(6);
-    expect(first.enrolments).toBe(6);
+    const sampleStudents = SAMPLE_BATCHES.flatMap((b) => b.students).length;
+    expect(first.batches).toBe(2 + SAMPLE_BATCHES.length); // 2 planning batches + the sample batches
+    expect(first.students).toBe(sampleStudents);
+    expect(first.enrolments).toBe(sampleStudents);
   });
 
   it('IPMAT locked baseline: 253 teaching classes, 316.25 h', async () => {
@@ -189,7 +192,16 @@ describe('Academic OS seeds (legacy planning data, fictional people)', () => {
         .filter((b) => b.isSample)
         .map((b) => b.code)
         .sort(),
-    ).toEqual(['SAMPLE-CAF', 'SAMPLE-IPMAT-A', 'SAMPLE-IPMAT-B']);
+    ).toEqual(SAMPLE_BATCHES.map((b) => b.code).sort());
+    // About 36 sample students across IPMAT, CLAT, CA and school maths (brief 23 Oct 2026 §25),
+    // each with an active enrolment placed in its batch.
+    expect(students).toHaveLength(SAMPLE_BATCHES.flatMap((b) => b.students).length);
+    expect(
+      await ctx.db.$count(
+        academicBatchPlacements,
+        and(eq(academicBatchPlacements.isSample, true), isNull(academicBatchPlacements.endDate)),
+      ),
+    ).toBe(students.length);
     expect(
       batches
         .filter((b) => !b.isSample)

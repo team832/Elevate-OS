@@ -16,5 +16,9 @@ export const sharedTest = {
     DATABASE_URL: 'pglite://memory',
     SESSION_SECRET: 'test-only-session-secret-for-vitest-runs-0001',
     INTERNAL_SERVICE_TOKEN: 'test-only-internal-token-for-vitest-runs-0001',
+    // A test never reaches a real AI provider: tests that need one stub a fake address.
+    GROQ_API_KEY: '',
+    GEMINI_API_KEY: '',
+    OPENROUTER_API_KEY: '',
   },
 };

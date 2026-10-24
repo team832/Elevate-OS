@@ -701,5 +701,63 @@ _Owner brief of 23 Oct 2026 (HR for teachers and marketing staff in Business Ope
 - The sample teacher `teacher@example.test` is also primary Quant on the real batch `IPMAT-C12-APR27` beside Satish; run `npm run db:clear-samples` before real use.
 - `apps/business-ops-os/src/server/organisation.ts` still says in its header comment that biometrics and leave are out of scope (D-015, OD-026); the code below it no longer matches that sentence.
 
+## Milestone 23–24 Oct 2026 — tests, requests through HR, marketing workflows, fee chart (D-094 … D-109)
+_Owner brief of 23 Oct 2026 and the owner's answers 1–6 of the same day. Every new grant is **Proposed** (code marker `PROPOSED-GRANTS-2026-10-23b`). Database: migration `0016_milestone_hr_marketing_tests` is **applied** on the owner's computer (with `0015`; `db:check` 19/19) and frozen; the next is `0017`. Status per D-013; **nothing is Deployed**. Each area was built by one agent, reviewed by a fresh reviewer agent and accepted after fix rounds; per-area test counts were the agents' scoped runs; whole-suite totals are pasted by the coordinator below._
+
+| # | Area | Status | Evidence (test files) |
+|---|---|---|---|
+| MS-01 | Schema `0016`: requests through HR, `ops.task_reminders`, lead stages and history, call fields, score imports, Marketing calendar / ideas fields / SEO-AIO-GEO items and observations / targets and metric definitions / monthly report / personal settings / `is_sample`, Academic assessment admin (D-100) | Tested · applied | `packages/database/tests/constraints/ops-0016.test.ts`, `marketing-0016.test.ts`, `academic-0016.test.ts`, `migrations.test.ts` |
+| MS-02 | Academic internal write routes for tests (`defineInternalWriteRoute` / `sendInternal`, caller `ops`, acting-user header) and the assessment contracts (D-094) | Tested | `packages/server-kit/tests/internal.test.ts`; `packages/shared-contracts/tests/academic-assessments.test.ts`; `apps/academic-os/tests/integration/assessment-ops.test.ts` |
+| MS-03 | Tests and Mock Tests in Business Operations: schedule, edit, cancel, roster (lookup-only add), paper and answer-key versions with release (`assessments.paper_release` Proposed), publish and withdraw (D-094) | Tested · grants Proposed | `apps/business-ops-os/tests/integration/tests-ops.test.ts`, `tests-ops-r1.test.ts`; `tests/unit/tests-ops-screens.test.tsx` |
+| MS-04 | Score import: CSV, or PDF read by AI with a per-read tick; match order, ambiguity, per-section bounds, blank ≠ 0, no implied attendance, same file refused, per-row confirmation (D-095, D-099, D-102; algorithm A-SCI-1) | Tested (AI with a faked adapter; no live OpenAI call) | `apps/business-ops-os/tests/unit/score-import.test.ts`, `ai-assist.test.ts`; `tests/integration/tests-ops.test.ts` |
+| MS-05 | Ranks (competition 1, 2, 2, 4 over present + verified), publication versions, auto-withdraw on an incomplete correction, `assessments.provisional_publication` (D-103; algorithm A23) | Tested · rank display Proposed | `apps/academic-os/tests/integration/assessment-ops.test.ts`, `marks-publication.test.ts`, `assessments.test.ts`; `tests/unit/assessment-bounds.test.ts`, `assessment-schedule.test.ts` |
+| MS-06 | Teacher scope for marks (`markBatchesInScope` / `markStudentIds`), student payload allow-list, My Day and teacher home, reviews (D-104) | Tested | `apps/academic-os/tests/integration/teacher-scope.test.ts`, `teacher-privacy.test.ts`, `students-progress.test.ts`, `work-mount.test.tsx`; `tests/unit/screens.test.tsx`; `apps/business-ops-os/tests/unit/teacher-record.test.tsx` |
+| MS-07 | Requests through HR in all three workspaces; HR queue; Schar recipient setting; viewer-shaped responses; forward scope (D-096, D-106) | Tested · grants and categories Proposed | `apps/business-ops-os/tests/unit/hr-requests.test.ts`; `tests/integration/hr-requests.test.ts`, `hr-requests-screens.test.tsx`; `apps/academic-os/tests/unit/screens.test.tsx` (nav) |
+| MS-08 | Task discussion HR and reviewer only (`tasks.peer_discussion` approved) (D-098) | Tested | `apps/business-ops-os/tests/unit/task-lifecycle.test.ts`; `tests/integration/hr-tasks-guards.test.ts` |
+| MS-09 | Lead stages (12 system stages, settings page, reasons), stage history and credit, Converted only with a confirmed admission, sales calls, merge review, funnel (D-105; algorithm A-LST-1) | Tested · conversion set Proposed | `apps/business-ops-os/tests/unit/lead-stages.test.ts`; `tests/integration/lead-stages.test.ts`, `lead-metrics.test.ts`, `sales-calls.test.ts`, `lead-screens.test.tsx`, `leads.test.ts` |
+| MS-10 | Marketing calendar (types, brief, owner, linked task, drag to move, approve ≠ own, manual publish with evidence), ideas plan (D-107 for filters) | Tested | `apps/marketing-os/tests/unit/calendar.test.ts`; `tests/integration/calendar.test.ts`, `calendar-screens.test.tsx`, `ideas-plan.test.ts` |
+| MS-11 | SEO / AIO / GEO work items and observations; targets and metric definitions; monthly marketing report (frozen aggregates in `ops.eod_reports`, month) (D-109) | Tested · routing Proposed | `apps/marketing-os/tests/integration/optimisation.test.ts`, `targets.test.ts`, `perf-screens.test.tsx`; `apps/business-ops-os/tests/integration/work-report-marketing.test.ts` |
+| MS-12 | Marketing shell: Overview filters with "Not filtered by …", nav (sales calls, requests, targets, reports), personal settings, team deliverables (D-107) | Tested | `apps/marketing-os/tests/integration/shell-overview.test.tsx`, `overview-today.test.tsx`, `routes.test.ts`; `tests/unit/navigation.test.ts`, `screens.test.tsx`. `PATCH /marketing/api/v1/campaigns/:id` is tested in `shell-overview.test.tsx`, "campaign edit and status change (marketing:campaigns:write)" |
+| MS-13 | Task reminders job (`tasks.reminders` Proposed, dedupe), due-work panel, pop-up notices without polling, permission-checked notification open (D-108; algorithm A-TSK-9) | Tested · no scheduler | `apps/business-ops-os/tests/unit/task-notices.test.ts`; `tests/integration/task-reminders.test.tsx`, `notifications.test.tsx`; `packages/notifications/tests/preferences.test.ts`; `packages/shared-ui/tests/notify.test.tsx` |
+| MS-14 | Annual tuition chart and drill-down from one function (D-101; algorithm A-FEE-9) | Tested · owner items Proposed | `apps/business-ops-os/tests/unit/fee-year.test.ts`, `fee-year-screen.test.tsx`; `tests/integration/fee-year.test.ts` |
+| MS-15 | Demo data (sample students, leads, marketing team, tests with tie/absence/pending import, fee cases, tasks in every state) and ten demo sign-ins; "Business administrator (demo)" (D-097) | Tested | `packages/database/tests/demo-accounts.test.ts`; `apps/platform/tests/integration/demo-landing.test.ts`, `seeds-reconciliation.test.ts`; `apps/business-ops-os/tests/integration/seeds.test.ts`, `seeds-marketing-team.test.ts`, `hr-seeds.test.ts`; `apps/marketing-os/tests/integration/seeds-samples.test.ts`; `apps/academic-os/tests/integration/seed.test.ts`, `sample-teaching-seed.test.ts` |
+
+### Docs updated (docs agent, 24 Oct 2026)
+`docs/DECISIONS.md` (D-094 … D-109; D-084 heading marked), `README.md` (status, demo sign-ins, decision range), `HANDOFF.md` (status report, step 7 done, step 9, milestone section with walkthrough, 20 new owner questions), this section, `apps/*/docs/API.md`, `apps/*/docs/ALGORITHMS.md` (A-FEE-9, A-SCI-1, A-LST-1, A-TSK-9; Academic A23; Marketing §12), module READMEs and REQUIREMENTS, the not-working register; regenerated `docs/SECURITY_AND_PERMISSIONS.md`, `apps/business-ops-os/docs/DATA_DICTIONARY.md`, `docs/code-map.html`.
+
+### Commands run and results (docs agent, 24 Oct 2026)
+| Command | Result |
+|---|---|
+| `npm run docs:permissions` | "matrix written to docs/SECURITY_AND_PERMISSIONS.md" |
+| `npm run docs:permissions -- --check` | "matrix is up to date." |
+| `npm run docs:data-dictionary` | "wrote apps\business-ops-os\docs\DATA_DICTIONARY.md (158 tables in schema)." |
+| `npm run docs:data-dictionary -- --check` | "up to date." |
+| `npm run docs:code-map` | "wrote docs/code-map.html: 2255 files, 158 tables, 441 foreign keys, 257 test files." (read-only scan of the working tree) |
+| `node build.mjs` (Elevate-Not-Working) | "Not-Working.html + README.md built: 200 items (owner_decision 71, needs_credentials 6, not_built 92, prototype_limitation 31) from 4 file(s)." (was 174; 27 added, MKT-NW-053 closed) |
+| `npm run validate`, `npm run build` per app, browser pass | **coordinator to paste** |
+
+### Known limitations
+- No scheduler: task reminders and follow-up reminders run only when triggered (`ops:jobs:run`, operations manager only).
+- Requests through HR refuse campaign and test links (Ops cannot verify them); HR's create-task from a request cannot carry a batch link.
+- Between uploading a new paper or key version and releasing it, readers see no version.
+- Shortcuts: the sales-calls list returns the newest 500 calls for any filter (`server/lead-calls.ts`, no `shortcut:` comment yet); the Tests page lists the newest 200 pending imports.
+- The database check `notifications_link_relative` does not refuse control characters (the code does) → migration `0017`.
+- Sample leads never reach Converted (sample admissions need legacy verification); external analytics not connected; no outbound email, calls or publishing; the prototype does not show this milestone.
+
 ## Integration (wave 3)
 _Owned by the Integration agent._ Pending: baseline migration, cross-module tests (enrolment handoff end to end), consumer scheduler, docs reconciliation (`npm run docs:permissions`). The platform placeholder dashboard was removed on 22 Oct (D-077); a consolidated platform dashboard from the summary contracts is no longer planned unless the owner asks (D-076 item 5 proposes deleting the platform overview).
+
+### Milestone 23–24 Oct 2026 — final checks (coordinator, 24 Oct 2026)
+`npm run validate`: typecheck PASS (all workspaces + scripts); lint PASS (0 warnings); tests `4074 passed / 4075` across 258 files — the 1 failure was `apps/business-ops-os/tests/integration/applications.test.ts` timing out at 30 s under full-suite load, and the file passes 30/30 on its own; `npm run secret-scan` OK (1,775 files). `npm run build -w @elevate/<app> -- --webpack`: exit 0 for platform, marketing-os, academic-os, business-ops-os. Migration 0016 applied by the owner on 23 Oct (`db:check` 19/19). Browser pass: **not done** (skipped at the owner's request). Status: **Implemented and Tested (automated) — not Deployed; not browser-checked.**
+
+## Free AI providers, office Wi-Fi, draft timetable, AI help for reports (24 Oct 2026, D-110, D-111)
+| ID | What | Status | Evidence |
+|---|---|---|---|
+| D-110 | AI adapter Groq → Gemini → OpenRouter with fallback, PDFs skip Groq; OpenAI removed; `ai.features` Approved | Tested (faked) · live 24 Oct: Groq 0.8 s and OpenRouter 5.8 s answered, Gemini key refused by Google | `apps/business-ops-os/tests/unit/ai-assist.test.ts`, `tests/integration/ai-drafts.test.ts`, `tests-ops*.test.ts` |
+| D-110 | Key protection: secret scan detects `gsk_`, `AQ.`, `sk-or-` keys; local pre-commit hook; tests blank real keys | Tested | probe with 3 fake keys → 3 found; clean scan 1,788 files |
+| D-110 | Office Wi-Fi mode `npm run office:build` / `npm run office`; cookie not Secure on plain-http production | Tested | `packages/authentication/tests/sessions.test.ts`; live: 8 demo accounts signed in at once on `http://192.168.1.5`, 120 page loads all 200 (median 207 ms, slowest 1.5 s), cross-site login 403, AI task brief 200 in 2.9 s |
+| D-111 | Shared adapter `@elevate/server-kit/ai` | Tested | same AI suites |
+| ACD-029 | Build draft timetable (rules build, AI explains; drafts only) | Tested | `apps/academic-os/tests/unit/timetable-builder.test.ts` (16), `tests/integration/timetable-build.test.ts` (4), screen tests (2) |
+| OPS-183 … 187 | AI Overall comment on progress (`progress-report/3`) and teacher (`teacher-report/2`) reports; monthly marketing draft gets marketing facts; AI student summary; admission documents deliberately not built | Tested | `apps/business-ops-os/tests/integration/ai-report-drafts.test.ts` (17), `progress-report-pdf.test.ts`, `teacher-report.test.ts` |
+
+Checks (coordinator, 24 Oct 2026): `npm run validate` → exit 0: typecheck all workspaces, lint 0 warnings, `Test Files 261 passed (261)`, `Tests 4121 passed (4121)`, secret scan OK (1,788 files). `npm run office:build` (webpack builds of all four apps) → exit 0, 4 × "Compiled successfully". No schema change. Browser pass of the new screens: **not done**. Status: **Implemented and Tested — not Deployed**.

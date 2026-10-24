@@ -9,10 +9,12 @@ import {
   REPORT_SECTIONS,
   reportKinds,
 } from '../../../../domain/student-report';
+import { aiBlocked } from '../../../../server/ai-drafts';
 import { loadSettings } from '../../../../server/settings';
 import { getStudentReport, reportsOf } from '../../../../server/student-report';
 import { getStudent } from '../../../../server/students';
 import { ActionForm, type FieldSpec } from '../../../../ui/action-form';
+import { AiDraft } from '../../../../ui/ai-draft';
 import { fmtDate, fmtDateTime, humanise } from '../../../../ui/format';
 import { Frame, gate, load, Section } from '../../../../ui/frame';
 import { RecordTable } from '../../../../ui/record-table';
@@ -79,6 +81,7 @@ async function Generate({ user, id }: { user: AuthenticatedUser; id: string }) {
       student,
       audiences: (await loadSettings(db))['reports.audiences'],
       reports: student.identity ? await reportsOf(db, student.identity.id) : [],
+      ai: await aiBlocked(db, user, 'reportDraft'),
     };
   });
   if (!r.ok) return r.view;
@@ -124,6 +127,13 @@ async function Generate({ user, id }: { user: AuthenticatedUser; id: string }) {
       defaultValue: s === 'fees' ? 'false' : 'true',
       section: 'Sections (only those the kind and your role allow are kept)',
     })),
+    {
+      name: 'comment',
+      label: 'Overall comment (optional)',
+      type: 'textarea',
+      hint: 'Printed on the report as written and checked by the reviewer. An AI draft uses only the summary facts for this kind and period, without names; check and edit it before generating.',
+      section: 'Comment',
+    },
   ];
   return (
     <>
@@ -142,12 +152,20 @@ async function Generate({ user, id }: { user: AuthenticatedUser; id: string }) {
           </p>
         </details>
         <Segment title="Make a report">
-          <ActionForm
-            action={`/ops/api/v1/students/${id}/report`}
-            submitLabel="Generate report"
-            redirectTo={`/students/${id}/report?export={id}`}
-            fields={fields}
-          />
+          <AiDraft
+            api="/ops/api/v1/ai/student-report"
+            body={{ studentId: id }}
+            fields={['audience', 'from', 'to']}
+            blocked={r.data.ai}
+            buttonLabel="Draft the comment with AI"
+          >
+            <ActionForm
+              action={`/ops/api/v1/students/${id}/report`}
+              submitLabel="Generate report"
+              redirectTo={`/students/${id}/report?export={id}`}
+              fields={fields}
+            />
+          </AiDraft>
         </Segment>
         <Segment title="Generated reports" flush>
           <ReportList rows={r.data.reports} studentId={id} />
@@ -416,6 +434,11 @@ function Snapshot({ s }: { s: NonNullable<Awaited<ReturnType<typeof getStudentRe
               { label: h.nextSteps, value: bullets(s.summary.nextSteps) },
             ]}
           />
+        </Segment>
+      ) : null}
+      {s.comment ? (
+        <Segment title="Overall comment">
+          <p>{s.comment}</p>
         </Segment>
       ) : null}
       {s.history ? (

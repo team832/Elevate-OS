@@ -3,7 +3,7 @@
  * brief 2 §14, D-036). Display names "Sample <name>", sign-in `<first>.<last>@example.test` with
  * SEED_USER_PASSWORD (the core seed users' local mechanism; production refuses @example.test,
  * D-030). No phone or ID numbers. Subjects are fixture associations, not qualifications.
- * DEMO-T12 has no manager on purpose (the "missing manager mapping" case). The seven real
+ * DEMO-T12 has no manager on purpose (the "missing manager mapping" case). The eight owner-supplied real
  * teachers (./teachers.ts) are never used. The manager holds `academic_coordinator`: it can
  * review the EODs submitted to it (manager chain, R3) and coordinates the sample batches.
  */

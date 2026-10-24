@@ -9,6 +9,7 @@ import type { z } from 'zod';
 import type { DecisionState, PolicyDefinition } from './policies-base';
 import { DECISION_STATES } from './policies-base';
 import { ADMISSION_SETTING_DEFINITIONS, admissionSettingSchemas } from './policies-admission';
+import { ASSESSMENT_SETTING_DEFINITIONS, assessmentSettingSchemas } from './policies-assessments';
 import { HR_SETTING_DEFINITIONS, hrSettingSchemas } from './policies-hr';
 import { PIPELINE_SETTING_DEFINITIONS, pipelineSettingSchemas } from './policies-pipeline';
 
@@ -26,6 +27,7 @@ export const settingSchemas = {
   ...pipelineSettingSchemas,
   ...admissionSettingSchemas,
   ...hrSettingSchemas,
+  ...assessmentSettingSchemas,
 };
 
 export type SettingKey = keyof typeof settingSchemas;
@@ -38,6 +40,7 @@ export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = 
   ...PIPELINE_SETTING_DEFINITIONS,
   ...ADMISSION_SETTING_DEFINITIONS,
   ...HR_SETTING_DEFINITIONS,
+  ...ASSESSMENT_SETTING_DEFINITIONS,
 };
 export const SETTING_KEYS = Object.keys(SETTING_DEFINITIONS) as SettingKey[];
 
