@@ -34,7 +34,7 @@ export default async function CampaignsPage({ searchParams }: { searchParams: Se
                 <details className="el-explain">
                   <summary>How these results are counted</summary>
                   Placements assigned to the campaign. Published counts only posts with a live link
-                  (sandbox and legacy-tracker posts are not counted). Views add up the latest
+                  (test runs and old-tracker posts are not counted). Views add up the latest
                   imported CSV numbers of each campaign post; a post without numbers is missing, not
                   zero. Leads, demos and admissions by campaign are not shown yet.
                 </details>

@@ -19,18 +19,26 @@
 .el-grid.ops-kpis {
   display: grid;
   gap: var(--el-space-3);
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  /* Two a row on phones, so the list is not a screen and a half down. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
   padding: 0;
   list-style: none;
+}
+@media (min-width: 720px) {
+  .el-grid.ops-kpis {
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  }
 }
 .ops-kpis > li {
   display: grid;
   min-width: 0;
 }
 /* Dense rows (dashboards) pack more tiles into a row: 9.5rem each at least. */
-.el-grid.ops-kpis-dense {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+@media (min-width: 720px) {
+  .el-grid.ops-kpis-dense {
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  }
 }
 /* Figures inside a panel sit in wells, so a card never holds raised cards. */
 .el-card :is(.ops-kpis .el-stat:not([aria-current='true']), .el-metric) {
@@ -107,19 +115,14 @@
   box-shadow: none;
 }
 
-/* Record tables (RecordTable): sticky header, an empty-state row, whole-row click-through. */
-.ops-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
+/* Record tables (RecordTable): an empty-state row, whole-row click-through. */
 /* Beats the shared compact last-row padding. */
 .el-table.ops-table .ops-table-empty {
   padding: var(--el-space-5) var(--el-space-4);
   color: var(--el-text-muted);
 }
 .ops-table-empty .el-state {
-  padding: var(--el-space-2) 0;
+  --el-state-pad: 0rem; /* calc() needs the unit */
   background: none;
   box-shadow: none;
 }
@@ -157,23 +160,17 @@
   }
 }
 @media (min-width: 720px) {
-  .ops-table {
-    min-width: calc(var(--ops-cols, 4) * 6rem);
-  }
   /* Keep the regular row height on wide screens (compact only changes phones). */
   .el-table-compact.ops-table :is(th, td):not(.ops-table-empty) {
     padding: 0.625rem var(--el-space-3);
-  }
-  /* Only lists longer than a page get a well; it scrolls, so the header sticks inside it. */
-  .ops-table-well {
-    max-height: min(70dvh, 52rem);
-    overflow: auto;
   }
 }
 
 /* Detail table (DetailTable): label | value rows in a rounded well; labels on the raised tint. */
 .ops-detail {
   width: 100%;
+  /* A value that will not shrink wraps inside its cell instead of widening the page. */
+  table-layout: fixed;
   overflow: hidden;
   border: 1px solid var(--el-border);
   border-spacing: 0;
@@ -208,6 +205,46 @@
   padding-left: 1.1rem;
 }
 
+/* Phone: a value holding a label/value table takes the whole card width under its label. */
+@media (max-width: 719.98px) {
+  .el-table-compact td:has(.ops-detail) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .el-table-compact td:has(.ops-detail) > * {
+    justify-self: stretch;
+  }
+}
+
+/* Printing a student report: the paper, without the screens around it. */
+@media print {
+  body:has(.ops-report-print)
+    :is(.el-sidebar, .el-topbar, .el-skip-link, .ops-no-print, details) {
+    display: none !important;
+  }
+  body:has(.ops-report-print) :is(.el-shell-body, .el-main) {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body:has(.ops-report-print),
+  body:has(.ops-report-print) :is(.el-main, .el-main *) {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+  body:has(.ops-report-print) :is(.el-card, .el-table-wrap, .ops-detail, .el-badge) {
+    border: 1px solid #777 !important;
+  }
+  body:has(.ops-report-print) :is(.el-table th, .el-table td, .ops-detail th, .ops-detail td) {
+    border: 1px solid #777 !important;
+  }
+  body:has(.ops-report-print) :is(.el-card, tr) {
+    break-inside: avoid;
+  }
+  body:has(.ops-report-print) a {
+    text-decoration: none !important;
+  }
+}
+
 /* Record pop-up (RecordModal): the shared dialog (.el-dialog sheet/panel, backdrop, header with
  * the grab handle) plus a wider record panel, a scrolling body and a sticky form footer. */
 .ops-modal {
@@ -221,6 +258,25 @@
 }
 html:has(.ops-modal[open]) {
   overflow: hidden;
+}
+/* Server-rendered open, so it paints with the page; RecordModal makes it the real modal once
+ * hydrated. Until then: the same place and the same backdrop, so the swap does not show. */
+.ops-modal[open]:not(:modal) {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+html:has(.ops-modal[open]:not(:modal))::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+  background: var(--el-backdrop);
+  -webkit-backdrop-filter: var(--el-backdrop-blur);
+  backdrop-filter: var(--el-backdrop-blur);
+}
+.ops-modal[open]:modal {
+  animation: none;
 }
 .ops-modal-head {
   flex: none;
@@ -259,6 +315,17 @@ html:has(.ops-modal[open]) {
 .ops-modal-tabs.el-tablist {
   flex-basis: 100%;
   margin-top: var(--el-space-1);
+}
+/* Phone sheet: one sliding row, or eleven tabs would take a third of the screen from the record. */
+@media (max-width: 719.98px) {
+  .ops-modal-tabs.el-tablist {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .ops-modal-tabs .el-tab[aria-selected='true'] {
+    scroll-initial-target: nearest;
+  }
 }
 .ops-modal-body {
   flex: 1 1 auto;
@@ -444,6 +511,11 @@ html:has(.ops-modal[open]) {
 
 /* Dashboard and report layout: panels two-up from ~800px of content, one column on phones;
  * a panel holding a table spans the row. Quick periods are the shared Subnav pills. */
+/* The overview is tall and arrives last: holding a screen for it stops "Your work today" being
+ * painted and then pushed off the page. */
+.ops-overview-slot:has(> [data-state='loading']) {
+  min-height: 100dvh;
+}
 .ops-panels {
   display: grid;
   gap: var(--el-space-4);

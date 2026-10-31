@@ -42,6 +42,7 @@ describe('POST timetable/build (ACD-029)', () => {
     expect((await build(u.teacher, body(w, [[w.quant, 2]]))).status).toBe(403);
     expect((await build(u.coordinator, { ...body(w, [[w.quant, 2]]), dayEnd: '08:00' })).status).toBe(400);
     expect((await build(u.coordinator, body(w, []))).status).toBe(400);
+    expect((await build(u.coordinator, { ...body(w, [[w.quant, 2]]), from: 'x', to: 'y' })).status).toBe(400); // API-002: was 500
     expect((await build(u.coordinator, body(w, [[other.quant, 2]]))).status).toBe(400);
   });
 

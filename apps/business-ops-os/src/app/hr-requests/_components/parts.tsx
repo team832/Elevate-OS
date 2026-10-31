@@ -2,6 +2,7 @@
  * Pieces shared by the staff side (`<base>/hr-requests`) and the HR queue (`/ops/hr/requests`):
  * status and urgency badges, the routing log as a timeline, and the facts of a request.
  */
+import type { Principal } from '@elevate/authorization';
 import { StatusBadge } from '@elevate/shared-ui';
 import {
   HR_REQUEST_STATUS_LABELS,
@@ -12,6 +13,7 @@ import {
 } from '../../../domain/hr-requests';
 import { istWhen } from '../../../domain/staff-tasks';
 import type { HrRequestView } from '../../../server/hr-requests-read';
+import { OpenLink } from '../../../ui/open-link';
 import { DetailTable, Timeline } from '../../../ui/sections';
 
 type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
@@ -82,9 +84,11 @@ export function RequestTimeline({ view }: { view: HrRequestView }) {
 
 /** The request's facts for its sender and for HR (never shown to a recipient). */
 export function RequestFacts({
+  user,
   view,
   base,
 }: {
+  user: Principal;
   view: HrRequestView;
   /** Workspace basePath, for links to a linked task. */
   base: string;
@@ -95,7 +99,13 @@ export function RequestFacts({
     r.relatedKind === 'none' ? null : r.relatedKind === 'task' ? (
       <a href={`${base}/tasks/${r.relatedId}`}>Open the task</a>
     ) : r.relatedKind === 'student' && view.as === 'hr' ? (
-      <a href={`/ops/students?open=${r.relatedId}`}>Open the student</a>
+      <OpenLink
+        user={user}
+        href={`/ops/students?open=${r.relatedId}`}
+        fallback="Student (your role does not open student records)"
+      >
+        Open the student
+      </OpenLink>
     ) : (
       `${r.relatedKind.charAt(0).toUpperCase()}${r.relatedKind.slice(1)} (in its own workspace)`
     );

@@ -28,9 +28,16 @@ import {
 export const ACADEMIC_CONSUMERS = {
   /** Consumes `ops.admission.enrolment_requested` v1 and replies confirmed/rejected. */
   enrolmentIntake: 'academic.enrolment-intake',
-  /** Consumes `ops.enrolment.closed` v1 and ends the enrolment (IR-OPS-EXIT-1). */
+  /** Consumes `ops.enrolment.closed` v1 (ends the enrolment, IR-OPS-EXIT-1) and `ops.student.renamed` v1. */
   enrolmentExit: 'academic.enrolment-exit',
 } as const;
+
+/** Reply of POST /academic/api/internal/v1/enrolment-exits/run (Business Ops runs the exit consumer). */
+export const academicEnrolmentExitRunV1Schema = z.strictObject({
+  processed: z.int().min(0),
+  failed: z.int().min(0),
+  skipped: z.int().min(0),
+});
 
 /**
  * `academic.assessment.finalised` v1 — published in the same transaction that
@@ -451,6 +458,8 @@ export const publishResultsBody = z
     cohortBatchIds: z.array(batchIdSchema).min(1).optional(),
     provisional: z.boolean(),
     note: z.string().trim().max(500).optional(),
+    /** Optional, additive: finalise first, in the same transaction, so a refusal leaves the test untouched. */
+    finalise: z.boolean().optional(),
   })
   .refine((b) => (b.rankingScope === 'cohort') === (b.cohortBatchIds !== undefined), {
     error: 'Choose the cohort batches exactly when ranking a cohort.',

@@ -18,6 +18,7 @@ import {
 } from '@elevate/database';
 import { istToday } from '../domain';
 import { acceptedVersions, feeYearRow, feeYearTotals } from '../domain/fee-year';
+import { feeLedgerHref } from '../domain/student-lifecycle';
 import { ownAdmissionFilter } from './admissions';
 import { accessScope, type Actor } from './context';
 import { plansWithLedger, type FeePlanRow } from './fee-agreements';
@@ -64,6 +65,10 @@ export async function feeYear(
         db
           .select({
             id: opsAdmissions.id,
+            studentId: opsAdmissions.studentId,
+            status: opsAdmissions.status,
+            heldFromStatus: opsAdmissions.heldFromStatus,
+            admittedAt: opsAdmissions.admittedAt,
             applicationId: opsAdmissions.applicationId,
             admissionNumber: opsAdmissions.admissionNumber,
             enrolledBatchId: opsAdmissions.enrolledBatchId,
@@ -102,6 +107,7 @@ export async function feeYear(
     return {
       planId: d.plan.id as string,
       studentId: d.plan.studentId as string,
+      href: b[0] ? feeLedgerHref(b[0]) : `/ops/admissions/${d.plan.admissionId}#fee-agreement`,
       studentName: s?.fullName ?? null,
       isSample: s?.isSample ?? false,
       admissionNumber: b.find((c) => c.admissionNumber)?.admissionNumber ?? null,
@@ -110,7 +116,7 @@ export async function feeYear(
         enrolledBatchId: c.enrolledBatchId as string | null,
         intendedBatchId: c.intendedBatchId as string | null,
       })),
-      closed: d.plan.status === 'closed',
+      closed: !v.inForce.includes(d.plan),
       reconciled: d.reconciliation.reconciled,
       ...feeYearRow(d, today),
     };

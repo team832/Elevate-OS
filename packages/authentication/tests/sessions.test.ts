@@ -94,7 +94,12 @@ describe('cookie', () => {
   it('is HttpOnly, SameSite=Lax, path /, Secure only in production', () => {
     const dev = serializeCookie(SESSION_COOKIE, 'abc', sessionCookieOptions(60, 'development'));
     expect(dev).toBe('elevate_session=abc; Path=/; Max-Age=60; HttpOnly; SameSite=Lax');
-    const prod = serializeCookie(SESSION_COOKIE, 'abc', sessionCookieOptions(60, 'production'));
+    // Named here, not read from PLATFORM_URL in the environment, which may be plain http.
+    const prod = serializeCookie(
+      SESSION_COOKIE,
+      'abc',
+      sessionCookieOptions(60, 'production', 'https://ops.example.test'),
+    );
     expect(prod).toContain('; Secure');
     expect(clearSessionCookie('development')).toContain('Max-Age=0');
     // Office Wi-Fi mode (D-110): plain http address → no Secure, or browsers drop the cookie.
@@ -200,6 +205,89 @@ describe('login / logout handlers', () => {
       );
     for (let i = 0; i < 3; i++) expect((await attempt(i, 'nope-nope')).status).toBe(401);
     expect((await attempt(9, 'fictional-password-1')).status).toBe(429);
+  });
+
+  it.each([
+    ['a NUL in the email, JSON', 'application/json', JSON.stringify({ email: 'a\0b@example.test', password: 'x' }), 400, null],
+    ['a NUL in the email, form', 'application/x-www-form-urlencoded', 'email=a%00b%40example.test&password=x', 303, 'error=missing'],
+    ['a broken form body', 'multipart/form-data', 'x', 303, 'error=missing'],
+  ])('%s is refused, not a 500 (API-001, API-003)', async (_name, type, body, status, location) => {
+    const res = await createLoginHandler(options)(
+      new Request('http://localhost/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': type },
+        body,
+      }),
+    );
+    expect(res.status).toBe(status);
+    if (location) expect(res.headers.get('location')).toContain(location);
+  });
+
+  describe('guesses sent at the same moment (API-007)', () => {
+    const limited = (max = 5) =>
+      createLoginHandler({
+        ...options,
+        throttle: new LoginThrottle({ maxFailures: max }),
+        ipThrottle: new LoginThrottle({ maxFailures: max * 10 }),
+        emailThrottle: new LoginThrottle({ maxFailures: max * 4 }),
+      });
+    const attempt = (login: (r: Request) => Promise<Response>, password: string) =>
+      jsonLogin(login, { email: 'tara.teacher@example.test', password }).then((r) => r.status);
+    const WRONG = 'nope-nope';
+    const RIGHT = 'fictional-password-1';
+
+    it('60 wrong at once: only the limit reach the password check', async () => {
+      const login = limited();
+      const statuses = await Promise.all(Array.from({ length: 60 }, () => attempt(login, WRONG)));
+      expect(statuses.filter((s) => s === 401)).toHaveLength(5);
+      expect(statuses.filter((s) => s === 429)).toHaveLength(55);
+    });
+
+    it('the right password behind 39 wrong ones in one burst is refused', async () => {
+      const login = limited();
+      const guesses = [...Array.from({ length: 39 }, () => WRONG), RIGHT];
+      const statuses = await Promise.all(guesses.map((p) => attempt(login, p)));
+      expect(statuses.at(-1)).toBe(429);
+      expect(statuses).not.toContain(200);
+    });
+
+    it('someone under the limit still gets in, with a wrong guess in flight', async () => {
+      const login = limited();
+      expect(await Promise.all([attempt(login, WRONG), attempt(login, RIGHT)])).toEqual([401, 200]);
+    });
+
+    it('correct sign-ins never use up the limit of a shared address', async () => {
+      const login = createLoginHandler({
+        ...options,
+        ipThrottle: new LoginThrottle({ maxFailures: 3 }),
+      });
+      for (let i = 0; i < 5; i++) expect(await attempt(login, RIGHT)).toBe(200);
+    });
+
+    it('a database failure says nothing about the password, so it is not counted', async () => {
+      let up = false;
+      const login = createLoginHandler({
+        ...options,
+        throttle: new LoginThrottle({ maxFailures: 3 }),
+        getDb: () => (up ? db : ({ select() { throw new Error('database down'); } } as never)),
+      });
+      for (let i = 0; i < 4; i++) expect(await attempt(login, RIGHT)).toBe(500);
+      up = true;
+      expect(await attempt(login, RIGHT)).toBe(200);
+    });
+  });
+
+  it('a successful sign-in clears the per-email count', async () => {
+    const login = createLoginHandler({
+      ...options,
+      emailThrottle: new LoginThrottle({ maxFailures: 3 }),
+    });
+    const attempt = (password: string) =>
+      jsonLogin(login, { email: 'tara.teacher@example.test', password });
+    for (let i = 0; i < 2; i++) expect((await attempt('nope-nope')).status).toBe(401);
+    expect((await attempt('fictional-password-1')).status).toBe(200);
+    for (let i = 0; i < 2; i++) expect((await attempt('nope-nope')).status).toBe(401);
+    expect((await attempt('fictional-password-1')).status).toBe(200);
   });
 
   it('form login redirects (303) to a safe relative next path; open redirects are refused', async () => {

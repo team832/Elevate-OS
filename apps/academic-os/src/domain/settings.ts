@@ -11,7 +11,7 @@ const enforcement = z.enum(['warning', 'hard']);
 export const SETTING_DEFINITIONS = {
   'timetable.teacher_workload_cap': {
     description:
-      'Teacher workload cap in teaching minutes per day and per week. Null = not configured (not checked). A preference (warning) unless enforcement is "hard".',
+      'Teacher workload cap in teaching minutes per day and per week. Empty means not configured (not checked). A preference (warning) unless enforcement is "hard".',
     schema: z
       .object({
         maxMinutesPerDay: z.int().min(1).max(1440).nullable(),
@@ -73,7 +73,7 @@ export const SETTING_DEFINITIONS = {
   },
   'teaching_log.deadline_hours': {
     description:
-      'Hours after a session ends by which its teaching log should be submitted. Null = no deadline (logs are listed as pending, never as late).',
+      'Hours after a session ends by which its teaching log should be submitted. Empty means no deadline (logs are listed as pending, never as late).',
     schema: z.object({ hours: z.int().min(1).max(720).nullable() }).strict(),
     defaultValue: { hours: null },
   },
@@ -85,7 +85,7 @@ export const SETTING_DEFINITIONS = {
   },
   'reviews.cadence_days': {
     description:
-      'How often a periodic progress review is expected per student and subject, in days. Null = no cadence (a missing review is pending, not negative).',
+      'How often a periodic progress review is expected per student and subject, in days. Empty means no cadence (a missing review is pending, not negative).',
     schema: z.object({ days: z.int().min(1).max(365).nullable() }).strict(),
     defaultValue: { days: null },
   },

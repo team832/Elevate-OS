@@ -28,9 +28,9 @@ A workspace runs on its own. Panels that show another workspace's figures (for e
 Demo sign-ins (development only):
 1. Put a password of at least 12 characters in `LOCAL_DEMO_PASSWORD` in the root `.env`.
 2. `npm run db:seed` (departments) and then `npm run db:seed-demo-accounts`. Safe to run again; it never creates duplicates and never prints the password.
-3. The script refuses `NODE_ENV=production` and any database that is not on this computer. `npm run db:clear-samples` switches the three accounts off before real use.
+3. The script refuses `NODE_ENV=production` and any database that is not on this computer. `npm run db:clear-samples` switches the demo accounts off before real use.
 
-The demo teacher has no batches until a coordinator places them on one; the sample teacher `teacher@example.test` (password `SEED_USER_PASSWORD`) has sample classes.
+After `npm run db:seed` the demo teacher `teacher@elevateeducation.in` co-teaches on `SAMPLE-IPMAT-B` (6 students, 1 test). The sample teacher `teacher@example.test` (password `SEED_USER_PASSWORD`) has sample classes.
 
 ## Office Wi-Fi: several people at once (D-110)
 
@@ -46,6 +46,14 @@ Staff use the app from their own laptops and phones on the office Wi-Fi while it
 - Over plain `http` the session cookie is not marked Secure (browsers would drop it); on an https deployment it is. Google sign-in does not work on a Wi-Fi address; staff use their password.
 - Windows must allow it once (owner step in `HANDOFF.md`): the Wi-Fi set to **Private**, and a firewall rule for ports 3000–3003.
 - Plain `npm run dev` keeps the `.env` (localhost) addresses: it is for this computer only.
+
+**Use office mode every day (31 Oct 2026).** Dev mode builds each page when first opened. Measured on a loaded PC with sample data: first visit on Ops median 5.9 s, worst 30.4 s, Academic worst 46 s, repeat visit median 423 ms with p90 9.6 s; with 257 MB free, `GET /` took 18 to 25 s. Built apps: 74 menu loads, median 44 ms, p90 202 ms, worst 1,472 ms. `npm run office:build` took 427 s here; repeat it after any code update. `release:package` leaves a standalone build in `.next`, so run `office:build` before `office` after a package build.
+
+Office mode runs `next start`, so it is production mode:
+- File uploads and downloads are refused (`attachmentStorage()` is null until a provider is chosen): test papers and keys, score imports, task files. Use `npm run dev:all` for those until then.
+- `@example.test` sign-ins are refused (D-030). The `@elevateeducation.in` demo sign-ins work.
+
+**127.0.0.1.** Sign-in and writes now work on `http://127.0.0.1:<port>` and the Wi-Fi address: the guard compares `Origin` with `Host` (FEE-004), and `evil.example` still gets 403. On 127.0.0.1 there is no hot reload, and other workspaces will probably ask you to sign in again, because a cookie belongs to a host name. A sign-in or switch to an app that is down says "That workspace is not running: start it with npm run dev:all".
 
 ## How sign-in and access work
 
@@ -63,6 +71,8 @@ Redirects go only to the four configured origins and never carry a token. If you
 
 **Sessions across ports.** Browsers do not separate cookies by port, so the single `elevate_session` cookie (HttpOnly, SameSite=Lax, path `/`, Secure in production, 7-day absolute expiry, only an HMAC of it stored in the database) is shared by every localhost port. One sign-in therefore covers all workspaces you belong to; signing out in any of them revokes the session everywhere. Other local projects on other ports can see a cookie with this name too — use a separate browser profile if you run untrusted local apps. In production each workspace gets its own host name; keep them under one site and the cookie host-only.
 
+**Membership on data routes.** Since 31 Oct 2026 `defineRoute` enforces membership on every signed-in API route, on `next dev` and `next start` alike (D-113). Before that only pages enforced it, despite what this guide said. Each `next.config.ts` declares `ELEVATE_BASE_PATH`; a production build without it answers 500 and runs no handler.
+
 **Revoked permissions** take effect on the next request: roles are read from the database on every request, and a disabled account's sessions stop validating immediately.
 
 **Cross-origin requests and CSRF.** Workspaces never call each other from the browser, so no CORS headers are sent anywhere (no wildcard, no credentialed CORS). Every state-changing request (API routes, sign-in, sign-out, the chooser) must come from the request's own origin or one of the four configured origins; a page on any other port or site gets 403. JSON routes accept only `Content-Type: application/json`. Server-to-server summaries use the `INTERNAL_SERVICE_TOKEN` bearer token.
@@ -78,7 +88,7 @@ Redirects go only to the four configured origins and never carry a token. If you
 | Marketing OS (`marketing` schema + the lead workflow) | campaigns, content, metrics imports; lead sources, lead ownership and follow-up activity on the one lead record | Business Operations: marketing summary route; lead records directly (same service) |
 | Shared task service (Business Ops code, `ops.staff_tasks`, `ops.eod_*`) | staff tasks and EOD reports | each workspace's own Tasks / EOD screens (D-073) |
 
-One canonical row per student (`core.students`), staff member (`core.staff_members`) and lead (`ops.leads`). No record is copied to show it in another workspace, no screen is scraped, and browser storage is never used to pass data between workspaces. No new events or background jobs were added: every cross-workspace read is a direct query or an existing summary route.
+One canonical row per student (`core.students`), staff member (`core.staff_members`) and lead (`ops.leads`). No record is copied to show it in another workspace, no screen is scraped, and browser storage is never used to pass data between workspaces. Every cross-workspace read is a direct query or a summary route. Events beyond the admission handoff: `ops.enrolment.closed` and `ops.student.renamed` (D-115).
 
 ## Role and workspace matrix
 
@@ -88,16 +98,18 @@ Generated from `packages/authorization` (all = every record, own = the person's 
 | Role | Workspaces | Leads | Admissions | Lead contacts | Student KYC / private | Fees | Own tasks/EOD | EOD review | Academic students | Attendance record | Student reviews | Campaigns/content | Users & roles |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Platform administrator | — (platform only) | — | — | — | — | — | — | — | — | — | — | — | all |
-| Director | Business Ops, Academic, Marketing | all | all | — | — | all | own | all | all | — | all | all | — |
+| Director | Business Ops, Academic, Marketing | all | all | — | — | all | own | all | all | — | all | all | read |
 | Marketing manager | Marketing | all | — | all | — | — | own | — | — | — | — | all | — |
 | Marketing employee (`marketing_contributor`) | Marketing | own | — | own | — | — | own | — | — | — | — | all | — |
 | Academic coordinator | Business Ops, Academic | — | — | — | — | — | own | — | all | all | all | — | — |
 | Teacher | Academic | — | — | — | — | — | own | — | own | own | own | — | — |
 | Admissions counsellor | Business Ops | own | own | — | own | own | own | — | — | — | — | — | — |
 | Operations manager | Business Ops | all | all | all | all | all | all | all | — | — | — | — | — |
-| Auditor | Business Ops, Academic, Marketing | all | all | — | — | all | — | — | all | — | all | all | — |
+| Auditor | Business Ops, Academic, Marketing | all | all | — | — | all | — | — | all | — | all | all | read |
 | Finance-authorised user | Business Ops | — | all | — | — | all | own | — | — | — | — | — | — |
 | HR manager (Proposed, 23 Oct 2026) | Business Ops | — | — | — | — | — | all (HR scope) | all (HR scope) | — | — | — | — | — |
+
+**Coordinator contacts:** "Student KYC / private" above is the Business Operations permission. In Academic's own copy, a coordinator sees student phone and email and guardian contacts (`/academic/students`, "Contact (restricted)"); director, auditor and teacher do not. Owner question, `HANDOFF.md`.
 
 **HR and own-scope rows (23 Oct 2026, D-080 … D-093; every grant here is Proposed, code marker `PROPOSED-GRANTS-2026-10-23`).** Read from the generated matrix in `docs/SECURITY_AND_PERMISSIONS.md` (`npm run docs:permissions`). For the HR manager, "all" means the staff of `hr.staff_scope_departments` plus staff with no department and their own record (D-089); the operations manager, director and auditor are not limited. "Staff private details" = HR-only contact details. "Raw feedback about teachers" is also refused to anyone who teaches (D-088). "Campaigns" own = campaigns the marketing employee is a current member of (D-093).
 
@@ -139,7 +151,7 @@ apps/business-ops-os  work.ts / leads.ts entry points (D-073)
 | Build, four apps (`npm run build -w @elevate/<app> -- --webpack`) | exit 0 for all four ("Compiled successfully") |
 | Wrong-port sign-in (real form, headless Chrome) | marketing@ on :3000 → :3002/marketing; teacher@ on :3002 → :3001/academic; business@ on :3001 → :3000/ops |
 | Opening another workspace | teacher on /ops/students → :3001/academic; marketing session on an Ops page → :3002/marketing |
-| Direct API requests | non-member → 403 "Your roles do not include this workspace."; teacher A → 404 on teacher B's task; marketing → 403 on students, KYC, fees, admissions, reviews; KYC columns absent from marketing's lead view |
+| Direct API requests | *Correction, 31 Oct: the non-member 403 held only in route tests; `next start` did not enforce it until D-113.* non-member → 403 "Your roles do not include this workspace."; teacher A → 404 on teacher B's task; marketing → 403 on students, KYC, fees, admissions, reviews; KYC columns absent from marketing's lead view |
 | CSRF | cross-site login/logout/chooser and API writes → 403; `text/plain;application/json` → 400 |
 | Screens | 25 pages × 390 / 1440 px: no console errors, no horizontal scroll, focus ring on first Tab |
 | One workspace alone | `npm run dev:business` starts one Next server and reuses the running database |
@@ -158,7 +170,8 @@ Separate ports do not save memory by themselves; starting only the workspace you
 ## Known limitations
 - A panel that shows another workspace's figures says "source unavailable" while that workspace is not running.
 - Google sign-in needs the platform app (:3003) running; its redirect URI is now `http://localhost:3003/api/v1/auth/google/callback`.
-- Not built (owner decisions first): teacher staff attendance ("My Attendance"), Resources, Events and Webinars in Marketing (needs an events-only permission), conversion outcomes by campaign (enquiries hold a free-text campaign note), which source counts when a lead enquires more than once (the Overview's leads-by-source chart shows what is recorded).
-- Teachers no longer see approved feedback about themselves (it was an Ops view).
+- Not built (owner decisions first): Resources, Events and Webinars in Marketing (needs an events-only permission), conversion outcomes by campaign (enquiries hold a free-text campaign note), which source counts when a lead enquires more than once (the Overview's leads-by-source chart shows what is recorded).
+- Teachers see approved feedback summaries in Academic only (D-088); `/ops` refuses them.
 - The `Elevate.html` prototype does not show the workspaces.
+- Going live: one host with one port per app is the only shape that works (F-05, `docs/RELEASE.md`).
 

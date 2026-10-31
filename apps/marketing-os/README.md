@@ -97,3 +97,10 @@ Requirement-level status: `requirements/REQUIREMENTS.md`. Not built (Proposed): 
 - **Seeds:** `seed/samples.ts` (sample campaigns with owner and members, six sample ideas, calendar items in every state, one SEO, one AIO and one GEO item with hand-typed observations, targets); all `is_sample`, removed by `npm run db:clear-samples`.
 - **Tests:** `tests/integration/calendar.test.ts`, `calendar-screens.test.tsx`, `ideas-plan.test.ts`, `optimisation.test.ts`, `targets.test.ts`, `perf-screens.test.tsx`, `shell-overview.test.tsx`, `seeds-samples.test.ts`, `routes.test.ts`, `overview-today.test.tsx`; `tests/unit/calendar.test.ts`, `navigation.test.ts`, `screens.test.tsx`; `packages/database/tests/constraints/marketing-0016.test.ts`.
 - **Open owner questions:** register `MKT-NW-054` (monthly report routing), `MKT-NW-055` (admission credit), `MKT-NW-056` (rescheduling and cancelling own calendar items), `MKT-NW-057` (analytics not connected).
+
+## 12. Debug pass, 30–31 Oct 2026
+- **Publish through the mock adapter** never marks a placement or item published (FLB-007): outcome `sandbox`, placement stays scheduled. Old records stored as published in sandbox are **not** rewritten: `HANDOFF.md` 11b (owner approves).
+- **Forms:** required selects start on Choose…; a dropped network and an ended session keep typing; a form submitted before the scripts run lands on the right page (`go()`, FLB-010). `archiveAction` and `cancelPlacementAction` validate like the REST routes (FLB-008).
+- **Reports and weekly pages:** no raw codes for sources or connection state (FLB-012, FLA-005). A monthly report for a future month or an unknown person answers 404.
+- **Workspace gate:** Marketing routes now refuse non-members (D-113). Server-action replay by other roles was run and held on the first package.
+- **Marketing server actions are a second door to the same services** (F-09): each reaches a literal permission check. Kept.

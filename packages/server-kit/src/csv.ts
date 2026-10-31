@@ -13,5 +13,6 @@ export function csvCell(value: CsvCell): string {
 }
 
 export function toCsv(header: readonly string[], rows: readonly (readonly CsvCell[])[]): string {
-  return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  // The byte order mark tells Excel on Windows this is UTF-8; without it Hindi names and ₹ garble.
+  return '﻿' + [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }

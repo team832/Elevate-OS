@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, lt } from 'drizzle-orm';
 import { idempotencyKeys, type Database } from '@elevate/database';
 import { ConflictError, ValidationError } from '@elevate/shared-contracts';
 import type { UserId } from '@elevate/shared-types';
@@ -104,4 +104,13 @@ export async function withIdempotency(
     })
     .where(eq(idempotencyKeys.id, id));
   return { ...response, replayed: false };
+}
+
+/** Delete keys past their expiry (job "Clear expired sign-ins"); a key is otherwise removed only on reuse. */
+export async function purgeExpiredIdempotencyKeys(db: Database, now = new Date()): Promise<number> {
+  const rows = await db
+    .delete(idempotencyKeys)
+    .where(lt(idempotencyKeys.expiresAt, now))
+    .returning({ id: idempotencyKeys.id });
+  return rows.length;
 }

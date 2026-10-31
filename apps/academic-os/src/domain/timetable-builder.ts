@@ -72,6 +72,7 @@ export const BUILD_REASON_TEXT: Record<BuildReason, string> = {
   ROOM_OVERLAP: 'every room is booked then',
   STUDENT_OVERLAP: 'a student of this batch has a class in another batch then',
   TEACHER_UNAVAILABLE: 'the teacher is marked unavailable on some of those dates',
+  TEACHER_LEFT: 'the teacher has left',
   ON_EXCLUSION: 'a holiday or closure falls on those dates',
   CROSSES_MIDNIGHT: 'the class would run past midnight',
   INVALID_TIME: 'the time is not valid',

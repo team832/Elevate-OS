@@ -170,6 +170,7 @@ export default async function OptimisationPage({ searchParams }: { searchParams:
                       </Field>
                       <Field id="categoryKey" label="Category">
                         <Select id="categoryKey" name="categoryKey" required>
+                          <option value="">Choose…</option>
                           {categories.map((c) => (
                             <option key={c.key} value={c.key}>
                               {c.label}

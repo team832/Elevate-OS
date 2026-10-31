@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Button, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { Button, Card, DataTable, EmptyState, PageHeader, fmtDay } from '@elevate/shared-ui';
 import { listBatches, listCatchup, listInterventions } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiButton, ApiForm } from '../../ui/api-form';
@@ -76,7 +76,7 @@ async function Body({
                   .map((i) => (
                     <li key={i.id}>
                       <a href={MODULE_PATHS.studentProgress(i.studentId)}>{i.studentName}</a>:{' '}
-                      {i.action} · due {i.dueDate ?? 'no date'} · review {i.reviewOn ?? 'no date'}
+                      {i.action} · due {fmtDay(i.dueDate, 'no date')} · review {fmtDay(i.reviewOn, 'no date')}
                     </li>
                   ))}
               </ul>
@@ -101,7 +101,7 @@ async function Body({
           ) : (
             <Card
               title={`Catch-up list — ${data.data.selected.code}`}
-              description={`As of ${data.data.catchup.asOf}. Weights: recency ${data.data.catchup.weights.recency}, chapter ${data.data.catchup.weights.chapter}, upcoming assessment ${data.data.catchup.weights.assessment}, horizon ${data.data.catchup.weights.horizonDays} days. ${data.data.catchup.closed} task(s) closed.`}
+              description={`As of ${fmtDay(data.data.catchup.asOf)}. Weights: recency ${data.data.catchup.weights.recency}, chapter ${data.data.catchup.weights.chapter}, upcoming assessment ${data.data.catchup.weights.assessment}, horizon ${data.data.catchup.weights.horizonDays} days. ${data.data.catchup.closed} task(s) closed.`}
             >
               {canWrite ? (
                 <ApiButton
@@ -128,7 +128,7 @@ async function Body({
                   {
                     key: 'missed',
                     header: 'Missed class',
-                    render: (r) => `${r.sessionDate}${r.chapterCode ? ` · ${r.chapterCode}` : ''}`,
+                    render: (r) => `${fmtDay(r.sessionDate)}${r.chapterCode ? ` · ${r.chapterCode}` : ''}`,
                   },
                   { key: 'score', header: 'Score', numeric: true },
                   { key: 'why', header: 'Why', render: (r) => r.explanation },

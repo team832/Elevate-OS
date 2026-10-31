@@ -1,5 +1,5 @@
 /** Batch profile tabs: details (Overview), Students (placements) and Teachers (assignment history). Server components. */
-import { Alert, Card, DataTable, EmptyState, SourceBadge } from '@elevate/shared-ui';
+import { Alert, Card, DataTable, EmptyState, SourceBadge, fmtDay } from '@elevate/shared-ui';
 import type { getBatch, listBatchPlacements, listStaff } from '../server';
 import { MODULE_PATHS } from '../server/paths';
 import { assignmentPhase } from '../domain/placements';
@@ -45,7 +45,7 @@ export function BatchDetails({ batch, staff, canWrite }: { batch: Batch; staff: 
   return (
     <Card title="Batch details">
       <p>
-        Coordinator: {coordinator ?? 'Not set'} · Campus: {batch.campus ?? 'Not set'} · Mode: {batch.mode ?? 'Not set'} · Dates: {batch.startDate ?? 'start not set'} to {batch.endDate ?? 'end not set'}
+        Coordinator: {coordinator ?? 'Not set'} · Campus: {batch.campus ?? 'Not set'} · Mode: {batch.mode ?? 'Not set'} · Dates: {fmtDay(batch.startDate, 'start not set')} to {fmtDay(batch.endDate, 'end not set')}
       </p>
       <p>
         Seats from today: {seats.placed} placed of {seats.capacity ?? 'no limit set'}. Demo students on upcoming classes: {seats.demoAttendeesUpcoming} (setting “demo students take a seat”: {seats.demoRule.counts ? 'yes' : 'no'}, {seats.demoRule.status}; shown for information, not used in placement checks).
@@ -64,6 +64,7 @@ export function BatchDetails({ batch, staff, canWrite }: { batch: Batch; staff: 
               { name: 'campus', label: 'Campus', defaultValue: batch.campus ?? undefined },
               { name: 'mode', label: 'Mode', type: 'select', options: opts(['offline', 'online', 'hybrid']) },
               { name: 'capacity', label: 'Seat limit', type: 'number', defaultValue: batch.capacity ?? undefined },
+              { name: 'classMinutesOverride', label: 'Class length (minutes)', type: 'number', defaultValue: batch.classMinutesOverride ?? undefined, hint: 'For this batch only; the timetable builder needs a length to place classes.' },
               { name: 'startDate', label: 'Start date', type: 'date', defaultValue: batch.startDate ?? undefined },
               { name: 'endDate', label: 'End date', type: 'date', defaultValue: batch.endDate ?? undefined },
               { name: 'status', label: 'Status', type: 'select', options: opts(['planning', 'active', 'completed', 'cancelled']), hint: 'Completing a batch does not complete its students. End each placement on the Students tab.' },
@@ -93,8 +94,8 @@ export function BatchStudents({ batch, placements, canDecide }: { batch: Batch; 
           empty={<EmptyState title="No students placed" description="Allocate students from the Enrolments page (Awaiting batch tab)." />}
           columns={[
             { key: 'student', header: 'Student', render: (p) => <><a href={MODULE_PATHS.student(p.studentId)}>{p.studentName}</a> <SourceBadge source={p.isSample ? 'sample' : 'live'} /></> },
-            { key: 'from', header: 'From', render: (p) => p.startDate },
-            { key: 'to', header: 'To', render: (p) => p.endDate ?? 'Current' },
+            { key: 'from', header: 'From', render: (p) => fmtDay(p.startDate) },
+            { key: 'to', header: 'To', render: (p) => fmtDay(p.endDate, 'Current') },
             { key: 'why', header: 'Note', render: placementNote },
             { key: 'status', header: 'Enrolment', render: (p) => <StateBadge state={p.enrolmentStatus} /> },
           ]}
@@ -125,8 +126,8 @@ export function BatchTeachers({ batch, subjects, staff, canAssign }: { batch: Ba
             { key: 'subject', header: 'Subject', render: (a) => a.subjectName },
             { key: 'staffName', header: 'Teacher' },
             { key: 'role', header: 'Role', render: (a) => ROLE_LABEL[a.role] ?? a.role },
-            { key: 'from', header: 'From', render: (a) => a.startDate ?? 'Not set' },
-            { key: 'to', header: 'To', render: (a) => a.endDate ?? 'Open' },
+            { key: 'from', header: 'From', render: (a) => fmtDay(a.startDate, 'Not set') },
+            { key: 'to', header: 'To', render: (a) => fmtDay(a.endDate, 'Open') },
             { key: 'status', header: 'Now', render: (a) => <StateBadge state={assignmentPhase(a.startDate, a.endDate, today)} /> },
           ]}
         />

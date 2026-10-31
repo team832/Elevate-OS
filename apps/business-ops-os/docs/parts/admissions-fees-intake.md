@@ -67,7 +67,7 @@ Owner brief 20 Oct 2026, chunks 5 (fees), 8, §8E, §10, §15; nav "Reports: Adm
 
 **A-REP-2 Demo conversion.** Demos with a class in the period (same rule as the demo list's date filter, so links match). Groups: programme (demo programme, else lead interest), counsellor, first source + campaign (only with `ops:lead_attribution:read`). Rate = converted ÷ demos with an outcome (open demos excluded); 0 decided → not enough data. Converted counts link to `/ops/admissions?view=previous&outcome=converted&from&to&programme|counsellor`. Status: Tested.
 
-**A-REP-3 Student summary.** Admissions with a student identity, population from `studentPopulation` (agent B); each student once, active > on hold > former. Links to `/ops/students?view=active|on_hold|former`. Status: Tested (domain), counts 0 in integration (Active needs Academic confirmation).
+**A-REP-3 Student summary.** Admissions with a student identity, population from `studentPopulation` (agent B, which uses `ACTIVE_CASE_STATUSES` since 31 Oct 2026; the on-hold link is `/ops/students?view=on_hold`); each student once, active > on hold > former. A student active on one programme and held on another counts once here and appears in both lists. Links to `/ops/students?view=active|on_hold|former`. Status: Tested (domain), counts 0 in integration (Active needs Academic confirmation).
 
 ## 5. Permissions (packages/authorization/src/permissions/ops.ts)
 

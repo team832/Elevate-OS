@@ -2,7 +2,7 @@
  * Demo lookups: the demo fee from the ledger, the cases a demo can be booked for, and the day's
  * demo classes for Academic (internal route). Re-exported by demos-read.ts.
  */
-import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import {
   opsAdmissions,
   opsDemos,
@@ -104,6 +104,7 @@ export async function demoSessionsForDay(db: Database, date: string) {
       and(
         sql`(${opsDemoSessions.startsAt} AT TIME ZONE 'Asia/Kolkata')::date = ${date}::date`,
         sql`${opsDemoSessions.attendance} <> 'cancelled'`,
+        ne(opsAdmissions.status, 'lost'),
         isNotNull(opsAdmissions.studentId),
       ),
     )

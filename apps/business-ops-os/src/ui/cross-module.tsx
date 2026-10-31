@@ -3,6 +3,7 @@
  * summary pages. A source that could not be fetched shows "Source unavailable (checked …)" with
  * the reason; metrics render through StatTile, so `missing` shows as "Missing", never as 0.
  */
+import { LINK_LOGIN_HELP, sourceReasonWords } from '@elevate/shared-contracts';
 import type {
   AcademicDeliverySummaryV1,
   MarketingSummaryV1,
@@ -11,7 +12,9 @@ import type {
 } from '@elevate/shared-contracts';
 import type { ReactNode } from 'react';
 import { Alert, Card, StatTile } from '@elevate/shared-ui';
-import { fmtDateTime } from './format';
+import { NOT_LINKED_TO_STAFF } from '../domain/feedback';
+import { fmtDateTime, humanise } from './format';
+import { ReloadButton } from './reload-button';
 
 /** Tiles shown; `studentsAtRisk` has no source yet (ACD-022), so it gets no tile rather than "Missing". */
 export const ACADEMIC_LABELS = {
@@ -35,6 +38,10 @@ export const MARKETING_LABELS = {
   totalReach: 'Total reach',
 } satisfies Partial<Record<keyof MarketingSummaryV1['metrics'], string>>;
 
+/** The words for a read that returned nothing: a login with no staff record is not an outage. */
+export const sourceGap = (reason: string) =>
+  reason === NOT_LINKED_TO_STAFF ? 'No staff record' : 'Source unavailable';
+
 /** "Source unavailable (checked <time>)" with the reason; no numbers rather than zeros. */
 export function Unavailable({
   name,
@@ -43,10 +50,16 @@ export function Unavailable({
   name: string;
   result: { reason: string; fetchedAt: string };
 }) {
+  if (result.reason === NOT_LINKED_TO_STAFF)
+    return (
+      <Alert tone="info" title={sourceGap(result.reason)}>
+        {NOT_LINKED_TO_STAFF}. {LINK_LOGIN_HELP}
+      </Alert>
+    );
   return (
     <Alert tone="warning" title="Source unavailable">
-      {name} could not be read ({result.reason}); checked {fmtDateTime(result.fetchedAt)}. No
-      numbers are shown rather than zeros.
+      {name} could not be read ({sourceReasonWords(result.reason)}); checked {fmtDateTime(result.fetchedAt)}. No
+      numbers are shown rather than zeros. <ReloadButton />
     </Alert>
   );
 }
@@ -96,7 +109,7 @@ function SourcePanel<T extends { generatedAt: string }>({
 export const AcademicPanel = ({ result }: { result: SourceResult<AcademicDeliverySummaryV1> }) => (
   <SourcePanel
     title="Academic delivery"
-    source="Academic OS (academic.delivery_summary v1)"
+    source="Academic OS"
     result={result}
   >
     {(d) => <Tiles metrics={d.metrics} labels={ACADEMIC_LABELS} />}
@@ -104,13 +117,14 @@ export const AcademicPanel = ({ result }: { result: SourceResult<AcademicDeliver
 );
 
 export const MarketingPanel = ({ result }: { result: SourceResult<MarketingSummaryV1> }) => (
-  <SourcePanel title="Marketing" source="Marketing OS (marketing.summary v1)" result={result}>
+  <SourcePanel title="Marketing" source="Marketing OS" result={result}>
     {(d) => (
       <>
         <Tiles metrics={d.metrics} labels={MARKETING_LABELS} />
         <p className="el-field-hint">
           Data sources:{' '}
-          {d.dataSources.map((s) => `${s.name} (${s.connection})`).join(', ') || 'none listed'}
+          {d.dataSources.map((s) => `${s.name} (${humanise(s.connection)})`).join(', ') ||
+            'none listed'}
         </p>
       </>
     )}

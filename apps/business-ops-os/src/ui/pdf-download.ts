@@ -1,7 +1,10 @@
 /** Browser-side helpers for buttons that fetch a PDF and save it (client components only). */
 
-/** The server's refusal in plain words (the `{ error: { message } }` envelope). */
-export async function refusal(res: Response, fallback: string) {
+export const UNREACHABLE = 'Could not reach the server. Check the connection and try again.';
+
+/** The server's refusal in plain words (the `{ error: { message } }` envelope); `null` = no answer at all. */
+export async function refusal(res: Response | null, fallback: string) {
+  if (!res) return UNREACHABLE;
   const json = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
   return json.error?.message ?? `${fallback} (${res.status}).`;
 }

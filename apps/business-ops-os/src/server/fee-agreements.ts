@@ -44,17 +44,13 @@ import {
 import type { AdmissionId, StudentIdentityId } from '@elevate/shared-types';
 import { istToday } from '../domain';
 import {
-  agreementStatus,
-  allocateInstalments,
+  agreementPosition,
   checkAgreementInput,
-  nextDue,
-  planTotals,
-  reconcilePlan,
   splitTuition,
   studentFeeStatus,
-  type PlanLedgerRow,
   type StudentFeeStatus,
 } from '../domain/fee-plans';
+import { acceptedVersions } from '../domain/fee-year';
 import { chargeSummary, FEE_DIRECTIONS, FEE_METHODS, MANUAL_FEE_DISCLAIMER } from '../domain/fees';
 import { lockAccessible, namesOf, ownAdmissionFilter, readinessOf } from './admissions';
 import { feeAgreementPolicy } from './approval-policies';
@@ -604,9 +600,8 @@ export async function recordPlanEntry(
 }
 
 /**
- * Agreements with instalments, ledger, totals, allocation, status and version history (no
- * permission check). The ledger of a version is every row of its version chain; a row naming an
- * instalment of an earlier version counts for the instalment with the same number.
+ * Agreements with instalments, ledger, totals, allocation, status and version history, read by
+ * agreementPosition (no permission check).
  */
 export async function plansWithLedger(db: Database, plans: FeePlanRow[], now: Date) {
   if (!plans.length) return [];
@@ -623,42 +618,30 @@ export async function plansWithLedger(db: Database, plans: FeePlanRow[], now: Da
       .where(inArray(opsFeeRecords.planId, ids))
       .orderBy(desc(opsFeeRecords.recordedAt), desc(opsFeeRecords.code)),
   ]);
-  const byId = new Map(family.map((p) => [p.id as string, p]));
-  const sequenceOf = new Map(instalments.map((i) => [i.id as string, i.sequence]));
   const today = istToday(now);
-  return plans.map((plan) => {
-    const chain: FeePlanRow[] = [];
-    for (let p: FeePlanRow | undefined = plan; p; p = byId.get(p.supersedesPlanId ?? ''))
-      chain.push(p);
-    const own = instalments.filter((i) => i.planId === plan.id);
-    const idOf = new Map(own.map((i) => [i.sequence, i.id as string]));
-    const chainIds = new Set(chain.map((p) => p.id as string));
-    const rows = ledger.filter((r) => r.planId && chainIds.has(r.planId));
-    const mapped = rows.map((r) => ({
-      ...r,
-      instalmentId: r.instalmentId
-        ? (idOf.get(sequenceOf.get(r.instalmentId) ?? 0) ?? r.instalmentId)
-        : null,
-    })) as PlanLedgerRow[];
-    const totals = planTotals(plan.totalPaise, own, mapped);
-    const allocated = allocateInstalments(own, mapped, today);
-    return {
-      plan,
-      totals,
-      instalments: allocated,
-      status: agreementStatus(allocated, totals),
-      nextDue: nextDue(allocated),
-      ledger: rows,
-      reconciliation: reconcilePlan(totals, own, mapped),
-      versions: chain.reverse(),
-    };
-  });
+  return plans.map((plan) => agreementPosition(plan, family, instalments, ledger, today));
+}
+
+/**
+ * The versions in force (acceptedVersions) among `visible`, the plans a reader may see: a change
+ * waiting for approval moves nothing, so its accepted version stays on every working list.
+ */
+export async function inForceOf(db: Database, visible: readonly FeePlanRow[]) {
+  if (!visible.length) return [];
+  const family = await db
+    .select()
+    .from(opsFeePlans)
+    .where(inArray(opsFeePlans.studentId, [...new Set(visible.map((p) => p.studentId))]));
+  const seen = new Set(visible.map((p) => p.id as string));
+  return acceptedVersions(family).inForce.filter((p) => seen.has(p.id));
 }
 
 /**
  * GET /fee-plans?studentId= — the student's current agreements the caller may see (own scope:
  * admissions they counsel or whose lead they own), version history, the registration and demo
- * charges (separate balances), names and the disclaimer.
+ * charges (separate balances), names and the disclaimer, newest first. During a change both the
+ * accepted version (`inForce`: its figures stand, money posts on it) and its draft
+ * (`proposedChange`) are listed.
  */
 export async function studentFeePlans(
   db: Database,
@@ -696,9 +679,14 @@ export async function studentFeePlans(
       ),
     );
   const visible = new Set(visibleAdmissions.map((a) => a.id as string));
-  const replaced = new Set(all.map((p) => p.supersedesPlanId));
-  const current = all.filter((p) => !replaced.has(p.id));
-  const shown = current.filter((p) => visible.has(p.admissionId));
+  const versions = acceptedVersions(all);
+  const listed = new Set([
+    ...versions.counted,
+    ...versions.proposed,
+    ...versions.drafts,
+    ...versions.abandoned,
+  ]);
+  const shown = all.filter((p) => listed.has(p) && visible.has(p.admissionId));
   const [detailed, other] = await inOrder([
     () => plansWithLedger(db, shown, now),
     visible.size
@@ -753,6 +741,8 @@ export async function studentFeePlans(
   return {
     plans: detailed.map((d) => ({
       ...d,
+      inForce: versions.inForce.includes(d.plan),
+      proposedChange: versions.proposed.includes(d.plan),
       approvedByName: d.plan.approvedBy ? (names.get(d.plan.approvedBy) ?? null) : null,
       versions: d.versions.map((v) => ({ ...v, createdByName: names.get(v.createdBy) ?? null })),
       ledger: d.ledger.map((r) => present(r, names)),
@@ -777,8 +767,8 @@ export async function studentFeePlans(
 
 /**
  * Fee status per student for lists (Active Students): `paid | due | overdue | not_configured`,
- * from ACTIVE agreements only (a draft is not configured yet). No permission check — callers
- * must hold `ops:fees:read` before showing it. No agreement → `not_configured`, never "paid".
+ * from agreements in force only (a first draft is not configured yet). No permission check —
+ * callers must hold `ops:fees:read` before showing it. No agreement → `not_configured`, never "paid".
  */
 export async function feeStatusForStudents(
   db: Database,
@@ -786,16 +776,11 @@ export async function feeStatusForStudents(
   now: Date = new Date(),
 ): Promise<Map<string, StudentFeeStatus>> {
   if (!studentIds.length) return new Map();
-  const plans = await db
+  const family = await db
     .select()
     .from(opsFeePlans)
-    .where(
-      and(
-        inArray(opsFeePlans.studentId, studentIds as StudentIdentityId[]),
-        eq(opsFeePlans.status, 'active'),
-      ),
-    );
-  const detailed = await plansWithLedger(db, plans, now);
+    .where(inArray(opsFeePlans.studentId, studentIds as StudentIdentityId[]));
+  const detailed = await plansWithLedger(db, acceptedVersions(family).inForce, now);
   return new Map(
     studentIds.map((id) => [
       id,

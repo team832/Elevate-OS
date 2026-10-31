@@ -354,7 +354,8 @@ const DELETES: readonly [string, string][] = [
      FROM core.integration_events e
      JOIN (VALUES ('ops.admission.enrolment_requested', 'academic.enrolment-intake'),
                   ('academic.enrolment.confirmed', 'ops.enrolment-replies'),
-                  ('academic.enrolment.rejected', 'ops.enrolment-replies')) c(type, consumer)
+                  ('academic.enrolment.rejected', 'ops.enrolment-replies'),
+                  ('ops.enrolment.closed', 'academic.enrolment-exit')) c(type, consumer)
        ON c.type = e.type
      WHERE NOT EXISTS (SELECT 1 FROM ops.admissions a WHERE a.id = (e.payload->>'admissionId')::uuid)
      ON CONFLICT (event_id, consumer) DO UPDATE SET status = 'dead', last_error = EXCLUDED.last_error

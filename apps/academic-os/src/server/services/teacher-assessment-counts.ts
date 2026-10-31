@@ -26,6 +26,7 @@ import {
   type Database,
 } from '@elevate/database';
 import { assessmentInScope, todayIst, type OwnScope } from '../context';
+import { batchCodes } from './assessments';
 
 const a = academicAssessments;
 const r = academicAssessmentRoster;
@@ -50,7 +51,7 @@ export async function teacherAssessments(
       title: a.title,
       status: a.status,
       scheduledDate: a.scheduledDate,
-      batchCode: academicBatches.code,
+      batchCode: batchCodes,
       subjectName: academicSubjects.name,
       responsible: a.responsibleTeacherStaffId,
       evaluator: a.evaluatorStaffId,

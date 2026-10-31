@@ -32,8 +32,8 @@ const STATUS_TONE: Record<AppointmentStatus, Tone> = {
 
 const REMINDER_TEXT: Record<string, string> = {
   pending: 'Reminder pending',
-  sent_in_app: 'Teacher notified in Elevate OS; email/SMS simulated, not sent',
-  simulated: 'No in-app login to notify; email/SMS simulated, not sent',
+  sent_in_app: 'Teacher notified in Elevate OS. No email or SMS was sent.',
+  simulated: 'Not sent: this teacher has no login to notify, and email and SMS are not connected.',
   not_applicable: 'No reminder needed',
 };
 

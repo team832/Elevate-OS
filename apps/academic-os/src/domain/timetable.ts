@@ -4,7 +4,8 @@
  * HARD constraints (any one makes the timetable infeasible):
  *   TEACHER_OVERLAP (incl. co-teachers and substitutes), BATCH_OVERLAP, ROOM_OVERLAP,
  *   STUDENT_OVERLAP (a student placed in both batches), TEACHER_UNAVAILABLE (academic
- *   availability record, not HR leave), ON_EXCLUSION, CROSSES_MIDNIGHT,
+ *   availability record, not HR leave), TEACHER_LEFT (HR ended their employment; scheduled
+ *   classes only, a held class is history), ON_EXCLUSION, CROSSES_MIDNIGHT,
  *   DURATION_MISMATCH when the class length is locked/approved,
  *   TEACHER_WORKLOAD when the configured cap says `enforcement: 'hard'`.
  * PREFERENCES (warnings; never block):
@@ -14,6 +15,7 @@
  * The result is `feasible` (no hard conflicts) or `infeasible` with reasons.
  * It never claims a timetable is optimal.
  */
+import { fmtDay } from '@elevate/shared-types';
 import { eachDate, intervalsOverlap, isoWeekday, parseClock, weekStart } from './time';
 
 export interface TimetableSession {
@@ -71,6 +73,7 @@ export type ConflictCode =
   | 'ROOM_OVERLAP'
   | 'STUDENT_OVERLAP'
   | 'TEACHER_UNAVAILABLE'
+  | 'TEACHER_LEFT'
   | 'ON_EXCLUSION'
   | 'CROSSES_MIDNIGHT'
   | 'INVALID_TIME'
@@ -93,6 +96,8 @@ export interface TimetableCheckInput {
   classLengthByBatch: Readonly<Record<string, ClassLength>>;
   workloadCap: WorkloadCap | null;
   unavailability?: readonly Unavailability[];
+  /** Staff whose record is inactive (core.staff_members): HR ended their employment. */
+  endedTeachers?: readonly string[];
   placements?: readonly PlacementSpan[];
   /** Report only conflicts that involve at least one of these sessions (e.g. new candidates). */
   onlyInvolving?: readonly string[];
@@ -218,9 +223,20 @@ export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult
         severity: 'hard',
         sessionIds: [s.id],
         date: s.date,
-        message: `A teacher has an academic unavailability record from ${u.from} to ${u.to} (not HR leave).`,
+        message: `A teacher has an academic unavailability record from ${fmtDay(u.from)} to ${fmtDay(u.to)} (not HR leave).`,
       });
     }
+  }
+
+  for (const s of sessions) {
+    if (s.status !== 'scheduled' || !teachersOf(s).some((t) => input.endedTeachers?.includes(t))) continue;
+    conflicts.push({
+      code: 'TEACHER_LEFT',
+      severity: 'hard',
+      sessionIds: [s.id],
+      date: s.date,
+      message: 'The teacher of this class has left (HR ended their employment). Assign a substitute or cancel the class.',
+    });
   }
 
   // Sessions on closures (exam blackouts apply to assessments, not classes).

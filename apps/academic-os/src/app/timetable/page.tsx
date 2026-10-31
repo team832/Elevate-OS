@@ -1,7 +1,16 @@
 import type { Metadata } from 'next';
 import { can, scopeFor } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, Button, Card, DataTable, EmptyState, PageHeader, Subnav } from '@elevate/shared-ui';
+import {
+  Alert,
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  PageHeader,
+  Subnav,
+  fmtDay,
+} from '@elevate/shared-ui';
 import { addDays, isIsoDate, type IsoDate } from '@elevate/shared-types';
 import type { PageAccess } from '@elevate/server-kit/next';
 import { eachDate, weekStart } from '../../domain';
@@ -16,7 +25,7 @@ import {
 } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
-import { StateBadge } from '../../ui/badges';
+import { StateBadge, words } from '../../ui/badges';
 import { ConflictList } from '../../ui/conflicts';
 import { Filter } from '../../ui/filters';
 import { PrintButton } from '../../ui/print-button';
@@ -29,14 +38,14 @@ type Search = Promise<Record<string, string | string[] | undefined>>;
 const str = (v: string | string[] | undefined) => (typeof v === 'string' && v ? v : undefined);
 const UUID = /^[0-9a-f-]{36}$/i;
 const STATUSES = ['scheduled', 'held', 'cancelled', 'rescheduled'] as const;
-const dayLabel = (date: string) =>
-  new Intl.DateTimeFormat('en-IN', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${date}T00:00:00Z`));
+const DAY_LABEL = new Intl.DateTimeFormat('en-IN', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const dayLabel = (date: string) => DAY_LABEL.format(new Date(`${date}T00:00:00Z`));
 const statusLabel = (s: string) => (s === 'held' ? 'delivered' : s);
 
 export default async function TimetablePage({ searchParams }: { searchParams: Search }) {
@@ -99,7 +108,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
     <>
       <PageHeader
         title="Timetable"
-        description={`${week ? 'Week' : 'Agenda'} from ${from} to ${to} (IST). Clashes block scheduling; preferences only warn. Delivered means a teacher marked the class delivered.`}
+        description={`${week ? 'Week' : 'Agenda'} from ${fmtDay(from)} to ${fmtDay(to)} (IST). Clashes block scheduling; preferences only warn. Delivered means a teacher marked the class delivered.`}
         actions={<PrintButton label="Print timetable" />}
         tabs={
           <Subnav
@@ -138,7 +147,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
         {select(
           'status',
           'Status',
-          STATUSES.map((s) => ({ value: s, label: statusLabel(s) })),
+          STATUSES.map((s) => ({ value: s, label: words(statusLabel(s)) })),
           filter.status,
         )}
         <Filter
@@ -162,7 +171,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
           ) : (
             <Agenda sessions={data.data.sessions} canWrite={canWrite} />
           )}
-          <Card title={`Conflict check ${from} to ${to}`}>
+          <Card title={`Conflict check ${fmtDay(from)} to ${fmtDay(to)}`}>
             <ConflictList
               verdict={data.data.check.verdict}
               hard={data.data.check.hard}
@@ -192,7 +201,11 @@ function Agenda({ sessions, canWrite }: { sessions: SessionListRow[]; canWrite: 
     return (
       <EmptyState
         title="No classes in this range"
-        description="Change the dates or filters, or schedule a class below."
+        description={
+          canWrite
+            ? 'Change the dates or filters, or schedule a class below.'
+            : 'Change the dates or filters.'
+        }
       />
     );
   const days = [...new Set(sessions.map((s) => s.date))];
@@ -204,6 +217,7 @@ function Agenda({ sessions, canWrite }: { sessions: SessionListRow[]; canWrite: 
             compact
             rows={sessions.filter((s) => s.date === day)}
             rowKey={(s) => s.id}
+            sampleOf={(s) => s.isSample}
             columns={[
               {
                 key: 'time',
@@ -287,12 +301,12 @@ function Agenda({ sessions, canWrite }: { sessions: SessionListRow[]; canWrite: 
 /** Read-only week grid; each block opens its class page. */
 function WeekGrid({ from, sessions }: { from: string; sessions: SessionListRow[] }) {
   return (
-    <div className="acd-week" role="list" aria-label={`Week of ${from}`}>
+    <div className="acd-week" role="list" aria-label={`Week of ${fmtDay(from)}`}>
       {eachDate(from, addDays(from as IsoDate, 6)).map((day) => {
         const list = sessions.filter((s) => s.date === day);
         return (
           <section key={day} className="acd-week-day" role="listitem" aria-label={dayLabel(day)}>
-            <h3>{dayLabel(day)}</h3>
+            <h2>{dayLabel(day)}</h2>
             {list.length === 0 ? <p className="el-field-hint">No classes</p> : null}
             {list.map((s) => (
               <a
@@ -304,7 +318,7 @@ function WeekGrid({ from, sessions }: { from: string; sessions: SessionListRow[]
                 {sessionLine(s)}
                 <br />
                 {s.teacherName ?? 'Teacher not set'} ·{' '}
-                {s.roomCode ?? (s.onlineLink ? 'Online' : 'No room')} · {statusLabel(s.status)}
+                {s.roomCode ?? (s.onlineLink ? 'Online' : 'No room')} · {words(statusLabel(s.status))}
               </a>
             ))}
           </section>

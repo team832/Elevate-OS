@@ -77,7 +77,10 @@ export async function getStudentProgress(db: Database, actor: Actor, studentId: 
   const [student] = await db.select({ id: academicStudents.id, code: academicStudents.code, fullName: academicStudents.fullName }).from(academicStudents).where(eq(academicStudents.id, studentId as StudentId));
   if (!student) throw new NotFoundError('Student not found.');
   const asOf = todayIst(now);
-  const enrolments = await db.select().from(academicEnrolments).where(and(eq(academicEnrolments.studentId, student.id), eq(academicEnrolments.status, 'active')));
+  const allEnrolments = await db.select().from(academicEnrolments).where(eq(academicEnrolments.studentId, student.id));
+  const running = allEnrolments.filter((e) => e.status === 'active');
+  // A student who has left keeps their history: with nothing running, the ended enrolments show.
+  const enrolments = running.length ? running : allEnrolments;
   const trendSetting = await getSetting(db, 'progress.trend');
   const trendOptions = trendSetting.value;
   const rule = await getSetting(db, 'attendance.denominator');
@@ -224,6 +227,7 @@ export async function generateCatchupTasks(db: Database, actor: Actor, batchId: 
 export async function listCatchup(db: Database, actor: Actor, batchId: string, now = new Date()) {
   const scope = await resolveScope(db, actor, 'academic:progress:read');
   assertBatchInScope(scope, batchId);
+  await getBatchOrThrow(db, batchId);
   const asOf = todayIst(now);
   const weights = (await getSetting(db, 'catchup.weights')).value;
   const rows = await db

@@ -47,6 +47,7 @@ import type { AdmissionRow } from './pipeline';
 import { loadSettings } from './settings';
 
 export {
+  approvalChecks,
   confirmationCheck,
   currentState,
   gapSettings,

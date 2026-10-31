@@ -10,6 +10,7 @@ import {
 } from '@elevate/testing';
 import { auditEvents, opsStaffTasks } from '@elevate/database';
 import { istToday } from '../../src/domain/dates';
+import { hrTabCounts, hrTaskCounts } from '../../src/server/staff-tasks-hr';
 import { GET as listRoute, POST as createRoute } from '../../src/app/api/v1/staff-tasks/route';
 import { GET as getRoute, PATCH as patchRoute } from '../../src/app/api/v1/staff-tasks/[id]/route';
 import { POST as actionRoute } from '../../src/app/api/v1/staff-tasks/[id]/[action]/route';
@@ -140,6 +141,45 @@ describe('staff tasks: access and own scope', () => {
       }),
     );
     expect(viaAcademic.status).toBe(201);
+  });
+});
+
+describe('a login with no staff record (CHK-009)', () => {
+  type Page = { rows: Task[]; total: number };
+  const listed = async (u: TestUser, query = '') =>
+    (await callRoute<Page>(listRoute, authedRequest(u, `/x/api/v1/staff-tasks${query}`))).data?.total;
+
+  let other: Task;
+  beforeAll(async () => {
+    other = (await create(manager, { title: 'Sample task of someone else', staffId: a.staffId, dueOn: today })).data!;
+  });
+
+  const PATHS: [string, (u: TestUser) => Promise<number | undefined>][] = [
+    ['the list', (u) => listed(u)],
+    ['open work', (u) => listed(u, '?open=1')],
+    ['one staff member', (u) => listed(u, `?staffId=${a.staffId}`)],
+    ['not acknowledged', (u) => listed(u, '?ack=pending')],
+    ['one status', (u) => listed(u, `?status=${other.status}`)],
+    ['the review queue', (u) => listed(u, '?reviewable=1')],
+    ['HR tab counts', async (u) => (await hrTabCounts(ctx.db, u, {})).all],
+    ['HR overview counts', async (u) => (await hrTaskCounts(ctx.db, u)).find((c) => c.key === 'tasks_due_today')!.value!],
+  ];
+  it.each(
+    (['academic_coordinator', 'teacher', 'admissions_counsellor', 'finance_officer', 'marketing_contributor', 'marketing_manager'] as const)
+      .flatMap((role) => PATHS.map(([name, count]) => [role, name, count] as const)),
+  )('%s, %s: nothing', async (role, _name, count) => {
+    expect(await count(await createTestUser(ctx.db, { roles: [role] }))).toBe(0);
+  });
+
+  it('agrees with the task page: the list shows nothing the detail would refuse', async () => {
+    const u = await createTestUser(ctx.db, { roles: ['teacher'] });
+    expect((await callRoute(getRoute, authedRequest(u, `/x/api/v1/staff-tasks/${other.id}`), { id: other.id })).status).toBe(404);
+    expect(await listed(u)).toBe(0);
+  });
+
+  it('an all-scope login without a staff record and the task owner still see the task', async () => {
+    expect(await listed(await createTestUser(ctx.db, { roles: ['director'] }))).toBeGreaterThan(0);
+    expect(await listed(a)).toBeGreaterThan(0);
   });
 });
 

@@ -19,6 +19,7 @@ import type { IntegrationEventId } from '@elevate/shared-types';
 import { accessScope, userIdsForStaff, userIdsWithRole, type Actor } from './context';
 import { leadOwnerOf } from './admissions';
 import { applyTransition, lockAdmission, type AdmissionRow } from './pipeline';
+import { linkOr } from './task-links';
 import { loadSettings } from './settings';
 
 export const ENROLMENT_REPLIES_CONSUMER = OPS_ENROLMENT_REPLIES_CONSUMER;
@@ -44,19 +45,22 @@ async function notifyCounsellor(
   title: string,
   body: string,
 ) {
-  await notify(tx, {
-    userIds: await userIdsForStaff(tx, [
-      admission.counsellorStaffId,
-      await leadOwnerOf(tx, admission),
-    ]),
-    module: 'ops',
-    kind,
-    title,
-    body,
-    link: `/ops/admissions/${admission.id}`,
-    entityType: 'admission',
-    entityId: admission.id,
-  });
+  const told = await userIdsForStaff(tx, [
+    admission.counsellorStaffId,
+    await leadOwnerOf(tx, admission),
+  ]);
+  for (const id of new Set(told))
+    await notify(tx, {
+      userIds: [id],
+      module: 'ops',
+      kind,
+      title,
+      body,
+      // A lead owner in Marketing has no admission page: the lead is theirs to open.
+      link: await linkOr(tx, id, 'ops:admissions:read', `/ops/admissions/${admission.id}`, 'leads', `/leads/${admission.leadId}`),
+      entityType: 'admission',
+      entityId: admission.id,
+    });
 }
 
 async function ignoreReply(tx: Database, event: Reply, reason: string) {

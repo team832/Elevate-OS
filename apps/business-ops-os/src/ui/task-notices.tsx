@@ -39,10 +39,10 @@ export async function DueWork({ user, base }: { user: AuthenticatedUser; base: s
   const r = await load((db) => dueWork(db, user));
   if (!r.ok) return r.view;
   if (!r.data) return null;
-  const { items, dueSoonHours } = r.data;
+  const { items, dueSoonHours, capped } = r.data;
   return (
     <Segment
-      title={`Due soon and overdue (${items.length})`}
+      title={`Due soon and overdue (${capped ? `first ${items.length}` : items.length})`}
       description={`Your open tasks past their deadline or due in the next ${dueSoonHours} hours. They stay here until you submit or finish them.`}
       flush
     >

@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -6,8 +7,11 @@ import {
   PlacementBadge,
   ProposedBadge,
   RuleCheckSummary,
+  ruleText,
 } from '../../src/ui/badges';
 import { VersionsPanel } from '../../src/ui/content-panels';
+import { Choice } from '../../src/app/calendar/item-ui';
+import { sessionGate } from '../../src/ui/session-guard';
 import { DecisionTiles, LeadFunnel, Provenance } from '../../src/ui/overview';
 import type { DashboardFilters } from '../../src/server/dashboard-filters';
 import { CampaignResultsTable, type CampaignRow } from '../../src/ui/campaigns';
@@ -22,28 +26,29 @@ const badge = (tone: string, text: string) =>
 
 describe('Marketing status badges', () => {
   it.each([
-    ['in_review', 'info', 'in review'],
-    ['changes_requested', 'warning', 'changes requested'],
-    ['published', 'success', 'published'],
+    ['in_review', 'info', 'In review'],
+    ['changes_requested', 'warning', 'Changes requested'],
+    ['published', 'success', 'Published'],
   ] as const)('content state %s reads as words', (state, tone, text) => {
     expect(html(<ContentStateBadge state={state} />)).toBe(badge(tone, text));
   });
 
   it.each([
-    ['not_configured', 'neutral', 'not configured'],
-    ['sandbox', 'warning', 'sandbox (mock only)'],
-    ['connected', 'success', 'connected'],
-    ['error', 'danger', 'error'],
+    ['not_configured', 'neutral', 'Not configured'],
+    ['sandbox', 'warning', 'Test mode only'],
+    ['connected', 'success', 'Connected'],
+    ['error', 'danger', 'Error'],
   ] as const)('integration %s never claims more than it is', (status, tone, text) => {
     expect(html(<IntegrationBadge status={status} />)).toBe(badge(tone, text));
   });
 
   it.each([
-    ['published', 'sandbox', 'warning', 'sandbox — nothing posted'],
-    ['published', 'legacy_reported', 'info', 'published (legacy tracker, unverified)'],
-    ['published', 'manual', 'success', 'published'],
-    ['planned', null, 'neutral', 'planned'],
-    ['scheduled', null, 'info', 'scheduled'],
+    ['published', 'sandbox', 'warning', 'Test run: nothing posted'],
+    ['published', 'legacy_reported', 'info', 'Published (old tracker, unverified)'],
+    ['published', 'manual', 'success', 'Published'],
+    ['planned', null, 'neutral', 'Planned'],
+    ['scheduled', null, 'info', 'Scheduled'],
+    ['scheduled', 'sandbox', 'warning', 'Scheduled, test run: nothing posted'],
   ] as const)(
     'placement %s via %s: planned or mock is never shown as posted',
     (status, mode, tone, text) => {
@@ -52,8 +57,15 @@ describe('Marketing status badges', () => {
   );
 
   it('a proposed setting is flagged until the owner approves it', () => {
-    expect(html(<ProposedBadge status="proposed" />)).toBe(badge('warning', 'proposed'));
-    expect(html(<ProposedBadge status="approved" />)).toBe(badge('success', 'approved'));
+    expect(html(<ProposedBadge status="proposed" />)).toBe(badge('warning', 'Proposed'));
+    expect(html(<ProposedBadge status="approved" />)).toBe(badge('success', 'Approved'));
+  });
+
+  it.each([
+    ['Facts only from BRAND.md or the founder.', 'Facts only from the brand guide or the founder.'],
+    ['No sole self-approval (offline marketing SOP MKT-03).', 'No sole self-approval (offline marketing SOP).'],
+  ])('a brand rule names no file or SOP number: %s (RVC-015)', (stored, shown) => {
+    expect(ruleText(stored)).toBe(shown);
   });
 });
 
@@ -172,7 +184,7 @@ describe('Overview decision tiles (§10)', () => {
     expect(out).toContain(
       `href="/marketing/tasks?tab=all&amp;flag=blocked" class="el-stat el-kpi">${tile('Blocked tasks', '1')}`,
     );
-    expect(out).toContain('2026-10-01 to 2026-10-31 (IST) · everyone in your scope');
+    expect(out).toContain('1 Oct 2026 to 31 Oct 2026 (IST) · everyone in your scope');
   });
 
   it.each([
@@ -272,5 +284,87 @@ describe('Provenance and campaign rows', () => {
     expect(html(<CampaignResultsTable rows={[]} empty="No campaign is active" />)).toContain(
       'No campaign is active',
     );
+  });
+});
+
+describe('a required choice is never made for the person (HUS-003)', () => {
+  const root = new URL('../../src/', import.meta.url);
+  const source = readdirSync(root, { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('.tsx'))
+    .map((f) => readFileSync(new URL(f.replaceAll('\\', '/'), root), 'utf8'))
+    .join('\n');
+  const selects = [...source.matchAll(/<Select\b([^>]*)>([\s\S]*?)<\/Select>/g)];
+
+  it('every required select opens on an empty choice or a stated value', () => {
+    const wrong = selects
+      .filter(([, attrs]) => /\brequired\b/.test(attrs!) && !/defaultValue=/.test(attrs!))
+      .filter(([, , options]) => !options!.includes('<option value="">'))
+      .map(([tag]) => tag!.slice(0, 60));
+    expect(wrong).toEqual([]);
+  });
+
+  it.each([
+    'as-role',
+    'pl-account',
+    'metricKey',
+    'coursePrefix',
+    'ci-format',
+    'st',
+    'categoryKey',
+    'decision',
+    'accountCode',
+  ])('%s must be chosen', (id) => {
+    const [tag] = selects.filter(([, attrs]) => attrs!.includes(`id="${id}"`));
+    expect(tag?.[1]).toMatch(/\brequired\b/);
+    expect(tag?.[2]).toContain('Choose…');
+  });
+
+  it('a calendar choice with no value and no empty option opens on Choose…', () => {
+    const out = (value?: string) =>
+      html(<Choice id="t" label="Type" value={value} options={[['a', 'Alpha']]} />);
+    expect(out()).toContain('<option value="" selected="">Choose…</option>');
+    expect(out('a')).not.toContain('Choose…');
+  });
+});
+
+describe('an ended session never throws away what was typed (HUS-022)', () => {
+  const setup = (signedIn: boolean | 'offline') => {
+    const event = { preventDefault: vi.fn(), stopPropagation: vi.fn(), submitter: null };
+    const form = { requestSubmit: vi.fn() };
+    const onEnded = vi.fn();
+    const check = vi.fn(async () => signedIn);
+    return { event, form, onEnded, check, gate: sessionGate(check, onEnded) };
+  };
+
+  it('signed in: the held submit is sent once, and that second pass is left alone', async () => {
+    const { event, form, onEnded, gate } = setup(true);
+    gate(event, form);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(form.requestSubmit).toHaveBeenCalledOnce());
+    gate(event, form);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(onEnded).not.toHaveBeenCalled();
+  });
+
+  it('network down: nothing is sent, the typing stays, and the person is told why (RVC-004)', async () => {
+    const { event, form, onEnded, gate } = setup('offline');
+    gate(event, form);
+    await vi.waitFor(() => expect(onEnded).toHaveBeenCalledWith('offline'));
+    expect(form.requestSubmit).not.toHaveBeenCalled();
+  });
+
+  it('signed out: nothing is sent and the person is told', async () => {
+    const { event, form, onEnded, gate } = setup(false);
+    gate(event, form);
+    await vi.waitFor(() => expect(onEnded).toHaveBeenCalledOnce());
+    expect(form.requestSubmit).not.toHaveBeenCalled();
+  });
+
+  it('a double click checks once and sends once', async () => {
+    const { event, form, check, gate } = setup(true);
+    gate(event, form);
+    gate(event, form);
+    await vi.waitFor(() => expect(form.requestSubmit).toHaveBeenCalledOnce());
+    expect(check).toHaveBeenCalledOnce();
   });
 });

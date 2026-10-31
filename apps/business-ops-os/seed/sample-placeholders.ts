@@ -22,6 +22,7 @@ import type { RoleKey, UserId } from '@elevate/shared-types';
 import { settingSchemas } from '../src/domain';
 import { ALLOWED_PROGRAMME_COMBINATIONS, combinationLabel } from '../src/domain/catalog';
 import { opsAudit } from '../src/server/ops-common';
+import { WEBSITE_FEES, websiteFeeRows } from './website-fees';
 
 export const SAMPLE_LABEL = 'Sample — replace';
 export const SAMPLE_SOURCE = 'Sample placeholder (20 Oct 2026) — replace';
@@ -97,24 +98,6 @@ export const PROGRAMME_NAMES: Record<string, string> = Object.fromEntries(
   SEED_PROGRAMMES.map(([code, name]) => [code, name]),
 );
 
-/** Prices the public website states (docs/PUBLIC_COURSE_CATALOG_RESEARCH.md, checked 20 Oct 2026). */
-const WEBSITE_FEES = [
-  {
-    programmeCodes: ['COMMERCE_11_12', 'CUET'],
-    label: 'Commerce + CUET Batch (price as stated on elevateeducation.in)',
-    amountPaise: 10_000_00,
-    sourceNote:
-      'FAQ on /commerce-coaching and /online-coaching: "Commerce + CUET batch (₹10,000/month)"; package cards say "Unlock Pricing". Recorded 20 Oct 2026; not confirmed by the owner.',
-  },
-  {
-    programmeCodes: ['COMMERCE_11_12', 'IPMAT', 'CUET'],
-    label: 'The ACE Batch — Commerce + IPMAT + CUET (price as stated on elevateeducation.in)',
-    amountPaise: 12_000_00,
-    sourceNote:
-      'FAQ on /commerce-coaching: "The ACE Batch (₹12,000/month)"; package cards say "Unlock Pricing". Recorded 20 Oct 2026; not confirmed by the owner. Not one of the owner’s programme combinations (catalog.ts).',
-  },
-];
-
 /** One SAMPLE row per allowed combination + the website prices (drafts). Existing rows are kept. */
 export async function seedFeeStructures(db: Database, log: (m: string) => void = () => {}) {
   const manager = await seedActor(db, 'operations-manager@example.test');
@@ -135,14 +118,7 @@ export async function seedFeeStructures(db: Database, log: (m: string) => void =
         isSample: true,
         updatedBy,
       })),
-      ...WEBSITE_FEES.map((w) => ({
-        ...w,
-        mode: 'online' as const,
-        billingPeriod: 'per_month' as const,
-        billingNote: 'Per month; the course length is not stated on the website.',
-        source: 'website_stated' as const,
-        updatedBy,
-      })),
+      ...websiteFeeRows(updatedBy),
     ])
     .onConflictDoNothing()
     .returning({ id: opsFeeStructures.id });

@@ -14,7 +14,7 @@ const NUMBER_BY_SUFFIX: [RegExp, (n: number) => string][] = [
   [/Minutes$/, (n) => `${n} minutes`],
   [/Percent$/, (n) => `${n} %`],
 ];
-const code = (s: string) => (/^[a-z][a-z0-9_]*$/.test(s) ? humanise(s) : s);
+const code = (s: string) => (/^[a-z][a-z0-9_]*$/.test(s) ? humanise(s) : decisionWords(s));
 
 function show(key: string, v: unknown): ReactNode {
   if (v === null || v === undefined) return 'Not set';
@@ -26,6 +26,8 @@ function show(key: string, v: unknown): ReactNode {
   if (Array.isArray(v)) {
     if (!v.length) return 'None';
     if (key === 'closedWeekdays') return v.map((d: number) => WEEKDAYS[d]).join(', ');
+    if (key === 'departmentCodes')
+      return v.map((d: string) => humanise(d.toLowerCase())).join(', ');
     if (typeof v[0] === 'object')
       return (
         <ul>
@@ -44,6 +46,7 @@ const labelOf = (key: string) =>
   humanise(
     key
       .replace(/(Paise|Inr|Percent)$/, '')
+      .replace(/Codes$/, 's')
       .replace(/([A-Z])/g, ' $1')
       .toLowerCase(),
   );
@@ -61,6 +64,8 @@ export const StateBadge = ({ state }: { state: DecisionState }) =>
     <StatusBadge tone={decisionTone(state)}>{DECISION_STATE_LABELS[state]}</StatusBadge>
   );
 
-/** Decision record codes named by the setting (D-038, OD-013), or null. */
-export const decisionCodes = (ownerDecision: string | null) =>
-  ownerDecision?.match(/\b(?:OD|D)-\d{3}\b/g)?.join(', ') ?? null;
+/** The owner's decision in words, without its decision-record codes. */
+export const decisionWords = (ownerDecision: string) =>
+  ownerDecision
+    .replace(/\bOD-\d{3}(?:,\s*OD-\d{3})*/g, 'Still open')
+    .replace(/\bD-\d{3}(?:,\s*D-\d{3})*/g, 'Decided');

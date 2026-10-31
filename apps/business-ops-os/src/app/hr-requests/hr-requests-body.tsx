@@ -5,12 +5,14 @@
  * `?open=<id>` one request, `?tab=forwarded` the forwarded list.
  */
 import { can } from '@elevate/authorization';
+import { LINK_LOGIN_HELP } from '@elevate/shared-contracts';
 import { ButtonLink, EmptyState, PageHeader, Tabs } from '@elevate/shared-ui';
 import { istWhen } from '../../domain/staff-tasks';
 import { listAttachments, type AttachmentListRow } from '../../server/attachments';
 import { staffIdForUser } from '../../server/context';
 import {
   getHrRequest,
+  hrReadsRequestsFrom,
   listForwardedToMe,
   listMyRequests,
   requestFormOptions,
@@ -35,13 +37,24 @@ import {
   URGENCY_OPTIONS,
 } from './_components/parts';
 
+/** Who reads this person's requests first: HR covers only the departments in a proposed setting. */
+export const requestRouteText = (hrReads: boolean) =>
+  hrReads
+    ? 'Ask HR, or a colleague through HR. HR reads every request first and passes it on; nothing is sent outside Elevate OS.'
+    : 'Ask for something, or reach a colleague, here. Your department is outside the staff HR currently covers, so an operations manager reads your request first and passes it on; nothing is sent outside Elevate OS.';
+
+async function RequestRoute({ user }: Pick<BodyProps, 'user'>) {
+  const r = await load((db) => hrReadsRequestsFrom(db, user));
+  return r.ok ? requestRouteText(r.data) : 'Nothing is sent outside Elevate OS.';
+}
+
 export function HrRequestsBody(props: BodyProps) {
   const page = `${props.base}/hr-requests`;
   return (
     <>
       <PageHeader
         title="Requests through HR"
-        description="Ask HR, or a colleague through HR. HR reads every request first and passes it on; nothing is sent outside Elevate OS."
+        description={<RequestRoute user={props.user} />}
         actions={
           <ButtonLink
             variant="primary"
@@ -96,7 +109,7 @@ async function Lists({ user, base, searchParams: sp }: BodyProps) {
             empty={
               <EmptyState
                 title="You have not sent any requests"
-                description="Use New request to ask HR, or a colleague through HR, for something."
+                description="Use New request to ask for something or to reach a colleague."
               />
             }
             columns={[
@@ -224,18 +237,23 @@ async function NewRequest({ user, base, searchParams: sp }: BodyProps) {
   const close = listHref(page, sp, { new: undefined });
   const r = await load(async (db) => {
     const self = await staffIdForUser(db, user.id);
-    const tasks =
-      self && can(user, 'ops:tasks:read')
-        ? (await listTasks(db, user, taskListQuery.parse({ staffId: self, open: '1' }))).rows
-        : [];
+    if (!self) return null;
+    const tasks = can(user, 'ops:tasks:read')
+      ? (await listTasks(db, user, taskListQuery.parse({ staffId: self, open: '1' }))).rows
+      : [];
     return { form: await requestFormOptions(db, user), tasks };
   });
   return (
     <FormModal id="hr-request-new" title="New request through HR" closeHref={close}>
-      {r.ok ? (
+      {r.ok && !r.data ? (
+        <p>
+          Your login is not linked to a staff record yet, so you cannot send a request.{' '}
+          {LINK_LOGIN_HELP}
+        </p>
+      ) : r.ok && r.data ? (
         <ActionForm
           action={`${base}/api/v1/hr-requests`}
-          submitLabel="Send to HR"
+          submitLabel="Send request"
           successText="Saved."
           redirectTo={`${page}?open={id}`}
           secondary={<a href={close}>Cancel</a>}
@@ -250,14 +268,14 @@ async function NewRequest({ user, base, searchParams: sp }: BodyProps) {
             },
             {
               name: 'draft',
-              label: 'Keep it as a draft instead (HR does not see it until you send it)',
+              label: 'Keep it as a draft instead (nobody else sees it until you send it)',
               type: 'checkbox',
               section: 'Request',
             },
           ]}
         />
       ) : (
-        r.view
+        !r.ok && r.view
       )}
     </FormModal>
   );
@@ -297,7 +315,7 @@ async function OpenRequest({ user, base, searchParams: sp, id }: BodyProps & { i
       returnId={view.id}
     >
       <div className="el-stack">
-        <RequestFacts view={view} base={base} />
+        <RequestFacts user={user} view={view} base={base} />
         {view.request ? (
           <Segment title="Your message" level={3}>
             <p className="el-pre">{view.request.message || 'No message yet.'}</p>

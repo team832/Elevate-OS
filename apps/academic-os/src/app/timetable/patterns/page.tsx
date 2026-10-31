@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Card, DataTable, EmptyState, PageHeader, Subnav } from '@elevate/shared-ui';
+import { Card, DataTable, EmptyState, PageHeader, Subnav, fmtDay } from '@elevate/shared-ui';
 import type { PageAccess } from '@elevate/server-kit/next';
 import { WEEKDAY_NAMES } from '../../../domain';
 import { getCourse, listBatches, listPatterns, listRooms, listStaff } from '../../../server';
@@ -64,7 +64,7 @@ async function Body({ access }: { access: PageAccess }) {
                 { key: 'subject', header: 'Subject', render: (p) => p.subjectName },
                 { key: 'teacher', header: 'Teacher', render: (p) => p.teacherName },
                 { key: 'room', header: 'Room', render: (p) => p.roomCode ?? (p.onlineLink ? 'Online' : '—') },
-                { key: 'range', header: 'Dates', render: (p) => `${p.effectiveFrom} to ${p.effectiveTo ?? 'open'}` },
+                { key: 'range', header: 'Dates', render: (p) => `${fmtDay(p.effectiveFrom)} to ${fmtDay(p.effectiveTo, 'open')}` },
                 { key: 'status', header: 'Status', render: (p) => <PlanBadge status={p.status} /> },
               ]}
             />

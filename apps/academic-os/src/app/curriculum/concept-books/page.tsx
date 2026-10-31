@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
+import { REFERENCE_DATA_HELP } from '@elevate/shared-contracts';
 import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge, Subnav } from '@elevate/shared-ui';
 import { listConceptBooks } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
-import { PlanBadge } from '../../../ui/badges';
+import { PlanBadge, words } from '../../../ui/badges';
 import { AcademicShell, LoadError, gate, load, CURRICULUM_TABS } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export default async function ConceptBooksPage() {
       {!data.ok ? (
         <LoadError error={data.error} />
       ) : data.data.books.length === 0 ? (
-        <EmptyState title="No concept-book indices" description="Run the Academic OS seed to import the six legacy indices." />
+        <EmptyState title="No concept-book indices" description={REFERENCE_DATA_HELP} />
       ) : (
         <div className="el-stack">
           <Alert tone="info">
@@ -38,8 +39,8 @@ export default async function ConceptBooksPage() {
                   { key: 'code', header: 'Chapter', render: (c) => c.chapterCode },
                   { key: 'title', header: 'Title' },
                   { key: 'section', header: 'Section', render: (c) => c.section ?? '—' },
-                  { key: 'status', header: 'Index', render: (c) => (c.status === 'active' ? <PlanBadge status={c.indexStatus} /> : <StatusBadge tone="neutral">{c.status}{c.aliasOfCode ? ` → ${c.aliasOfCode}` : ''}</StatusBadge>) },
-                  { key: 'content', header: 'Content', render: (c) => <StatusBadge tone="neutral">{c.contentStatus.replace(/_/g, ' ')}</StatusBadge> },
+                  { key: 'status', header: 'Index', render: (c) => (c.status === 'active' ? <PlanBadge status={c.indexStatus} /> : <StatusBadge tone="neutral">{words(c.status)}{c.aliasOfCode ? ` → ${c.aliasOfCode}` : ''}</StatusBadge>) },
+                  { key: 'content', header: 'Content', render: (c) => <StatusBadge tone="neutral">{words(c.contentStatus)}</StatusBadge> },
                   {
                     key: 'q',
                     header: 'Questions (planned)',

@@ -29,7 +29,7 @@ packages/shared-contracts/src/modules/ops.ts   consumer name; no new events
 | Academic → Ops: reply | `processEvents` consumer `ops.enrolment-replies` for `academic.enrolment.confirmed` / `.rejected` | `server/enrolment.ts` `processEnrolmentReplies` |
 | Academic, Marketing → Ops dashboard | `fetchInternal` to `/academic|/marketing/api/internal/v1/summary`; failures render "source unavailable" | `server/summaries.ts`, `ui/cross-module.tsx` |
 | Core (steward) | Ops writes `core.departments`, `core.staff_members` (only via `server/organisation.ts`, `seed/reference.ts`) | |
-| Core shared services | approvals (`ops.admission.fee_arrangement`, `ops.sop.approve`), audit, notifications, idempotency keys | `server/approval-policies.ts` |
+| Core shared services | approvals (fee agreement versions; the admission-level `ops.admission.fee_arrangement` and `ops.sop.approve` are gone), audit, notifications, idempotency keys | `server/approval-policies.ts` |
 
 No other module is imported (ESLint). External CRM: interface + mock only (`server/adapters/crm.ts`, D-014, OD-010).
 

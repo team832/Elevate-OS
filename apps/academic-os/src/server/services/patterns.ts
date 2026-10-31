@@ -19,14 +19,17 @@ import {
   type AcademicPatternId,
   type Database,
 } from '@elevate/database';
+import { notify } from '@elevate/notifications';
 import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, InvalidStateTransitionError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
-import { addDays, type BatchId, type IsoDate, type StaffMemberId } from '@elevate/shared-types';
+import { addDays, fmtDay, type BatchId, type IsoDate, type StaffMemberId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { eachDate, patternDates } from '../../domain';
 import { audit, resolveScope, todayIst, type Actor } from '../context';
+import { MODULE_PATHS } from '../paths';
 import type { patternBody, patternUpdateBody, seriesEditBody } from '../schemas-sessions';
-import { checkAgainst, conflictContext, lockTimetable, recordCancellation, refuseConflicts, toTimetableSession, weekRange } from './timetable';
+import { activeStaffOrThrow } from './assignments';
+import { checkAgainst, conflictContext, lockTimetable, recordCancellation, refuseConflicts, teacherUserId, toTimetableSession, weekRange } from './timetable';
 
 type Pattern = typeof academicTimetablePatterns.$inferSelect;
 const MAX_DAYS = 400;
@@ -37,8 +40,7 @@ async function validatePatternRefs(tx: Database, p: { batchId: string; subjectId
   if (batch.status === 'completed' || batch.status === 'cancelled') throw new ValidationError(`Batch ${batch.code} is ${batch.status}.`);
   const [subject] = await tx.select().from(academicSubjects).where(eq(academicSubjects.id, p.subjectId as never));
   if (!subject || subject.courseId !== batch.courseId) throw new ValidationError('The subject is not part of the batch’s course.');
-  const [staff] = await tx.select({ id: staffMembers.id }).from(staffMembers).where(eq(staffMembers.id, p.staffId as StaffMemberId));
-  if (!staff) throw new ValidationError('Teacher (staff member) not found.');
+  await activeStaffOrThrow(tx, p.staffId);
   if (p.roomId) {
     const [room] = await tx.select().from(academicRooms).where(eq(academicRooms.id, p.roomId as never));
     if (!room || room.status !== 'active') throw new ValidationError('Room not found or inactive.');
@@ -131,6 +133,14 @@ async function generate(tx: Database, actor: Actor, p: Pattern) {
   return rows;
 }
 
+/** One notice per teacher for a whole series, however many classes it holds. */
+async function tellTeacher(tx: Database, p: Pattern, staffId: string, what: string, body: string) {
+  const userId = await teacherUserId(tx, staffId);
+  if (!userId) return;
+  const [batch] = await tx.select({ code: academicBatches.code }).from(academicBatches).where(eq(academicBatches.id, p.batchId));
+  await notify(tx, { userIds: [userId], module: 'academic', kind: 'timetable_pattern.series_changed', title: `${batch!.code}: ${what}`, body, link: MODULE_PATHS.timetable, entityType: 'timetable_pattern', entityId: p.id });
+}
+
 async function lockDraft(tx: Database, id: string, version: number) {
   const pattern = await loadPattern(tx, id, true);
   if (pattern.status !== 'draft') throw new InvalidStateTransitionError('Only a draft can be edited or deleted; change a published series from a date instead.');
@@ -176,6 +186,7 @@ export async function publishPattern(db: Database, actor: Actor, id: string, ver
     if (pattern.version !== version) throw new ConflictError('The pattern changed since you previewed it. Preview it again before publishing.');
     if (pattern.status === 'retired') throw new InvalidStateTransitionError('A retired pattern cannot be published.');
     const created = await generate(tx, actor, pattern);
+    if (created.length) await tellTeacher(tx, pattern, pattern.staffId, `${created.length} classes assigned to you`, `Series from ${fmtDay(pattern.effectiveFrom)} to ${fmtDay(pattern.effectiveTo)}.`);
     const [row] = await tx
       .update(academicTimetablePatterns)
       .set({ status: 'published', publishedAt: pattern.publishedAt ?? now, publishedByUserId: pattern.publishedByUserId ?? actor.user.id, version: pattern.version + 1 })
@@ -198,21 +209,27 @@ export async function editSeries(db: Database, actor: Actor, id: string, input: 
     if (old.status !== 'published') throw new InvalidStateTransitionError('Only a published series can be changed from a date; edit a draft on its own page.');
     if (old.version !== input.version) throw new ConflictError('The series changed since you opened it. Reload and try again.');
     if (input.effectiveDate <= todayIst(now)) throw new ValidationError('Series changes start tomorrow at the earliest; change today’s class on its own.');
-    if (input.effectiveDate < old.effectiveFrom || input.effectiveDate > old.effectiveTo!) throw new ValidationError(`The effective date must fall between ${old.effectiveFrom} and ${old.effectiveTo}.`);
+    if (input.effectiveDate < old.effectiveFrom || input.effectiveDate > old.effectiveTo!) throw new ValidationError(`The effective date must fall between ${fmtDay(old.effectiveFrom)} and ${fmtDay(old.effectiveTo)}.`);
     const next = { batchId: old.batchId, subjectId: old.subjectId, onlineLink: old.onlineLink, staffId: (input.staffId as StaffMemberId | undefined) ?? old.staffId, roomId: input.roomId === undefined ? old.roomId : (input.roomId as never), weekday: input.weekday ?? old.weekday, startTime: input.startTime ?? old.startTime, durationMinutes: input.durationMinutes ?? old.durationMinutes, effectiveFrom: input.effectiveDate, effectiveTo: old.effectiveTo! };
     await validatePatternRefs(tx, next);
     const later = await tx.select().from(academicClassSessions).where(and(eq(academicClassSessions.patternId, old.id), gte(academicClassSessions.date, input.effectiveDate)));
-    const statusReason = `Series changed from ${input.effectiveDate}: ${input.reason}`;
+    const statusReason = `Series changed from ${fmtDay(input.effectiveDate)}: ${input.reason}`;
     const cancelled = [];
     for (const s of later.filter((s) => s.status === 'scheduled')) {
       const [row] = await tx.update(academicClassSessions).set({ status: 'cancelled', statusReason, version: s.version + 1 }).where(eq(academicClassSessions.id, s.id)).returning();
-      await recordCancellation(tx, actor, s, row!, statusReason);
+      await recordCancellation(tx, actor, s, row!, statusReason, { quiet: true });
       cancelled.push(row!);
     }
     const ended = input.effectiveDate > old.effectiveFrom ? { effectiveTo: addDays(input.effectiveDate as IsoDate, -1) } : { status: 'retired' as const };
     await tx.update(academicTimetablePatterns).set({ ...ended, version: old.version + 1 }).where(eq(academicTimetablePatterns.id, old.id));
     const [created] = await tx.insert(academicTimetablePatterns).values({ ...next, status: 'published', publishedAt: now, publishedByUserId: actor.user.id, createdByUserId: actor.user.id }).returning();
     const sessions = await generate(tx, actor, created!);
+    const from = `from ${fmtDay(input.effectiveDate)}`;
+    if (next.staffId === old.staffId) await tellTeacher(tx, created!, old.staffId, `Your series changes ${from}`, input.reason);
+    else {
+      if (cancelled.length) await tellTeacher(tx, created!, old.staffId, `${cancelled.length} classes taken off you ${from}`, input.reason);
+      if (sessions.length) await tellTeacher(tx, created!, next.staffId, `${sessions.length} classes assigned to you ${from}`, input.reason);
+    }
     await audit(tx, actor, { action: 'timetable_pattern.series_edited', entityType: 'timetable_pattern', entityId: old.id, before: old, after: { ...ended, nextPatternId: created!.id }, metadata: { reason: input.reason, effectiveDate: input.effectiveDate, cancelledSessionIds: cancelled.map((c) => c.id) } });
     await audit(tx, actor, { action: 'timetable_pattern.published', entityType: 'timetable_pattern', entityId: created!.id, after: created, metadata: { created: sessions.length, replaces: old.id } });
     return { previousId: old.id, pattern: created!, cancelled, created: sessions };

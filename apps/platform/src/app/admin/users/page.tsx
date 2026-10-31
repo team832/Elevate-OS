@@ -70,7 +70,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
                 <Dialog
                   id="add-person"
                   title="Add a person"
-                  description={`Creates the account now so you can give roles before their first sign-in. They sign in with Google using this @${ORGANISATION_EMAIL_DOMAIN} address. There is no password yet: setting one by email comes later.`}
+                  description={`Creates the account now so you can give roles before their first sign-in. They sign in with Google using this @${ORGANISATION_EMAIL_DOMAIN} address. There is no password yet: setting one by email comes later. Their classes, tasks and requests appear once an operations manager links this login to their staff record in Business Operations.`}
                   triggerLabel="Add person"
                   triggerIcon="plus"
                 >

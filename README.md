@@ -8,6 +8,8 @@ Elevate OS is the internal operating system for **Elevate Education**, a coachin
 >
 > 23 Oct 2026 (D-080 … D-093): an **HR area** in Business Operations (new role HR manager; staff records and HR-only details, teaching assignments, staff attendance, task assignment and submission review, day/week/month work reports, student feedback about teachers, HR settings), file attachments, a notifications inbox in every workspace, AI draft helpers (OpenAI, drafts only), a charcoal sidebar and campaign membership for marketing employees. All new grants are **Proposed**. Migration `0015_hr_staff_workspaces` is written and tested but **not applied**; the next is `0016`. Startup commands are unchanged. Details: `IMPLEMENTATION_STATUS.md`, section "HR area".
 
+> 31 Oct 2026 (D-112 … D-122): a debug pass. An exit reaches Academic, workspace membership holds on API routes, one fee statement, insert-only seeds, a jobs panel, Hindi PDFs, and an installable package (`docs/RELEASE.md`). Nothing is deployed. Owner steps and questions: `HANDOFF.md`.
+
 > 23–24 Oct 2026 (D-094 … D-109): **Tests and Mock Tests** in Business Operations on one Academic test record (roster, score import from CSV or AI-read PDF, ranks, publication versions, paper and answer-key release), **requests through HR** in every workspace, **lead stages** and sales calls with conversion linked to confirmed admissions, the Marketing **calendar, ideas plan, SEO/AIO/GEO work, targets and monthly report**, task **reminders** and notification pop-ups, the **annual fee chart** with a reconciled drill-down, and a larger sample data set with ten demo sign-ins. Migrations `0015` and `0016` are **applied** on the owner's computer (`db:check` 19/19); the next is `0017`. All new grants are **Proposed** (`PROPOSED-GRANTS-2026-10-23b`). Details: `IMPLEMENTATION_STATUS.md`, section "Milestone 23–24 Oct 2026"; walkthrough and accounts: `HANDOFF.md`.
 
 ## Contents
@@ -119,6 +121,12 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `GROQ_API_KEY`/`GROQ_MODEL`, `GEMINI_API_KEY`/`GEMINI_MODEL`, `OPENROUTER_API_KEY`/`OPENROUTER_MODEL` | AI draft helpers | Free AI providers, tried in this order (D-110); one is used only with both its key and model (no default in code); PDFs skip Groq. Keys only in the git-ignored `.env`; the secret scan blocks `gsk_`, `AQ.` and `sk-` keys. With none set the AI buttons say "AI drafting is not set up" |
 | `AI_TIMEOUT_MS`, `<PROVIDER>_BASE_URL` | AI draft helpers | Optional: give up on one provider after this many milliseconds (default 20000); another https address per provider (tests) |
 | `OFFICE_HOST` | `npm run office` | Optional: the address staff type on the office Wi-Fi; empty = this computer's Wi-Fi address, found at start (D-110) |
+| `INTERNAL_SERVICE_TOKENS` | all | Optional: one token per module, `<module>:<token>` pairs, same value everywhere. `INTERNAL_SERVICE_TOKEN` stays required (D-077) |
+| `BOOTSTRAP_OWNER_EMAILS` | all | Optional: first administrators, `@elevateeducation.in` only. Such an address gets its roles back at each sign-in |
+| `PG_BIN_DIR` | `db:backup` | Optional: folder holding `pg_dump` |
+
+Not in `.env`: `ELEVATE_BASE_PATH` is declared by each `next.config.ts` and inlined at build (D-113). `ELEVATE_RELEASE_STANDALONE` is set only by `release:package`. `ELEVATE_PG_DATA` is for tests only. `SMOKE_EMAIL` and `SMOKE_PASSWORD` are read only by a package's `bin/smoke.mjs`.
+
 | `MARKETING_PUBLISHING_ADAPTER`, `MARKETING_METRICS_ADAPTER`, `NOTIFICATIONS_EMAIL_ADAPTER` | modules | `mock` (default) or `disabled` — no live adapters exist (D-014) |
 | `LOG_LEVEL` | all | `debug`, `info`, `warn` or `error` |
 
@@ -136,8 +144,9 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `npm run validate` | typecheck + lint + test + secret-scan |
 | `npm run db:start` / `db:stop` | Local PostgreSQL (embedded-postgres). After a crash, `db:start` removes a stale `postmaster.pid` when nothing listens on the port |
 | `npm run db:generate` | drizzle-kit migration from all schema files (the `ops` schema spans five, D-029) (wave 3 / Integration) |
-| `npm run db:migrate` | Apply migrations |
-| `npm run db:seed` | Core + module seeds (local DBs only) |
+| `npm run db:migrate` | Apply migrations; refuses a non-local database unless given `-- --allow-non-local` (a package uses `db/migrate.mjs`) |
+| `npm run db:seed` | Core + module seeds (local DBs only). Insert-only for anything staff can edit, so it is safe to repeat (D-116) |
+| `npm run release:package` | Build the four apps into one installable folder and archive (`docs/RELEASE.md`). Leaves a standalone build in `.next`: run `office:build` before `office` |
 | `npm run db:seed-demo-accounts` | Development only: the demo sign-ins with `LOCAL_DEMO_PASSWORD`, after `db:seed` (safe to repeat) |
 | `npm run db:clear-samples` | Before real use: delete every sample row and switch the demo sign-ins off |
 | `npm run db:reset` | Dev only: drop Elevate schemas, migrate, seed (refuses non-local URLs) |
@@ -148,17 +157,19 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 ## 7. Running modules alone and integrated
 - **Workspaces (default, D-072):** `npm run dev:all` and open each workspace on its own port: http://localhost:3000 (Business Operations), :3001 (Academic), :3002 (Marketing); `/` redirects to the workspace. Browsers share cookies across ports, so the one `elevate_session` cookie signs you in to every workspace your roles grant; signing out anywhere ends the session everywhere.
 - **One workspace alone:** e.g. `npm run dev:academic`, then http://localhost:3001 (sign in at `/academic/login`). Panels that show another workspace's figures say "source unavailable" while that workspace is not running; they never show 0.
-- **Platform admin and Google sign-in:** `npm run dev:platform` (:3003). The platform can still act as an optional single-origin gateway: it rewrites `/marketing`, `/academic`, `/ops` to the workspace apps.
+- **Daily use:** `npm run office:build`, then `npm run office`. Dev mode is for developers; the numbers and what changes in office mode are in `docs/WORKSPACES.md`.
+- **Platform admin and Google sign-in:** `npm run dev:platform` (:3003). The platform still rewrites `/marketing`, `/academic`, `/ops` to the workspace apps; internal routes are excluded (HAT-004). That is not a go-live gateway (F-05, `docs/RELEASE.md`).
+- **Installable package:** `npm run release:package` (`docs/RELEASE.md`).
 - **Production-like:** `npm run build`, then `npm run start -w @elevate/platform` (and `-w @elevate/<module>-os`). With `NODE_ENV=production` the cookie is `Secure` (fine on `localhost`, HTTPS required elsewhere).
 
 ## 8. Database, migrations and seed data
 - Schemas: `core` (shared, Foundation) and `marketing`, `academic`, `ops` — one file each in `packages/database/src/schema/`, owned by the module team. Design: `DATABASE_DESIGN.md`; columns: `docs/DATA_DICTIONARY.md`.
 - Tests never need migrations: `createTestDb()` builds the live schema in in-memory PGlite.
 - Migrations are central: **module teams do not run `db:generate`** during wave 2; wave 3 generates the baseline. Process, rollback and the backup-before-destructive rule: `docs/DATABASE_MIGRATION_PLAN.md`; backups/restore: `infrastructure/database/README.md`.
-- Seeds are idempotent and **fictional** (D-016): 10 users (one per role except the finance-authorised user; `hr-manager@example.test` added 23 Oct), 8 staff, 13 provisional departments from the legacy model, 5 programmes. Modules add seeds in `apps/<module>/seed/index.ts`.
+- Seeds are insert-only for anything staff can edit (D-116) and **fictional** (D-016), apart from the owner-supplied staff and reference data: 10 users (one per role except the finance-authorised user; `hr-manager@example.test` added 23 Oct), 8 staff, 13 provisional departments from the legacy model, 5 programmes. Modules add seeds in `apps/<module>/seed/index.ts`.
 
 ## 9. Tests
-`npm test` runs 158 files / 2,069 tests as of 22 Oct 2026 (foundation + all three modules + platform). Strategy, layers and inventory: `docs/TESTING_STRATEGY.md`. Write module tests with `@elevate/testing` (`setupTestDatabase`, `createTestUser`, `authedRequest`, `callRoute`). One project: `npx vitest run --project academic-os`.
+`npm test` runs every project (foundation, all three modules, platform); the latest totals are in `IMPLEMENTATION_STATUS.md` "Debug pass". Strategy, layers and inventory: `docs/TESTING_STRATEGY.md`. Write module tests with `@elevate/testing` (`setupTestDatabase`, `createTestUser`, `authedRequest`, `callRoute`). One project: `npx vitest run --project academic-os`.
 
 ## 10. Adding a feature without breaking boundaries
 1. Find or add the requirement ID in your module's `requirements/REQUIREMENTS.md` (from `docs/PRODUCT_REQUIREMENTS.md`).
@@ -189,7 +200,9 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `INTEGRATION_CONTRACT.md` | Identities, IDs, ownership, permissions, API, events, summaries, versioning, failure behaviour |
 | `DATABASE_DESIGN.md` | Schemas, conventions, core tables |
 | `IMPLEMENTATION_STATUS.md` | What is built and the evidence |
-| `docs/DECISIONS.md` | Decision log (D-001 … D-111) |
+| `docs/DECISIONS.md` | Decision log (D-001 … D-122) |
+| `docs/RELEASE.md` | The release package: build, contents, install, what it does not do, go-live blockers |
+| `docs/CASELETS.md` | The master register of use cases and their first-package results |
 | `docs/WORKSPACES.md` | The three role workspaces: URLs, dev commands, demo sign-ins, sign-in and access rules, role × workspace matrix |
 | `docs/BUILD_PLAN.md` | Waves, ownership, module layout, definition of done |
 | `docs/EXISTING_PROJECT_AUDIT.md` | Audit of the legacy material |
@@ -200,9 +213,6 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `docs/DATA_DICTIONARY.md` | Core columns |
 | `docs/DATABASE_MIGRATION_PLAN.md` | Migration process, rollback, backups |
 | `docs/TESTING_STRATEGY.md` | Test layers and inventory |
-| `infrastructure/*/README.md` | Dev environment, database operations, deployment outline (Proposed) |
+| `infrastructure/*/README.md` | Dev environment, database operations, deployment outline (Proposed); see `docs/RELEASE.md` |
 | `packages/*/README.md` | Package APIs |
 | `data/legacy/README.md` | Legacy data extracts |
-#   E l e v a t e - O S 
- 
- 

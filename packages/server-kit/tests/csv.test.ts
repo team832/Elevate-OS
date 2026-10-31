@@ -20,7 +20,10 @@ describe('CSV export', () => {
     expect(csvCell(input)).toBe(expected);
   });
 
-  it('joins header and rows with CRLF', () => {
-    expect(toCsv(['a', 'b'], [[1, 'x,y']])).toBe('a,b\r\n1,"x,y"\r\n');
+  it('joins header and rows with CRLF, after a byte order mark so Excel reads UTF-8', async () => {
+    const csv = toCsv(['a', 'b'], [[1, 'x,y']]);
+    expect(csv).toBe('﻿a,b\r\n1,"x,y"\r\n');
+    const bytes = new Uint8Array(await new Response(toCsv(['नाम ₹'], [])).arrayBuffer());
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
   });
 });

@@ -17,7 +17,7 @@ import {
 } from '@elevate/database';
 import { publishEvent, withTransaction } from '@elevate/server-kit';
 import { ConflictError, InvalidStateTransitionError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
-import type { StudentId } from '@elevate/shared-types';
+import { fmtDay, type StudentId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import {
   aggregateResults,
@@ -142,16 +142,21 @@ async function writeRun(tx: Database, actor: Actor, assessmentId: string, versio
   return { assessment, run: run!, aggregate: agg };
 }
 
+/** Write result version 1 of a locked assessment, in the caller's transaction. */
+export async function finaliseLocked(tx: Database, actor: Actor, locked: Pick<typeof academicAssessments.$inferSelect, 'id' | 'status' | 'rosterSnapshotAt'>) {
+  if (locked.status === 'finalised') throw new InvalidStateTransitionError('Results are already final; re-score to create a new version.');
+  if (locked.status === 'cancelled') throw new InvalidStateTransitionError('The assessment is cancelled.');
+  if (locked.rosterSnapshotAt) await mirrorRosterToAttempts(tx, actor, locked.id);
+  const { run, aggregate } = await writeRun(tx, actor, locked.id, 1, null);
+  await audit(tx, actor, { action: 'assessment.finalised', entityType: 'assessment', entityId: locked.id, before: { status: locked.status }, after: { status: 'finalised', runId: run.id, version: 1, scored: aggregate.scored, absent: aggregate.absent } });
+  return { run, scored: aggregate.scored, absent: aggregate.absent, sectionStats: aggregate.sectionStats };
+}
+
 export async function finaliseAssessment(db: Database, actor: Actor, assessmentId: string) {
   return withTransaction(db, async (tx) => {
     const [locked] = await tx.select().from(academicAssessments).where(eq(academicAssessments.id, assessmentId as never)).for('update');
     if (!locked) throw new NotFoundError('Assessment not found.');
-    if (locked.status === 'finalised') throw new InvalidStateTransitionError('Results are already final; re-score to create a new version.');
-    if (locked.status === 'cancelled') throw new InvalidStateTransitionError('The assessment is cancelled.');
-    if (locked.rosterSnapshotAt) await mirrorRosterToAttempts(tx, actor, locked.id);
-    const { run, aggregate } = await writeRun(tx, actor, locked.id, 1, null);
-    await audit(tx, actor, { action: 'assessment.finalised', entityType: 'assessment', entityId: locked.id, before: { status: locked.status }, after: { status: 'finalised', runId: run.id, version: 1, scored: aggregate.scored, absent: aggregate.absent } });
-    return { run, scored: aggregate.scored, absent: aggregate.absent, sectionStats: aggregate.sectionStats };
+    return finaliseLocked(tx, actor, locked);
   });
 }
 
@@ -337,7 +342,7 @@ export async function checkAssessmentScheduleFor(db: Database, actor: Actor, inp
   const result = checkAssessmentSchedule({
     candidates,
     otherAssessments: others,
-    classes: classes.map((c) => ({ id: c.id, label: `Class ${c.date} ${c.startTime}`, date: c.date, startTime: c.startTime, durationMinutes: c.durationMinutes })),
+    classes: classes.map((c) => ({ id: c.id, label: `Class ${fmtDay(c.date)} ${c.startTime}`, date: c.date, startTime: c.startTime, durationMinutes: c.durationMinutes })),
     blackouts,
     minGap: gap.value.minDays > 0 ? gap.value : null,
   });

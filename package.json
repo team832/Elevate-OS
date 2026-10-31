@@ -9,6 +9,7 @@
     "node": ">=24.0.0",
     "npm": ">=11.0.0"
   },
+  "packageManager": "npm@11.17.0",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -41,6 +42,7 @@
     "db:clear-samples": "tsx scripts/development/clear-samples.ts",
     "db:check": "tsx scripts/development/db-check.ts",
     "db:backup": "node scripts/backup/pg-backup.mjs",
+    "release:package": "node scripts/release/package.mjs",
     "docs:permissions": "tsx scripts/development/permission-matrix.ts",
     "docs:data-dictionary": "tsx scripts/development/data-dictionary.ts",
     "docs:code-map": "node scripts/development/code-map.mjs"

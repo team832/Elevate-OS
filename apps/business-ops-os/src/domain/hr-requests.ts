@@ -83,7 +83,7 @@ interface Rule {
 const OPEN: HrRequestStatus[] = ['submitted', 'reviewed', 'forwarded'];
 export const HR_REQUEST_RULES: Record<HrRequestAction, Rule> = {
   submit: {
-    label: 'Send to HR',
+    label: 'Send request',
     from: ['draft'],
     to: 'submitted',
     who: 'sender',

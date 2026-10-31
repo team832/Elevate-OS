@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { refusal } from '../../src/ui/pdf-download';
 import type { Column } from '@elevate/shared-ui';
 import {
   donutArcs,
@@ -20,15 +22,18 @@ import {
   Sparkline,
   StatCard,
 } from '../../src/ui/charts';
-import { humanise } from '../../src/ui/format';
+import { humanise, plainNote } from '../../src/ui/format';
 import { RecordTable } from '../../src/ui/record-table';
-import { DetailTable, FormSection, Segment } from '../../src/ui/sections';
-import { SearchPanel } from '../../src/ui/list-controls';
+import { DetailTable, FormSection, noStaffHint, Segment } from '../../src/ui/sections';
+import { Pager, SearchPanel } from '../../src/ui/list-controls';
 import { rowLinkFor } from '../../src/ui/row-links';
 import { FormModal, RecordModal } from '../../src/ui/record-modal';
 import {
   ActionForm,
   FormAlert,
+  missingRequired,
+  recordedText,
+  signInHref,
   groupSections,
   plainError,
   submitGate,
@@ -36,6 +41,9 @@ import {
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace() {}, push() {}, refresh() {} }),
+  redirect: (to: string) => {
+    throw new Error(`REDIRECT ${to}`);
+  },
 }));
 
 const html = (node: React.ReactNode) => renderToStaticMarkup(<>{node}</>);
@@ -235,8 +243,17 @@ describe('humanise', () => {
     ['whatsapp', 'WhatsApp'],
     ['sms', 'SMS'],
     ['bank_transfer', 'Bank transfer'],
+    ['sandbox', 'Test mode only'],
     [null, '—'],
   ])('%s → %s', (code, label) => expect(humanise(code)).toBe(label));
+});
+
+describe('plainNote (RVC-015)', () => {
+  it.each([
+    ['Accounts subjects added by the owner 2026-10-21 (D-047)', 'Accounts subjects added by the owner 21 Oct 2026'],
+    ['subject changed by the owner 2026-10-23 (OA-2)', 'subject changed by the owner 23 Oct 2026'],
+    ['site spells it so (checked 2026-10-20)', 'site spells it so (checked 20 Oct 2026)'],
+  ])('%s', (note, plain) => expect(plainNote(note)).toBe(plain));
 });
 
 describe('tables and sections', () => {
@@ -293,8 +310,32 @@ describe('tables and sections', () => {
       '<td data-label="Due"><div>Today<small>hint</small><button>Mark done</button></div></td>',
     );
     expect(table(25)).toContain('class="el-table-wrap"');
-    expect(table(26)).toContain('class="el-table-wrap ops-table-well"');
+    expect(table(26)).toContain('class="el-table-wrap el-table-well"');
+    expect(table(1, [{ key: 'go', header: '', render: () => 'Open' }])).toContain(
+      '<th scope="col"><span class="el-visually-hidden">Actions</span></th>',
+    );
   });
+
+  it('the chevron of an empty row keeps its distance: the state variable carries a unit for calc()', () => {
+    const ops = readFileSync(new URL('../../src/app/ops.css', import.meta.url), 'utf8');
+    expect(ops).toMatch(/\.ops-table-empty \.el-state \{[^}]*--el-state-pad: 0rem/);
+  });
+
+  it.each(['ascending', 'descending'] as const)(
+    'record table: the sorted column alone says %s',
+    (direction) => {
+      const out = html(
+        <RecordTable
+          columns={columns}
+          rows={[]}
+          rowKey={(r) => r.id}
+          sortedBy={{ column: 'name', direction }}
+        />,
+      );
+      expect(out.match(/aria-sort/g)).toHaveLength(1);
+      expect(out).toContain(`<th scope="col" aria-sort="${direction}">Student</th>`);
+    },
+  );
 
   it('record table: empty state row under the real headers', () => {
     const out = html(
@@ -362,6 +403,7 @@ describe('record modal and forms', () => {
       />,
     );
     expect(out).toContain('<dialog id="student-modal" class="el-dialog ops-modal"');
+    expect(out).toMatch(/<dialog [^>]*\bopen=""/); // paints with the page, not after hydration
     expect(out).toContain('Open full record');
     expect(out).toContain('role="tablist"');
     expect(out).toContain('aria-selected="true"');
@@ -450,6 +492,19 @@ describe('record modal and forms', () => {
         ? undefined
         : { id: `f-${i.path?.[0]}`, label: `Label ${i.path?.[0]}` };
     const error = { code: 'VALIDATION', message: 'The request body is not valid.' };
+    const expired = html(
+      <FormAlert
+        error={{ code: 'UNAUTHENTICATED', message: 'You need to sign in.' }}
+        fieldFor={fieldFor}
+        issues={[]}
+        signIn={signInHref('/ops/api/v1/leads')}
+      />,
+    );
+    expect(expired).toContain('<a href="/ops/login" target="_blank" rel="noopener">');
+    expect(expired).toContain('What you typed stays here');
+    expect(
+      html(<FormAlert error={error} fieldFor={fieldFor} issues={[]} signIn="/ops/login" />),
+    ).not.toContain('/ops/login');
     const two = html(
       <FormAlert
         error={error}
@@ -538,5 +593,132 @@ describe('record modal and forms', () => {
     expect(
       rowLinkFor({ closest: (sel: string) => (sel === 'tr' ? outside : {}) } as unknown as Element),
     ).toBe(link);
+  });
+});
+
+describe('a required choice is never made for the person (HUS-003)', () => {
+  it.each([
+    [150, 'HUS-1', 'Recorded ₹1.50, receipt HUS-1.'],
+    [2500000, undefined, 'Recorded ₹25,000.'],
+  ])('a recorded payment is named: %i paise, receipt %s (HUS-008)', (paise, receipt, words) => {
+    expect(recordedText(paise, receipt)).toBe(words);
+  });
+
+  const opts = [
+    { value: 'connected_two_way', label: 'Connected' },
+    { value: 'no_answer', label: 'No answer' },
+  ];
+  const form = (defaultValue?: string, required = true) =>
+    html(
+      <ActionForm
+        action="/ops/api/v1/x"
+        submitLabel="Log contact"
+        fields={[
+          {
+            name: 'outcome',
+            label: 'Outcome',
+            type: 'select',
+            required,
+            options: opts,
+            defaultValue,
+          },
+        ]}
+      />,
+    );
+  it('no default: opens on Choose, and nothing is selected', () => {
+    expect(form()).toContain('<option value="" selected="">Choose…</option>');
+  });
+  it('a stated default stays selected with no blank option', () => {
+    const out = form('no_answer');
+    expect(out).toContain('<option value="no_answer" selected="">');
+    expect(out).not.toContain('Choose…');
+  });
+  it('an optional select keeps its dash', () => {
+    expect(form(undefined, false)).toContain('<option value="" selected="">—</option>');
+  });
+  it('blank required fields are named in words; hidden, checkbox and filled ones are not', () => {
+    const data = new FormData();
+    data.set('filled', 'x');
+    expect(
+      missingRequired(
+        [
+          { name: 'outcome', label: 'Outcome', type: 'select', required: true },
+          { name: 'dueOn', label: 'Due date', type: 'date', required: true },
+          { name: 'filled', label: 'Filled', required: true },
+          { name: 'optional', label: 'Optional' },
+          { name: 'id', label: 'Id', type: 'hidden', required: true },
+          { name: 'ok', label: 'Ok', type: 'checkbox', required: true },
+        ],
+        data,
+      ),
+    ).toEqual([
+      { path: ['outcome'], message: 'Choose outcome.' },
+      { path: ['dueOn'], message: 'Enter due date.' },
+    ]);
+  });
+});
+
+describe('RecordTable marks sample rows (HUS-034)', () => {
+  it('in the link column, for sample rows only', () => {
+    const out = html(
+      <RecordTable
+        rows={[
+          { id: 's', name: 'Saanvi Sample Student', note: 'x', sample: true },
+          { id: 'r', name: 'Real Person', note: 'y', sample: false },
+        ]}
+        rowKey={(r) => r.id}
+        rowHref={(r) => `/ops/x/${r.id}`}
+        linkColumn="note"
+        sampleOf={(r) => r.sample}
+        columns={[{ key: 'name', header: 'Name' }, { key: 'note', header: 'Note' }]}
+      />,
+    );
+    expect(out.split('el-badge-sample').length - 1).toBe(1);
+    expect(out).toMatch(/>x <span class="el-badge el-badge-sample">SAMPLE DATA/);
+  });
+});
+
+it.each([
+  [null, 'Could not reach the server. Check the connection and try again.'],
+  [new Response('{"error":{"message":"No access"}}', { status: 403 }), 'No access'],
+  [new Response('not json', { status: 500 }), 'The form could not be generated (500).'],
+])('a download that fails says why (%#)', async (res, words) => {
+  expect(await refusal(res, 'The form could not be generated')).toBe(words);
+});
+
+describe('small refusals and page numbers', () => {
+  it('a refusal not tied to a field says its sentence once (HUS-030)', () => {
+    const message = 'A demo has 3 demo days under the setting.';
+    const out = html(
+      <FormAlert
+        error={{ code: 'VALIDATION', message }}
+        fieldFor={() => undefined}
+        issues={[{ path: ['days'], message }]}
+      />,
+    );
+    expect(out.split(message).length - 1).toBe(1);
+  });
+
+  it('a select with nothing to choose from says what to do (HUS-015)', () => {
+    const form = (emptyHint?: React.ReactNode) =>
+      html(
+        <ActionForm
+          action="/ops/api/v1/x"
+          submitLabel="Assign owner"
+          fields={[{ name: 'o', label: 'New owner', type: 'select', required: true, options: [], emptyHint }]}
+        />,
+      );
+    expect(form()).toContain('Nothing to choose from yet.');
+    expect(form(noStaffHint('/ops'))).toContain('href="/ops/staff?new=1"');
+    expect(form(noStaffHint('/marketing'))).not.toContain('href=');
+  });
+
+  it('a page past the end goes to the last page (HUS-029)', () => {
+    expect(() =>
+      Pager({ basePath: '/ops/leads', params: { page: '9999', q: 'a' }, page: 9999, pageSize: 25, total: 247 }),
+    ).toThrow('REDIRECT /leads?page=10&q=a');
+    expect(
+      html(Pager({ basePath: '/ops/leads', params: {}, page: 10, pageSize: 25, total: 247 })),
+    ).toContain('Showing 226–247 of 247');
   });
 });

@@ -58,6 +58,41 @@ async function submittedReviews(
   return { source: r, reviews };
 }
 
+/** Active guardians; none added yet: the guardian given on the enquiry, whom the profile shows too (RVB-007). */
+async function reportGuardians(db: Database, profile: Profile) {
+  if (profile.guardians === 'hidden') return [];
+  const rows = profile.guardians
+    .filter((g) => !g.archivedAt)
+    .map((g) => ({
+      name: g.fullName,
+      relationship: g.relationship as string,
+      phone: g.phone,
+      email: g.email,
+      consent: g.consentStatus as string,
+    }));
+  if (rows.length) return rows;
+  const [lead] = await db
+    .select({
+      name: opsLeads.guardianName,
+      relationship: opsLeads.guardianRelationship,
+      phone: opsLeads.guardianPhone,
+      email: opsLeads.guardianEmail,
+    })
+    .from(opsLeads)
+    .where(eq(opsLeads.id, profile.person.leadId));
+  return lead?.name || lead?.phone
+    ? [
+        {
+          name: `${lead.name ?? 'Guardian'} (on the enquiry)`,
+          relationship: lead.relationship ?? 'not_recorded',
+          phone: lead.phone,
+          email: lead.email,
+          consent: 'not_recorded',
+        },
+      ]
+    : [];
+}
+
 /**
  * KYC block of the internal kind (D-078): DOB and age, class, school, city, guardians with
  * contacts, document checklist. Built only when the author may read private data; getStudentKyc
@@ -65,15 +100,15 @@ async function submittedReviews(
  */
 async function kycFacts(db: Database, actor: Actor, profile: Profile) {
   const p = profile.person;
-  const [[lead], kyc] = await Promise.all([
+  const [[lead], kyc, guardians] = await Promise.all([
     db
       .select({ dateOfBirth: opsLeads.dateOfBirth })
       .from(opsLeads)
       .where(eq(opsLeads.id, p.leadId)),
     getStudentKyc(db, actor, profile.identity!.id),
+    reportGuardians(db, profile),
   ]);
   const dateOfBirth = lead?.dateOfBirth ?? null;
-  const guardians = profile.guardians === 'hidden' ? [] : profile.guardians;
   return {
     dateOfBirth,
     age: ageOn(dateOfBirth, istToday(new Date())),
@@ -81,15 +116,7 @@ async function kycFacts(db: Database, actor: Actor, profile: Profile) {
     board: p.schoolBoard,
     school: p.previousSchool ?? null,
     city: p.city ?? null,
-    guardians: guardians
-      .filter((g) => !g.archivedAt)
-      .map((g) => ({
-        name: g.fullName,
-        relationship: g.relationship,
-        phone: g.phone,
-        email: g.email,
-        consent: g.consentStatus,
-      })),
+    guardians,
     documents: documentChecklist(
       kyc.documents.filter((d) => d.current && d.subjectType === 'student'),
     ),
@@ -222,22 +249,23 @@ export async function buildSnapshot(
     kyc: has('kyc') ? await kycFacts(db, actor, profile) : undefined,
     guardians:
       has('guardians') && profile.guardians !== 'hidden'
-        ? profile.guardians
-            .filter((g) => !g.archivedAt)
-            .map((g) => ({
-              name: g.fullName,
-              relationship: g.relationship,
-              consent: g.consentStatus,
-            }))
+        ? (await reportGuardians(db, profile)).map(({ name, relationship, consent }) => ({
+            name,
+            relationship,
+            consent,
+          }))
         : undefined,
     // Totals only (a statement): no payment rows, methods or receipts.
     fees:
       has('fees') && profile.fees
         ? {
             duePaise: profile.fees.duePaise,
+            creditAdjustmentsPaise: profile.fees.creditAdjustmentsPaise,
             netReceivedPaise: profile.fees.netReceivedPaise,
+            unchargedPaise: profile.fees.unchargedPaise,
             balancePaise: profile.fees.balancePaise,
             balance: FEE_BALANCE_LABELS[profile.fees.balanceState],
+            basis: 'agreement' as const,
             disclaimer: profile.fees.disclaimer,
           }
         : undefined,

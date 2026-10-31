@@ -3,6 +3,7 @@
  * "My meetings" (D-073), one appointment with participants, messages and changes, and pickers.
  */
 import { and, asc, count, eq, gte, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
+import { containsPattern } from '@elevate/server-kit';
 import {
   opsAppointmentChanges,
   opsAppointmentParticipants,
@@ -70,7 +71,7 @@ function ownFilter(db: Database, access: AccessScope): SQL | undefined {
 
 /** Appointments whose student or lead name contains `q` (subqueries, so the count query needs no joins). */
 function nameMatches(db: Database, q: string) {
-  const like = `%${q.replace(/[%_]/g, '')}%`;
+  const like = containsPattern(q);
   return or(
     inArray(
       appointments.studentId,

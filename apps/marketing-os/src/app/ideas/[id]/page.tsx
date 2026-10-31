@@ -96,7 +96,7 @@ export default async function IdeaDetailPage({
                   meta={<SampleBadge sample={idea.isSample} />}
                 >
                   {idea.quarantineState === 'quarantined' ? (
-                    <Alert tone="warning" title="Quarantined: duplicate legacy ID">
+                    <Alert tone="warning" title="Quarantined: duplicate old tracker ID">
                       {idea.quarantineReason}{' '}
                       {idea.proposedCode
                         ? `Proposed code: ${idea.proposedCode} (${idea.proposedCodeStatus}, not applied).`
@@ -316,7 +316,8 @@ export default async function IdeaDetailPage({
                         <TextInput id="ci-title" name="title" required />
                       </Field>
                       <Field id="ci-format" label="Format">
-                        <Select id="ci-format" name="format">
+                        <Select id="ci-format" name="format" required>
+                          <option value="">Choose…</option>
                           {CONTENT_FORMATS.map((f) => (
                             <option key={f} value={f}>
                               {f.replace('_', ' ')}
@@ -370,7 +371,7 @@ export default async function IdeaDetailPage({
                       },
                       {
                         key: 'legacy',
-                        header: 'Legacy',
+                        header: 'Old tracker',
                         render: (p) =>
                           p.legacyStatus
                             ? `${p.legacyStatus}${p.legacyNotes ? ` — ${p.legacyNotes}` : ''}`
@@ -385,7 +386,8 @@ export default async function IdeaDetailPage({
                     <form action={changeIdeaStatusAction} className="el-grid">
                       <input type="hidden" name="ideaId" value={idea.id} />
                       <Field id="st" label="New status">
-                        <Select id="st" name="status">
+                        <Select id="st" name="status" required>
+                          <option value="">Choose…</option>
                           {IDEA_STATUSES.map((s) => (
                             <option key={s} value={s}>
                               {IDEA_STATUS_LABELS[s]}

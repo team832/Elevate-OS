@@ -225,7 +225,7 @@ Source: the owner's admissions brief of 21 Oct 2026 and owner decisions D-037 �
 
 Earlier rows these replace: OPS-080 → OPS-124; OPS-089 / OPS-090 (number at conversion) → number only at final confirmation (OPS-129, D-040; `convert` now returns the application and refuses `admissionNumber`); OPS-099 → OPS-138; OPS-109 (activation by the admission's fee-arrangement approval) → OPS-134; OPS-120 "Applications" → OPS-132 (an "Enrolment handoffs" screen is still Proposed); OPS-121 profile part → OPS-138 (Academic columns on the Active students list are still Proposed).
 
-Still Proposed or open: Google re-authentication for confirmers (D-041); who holds `ops:admissions:confirm`, `ops:kyc:verify`, `ops:student_reports:review`, `ops:event_messages:send` and `ops:eod:review`; registration fee once per student or per year; discount second approver; onboarding template items; messaging provider; Devanagari in PDFs.
+Still Proposed or open: Google re-authentication for confirmers (D-041); who holds `ops:admissions:confirm`, `ops:kyc:verify`, `ops:student_reports:review`, `ops:event_messages:send` and `ops:eod:review`; registration fee once per student or per year; discount second approver; onboarding template items; messaging provider. Devanagari in PDFs is Implemented and Tested since 31 Oct 2026 (D-118).
 
 
 ## Role workspaces (owner brief 22 Oct 2026; D-072, D-073)

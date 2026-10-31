@@ -158,7 +158,7 @@ describe('overview blocks follow permissions', () => {
     stubAcademic({ reviews: 'down' });
     const o = await buildOverview(db(), user(), range, { summaries: down });
     for (const k of BLOCKS) expect(o[k] !== null, k).toBe((parts as readonly string[]).includes(k));
-    const out = renderToStaticMarkup(<OverviewBlocks o={o} />);
+    const out = renderToStaticMarkup(<OverviewBlocks o={o} user={user()} />);
     for (const id of SECTIONS)
       expect(out.includes(`id="${id}"`), id).toBe((sections as readonly string[]).includes(id));
   });
@@ -214,7 +214,8 @@ describe('/ops/marketing-summary page', () => {
     vi.stubGlobal('fetch', down.fetchImpl);
     const out = await page();
     expect(out).toContain('Source unavailable');
-    expect(out).toContain('HTTP 503');
+    expect(out).toContain('the other workspace reported a problem');
+    expect(out).not.toContain('HTTP 503');
     expect(out).not.toContain('Posts published');
   });
 });
@@ -228,10 +229,10 @@ describe('sources that cannot be read', () => {
       data: { academic: { status: 'unavailable' } },
     });
     expect(o.reviews).toMatchObject({ ok: true, data: { status: 'unavailable' } });
-    const out = renderToStaticMarkup(<OverviewBlocks o={o} />);
+    const out = renderToStaticMarkup(<OverviewBlocks o={o} user={manager} />);
     expect(out).toContain('Source unavailable (checked');
-    expect(out).toContain('Academic OS could not be read (HTTP 503)');
-    expect(out).toContain('Marketing OS could not be read (HTTP 503)');
+    expect(out).toContain('Academic OS could not be read (the other workspace reported a problem)');
+    expect(out).toContain('Marketing OS could not be read (the other workspace reported a problem)');
     expect(out).not.toContain('Classes delivered');
     expect(out).toMatch(/Teacher reviews published.*Source unavailable/);
   });
@@ -251,7 +252,7 @@ describe('sources that cannot be read', () => {
     });
     const o = await buildOverview(db(), manager, range, { summaries: academicUp });
     expect(o.reviews).toMatchObject({ ok: true, data: { status: 'available', total: 1 } });
-    const out = renderToStaticMarkup(<OverviewBlocks o={o} />);
+    const out = renderToStaticMarkup(<OverviewBlocks o={o} user={manager} />);
     expect(out).toContain('Classes delivered');
     expect(out).toContain('>17<');
     expect(out).toContain('Marketing OS could not be read');
@@ -278,7 +279,9 @@ describe('per-day series', () => {
     const days = o.series.data.leadsPerDay;
     expect(days).toHaveLength(7);
     expect([days[0]?.date, days.at(-1)?.date]).toEqual([range.from, range.to]);
-    expect(renderToStaticMarkup(<OverviewBlocks o={o} />)).toContain('Leads received per day');
+    expect(renderToStaticMarkup(<OverviewBlocks o={o} user={manager} />)).toContain(
+      'Leads received per day',
+    );
   });
 });
 
@@ -286,7 +289,10 @@ describe('overview links open the records', () => {
   it('each block links to its list, keeping the range', async () => {
     stubAcademic({ reviews: 'down' });
     const o = await buildOverview(db(), manager, range, { summaries: down });
-    const out = renderToStaticMarkup(<OverviewBlocks o={o} />).replaceAll('&amp;', '&');
+    const out = renderToStaticMarkup(<OverviewBlocks o={o} user={manager} />).replaceAll(
+      '&amp;',
+      '&',
+    );
     const q = `from=${range.from}&to=${range.to}`;
     for (const href of [
       `/ops/reports/admissions?${q}`,

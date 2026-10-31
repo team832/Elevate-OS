@@ -173,24 +173,21 @@ export async function closeFollowUp(
 
 export type FollowUpView = 'mine' | 'overdue' | 'due_today' | 'open' | 'all';
 
-export async function listFollowUps(
-  db: Database,
-  actor: Actor,
-  options: { view?: FollowUpView; leadId?: string; now?: Date } = {},
-) {
+type FollowUpOptions = { view?: FollowUpView; leadId?: string; now?: Date };
+
+/** The list's conditions; null when the reader has none to see. */
+async function followUpWhere(db: Database, actor: Actor, options: FollowUpOptions) {
   const access = await accessScope(db, actor, 'ops:leads:read');
-  const now = options.now ?? new Date();
-  const today = istToday(now);
-  const settings = await loadSettings(db);
+  const today = istToday(options.now ?? new Date());
   const conditions: SQL[] = [];
   if (access.scope === 'own') {
-    if (!access.staffId) return [];
+    if (!access.staffId) return null;
     conditions.push(eq(opsFollowUps.ownerStaffId, access.staffId));
   }
   const view = options.view ?? 'open';
   if (view === 'mine') {
     const own = access.scope === 'own' ? access.staffId : await staffIdForUser(db, actor.id);
-    if (!own) return [];
+    if (!own) return null;
     conditions.push(eq(opsFollowUps.ownerStaffId, own), eq(opsFollowUps.status, 'open'));
   }
   if (view === 'overdue')
@@ -201,6 +198,22 @@ export async function listFollowUps(
   if (options.leadId) conditions.push(eq(opsFollowUps.leadId, options.leadId as LeadId));
   // Admission follow-ups belong to the admissions case (D-073): Marketing sees lead ones only.
   if (!can(actor, 'ops:admissions:read')) conditions.push(isNull(opsFollowUps.admissionId));
+  return conditions;
+}
+
+/** How many follow-ups the list has, past its FOLLOW_UP_LIST_LIMIT. */
+export async function countFollowUps(db: Database, actor: Actor, options: FollowUpOptions = {}) {
+  const where = await followUpWhere(db, actor, options);
+  return where ? db.$count(opsFollowUps, and(...where)) : 0;
+}
+
+export const FOLLOW_UP_LIST_LIMIT = 500;
+
+export async function listFollowUps(db: Database, actor: Actor, options: FollowUpOptions = {}) {
+  const conditions = await followUpWhere(db, actor, options);
+  if (!conditions) return [];
+  const now = options.now ?? new Date();
+  const settings = await loadSettings(db);
   const rows = await db
     .select({
       followUp: opsFollowUps,
@@ -211,9 +224,9 @@ export async function listFollowUps(
     .from(opsFollowUps)
     .innerJoin(opsLeads, eq(opsLeads.id, opsFollowUps.leadId))
     .innerJoin(staffMembers, eq(staffMembers.id, opsFollowUps.ownerStaffId))
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(asc(opsFollowUps.dueDate), asc(opsLeads.code))
-    .limit(500);
+    .limit(FOLLOW_UP_LIST_LIMIT);
   const window = settings['followups.due_rules'].value.upcomingWindowDays;
   return rows.map((r) => ({
     ...r.followUp,

@@ -26,6 +26,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
+import { containsPattern } from '@elevate/server-kit';
 import { alias } from 'drizzle-orm/pg-core';
 import { can, scopeFor } from '@elevate/authorization';
 import {
@@ -189,7 +190,7 @@ export async function listStudents(
     ...dashboardConditions(db, query, now),
   ];
   if (query.q) {
-    const q = `%${query.q.replace(/[%_\\]/g, '')}%`;
+    const q = containsPattern(query.q);
     conditions.push(
       or(
         ilike(opsLeads.studentName, q),

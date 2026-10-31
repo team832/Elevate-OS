@@ -184,7 +184,8 @@ const reductionSign = (r: FeeRecordLike) =>
  * A-FEE-2: apply the ledger to instalments. Payments first, then reductions; each fills the
  * instalments its rows name (`instalmentId`) first, then the rest oldest due date first (no due
  * date last). Links only set priority: what is applied never exceeds what was recorded, and
- * nothing is applied beyond an instalment's amount.
+ * nothing is applied beyond an instalment's amount. A debit above the reductions belongs to no
+ * instalment: it stays owed apart (owedAboveInstalments) and never undoes a payment.
  */
 export function allocateInstalments<I extends InstalmentLike>(
   instalments: readonly I[],
@@ -214,12 +215,13 @@ export function allocateInstalments<I extends InstalmentLike>(
     return given;
   };
   const s = ledgerSums(ledger);
-  // Everything applicable; a negative side (more refunded than paid, debits above reductions)
-  // lowers the other one.
-  const total = Math.max(0, s.received - s.refund + s.discount + s.waiver + s.credit - s.debit);
-  const payments = Math.min(Math.max(0, s.received - s.refund), total);
-  const paid = apply(paymentSign, payments);
-  const adjusted = apply(reductionSign, total - payments);
+  const net = s.received - s.refund;
+  const paid = apply(paymentSign, Math.max(0, net));
+  // More refunded than paid lowers the reductions; a net debit applies nothing.
+  const adjusted = apply(
+    reductionSign,
+    Math.max(0, s.discount + s.waiver + s.credit - s.debit + Math.min(0, net)),
+  );
   return order.map((instalment) => {
     const p = paid.get(instalment.id) ?? 0;
     const a = adjusted.get(instalment.id) ?? 0;
@@ -233,6 +235,12 @@ export function allocateInstalments<I extends InstalmentLike>(
     };
   });
 }
+
+/** Owed on the agreement but on no instalment: what a debit adds above the instalments. */
+export const owedAboveInstalments = (
+  totals: Pick<PlanTotals, 'outstandingPaise'>,
+  allocated: readonly Pick<AllocatedInstalment, 'remainingPaise'>[],
+) => totals.outstandingPaise - allocated.reduce((n, a) => n + a.remainingPaise, 0);
 
 /** A-FEE-7: overall state of an agreement (a debit above the instalments stays owed). */
 export function agreementStatus(
@@ -257,7 +265,7 @@ export interface Reconciliation {
 
 /**
  * A-FEE-4: does the agreement agree with its ledger? Issues are shown above the tables. A credit
- * (more recorded than owed) is not an issue: it is shown as a credit.
+ * (more recorded than owed) or a debit above the reductions is not an issue: each is shown as itself.
  */
 export function reconcilePlan(
   totals: PlanTotals,
@@ -269,7 +277,6 @@ export function reconcilePlan(
   if (totals.scheduledPaise !== totals.totalPaise)
     issues.push('The instalments do not add up to the agreed tuition.');
   if (totals.netPaidPaise < 0) issues.push('More is recorded as refunded than as paid.');
-  if (totals.reductionsPaise < 0) issues.push('Debit adjustments exceed the reductions recorded.');
   const rows = effectiveRecords(ledger);
   if (rows.some((r) => !(PLAN_LEDGER_KINDS as readonly string[]).includes(r.kind)))
     issues.push('A ledger row on this agreement has a kind an agreement does not use.');
@@ -278,7 +285,69 @@ export function reconcilePlan(
   return { reconciled: issues.length === 0, issues };
 }
 
-/** List status of a student from the overall states of their ACTIVE agreements. */
+type Version = { id: string; supersedesPlanId: string | null };
+
+/** Every version of the agreement `plan` belongs to, oldest first (`family` = the student's versions). */
+export function versionChain<P extends Version>(plan: P, family: readonly P[]): P[] {
+  const byId = new Map<string, P>(family.map((p) => [p.id, p]));
+  const next = new Map(family.map((p) => [p.supersedesPlanId, p]));
+  let root = plan;
+  for (let p = byId.get(root.supersedesPlanId ?? ''); p; p = byId.get(p.supersedesPlanId ?? ''))
+    root = p;
+  const chain: P[] = [];
+  for (let p: P | undefined = root; p; p = next.get(p.id)) chain.push(p);
+  return chain;
+}
+
+/**
+ * The ledger of an agreement version is every row of its version chain. `rows` as recorded;
+ * `mapped` as they count for this version: on it, and a row naming an instalment of another
+ * version counts for the instalment with the same number.
+ */
+export function versionRows<
+  P extends Version,
+  I extends InstalmentLike & { planId: string },
+  R extends PlanLedgerRow & { planId?: string | null },
+>(plan: P, family: readonly P[], instalments: readonly I[], ledger: readonly R[]) {
+  const chain = versionChain(plan, family);
+  const own = instalments.filter((i) => i.planId === plan.id);
+  const idOf = new Map(own.map((i) => [i.sequence, i.id]));
+  const sequenceOf = new Map(instalments.map((i) => [i.id, i.sequence]));
+  const chainIds = new Set(chain.map((p) => p.id));
+  const rows = ledger.filter((r) => r.planId && chainIds.has(r.planId));
+  const mapped = rows.map((r) => ({
+    ...r,
+    planId: plan.id,
+    instalmentId: r.instalmentId
+      ? (idOf.get(sequenceOf.get(r.instalmentId) ?? 0) ?? r.instalmentId)
+      : null,
+  }));
+  return { chain, own, rows, mapped };
+}
+
+/** One agreement version as every surface reads it (A-FEE-1, A-FEE-2, A-FEE-4, A-FEE-7). */
+export function agreementPosition<
+  P extends Version & { totalPaise: number },
+  I extends InstalmentLike & { planId: string },
+  R extends PlanLedgerRow & { planId?: string | null },
+>(plan: P, family: readonly P[], instalments: readonly I[], ledger: readonly R[], today: IsoDate) {
+  const { chain, own, rows, mapped } = versionRows(plan, family, instalments, ledger);
+  const totals = planTotals(plan.totalPaise, own, mapped);
+  const allocated = allocateInstalments(own, mapped, today);
+  return {
+    plan,
+    totals,
+    instalments: allocated,
+    status: agreementStatus(allocated, totals),
+    nextDue: nextDue(allocated),
+    aboveInstalmentsPaise: owedAboveInstalments(totals, allocated),
+    ledger: rows,
+    reconciliation: reconcilePlan(totals, own, mapped),
+    versions: chain,
+  };
+}
+
+/** List status of a student from the overall states of their agreements in force. */
 export function studentFeeStatus(activePlans: readonly InstalmentStatus[]): StudentFeeStatus {
   if (activePlans.length === 0) return 'not_configured';
   if (activePlans.includes('overdue')) return 'overdue';

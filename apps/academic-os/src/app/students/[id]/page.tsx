@@ -1,12 +1,21 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, ButtonLink, Card, DataTable, EmptyState, PageHeader, SourceBadge } from '@elevate/shared-ui';
+import {
+  Alert,
+  ButtonLink,
+  Card,
+  DataTable,
+  EmptyState,
+  PageHeader,
+  SourceBadge,
+  fmtDay,
+} from '@elevate/shared-ui';
 import { getStudentProgress, getStudentRecord, listStaff } from '../../../server';
 import { modulePath } from '../../../domain';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
-import { StateBadge } from '../../../ui/badges';
+import { StateBadge, programmeName } from '../../../ui/badges';
 import { placementNote } from '../../../ui/batch-tabs';
 import { InterventionsTable } from '../../../ui/interventions';
 import { AcademicShell, LoadError, actorFor, gate, load, workspaceLink } from '../../../ui/shell';
@@ -29,7 +38,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
     progress: canProgress ? await getStudentProgress(db, actor, id) : null,
     staff: canWrite ? await listStaff(db) : [],
   }));
-  if (!data.ok) return <AcademicShell access={access} active="students"><LoadError error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="students"><LoadError level={1} error={data.error} /></AcademicShell>;
   const { record, progress, staff } = data.data;
   const s = record.student;
   const opsRef = 'coreStudentId' in s && can(access.user, 'academic:enrolments:read') ? (s.coreStudentId ?? s.sourceAdmissionId) : null;
@@ -40,7 +49,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
         title={s.fullName}
         meta={<><StateBadge state={s.status} /> <SourceBadge source={s.isSample ? 'sample' : 'live'} /> <span className="el-field-hint">{s.code}</span></>}
         description={`${s.currentStage ?? 'Stage not recorded'}${s.contactsHidden ? ' · contact details hidden for your role' : ''}`}
-        actions={<>{opsHref ? <a href={opsHref}>Admission, KYC and fees in Business Ops</a> : null} <a href={`${modulePath('reviews')}?academicStudentId=${s.id}`}>Teacher reviews</a> <ButtonLink href={MODULE_PATHS.students}>All students</ButtonLink></>}
+        actions={<>{opsHref ? <a href={opsHref}>Admission, KYC and fees in Business Operations</a> : null} <a href={`${modulePath('reviews')}?academicStudentId=${s.id}`}>Teacher reviews</a> <ButtonLink href={MODULE_PATHS.students}>All students</ButtonLink></>}
       />
       <div className="el-stack">
         {!s.contactsHidden ? (
@@ -55,12 +64,12 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
             rowKey={(e) => e.id}
             empty={<EmptyState title="No enrolments" />}
             columns={[
-              { key: 'programme', header: 'Programme', render: (e) => e.programmeCode },
+              { key: 'programme', header: 'Programme', render: (e) => programmeName(e.programmeCode) },
               { key: 'year', header: 'Academic year', render: (e) => e.academicYear ?? 'Not recorded' },
               { key: 'batch', header: 'Batch', render: (e) => (e.batchId ? <a href={MODULE_PATHS.batch(e.batchId)}>{e.batchCode}</a> : 'awaiting batch allocation') },
-              { key: 'start', header: 'Start', render: (e) => e.startDate ?? '—' },
+              { key: 'start', header: 'Start', render: (e) => fmtDay(e.startDate) },
               { key: 'late', header: 'Late joiner', render: (e) => (e.lateJoiner ? 'yes' : 'no') },
-              { key: 'source', header: 'Source', render: (e) => (e.source === 'manual' ? ('manualReason' in e ? `manual: ${e.manualReason}` : 'manual') : 'Business Ops admission') },
+              { key: 'source', header: 'Source', render: (e) => (e.source === 'manual' ? ('manualReason' in e ? `manual: ${e.manualReason}` : 'manual') : 'Business Operations admission') },
               { key: 'status', header: 'Status', render: (e) => <StateBadge state={e.status} /> },
             ]}
           />
@@ -72,8 +81,8 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
             empty={<EmptyState title="Not placed in a batch" description="Allocate a batch from the Enrolments page (Awaiting batch tab)." />}
             columns={[
               { key: 'batch', header: 'Batch', render: (p) => <a href={MODULE_PATHS.batch(p.batchId)}>{p.batchCode}</a> },
-              { key: 'from', header: 'From', render: (p) => p.startDate },
-              { key: 'to', header: 'To', render: (p) => p.endDate ?? 'Current' },
+              { key: 'from', header: 'From', render: (p) => fmtDay(p.startDate) },
+              { key: 'to', header: 'To', render: (p) => fmtDay(p.endDate, 'Current') },
               { key: 'note', header: 'Note', render: placementNote },
               { key: 'status', header: 'Enrolment', render: (p) => <StateBadge state={p.enrolmentStatus} /> },
             ]}
@@ -99,9 +108,9 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
                   empty={<EmptyState title="No finalised results" />}
                   columns={[
                     { key: 'code', header: 'Assessment' },
-                    { key: 'date', header: 'Date', render: (r) => r.date ?? '—' },
-                    { key: 'score', header: 'Score', render: (r) => (r.state === 'scored' ? `${Number(r.total)} / ${Number(r.max)}` : <StateBadge state={r.state} />) },
-                    { key: 'pct', header: 'Percentile', render: (r) => (r.percentile === null ? '—' : Number(r.percentile).toFixed(2)) },
+                    { key: 'date', header: 'Date', render: (r) => fmtDay(r.date) },
+                    { key: 'score', header: 'Score', numeric: true, render: (r) => (r.state === 'scored' ? `${Number(r.total)} / ${Number(r.max)}` : <StateBadge state={r.state} />) },
+                    { key: 'pct', header: 'Percentile', numeric: true, render: (r) => (r.percentile === null ? '—' : Number(r.percentile).toFixed(2)) },
                   ]}
                 />
                 <DataTable compact
@@ -110,7 +119,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
                   rowKey={(m) => m.sessionId}
                   empty={<EmptyState title="No missed classes recorded" />}
                   columns={[
-                    { key: 'date', header: 'Date' },
+                    { key: 'date', header: 'Date', render: (m) => fmtDay(m.date) },
                     { key: 'reason', header: 'Reason', render: (m) => m.reason.replace(/_/g, ' ') },
                   ]}
                 />
@@ -126,7 +135,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
                 empty={<EmptyState title="No catch-up tasks" />}
                 columns={[
                   { key: 'reason', header: 'Reason', render: (t) => t.reason.replace(/_/g, ' ') },
-                  { key: 'due', header: 'Due', render: (t) => t.dueDate ?? '—' },
+                  { key: 'due', header: 'Due', render: (t) => fmtDay(t.dueDate) },
                   { key: 'status', header: 'Status', render: (t) => <StateBadge state={t.status} /> },
                   { key: 'note', header: 'Note', render: (t) => t.note ?? '' },
                 ]}

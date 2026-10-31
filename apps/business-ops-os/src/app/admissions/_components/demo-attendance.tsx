@@ -215,8 +215,8 @@ export function DemoAttendance({ d, user, options, level }: DemoTabProps) {
               <Disclosure summary="Add a class to a day">
                 <p className="el-field-hint">
                   Extra demo days:{' '}
-                  {extension.allowed ? `up to ${extension.maxExtraDays}, with a reason` : 'off'} (
-                  {d.extension.decisionState} setting). A demo never gets another day otherwise.
+                  {extension.allowed ? `up to ${extension.maxExtraDays}, with a reason` : 'off'}. A demo
+                  never gets another day otherwise.
                 </p>
                 <ActionForm
                   compact

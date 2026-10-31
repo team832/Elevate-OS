@@ -11,11 +11,14 @@ import {
   opsFeePlans,
   opsFeeRecords,
   opsOnboardingItems,
+  opsSignatureConfirmations,
   type Database,
 } from '@elevate/database';
 import { createTestUser, setupTestDatabase, type TestUser } from '@elevate/testing';
 import { addDays, istToday } from '../../src/domain';
 import { buildAdmissionsOverview } from '../../src/server/admissions-overview';
+import { listApplications } from '../../src/server/applications-read';
+import { applicationListQuery } from '../../src/server/applications-schemas';
 import { pendingCase } from './admissions-fixtures';
 import { confirmAs, signedApplication, type People } from './application-fixtures';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
@@ -172,5 +175,18 @@ describe('admissions overview (brief §4)', () => {
     const f = await overview(finance);
     expect(f.demos.list).toBeNull();
     expect(f.fees?.outstanding?.agreements).toBe(1);
+  });
+});
+
+describe('Approval blocked: the tile and the list it opens agree', () => {
+  it('lists only signed applications an item still blocks', async () => {
+    const blockedList = () => listApplications(ctx.db, manager, applicationListQuery.parse({ status: 'signatures_confirmed', blocked: '1' }));
+    await signedApplication(ctx.db, people, { name: 'Sample Signed Clean' });
+    expect((await blockedList()).total).toBe(0);
+    const held = await signedApplication(ctx.db, people, { name: 'Sample Signed Held' });
+    await ctx.db.delete(opsSignatureConfirmations).where(eq(opsSignatureConfirmations.applicationId, held.applicationId as never));
+    const list = await blockedList();
+    expect(list.items.map((a) => a.id)).toEqual([held.applicationId]);
+    expect((await overview(manager)).applications.approvalBlocked).toBe(list.total);
   });
 });

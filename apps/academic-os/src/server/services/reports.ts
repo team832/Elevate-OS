@@ -19,7 +19,7 @@ import {
 } from '@elevate/database';
 import { toCsv, type CsvCell } from '@elevate/server-kit';
 import { NotFoundError, ValidationError } from '@elevate/shared-contracts';
-import { addDays, type IsoDate, type StaffMemberId } from '@elevate/shared-types';
+import { addDays, fmtDay, type IsoDate, type StaffMemberId } from '@elevate/shared-types';
 import { attendanceDefinition, summariseAttendance, weekStart } from '../../domain';
 import { assertBatchInScope, audit, getBatchOrThrow, resolveScope, todayIst, type Actor } from '../context';
 import type { ReportKind, ReportQuery } from '../schemas-assessment';
@@ -82,7 +82,7 @@ async function attendanceReport(db: Database, actor: Actor, q: ReportQuery, now:
   return {
     kind: 'attendance',
     title: `Attendance: ${batch.code}`,
-    subtitle: `${batch.name} · ${from} to ${to}`,
+    subtitle: `${batch.name} · ${fmtDay(from)} to ${fmtDay(to)}`,
     definition: `${attendanceDefinition(rule.value)} Rule status: ${rule.status === 'approved' ? 'approved by the owner' : 'proposed, not approved by the owner'}.`,
     columns: ['Student code', 'Student', 'Placement', 'Delivered sessions', 'Present', 'Late', 'Partial', 'Absent', 'Excused', 'Not recorded', 'Attendance %'],
     rows,
@@ -97,7 +97,7 @@ async function coverageReport(db: Database, actor: Actor, q: ReportQuery, now: D
   return {
     kind: 'coverage',
     title: `Curriculum coverage: ${c.batch.code}`,
-    subtitle: `${c.batch.name} · as of ${asOf} · plan ${c.plan ? `${c.plan.code} (${c.plan.status})` : 'none'}`,
+    subtitle: `${c.batch.name} · as of ${fmtDay(asOf)} · plan ${c.plan ? `${c.plan.code} (${c.plan.status})` : 'none'}`,
     definition: `${c.note} Coverage shows what was taught in the batch; it says nothing about any student's mastery.`,
     columns: ['Subject', 'Chapter', 'Title', 'Planned classes', 'Planned hours', 'Verified hours', 'Recorded, not verified (minutes)', 'Completion %'],
     rows: c.coverage.chapters.map((ch) => [subjects.get(ch.subjectId) ?? '', ch.code, ch.title, ch.plannedClasses, ch.plannedHours, ch.verifiedHours, ch.unverifiedMinutes, ch.completionPercent]),
@@ -114,7 +114,7 @@ async function assessmentReport(db: Database, actor: Actor, q: ReportQuery): Pro
   return {
     kind: 'assessment',
     title: `Assessment analysis: ${a.code}`,
-    subtitle: `${a.title} · ${a.kind.replace(/_/g, ' ')} · ${a.scheduledDate ?? 'date not recorded'} · ${results.run ? `result version ${results.run.version} (${results.run.status})` : 'no final results'}`,
+    subtitle: `${a.title} · ${a.kind.replace(/_/g, ' ')} · ${fmtDay(a.scheduledDate, 'date not recorded')} · ${results.run ? `result version ${results.run.version} (${results.run.status})` : 'no final results'}`,
     definition: 'Average = mean of scored students only. Absent, exempt, withheld and pending (no result) are counted separately and never treated as 0. Rank and percentile are shown only under an approved policy.',
     columns: ['Student code', 'Student', 'Result', 'Score', 'Maximum', 'Score %', ...(results.showRank ? ['Rank', 'Percentile'] : [])],
     rows: results.results.map((r) => [r.studentCode, r.studentName, r.state, r.totalScore === null ? null : Number(r.totalScore), Number(r.maxScore), pct(r.totalScore, r.maxScore), ...(results.showRank ? [r.rank, r.percentile === null ? null : Number(r.percentile)] : [])]),
@@ -158,7 +158,7 @@ async function teacherWeekReport(db: Database, actor: Actor, q: ReportQuery, now
   return {
     kind: 'teacher-week',
     title: `Teacher week: ${teacher.name}`,
-    subtitle: `${from} to ${to}`,
+    subtitle: `${fmtDay(from)} to ${fmtDay(to)}`,
     definition: 'Sessions this teacher is timetabled for or took part in (co-teacher or substitute). Delivered = marked delivered (held). Log pending = a delivered session without a submitted or verified teaching log. Operational summary only: not HR attendance, leave or payroll.',
     columns: ['Date', 'Start', 'Batch', 'Subject', 'Session', 'Teaching log'],
     rows,

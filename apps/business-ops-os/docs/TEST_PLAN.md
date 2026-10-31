@@ -107,7 +107,7 @@ Run: `npx vitest run apps/business-ops-os` (whole module), or one file, e.g. `np
 |---|---|---|
 | `applications.test.ts` (14) | A-APP-1 … A-APP-3 | status machine, canonical JSON, signers at the 18 boundary, information / confirmation gap tables, payment gate table |
 | `admission-form.test.ts` (6), `admission-documents.test.ts` (3) | A-APP-2 | paper-form sections and document checklist; form = 3 A4 pages with long names, ₹, missing values, no declaration; acknowledgement; CR80 ID card |
-| `pdf-toolkit.test.ts` (3) | D-042 | 6-page A4 with wrapping, repeated table header, "Page n of N", Devanagari "?" + footer note, CR80 card, `pdfResponse` headers |
+| `pdf-toolkit.test.ts` (3) | D-042 | 6-page A4 with wrapping, repeated table header, "Page n of N", Devanagari shaped through Noto Sans Devanagari, Tamil and emoji "?" + footer note (D-118), CR80 card, `pdfResponse` headers |
 | `fee-agreements.test.ts` (11), `fee-plans.test.ts` (15), `admissions-fees.test.ts` (16) | A-FEE-1 … A-FEE-7 | 50/25/25 split in integer paise (seeded / exhaustive property tests), allocation with links and no due date, statuses, reconciliation, reversals and refunds, charge categories |
 | `demos.test.ts` (26) | A-57 … A-64 | day states and day progress (present or late), extension, substitute, views at IST boundaries |
 | `admissions-kpis-overview.test.ts` (11) | overview KPIs | days attended not classes, demo → admission conversion cohort and `waiting`, applications awaiting, confirmed, overdue onboarding, collections, outstanding (null = unknown) |
@@ -149,7 +149,7 @@ Map of brief 2's 19 required checks to tests: `docs/task-tracker-verification.md
 | integration `feedback.test.ts`, `seeds.test.ts` (changed) | A-75, D-061 | read-only history of Ops reviews; 12 sample teachers with sample work, nothing sent, clear-samples |
 
 ## Not automated (21 Oct 2026)
-Full browser pass with axe on every redesigned screen (agents checked several at 1440 / 390 px); Google re-authentication (not built, D-041); real message delivery (mock adapter only); Devanagari in PDFs; a true concurrency proof of the demo booking lock under PGlite (single connection).
+Full browser pass with axe on every redesigned screen (agents checked several at 1440 / 390 px); Google re-authentication (not built, D-041); real message delivery (mock adapter only); round-trip copy of Hindi from a PDF (does not work, D-118); a true concurrency proof of the demo booking lock under PGlite (single connection).
 
 
 ## Added on 22 Oct 2026 (role workspaces, D-072 / D-073)

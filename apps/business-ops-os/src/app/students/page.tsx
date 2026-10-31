@@ -1,6 +1,7 @@
 import { EmptyState, PageHeader } from '@elevate/shared-ui';
 import { AdmissionsNav } from '../../ui/admissions-nav';
 import { Frame, gate, Section } from '../../ui/frame';
+import { OpenLink } from '../../ui/open-link';
 import { ActiveDashboard } from './_components/student-dashboard';
 import {
   listHref,
@@ -53,9 +54,11 @@ export default async function ActiveStudentsPage({
             record says &ldquo;Source unavailable&rdquo;.
           </p>
         </details>
-        <Section label="Loading summary…">
-          <ActiveDashboard user={access.user} base={BASE} params={params} />
-        </Section>
+        <div className="ops-overview-slot">
+          <Section label="Loading summary…">
+            <ActiveDashboard user={access.user} base={BASE} params={params} />
+          </Section>
+        </div>
         <Section label="Loading filters…">
           <StudentSearch
             basePath={BASE}
@@ -113,7 +116,9 @@ export default async function ActiveStudentsPage({
                   filtered ? (
                     <a href={BASE}>Clear filters</a>
                   ) : (
-                    <a href="/ops/admissions">Open demo students</a>
+                    <OpenLink user={access.user} href="/ops/admissions" fallback={null}>
+                      Open demo students
+                    </OpenLink>
                   )
                 }
               />

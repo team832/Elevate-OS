@@ -75,3 +75,6 @@ Use fictional data only. Each test file gets its own database; tests inside a fi
 - Every state transition needs valid and invalid transition tests.
 - Do not mock the database for service tests — use PGlite.
 - `npm run typecheck && npm run lint && npm test` must pass before handing work over.
+
+## Re-verification on a package (31 Oct 2026)
+Automated tests prove the code; they did not catch a workspace gate that never ran on `next start` (D-113). So each large change also gets a real run: build the package, then drive it by HTTP and in Chrome, by role, against `docs/CASELETS.md`. Rules: every key check has a control that must succeed next to one that must be refused; a result closed only by reading code counts as not run; results on an older package count only for that package. First results: `docs/RELEASE.md`. Dev mode needs its own walk: the owner may be using it.

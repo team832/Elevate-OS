@@ -219,11 +219,35 @@ export const enrolmentClosedV1 = defineEvent({
   payload: enrolmentClosedV1Payload,
 });
 
+/**
+ * A student's name was corrected in Ops. Academic keeps its own copy of the name (it owns the
+ * student from confirmation onwards), so it learns of the correction here.
+ */
+export const studentRenamedV1Payload = z
+  .object({
+    coreStudentId: coreStudentIdSchema,
+    fullName: personName,
+    renamedAt: isoDateTimeSchema,
+    renamedByUserId: userIdSchema,
+  })
+  .strict();
+
+export const studentRenamedV1 = defineEvent({
+  type: 'ops.student.renamed',
+  version: 1,
+  producer: 'ops',
+  consumers: ['academic'],
+  description: "Business Ops corrected a student's name; Academic updates its copy of the name.",
+  payload: studentRenamedV1Payload,
+});
+
 /** Idempotency keys for the handoff — producers must use these. */
 export const enrolmentKeys = {
   request: (admissionId: string, attempt: number) => `admission:${admissionId}:attempt:${attempt}`,
   reply: (requestEventId: string) => `enrolment-reply:${requestEventId}`,
   closed: (exitRecordId: string) => `enrolment-closed:${exitRecordId}`,
+  renamed: (coreStudentId: string, renamedAt: string) =>
+    `student-renamed:${coreStudentId}:${renamedAt}`,
 } as const;
 
 export const enrolmentEvents = [
@@ -231,4 +255,5 @@ export const enrolmentEvents = [
   enrolmentConfirmedV1,
   enrolmentRejectedV1,
   enrolmentClosedV1,
+  studentRenamedV1,
 ] as const;

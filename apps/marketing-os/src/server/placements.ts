@@ -22,6 +22,7 @@ import {
   ValidationError,
   withTransaction,
 } from '@elevate/server-kit';
+import { httpUrlSchema } from '@elevate/shared-contracts';
 import {
   PLACEMENT_VARIANTS,
   buildPlacementCode,
@@ -40,7 +41,7 @@ import { assertCan, type Actor } from './access';
 import { auditMarketing, rowById } from './common';
 import { cadenceOf, getAccountByCode } from './accounts';
 import { getPublishingAdapter, type PublishResult } from './adapters/publishing';
-import { getContentItem, getVersion, type ContentItemRow } from './content';
+import { checkedReason, getContentItem, getVersion, type ContentItemRow } from './content';
 import { loadPolicy } from './policy';
 import { runRuleCheck } from './rules';
 import { assertPlacementVisible } from './scope';
@@ -63,7 +64,7 @@ export const cancelBody = z.object({ reason: z.string().trim().min(3).max(500) }
 export const manualPublicationBody = z
   .object({
     publishedAt: z.iso.datetime({ offset: true }),
-    url: z.url({ protocol: /^https?$/ }).max(2000),
+    url: httpUrlSchema.max(2000),
   })
   .strict();
 
@@ -401,6 +402,7 @@ export async function cancelPlacement(
   reason: string,
   requestId?: string,
 ) {
+  checkedReason(reason);
   return withTransaction(db, async (tx) => {
     const placement = await lockPlacement(tx, placementId);
     await assertPlacementVisible(tx, actor, placement, 'Placement not found.');
@@ -478,8 +480,21 @@ export async function publishPlacement(
           attemptNumber: r.attempts,
           request: null as never,
         }) as const;
-      if (existing?.status === 'succeeded') return duplicate(existing);
+      if (placement.status === 'published' && existing?.status === 'succeeded')
+        return duplicate(existing);
       await assertPublishable(tx, placement, item);
+      // shortcut: a sandbox run also answers for a later version; a real adapter must take over this record.
+      const [sandboxRun] = await tx
+        .select()
+        .from(marketingPublishingRecords)
+        .where(
+          and(
+            eq(marketingPublishingRecords.placementId, placement.id),
+            eq(marketingPublishingRecords.isSandbox, true),
+            eq(marketingPublishingRecords.status, 'succeeded'),
+          ),
+        );
+      if (sandboxRun) return duplicate(sandboxRun);
       const stale =
         existing?.status === 'pending' &&
         Date.now() - existing.updatedAt.getTime() > STALE_PENDING_MS;
@@ -556,12 +571,20 @@ export async function publishPlacement(
       .select()
       .from(marketingPublishingRecords)
       .where(eq(marketingPublishingRecords.id, prepared.recordId as never));
-    return {
-      outcome: 'already_published' as const,
-      duplicate: true,
-      record: record!,
-      message: 'Already published with this version; nothing was sent again.',
-    };
+    return record!.isSandbox
+      ? {
+          outcome: 'sandbox' as const,
+          duplicate: true,
+          record: record!,
+          message:
+            'Already run in the sandbox: nothing was posted and the placement stays scheduled. Record the publication by hand once it is live.',
+        }
+      : {
+          outcome: 'already_published' as const,
+          duplicate: true,
+          record: record!,
+          message: 'Already published with this version; nothing was sent again.',
+        };
   }
 
   let result: PublishResult;
@@ -607,16 +630,22 @@ export async function publishPlacement(
       .returning();
     if (result.ok) {
       const placement = await lockPlacement(tx, rec!.placementId);
+      // Sandbox: nothing was posted, so placement and item stay scheduled (D-014); only the run is noted.
       await tx
         .update(marketingPlacements)
-        .set({
-          status: 'published',
-          publishedAt: new Date(),
-          publishedUrl: result.sandbox ? null : result.url,
-          publicationMode: result.sandbox ? 'sandbox' : 'adapter',
-        })
+        .set(
+          result.sandbox
+            ? { publicationMode: 'sandbox' }
+            : {
+                status: 'published',
+                publishedAt: new Date(),
+                publishedUrl: result.url,
+                publicationMode: 'adapter',
+              },
+        )
         .where(eq(marketingPlacements.id, placement.id));
-      await itemTransition(tx, await getContentItem(tx, placement.contentItemId!), 'publish');
+      if (!result.sandbox)
+        await itemTransition(tx, await getContentItem(tx, placement.contentItemId!), 'publish');
     }
     await auditMarketing(tx, actor, {
       action: ok
@@ -635,7 +664,7 @@ export async function publishPlacement(
       requestId,
     });
     return {
-      outcome: ok ? ('published' as const) : ('failed' as const),
+      outcome: ok ? (sandbox ? ('sandbox' as const) : ('published' as const)) : ('failed' as const),
       duplicate: false,
       record: record!,
       message: result.ok ? result.message : result.error,
@@ -663,24 +692,41 @@ export async function recordManualPublication(
       throw new InvalidStateTransitionError('This legacy placement is not linked to content.');
     const item = await getContentItem(tx, placement.contentItemId);
     await assertPublishable(tx, placement, item);
+    const [sandboxRun] = await tx
+      .select()
+      .from(marketingPublishingRecords)
+      .where(
+        and(
+          eq(marketingPublishingRecords.placementId, placement.id),
+          eq(marketingPublishingRecords.isSandbox, true),
+          eq(marketingPublishingRecords.status, 'succeeded'),
+        ),
+      );
+    const attempt = (sandboxRun?.attempts ?? 0) + 1;
+    const manual = {
+      versionId: item.approvedVersionId!,
+      idempotencyKey: publishingIdempotencyKey(placement.id, item.approvedVersionId!),
+      adapter: 'manual',
+      status: 'succeeded',
+      attempts: attempt,
+      maxAttempts: attempt,
+      isSandbox: false,
+      publishedUrl: input.url,
+      lastResponse: { recordedBy: actor.id, publishedAt: publishedAt.toISOString() },
+      requestedBy: actor.id,
+    } as const;
     let record;
     try {
-      [record] = await tx
-        .insert(marketingPublishingRecords)
-        .values({
-          placementId: placement.id,
-          versionId: item.approvedVersionId!,
-          idempotencyKey: publishingIdempotencyKey(placement.id, item.approvedVersionId!),
-          adapter: 'manual',
-          status: 'succeeded',
-          attempts: 1,
-          maxAttempts: 1,
-          isSandbox: false,
-          publishedUrl: input.url,
-          lastResponse: { recordedBy: actor.id, publishedAt: publishedAt.toISOString() },
-          requestedBy: actor.id,
-        })
-        .returning();
+      [record] = sandboxRun
+        ? await tx
+            .update(marketingPublishingRecords)
+            .set(manual)
+            .where(eq(marketingPublishingRecords.id, sandboxRun.id))
+            .returning()
+        : await tx
+            .insert(marketingPublishingRecords)
+            .values({ placementId: placement.id, ...manual })
+            .returning();
     } catch (error) {
       if (isUniqueViolation(error))
         throw new ConflictError('This placement already has a publishing record for this version.');
@@ -688,7 +734,7 @@ export async function recordManualPublication(
     }
     await tx.insert(marketingPublishingAttempts).values({
       recordId: record!.id,
-      attemptNumber: 1,
+      attemptNumber: attempt,
       outcome: 'succeeded',
       response: { manual: true },
       attemptedBy: actor.id,

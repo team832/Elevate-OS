@@ -1,6 +1,7 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can, scopeFor } from '@elevate/authorization';
 import type { Metric } from '@elevate/shared-contracts';
+import { programmeName } from '@elevate/shared-types';
 import { formatMetricValue, PageHeader } from '@elevate/shared-ui';
 import { rangeOf, reviewsInRange } from '../../server/overview';
 import { fetchAcademicSummary } from '../../server/summaries';
@@ -82,7 +83,11 @@ async function Summary({
             rowKey={(p) => p.programmeCode}
             empty="Academic OS reported no programme figures for this period."
             columns={[
-              { key: 'programmeCode', header: 'Programme' },
+              {
+                key: 'programmeCode',
+                header: 'Programme',
+                render: (p) => programmeName(p.programmeCode),
+              },
               ...(
                 [
                   ['classesPlanned', 'Planned'],

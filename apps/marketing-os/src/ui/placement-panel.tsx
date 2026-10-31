@@ -7,6 +7,7 @@ import {
   EmptyState,
   Field,
   Select,
+  StoredLink,
   TextInput,
 } from '@elevate/shared-ui';
 import { formatIst } from '../domain';
@@ -73,7 +74,7 @@ export function PlacementPanel({
                 ) : null}
                 {p.publishedUrl ? (
                   <div>
-                    <a href={p.publishedUrl}>live link</a>
+                    <StoredLink href={p.publishedUrl}>live link</StoredLink>
                   </div>
                 ) : null}
               </>
@@ -89,8 +90,8 @@ export function PlacementPanel({
                 <ul>
                   {p.publishingRecords.map((r) => (
                     <li key={r.id}>
-                      {r.adapter} · {r.status} · attempts {r.attempts}/{r.maxAttempts}
-                      {r.isSandbox ? ' · sandbox (no post, no URL)' : ''}
+                      {r.isSandbox ? 'Test run' : r.adapter} · {r.status.replace(/_/g, ' ')} · attempts {r.attempts}/{r.maxAttempts}
+                      {r.isSandbox ? ' · nothing posted, no link' : ''}
                       {r.lastError ? <div className="el-field-error">{r.lastError}</div> : null}
                     </li>
                   ))}
@@ -169,7 +170,8 @@ export function PlacementPanel({
         <form action={createPlacementAction} className="el-grid">
           <input type="hidden" name="itemId" value={d.item.id} />
           <Field id="pl-account" label="Place on account">
-            <Select id="pl-account" name="accountCode">
+            <Select id="pl-account" name="accountCode" required>
+              <option value="">Choose…</option>
               {accounts
                 .filter((a) => a.status === 'live' || a.status === 'starting')
                 .map((a) => (

@@ -27,6 +27,7 @@ import {
   type Database,
 } from '@elevate/database';
 import type { UserId } from '@elevate/shared-types';
+import { feeLedgerHref } from '../domain/student-lifecycle';
 import { ownAdmissionFilter } from './admissions';
 import { feeAgreementPolicy } from './approval-policies';
 import { accessScope, type Actor } from './context';
@@ -50,6 +51,8 @@ export interface ApprovalInboxItem {
   /** Tuition before → after (before null = a new agreement); only with ops:fees:read. */
   beforePaise?: number | null;
   afterPaise?: number;
+  /** Fictional record (D-036): the list shows the SAMPLE DATA badge. */
+  isSample?: boolean;
 }
 
 export interface ApprovalSource {
@@ -94,9 +97,11 @@ export const feeAgreementSource: ApprovalSource = {
       .select({
         a: approvals,
         plan: opsFeePlans,
+        admission: opsAdmissions,
         before: previous.totalPaise,
         student: students.fullName,
         requester: users.displayName,
+        isSample: opsLeads.isSample,
       })
       .from(approvals)
       .innerJoin(opsFeePlans, eq(opsFeePlans.id, approvals.subjectId))
@@ -117,7 +122,7 @@ export const feeAgreementSource: ApprovalSource = {
       )
       .orderBy(asc(approvals.requestedAt));
     const { named, amounts } = visibility(actor);
-    return rows.map(({ a, plan, before, student, requester }) =>
+    return rows.map(({ a, plan, admission, before, student, requester, isSample }) =>
       inboxItem({
         id: a.id,
         title: `${named ? student : HIDDEN_NAME}: fee agreement ${plan.academicYear ?? '(year not recorded)'}, version ${plan.version}`,
@@ -126,8 +131,10 @@ export const feeAgreementSource: ApprovalSource = {
         requestedByUserId: a.requestedBy,
         requestedByName: requester,
         requestedAt: a.requestedAt,
-        link: `/ops/students/${plan.studentId}?tab=fees`,
+        // Agreements are usually decided before admission, when there is no student record to open.
+        link: feeLedgerHref(admission),
         decide: `/ops/api/v1/fee-plans/${plan.id}/decision`,
+        isSample,
       }),
     );
   },

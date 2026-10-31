@@ -6,6 +6,7 @@ import { Alert, Card, DataTable, EmptyState, StatusBadge } from '@elevate/shared
 import { toAppPath } from '@elevate/server-kit/next';
 import { addDays, toIsoDate } from '@elevate/shared-types';
 import { MODULE, formatIst, modulePath } from '../domain';
+import { formatDay } from '../domain/metrics';
 import { listCampaigns, memberOptions, teamWide } from '../server';
 import { courseOptions } from '../server/campaigns';
 import { dashboardFilters } from '../server/dashboard-filters';
@@ -64,9 +65,7 @@ async function OverviewBody({ user, sp }: { user: AuthenticatedUser; sp: Awaited
     <div className="el-stack">
       {o.dashboard.unreconciledConflicts.length ? (
         <Alert tone="warning" title="Owner decision needed">
-          {o.dashboard.unreconciledConflicts
-            .map((c) => `${c.title}.`)
-            .join(' ')}{' '}
+          {o.dashboard.unreconciledConflicts.map((c) => `${c.title}.`).join(' ')}{' '}
           <a href={modulePath('accounts')}>See accounts</a>
         </Alert>
       ) : null}
@@ -188,8 +187,8 @@ function Scheduled({ o }: { o: Overview }) {
       actions={<a href={modulePath('calendar')}>Open the calendar</a>}
     >
       <Explain>
-        Posts scheduled from now to {addDays(toIsoDate(o.asOf), 7)} (IST), all campaigns. Planned
-        but unscheduled posts are on the calendar, not counted here.
+        Posts scheduled from now to {formatDay(addDays(toIsoDate(o.asOf), 7))} (IST), all campaigns.
+        Planned but unscheduled posts are on the calendar, not counted here.
       </Explain>
       <Unfiltered f={o.filters} applied={[]} />
       {d.overdueScheduled.length ? (

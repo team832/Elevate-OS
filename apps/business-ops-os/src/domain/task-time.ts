@@ -45,13 +45,13 @@ export const minutesOf = (e: WorkEntry): number | null =>
   e.durationMinutes ??
   (e.startedAt && e.endedAt ? Math.round((+e.endedAt - +e.startedAt) / 60000) : null);
 
-const day = (d: string) =>
-  new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', {
-    timeZone: 'UTC',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+const DAY = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'UTC',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+const day = (d: string) => DAY.format(new Date(`${d}T00:00:00Z`));
 const clock = new Intl.DateTimeFormat('en-IN', {
   timeZone: 'Asia/Kolkata',
   hour: 'numeric',

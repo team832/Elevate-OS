@@ -79,7 +79,7 @@ export function DaysTab({
       {review ? null : (
         <Segment
           title="Attendance by date"
-          description={`Staff present each day, ${range}. Hover a bar for the other statuses.`}
+          description={`Staff present each day, ${range}. "Show as table" lists the other statuses.`}
         >
           <BarChart
             label="Staff present per day"

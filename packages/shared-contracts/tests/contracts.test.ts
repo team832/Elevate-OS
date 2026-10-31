@@ -1,3 +1,4 @@
+import { phoneInputSchema } from '../src/phone';
 import { describe, expect, it } from 'vitest';
 import {
   AppError,
@@ -8,6 +9,7 @@ import {
   enrolmentConfirmedV1Payload,
   enrolmentKeys,
   enrolmentRequestedV1Payload,
+  studentRenamedV1Payload,
   findEventDefinition,
   getEventDefinition,
   defineEvent,
@@ -15,9 +17,30 @@ import {
   metric,
   metricSchema,
   apiFailureSchema,
+  httpUrlSchema,
   isMaskedReference,
   type EventPayload,
 } from '../src/index';
+
+describe('httpUrlSchema (HAT-006)', () => {
+  it.each([
+    ['https://meet.example/room', true],
+    ['http://meet.example/room', true],
+    ['HTTPS://MEET.EXAMPLE/room', true],
+    ['javascript:alert(1)', false],
+    ['JaVaScRiPt:alert(1)', false],
+    ['java\tscript:alert(1)', false],
+    ['data:text/html,<script>alert(1)</script>', false],
+    ['vbscript:msgbox(1)', false],
+    ['ms-msdt:/id%20x', false],
+    ['file:///c:/windows/win.ini', false],
+    ['ftp://files.example/x', false],
+    ['meet.example/room', false],
+    ['', false],
+  ])('%s -> %s', (value, ok) => {
+    expect(httpUrlSchema.safeParse(value).success).toBe(ok);
+  });
+});
 import { z } from 'zod';
 
 const ids = {
@@ -40,6 +63,25 @@ const validRequest = {
   counsellorStaffId: ids.staff,
   requestedByUserId: ids.user,
 };
+
+describe('student renamed contract', () => {
+  const renamed = {
+    coreStudentId: ids.enrolment,
+    fullName: 'Sample Student',
+    renamedAt: '2026-10-30T06:00:00.000Z',
+    renamedByUserId: ids.user,
+  };
+
+  it('Ops publishes it for Academic, with a key per change', () => {
+    expect(studentRenamedV1Payload.parse(renamed)).toEqual(renamed);
+    expect(getEventDefinition('ops.student.renamed', 1).consumers).toEqual(['academic']);
+    expect(enrolmentKeys.renamed('s1', 't1')).toBe('student-renamed:s1:t1');
+  });
+
+  it.each([[{ fullName: '  ' }], [{ phone: '+919999999999' }]])('refuses %o', (change) => {
+    expect(studentRenamedV1Payload.safeParse({ ...renamed, ...change }).success).toBe(false);
+  });
+});
 
 describe('enrolment exit contract (IR-OPS-EXIT-1, -2)', () => {
   const closed = {
@@ -240,4 +282,20 @@ describe('isMaskedReference (D-043)', () => {
     ['XXXX123456', false],
     ['X', false],
   ])('%s → %s', (value, ok) => expect(isMaskedReference(value)).toBe(ok));
+});
+
+describe('phoneInputSchema (HUS-035): one rule for what a person may type', () => {
+  it.each([
+    ['+91 98765 43210', '+919876543210'],
+    ['098765-43210', '+919876543210'],
+    ['98765 43210', '+919876543210'],
+    ['+1 415 555 2671', '+14155552671'],
+  ])('%s is stored as %s', (typed, stored) => {
+    expect(phoneInputSchema.parse(typed)).toBe(stored);
+  });
+  it.each(['12345', 'call me', '0000000000'])('%s is refused in words', (typed) => {
+    const out = phoneInputSchema.safeParse(typed);
+    expect(out.success).toBe(false);
+    expect(out.error?.issues[0]?.message).not.toMatch(/E\.164/);
+  });
 });

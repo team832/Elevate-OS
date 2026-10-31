@@ -5,10 +5,15 @@
  * permission here even when the route already did (pages call services directly).
  */
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { requirePermission, type Permission, type Principal } from '@elevate/authorization';
-import { programmes, staffMembers, userRoles, type Database } from '@elevate/database';
+import {
+  grantsForRole,
+  requirePermission,
+  type Permission,
+  type Principal,
+} from '@elevate/authorization';
+import { programmes, staffMembers, userRoles, users, type Database } from '@elevate/database';
 import { ForbiddenError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
-import type { ProgrammeId, StaffMemberId, UserId } from '@elevate/shared-types';
+import { ROLE_KEYS, type ProgrammeId, type StaffMemberId, type UserId } from '@elevate/shared-types';
 import { CODE_FORMATS, formatCode, type CodeKind } from '../domain';
 import { ancestorChain } from '../domain/graph';
 
@@ -175,6 +180,28 @@ export async function userIdsWithRole(db: Database, role: string): Promise<UserI
     .from(userRoles)
     .where(eq(userRoles.role, role as never));
   return rows.map((r) => r.userId);
+}
+
+/** Everyone whose roles grant `permission`. */
+export async function userIdsHolding(db: Database, permission: Permission): Promise<UserId[]> {
+  const ids = new Set<UserId>();
+  for (const role of ROLE_KEYS.filter((r) => grantsForRole(r).has(permission)))
+    for (const id of await userIdsWithRole(db, role)) ids.add(id);
+  return [...ids];
+}
+
+/** Who acts for someone who cannot: their manager's login if active, else the operations managers. */
+export async function actingFor(db: Database, managerStaffId: string | null): Promise<UserId[]> {
+  const active = async (ids: readonly UserId[]) =>
+    ids.length
+      ? (await db
+          .select({ id: users.id })
+          .from(users)
+          .where(and(inArray(users.id, [...ids]), eq(users.status, 'active')))
+        ).map((u) => u.id)
+      : [];
+  const manager = await active(await userIdsForStaff(db, [managerStaffId]));
+  return manager.length ? manager : active(await userIdsWithRole(db, 'operations_manager'));
 }
 
 export function notFound(what: string): never {

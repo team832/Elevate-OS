@@ -83,6 +83,14 @@ Rules: strict object (unknown fields rejected); at least one contact (student or
 ### `academic.enrolment.rejected` v1 — producer `academic`, consumer `ops`
 `{ requestEventId, admissionId, leadId, reasonCode, reason, rejectedAt, rejectedByUserId | null }`, `reasonCode ∈ PROGRAMME_NOT_OFFERED | COURSE_NOT_FOUND | BATCH_NOT_FOUND | BATCH_FULL | DUPLICATE_ENROLMENT | INVALID_REQUEST | OTHER`. Same key/correlation rules. Ops may correct and re-request with `attempt + 1`.
 
+### `ops.enrolment.closed` v1 — producer `ops`, consumer `academic` (31 Oct 2026, D-115)
+Published in the exit transaction. `idempotencyKey = enrolmentKeys.closed(exitRecordId)` = `enrolment-closed:<exitRecordId>`. Consumer `academic.enrolment-exit` ends the enrolment and placement after the exit date: `completed` stays completed; `withdrawn`, `transferred` and `other_inactive` end as Academic `withdrawn` (Proposed). Later tests and classes drop the student; rows with marks stay. Replay adds nothing.
+
+### `ops.student.renamed` v1 — producer `ops`, consumer `academic` (31 Oct 2026, D-115)
+`{ coreStudentId, fullName, renamedAt, renamedByUserId }`. `idempotencyKey = enrolmentKeys.renamed(coreStudentId, renamedAt)` = `student-renamed:<id>:<at>`. Taken by the same consumer. Academic owns its copy of the name from confirmation onward, so it learns of a correction here.
+
+**Running it:** the Ops job `enrolment-exits` ("Send exits to Academic", `ops:jobs:run`) calls `POST /academic/api/internal/v1/enrolment-exits/run` (caller `ops`). Nothing runs it by itself: until someone presses the button, Academic stays active and the Ops profile says it is waiting.
+
 ### Handoff sequence
 1. Ops (one transaction): admission → `enrolment_requested`; `publishEvent(tx, enrolment_requested)`; `recordAudit`.
 2. Academic consumer `academic.enrolment-intake` (`processEvents`): validates refs; creates or reuses the student; creates the enrolment (or decides to reject — automatically or after a coordinator's decision); publishes exactly one reply in the same transaction.
@@ -90,7 +98,7 @@ Rules: strict object (unknown fields rejected); at least one contact (student or
 4. Exactly-once effect: `core.event_deliveries` is unique per (event, consumer); a crashed handler rolls back and is retried; after `maxAttempts` the delivery is `dead` and needs a human.
 5. Until a reply arrives the admission shows "awaiting Academic OS" — never "enrolled".
 
-**Who runs consumers:** each consumer module calls `processEvents` (e.g. from a route its UI triggers, or a scheduled job). A scheduler is a wave-3 integration item.
+**Who runs consumers:** each consumer module calls `processEvents` from a route its UI triggers: "Process intake" in Academic, and the Background jobs panel on the Ops Overview (D-117). A scheduler is still an open owner question.
 
 ## 7. Summary contracts (D-011.2 — read-only HTTP)
 Endpoint `GET /<zone>/api/internal/v1/summary?from=YYYY-MM-DD&to=YYYY-MM-DD`, built with `defineInternalRoute`, returning:
@@ -110,6 +118,8 @@ Teacher workspace contracts (21 Oct 2026, `packages/shared-contracts/src/summari
 | `GET /ops/api/internal/v1/demo-sessions?date=YYYY-MM-DD` | `academic` | `OpsDemoSessionsForDayV1` | `items[] { demoSessionId, coreStudentId, displayName, dayNumber, subject, startsAt, isSample }`; minimal fields so a coordinator can add a demo student to a class. |
 
 Rules for these contracts: Ops checks the user's own permission (`ops:feedback:read`, own = students they counsel) **before** calling the reviews route and filters what it shows by scope and `visibility` (family-audience reports use `shareable` reviews only); Ops never edits a review and records its acknowledgement in `ops.review_acknowledgements` (keyed by review key and version). Academic serves internal routes to the module, not to a user, so the calling module is responsible for the user check.
+
+`GET /academic/api/internal/v1/teaching-assignments` takes `programmeCode` since 31 Oct 2026 (shortcut: first 100 assignments). Internal routes are not reachable through the platform's rewrites (404, HAT-004).
 
 Retired event (D-075, 22 Oct 2026): `marketing.lead.handed_off` v1 was declared by Business Ops and never produced by Marketing; its contract, consumer (`ops.lead-intake`), routes and permission are gone, and the table `ops.lead_handoff_receipts` stays. Since D-073 Marketing works on the shared lead service, so no lead crosses by event.
 

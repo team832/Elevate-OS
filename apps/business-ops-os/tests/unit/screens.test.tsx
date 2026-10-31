@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { sourceReasonWords } from '@elevate/shared-contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { AuthenticatedUser } from '@elevate/authentication';
@@ -20,6 +22,7 @@ import { AcademicEvidenceView } from '../../src/app/students/_components/academi
 import { ReportList } from '../../src/app/students/_components/report-list';
 import {
   FeeBadge,
+  pastTabs,
   STUDENT_COLUMNS,
   type Row,
 } from '../../src/app/students/_components/student-list';
@@ -31,6 +34,19 @@ import { AckBadge, TaskFacts, WaitingAlert } from '../../src/app/tasks/_componen
 import type { TaskDetail } from '../../src/server/task-detail';
 import type { Overview } from '../../src/server/overview';
 import { OverviewBlocks } from '../../src/app/_components/overview-blocks';
+import { taskItems } from '../../src/app/admissions/applications/_components/application-detail';
+import { RequestFacts } from '../../src/app/hr-requests/_components/parts';
+import {
+  AdmissionFacts,
+  PrimaryAction,
+  ProgrammesTable,
+} from '../../src/app/students/_components/profile-sections';
+import { OutcomeDonut, StudentSummary } from '../../src/app/reports/_components/admissions-charts';
+import { requestRouteText } from '../../src/app/hr-requests/hr-requests-body';
+import { StaffEditModal, StaffProfile } from '../../src/app/staff/staff-record';
+import { MARKETING_LABELS, MarketingPanel } from '../../src/ui/cross-module';
+import { openHref, PAGE_GATES } from '../../src/ui/open-link';
+import { RecordTable } from '../../src/ui/record-table';
 import { TeacherReports } from '../../src/app/teachers/teacher-reports';
 
 const loaded = vi.hoisted(() => ({ data: undefined as unknown, fail: false }));
@@ -57,6 +73,15 @@ const facts = (over: Partial<EodFacts> = {}): EodFacts => ({
     academic: { status: 'unavailable', reason: 'timeout', fetchedAt: NOW },
   }),
   ...over,
+});
+
+describe('why another workspace could not be read', () => {
+  it.each([
+    ['HTTP 500', 'the other workspace reported a problem'],
+    ['Response did not match the contract', 'the other workspace reported a problem'],
+    ['Timed out', 'Timed out'],
+    ['Could not reach the source', 'Could not reach the source'],
+  ])('%s (RVC-015)', (reason, plain) => expect(sourceReasonWords(reason)).toBe(plain));
 });
 
 describe('screen formatters', () => {
@@ -198,6 +223,7 @@ describe('admissions pieces', () => {
     const out = html(
       <ConversionBreakdown
         title="By counsellor"
+        user={as('operations_manager')}
         rows={[]}
         window={{ from: '2026-10-01', to: '2026-10-21' } as never}
       />,
@@ -231,6 +257,7 @@ describe('Academic evidence on the student profile', () => {
     expect(out).toContain('Source unavailable');
     expect(out).toContain('Academic OS could not be read (timeout); checked 21 Oct 2026');
     expect(out).toContain('No numbers are shown rather than zeros.');
+    expect(out).toContain('>Try again</button>');
     expect(out).not.toMatch(/>0</);
   });
 
@@ -479,6 +506,7 @@ describe('Overview dashboard (missing is not zero; a sparkline only with a serie
   it('no series: labelled tiles without a sparkline; an unrecorded total is words, not ₹0', () => {
     const out = html(
       <OverviewBlocks
+        user={as('operations_manager')}
         o={{
           ...base,
           funnel,
@@ -494,6 +522,7 @@ describe('Overview dashboard (missing is not zero; a sparkline only with a serie
       'EOD reports missing',
     ])
       expect(out).toContain(t);
+    expect(out).toContain('view=previous&amp;outcome=converted'); // the tile opens what it counts
     expect(out).toContain('No payment recorded yet');
     expect(out).toContain('Choose 92 days or fewer');
     expect(out).not.toContain('₹0');
@@ -508,11 +537,361 @@ describe('Overview dashboard (missing is not zero; a sparkline only with a serie
       ok: true,
       data: { scope: 'all', leadsPerDay: perDay([1, 0, 2]), conversionsPerDay: perDay([0, 0, 1]) },
     } as never;
-    const out = html(<OverviewBlocks o={{ ...base, funnel, series }} />);
+    const out = html(
+      <OverviewBlocks user={as('operations_manager')} o={{ ...base, funnel, series }} />,
+    );
     expect(out).toContain('el-spark');
     expect(out).toContain('Leads received per day');
     expect(out).toContain('19 Oct');
     expect(out).toContain('Not enough data'); // an empty funnel is never drawn as zero bars
+  });
+});
+
+describe('a link that opens "No access" for this person is not shown (CHK-014)', () => {
+  const hrefs = (out: string) =>
+    [...out.matchAll(/href="([^"]*)"/g)].map((m) => m[1]!.replaceAll('&amp;', '&'));
+  const opensAll = (role: string, out: string) =>
+    expect(hrefs(out).filter((h) => !openHref(as(role), h))).toEqual([]);
+  const range = { from: '2026-10-01', to: '2026-10-21' };
+  const ok = (data: unknown) => ({ ok: true, data }) as never;
+  const m = { status: 'ok', value: 1, definition: 'd', window: range, unit: 'count' };
+  const down = { status: 'unavailable', reason: 'test', fetchedAt: NOW };
+  const overview = {
+    asOf: NOW,
+    range,
+    series: null,
+    funnel: ok({
+      scope: 'all',
+      window: range,
+      funnel: admissionsFunnel([]),
+      demoConversion: { total: 0, byOutcome: [] },
+    }),
+    report: ok({ bySource: [] }),
+    pipeline: ok({
+      confirmed: { metric: { value: 2 } },
+      applications: {
+        awaiting: { signatures_confirmed: { value: 2 } },
+        approvalBlocked: 0,
+        approvalChecked: 0,
+      },
+      onboarding: { completion: { done: 1, total: 2 }, items: { value: 1 }, admissions: 1 },
+    }),
+    collections: ok({ collected: { netPaise: 500_00 } }),
+    outstanding: ok({
+      views: { due: { count: 1, owedPaise: 100 }, overdue: { count: 1, owedPaise: 100 } },
+    }),
+    crossModule: ok({ academic: down, marketing: down }),
+    reviews: ok({ status: 'available', total: 3 }),
+    team: ok({
+      asOf: NOW,
+      totals: { eodSubmitted: 1, eodMissing: 1, overdue: 1, blocked: 1 },
+      people: [],
+    }),
+    kpis: ok({
+      asOf: NOW,
+      kpis: { newLeads: m, conversion: m, followUpCompliance: m, overdueWork: m },
+      workload: { rows: [], unassigned: 0 },
+    }),
+  } as unknown as Overview;
+  const OPS_ROLES = [
+    'operations_manager',
+    'hr_manager',
+    'admissions_counsellor',
+    'director',
+    'auditor',
+    'academic_coordinator',
+    'finance_officer',
+  ];
+
+  it('PAGE_GATES repeats every gate() in src/app, so it cannot drift from the pages', () => {
+    const app = new URL('../../src/app/', import.meta.url);
+    const found = readdirSync(app, { recursive: true, encoding: 'utf8' })
+      .map((f) => f.replaceAll('\\', '/'))
+      .filter((f) => f === 'page.tsx' || f.endsWith('/page.tsx'))
+      .flatMap((f): [string, string][] => {
+        const permission = readFileSync(new URL(f, app), 'utf8').match(
+          /\bgate\(\s*'([\w:]+)'/,
+        )?.[1];
+        return permission ? [[`/ops/${f}`.replace(/\/?page\.tsx$/, ''), permission]] : [];
+      });
+    expect(Object.fromEntries(found)).toEqual(PAGE_GATES);
+  });
+
+  it.each([
+    // The walker's pairs (c-walk3-grouped.txt), then what must stay open.
+    ['admissions_counsellor', '/ops/academic-summary?from=2026-10-01', false],
+    ['admissions_counsellor', '/ops/marketing-summary', false],
+    ['academic_coordinator', '/ops/leads', false],
+    ['finance_officer', '/ops/meetings?view=week', false],
+    ['hr_manager', '/ops/leads/abc', false],
+    ['finance_officer', '/ops/admissions', false],
+    ['finance_officer', '/ops/students', false],
+    ['finance_officer', '/ops/students/abc?tab=fees', false],
+    ['finance_officer', '/ops/students/past?tab=former', false],
+    ['auditor', '/ops/hr/review', false],
+    ['auditor', '/ops/hr/tasks?staffId=abc', false],
+    ['academic_coordinator', '/ops/admissions/abc', false],
+    ['academic_coordinator', '/ops/admissions/demos/abc', false],
+    ['academic_coordinator', '/ops/staff/abc', false],
+    ['finance_officer', '/ops/admissions/overview', true],
+    ['finance_officer', '/ops/admissions/abc#fee-agreement', true],
+    ['finance_officer', '/ops/fees/collections', true],
+    ['academic_coordinator', '/ops/students/abc', true],
+    ['auditor', '/ops/hr', true],
+    ['finance_officer', '#today-classes', true],
+  ])('%s, %s opens: %s', (role, href, opens) => {
+    expect(openHref(as(role), href)).toBe(opens ? href : undefined);
+  });
+
+  it.each(OPS_ROLES)('Overview as %s: every link opens and every figure stays', (role) => {
+    const out = html(<OverviewBlocks o={overview} user={as(role)} />);
+    opensAll(role, out);
+    for (const figure of [
+      'Collected in the period',
+      'Overdue instalments',
+      'Waiting for confirmation',
+      'Teacher reviews published',
+      'EOD reports missing',
+      'Checklist items done',
+    ])
+      expect(out, figure).toContain(figure);
+  });
+
+  it('Overview: EOD submitted and missing add up to the expected days (HMO-023)', () => {
+    const team = ok({
+      asOf: NOW,
+      totals: { eodSubmitted: 5, eodMissing: 100, overdue: 0, blocked: 0 },
+      people: [{ eod: { days: 100 } }],
+    });
+    const out = html(<OverviewBlocks o={{ ...overview, team }} user={as('operations_manager')} />);
+    expect(out).toContain('0 of 100 expected days; 5 for other days');
+    expect(out).not.toContain('Of 100 expected');
+  });
+
+  it('Overview: a manager keeps the links a finance officer loses', () => {
+    const lost = ['/ops/leads', '/ops/students', '/ops/academic-summary?'];
+    const of = (role: string) => hrefs(html(<OverviewBlocks o={overview} user={as(role)} />));
+    for (const h of lost) {
+      expect(
+        of('operations_manager').some((x) => x.startsWith(h)),
+        h,
+      ).toBe(true);
+      expect(
+        of('finance_officer').some((x) => x.startsWith(h)),
+        h,
+      ).toBe(false);
+    }
+    expect(of('finance_officer')).toContain('/ops/fees/outstanding?status=overdue');
+  });
+
+  it('report tables keep their counts without the link', () => {
+    const report = {
+      window: range,
+      demoConversion: { byOutcome: [{ group: 'converted', demos: 7 }] },
+    } as never;
+    const students = { active: 11, on_hold: 12, former: 13 } as never;
+    const group = {
+      group: 'CLAT',
+      programmeCode: 'CLAT',
+      demos: 9,
+      decided: 8,
+      converted: 6,
+      ratePct: 75,
+    };
+    const out = (role: string) =>
+      html(
+        <>
+          <OutcomeDonut report={report} user={as(role)} />
+          <StudentSummary students={students} user={as(role)} />
+          <ConversionBreakdown
+            title="By programme"
+            rows={[group]}
+            window={range as never}
+            filter={(g) => ({ programme: g.programmeCode })}
+            user={as(role)}
+          />
+        </>,
+      );
+    const finance = out('finance_officer');
+    opensAll('finance_officer', finance);
+    expect(hrefs(finance)).toEqual([]);
+    for (const n of ['>7<', '>11<', '>12<', '>13<', '>6<']) expect(finance).toContain(n);
+    expect(hrefs(out('operations_manager'))).toContain('/ops/students');
+  });
+
+  const profile = {
+    admission: { id: 'a1', status: 'enrolled', statusLabel: 'Enrolled', admissionNumber: '001' },
+    identity: { id: 's1' },
+    exitRecords: [],
+    numberChanges: [],
+    owner: null,
+    academic: { path: null },
+    actions: { resume: false, report: false },
+    handoff: { retry: { allowed: true } },
+    demos: [{ id: 'dm1', outcome: 'converted', outcomeAt: new Date(NOW) }],
+    cases: [{ id: 'a1', admissionNumber: 'ADM-77', statusLabel: 'Enrolled', status: 'enrolled' }],
+  } as never;
+
+  it('a student record keeps the demo date and admission number without the link', () => {
+    const out = (role: string) =>
+      html(
+        <>
+          <AdmissionFacts d={profile} user={as(role)} />
+          <ProgrammesTable d={profile} user={as(role)} />
+          <PrimaryAction d={profile} base="/ops/students/s1" user={as(role)} />
+        </>,
+      );
+    const coordinator = out('academic_coordinator');
+    opensAll('academic_coordinator', coordinator);
+    expect(coordinator).toContain('Converted demo');
+    expect(coordinator).toContain('ADM-77');
+    expect(coordinator).not.toContain('Request enrolment again');
+    const manager = out('operations_manager');
+    expect(hrefs(manager)).toContain('/ops/admissions/demos/dm1');
+    expect(hrefs(manager)).toContain('/ops/admissions/a1');
+    expect(manager).toContain('Request enrolment again');
+  });
+
+  it('application tasks: the fix stays in words, the link goes with the access', () => {
+    const d = {
+      admission: { id: 'a1', leadId: 'l1' },
+      can: { write: false },
+      tasks: [
+        { task: 'details', missing: [{ message: 'Student phone missing', fix: 'contact' }] },
+        { task: 'declarations', missing: [{ message: 'Declaration not set' }] },
+      ],
+    } as never;
+    const [details, declarations] = taskItems(as('finance_officer'), d, '/ops/x');
+    expect(html(details!.missing[0])).toBe('Student phone missing. ');
+    expect(declarations!.href).toBeNull();
+    const [mine, settings] = taskItems(as('operations_manager'), d, '/ops/x');
+    expect(html(mine!.missing[0])).toContain('/ops/leads/l1?act=details');
+    expect(settings!.href).toBe('/ops/settings?group=admissions');
+  });
+
+  it('an HR request about a student says so when HR cannot open student records', () => {
+    const view = {
+      as: 'hr',
+      categoryLabel: 'General',
+      request: {
+        relatedKind: 'student',
+        relatedId: 's1',
+        status: 'submitted',
+        recipient: { label: 'HR' },
+        urgency: 'normal',
+        submittedAt: null,
+        linkedTaskId: null,
+      },
+    } as never;
+    const out = (role: string) => html(<RequestFacts user={as(role)} view={view} base="/ops" />);
+    expect(out('hr_manager')).toContain('your role does not open student records');
+    expect(hrefs(out('hr_manager'))).toEqual([]);
+    expect(hrefs(out('operations_manager'))).toEqual(['/ops/students?open=s1']);
+  });
+
+  it('a column whose value is an element renders it, never "[object Object]" (FLA-001)', () => {
+    const out = html(
+      <RecordTable
+        rows={[{ id: '1', status: <button type="button">Mark attended</button> }]}
+        rowKey={(r) => r.id}
+        columns={[{ key: 'status', header: 'Attendance or status' }]}
+      />,
+    );
+    expect(out).toContain('<button type="button">Mark attended</button>');
+    expect(out).not.toContain('[object Object]');
+  });
+
+  it('a list row whose record does not open keeps its data and has no row link', () => {
+    const out = html(
+      <RecordTable
+        rows={[{ id: '1', name: 'Sample Student' }]}
+        rowKey={(r) => r.id}
+        rowHref={(r) => openHref(as('finance_officer'), `/ops/students/${r.id}`)}
+        columns={[{ key: 'name', header: 'Student' }]}
+      />,
+    );
+    expect(out).toContain('Sample Student');
+    expect(out).not.toContain('<a ');
+    expect(out).not.toContain('ops-row-link');
+  });
+});
+
+describe('a login and a staff record (PPL-005)', () => {
+  const d = {
+    staff: { id: 's1', fullName: 'Sample Teacher', title: null, status: 'active', userId: null },
+    profile: null,
+    reports: [],
+    manager: null,
+    department: null,
+  } as never;
+  const logins = [{ value: 'u9', label: 'Sample Login (sample@example.test)' }];
+
+  it('the edit form offers the logins with no staff record', () => {
+    const out = html(<StaffEditModal d={d} logins={logins} closeHref="/ops/staff/s1" />);
+    expect(out).toContain('name="userId"');
+    expect(out).toContain('Sample Login (sample@example.test)');
+  });
+
+  it.each([
+    ['operations_manager', 'Not linked: link a login', '/ops/staff/s1?act=edit'],
+    ['hr_manager', 'An operations manager links it on this record', null],
+    ['auditor', 'An operations manager links it on this record', null],
+  ])('no login, as %s: says what to do and who can', (role, words, href) => {
+    const out = html(
+      <StaffProfile d={d} user={as(role)} editHref="/ops/staff/s1?act=edit" level={2} />,
+    );
+    expect(out).toContain(words);
+    expect(out.includes(`href="${href}"`)).toBe(href !== null);
+  });
+});
+
+describe('who reads a request first is true for the reader', () => {
+  it.each([
+    [true, 'HR reads every request first', 'operations manager'],
+    [false, 'an operations manager reads your request first', 'HR reads every request'],
+  ])('HR covers this person: %s', (covers, says, never) => {
+    expect(requestRouteText(covers)).toContain(says);
+    expect(requestRouteText(covers)).not.toContain(never);
+  });
+});
+
+describe('Marketing panel (FLA-005)', () => {
+  it('names each source connection in words, never a raw code', () => {
+    const m = {
+      status: 'ok',
+      value: 1,
+      definition: 'd',
+      window: { from: '2026-10-01', to: '2026-10-31' },
+      unit: 'count',
+    };
+    const out = html(
+      <MarketingPanel
+        result={
+          {
+            status: 'available',
+            fetchedAt: NOW,
+            data: {
+              generatedAt: NOW,
+              metrics: Object.fromEntries(Object.keys(MARKETING_LABELS).map((k) => [k, m])),
+              dataSources: [{ name: 'Metricool', connection: 'not_configured', lastSyncAt: null }],
+            },
+          } as never
+        }
+      />,
+    );
+    expect(out).toContain('Metricool (Not configured)');
+    expect(out).not.toContain('not_configured');
+  });
+});
+
+describe('Past students tabs (CHK-015)', () => {
+  it.each([
+    ['academic_coordinator', ['former']],
+    ['finance_officer', ['former']],
+    ['admissions_counsellor', ['former', 'demos']],
+    ['operations_manager', ['former', 'demos']],
+  ])('%s is offered %j: never a tab that refuses them', (role, keys) => {
+    expect(pastTabs(as(role)).map((t) => t.key)).toEqual(keys);
   });
 });
 
@@ -540,5 +919,16 @@ describe('student report kinds (D-078)', () => {
     expect(out).toContain('<span class="el-badge el-tone-success">Final</span>');
     expect(out).toContain('href="/ops/api/v1/students/s1/report/SR-SAMPLE0001/pdf"');
     expect(html(<ReportList rows={[]} studentId="s1" />)).toContain('No report generated yet');
+  });
+});
+
+describe('what a page may not hold', () => {
+  const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8');
+  it('no inline <style>: the content security policy blocks it (RVC-017)', () => {
+    expect(read('../../src/app/students/[id]/report/page.tsx')).not.toContain('<style');
+  });
+  it('no false "HR attendance unavailable" (RVC-003)', () => {
+    expect(read('../../src/app/teachers/page.tsx')).not.toContain('HR attendance unavailable');
+    expect(read('../../src/server/pdf/teacher-report.ts')).not.toContain('HR attendance unavailable');
   });
 });

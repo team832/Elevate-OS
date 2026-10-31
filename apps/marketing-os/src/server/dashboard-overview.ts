@@ -5,7 +5,7 @@
  */
 import { and, eq, isNotNull, isNull, or, type SQL } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
-import { followUpDaySummary, leadStageFunnel, listLeads } from '@elevate/business-ops-os/leads';
+import { followUpDaySummary, leadCounts, leadStageFunnel } from '@elevate/business-ops-os/leads';
 import { listTasks, myReports, taskListQuery } from '@elevate/business-ops-os/work';
 import { marketingCampaigns, marketingPlacements, type Database } from '@elevate/database';
 import type { AuthenticatedUser } from '@elevate/authentication';
@@ -29,12 +29,12 @@ const failed = () => 'failed' as const;
 async function loadLeads(db: Database, user: AuthenticatedUser, f: DashboardFilters) {
   const [funnel, awaiting] = await Promise.all([
     leadStageFunnel(db, user, { from: f.from, to: f.to, base: modulePath() }),
-    listLeads(db, user, { flag: 'awaiting_contact' }),
+    leadCounts(db, user, { flag: 'awaiting_contact' }),
   ]);
   return {
-    awaitingContact: awaiting.length,
+    awaitingContact: awaiting.total,
     awaitingHref: modulePath('leads?flag=awaiting_contact'),
-    hasSample: awaiting.some((l) => l.isSample),
+    hasSample: awaiting.samples > 0,
     funnel: funnel.map((s) => ({
       ...s,
       href: modulePath(

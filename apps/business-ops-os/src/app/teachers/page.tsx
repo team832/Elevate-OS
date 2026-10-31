@@ -1,5 +1,5 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { EmptyState, PageHeader } from '@elevate/shared-ui';
+import { EmptyState, PageHeader, ListEmpty } from '@elevate/shared-ui';
 import { getTeacherProfile, listTeachers, subjectCatalogue } from '../../server/teachers';
 import { humanise } from '../../ui/format';
 import { PeopleNav } from '../../ui/admissions-nav';
@@ -82,10 +82,18 @@ async function Directory({ user, sp }: { user: AuthenticatedUser; sp: Params }) 
         rowKey={(t) => t.id}
         rowHref={(t) => listHref(BASE, sp, { open: t.id, act: undefined })}
         empty={
-          <EmptyState
-            title={sp.subject ? `No teacher has “${sp.subject}” recorded` : 'No teachers match'}
-            description="Subjects are added on a teacher's profile by an operations manager."
-          />
+          sp.subject ? (
+            <EmptyState
+              title={`No teacher has “${sp.subject}” recorded`}
+              description="Subjects are added on a teacher's profile by an operations manager."
+            />
+          ) : (
+            <ListEmpty
+              noun="teachers"
+              params={sp}
+              first="A staff member appears here once they have a teaching role."
+            />
+          )
         }
         columns={[
           {
@@ -112,7 +120,6 @@ async function Directory({ user, sp }: { user: AuthenticatedUser; sp: Params }) 
           },
           { key: 'manager', header: 'Manager', render: (t) => t.manager ?? 'Not recorded' },
           { key: 'status', header: 'Staff status', render: (t) => humanise(t.status) },
-          { key: 'hr', header: 'HR attendance today', render: () => 'HR attendance unavailable' },
           {
             key: 'classes',
             header: 'Classes today (scheduled / delivered)',
@@ -124,6 +131,7 @@ async function Directory({ user, sp }: { user: AuthenticatedUser; sp: Params }) 
           {
             key: 'logs',
             header: 'Logs pending today',
+            numeric: true,
             render: (t) =>
               t.academicToday?.status === 'available'
                 ? metricText(t.academicToday.data.logsPending)

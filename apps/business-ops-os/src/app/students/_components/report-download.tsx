@@ -32,14 +32,14 @@ export function ReportDownload({
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ audience, from, to }),
-    });
-    const res = made.ok
+    }).catch(() => null);
+    const res = made?.ok
       ? await fetch(
           `${base}/${((await made.json()) as { data: { referenceCode: string } }).data.referenceCode}/pdf`,
           { credentials: 'same-origin' },
-        )
+        ).catch(() => null)
       : made;
-    if (res.ok) await savePdf(res, 'student-report.pdf');
+    if (res?.ok) await savePdf(res, 'student-report.pdf');
     else setError(await refusal(res, 'The report could not be made'));
     setBusy(null);
   }

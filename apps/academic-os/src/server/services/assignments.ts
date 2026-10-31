@@ -16,9 +16,9 @@ import {
   type CoreBranchId,
   type Database,
 } from '@elevate/database';
-import { withTransaction } from '@elevate/server-kit';
+import { withTransaction, containsPattern } from '@elevate/server-kit';
 import { ConflictError, NotFoundError, teachingAssignmentsV1Schema, ValidationError, type TeachingAssignmentsV1 } from '@elevate/shared-contracts';
-import type { BatchId, StaffMemberId } from '@elevate/shared-types';
+import { fmtDay, type BatchId, type StaffMemberId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { assignmentActiveOn, audit, getBatchOrThrow, resolveScope, todayIst, type Actor } from '../context';
 import type { createAssignmentBody } from '../schemas';
@@ -30,7 +30,7 @@ type AssignmentFilter = { batchId?: string; staffIds?: readonly string[]; histor
 
 /** Current assignments (open today by their dates) plus pending ones; with `history` every row. `q` = teacher, subject or batch. */
 function assignmentWhere(f: AssignmentFilter) {
-  const like = f.q ? `%${f.q.replace(/[%_\\]/g, '\\$&')}%` : null;
+  const like = f.q ? containsPattern(f.q) : null;
   return and(
     f.history ? undefined : or(assignmentActiveOn(todayIst()), eq(t.status, 'pending')),
     f.batchId ? eq(t.batchId, f.batchId as BatchId) : undefined,
@@ -80,14 +80,16 @@ export async function listAssignmentsFor(db: Database, filter: AssignmentFilter)
 }
 
 /** Contract `academic.teaching_assignments` v1 for HR (internal route, caller ops): every row incl. pending and ended, one page. */
-export async function teachingAssignmentsPage(db: Database, query: { staffId?: string; status?: AssignmentFilter['status']; q?: string; page: number; pageSize: number }): Promise<TeachingAssignmentsV1> {
-  const where = assignmentWhere({ history: true, staffIds: query.staffId ? [query.staffId] : undefined, status: query.status, q: query.q });
-  // Only the joins `where` can reference (courses and programmes are inner joins on NOT NULL FKs).
+export async function teachingAssignmentsPage(db: Database, query: { staffId?: string; status?: AssignmentFilter['status']; programmeCode?: string; q?: string; page: number; pageSize: number }): Promise<TeachingAssignmentsV1> {
+  const where = and(assignmentWhere({ history: true, staffIds: query.staffId ? [query.staffId] : undefined, status: query.status, q: query.q }), query.programmeCode ? eq(programmes.code, query.programmeCode) : undefined);
+  // Only the joins `where` can reference.
   const [{ n } = { n: 0 }] = await db
     .select({ n: count() })
     .from(t)
     .leftJoin(academicBatches, eq(academicBatches.id, t.batchId))
     .innerJoin(academicSubjects, eq(academicSubjects.id, t.subjectId))
+    .innerJoin(academicCourses, eq(academicCourses.id, academicSubjects.courseId))
+    .innerJoin(programmes, eq(programmes.id, academicCourses.programmeId))
     .innerJoin(staffMembers, eq(staffMembers.id, t.staffMemberId))
     .where(where);
   const rows = await assignmentRows(db, where)
@@ -202,7 +204,7 @@ export async function updateAssignment(db: Database, actor: Actor, assignmentId:
       branchId: input.branchId === undefined ? before.branchId : (input.branchId as CoreBranchId | null),
       status: activating ? (before.endDate ? ('ended' as const) : ('active' as const)) : before.status,
     };
-    if (next.startDate && next.endDate && next.startDate > next.endDate) throw new ValidationError(`The start date cannot be after the end date (${next.endDate}).`);
+    if (next.startDate && next.endDate && next.startDate > next.endDate) throw new ValidationError(`The start date cannot be after the end date (${fmtDay(next.endDate)}).`);
     if (next.batchId) await assertNoOverlap(tx, { ...next, batchId: next.batchId }, before.id);
     const { id: _id, createdAt: _c, updatedAt: _u, ...set } = next;
     const [row] = await tx.update(t).set(set).where(eq(t.id, before.id)).returning();
@@ -221,7 +223,7 @@ export async function endAssignment(db: Database, actor: Actor, assignmentId: st
     const before = await assignmentForUpdate(tx, assignmentId);
     if (before.status === 'pending') throw new ConflictError('A pending assignment has no batch to end. Withdraw it instead.');
     if (before.status !== 'active' && !(before.endDate && before.endDate >= todayIst(now))) throw new ConflictError('This assignment has already ended.');
-    if (before.startDate && input.endDate < before.startDate) throw new ValidationError(`The end date cannot be before the start date (${before.startDate}).`);
+    if (before.startDate && input.endDate < before.startDate) throw new ValidationError(`The end date cannot be before the start date (${fmtDay(before.startDate)}).`);
     await assertNoOverlap(tx, { ...before, batchId: before.batchId!, endDate: input.endDate }, before.id);
     const [row] = await tx.update(t).set({ endDate: input.endDate, status: 'ended' }).where(eq(t.id, before.id)).returning();
     await audit(tx, actor, { action: 'assignment.ended', entityType: 'teacher_assignment', entityId: before.id, before, after: row });
@@ -266,7 +268,7 @@ async function assertNoOverlap(
       ),
     )
     .limit(1);
-  if (clash) throw new ConflictError(`This teacher already has this subject in this batch from ${clash.startDate ?? 'the start'} to ${clash.endDate ?? 'open'}.`);
+  if (clash) throw new ConflictError(`This teacher already has this subject in this batch from ${fmtDay(clash.startDate, 'the start')} to ${fmtDay(clash.endDate, 'open')}.`);
 }
 
 async function assertNoPending(tx: Database, staffId: StaffMemberId, subjectId: string) {

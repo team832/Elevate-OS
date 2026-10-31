@@ -2,13 +2,21 @@ import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import type { PageAccess } from '@elevate/server-kit/next';
-import { Card, DataTable, EmptyState, PageHeader, SourceBadge, Tabs } from '@elevate/shared-ui';
+import {
+  Card,
+  DataTable,
+  EmptyState,
+  PageHeader,
+  SourceBadge,
+  Tabs,
+  fmtDay,
+} from '@elevate/shared-ui';
 import { modulePath } from '../../domain';
 import { listBatches, listPlacementViews } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { PLACEMENT_VIEWS } from '../../server/schemas-placements';
 import { ApiForm } from '../../ui/api-form';
-import { StateBadge } from '../../ui/badges';
+import { StateBadge, programmeName } from '../../ui/badges';
 import { EndEnrolmentForm, placementNote } from '../../ui/batch-tabs';
 import { AcademicShell, LoadError, actorFor, gate, load, workspaceLink } from '../../ui/shell';
 
@@ -56,13 +64,13 @@ async function Body({ access, view }: { access: PageAccess; view: View }) {
   if (!data.ok) return <>{header}<LoadError error={data.error} /></>;
   const { list, batches } = data.data;
   type Row = (typeof list.rows)[number];
-  const batchOptions = batches.map((b) => ({ value: b.id, label: `${b.code}, ${b.programmeCode} / ${b.courseCode}${b.capacity ? ` (${b.activeEnrolments} of ${b.capacity} seats)` : ''}` }));
-  const enrolmentOptions = list.rows.map((r) => ({ value: r.enrolmentId, label: `${r.studentName} · ${r.studentCode} · ${r.programmeName}${r.startDate ? ` · since ${r.startDate}` : ''}${r.placement ? ` (${r.placement.batchCode})` : ''}` }));
+  const batchOptions = batches.map((b) => ({ value: b.id, label: `${b.code}, ${programmeName(b.programmeCode)} / ${b.courseCode}${b.capacity ? ` (${b.activeEnrolments} of ${b.capacity} seats)` : ''}` }));
+  const enrolmentOptions = list.rows.map((r) => ({ value: r.enrolmentId, label: `${r.studentName} · ${r.studentCode} · ${r.programmeName}${r.startDate ? ` · since ${fmtDay(r.startDate)}` : ''}${r.placement ? ` (${r.placement.batchCode})` : ''}` }));
   const opsCell = (ref: string | null) => {
     const href = ref ? workspaceLink(access.user, 'ops', `/students/${ref}`) : null;
-    return href ? <a href={href}>Admission and fees</a> : ref ? 'In Business Ops' : 'Not linked';
+    return href ? <a href={href}>Admission and fees</a> : ref ? 'In Business Operations' : 'Not linked';
   };
-  const placementText = (r: Row) => (r.placement ? `${r.placement.batchCode}, ${r.placement.startDate} to ${r.placement.endDate ?? 'now'}${r.placement.endedReason ? ` (${placementNote(r.placement)})` : ''}` : 'Awaiting batch');
+  const placementText = (r: Row) => (r.placement ? `${r.placement.batchCode}, ${fmtDay(r.placement.startDate)} to ${fmtDay(r.placement.endDate, 'now')}${r.placement.endedReason ? ` (${placementNote(r.placement)})` : ''}` : 'Awaiting batch');
   return (
     <>
       {header}
@@ -83,9 +91,9 @@ async function Body({ access, view }: { access: PageAccess; view: View }) {
                 { key: 'student', header: 'Student', render: (r) => <><a href={MODULE_PATHS.student(r.studentId)}>{r.studentName}</a> <SourceBadge source={r.isSample ? 'sample' : 'live'} /></> },
                 { key: 'programme', header: 'Programme', render: (r) => `${r.programmeName}${r.courseCode ? ` · ${r.courseCode}` : ''}` },
                 { key: 'year', header: 'Academic year', render: (r) => r.academicYear ?? 'Not recorded' },
-                { key: 'start', header: 'Enrolled from', render: (r) => r.startDate ?? 'Not recorded' },
+                { key: 'start', header: 'Enrolled from', render: (r) => fmtDay(r.startDate, 'Not recorded') },
                 view === 'transfers'
-                  ? { key: 'moves', header: 'Transfers', render: (r: Row) => r.transfers.map((t) => `${t.effectiveDate}: ${t.fromBatchCode ?? '?'} to ${t.toBatchCode} (${t.reason ?? 'no reason'})`).join('; ') }
+                  ? { key: 'moves', header: 'Transfers', render: (r: Row) => r.transfers.map((t) => `${fmtDay(t.effectiveDate)}: ${t.fromBatchCode ?? '?'} to ${t.toBatchCode} (${t.reason ?? 'no reason'})`).join('; ') }
                   : { key: 'batch', header: 'Batch', render: placementText },
                 ...(view === 'transfers'
                   ? [{
@@ -97,8 +105,8 @@ async function Body({ access, view }: { access: PageAccess; view: View }) {
                           .join('; '),
                     }]
                   : []),
-                { key: 'source', header: 'Source', render: (r) => (r.source === 'manual' ? `Manual: ${r.manualReason ?? ''}` : 'Business Ops admission') },
-                { key: 'ops', header: 'Business Ops', render: (r) => opsCell(r.coreStudentId ?? r.sourceAdmissionId) },
+                { key: 'source', header: 'Source', render: (r) => (r.source === 'manual' ? `Manual: ${r.manualReason ?? ''}` : 'Business Operations admission') },
+                { key: 'ops', header: 'Business Operations', render: (r) => opsCell(r.coreStudentId ?? r.sourceAdmissionId) },
                 { key: 'status', header: 'Status', render: (r) => <StateBadge state={r.status} /> },
               ]}
             />

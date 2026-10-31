@@ -1,12 +1,22 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { reviewFields } from '../../src/app/reviews/review-fields';
-import { ApiForm, describeDetails } from '../../src/ui/api-form';
+import {
+  answerList,
+  ApiForm,
+  describeDetails,
+  ErrorAlert,
+  missingRequired,
+  send,
+} from '../../src/ui/api-form';
+import { createStudentBody } from '../../src/server/schemas';
 import { AssignmentForms, RecordAssignmentForm } from '../../src/ui/assignments';
 import { AttendanceForm } from '../../src/ui/attendance-form';
-import { fmtDateTime, fmtHours, Maybe, PlanBadge, StateBadge } from '../../src/ui/badges';
+import { fmtDateTime, fmtHours, Maybe, PlanBadge, programmeName, StateBadge } from '../../src/ui/badges';
 import { CoverageSection, FeasibilitySection } from '../../src/ui/batch-sections';
 import { ConflictList } from '../../src/ui/conflicts';
+import { CourseChapters } from '../../src/ui/course-chapters';
 import { InterventionsTable } from '../../src/ui/interventions';
 import {
   CoordinatorTiles,
@@ -32,10 +42,10 @@ describe('Academic badges and formatters', () => {
     [<Maybe value={null} />, badge('neutral', 'Missing')],
     [<Maybe value="" />, badge('neutral', 'Missing')],
     [<Maybe value={0} suffix="%" />, '0%'],
-    [<PlanBadge status={null} />, badge('neutral', 'unknown')],
-    [<PlanBadge status="provisional" prefix="dates" />, badge('warning', 'dates: provisional')],
-    [<StateBadge state="in_progress" />, badge('info', 'in progress')],
-    [<StateBadge state="not_assessed" />, badge('neutral', 'not assessed')],
+    [<PlanBadge status={null} />, badge('neutral', 'Unknown')],
+    [<PlanBadge status="provisional" prefix="dates" />, badge('warning', 'Dates: provisional')],
+    [<StateBadge state="in_progress" />, badge('info', 'In progress')],
+    [<StateBadge state="not_assessed" />, badge('neutral', 'Not assessed')],
   ])('%#: missing is "Missing" (a real 0 stays 0) and codes read as words', (node, expected) => {
     expect(html(node)).toBe(expected);
   });
@@ -97,6 +107,77 @@ describe('ApiForm', () => {
   });
 });
 
+describe('course record (FLB-006)', () => {
+  const subjects = [{ id: 's1', code: 'QUANT', name: 'Quantitative Ability' }];
+  const chapter = { id: 'c1', subjectId: 's1', code: 'QA-01', title: 'Averages', weight: 7, status: 'active' };
+  it('shows each chapter under its subject with its weight', () => {
+    const out = renderToStaticMarkup(<CourseChapters subjects={subjects} chapters={[chapter]} />);
+    expect(out).toContain('Quantitative Ability (QUANT)');
+    expect(out).toContain('Averages');
+    expect(out).toContain('>7<');
+  });
+  it('says so when a course has no subjects', () => {
+    expect(renderToStaticMarkup(<CourseChapters subjects={[]} chapters={[]} />)).toContain('No subjects on this course yet');
+  });
+});
+
+describe('a refusal in ApiForm is readable (HUS-007)', () => {
+  const reply = (status: number, error: unknown) =>
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error }), { status }));
+  const refused = async () => {
+    const r = await send('/academic/api/v1/x', 'POST', {});
+    if (r.ok) throw new Error('expected a refusal');
+    return r.error;
+  };
+  it('a field issue goes beside its field, in its label; no reference on a 400', async () => {
+    reply(400, {
+      message: 'The request body is not valid.',
+      requestId: 'ef913e41',
+      details: [{ path: ['actualMinutes'], message: 'Enter the minutes.' }],
+    });
+    const error = await refused();
+    expect(error.issues).toEqual([{ field: 'actualMinutes', message: 'Enter the minutes.' }]);
+    const out = renderToStaticMarkup(<ErrorAlert error={error} labelOf={() => 'Actual minutes'} />);
+    expect(out).toContain('Actual minutes: Enter the minutes.');
+    expect(out).not.toContain('actualMinutes');
+    expect(out).not.toContain('ef913e41');
+  });
+  it('a server failure gives the reference; a lost session gives a way back', async () => {
+    reply(500, { message: 'Something went wrong', requestId: 'ef913e41' });
+    expect(renderToStaticMarkup(<ErrorAlert error={{ message: 'A score needs the result Scored. Classes must not overlap.', details: ['Classes must not overlap.'], issues: [{ field: 'manualScore', message: 'A score needs the result Scored.' }] }} />)).not.toContain('<li>'); // RVC-020
+    expect(renderToStaticMarkup(<ErrorAlert error={await refused()} />)).toContain('Reference for the administrator: ef913e41');
+    reply(401, { message: 'You need to sign in.' });
+    expect(renderToStaticMarkup(<ErrorAlert error={await refused()} />)).toContain('href="/academic/login"');
+  });
+});
+
+describe('required choices and blank fields in ApiForm (HUS-003)', () => {
+  const opts = [{ value: 'a', label: 'First' }, { value: 'b', label: 'Second' }];
+  it('a required select with no default opens on Choose; a stated default stays', () => {
+    const form = (defaultValue?: string) =>
+      renderToStaticMarkup(
+        <ApiForm action="/academic/api/v1/x" submitLabel="Save" fields={[{ name: 'pick', label: 'Pick', type: 'select', required: true, options: opts, defaultValue }]} />,
+      );
+    expect(form()).toContain('Choose…');
+    expect(form('b')).not.toContain('Choose…');
+  });
+  it('names blank required fields in words', () => {
+    const data = new FormData();
+    data.set('title', 'x');
+    expect(
+      missingRequired(
+        [
+          { name: 'pick', label: 'Batch', type: 'select', required: true },
+          { name: 'title', label: 'Title', required: true },
+          { name: 'due', label: 'Due date', type: 'date', required: true },
+          { name: 'note', label: 'Note' },
+        ],
+        data,
+      ),
+    ).toEqual(['Choose batch.', 'Enter due date.']);
+  });
+});
+
 describe('ConflictList', () => {
   it('keeps hard conflicts apart from preferences and flags unverified dates', () => {
     const out = html(
@@ -115,7 +196,7 @@ describe('ConflictList', () => {
       />,
     );
     expect(out).toContain(
-      `Result: ${badge('danger', 'infeasible')} — 1 hard conflict(s), 0 preference warning(s).`,
+      `Result: ${badge('danger', 'Infeasible')} — 1 hard conflict(s), 0 preference warning(s).`,
     );
     expect(out).toContain('Hard conflicts');
     expect(out).not.toContain('Preferences (warnings only)');
@@ -416,6 +497,18 @@ describe('Academic dashboards (22 Oct 2026 redesign)', () => {
     expect(out).not.toContain('No more classes today');
     expect(out).toContain('No students placed in your batches today');
     expect(out).toContain('Not available'); // no assignment today: counts are not available, never 0
+  });
+
+  it.each([
+    ['https://meet.example/a', true],
+    ['vbscript:msgbox(1)', false],
+    ['ms-msdt:/id', false],
+    ['data:text/html,x', false],
+    ['file:///c:/win.ini', false],
+  ])('teacher hero: a stored class link %s is a live link: %s (HAT-006)', (onlineLink, live) => {
+    const out = html(<TeacherHome day={{ ...day, next: { ...session, onlineLink } } as never} />);
+    expect(out.includes(`href="${onlineLink}"`)).toBe(live);
+    expect(out.includes(`Not a web link: ${onlineLink}`)).toBe(!live);
   });
 
   it('work tiles: no staff record is words, never 0; counts come through as figures', () => {
@@ -727,5 +820,59 @@ describe('Build draft timetable (ACD-029)', () => {
     expect(out).toContain('No room');
     const two = html(<BuildResultPanel result={{ ...result, unplaced: [{ ...result.unplaced[0]!, missing: 2 }] }} patternsPath="/academic/timetable/patterns" />);
     expect(two).toContain('Verbal: 2 classes a week not placed');
+  });
+});
+
+describe('typed in plain form', () => {
+  it.each([
+    ['A C - D', ['A', 'C', null, 'D']],
+    ['A,C,  D', ['A', 'C', 'D']],
+  ])('an answer key typed as %j (HUS-039)', (typed, answers) => {
+    expect(answerList(typed)).toEqual(answers);
+  });
+
+  it('a date of birth in the future is refused, as Business Operations refuses it (RVC-011)', () => {
+    const on = (dateOfBirth: string) => createStudentBody.safeParse({ fullName: 'Sample Birth', dateOfBirth });
+    expect(on('2009-04-01').success).toBe(true);
+    expect(on('2099-04-01').error?.issues[0]?.message).toBe('A date of birth cannot be in the future.');
+  });
+
+  it('a phone is taken as Business Operations takes it, and stored the same (HUS-035)', () => {
+    const body = createStudentBody.parse({
+      fullName: 'Sample Phone',
+      phone: '+91 98765 43210',
+      guardianPhone: '098765-43211',
+    });
+    expect([body.phone, body.guardianPhone]).toEqual(['+919876543210', '+919876543211']);
+    expect(createStudentBody.safeParse({ fullName: 'Sample Phone', phone: '12345' }).success).toBe(false);
+  });
+
+  it.each([
+    ['CLASS_11', 'Class 11 Commerce'],
+    ['COMMERCE_11_12', 'Class 11–12 Commerce'],
+    ['CA_FOUNDATION', 'CA Foundation'],
+    ['DROPPER', 'Dropper'],
+    ['CLAT', 'CLAT'],
+    ['IPMAT', 'IPMAT'],
+  ])('programme %s reads %s (RVC-015)', (code, name) => {
+    expect(programmeName(code)).toBe(name);
+  });
+
+  it('report tables break words only on paper, where they cannot scroll (RVC-023)', () => {
+    const [screen, paper] = readFileSync(new URL('../../src/app/reports/print.css', import.meta.url), 'utf8').split('@media print');
+    expect(screen).not.toContain('overflow-wrap');
+    expect(paper).toContain('overflow-wrap: anywhere');
+  });
+
+  it('a stored value reads as words (HUS-042)', () => {
+    expect(html(<StateBadge state="class11_two_year" />)).toContain('Class 11 two year');
+    const out = html(
+      <ApiForm
+        action="/academic/api/v1/x"
+        submitLabel="Save"
+        fields={[{ name: 'route', label: 'Route', type: 'select', options: [{ value: 'fast_track', label: 'fast_track' }] }]}
+      />,
+    );
+    expect(out).toContain('>Fast track<');
   });
 });

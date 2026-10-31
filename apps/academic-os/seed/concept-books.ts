@@ -24,13 +24,8 @@ const ALIASES: { code: string; status: 'retired' | 'moved'; aliasOf: string; tit
   { code: 'B1-25', status: 'moved', aliasOf: 'B5-07', title: 'Conversation Analysis (moved to Book 5)' },
 ];
 
-async function upsertRow(db: Database, row: Row) {
-  const { chapterCode: _c, ...set } = row;
-  await db
-    .insert(academicConceptBookChapters)
-    .values(row)
-    .onConflictDoUpdate({ target: academicConceptBookChapters.chapterCode, set });
-}
+const insertRow = (db: Database, row: Row) =>
+  db.insert(academicConceptBookChapters).values(row).onConflictDoNothing({ target: academicConceptBookChapters.chapterCode });
 
 function chapterRow(book: { book_id: string; title: string }, ch: ConceptChapter, status: Row['status']): Row {
   const q = ch.planned_questions;
@@ -63,18 +58,18 @@ export const conceptBooksSeed = defineSeed({
     const present = new Set<string>();
     for (const book of cb.records) {
       if (book.opening_unit) {
-        await upsertRow(db, chapterRow(book, book.opening_unit, 'opening_unit'));
+        await insertRow(db, chapterRow(book, book.opening_unit, 'opening_unit'));
         present.add(book.opening_unit.chapter_id);
       }
       for (const ch of book.chapters) {
-        await upsertRow(db, chapterRow(book, ch, 'active'));
+        await insertRow(db, chapterRow(book, ch, 'active'));
         present.add(ch.chapter_id);
       }
     }
     for (const a of ALIASES) {
       if (present.has(a.code) || !present.has(a.aliasOf)) continue;
       const book = cb.records.find((b) => a.code.startsWith(`${b.book_id}-`))!;
-      await upsertRow(db, {
+      await insertRow(db, {
         bookCode: book.book_id,
         bookTitle: book.title,
         chapterCode: a.code,

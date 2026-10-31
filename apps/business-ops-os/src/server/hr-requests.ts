@@ -6,7 +6,7 @@
  * step is an event row plus an audit row; notifications are in-app only, nothing leaves the app.
  */
 import { eq } from 'drizzle-orm';
-import { can, grantsForRole } from '@elevate/authorization';
+import { can } from '@elevate/authorization';
 import { loadRoles } from '@elevate/authentication';
 import {
   opsHrRequestEvents as events,
@@ -19,9 +19,10 @@ import {
   ForbiddenError,
   InvalidStateTransitionError,
   isAppError,
+  sourceReasonWords,
   teachingAssignmentsV1Schema,
 } from '@elevate/shared-contracts';
-import { ROLE_KEYS, type StaffMemberId, type UserId } from '@elevate/shared-types';
+import type { StaffMemberId, UserId } from '@elevate/shared-types';
 import {
   decideHrRequest,
   isEditable,
@@ -37,7 +38,7 @@ import {
   scopeCovers,
   staffIdForUser,
   userIdsForStaff,
-  userIdsWithRole,
+  userIdsHolding,
   type Actor,
 } from './context';
 import type { HrActionBody, HrRequestInput, HrRequestPatch } from './hr-requests-schemas';
@@ -94,7 +95,7 @@ async function checkRelated(db: Database, actor: Actor, self: string, b: Partial
     if (r.status !== 'available')
       throw fieldError(
         'relatedId',
-        `Source unavailable: Academic OS could not confirm the batch (${r.reason}). Try again, or name it in your message.`,
+        `Source unavailable: Academic OS could not confirm the batch (${sourceReasonWords(r.reason)}). Try again, or name it in your message.`,
       );
     ok = r.data.items.some((a) => a.batchId === id);
   } else
@@ -131,11 +132,8 @@ async function checkCategory(db: Database, code: string | undefined) {
 
 /** Everyone who may manage this sender's request (HR with a department scope only inside it). */
 async function hrInbox(db: Database, senderStaffId: string): Promise<UserId[]> {
-  const holders = new Set<UserId>();
-  for (const role of ROLE_KEYS.filter((r) => grantsForRole(r).has('ops:hr_requests:manage')))
-    for (const id of await userIdsWithRole(db, role)) holders.add(id);
   const out: UserId[] = [];
-  for (const id of holders) {
+  for (const id of await userIdsHolding(db, 'ops:hr_requests:manage')) {
     const hr: Actor = { id, roles: await loadRoles(db, id) };
     if ((await hrCovers(db, hr, senderStaffId, await staffIdForUser(db, id))).manage) out.push(id);
   }
@@ -295,6 +293,11 @@ async function forwardTarget(
   if (!person.userId) throw fieldError('toStaffId', `${person.fullName} has no login yet.`);
   if (person.id === r.senderStaffId)
     throw fieldError('toStaffId', 'That is the sender. Resolve the request instead.');
+  if (!can({ id: person.userId, roles: await loadRoles(db, person.userId) }, 'ops:hr_requests:create'))
+    throw fieldError(
+      'toStaffId',
+      `${person.fullName} cannot reply to a request with their current role. Choose someone else, or answer it yourself.`,
+    );
   const intended = person.id === r.recipientStaffId || person.id === configured;
   if (!intended && !(await inHrReach(db, actor, person.id)))
     throw new ForbiddenError(

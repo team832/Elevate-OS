@@ -1,5 +1,11 @@
 /** Status badges that keep planning labels (locked/provisional/proposed) apart from delivery states. */
-import { StatusBadge, type Tone } from '@elevate/shared-ui';
+import { fmtDay, StatusBadge, type Tone } from '@elevate/shared-ui';
+
+/** A stored value in words: `class_12` reads "Class 12", `class11_two_year` "Class 11 two year". */
+export const words = (s: string) =>
+  (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, ' ').replace(/([a-z])(\d)/g, '$1 $2');
+
+export { programmeName } from '@elevate/shared-types';
 
 const PLAN_TONES: Record<string, Tone> = {
   locked: 'success',
@@ -15,7 +21,7 @@ const PLAN_TONES: Record<string, Tone> = {
 /** Plan / label status: locked = success, provisional = warning, proposed = info, superseded = neutral. */
 export function PlanBadge({ status, prefix }: { status: string | null | undefined; prefix?: string }) {
   const s = status ?? 'unknown';
-  return <StatusBadge tone={PLAN_TONES[s] ?? 'neutral'}>{prefix ? `${prefix}: ${s}` : s}</StatusBadge>;
+  return <StatusBadge tone={PLAN_TONES[s] ?? 'neutral'}>{words(prefix ? `${prefix}: ${s}` : s)}</StatusBadge>;
 }
 
 const STATE_TONES: Record<string, Tone> = {
@@ -59,7 +65,7 @@ const STATE_TONES: Record<string, Tone> = {
 
 export function StateBadge({ state }: { state: string | null | undefined }) {
   const s = state ?? 'unknown';
-  return <StatusBadge tone={STATE_TONES[s] ?? 'neutral'}>{s.replace(/_/g, ' ')}</StatusBadge>;
+  return <StatusBadge tone={STATE_TONES[s] ?? 'neutral'}>{words(s)}</StatusBadge>;
 }
 
 /** A value that may be missing: shows "Missing" (never 0) when null. */
@@ -73,8 +79,8 @@ export function Maybe({ value, suffix = '' }: { value: number | string | null | 
   );
 }
 
-/** "2026-10-01" or "2026-10-01 to 2026-10-07". */
-export const fmtRange = (r: { from: string; to: string }) => (r.from === r.to ? r.from : `${r.from} to ${r.to}`);
+/** "1 Oct 2026" or "1 Oct 2026 to 7 Oct 2026". */
+export const fmtRange = (r: { from: string; to: string }) => (r.from === r.to ? fmtDay(r.from) : `${fmtDay(r.from)} to ${fmtDay(r.to)}`);
 export const fmtHours = (minutes: number) => `${Math.round((minutes / 60) * 100) / 100} h`;
-export const fmtDateTime = (d: Date | string | null | undefined) =>
-  d ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(d)) : '—';
+const DATE_TIME = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
+export const fmtDateTime = (d: Date | string | null | undefined) => (d ? DATE_TIME.format(new Date(d)) : '—');

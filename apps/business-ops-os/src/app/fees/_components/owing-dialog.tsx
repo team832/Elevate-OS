@@ -3,6 +3,7 @@
  * makes up the chart's outstanding figure under the same filters. Its header sums these rows with
  * the chart's own totals function, so the two always agree (A-FEE-9).
  */
+import { can, type Principal } from '@elevate/authorization';
 import { StatusBadge } from '@elevate/shared-ui';
 import { feeYearTotals } from '../../../domain/fee-year';
 import { FEE_PAGE_SIZE } from '../../../server/fee-collections';
@@ -13,13 +14,21 @@ import { RecordModal } from '../../../ui/record-modal';
 import { RecordTable } from '../../../ui/record-table';
 import { batchLabel } from '../../students/_components/profile-sections';
 
+const LEDGER_CLOSED = 'Opening a fee ledger needs access to student records.';
+
+/** Where a payment is recorded; someone who cannot open the ledger is told so instead (CHK-013). */
+export const paymentNote = (user: Principal) =>
+  can(user, 'ops:students:read')
+    ? "To record or correct a payment, open the student's fees."
+    : LEDGER_CLOSED;
+
 const courseLine = (r: FeeYearStudent) =>
   r.courses
     .map(
       (c) =>
         `${c.name ?? 'Programme not set'}, batch ${batchLabel(c.enrolledBatchId, c.intendedBatchId).replace(/^./, (x) => x.toLowerCase())}`,
     )
-    .join(' + ') || 'Not recorded in Business Ops';
+    .join(' + ') || 'Not recorded in Business Operations';
 
 const SORT_LABELS: Record<OwingSort, string> = {
   overdue: 'Overdue first',
@@ -72,9 +81,7 @@ export function OwingDialog({
       </p>
       <p className="el-field-hint">
         A balance is not late until its due date has passed: only the Overdue column is.
-        {canOpenLedger
-          ? ' Open a student to see their fee ledger.'
-          : ' Opening a fee ledger needs access to student records.'}
+        {canOpenLedger ? ' Open a student to see their fee ledger.' : ` ${LEDGER_CLOSED}`}
       </p>
       <nav className="el-inline-form" aria-label="Order of students">
         <span>Order:</span>
@@ -92,8 +99,13 @@ export function OwingDialog({
         caption={`${plural(t.students, 'student')} · ${fmtPaise(t.outstandingPaise)} outstanding`}
         rows={rows.slice((page - 1) * FEE_PAGE_SIZE, page * FEE_PAGE_SIZE)}
         rowKey={(r) => r.planId}
-        rowHref={canOpenLedger ? (r) => `/ops/students/${r.studentId}?tab=fees` : undefined}
+        rowHref={canOpenLedger ? (r) => r.href : undefined}
         empty="No tuition is outstanding under these filters."
+        sortedBy={
+          params.sort === 'name'
+            ? { column: 'student', direction: 'ascending' }
+            : { column: `${params.sort}Paise`, direction: 'descending' }
+        }
         columns={[
           {
             key: 'student',

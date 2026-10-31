@@ -103,6 +103,7 @@ export async function weeklyReport(
       status: marketingPlacements.status,
       original: marketingPlacements.originalPublishAt,
       publishedAt: marketingPlacements.publishedAt,
+      scheduledAt: marketingPlacements.scheduledAt,
       mode: marketingPlacements.publicationMode,
     })
     .from(marketingPlacements);
@@ -124,7 +125,7 @@ export async function weeklyReport(
         publishedLegacyReported: mine.filter(
           (p) => inWeek(p.publishedAt) && p.mode === 'legacy_reported',
         ).length,
-        publishedSandbox: mine.filter((p) => inWeek(p.publishedAt) && p.mode === 'sandbox').length,
+        publishedSandbox: mine.filter((p) => inWeek(p.publishedAt ?? p.scheduledAt) && p.mode === 'sandbox').length,
         postsWithData: group?.posts ?? 0,
       };
     });

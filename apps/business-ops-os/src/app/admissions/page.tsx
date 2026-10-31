@@ -308,6 +308,12 @@ const VIEW_COLUMNS: Record<DemoView, (keyof typeof COLUMNS | 'followUp' | 'stude
   upcoming: ['student', 'firstSession', 'programme', 'teachers', 'setup', 'followUp'],
   previous: ['student', 'outcome', 'attended', 'checklist', 'conversion', 'reason'],
 };
+/** The column each offered sort orders by; "Recently booked" has none on screen. */
+const SORTED_COLUMN: Partial<Record<(typeof DEMO_SORTS)[number], string>> = {
+  name: 'student',
+  first_class: COLUMNS.firstSession.key,
+  follow_up: 'followUp',
+};
 
 async function DemoList({
   user,
@@ -338,13 +344,16 @@ async function DemoList({
       'Conversions this month',
       kpis.conversions,
       `Converted in ${fmtMonth(list.month)}`,
-      { view: 'previous', outcome: 'converted' },
+      { view: 'previous', outcome: 'converted', outcomeMonth: list.month },
     ],
     [
       'Admissions pending decision',
       kpis.pendingDecision,
       'Demo students whose case awaits the admission decision',
-      { stage: 'admission_pending' },
+      {
+        stage: 'admission_pending',
+        view: DEMO_VIEWS.find((v) => kpis.pendingDecisionByView[v] > 0) ?? view,
+      },
     ],
   ];
   const filtered = FILTER_KEYS.some((k) => params[k]);
@@ -368,6 +377,22 @@ async function DemoList({
           </li>
         ))}
       </ul>
+      {list.leftOpen.length ? (
+        <Alert tone="warning" title="Lost cases with demo classes still scheduled">
+          <p>
+            These no longer count as current or upcoming, and nothing was cancelled. Open each demo
+            and close it: that releases its classes and the teacher’s time.
+          </p>
+          <ul>
+            {list.leftOpen.map((d) => (
+              <li key={d.demoId}>
+                <a href={linkTo(params, { open: d.demoId, new: undefined })}>{d.studentName}</a>:{' '}
+                {d.classes} {d.classes === 1 ? 'class' : 'classes'}
+              </li>
+            ))}
+          </ul>
+        </Alert>
+      ) : null}
       <SearchPanel
         action={BASE}
         hidden={kept}
@@ -431,6 +456,11 @@ async function DemoList({
           rowKey={(row) => row.demo.id}
           rowHref={(row) => linkTo(params, { open: row.demo.id, new: undefined })}
           linkColumn="student"
+          sortedBy={
+            query.sort && SORTED_COLUMN[query.sort]
+              ? { column: SORTED_COLUMN[query.sort]!, direction: 'ascending' }
+              : undefined
+          }
           columns={VIEW_COLUMNS[view].map((k) =>
             k === 'followUp'
               ? followUpColumn(write)

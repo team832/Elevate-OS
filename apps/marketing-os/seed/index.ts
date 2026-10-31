@@ -7,22 +7,8 @@
  * Plus the SEO/AIO/GEO categories (reference) and the labelled sample set of ./samples.ts
  * (brief 23 Oct 2026 §25). Idempotent: re-running inserts nothing new.
  */
-import { defineSeed, type SeedDefinition } from '@elevate/database/seed';
-import { importLegacyMarketing } from '../src/server/legacy';
-import { loadLegacyMarketingData } from '../src/server/legacy/load';
+import type { SeedDefinition } from '@elevate/database/seed';
+import { marketingLegacySeed } from './reference';
 import { marketingSampleSeeds } from './samples';
 
-export const seeds: readonly SeedDefinition[] = [
-  defineSeed({
-    name: 'marketing.legacy',
-    module: 'marketing',
-    dependsOn: ['core.users', 'core.staff_members'],
-    description:
-      'Marketing legacy import: accounts, OD-001 conflict, brand rules, ideas (quarantine), placements, post audit, proposed policies',
-    async run({ db, log }) {
-      const result = await importLegacyMarketing(db, loadLegacyMarketingData());
-      log(`marketing.legacy — ${JSON.stringify(result)}`);
-    },
-  }),
-  ...marketingSampleSeeds,
-];
+export const seeds: readonly SeedDefinition[] = [marketingLegacySeed, ...marketingSampleSeeds];

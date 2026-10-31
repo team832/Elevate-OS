@@ -65,7 +65,7 @@ export async function hrAttendanceCounts(
       value: days.filter(
         (d) => d.date === yesterday && reviewReasons(d, today).includes('unmarked'),
       ).length,
-      href: `${BASE}?from=${yesterday}&to=${yesterday}&review=unmarked`,
+      href: `${BASE}?tab=review&from=${yesterday}&to=${yesterday}&review=unmarked`,
     },
   ];
 }

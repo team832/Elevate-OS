@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { Card, DataTable, EmptyState, PageHeader, fmtDay } from '@elevate/shared-ui';
 import { listBatches, listCourses } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
-import { PlanBadge, StateBadge } from '../../ui/badges';
+import { PlanBadge, StateBadge, programmeName, words } from '../../ui/badges';
 import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
@@ -37,15 +37,16 @@ async function Body({ access }: { access: PageAccess }) {
             <DataTable compact
               rows={data.data.batches}
               rowKey={(b) => b.id}
+              sampleOf={(b) => b.isSample}
               empty={<EmptyState title="No batches" description={canWrite ? 'Create a batch below.' : 'You are not assigned to any batch yet.'} />}
               columns={[
                 { key: 'code', header: 'Batch', render: (b) => <a href={MODULE_PATHS.batch(b.id)}>{b.code}</a> },
                 { key: 'name', header: 'Name' },
-                { key: 'programme', header: 'Programme / course', render: (b) => `${b.programmeCode} / ${b.courseCode}` },
-                { key: 'mode', header: 'Mode', render: (b) => b.mode ?? '—' },
-                { key: 'start', header: 'Start', render: (b) => b.startDate ?? 'not set' },
+                { key: 'programme', header: 'Programme / course', render: (b) => `${programmeName(b.programmeCode)} / ${b.courseCode}` },
+                { key: 'mode', header: 'Mode', render: (b) => (b.mode ? words(b.mode) : '—') },
+                { key: 'start', header: 'Start', render: (b) => fmtDay(b.startDate, 'not set') },
                 { key: 'len', header: 'Class length', render: (b) => (b.classLength.minutes ? <>{b.classLength.minutes} min <PlanBadge status={b.classLength.status} /></> : <PlanBadge status="unknown" />) },
-                { key: 'exam', header: 'Target exam', render: (b) => (b.targetExamDate ? <>{b.targetExam ?? 'exam'} {b.targetExamDate} <PlanBadge status={b.targetExamDateStatus} /></> : '—') },
+                { key: 'exam', header: 'Target exam', render: (b) => (b.targetExamDate ? <>{b.targetExam ?? 'exam'} {fmtDay(b.targetExamDate)} <PlanBadge status={b.targetExamDateStatus} /></> : '—') },
                 { key: 'enrolled', header: 'Enrolled', numeric: true, render: (b) => `${b.activeEnrolments}${b.capacity ? ` / ${b.capacity}` : ''}` },
                 { key: 'status', header: 'Status', render: (b) => <StateBadge state={b.status} /> },
               ]}
@@ -61,7 +62,7 @@ async function Body({ access }: { access: PageAccess }) {
                 fields={[
                   { name: 'code', label: 'Code', required: true, placeholder: 'CAF-SEP27-REG' },
                   { name: 'name', label: 'Name', required: true },
-                  { name: 'courseId', label: 'Course version', type: 'select', required: true, options: data.data.courses.map((c) => ({ value: c.id, label: `${c.code} (${c.programmeCode})` })) },
+                  { name: 'courseId', label: 'Course version', type: 'select', required: true, options: data.data.courses.map((c) => ({ value: c.id, label: `${c.code} (${programmeName(c.programmeCode)})` })) },
                   { name: 'route', label: 'Route', type: 'select', options: ['regular', 'dropper', 'class11_two_year', 'fast_track'].map((v) => ({ value: v, label: v })) },
                   { name: 'mode', label: 'Mode', type: 'select', options: ['offline', 'online', 'hybrid'].map((v) => ({ value: v, label: v })) },
                   { name: 'startDate', label: 'Start date', type: 'date' },

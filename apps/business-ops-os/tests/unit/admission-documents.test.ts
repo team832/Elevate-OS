@@ -121,7 +121,7 @@ const record = (
   generatedAt: new Date('2026-10-21T06:00:00Z'),
   snapshot: s,
   documents: documentChecklist([{ documentType: 'aadhaar', verificationStatus: 'verified' }]),
-  summary: feeSummary(s, ledger, INSTALMENTS),
+  summary: feeSummary(s, ledger),
   tracker: feeTracker(s, ledger, INSTALMENTS, '2026-10-22' as IsoDate),
   checkedBy: ['Sample Counsellor', 'Sample Manager'],
   admission,
@@ -142,6 +142,21 @@ describe('admission documents', () => {
     const doc2 = doc;
     expect(doc2.getPages().every((p) => Math.round(p.getWidth()) === 595)).toBe(true);
     expect(doc2.getTitle()).toBe('Student Admission & Fee Record — APP-000123 · version 2');
+  });
+
+  it('a debit prints on its own line, the discount at its value, and the form stays 3 sheets (RVB-006)', async () => {
+    const row = (kind: string, direction: string | null, amountPaise: number, id: string) =>
+      ({ id, kind, direction, chargeCategory: 'tuition', amountPaise, status: 'recorded', planId: 'p', paymentDate: null, method: null }) as TrackerRecord;
+    const rows = [...ledger, row('discount', null, 10_000_00, 'd1'), row('adjustment', 'debit', 3_000_00, 'd2')];
+    const debited = { ...record(typical), summary: feeSummary(typical, rows), tracker: feeTracker(typical, rows, INSTALMENTS, '2026-10-22' as IsoDate) };
+    let lines: readonly string[] = [];
+    const bytes = await admissionFormPdf(debited, (l) => (lines = l));
+    if (out) writeFileSync(`${out}/form-debit.pdf`, bytes);
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(3);
+    const after = (label: string) => lines[lines.indexOf(label) + 1];
+    expect(after('Discount / scholarship')).toBe('₹10,000.00');
+    expect(after('Added charge (debit)')).toBe('₹3,000.00');
+    expect(lines).not.toContain('₹7,000.00');
   });
 
   it('the not-approved block prints only without approved text; untitled approved text never triggers it', async () => {

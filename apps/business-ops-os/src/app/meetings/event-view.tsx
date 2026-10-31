@@ -34,7 +34,7 @@ const POPULATION_OPTIONS = EVENT_POPULATIONS.map((p) => ({
 
 const MESSAGE_STATUS: Record<string, string> = {
   draft: 'Draft — not sent',
-  simulated: 'Simulated — not sent (no messaging provider connected)',
+  simulated: 'Not sent: no messaging provider is connected',
   sent: 'Sent through the provider',
 };
 
@@ -413,7 +413,7 @@ export function EventActModal({
           </Segment>
           {getMessagingAdapter().connected ? null : (
             <p role="note">
-              No messaging provider is connected. Sending records the message as “Simulated — not
+              No messaging provider is connected. Sending records the message as “Not
               sent”; nobody receives it.
             </p>
           )}

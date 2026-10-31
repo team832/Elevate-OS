@@ -9,6 +9,7 @@ import {
   academicResults,
   academicStudents,
   auditEvents,
+  integrationEvents,
   students as coreStudents,
   users as coreUsers,
 } from '@elevate/database';
@@ -425,7 +426,9 @@ describe('IPMAT-style mock: selected batches, snapshot, scores, ranking, publica
     const pub = await at(publishRoute, 'publications', { version: 1, provisional: true });
     expect(pub.status).toBe(200);
     expect(pub.data!.publication).toMatchObject({ state: 'provisional', rankVisible: false });
-    expect((await listAssessments(ctx.db, actor(u.coordinator))).find((x) => x.id === mockId)).toMatchObject({ provisional: true }); // listed as provisional, not published
+    expect(
+      (await listAssessments(ctx.db, actor(u.coordinator))).find((x) => x.id === mockId),
+    ).toMatchObject({ provisional: true }); // listed as provisional, not published
     expect(pub.data!.roster.every((r) => r.rank === null)).toBe(true);
     await updateSetting(ctx.db, actor(u.director), 'progress.show_rank_percentile', {
       value: { show: true },
@@ -465,7 +468,9 @@ describe('IPMAT-style mock: selected batches, snapshot, scores, ranking, publica
       [1, 'superseded', true, 1],
     ]);
     expect(d.publication.state).toBe('published');
-    expect((await listAssessments(ctx.db, actor(u.coordinator))).find((x) => x.id === mockId)).toMatchObject({ provisional: false });
+    expect(
+      (await listAssessments(ctx.db, actor(u.coordinator))).find((x) => x.id === mockId),
+    ).toMatchObject({ provisional: false });
     expect(Object.fromEntries(['a', 'f', 'b', 'c', 'g'].map((k) => [k, rowOf(d, k).rank]))).toEqual(
       { a: 1, f: 2, b: 3, c: 3, g: 5 },
     );
@@ -705,7 +710,18 @@ describe('list views and teacher visibility', () => {
       enterMarks(ctx.db, actor(u.teacher), id, {
         marks: [{ studentId: s.a!, state: 'scored', manualScore: '18', version: 2 }],
       }),
-    ).rejects.toMatchObject({ status: 409 });
+    ).rejects.toMatchObject({ status: 409, message: 'This mark is verified. Ask the academic coordinator to change it; nothing was saved.' });
+    // RVC-007: the coordinator corrects a typing slip with a reason; a reason does not let a teacher through.
+    const fix = { studentId: s.a!, state: 'scored' as const, manualScore: '18', version: 2 };
+    const asCoordinator = await getMarksSheet(ctx.db, actor(u.coordinator), id);
+    expect([sheet.canCorrect, asCoordinator.canCorrect]).toEqual([false, true]);
+    await expect(enterMarks(ctx.db, actor(u.teacher), id, { marks: [{ ...fix, reason: 'Typing slip' }] })).rejects.toMatchObject({ status: 409 });
+    await expect(enterMarks(ctx.db, actor(u.coordinator), id, { marks: [fix] })).rejects.toMatchObject({ status: 409, message: 'This mark is verified. Say why it changes under Reason for the change; nothing was saved.' });
+    await enterMarks(ctx.db, actor(u.coordinator), id, { marks: [{ ...fix, reason: 'Typing slip: 17 for 18' }] });
+    const after = academicAssessmentDetailV1Schema.parse((await call(detailRoute, `/${id}`, undefined, { id })).data);
+    expect(after.roster.find((r) => r.studentId === s.a)).toMatchObject({ marksState: 'verified', score: '18', version: 3 });
+    const [audited] = await ctx.db.select().from(auditEvents).where(eq(auditEvents.entityId, id)).orderBy(desc(auditEvents.at)).limit(1);
+    expect(audited!.metadata).toMatchObject({ overwriteVerified: true, reason: 'Typing slip: 17 for 18' });
   });
 });
 
@@ -764,6 +780,27 @@ describe('fix round 1: teacher scope on multi-batch rosters, attempts after fina
     const mine = await issueIds(t3);
     expect(mine).toContain(s.h);
     expect(mine.filter((id) => id !== s.g && id !== s.h)).toEqual([]);
+  });
+
+  it('a typed score on Pending is refused, never dropped with a false success (HUS-006)', async () => {
+    await expect(
+      enterMarks(ctx.db, actor(u.coordinator), multi, {
+        marks: [{ studentId: multi, version: 0, state: 'pending', manualScore: '95' }],
+      } as never),
+    ).rejects.toThrow(/needs the result Scored/);
+    await expect(
+      enterMarks(ctx.db, actor(u.coordinator), multi, {
+        marks: [{ studentId: multi, version: 0, state: 'scored' }],
+      } as never),
+    ).rejects.toThrow(/Enter the score/);
+  });
+
+  it('a test names every batch it covers, and a filter on its secondary batch finds it (PPL-010)', async () => {
+    const listed = (await listAssessments(ctx.db, actor(t3), { batchId: b2 })).find(
+      (x) => x.id === multi,
+    );
+    expect(listed?.batchCode.split(', ')).toHaveLength(2);
+    expect((await getAssessment(ctx.db, actor(t3), multi)).batchCode).toBe(listed!.batchCode);
   });
 
   it('I1: a teacher of a secondary batch gets a schedule check for their batch, not a 404', async () => {
@@ -922,5 +959,92 @@ describe('fix round 1: teacher scope on multi-batch rosters, attempts after fina
         )
       ).status,
     ).toBe(403);
+  });
+});
+
+describe('publish and finalise together (CHK-018): a refused publish changes nothing', () => {
+  it('stays scheduled with no result run or event, marks can still be entered, and a complete roster then finalises and publishes', async () => {
+    const coord = actor(u.coordinator);
+    const { id: batchId } = await createBatch(ctx.db, coord, {
+      code: uniq('B-'),
+      name: 'Publish batch (fictional)',
+      courseId: w.course.id,
+      startDate: '2026-09-01',
+      status: 'active',
+    });
+    const student = await createStudent(ctx.db, coord, {
+      fullName: 'Sample Early Click (fictional)',
+    });
+    await enrolManually(ctx.db, coord, {
+      studentId: student.id,
+      batchId,
+      startDate: '2026-09-01',
+      reason: 'Test (fictional)',
+    });
+    const created = await call(createRoute, '', {
+      code: uniq('PUB-'),
+      kind: 'practice',
+      title: 'Early publish (fictional)',
+      academicYear: '2026-27',
+      batchIds: [batchId],
+      scheduledDate: '2026-09-20',
+      maxMarks: '10',
+    });
+    const id = created.data!.assessment.id;
+    await call(snapshotRoute, `/${id}/roster`, {}, { id });
+    const publish = () =>
+      call(
+        publishRoute,
+        `/${id}/publications`,
+        { version: 1, provisional: false, finalise: true },
+        { id },
+      );
+    const runs = () =>
+      ctx.db
+        .select()
+        .from(academicResultRuns)
+        .where(eq(academicResultRuns.assessmentId, id as never));
+    const finalisedEvents = async () =>
+      (
+        await ctx.db
+          .select()
+          .from(integrationEvents)
+          .where(eq(integrationEvents.type, 'academic.assessment.finalised'))
+      ).filter((e) => (e.payload as { assessmentId: string }).assessmentId === id);
+
+    const refused = await publish();
+    expect(refused.status).toBe(409);
+    expect(refused.error!.message).toMatch(/incomplete/);
+    const after = (await call(detailRoute, `/${id}`, undefined, { id })).data!;
+    expect(after.assessment.status).toBe('scheduled');
+    expect(after.results).toBeNull();
+    expect(await runs()).toEqual([]);
+    expect(await finalisedEvents()).toEqual([]);
+
+    const scored = await call(
+      scoresRoute,
+      `/${id}/scores`,
+      {
+        source: 'csv',
+        rows: [
+          {
+            studentId: student.id,
+            version: after.roster[0]!.version,
+            attendance: 'present',
+            marksState: 'verified',
+            score: '5',
+          },
+        ],
+      },
+      { id },
+    );
+    expect(scored.status).toBe(200);
+
+    const done = await publish();
+    expect(done.status).toBe(200);
+    expect(done.data!.assessment.status).toBe('finalised');
+    expect(done.data!.publication.state).toBe('published');
+    expect(await runs()).toHaveLength(1);
+    expect(await finalisedEvents()).toHaveLength(1);
   });
 });

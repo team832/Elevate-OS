@@ -15,13 +15,11 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import {
-  ConflictError,
+import { ConflictError,
   ForbiddenError,
   InvalidStateTransitionError,
   ValidationError,
-  withTransaction,
-} from '@elevate/server-kit';
+  withTransaction, containsPattern } from '@elevate/server-kit';
 import {
   COURSE_PREFIXES,
   EXAM_PREFIXES,
@@ -300,7 +298,7 @@ export async function listIdeas(
     where.push(eq(marketingIdeas.quarantineState, filters.quarantined ? 'quarantined' : 'none'));
   }
   if (filters.q) {
-    const term = `%${filters.q.replace(/[%_]/g, '')}%`;
+    const term = containsPattern(filters.q);
     where.push(
       or(
         ilike(marketingIdeas.title, term),

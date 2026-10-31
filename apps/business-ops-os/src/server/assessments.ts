@@ -19,6 +19,7 @@ import {
   NotFoundError,
   type updateAssessmentInternalBody,
   type withdrawPublicationBody,
+  sourceReasonWords,
   teachingAssignmentsV1Schema,
   type AcademicAssessmentDetailV1,
   type ErrorCode,
@@ -48,7 +49,7 @@ const read = <S extends z.ZodType>(path: string, schema: S) =>
 const UNREACHABLE =
   'Academic OS could not be reached, so nothing was changed. Try again in a minute.';
 /** Academic's refusal as the same kind of error here (its message is written for people). */
-function refusal(r: Extract<InternalWriteResult<unknown>, { ok: false }>): AppError {
+export function refusal(r: Extract<InternalWriteResult<unknown>, { ok: false }>): AppError {
   if (r.status === 0 || r.status >= 500 || r.error.code === 'CONTRACT_MISMATCH')
     return new InternalError(UNREACHABLE);
   const code = (
@@ -93,7 +94,7 @@ export async function requireTest(actor: Actor, id: string): Promise<TestDetail>
   const r = await read(`/${id}`, academicAssessmentDetailV1Schema);
   if (r.status === 'available') return r.data;
   if (r.reason === 'HTTP 404') throw new NotFoundError('Test not found.');
-  throw new InternalError(`Academic OS could not be read (${r.reason}). Try again in a minute.`);
+  throw new InternalError(`Academic OS could not be read (${sourceReasonWords(r.reason)}). Try again in a minute.`);
 }
 
 /** The Academic record for a page: `unavailable` is shown as "Source unavailable", never zeros. */
@@ -311,12 +312,10 @@ export function completenessIssues(d: TestDetail): string[] {
   ].filter((x): x is string => typeof x === 'string');
 }
 
-/** Finalise when needed, then publish the next version (final, or provisional when allowed). */
+/** Publish the next version (final, or provisional when allowed); Academic finalises in the same step. */
 export async function publishTest(actor: Actor, id: string, body: z.output<typeof publishBody>) {
   assertCan(actor, 'ops:assessments:publish');
-  let d = await requireTest(actor, id);
-  if (!d.results)
-    d = await academicWrite(actor, `/${id}/finalise`, {}, { id, landed: (x) => !!x.results });
+  const d = await requireTest(actor, id);
   const version = Math.max(0, ...d.publication.history.map((p) => p.version)) + 1;
   const cohort = body.cohort?.length ? body.cohort : undefined;
   return academicWrite(
@@ -328,6 +327,7 @@ export async function publishTest(actor: Actor, id: string, body: z.output<typeo
       ...(cohort ? { cohortBatchIds: cohort } : {}),
       provisional: body.provisional,
       ...(body.note ? { note: body.note } : {}),
+      ...(d.results ? {} : { finalise: true }),
     },
     { id, landed: (x) => x.publication.history.some((p) => p.version === version) },
   );

@@ -87,7 +87,12 @@ export async function checkPassword(
 }
 
 const loginBody = z.object({
-  email: z.string().trim().min(3).max(320),
+  email: z
+    .string()
+    .trim()
+    .min(3)
+    .max(320)
+    .refine((v) => !v.includes('\0')), // PostgreSQL refuses NUL, and nobody's address holds one
   password: z.string().min(1).max(512),
   next: z.string().max(2000).optional(),
 });
@@ -123,9 +128,15 @@ function isFormPost(request: Request): boolean {
   return type.includes('application/x-www-form-urlencoded') || type.includes('multipart/form-data');
 }
 
+/** A form that cannot be parsed is the sender's mistake, not a 500 with an error line. */
+const readForm = (request: Request) =>
+  request.formData().catch(() => {
+    throw new ValidationError('The form could not be read.');
+  });
+
 async function readBody(request: Request): Promise<unknown> {
   if (isFormPost(request)) {
-    const form = await request.formData();
+    const form = await readForm(request);
     return Object.fromEntries(
       [...form.entries()].map(([k, v]) => [k, typeof v === 'string' ? v : '']),
     );
@@ -317,15 +328,23 @@ export function createLoginHandler(options: AuthHandlerOptions) {
       }
       const db = (options.getDb ?? getDb)();
       const secret = (options.getSecret ?? getSessionSecret)();
-      const user = await checkPassword(db, email, password);
+      // Counted before the slow check: recorded after it, every guess in a burst passes the test above.
+      throttle.recordFailure(key);
+      ipThrottle.recordFailure(ip);
+      emailThrottle.recordFailure(account);
+      const user = await checkPassword(db, email, password).catch((error: unknown) => {
+        throttle.undo(key);
+        ipThrottle.undo(ip);
+        emailThrottle.undo(account);
+        throw error;
+      });
       if (!user) {
-        throttle.recordFailure(key);
-        ipThrottle.recordFailure(ip);
-        emailThrottle.recordFailure(account);
         log.warn('login failed', { requestId, module: options.module, ip });
         throw new UnauthenticatedError('Email or password is incorrect.');
       }
       throttle.reset(key);
+      ipThrottle.undo(ip);
+      emailThrottle.reset(account);
       const session = await openSession(db, request, {
         userId: user.userId,
         secret,
@@ -434,7 +453,7 @@ export function createWorkspaceChoiceHandler(options: AuthHandlerOptions) {
         (options.getSecret ?? getSessionSecret)(),
       );
       if (!user) return seeOther(options.loginPath);
-      const form = isFormPost(request) ? await request.formData() : new FormData();
+      const form = isFormPost(request) ? await readForm(request) : new FormData();
       const workspace = form.get('workspace');
       if (!isWorkspaceKey(workspace) || !workspacesFor(user).includes(workspace)) {
         throw new ForbiddenError('Your roles do not include that workspace.');
@@ -460,7 +479,7 @@ export function createWorkspaceChoiceHandler(options: AuthHandlerOptions) {
       }
       return seeOther(landingLocation({ kind: 'workspace', workspace }, options.module));
     } catch (error) {
-      if (!(error instanceof ForbiddenError))
+      if (!(error instanceof ForbiddenError || error instanceof ValidationError))
         log.error('workspace choice error', { requestId, error });
       return errorResponse(error, requestId);
     }

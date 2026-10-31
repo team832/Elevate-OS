@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from 'react';
 import type { Metadata } from 'next';
 import { can, scopeFor } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Button, Card, ErrorState, Field, TextArea, TextInput } from '@elevate/shared-ui';
+import { Button, Card, ErrorState, Field, StoredLink, TextArea, TextInput } from '@elevate/shared-ui';
 import {
   CALENDAR_ACTION_TEXT,
   CHANNEL_LABELS,
@@ -122,9 +122,9 @@ export default async function CalendarItemPage({
                   <ul key="a">
                     {item.assetLinks.map((l) => (
                       <li key={l}>
-                        <a href={l} rel="noreferrer noopener" target="_blank">
+                        <StoredLink href={l} rel="noreferrer noopener" target="_blank">
                           {l}
-                        </a>
+                        </StoredLink>
                       </li>
                     ))}
                   </ul>
@@ -158,9 +158,14 @@ export default async function CalendarItemPage({
               [
                 'Live link',
                 item.publishedUrl ? (
-                  <a key="u" href={item.publishedUrl} rel="noreferrer noopener" target="_blank">
+                  <StoredLink
+                    key="u"
+                    href={item.publishedUrl}
+                    rel="noreferrer noopener"
+                    target="_blank"
+                  >
                     {item.publishedUrl}
-                  </a>
+                  </StoredLink>
                 ) : (
                   '—'
                 ),

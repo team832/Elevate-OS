@@ -5,24 +5,30 @@
  * student is readmitted with a new application (the recommended path); reactivating the exited
  * case itself stays available as before (`ops:students:reactivate`, never by whoever recorded
  * the exit; the exit record is kept with who reactivated it). Needs `ops:students:lifecycle`.
+ * An exit of a case Academic enrolled publishes `ops.enrolment.closed` v1 in its own transaction
+ * (IR-OPS-EXIT-1); Academic's consumer `academic.enrolment-exit` ends that enrolment.
  */
 import { can } from '@elevate/authorization';
 import { and, asc, desc, eq, isNull, ne } from 'drizzle-orm';
 import { opsAdmissions, opsApplications, opsExitRecords, type Database } from '@elevate/database';
-import { withTransaction } from '@elevate/server-kit';
+import { publishEvent, sendInternal, withTransaction } from '@elevate/server-kit';
 import {
+  academicEnrolmentExitRunV1Schema,
   ConflictError,
+  enrolmentKeys,
   ForbiddenError,
   InvalidStateTransitionError,
   ValidationError,
 } from '@elevate/shared-contracts';
 import { istToday, type AdmissionStatus } from '../domain';
 import { isExitStatus, lifecycleOptions } from '../domain/student-lifecycle';
+import { academicUrl } from './academic-summary';
 import { lockAccessible } from './admissions';
 import { createApplication } from './applications';
+import { refusal } from './assessments';
 import { accessScope, clean, programmeByCode, type Actor } from './context';
-import { feeSummaryFor, studentFeePlans } from './fees';
-import { fieldError, opsAudit } from './ops-common';
+import { feeStatementFor } from './fee-statement';
+import { fieldError, inOrder, opsAudit } from './ops-common';
 import { applyTransition, createAdmissionRecord } from './pipeline';
 import { loadSettings } from './settings';
 import type { LifecycleInput } from './students-schemas';
@@ -30,19 +36,11 @@ import type { LifecycleInput } from './students-schemas';
 type Admission = typeof opsAdmissions.$inferSelect;
 
 /**
- * Fee balance of the case at exit, in paise (> 0 owed, < 0 credit), read from the fee domain:
- * the active plan's outstanding amount, else the case's ledger summary. null = not recorded,
- * or the actor may not read fees (never 0).
+ * The student's fee balance at exit, in paise (> 0 owed, < 0 credit), from their fee statement.
+ * null = not recorded, or the actor may not read fees (never 0).
  */
 async function balanceAtExit(db: Database, actor: Actor, a: Admission) {
-  if (!can(actor, 'ops:fees:read')) return null;
-  if (a.studentId) {
-    const plans = (await studentFeePlans(db, actor, a.studentId)).plans.filter(
-      (p) => p.plan.admissionId === a.id && p.plan.status === 'active',
-    );
-    if (plans.length) return plans.reduce((n, p) => n + p.totals.outstandingPaise, 0);
-  }
-  return (await feeSummaryFor(db, a.id)).balancePaise;
+  return can(actor, 'ops:fees:read') ? (await feeStatementFor(db, a)).balancePaise : null;
 }
 
 /** POST /admissions/{id}/lifecycle — every change validated by the transition table and audited. */
@@ -53,13 +51,14 @@ export async function changeStudentLifecycle(
   input: LifecycleInput,
   requestId?: string,
 ) {
-  const [access, settings] = await Promise.all([
-    accessScope(
-      db,
-      actor,
-      input.action === 'reactivate' ? 'ops:students:reactivate' : 'ops:students:lifecycle',
-    ),
-    loadSettings(db),
+  const [access, settings] = await inOrder([
+    () =>
+      accessScope(
+        db,
+        actor,
+        input.action === 'reactivate' ? 'ops:students:reactivate' : 'ops:students:lifecycle',
+      ),
+    () => loadSettings(db),
   ]);
   return withTransaction(db, async (tx) => {
     if (input.action === 'reactivate' || input.action === 'readmit')
@@ -132,6 +131,23 @@ export async function changeStudentLifecycle(
           },
           requestId,
         );
+        // cancelled_before_enrolment never had one; a case with no link has nothing to name.
+        if (admission.enrolmentId && input.exitStatus !== 'cancelled_before_enrolment')
+          await publishEvent(tx, {
+            type: 'ops.enrolment.closed',
+            version: 1,
+            idempotencyKey: enrolmentKeys.closed(record!.id),
+            payload: {
+              admissionId: admission.id,
+              academicEnrolmentId: admission.enrolmentId,
+              ...(admission.studentId ? { coreStudentId: admission.studentId } : {}),
+              outcome: input.exitStatus,
+              exitDate: input.exitDate,
+              reason: input.reason,
+              closedAt: new Date().toISOString(),
+              closedByUserId: actor.id,
+            } as never,
+          });
         return updated;
       }
       case 'reactivate': {
@@ -166,6 +182,17 @@ export async function changeStudentLifecycle(
         return readmit(tx, actor, admission, input, requestId);
     }
   });
+}
+
+/** Job "Send exits to Academic": Academic runs its exit consumer, as the signed-in person. */
+export async function sendEnrolmentExits(actor: Actor) {
+  const r = await sendInternal(
+    academicUrl('/academic/api/internal/v1/enrolment-exits/run'),
+    academicEnrolmentExitRunV1Schema,
+    { caller: 'ops', actingUserId: actor.id, body: {} },
+  );
+  if (!r.ok) throw refusal(r);
+  return r.data;
 }
 
 /** Reference of the open (not withdrawn) readmission application of a closed case, if any. */

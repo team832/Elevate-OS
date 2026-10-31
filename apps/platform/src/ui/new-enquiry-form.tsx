@@ -12,15 +12,10 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { useDialogClose } from '@elevate/shared-ui';
 
-interface Match {
-  leadId: string;
-  code: string;
-  level: 'exact' | 'possible';
-  signals: string[];
-  accessible: boolean;
-  studentName: string | null;
-  ownerName: string | null;
-}
+type Match = { level: 'exact' | 'possible' } & (
+  | { accessible: true; leadId: string; code: string; signals: string[]; studentName: string | null }
+  | { accessible: false }
+);
 
 type FieldName =
   | 'studentName'
@@ -341,20 +336,19 @@ export function NewEnquiryForm({
           <p>{message}</p>
           <ul>
             {matches.map((m) => (
-              <li key={m.leadId}>
+              <li key={m.accessible ? m.leadId : m.level}>
                 <strong>{m.level === 'exact' ? 'Existing contact' : 'Possible duplicate'}:</strong>{' '}
                 {m.accessible ? (
-                  <a href={`${base}/leads/${m.leadId}`}>
-                    {m.code}
-                    {m.studentName ? `, ${m.studentName}` : ''}
-                  </a>
+                  <>
+                    <a href={`${base}/leads/${m.leadId}`}>
+                      {m.code}
+                      {m.studentName ? `, ${m.studentName}` : ''}
+                    </a>{' '}
+                    (matched on {m.signals.join(', ').replace(/_/g, ' ')})
+                  </>
                 ) : (
-                  <span>
-                    {m.code} (owned by {m.ownerName ?? 'another counsellor'}; ask an operations
-                    manager)
-                  </span>
-                )}{' '}
-                (matched on {m.signals.join(', ').replace(/_/g, ' ')})
+                  <span>on a lead you cannot open. Ask an operations manager.</span>
+                )}
               </li>
             ))}
           </ul>

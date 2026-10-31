@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { idempotencyKeys, programmes } from '@elevate/database';
 import {
   authedRequest,
@@ -29,6 +30,8 @@ const echo = defineRoute(
   }),
 );
 
+const echoGet = defineRoute({ permission: 'ops:leads:read' }, async () => ({ ok: true }));
+
 const ID = '0b6f8f2e-3c1a-4f7e-9b2d-1a2b3c4d5e6f';
 
 describe('defineRoute', () => {
@@ -42,6 +45,22 @@ describe('defineRoute', () => {
     expect(res.error?.code).toBe('UNAUTHENTICATED');
     expect(res.error?.requestId).toBeTruthy();
     expect(res.headers.get('x-request-id')).toBe(res.error?.requestId);
+  });
+
+it.each([
+    ['a link followed in the browser goes to sign-in and comes back', 'text/html,application/xhtml+xml', 303],
+    ['a script still gets the JSON answer', 'application/json', 401],
+    ['fetch with no stated preference gets the JSON answer', '*/*', 401],
+  ])('session ended: %s (HUS-021)', async (_, accept, status) => {
+    const res = await echoGet(
+      new Request('http://localhost/ops/api/v1/thing/export?x=1', { headers: { accept } }),
+      { params: Promise.resolve({}) },
+    );
+    expect(res.status).toBe(status);
+    if (status === 303)
+      expect(res.headers.get('location')).toBe(
+        `/ops/login?next=${encodeURIComponent('/ops/api/v1/thing/export?x=1')}`,
+      );
   });
 
   it('403 FORBIDDEN when signed in without the permission (checked before validation)', async () => {
@@ -121,7 +140,8 @@ describe('defineRoute', () => {
     expect((await post({ 'content-type': 'text/plain;application/json' })).status).toBe(400);
   });
 
-  it('a route under a workspace path needs membership of that workspace (D-072)', async () => {
+  // Outside Next only: under Next the URL has no prefix, so the next block is what proves the check.
+  it('in a route test the URL stands in for the base path (D-072)', async () => {
     const leads = defineRoute({ permission: 'ops:leads:read' }, async () => ({ ok: true }));
     const marketer = await createTestUser(ctx.db, { roles: ['marketing_manager'] });
     const at = (path: string) => callRoute(leads, authedRequest(marketer, path));
@@ -131,6 +151,59 @@ describe('defineRoute', () => {
     expect(viaOps.status).toBe(403);
     expect(viaOps.error?.message).toBe('Your roles do not include this workspace.');
     expect((await at('/opsx/api/v1/leads')).status).toBe(200); // not the /ops base path
+  });
+
+  describe('under Next, where request.url has lost the base path (D-072)', () => {
+    afterEach(() => vi.unstubAllEnvs());
+    const route = defineRoute({ permission: 'platform:notifications:read' }, async () => ({ ok: true }));
+
+    it.each([
+      ['/ops', ['marketing_manager'], 403],
+      ['/ops', ['teacher'], 403],
+      ['/academic', ['marketing_manager'], 403],
+      ['/academic', ['operations_manager'], 403],
+      ['/marketing', ['teacher'], 403],
+      ['/marketing', ['operations_manager'], 403],
+      ['/ops', ['operations_manager'], 200],
+      ['/academic', ['teacher'], 200],
+      ['/marketing', ['marketing_manager'], 200],
+      ['/academic', ['teacher', 'marketing_manager'], 200],
+      ['/marketing', ['teacher', 'marketing_manager'], 200],
+      ['', ['teacher'], 200], // the platform app has no workspace of its own
+    ] as const)('app at "%s", roles %j: %i', async (basePath, roles, status) => {
+      vi.stubEnv('ELEVATE_BASE_PATH', basePath);
+      const user = await createTestUser(ctx.db, { roles: [...roles] });
+      const res = await callRoute(route, authedRequest(user, '/api/v1/notifications'));
+      expect(res.status).toBe(status);
+      if (status === 403) expect(res.error?.message).toBe('Your roles do not include this workspace.');
+    });
+
+    it('a production build without the value refuses everyone, rather than skip the check', async () => {
+      const handler = vi.fn(async () => ({ ok: true }));
+      const guarded = defineRoute({ permission: 'platform:notifications:read' }, handler);
+      const member = await createTestUser(ctx.db, {
+        roles: ['operations_manager'],
+        email: 'fictional.member@elevateeducation.in', // production refuses @example.test
+      });
+      vi.stubEnv('NODE_ENV', 'production');
+      vi.stubEnv('ELEVATE_BASE_PATH', undefined);
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const res = await callRoute(guarded, authedRequest(member, '/ops/api/v1/notifications'));
+      stderr.mockRestore();
+      expect(res.status).toBe(500);
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['business-ops-os', '/ops'],
+      ['academic-os', '/academic'],
+      ['marketing-os', '/marketing'],
+      ['platform', ''],
+    ])('apps/%s declares its base path "%s" for this check', (app, basePath) => {
+      const config = readFileSync(new URL(`../../../apps/${app}/next.config.ts`, import.meta.url), 'utf8');
+      expect(config).toContain(`env: { ELEVATE_BASE_PATH: '${basePath}' }`);
+      if (basePath) expect(config).toContain(`basePath: '${basePath}'`);
+    });
   });
 
   it('200 with the { data } envelope when allowed and valid', async () => {
@@ -177,6 +250,52 @@ describe('defineRoute', () => {
     expect(res.status).toBe(500);
     expect(res.error?.code).toBe('INTERNAL');
     expect(JSON.stringify(res.error)).not.toContain('hunter2');
+  });
+
+  describe('a value PostgreSQL refuses is the sender\'s mistake, not ours (API-001)', () => {
+    const coded = (code: string) =>
+      defineRoute({ permission: 'authenticated' }, async () => {
+        throw Object.assign(new Error('pg says no'), { code });
+      });
+
+    it.each(['22001', '22003', '22007', '22008', '22021', '22P02'])('%s: 400', async (code) => {
+      const admin = await createTestUser(ctx.db, { roles: ['platform_admin'] });
+      const res = await callRoute(coded(code), authedRequest(admin, '/x'));
+      expect(res.status).toBe(400);
+      expect(res.error?.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('division by zero stays our fault: 500', async () => {
+      const admin = await createTestUser(ctx.db, { roles: ['platform_admin'] });
+      expect((await callRoute(coded('22012'), authedRequest(admin, '/x'))).status).toBe(500);
+    });
+
+    it('a failing query logs its code, never its values (API-009)', async () => {
+      const admin = await createTestUser(ctx.db, { roles: ['platform_admin'] });
+      const value = 'student-phone-98765-43210';
+      const failing = defineRoute({ permission: 'authenticated' }, async ({ db }) =>
+        db.execute(sql`select 1 / 0 where ${value} = ${value}`),
+      );
+      const written: string[] = [];
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((line) => {
+        written.push(String(line));
+        return true;
+      });
+      expect((await callRoute(failing, authedRequest(admin, '/x'))).status).toBe(500);
+      stderr.mockRestore();
+      const line = written.find((l) => l.includes('request failed'));
+      expect(line).toContain('"code":"22012"');
+      expect(written.join('')).not.toContain(value);
+    });
+
+    it('a NUL in a search reaches the database and answers 400', async () => {
+      const admin = await createTestUser(ctx.db, { roles: ['platform_admin'] });
+      const search = defineRoute(
+        { permission: 'authenticated', query: z.object({ q: z.string() }) },
+        async ({ db, query }) => db.select().from(programmes).where(eq(programmes.code, query.q)),
+      );
+      expect((await callRoute(search, authedRequest(admin, '/x?q=%00'))).status).toBe(400);
+    });
   });
 
   it('public routes run without a session; anyOf accepts any listed permission', async () => {

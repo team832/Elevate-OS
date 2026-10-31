@@ -12,7 +12,7 @@
  * Wi-Fi address (or OFFICE_HOST from .env), so staff open http://<that address>:3000 on their own
  * devices. The database still listens on this computer only.
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import dgram from 'node:dgram';
 import { existsSync, readFileSync } from 'node:fs';
 import net from 'node:net';
@@ -39,8 +39,8 @@ if (names.length === 0 || unknown.length > 0) {
 }
 
 const children = [];
-const run = (label, args, cwd = repoRoot) => {
-  const child = spawn(process.execPath, args, { cwd, stdio: 'inherit' });
+const run = (label, args, cwd = repoRoot, stdin = 'inherit') => {
+  const child = spawn(process.execPath, args, { cwd, stdio: [stdin, 'inherit', 'inherit'] });
   child.on('exit', (code) => {
     console.log(`dev — ${label} exited (${code ?? 'signal'}); stopping the rest.`);
     stop();
@@ -51,7 +51,14 @@ let stopping = false;
 function stop() {
   if (stopping) return;
   stopping = true;
-  for (const c of children) if (c.exitCode === null) c.kill('SIGINT');
+  for (const c of children) {
+    if (c.exitCode !== null) continue;
+    // db-server.mjs stops PostgreSQL cleanly when this pipe closes.
+    if (c.stdin) c.stdin.end();
+    // On Windows a signal kills outright and leaves next's own child running.
+    else if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(c.pid), '/T', '/F'], { stdio: 'ignore' });
+    else c.kill('SIGINT');
+  }
 }
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGBREAK']) process.on(sig, stop);
 
@@ -60,13 +67,6 @@ const listening = (host, port) =>
     const socket = net.connect({ host, port }, () => (socket.end(), resolve(true)));
     socket.on('error', () => resolve(false));
   });
-
-const db = new URL(process.env.DATABASE_URL ?? 'pglite://memory');
-if (/^postgres(ql)?:$/.test(db.protocol) && ['localhost', '127.0.0.1'].includes(db.hostname)) {
-  const port = Number(db.port || 5432);
-  if (await listening('127.0.0.1', port)) console.log(`dev — reusing the database already running on port ${port}.`);
-  else run('database', [path.join(repoRoot, 'scripts/development/db-server.mjs')]);
-}
 
 /** The address this computer uses on the local network (a UDP "connect" sends nothing). */
 const lanAddress = () =>
@@ -92,12 +92,33 @@ if (office) {
   }
 }
 
+// A leftover server on the port looks like old screens or "source unavailable": say so before starting anything.
+const portOf = (name) => {
+  const url = new URL(process.env[APP_URL_VARS[APPS[name][0]]] || APP_URL_DEFAULTS[APPS[name][0]]);
+  return url.port || (url.protocol === 'https:' ? '443' : '80');
+};
+for (const name of names) {
+  const port = portOf(name);
+  if (!(await listening('localhost', Number(port)))) continue;
+  console.error(`${office ? 'office' : 'dev'} — port ${port} (${name}) is already in use, by an old server or another program, so nothing was started.
+Find it:  netstat -ano | findstr :${port}
+Stop it:  taskkill /PID <the last number on that line> /F`);
+  process.exit(1);
+}
+
+const db = new URL(process.env.DATABASE_URL ?? 'pglite://memory');
+if (/^postgres(ql)?:$/.test(db.protocol) && ['localhost', '127.0.0.1'].includes(db.hostname)) {
+  const port = Number(db.port || 5432);
+  if (await listening('127.0.0.1', port)) console.log(`dev — reusing the database already running on port ${port}.`);
+  else run('database', [path.join(repoRoot, 'scripts/development/db-server.mjs'), '--stop-with-pipe'], repoRoot, 'pipe');
+}
+
 // Turbopack's native binary is blocked by Windows Application Control on the office PCs, so dev uses webpack.
 const nextBin = path.join(repoRoot, 'node_modules/next/dist/bin/next');
 for (const name of names) {
   const [key, dir] = APPS[name];
   const url = new URL(process.env[APP_URL_VARS[key]] || APP_URL_DEFAULTS[key]);
-  const port = url.port || (url.protocol === 'https:' ? '443' : '80');
+  const port = portOf(name);
   console.log(`${office ? 'office' : 'dev'} — ${name}: ${url.origin}`);
   const mode = office ? ['start'] : ['dev', '--webpack'];
   run(name, [nextBin, ...mode, '--port', port], path.join(repoRoot, 'apps', dir));

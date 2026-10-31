@@ -8,7 +8,7 @@ import { Suspense, type ReactNode } from 'react';
 import { can, scopeFor, type Permission } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { countUnread } from '@elevate/notifications';
-import { AppError } from '@elevate/shared-contracts';
+import { toAppError } from '@elevate/server-kit';
 import {
   currentRequestId,
   requirePageAccess,
@@ -216,24 +216,28 @@ const retry = <ButtonLink href="">Try again</ButtonLink>;
 /** Load data for a section; returns either the data or a rendered error state. */
 export async function load<T>(
   fn: (db: ReturnType<typeof getDb>) => Promise<T>,
+  /** 1 when the failure replaces the whole page. */
+  level?: 1 | 2,
 ): Promise<{ ok: true; data: T } | { ok: false; view: ReactNode }> {
   try {
     return { ok: true, data: await fn(getDb()) };
   } catch (error) {
     const requestId = await currentRequestId().catch(() => undefined);
-    if (error instanceof AppError && error.status < 500) {
+    const known = toAppError(error);
+    if (known.status < 500) {
       return {
         ok: false,
         view: (
           <ErrorState
-            title={error.status === 404 ? 'Not found' : 'Cannot show this'}
-            description={error.message}
+            level={level}
+            title={known.status === 404 ? 'Not found' : 'Cannot show this'}
+            description={known.message}
             requestId={requestId}
           />
         ),
       };
     }
     console.error('ops page section failed', error);
-    return { ok: false, view: <ErrorState requestId={requestId} action={retry} /> };
+    return { ok: false, view: <ErrorState level={level} requestId={requestId} action={retry} /> };
   }
 }

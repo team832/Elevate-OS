@@ -4,6 +4,8 @@
 .el-chart {
   position: relative;
   display: grid;
+  /* An auto track would grow to the bars' longest labels and push the page sideways on a phone. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--el-space-3);
   min-width: 0;
   margin: 0;
@@ -142,15 +144,19 @@
 
 /* vertical bars (days, months) */
 .el-vbars {
-  display: flex;
-  gap: 2px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  column-gap: 2px;
   height: 12rem;
 }
+/* Subgrid: every bar shares the tallest label's row, so a wrapped label never lifts its bar off the axis. */
 .el-vbar {
-  flex: 1 1 0;
+  grid-row: span 2;
   min-width: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: subgrid;
   border-radius: var(--el-radius-sm) var(--el-radius-sm) 0 0;
 }
 .el-vbar:hover {
@@ -179,12 +185,18 @@
   background: var(--el-chart-bar);
 }
 .el-vbar-label {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
   min-height: 1.25rem;
   padding-top: var(--el-space-1);
   color: var(--el-text-muted);
   font-size: var(--el-text-xs);
+  line-height: 1.2;
   text-align: center;
+  /* Wider than its bar: labels are thinned out in the markup, so one line never meets the next. */
   white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 /* donut */

@@ -10,6 +10,7 @@
  *   CADENCE_DAY / CADENCE_WEEK with enforcement `warn` (proposed cadence targets, OD-007).
  *   STAGGER_SAME_DAY — same idea on another account the same IST day, not in one collab.
  */
+import { fmtDay } from '@elevate/shared-types';
 import { istDate, weekStart } from './week';
 import type { CadenceEnforcement, SettingStatus } from './vocabulary';
 
@@ -128,7 +129,7 @@ export function detectScheduleConflicts(
       push({
         code: 'CADENCE_DAY',
         severity,
-        message: `${candidate.accountCode} would have ${sameDay.length + 1} posts on ${day} (limit ${cadence.maxPerDay}/day, ${cadence.status}).`,
+        message: `${candidate.accountCode} would have ${sameDay.length + 1} posts on ${fmtDay(day)} (limit ${cadence.maxPerDay}/day, ${cadence.status}).`,
         accountCode: candidate.accountCode,
         relatedPlacementIds: sameDay.map((e) => e.placementId),
       });
@@ -157,7 +158,7 @@ export function detectScheduleConflicts(
       push({
         code: 'STAGGER_SAME_DAY',
         severity: 'warning',
-        message: `The same idea is also scheduled on ${sameIdeaSameDay.map((e) => e.accountCode).join(', ')} on ${day}; stagger it or make it a collab.`,
+        message: `The same idea is also scheduled on ${sameIdeaSameDay.map((e) => e.accountCode).join(', ')} on ${fmtDay(day)}; stagger it or make it a collab.`,
         accountCode: candidate.accountCode,
         relatedPlacementIds: sameIdeaSameDay.map((e) => e.placementId),
       });

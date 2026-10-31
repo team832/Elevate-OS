@@ -31,7 +31,8 @@ export type Landing =
   /** Several workspaces and no remembered choice (or none at all): show the chooser. */
   | { kind: 'choose' };
 
-const inBase = (path: string, base: string) =>
+/** The path is the workspace at `base` or a page in it. */
+export const inBase = (path: string, base: string) =>
   path === base || path.startsWith(`${base}/`) || path.startsWith(`${base}?`);
 
 /**

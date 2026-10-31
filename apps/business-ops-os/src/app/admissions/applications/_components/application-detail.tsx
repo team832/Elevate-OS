@@ -4,6 +4,7 @@
  * Used by the full page and by the `?open=` pop-up of the list. Server component.
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
+import type { Principal } from '@elevate/authorization';
 import { Alert, StatusBadge, type Tone } from '@elevate/shared-ui';
 import {
   partLabels,
@@ -16,6 +17,7 @@ import { getApplication } from '../../../../server/applications-read';
 import { ActionForm } from '../../../../ui/action-form';
 import { fmtDate, fmtDateTime, fmtPaise, humanise } from '../../../../ui/format';
 import { load } from '../../../../ui/frame';
+import { OpenLink, openHref } from '../../../../ui/open-link';
 import { RecordTable } from '../../../../ui/record-table';
 import { DetailTable, Segment, TaskList } from '../../../../ui/sections';
 import { RecordJourney } from '../../_components/journey';
@@ -49,13 +51,17 @@ export type ApplicationView = Extract<
 const missing = (v: string | null | undefined) => v || 'Not recorded';
 
 /** Where each confirmation task is fixed (printing the form is the button on this page). */
-const taskHref = (d: ApplicationView, page: string): Record<ApplicationTask, string | null> => {
+const taskHref = (
+  user: Principal,
+  d: ApplicationView,
+  page: string,
+): Record<ApplicationTask, string | null> => {
   const admission = `/ops/admissions/${d.admission.id}`;
   return {
     details: d.can.write ? `${page}?edit=1` : null,
     fee_agreement: admission,
     documents: admission,
-    declarations: '/ops/settings?group=admissions',
+    declarations: openHref(user, '/ops/settings?group=admissions') ?? null,
     form: null,
     signatures: d.can.write ? `${page}?sign=1` : null,
     payment: admission,
@@ -69,15 +75,22 @@ const FIX = {
 } as const;
 
 /** The task list: each gap fixed elsewhere links there; "Go to this task" only when the form fixes something. */
-export const taskItems = (d: ApplicationView, page: string, tasks = d.tasks) =>
+export const taskItems = (user: Principal, d: ApplicationView, page: string, tasks = d.tasks) =>
   tasks.map((t) => ({
     ...t,
-    href: t.missing.length && t.missing.every((g) => g.fix) ? null : taskHref(d, page)[t.task],
+    href:
+      t.missing.length && t.missing.every((g) => g.fix) ? null : taskHref(user, d, page)[t.task],
     missing: t.missing.map((g) =>
       g.fix ? (
         <>
           {g.message}.{' '}
-          <a href={`/ops/leads/${d.admission.leadId}?${FIX[g.fix][0]}`}>{FIX[g.fix][1]}</a>
+          <OpenLink
+            user={user}
+            href={`/ops/leads/${d.admission.leadId}?${FIX[g.fix][0]}`}
+            fallback={null}
+          >
+            {FIX[g.fix][1]}
+          </OpenLink>
         </>
       ) : (
         g.message
@@ -185,10 +198,12 @@ export function PaperAnswers({ d, level }: { d: ApplicationView; level: 2 | 3 })
 }
 
 export function ApplicationDetail({
+  user,
   d,
   level,
   page,
 }: {
+  user: Principal;
   d: ApplicationView;
   level: 2 | 3;
   page: string;
@@ -217,7 +232,7 @@ export function ApplicationDetail({
         description="Checked again on the server when an approver confirms with their password. Completing these steps never admits the student by itself."
       >
         {d.tasks.length ? (
-          <TaskList caption="Confirmation tasks" items={taskItems(d, page)} />
+          <TaskList caption="Confirmation tasks" items={taskItems(user, d, page)} />
         ) : null}
         {a.status !== 'admission_confirmed' && !d.confirmationGaps.length ? (
           <p>Nothing is missing. An approver can confirm the admission.</p>
@@ -332,7 +347,7 @@ export function ApplicationDetail({
             },
             {
               label: 'Payment before admission',
-              value: `${humanise(d.paymentGate.value.rule)} (${d.paymentGate.decisionState})`,
+              value: humanise(d.paymentGate.value.rule),
             },
           ]}
         />
@@ -347,7 +362,7 @@ export function ApplicationDetail({
           rows={d.versions}
           rowKey={(v) => String(v.version)}
           columns={[
-            { key: 'v', header: 'Version', render: (v) => v.version },
+            { key: 'v', header: 'Version', numeric: true, render: (v) => v.version },
             { key: 'at', header: 'Saved', render: (v) => fmtDateTime(v.createdAt) },
             { key: 'by', header: 'By', render: (v) => v.createdByName ?? '—' },
             {
@@ -364,7 +379,7 @@ export function ApplicationDetail({
           rowKey={(f) => f.id}
           empty={<p className="el-field-hint">No form printed yet.</p>}
           columns={[
-            { key: 'v', header: 'Version', render: (f) => f.version },
+            { key: 'v', header: 'Version', numeric: true, render: (f) => f.version },
             {
               key: 'at',
               header: 'Printed',

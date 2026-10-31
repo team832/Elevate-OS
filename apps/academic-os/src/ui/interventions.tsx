@@ -1,5 +1,5 @@
 /** Support plans (interventions): evidence → goal → action → responsible → due → review → outcome. Shared by the student and progress pages. */
-import { DataTable, EmptyState } from '@elevate/shared-ui';
+import { DataTable, EmptyState, fmtDay } from '@elevate/shared-ui';
 import type { listInterventions } from '../server';
 import { MODULE_PATHS } from '../server/paths';
 import { ApiForm, type FormField } from './api-form';
@@ -30,8 +30,8 @@ export function InterventionsTable({ rows, canWrite }: { rows: Rows; canWrite: b
         { key: 'goal', header: 'Goal', render: (i) => i.goal ?? 'Not recorded' },
         { key: 'action', header: 'Next action', render: (i) => i.action },
         { key: 'owner', header: 'Responsible', render: (i) => i.responsibleName },
-        { key: 'due', header: 'Due', render: (i) => i.dueDate ?? 'No date' },
-        { key: 'review', header: 'Review', render: (i) => i.reviewOn ?? 'No date' },
+        { key: 'due', header: 'Due', render: (i) => fmtDay(i.dueDate, 'No date') },
+        { key: 'review', header: 'Review', render: (i) => fmtDay(i.reviewOn, 'No date') },
         { key: 'status', header: 'Status and outcome', render: (i) => <><StateBadge state={i.status} />{i.outcome ? ` ${i.outcome}` : ''}</> },
         {
           key: 'update',

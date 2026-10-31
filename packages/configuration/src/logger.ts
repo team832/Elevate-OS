@@ -30,7 +30,9 @@ function currentLevel(): LogLevel {
 
 function serialise(value: unknown): unknown {
   if (value instanceof Error) {
-    return { name: value.name, message: value.message, stack: value.stack };
+    // A failed query's driver error sits on `cause`, with the PostgreSQL code and constraint.
+    const { code, constraint } = (value.cause ?? value) as { code?: unknown; constraint?: unknown };
+    return { name: value.name, message: value.message, stack: value.stack, code, constraint };
   }
   return value;
 }

@@ -49,7 +49,7 @@ Everything commits or nothing does.
 | Production | Managed PostgreSQL ≥ 17 | Four Next.js servers behind HTTPS; only the platform public | **Proposed** (`infrastructure/deployment/README.md`) |
 
 ## 5. Background work
-There is no scheduler yet. Outbox consumers run when a module calls `processEvents` (for example from an action in its UI). A periodic runner (cron route protected by `INTERNAL_SERVICE_TOKEN`, or a small worker process) is a wave-3 integration item; until then nothing claims automatic delivery.
+There is no scheduler yet. Outbox consumers run when a module calls `processEvents`: from "Process intake" in Academic and the Background jobs panel on the Ops Overview (D-117). A periodic runner (cron route protected by `INTERNAL_SERVICE_TOKEN`, or a small worker process) is a wave-3 integration item; until then nothing claims automatic delivery.
 
 ## 6. Failure handling
 | Failure | Behaviour |

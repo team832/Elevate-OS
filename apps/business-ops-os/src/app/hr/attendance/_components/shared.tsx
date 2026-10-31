@@ -79,8 +79,7 @@ export function Legend() {
       <p>
         Statuses come from check-ins and check-outs (entered by HR or imported from a file), the
         work schedule, holidays and approved leave, using the HR settings for late grace and
-        half-day and full-day hours (Proposed until the owner approves them). No biometric device is
-        connected. Classes taught and teaching logs are separate records in Academic OS and never
+        half-day and full-day hours. No biometric device is connected. Classes taught and teaching logs are separate records in Academic OS and never
         change attendance.
       </p>
     </details>

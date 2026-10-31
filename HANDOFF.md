@@ -1,10 +1,52 @@
 # Elevate OS — handoff
 
-_Last updated 24 Oct 2026 (tests, requests through HR, marketing, fees milestone). Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
+_Last updated 31 Oct 2026 (debug pass, structure, release package). Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
 
 ## For the owner (plain language)
 
 **What it is.** Elevate OS is the internal system your staff sign in to. Since 22 Oct 2026 it has three **workspaces**, one per kind of work, each at its own address: Business Operations (enquiries, demos, admissions, students, fees, staff tasks), Academic (teachers and coordinators) and Marketing. A fourth address holds Users & roles. Only `@elevateeducation.in` accounts can use it (D-030).
+
+### Status report — 31 Oct 2026 (debug pass, structure, installable package)
+
+```
+What's live now: nothing on the internet; nothing is deployed. On your computer, the same four
+  addresses as before, once you start them (step 10 below). A package that installs on one
+  computer now exists; it has been installed and tested on this PC only, with sample data.
+What I did:
+- A student who leaves now really leaves. An exit recorded in Business Operations reaches Academic
+  when someone presses "Send exits to Academic" (there is no timer yet): the student drops off
+  later classes and tests, and what was already marked stays. A corrected name travels the same
+  way. When staff leave, their manager, the operations managers and the coordinators are told
+  what that person still holds; nothing is moved for them.
+- Each person now stays inside their own workspace for data as well as screens. Until now someone
+  could read another workspace's records through its data connections if their role held the
+  permission, even though the screens sent them away. Tried 3,567 times from outside: all refused.
+  Each teacher sees only their own batches, students and marks.
+- Messages reach someone who can act. Requests through HR now always tell a person who can decide
+  (one gap for your decision is below), notices open in the right workspace, and someone whose
+  login has no staff record is told why instead of failing quietly.
+- Fee figures agree. Tuition pages show tuition, the case page and exit record show everything
+  owed, and each adds up on every screen and paper: 160 figures worked out by hand first, 0
+  mismatches. Forms, cards and reports now print Hindi names correctly.
+- Clicks show a thin bar at once, the Overview opens in about 0.3 seconds (was 1.2 to 1.8), and
+  everything now builds into one package with a check on every file. On the first package, 266 use
+  cases: 260 passed, 3 failed and were fixed afterwards, 3 could not be run here.
+What I need from you: step 10 below, in order, on your own computer. Then the first three rows
+  marked "New 31 Oct" in "Decisions waiting for you": real staff cannot use this without them.
+What's next:
+- The final re-test on the rebuilt package: [coordinator fills final numbers]
+- Your own look at the screens, above all the arrows under tables you mentioned. I fixed four
+  arrow-like things and cannot tell which you meant.
+- Choosing where to host it, once the three decisions are made.
+Placeholders still to replace: 26 (the placeholders list says what each one is).
+```
+
+**What this does not mean.** I cannot tell you there are no errors anywhere. These are still true:
+- **Not checked by anyone yet:** a real Google sign-in, a real phone on your Wi-Fi, restoring a backup, any server other than this PC, and your own database, which I do not touch.
+- **Speed figures** come from sample data on a busy PC. Forty people opening the Overview at the same instant still wait about 9 seconds (it was about a minute).
+- **Open by design until you choose a host:** until a secure front door (a proxy) is in place, someone can fake the network address recorded for their session.
+- **In the office mode of step 10, file uploads are refused,** the same as online: test papers and keys, score imports and task files. Choosing file storage fixes this. Marks by hand and publishing still work.
+- **How I read your brief:** "this one" means Elevate OS, and "different teacher, different workspace" means each teacher has their own view inside one Academic workspace. Tell me if you meant something else.
 
 ### Status report — 23–24 Oct 2026 (tests, requests through HR, marketing, fees)
 
@@ -192,6 +234,62 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 
 ### Steps only you can do
 
+Do step 10 first. The numbered steps after it are kept from earlier dates; each says whether it is already done.
+
+**10. Bring your computer up to date (31 Oct 2026). Do these in order, on your own computer.** Only you can do this, because it changes your database and I do not touch it. "Type" means: in the Claude Code chat, type the line as shown, starting with `!`. If any step shows an error, stop and send the developer the last lines.
+1. **Start the database.** Open a terminal in the `elevate-os` folder, run `npm run db:start` and leave it open.
+2. **Take a backup.** Type `! node .data/json-backup.mjs`. It makes a copy of every table on this computer (not in git). It ends with the number of tables and rows, then "Pre-check OK". (`npm run db:backup` will not work here: `pg_dump` is not installed.)
+3. **Check the notification links before the update.** The update adds a rule that no stored link may hold a control character (an invisible character that can break a link). This command only reads. Type:
+
+   ```
+   ! node -e "const{Client}=require('pg');const env=require('util').parseEnv(require('fs').readFileSync('.env','utf8'));const c=new Client({connectionString:env.DATABASE_URL});c.connect().then(()=>c.query('select count(*)::int n from core.notifications where link ~ \'[[:cntrl:]]\'')).then(r=>{console.log('Links holding a control character:',r.rows[0].n);return c.end()})"
+   ```
+
+   It prints `Links holding a control character: 0`. If it prints any other number, stop and tell the developer. Nothing has changed.
+4. **Apply the database update.** Type `! npm run db:migrate`. It should say the migration files were applied or are already up to date. I do not know whether update `0017` has already been applied on your computer; if it has, this changes nothing. `0017` adds seven indexes (so seven kinds of list read faster) and the link rule. It changes no stored record. If it stops with an error, nothing is half-applied.
+5. **Check the database.** Type `! npm run db:check`. It should end with `db:check — 19/19 checks passed.`
+6. **Load anything new.** Type `! npm run db:seed`. Since 31 Oct it only adds what is missing, so running it again is safe: it no longer puts seed text back over what you edited on a screen (until now it did, for example on batches, programmes and staff notes). Sample and demo rows are still refreshed. Anything an earlier run already overwrote stays as it is now.
+7. **Use office mode every day from now on.** Type `! npm run office:build` (about 7 minutes: 427 seconds on this PC; repeat after any code update). Then in a separate terminal in the `elevate-os` folder run `npm run office` and leave it open. It prints your Wi-Fi addresses. Open the printed address, on this computer too. For staff devices, do step 8b once first.
+
+   Why: the `npm run dev` commands are for developers and build each page when it is first opened. Most of the slowness and the false "Source unavailable" messages came from that mode on a computer short of memory.
+
+   | | Development mode | Office mode |
+   |---|---|---|
+   | Opening a page for the first time, Business Operations | middle 5.9 s, worst 30.4 s | |
+   | Opening a page for the first time, Academic | worst 46 s | |
+   | Opening a menu page | second visit: middle 0.4 s, 9 in 10 under 9.6 s | middle 0.04 s, 9 in 10 under 0.2 s, worst 1.5 s |
+
+   Measured on sample data on a busy PC. Checked on 31 Oct on a scratch database: `npm run office` with a real sign-in and a Hindi PDF, 32 of 32 checks passed. Not tried from a real phone.
+
+   Two things change in office mode. File uploads are refused (see "What this does not mean" above), so if you need to upload a test paper, score sheet or task file before choosing storage, use `npm run dev:all` for that. Sample sign-ins ending `@example.test` are refused; `business@`, `hr@`, `teacher@` and `marketing@elevateeducation.in` still work.
+8. **Replace the AI keys, if you have not yet.** Do step 8a, then stop and start `npm run office` again.
+
+**11. Leftovers that need a person.**
+
+*11a. Stored papers that may hold a wrong fee figure.* Before the fix of 30 Oct, some fee figures were worked out wrongly. For example, a report could say "credit ₹50,000" for a student who owed ₹50,000, and a signed form could overstate the fee after an agreement changed. The screens are right now, but stored papers and frozen records were **not** rewritten. To list what might be affected, type this (it only reads):
+
+   ```
+   ! node -e "const{Client}=require('pg');const fs=require('fs');const env=require('util').parseEnv(fs.readFileSync('.env','utf8'));const c=new Client({connectionString:env.DATABASE_URL});c.connect().then(()=>c.query('BEGIN READ ONLY')).then(()=>c.query(fs.readFileSync('scripts/development/find-stored-fee-figures.sql','utf8'))).then(rs=>{for(const r of rs)console.table(r.rows);return c.query('ROLLBACK')}).then(()=>c.end())"
+   ```
+
+It prints three lists. They are **candidates to check, not confirmed errors**, and the check is broad.
+- **report:** open the student's report. A report saved before the fix now says "Check before relying on this". Make a new report and use that one.
+- **form:** only a fingerprint of a printed form is stored, so the paper in your file is the only copy. Compare sections 07 and 08 on the paper (discount, net fee, instalments received, balance) with the student's Fees tab. The form's net fee includes the registration fee from Settings even when it has not been charged yet; that difference is expected. If nothing else differs, there is nothing to do. If it differs, tell the family, then decide whether to print the form again and have it signed again. This is your call, and the system changes nothing by itself. Acknowledgements already downloaded need the same check.
+- **exit:** the balance saved on an exit record is frozen. Compare it with the Fees tab. If it differs, tell the developer: no screen corrects it.
+
+*11b. Old marketing records marked "published" that were never posted. Only if you approve.* Until 26 Oct a Publish button marked items published although nothing was posted. Any such records still count as published on the Marketing dashboard. To see how many, type (it only reads):
+
+   ```
+   ! node -e "const{Client}=require('pg');const env=require('util').parseEnv(require('fs').readFileSync('.env','utf8'));const c=new Client({connectionString:env.DATABASE_URL});c.connect().then(()=>c.query('select count(*)::int n from marketing.placements where status=\'published\' and publication_mode=\'sandbox\'')).then(r=>{console.log('Sandbox publications stored as published:',r.rows[0].n);return c.end()})"
+   ```
+
+If it prints 0, you are done. Otherwise, changing stored records is your decision; if you leave them, the dashboard keeps over-counting those old items. If you approve, take a backup (step 10.2) and tell Claude Code "apply the two sandbox updates in HANDOFF step 11b". They are, in this order:
+
+```sql
+UPDATE marketing.content_items i SET state='scheduled' WHERE i.state='published' AND EXISTS (SELECT 1 FROM marketing.placements p WHERE p.content_item_id=i.id AND p.publication_mode='sandbox') AND NOT EXISTS (SELECT 1 FROM marketing.placements p WHERE p.content_item_id=i.id AND p.status='published' AND p.publication_mode IS DISTINCT FROM 'sandbox');
+UPDATE marketing.placements SET status='scheduled', published_at=NULL WHERE status='published' AND publication_mode='sandbox';
+```
+
 **1. Change the password of the shared look-around account.** The account `team@elevateeducation.in` exists on this computer only. It can look at everything and change nothing, and it can never confirm an admission. Its password was typed in our chat, so treat it as known to others. There is no "change password" screen yet, so:
 1. Start the admin app with `npm run dev:platform`, open http://localhost:3003 and sign in with your own account.
 2. Click **Users & roles** in the menu.
@@ -227,7 +325,7 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 2. In the Claude Code chat type `! npm run db:backup`. If it says `pg_dump` is not installed (likely on this computer), stop and ask the developer to take a backup for you before going on.
 3. Type `! npm run db:migrate`. It should say the migrations were applied.
 4. Type `! npm run db:check`. It should end with all checks passed.
-5. Type `! npm run db:seed`. This adds the Sikar centre, the fictional HR sample user `hr-manager@example.test` and the teaching assignments you gave today. Running it again is safe.
+5. Type `! npm run db:seed`. This adds the Sikar centre, the fictional HR sample user `hr-manager@example.test` and the teaching assignments you gave today. Running it again is safe (true since 31 Oct, step 10.6).
 6. Optional: type `! npm run db:seed-demo-accounts` to refresh the demo sign-ins; it also sets up `satish@elevateeducation.in` as a teacher sign-in for testing on this computer only (we assumed the `.in` ending; tell me if his address is different).
 If any step shows an error, stop and send the developer the last lines; nothing is half-applied (the update runs as one step).
 
@@ -236,7 +334,7 @@ If any step shows an error, stop and send the developer the last lines; nothing 
 *8a. Make new Groq and Gemini keys.* Both were shown in the build chat on 24 Oct, so treat them as seen; the Gemini key is also refused by Google ("Your project has been denied access").
 1. Groq: open https://console.groq.com/keys, click **Create API Key**, name it "Elevate OS", copy it. Then delete the old key in the same list (trash icon).
 2. Gemini: open https://aistudio.google.com/apikey, click **Create API key**, choose **Create API key in new project**, copy it. Delete the old key.
-3. Open `C:OPENBOTelevate-os.env` in Notepad. Replace the text after `GROQ_API_KEY=` and after `GEMINI_API_KEY=` with the new keys (no spaces, no quotes). Save.
+3. Open `C:\OPENBOT\elevate-os\.env` in Notepad. Replace the text after `GROQ_API_KEY=` and after `GEMINI_API_KEY=` with the new keys (no spaces, no quotes). Save.
 4. Never paste a key into a chat, an email or a code file. The checks refuse a commit that contains one.
 
 *8b. Let staff devices reach this computer (once, as administrator).*
@@ -259,7 +357,7 @@ If any step shows an error, stop and send the developer the last lines; nothing 
 **9. Load the new sample records and demo sign-ins (this computer only).** The database updates are already applied. This adds the fictional sample tests, leads, marketing work and requests used in the walkthrough below. Only you can do it, because it changes the database on your computer.
 1. Make sure the database is running (`npm run db:start` in a terminal in the `elevate-os` folder, left open).
 2. In the Claude Code chat type `! node .data/json-backup.mjs` (a copy of every table, kept on this computer; the file is not in git).
-3. Type `! npm run db:seed`. Running it again is safe.
+3. Type `! npm run db:seed`. Running it again is safe (true since 31 Oct, step 10.6).
 4. Check that `.env` has a line `LOCAL_DEMO_PASSWORD=` followed by a password of at least 12 characters (step 4 above). Then type `! npm run db:seed-demo-accounts`. It prints the sign-ins, never the password.
 5. Before real staff use the system, type `! npm run db:clear-samples` (removes every sample record and switches the demo sign-ins off).
 
@@ -269,6 +367,71 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 
 | Question | Safe choice used today |
 |---|---|
+| **New 31 Oct (go-live).** How do real staff sign in, and how do they confirm an admission? New accounts have no password, no screen sets or resets one, and confirming an admission asks for a password. Either signing in with Google again counts for confirming (D-041), or a set-password screen gets built | Sign-in needs Google. Confirming refuses anyone with no password, so no real admission can be confirmed yet |
+| **New 31 Oct (go-live).** Where should uploaded files be kept? This covers test papers and answer keys, score imports and task files | Refused with a plain message in office mode and online. Marks by hand and publishing still work |
+| **New 31 Oct (go-live).** Who runs the background jobs, and how often? An exit or a corrected name reaches Academic only when someone presses the button. The same goes for reminders, Academic replies and demo attendance | Buttons on the Business Operations Overview, operations manager only. Pressing one twice is safe |
+| **New 31 Oct (fees).** A finance officer cannot open a student's Fees tab, so no screen lets finance record a payment on an admitted student's yearly agreement. Give finance read access to students, make a fee-only page, or show the fee section on the admitted case? | Finance sees Collections and Outstanding; the operations manager records the payment |
+| **New 31 Oct (fees).** Money above the whole agreement, such as ₹2,00,000 recorded on a ₹1,00,000 agreement: refuse, warn or allow? | Accepted, and shown as a credit |
+| **New 31 Oct (fees).** May one receipt number be recorded twice, for example one receipt across two instalments? Refuse, warn or allow? | The same receipt, amount, date, charge and instalment is refused; a different amount is accepted. This changes the earlier "a second identical payment is deliberate" rule |
+| **New 31 Oct (fees).** A discount, waiver or credit above what is owed: refuse it? | Refused (Proposed). Demo credits are exempt |
+| **New 31 Oct (fees).** A demo fee credited to tuition: must the credit be undone before it can be refunded? | Yes (Proposed). Credits already refunded stay ₹1,000 short until reversed |
+| **New 31 Oct (fees).** A refund dated before the payment it returns: refuse it? | Refused (Proposed) |
+| **New 31 Oct (fees).** An added charge (a debit): which instalment does it belong to, if any? | None: no due date, never overdue, still counted as owed (Proposed) |
+| **New 31 Oct (fees).** Should an added charge have its own line on the signed form? | Printed as "Added charge (debit)" (Proposed) |
+| **New 31 Oct (fees).** An agreement closed on purpose with money unpaid: is that money still owed? | Counted on the Fees tab, fee year, statement and exit record; left out of Outstanding, Overview and fee status (Proposed) |
+| **New 31 Oct (fees).** The case page and exit record show everything the student owes across all cases, including registration and demo fees; the Fees tab, Outstanding, Overview and fee year show tuition. Is that the right split? | As stated (Proposed) |
+| **New 31 Oct (fees).** Two leads merged: should the ₹1,000 demo fee on the lost lead's case move across? | It stays on the lost case |
+| **New 31 Oct (fees).** A signed paper turns out to hold a wrong fee figure (step 11a): print and sign it again, or keep it with a note? | Nothing is rewritten; the case page shows the right figure |
+| **New 31 Oct (fees).** Fee structure rows: entered on the fee screen, or imported? | No screen adds them; the page says it waits for you |
+| **New 31 Oct (fees).** Count tiles on the HR page and task reports are not marked when they include sample records (money figures are). Mark them too? | Not marked |
+| **New 31 Oct (admissions).** After a student's name is corrected: reprint the acknowledgement and ID card, or leave them as issued? | Left as issued (Proposed); the case page says so |
+| **New 31 Oct (admissions).** When a case is lost or merged, should its demo classes be cancelled automatically? | A person closes them and the page warns; the slot stays held until then |
+| **New 31 Oct (admissions).** "Active" students means admitted, awaiting enrolment or enrolled. Is that right? | As stated (Proposed) |
+| **New 31 Oct (admissions).** After a real merge, the old lead still shows the new lead's id and code. Is that acceptable? | Left as is: it records the merge |
+| **New 31 Oct (leads).** A duplicate check matches a lead the person may not see: how much to show? Should the checks have a daily limit? | Only "exact" or "possible", with no name, code, owner or count. A name-and-school match with no shared contact is left out for them and still flagged for merge review. Checks are logged, with no limit (Proposed) |
+| **New 31 Oct (exits).** A transferred or "other inactive" exit ends as "withdrawn" in Academic. Separate statuses need another database update. Is "withdrawn" enough? | Withdrawn in Academic; the true outcome stays in Business Operations and the audit history |
+| **New 31 Oct (exits).** An exit dated in the future: close the case today and let attendance run to that date? | As stated |
+| **New 31 Oct (exits).** A student leaves before their first day: delete the unstarted batch place? | Deleted; the audit history keeps it |
+| **New 31 Oct (exits).** On exit: cancel open catch-up tasks and remove untouched later test rows, and keep rows that hold marks? | As stated |
+| **New 31 Oct (exits).** A coordinator ending an enrolment in Academic does not tell Business Operations. Should it? | Not told |
+| **New 31 Oct (exits).** "On hold" in Business Operations does not pause Academic, and HR leave does not flag anything there. Should they? | No link |
+| **New 31 Oct (exits).** May Academic end an enrolment before it starts? | Refused until the start date, with an explanation |
+| **New 31 Oct (exits).** When a teacher leaves, should assignments end and tasks move automatically? | No. Their manager, operations managers and coordinators are told what they held |
+| **New 31 Oct (teachers).** A student moves to another batch: should the old teacher's read access end on the transfer date? | It ends with the teacher's assignment to that batch |
+| **New 31 Oct (teachers).** Should a replaced teacher be told about a substitute? | No |
+| **New 31 Oct (teachers).** A teacher named on a batch but on no class sees its students and marks and no classes. Is that right? | As built |
+| **New 31 Oct (academic).** Coordinators see student and guardian phone and email in Academic; directors, auditors and teachers do not. Is that intended? | As built |
+| **New 31 Oct (academic).** Ranks say "Hidden" on a fresh system until the Academic setting is turned on, although the walkthrough shows 1, 2, 2, 4. Turn it on? | Hidden (D-103, Proposed) |
+| **New 31 Oct (academic).** A coordinator corrects a verified or final mark, with a required reason. Is the permission for finalising the right one for this? | As built (Proposed), recorded in the audit history |
+| **New 31 Oct (academic).** Subjects and chapters cannot be added on a screen. Is the loaded curriculum enough? | Loaded curriculum only |
+| **New 31 Oct (academic).** Paused programmes still accept new courses. Should they? | Accepted |
+| **New 31 Oct (academic).** A class length set on one batch counts as approved, and scheduled classes of another length then show as hard conflicts. Is that right? | As built |
+| **New 31 Oct (HR).** Requests from counsellors, finance, directors and operations managers go to the operations managers, not the HR manager, because of the Proposed HR scope. With only one operations manager, their own request reaches nobody. What should happen? | As stated |
+| **New 31 Oct (HR).** HR cannot add a staff record, and the HR manager cannot send a request. Should they? | No (grants Proposed) |
+| **New 31 Oct (HR).** A request forwarded to someone with no permission to send requests is refused. Should they be able to reply anyway? | Refused; HR chooses someone else or answers it |
+| **New 31 Oct (HR).** When HR makes a task from a request, should the sender be told? | Not told |
+| **New 31 Oct (HR).** May HR move someone to a department outside HR's scope? Today it works, then HR can no longer open that record | Allowed; only an operations manager can undo it |
+| **New 31 Oct (HR).** Should a screen offer unlinking a login from a staff record? | No screen |
+| **New 31 Oct (HR).** An address in the first-administrator setting gets its roles back at every sign-in, so it cannot be permanently demoted. Is that acceptable? | As built, recorded in the audit history |
+| **New 31 Oct (tasks).** Who should hear a comment or a blocker on a task? | Nobody: it shows on the task only |
+| **New 31 Oct (settings).** Should teachers and counsellors also get Personal Settings (pop-ups off, reminder spacing)? | Marketing only |
+| **New 31 Oct (events).** Should an event's capacity also limit invitations? | Limits registrations only |
+| **New 31 Oct (marketing).** Old records marked published with nothing posted (step 11b): change them? | Not changed; the dashboard over-counts them |
+| **New 31 Oct (marketing).** A monthly report for a month still to come answers "not found". Is that right? | As built |
+| **New 31 Oct (first install).** On a first install, load the 8 real staff and their assignments? Their names ship inside the package either way, so keep it private | Not loaded |
+| **New 31 Oct (first install).** Load the old marketing history (59 ideas, 36 placements)? | Not loaded |
+| **New 31 Oct (first install).** Load the two planning batches, the draft syllabus courses and the website-stated prices? | Loaded, labelled |
+| **New 31 Oct (first install).** Must any reference name stay under the seed's control, so a re-seed resets it? | None |
+| **New 31 Oct (first install).** Who may add lead sources and programmes on a screen? | No screen |
+| **New 31 Oct (first install).** Going live: one address with one port per app is the only shape that works today. Any other shape needs more work (see the release notes) | One address, four ports |
+| **New 31 Oct (tidying).** Clearing expired sign-ins keeps ended sessions for 30 days. Is that long enough? | 30 days |
+| **New 31 Oct (tidying).** `npm run office` runs your database from a beta build of the database tool. Acceptable until you have a host? | As built |
+| **New 31 Oct (tidying).** 17 data connections no screen uses, and 60 that repeat what a screen does directly: keep them? | Kept |
+| **New 31 Oct (tidying).** Two permissions nobody holds, and an empty leftover folder: remove them? | Left as they are |
+| **New 31 Oct (tidying).** A script that prepares old data holds real staff names and roles (no phones or emails). Acceptable in a private repository? | Left as is |
+| **New 31 Oct (names).** Which name for each pair: Requests through HR or HR Requests; My reports or My Work Updates; My tasks or My Tasks; Tests and Mock Tests or Assessments? | As they are today |
+| **New 31 Oct (look).** After the rebuild, are the arrows under tables gone on your screen? Four arrow-like things were fixed, and I cannot tell which you meant | The four fixes stand |
+| **New 31 Oct (look).** Slim scrollbars with no arrows, and table headers on several lines: do they suit the look you chose? | As built |
 | **New 24 Oct (staff).** Is `soma@elevateeducation.in` the "Soma" who teaches CLAT Current Affairs (not Soma Tiwari)? I assumed so for the demo sign-in | Linked to "Soma" (CLAT Current Affairs), marked as an assumption |
 | **New 24 Oct (requests).** Which staff record is Schar? (D-096) | Not set: requests for Schar wait in HR's queue |
 | **New 24 Oct (leads).** Does an admission that was later withdrawn, transferred or completed still count as a conversion? (D-105) | Yes, with a flag (Proposed). Cancelled before enrolment and lost never count |
@@ -356,7 +519,7 @@ New on 24 Oct 2026 (D-111): **Build draft timetable** in Academic (Timetable →
 
 Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), a new layout (D-054, D-059; the dark look itself was replaced on 22 Oct, D-074), teacher reviews written in Academic (D-058), demo attendance marked by the teacher in Academic (D-060), sample staff named "Sample …" with `@example.test` sign-ins (D-061). On 23 Oct 2026: HR back inside Business Operations, including staff attendance (D-080, D-086; answers the old staff-attendance question OD-026), teachers see approved feedback summaries in Academic (D-088), the charcoal sidebar (D-081), your staff answers on Soma, Satish and Nikunj (D-082), directors make student reports (D-079), AI drafting with the model you chose (D-092). Later on 23 Oct 2026: tests are one record in Academic run from Business Operations (D-094), score sheets as CSV or PDF only (D-095), Schar as a setting (D-096), "business administrator" = operations manager (D-097), task comments by HR and the reviewer only (D-098), AI reading of PDF score sheets with your tick each time (D-099).
 
-**What is not connected yet.** Email and text messages, event invitations, the social-media publishing tool, a biometric device and a CRM are "pretend" connections or not connected at all; file uploads work only on this computer until you choose where files are kept online (D-085): they record what would happen and never claim it happened. Hindi (Devanagari) text does not print in PDFs yet; it shows as "?" with a note.
+**What is not connected yet.** Email and text messages, event invitations, the social-media publishing tool, a biometric device and a CRM are "pretend" connections or not connected at all; file uploads work only on this computer until you choose where files are kept online (D-085): they record what would happen and never claim it happened. Hindi (Devanagari) now prints correctly in every PDF, with two limits: copying or searching Hindi from a PDF can give the letters in the wrong order, and Tamil, emoji and rare Devanagari letters still print as "?" with a note at the foot of the page (no warning appears when such a name is typed).
 
 **Security.** Every page checks who is signed in and what they may see. Most students are minors, so phone numbers, addresses and documents are shown only to staff with the private-data permission, and every contact search is logged. Passwords and keys stay in a private settings file (`.env`) that is never uploaded.
 
@@ -411,15 +574,15 @@ These email addresses are sign-in names only; no mailbox receives anything.
 - **Email, text messages, calls, social publishing**: none. Reminders and notices are inside Elevate OS only; "Published" on a calendar item is recorded by a person with a link or evidence.
 
 ### Limitations
-- No scheduler: task reminders and follow-up reminders run only when the operations manager starts them (`POST /ops/api/v1/jobs/task-reminders`).
+- No scheduler: every job runs only when the operations manager presses its button. Since 31 Oct the buttons are on the Business Operations Overview ("Background jobs", D-117).
 - Nothing is deployed; sign-in emails are not mailboxes; no outbound email, calls or publishing.
 - A request through HR cannot link a campaign or a test (Business Operations cannot check them); HR's "create task from request" cannot carry a batch link.
 - Between uploading a new paper or key version and releasing it, readers see no version at all.
-- The sales-calls list shows at most the newest 500 calls for any filter, and the Tests page lists at most the newest 200 pending imports (shortcuts).
-- The database rule on notification links (`notifications_link_relative`) does not yet refuse control characters (the code does); planned for migration `0017`.
+- The sales-calls list shows at most the newest 500 calls for any filter, and the Tests page lists at most the newest 200 pending imports (shortcuts). Since 31 Oct the count tiles on leads and calls are counted in the database, so they stay right above those limits. Other capped lists, with no note on screen: calendar and deliverables 500, ideas and optimisation 500, funnel drill-down 2,000, placements 2,000, teaching-log exceptions 1,000 sessions, pickers 200 and 500. Not near these at current volume.
+- The database rule on notification links now refuses control characters too, once `0017` is applied (step 10). `0017` also adds seven indexes (`placements_campaign_idx`, `attempts_student_idx`, `results_assessment_idx`, `duplicate_flags_matched_idx`, `demos_lead_idx`, `appointments_lead_idx`, `fee_records_lead_idx`).
 - Sample leads never reach Converted (sample admissions still need legacy verification).
 - The prototype `Elevate.html` does not show this milestone.
-- Browser pass: results to be added below.
+- Browser pass: run on 31 Oct 2026 on the first package, on production builds; results in §6. The development mode was not walked for Academic, Marketing or Platform.
 
 ### Decisions waiting for you
 The 21 questions from this milestone are the rows marked **New 24 Oct** at the top of "Decisions waiting for you" above.
@@ -429,11 +592,13 @@ The 21 questions from this milestone are the rows marked **New 24 Oct** at the t
 2. **A request through HR.** As `teacher@` on :3001 → Requests through HR → new request (category, message, meant for HR or a named person) → Submit. As `hr@` on :3000 → HR → Requests → open it → mark reviewed, then answer and resolve, decline, or forward to a person in HR's scope. The person it is forwarded to sees only the forwarded note on their own Requests page and replies; HR relays the answer. The sender's message cannot be edited after submitting.
 3. **Lead → admission.** As `business@` on :3000 → Leads → a lead → change stage (Contacted, Qualified, Demo booked …; Lost, Duplicate and Do not contact ask for a reason) and log a call. Book the demo and start the admission as before; once the admission is confirmed and has an admission number, Converted becomes available on the lead. Marketing (`marketing@` on :3002) sees the same stages, the funnel and the sales calls; stage credit goes to whoever owned the lead when it entered the stage.
 4. **Calendar item to published.** As `pooja.verma@example.test` on :3002 → Content calendar → New item (type, channel, date, brief) → plan → start → submit. As `marketing@` → open it → Approve (nobody approves their own item) → Schedule → Publish, giving the post's link or evidence. Nothing is posted automatically.
-5. **A test from schedule to published.** As `business@` on :3000 → Tests → New (batches, date, sections and marking) → open it → roster (taken from the batches) → upload paper and key → import scores (CSV, or PDF with the "I confirm" tick) → review the import (fix ambiguous and unmatched rows; "mark scored students present" is a separate button) → confirm → Publish. The sample `SAMPLE-CLAT-CA-01` has a pending import with an ambiguous row; `SAMPLE-IPMAT-MOCK-01` shows a tie (ranks 1, 2, 2, 4). The teacher sees the same test in Academic → Assessments.
+5. **A test from schedule to published.** As `business@` on :3000 → Tests → New (batches, date, sections and marking) → open it → roster (taken from the batches) → upload paper and key → import scores (CSV, or PDF with the "I confirm" tick) → review the import (fix ambiguous and unmatched rows; "mark scored students present" is a separate button) → confirm → Publish. The sample `SAMPLE-CLAT-CA-01` has a pending import with an ambiguous row; `SAMPLE-IPMAT-MOCK-01` has a tie, ranked 1, 2, 2, 4 when ranks are shown (on a fresh system they say Hidden until the Academic setting `progress.show_rank_percentile` is turned on, D-103). The teacher sees the same test in Academic → Assessments.
 6. **Fee donut drill-down.** As `business@` on :3000 → Fees → choose the academic year and course → the chart shows paid and outstanding tuition with due-now, overdue and future tiles → click "outstanding": the list of students and its header total match the chart exactly.
 
 ### Checks
-Checks (24 Oct 2026, run by the coordinator): typecheck PASS; lint PASS (0 warnings); tests 4,074 of 4,075 passed in the full run — the 1 failure was a 30 s timeout under load in `applications.test.ts`, which passes 30/30 on its own; secret scan OK (1,775 files); webpack builds exit 0 for all four apps (platform, marketing-os, academic-os, business-ops-os). **Browser pass: not done** (skipped at the owner's request to save time) — screens are proven by server-rendered markup tests only; check them in a browser before relying on them.
+Checks (31 Oct 2026): `npm run validate`, four webpack builds and the final re-test: `[coordinator fills final numbers]`. First re-test, on the first package: 266 use cases, 260 pass, 3 fail, 3 held; details in §6.
+
+Checks (24 Oct 2026, run by the coordinator): typecheck PASS; lint PASS (0 warnings); tests 4,074 of 4,075 passed in the full run — the 1 failure was a 30 s timeout under load in `applications.test.ts`, which passes 30/30 on its own; secret scan OK (1,775 files); webpack builds exit 0 for all four apps (platform, marketing-os, academic-os, business-ops-os). **Browser pass: not done** that day (skipped at the owner's request to save time). The browser pass of 31 Oct is in §6.
 
 ## 1. What was built and what was not
 
@@ -459,6 +624,8 @@ Checks (24 Oct 2026, run by the coordinator): typecheck PASS; lint PASS (0 warni
 | Password reset / change screen, shared login rate limit, outbox scheduler, Google re-authentication for confirmation | **Not built** | `infrastructure/deployment/README.md`; `C:\OPENBOT\Elevate-Not-Working` |
 | Migrations `0015_hr_staff_workspaces`, `0016_milestone_hr_marketing_tests` | **Applied on the owner's computer** 23 Oct (`db:check` 19/19; frozen) | `packages/database/migrations/` |
 | Milestone 23–24 Oct (D-094 … D-109): Tests and Mock Tests, score import, ranks and publication, requests through HR, lead stages and calls, Marketing calendar / ideas plan / SEO-AIO-GEO / targets / monthly report, reminders and pop-ups, annual fee chart, sample data | Implemented, Tested (rules and API); grants **Proposed**; browser pass pending | "Milestone 23–24 Oct 2026" above; `IMPLEMENTATION_STATUS.md` |
+| Debug pass 26 Oct and 30–31 Oct (D-112 … D-122): exit reaches Academic, workspace membership enforced on data connections, one fee statement, insert-only seeds, jobs panel, Hindi PDFs, release package | Implemented; tested on the first package; final re-test `[coordinator fills final numbers]` | `IMPLEMENTATION_STATUS.md` "Debug pass", `docs/RELEASE.md`, `docs/CASELETS.md` |
+| Migration `0017` (seven indexes, link rule) | Written and tested; **status on the owner's computer unknown** (step 10) | `docs/DATABASE_MIGRATION_PLAN.md` |
 | Business facts (fees per programme, staff, holidays, targets) | **Missing — owner** | `PLACEHOLDERS.md`; OD-001…OD-048 in `docs/EXISTING_PROJECT_AUDIT.md` §9 |
 
 Status words follow D-013: Proposed → Approved → Implemented → Tested → Deployed. Nothing is Deployed.
@@ -482,6 +649,8 @@ npm run dev:all             # terminal 2: the three workspaces on :3000, :3001, 
 
 One workspace alone: `npm run dev:business`, `dev:academic`, `dev:marketing`; Users & roles and Google sign-in: `npm run dev:platform` (:3003). Each starts the database if it is not running. Demo sign-ins: step 4 above. Guide: `docs/WORKSPACES.md`.
 
+Daily use on this computer: `npm run office:build`, then `npm run office` (owner step 10.7, why and what changes). Installable package: `docs/RELEASE.md`.
+
 Production-like run: `npm run build`, then `npm run start -w @elevate/<module>-os` for each module, then `npm run start -w @elevate/platform`.
 
 The seed users are fictional `@example.test` accounts. They sign in on your own computer (password: `SEED_USER_PASSWORD` in the root `.env`); a production build refuses them (D-030), so a live site needs real `@elevateeducation.in` accounts.
@@ -492,15 +661,15 @@ Never run `db:reset` or `db:seed` against a non-local database. `pg_dump` is not
 
 ## 4. How deployment will work
 
-**Nothing is deployed.** The hosting provider, database provider and domain are **owner decisions**. The proposed shape is in `infrastructure/deployment/README.md`:
-- Only the platform is public, over HTTPS.
-- The three module apps run on a private network.
+**Nothing is deployed.** The hosting provider, database provider and domain are **owner decisions**. How to build, install and check the package, and every go-live blocker: `docs/RELEASE.md`. Outline: `infrastructure/deployment/README.md`.
+- One host with one port per app is the only shape that works today (F-05). A gateway with only the platform public needs a second URL variable, written once a host is chosen.
+- The proxy must overwrite `X-Forwarded-For` (API-010).
 - PostgreSQL is a managed service with backups.
 - CI runs `npm ci`, then `validate`, then `build`, then migrates after a verified backup.
 - Request logs on the host and any proxy keep the path **without the query string** (search addresses can hold phone numbers, D-056).
-- PDF fonts in `apps/business-ops-os/assets/fonts` must ship with the build (a `standalone` build needs `outputFileTracingIncludes`).
+- PDF fonts in `apps/business-ops-os/assets/fonts` must ship with the build; `npm run release:package` does this and refuses a package that lacks them.
 
-Each workspace gets its own host name (D-072); keep them under one site and the session cookie host-only. Two settings are compiled in at **build** time, so set them before `npm run build`:
+Two settings are compiled in at **build** time, so set them before `npm run build`:
 - The workspace URLs (`BUSINESS_OPS_OS_URL`, `ACADEMIC_OS_URL`, `MARKETING_OS_URL`): they are the allowlist for sign-in redirects and cross-origin form posts, and the targets of the optional rewrites.
 - `PLATFORM_URL`. If it starts with `https://`, the build turns on HSTS and `upgrade-insecure-requests`.
 
@@ -558,8 +727,27 @@ Not verified: pages behind sign-in in a browser (the seed users are `@example.te
 
 Later runs: on 22 Oct 2026 a scripted headless-Chrome pass opened every static page and the sample detail pages at 1440 and 390 px (console errors, sideways scroll, one h1, labels, button names, image alt, duplicate ids, skip link, first-Tab focus, text contrast); its findings were fixed or filed in `C:\OPENBOT\Elevate-Not-Working`. Details: `IMPLEMENTATION_STATUS.md` "22 Oct 2026 — full test session". Lighthouse and axe are still for the release run.
 
-### Final verification — filled at release
-_To be filled by the orchestrator: `npm run validate`, `npm run build`, smoke test, axe, Lighthouse, keyboard pass, `npm audit`._
+### Final verification — 31 Oct 2026
+
+`npm run validate`: `[coordinator fills final numbers]`. Four webpack builds: `[coordinator fills final numbers]`. Re-test on the final package: `[coordinator fills final numbers]`.
+
+First re-test, on the **first package** (database `elevate_v2`, ports 3000 to 3003, other checkers running). The failures below were fixed in the source afterwards, so these numbers describe that package only:
+
+| Check | Result |
+|---|---|
+| Use-case register (`docs/CASELETS.md`) | 266 rows: 260 pass, 3 fail (TASK-17, HR-01, APP-06), 3 held (AUTH-13 needs real Google; STU-03 needs Academic stopped, a second process passed 16/16; WIFI-01 needs free ports) |
+| Workspace membership | 22 of 22 refused, 42 of 42 own workspace answered 200. 481 handlers × 11 roles, 6,281 requests: 3,567 from non-members all refused, 0 server errors, 0 false refusals on 1,343 member reads. 28 path and header tricks refused |
+| Interface per login | 19 logins: 0 of 671 denied pages opened, 418 of 418 allowed pages opened, 0 links to a page the login cannot open; 44 landings and 26 menus match; 11 roles, 11 menu sets |
+| Attacks earlier marked NOT RUN | All RUN and held, each with a control. Self-approval 42 of 42; nested ids; XSS through review, PDF and score import text; EOD CSV; server-action replay (held, answers 500, RVA-004); log privacy (247 private values, 0 hits in 8.6 MB of logs); `@example.test` bypass; bootstrap; demo seed refusal; jobs by low roles; per-module tokens; Secure cookie; SSRF |
+| Still failing at that point | API-010 (session address can be forged until a proxy overwrites the header: go-live item). API-011, Low (unknown API path answers HTML 404, wrong method an empty 405): left |
+| Parallel use | Races 18 of 18, decided by the database. 50 sessions for 2 minutes: 6,473 requests, 0 server errors, median 58 ms, 95th percentile 811 ms, slowest 4,683 ms; PostgreSQL peak 41 of 100 |
+| Fee figures | 160 hand-worked values across every surface: 0 mismatches |
+| Exit | 44 of 44 per outcome. Leaver 37 of 37. 64 of 65 notice pairs open (the 65th was RVA-006) |
+| PDFs | 7 kinds with a Hindi name, downloaded and looked at: shaped correctly |
+| Browser | 6,160 production page loads: 14 console errors (8 dead link, 6 blocked print stylesheet), 0 warnings, 0 hydration messages. All 147 pages visited. Finance, counsellor and director list runs were **not** done. Dev mode **not** walked |
+| Speed on `/ops` | Alone 264 to 298 ms (was 1,220 to 1,802). Forty at once: median 9.47 s (was 61.9 s). First visible change after a click 28 ms (was 517). Layout shift 0 (was 0.429) |
+
+Not run: axe and Lighthouse; a keyboard pass of every template (the browser pass drove 92 Escape closes and 73 keyboard opens on lists); a real Google sign-in; a real phone. `npm audit`: see §12.
 
 ## 7. Where secrets live and how to rotate them
 
@@ -604,8 +792,8 @@ Limitations:
 - There is no outbox scheduler; the intake is run by hand.
 - Module services often `select()` whole module rows. None are secret, but §6.6 prefers named columns, so that is a follow-up.
 - Error and 404 pages use an `h2` with no `h1`.
-- Signed-in screens were not browser-checked against the CSP.
-- No HR module: staff attendance and leave show "HR attendance unavailable". Teacher unavailability in Academic is a planning note, not HR leave.
+- Since 31 Oct signed-in screens are browser-checked against the CSP (§6). The first pass found one block, on the student report's print stylesheet; fixed in source.
+- Teacher unavailability in Academic is a planning note, not HR leave.
 - Academic reports print from the browser and download as CSV; Academic makes no PDFs.
 - Not built: topics below chapter level, homework submissions, teaching-log reminders, bulk task changes, file uploads for evidence (links only).
 - Students who left or finished before 21 Oct 2026 have no batch history, so their attendance shows "Not recorded — no batch history before 21 Oct 2026".
@@ -615,7 +803,9 @@ Limitations:
 - The prototype (`C:\OPENBOT\Elevate`) does not show the 21 Oct work or the 22 Oct workspaces, and keeps the old dark look (not redesigned, D-074).
 - Workspaces (22 Oct): a panel that shows another workspace's figures says "source unavailable" while that workspace is not running; Google sign-in needs the admin app (:3003) running; on this computer the sign-in cookie is shared by every local port, so other local programs could see its name (use a separate browser profile if you run unknown local apps). Not built: staff attendance ("My Attendance"), teaching resources, Events and Webinars in Marketing, results by campaign.
 
-- Milestone 23–24 Oct: see "Limitations" in the milestone section above (no scheduler for reminders, request links to campaigns/tests refused, no paper visible between upload and release, list caps of the newest 500 calls and 200 pending imports, `0017` for the notification-link rule).
+- Milestone 23–24 Oct: see "Limitations" in the milestone section above (no scheduler for reminders, request links to campaigns/tests refused, no paper visible between upload and release, list caps of the newest 500 calls and 200 pending imports).
+- Debug pass 31 Oct: see "What this does not mean" at the top, and `IMPLEMENTATION_STATUS.md` "Debug pass" for what stayed partial.
+- The prototype `Elevate.html` does not show the 26 Oct or 30–31 Oct work (register `OPS-P-DEBUG-31OCT`).
 
 Next three improvements, in priority order:
 1. **Go-live basics.** The owner chooses hosting. Then build HTTPS, CI deploy, error monitoring, an uptime check and a tested backup and restore (§15.1).
@@ -625,7 +815,7 @@ Next three improvements, in priority order:
 ## 11. Licences
 
 - **Logo:** `apps/*/public/brand/elevate-logo.png` and `favicon.ico` belong to the owner (Elevate Education).
-- **Fonts:** screens use the computer's own font for text and Bricolage Grotesque for titles and figures (SIL Open Font License 1.1; `packages/shared-ui/fonts/OFL-BricolageGrotesque.txt`, D-074). PDFs embed Noto Sans 2.015 Regular and Bold (SIL Open Font License 1.1; licence file `apps/business-ops-os/assets/fonts/OFL.txt`, D-042).
+- **Fonts:** screens use the computer's own font for text and Bricolage Grotesque for titles and figures (SIL Open Font License 1.1; `packages/shared-ui/fonts/OFL-BricolageGrotesque.txt`, D-074). PDFs embed Noto Sans 2.015 Regular and Bold (SIL Open Font License 1.1; licence file `apps/business-ops-os/assets/fonts/OFL.txt`, D-042) and Noto Sans Devanagari 2.007 Regular and Bold (OFL; `OFL-NotoSansDevanagari.txt`, D-118).
 - **PDF library:** `pdf-lib` 1.17.1 and `@pdf-lib/fontkit` 1.1.1 (MIT), owner-approved 21 Oct 2026.
 - **No third-party images.**
 - **npm dependencies:** all come from the public npm registry, and the project itself is `UNLICENSED` (private). A census of installed packages on 20 Oct 2026 found:
@@ -635,13 +825,12 @@ Next three improvements, in priority order:
   - None are copyleft-incompatible with private use.
 - To re-list licences without new dependencies, read the `license` field of every `node_modules/**/package.json`. `npm ls --all` lists the tree.
 
-## 12. Known `npm audit` advisories (8, development tools only)
+## 12. Known `npm audit` advisories (4, development tools only)
 
-`npm audit` on 20 Oct 2026 reports 4 high and 4 moderate advisories, 0 critical. None are in code that runs in production:
-- **High:** `@next/eslint-plugin-next` → `fast-glob` → `micromatch` → `braces`, a stack-exhaustion denial of service from deeply nested glob patterns. It only runs inside ESLint, on our own patterns.
+`npm audit` on 30 Oct 2026 reports 4 moderate advisories, 0 high, 0 critical; with `--omit=dev --audit-level=high` it reports 0. None are in code that runs in production:
 - **Moderate:** `drizzle-kit` → `@esbuild-kit/esm-loader` → `@esbuild-kit/core-utils` → `esbuild`, where the esbuild dev server lets a website read its responses. `drizzle-kit` only generates migrations and never starts that server.
 
-They are not fixed because the fixes need a major downgrade or upgrade of the lint plugin or drizzle-kit. Versions are pinned (D-018), and neither tool ships to production. Re-check when Next or drizzle-kit release updates.
+They are not fixed because the fix needs a major change of drizzle-kit. Versions are pinned (D-018), and neither tool ships to production. Re-check when Next or drizzle-kit release updates.
 
 ## 13. Maintenance
 

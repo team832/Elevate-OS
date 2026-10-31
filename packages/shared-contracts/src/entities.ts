@@ -23,6 +23,12 @@ import {
  * does not own (store the UUID, read the rest through the owner's contract).
  */
 
+/** A web address someone will be sent to from a screen: http(s) only, whatever the input. */
+export const httpUrlSchema = z.url({
+  protocol: /^https?$/,
+  error: 'Enter a full web address starting with http:// or https://.',
+});
+
 export const roleKeySchema = z.enum(ROLE_KEYS);
 
 export const userStatusSchema = z.enum(['active', 'disabled']);

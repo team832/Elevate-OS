@@ -8,6 +8,7 @@
  *   from a sample idea.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
+import { toIsoDate } from '@elevate/shared-types';
 import { and, eq } from 'drizzle-orm';
 import { hashPassword, type AuthenticatedUser } from '@elevate/authentication';
 import {
@@ -142,7 +143,7 @@ describe('db:clear-samples and real rows', () => {
       .select()
       .from(marketingCampaigns)
       .where(eq(marketingCampaigns.code, 'SAMPLE-IPMAT-WEBINAR'));
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toIsoDate();
     const target = await createTarget(db(), manager.user, {
       scope: 'campaign',
       campaignId: campaign!.id,

@@ -1,7 +1,7 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { EmptyState, PageHeader, StatusBadge, Tabs } from '@elevate/shared-ui';
 import { FOLLOW_UP_KIND_LABELS, type FollowUpKind } from '../../domain';
-import { listFollowUps } from '../../server/follow-ups';
+import { countFollowUps, listFollowUps } from '../../server/follow-ups';
 import { fmtDate, humanise, statusTone } from '../../ui/format';
 import { load, Section } from '../../ui/frame';
 import { listHref, Pager } from '../../ui/list-controls';
@@ -44,8 +44,12 @@ async function FollowUps({
   base: string;
 }) {
   const view = VIEWS.find(([k]) => k === sp.view)?.[0] ?? 'open';
-  const r = await load((db) => listFollowUps(db, user, { view }));
+  const r = await load(async (db) => ({
+    rows: await listFollowUps(db, user, { view }),
+    total: await countFollowUps(db, user, { view }),
+  }));
   if (!r.ok) return r.view;
+  const { rows, total } = r.data;
   const self = `${base}/follow-ups`;
   const page = Math.max(1, Number(sp.page) || 1);
   return (
@@ -60,8 +64,12 @@ async function FollowUps({
       }))}
     >
       <RecordTable
-        caption={`${r.data.length} follow-up${r.data.length === 1 ? '' : 's'}`}
-        rows={r.data.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+        caption={
+          total > rows.length
+            ? `First ${rows.length} of ${total} follow-ups, earliest due first`
+            : `${total} follow-up${total === 1 ? '' : 's'}`
+        }
+        rows={rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
         rowKey={(f) => f.id}
         rowHref={(f) => `${base}/leads/${f.leadId}`}
         linkColumn="lead"
@@ -103,7 +111,7 @@ async function FollowUps({
           },
         ]}
       />
-      <Pager basePath={self} params={sp} page={page} pageSize={PAGE_SIZE} total={r.data.length} />
+      <Pager basePath={self} params={sp} page={page} pageSize={PAGE_SIZE} total={rows.length} />
     </Tabs>
   );
 }

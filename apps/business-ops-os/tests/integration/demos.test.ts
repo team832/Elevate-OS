@@ -34,7 +34,8 @@ import { POST as mergeLead } from '../../src/app/api/v1/leads/[id]/merge/route';
 import { istToday } from '../../src/domain';
 import { feeRecordAction, recordFee } from '../../src/server/fees';
 import { POST as schedule } from '../../src/app/api/v1/appointments/route';
-import { getDemo as loadDemo } from '../../src/server/demos';
+import { demoSessionsForDay, getDemo as loadDemo } from '../../src/server/demos';
+import { POST as transition } from '../../src/app/api/v1/admissions/[id]/transitions/route';
 import { sampleSeeds, TANISHA_EMAIL } from '../../seed/samples';
 import { referenceSeeds } from '../../seed/reference';
 import { review, reviewsPayload, stubAcademic } from './academic-stub';
@@ -63,7 +64,15 @@ type Demo = {
 };
 type List = {
   counts: Record<string, number>;
-  kpis: { current: number; followUpsDue: number; followUpsDueByView: Record<string, number> };
+  kpis: {
+    current: number;
+    upcoming: number;
+    followUpsDue: number;
+    followUpsDueByView: Record<string, number>;
+    pendingDecision: number;
+    pendingDecisionByView: Record<string, number>;
+  };
+  leftOpen: { demoId: string; studentName: string; classes: number }[];
   rows: { demo: { id: string } }[];
   total: number;
 };
@@ -292,6 +301,8 @@ describe('list views (GET /demos)', () => {
     expect(cur.counts.current).toBe(cur.kpis.current);
     const due = Object.values(cur.kpis.followUpsDueByView);
     expect(due.reduce((a, b) => a + b, 0)).toBe(cur.kpis.followUpsDue);
+    const pending = Object.values(cur.kpis.pendingDecisionByView);
+    expect(pending.reduce((a, b) => a + b, 0)).toBe(cur.kpis.pendingDecision);
     const all = (await list(manager, 'view=current')).data!;
     expect(ids(all)).toEqual(expect.arrayContaining([current.id, theirs.id]));
     const search = (await list(manager, 'view=upcoming&q=nobody-has-this-name')).data!;
@@ -299,6 +310,73 @@ describe('list views (GET /demos)', () => {
     expect((await list(teacher, 'view=current')).status).toBe(403);
     expect((await list(counsellor, 'view=sideways')).status).toBe(400);
   });
+});
+
+describe('a demo left open on a closed case (HMO-017)', () => {
+  const close = {
+    lost: (d: Demo) =>
+      callRoute(transition, post(counsellor, { to: 'lost', reason: 'Chose another institute' }), {
+        id: d.admissionId,
+      }),
+    merged: async (d: Demo) => {
+      const [source] = await ctx.db
+        .select({ name: opsLeads.studentName, phone: opsLeads.studentPhone })
+        .from(opsLeads)
+        .where(eq(opsLeads.id, d.leadId as never));
+      const twin = await callRoute<{ lead: { id: string } }>(
+        createLead,
+        post(manager, {
+          studentName: source!.name,
+          studentPhone: source!.phone,
+          sourceCode: 'WEBINAR',
+          acknowledgeDuplicates: { reason: 'Sample: entered twice' },
+        }),
+      );
+      expect([twin.status, twin.error?.message]).toEqual([201, undefined]);
+      return callRoute(
+        mergeLead,
+        post(manager, { targetLeadId: twin.data!.lead.id, note: 'Same' }),
+        {
+          id: d.leadId,
+        },
+      );
+    },
+  };
+
+  it.each(['lost', 'merged'] as const)(
+    '%s: stops counting as upcoming, is listed as left open, and closing it clears the list',
+    async (how) => {
+      const demo = await book(counsellor, [300, 324, 348]);
+      const day = istToday(new Date(Date.now() + 300 * 3_600_000));
+      const before = (await list(manager, 'view=upcoming')).data!;
+      expect(before.rows.map((r) => r.demo.id)).toContain(demo.id);
+      const offered = async () =>
+        (await demoSessionsForDay(ctx.db, day)).items.map((i) => i.demoSessionId);
+      expect(await offered()).toContain(demo.sessions[0]!.id);
+      expect((await close[how](demo)).status).toBe(200);
+
+      const after = (await list(manager, 'view=upcoming')).data!;
+      expect(after.rows.map((r) => r.demo.id)).not.toContain(demo.id);
+      expect(after.kpis.upcoming).toBe(before.kpis.upcoming - 1);
+      expect(after.counts.previous).toBe(before.counts.previous! + 1);
+      // Nothing was cancelled: a person sees what is left and closes it.
+      expect(after.leftOpen).toContainEqual({
+        demoId: demo.id,
+        studentName: expect.any(String),
+        classes: 3,
+      });
+      expect(await offered()).not.toContain(demo.sessions[0]!.id);
+
+      const closed = await callRoute(
+        demoAction,
+        post(manager, { action: 'outcome', outcome: 'cancelled', reason: 'Sample: case closed' }),
+        { id: demo.id },
+      );
+      expect(closed.status).toBe(200);
+      const done = (await list(manager, 'view=previous')).data!;
+      expect(done.leftOpen.map((d) => d.demoId)).not.toContain(demo.id);
+    },
+  );
 });
 
 describe('outcome, checklist, detail access', () => {
@@ -759,7 +837,7 @@ describe('demo KYC (acceptance 1) and shared guardian contacts (acceptance 3)', 
       },
     );
     expect(merge.status).toBe(409);
-    expect(merge.error?.message).toContain('correct the name first');
+    expect(merge.error?.message).toContain('correct the details first');
   });
 
   it('two children sharing a parent phone are flagged "possible", shown on the demo, and never merged', async () => {

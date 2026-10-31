@@ -217,6 +217,7 @@ All four apps send a per-request nonce CSP (`script-src 'self' 'nonce-…' 'stri
 
 ## D-042 — PDFs with pdf-lib, fontkit and a vendored OFL font (Approved, technical; owner approved 21 Oct 2026)
 - **Decision:** admission forms, acknowledgements, ID cards and progress reports are real PDFs built with `pdf-lib` + `@pdf-lib/fontkit` and one vendored SIL OFL font that has the ₹ sign (licence file kept beside it). PDFs and print views are light (white paper); the screens keep the dark theme.
+- **Amended by D-118 (31 Oct 2026):** a second vendored OFL font, Noto Sans Devanagari, so Hindi now prints.
 
 ## D-043 — Admissions lifecycle schema (Approved, technical, 21 Oct 2026; migration `0007_admissions_lifecycle`; the "Teacher reviews" bullet is superseded by D-058)
 - **Applications:** `ops.applications` (one per primary admission case; origin demo / direct / readmission; status draft → ready_for_review → form_generated → signatures_confirmed → admission_confirmed, or withdrawn), `application_versions` (content snapshot + SHA-256), `application_forms` (PDF hash, template version), `signature_confirmations` (one live row; a material change invalidates it), `admission_approvals` (D-040). Forms, signatures and approvals reference `application_versions (application_id, version)` by composite foreign keys, so a form or signature can never belong to another application or a missing version. `ops.admissions.application_id` (nullable, indexed) links every admission case an application covers (multi-programme bundles; the primary too). `ops.ts` and `ops-applications.ts` import each other; the cycle is safe because the `ops` schema object lives in `ops-columns.ts` and the cross-file references are lazy FK callbacks.
@@ -361,6 +362,7 @@ All four apps send a per-request nonce CSP (`script-src 'self' 'nonce-…' 'stri
 - **Decision:** CSV downloads in both modules use `toCsv` / `csvCell` from `packages/server-kit/src/csv.ts`: RFC 4180 quoting, and a leading apostrophe on cells that start with `=`, `+`, `-`, `@`, tab or carriage return (spreadsheet formula injection). Evidence: `packages/server-kit/tests/csv.test.ts`.
 
 ## D-072 — Role workspaces on their own origins; one identity, one database (Approved, owner brief 22 Oct 2026; technical choices by the coordinator)
+- **Correction (31 Oct 2026, D-113):** membership on API routes was documented here and in `docs/WORKSPACES.md` but was **never enforced** on `next start` or `next dev` until D-113. Pages did enforce it.
 - **Decision:** the three module apps are the three workspaces: Business Operations `http://localhost:3000/ops`, Academic OS `http://localhost:3001/academic` (teachers and coordinators; no separate teacher app), Marketing OS `http://localhost:3002/marketing`. The platform app (Users & roles, Google sign-in, optional single-origin gateway) moves to `:3003`. Base paths are unchanged, so every existing route still works; each origin's `/` redirects to its workspace. Origins come from `BUSINESS_OPS_OS_URL`, `ACADEMIC_OS_URL`, `MARKETING_OS_URL`, `PLATFORM_URL` (defaults above; `appOrigin()` in `packages/configuration/src/workspaces.ts`).
 - **Membership:** a person belongs to a workspace when one of their stored roles grants `<workspace>:module:access` (`workspacesFor`). No separate membership table: per-person exceptions would need one (owner decision, not requested). Opening a port grants nothing: every page passes `requirePageAccess(…, { workspace })`, which sends non-members to their own workspace before any permission check; every route keeps its own permission.
 - **Landing (`resolveLanding`):** a member stays where they signed in (deep link kept); otherwise the remembered workspace (`core.users.preferred_workspace`, migration 0013) if still permitted, else the only workspace, else the chooser (`<base>/workspaces`). Redirects go only to the configured origins and never carry a token.
@@ -584,3 +586,83 @@ All four apps send a per-request nonce CSP (`script-src 'self' 'nonce-…' 'stri
 - **Fixed on the way:** the teacher report PDF crashed (NaN bar width) for a teacher with no schedule and no EOD reports; bar maximum is now at least 1.
 - **Still open (owner):** a standard school day to prefill the timetable form (would be a Proposed setting); a daily AI limit in Academic; whether the AI-drafted comment on the PTM report goes to parents; a generated report's comment cannot be edited (a new report is needed).
 - **Evidence:** `apps/academic-os/tests/unit/timetable-builder.test.ts`, `tests/integration/timetable-build.test.ts`; `apps/business-ops-os/tests/integration/ai-report-drafts.test.ts` (17), `tests/unit/ai-assist.test.ts`, `progress-report-pdf.test.ts`, `teacher-report.test.ts`.
+
+## D-112 — Release package and reference seed (Implemented, technical, 31 Oct 2026; what ships in a first install Proposed)
+- **Decision:** `npm run release:package` builds the four apps as Next standalone (`ELEVATE_RELEASE_STANDALONE`, webpack) and writes one folder and one archive: `manifest.json` (version, git sha and dirty flag, the four URLs, Node version, sha256 of every file, migrations), `README-RUN.md`, `.env.production.example`, `bin/{preflight,start,stop,smoke}.mjs`, `db/{migrate,seed-reference}.mjs` with the SQL migrations, and `apps/{ops,academic,marketing,platform}`. It refuses to package forbidden files (`.env`, `.data`, private legacy data, sample and demo code, tests, `embedded-postgres`, source maps), a sample in the reference seed, or a secret in the output (`secret-scan --path`). Plan: `docs/RELEASE.md`.
+- **Reference seed:** `db/seed-reference.mjs` runs a named list (`scripts/release/reference-seeds.ts`) and needs `--confirm-database <name>`. It answers F-06: until now a new production database could not even create a lead, because `db:seed` refuses production.
+- **Addresses are compiled in (F-05):** a package works only at the URLs it was built for, and preflight refuses a mismatch.
+- **Migrate:** the package's `db/migrate.mjs` needs no tsx and uses the same tracking table as `npm run db:migrate`. `npm run db:migrate` now refuses a non-local database unless given `-- --allow-non-local`.
+- **Proposed (owner):** `--include owner-staff` and `--include marketing-history` stay off by default; the two planning batches, draft syllabus courses and website-stated prices load, labelled. The owner-staff names ship inside `db/seed-reference.mjs` either way, so the archive stays private.
+- **Still open:** every blocker in `docs/RELEASE.md`. Never Deployed.
+- **Evidence:** `apps/platform/tests/integration/release-package.test.ts`, `reference-seed.test.ts`; the real package run of 31 Oct (32 of 32 smoke checks, Hindi PDF on three origins).
+
+## D-113 — Workspace membership on API routes, through ELEVATE_BASE_PATH, failing closed (Implemented, technical, 31 Oct 2026)
+- **Why:** CHK-010, Critical. Next removes the base path from `request.url` before a handler runs, so `defineRoute` could not tell which workspace it served, and the check D-072 promised never ran. A non-member with the permission got 200 from another workspace's API (22 of 22 cases). Data was still limited by the permission and scope, but the workspace boundary did not exist on APIs, in dev or production.
+- **Decision:** each `next.config.ts` declares `env: { ELEVATE_BASE_PATH }`. `requestWorkspace` (`packages/server-kit/src/define-route.ts`) reads it. Without the value, a production build answers **500** and the handler does not run: skipping the check would open every workspace. Outside Next (route tests) it reads the URL.
+- **Consequence:** the workspace gate runs on every signed-in route, so an authenticated route must be called by a member of its mount. The HAT-001 test lists 26 grants of 13 `ops:*` permissions on teacher, contributor and marketing manager, which exist for hosted services (D-073).
+- **Limits:** Turbopack is not proven, because Application Control blocks it on this PC. If it failed to inline the value, the failure would be 500s, not an open door (`docs/RELEASE.md`).
+- **Evidence:** `packages/server-kit/tests/define-route.test.ts`; on the first package 22 of 22 refused, 42 of 42 own workspace 200; 481 handlers × 11 roles, 3,567 non-member requests all refused, 0 false refusals on 1,343 member reads.
+
+## D-114 — One money calculation: domain/fee-statement, with Proposed refusals (Implemented, technical, 31 Oct 2026; refusals Proposed)
+- **Why:** HMO-001 to HMO-013. The case page, report and exit record blended charges with an agreement's tuition, so a student owing ₹50,000 could read "credit ₹50,000", and a form could overstate the fee after a version change.
+- **Decision:** `apps/business-ops-os/src/domain/fee-statement.ts` is the one rule behind the case page's fee summary, the report's statement, the exit balance and the API's `feeSummary`. Each charge is summed on its own, never blended. The accepted version of an agreement counts. A proposed change does not count until activated. `aboveInstalmentsPaise` carries what sits above the instalments, and a debit sits on no instalment. `feeSummaryFor` is removed; A-FEE-4 is gone.
+- **Scope, Proposed:** the case page and exit record show the whole student; the Fees tab, Outstanding, Overview and fee year show tuition.
+- **Refusals, Proposed (owner):** a discount, waiver or credit above what is owed (demo credits exempt); a refund of a credited demo fee until the credit is reversed; a refund dated before its payment; the same receipt, amount, date, charge and instalment (this changes the earlier "a second identical payment is deliberate" rule).
+- **Differ on purpose:** a deliberately closed agreement counts on the Fees tab, fee year, statement and exit, not on Outstanding, Overview or status. The form's "Net fee payable" includes the registration fee from Settings even if not charged yet; the statement counts charges only. An acknowledgement after a later version prints the terms signed plus money to date and names the version in force.
+- **Not rewritten:** `ops.report_exports.snapshot` (page and PDF now say "Check before relying on this"), printed forms (only a hash is stored), downloaded acknowledgements, frozen `ops.exit_records.balance_paise`. `scripts/development/find-stored-fee-figures.sql` lists candidates; owner step `HANDOFF.md` 11a.
+- **Open owner questions:** money above the whole agreement (RVA-005, accepted today); which instalment holds a debit; whether a closed agreement stays owed; a debit's line on the signed form.
+- **Evidence:** `apps/business-ops-os/tests/integration/fee-figures.test.ts`, `fee-plans.test.ts`, `fee-year.test.ts`; on the first package 160 hand values, 0 mismatches; property run of 60,000 ledgers, 0 failures.
+
+## D-115 — An exit reaches Academic; a corrected name too (Implemented, technical, 31 Oct 2026; outcomes Proposed)
+- **Why:** F-04, CHK-017, the owner's "if a student is entering, there is no point of exiting for him". The contract existed since 26 Oct with nothing publishing or consuming it.
+- **Decision:** Ops publishes `ops.enrolment.closed` v1 in the exit transaction (key `enrolment-closed:<exitRecordId>`). Academic's consumer `academic.enrolment-exit` ends the enrolment and the placement after the exit date, and is run from Ops through `POST /academic/api/internal/v1/enrolment-exits/run`. A name correction in Ops writes `core.students` and the student's other leads and publishes `ops.student.renamed` v1 (key `student-renamed:<id>:<at>`), taken by the same consumer. Replay adds nothing. Both reach Academic only when someone presses "Send exits to Academic" (D-117).
+- **Behaviour, Proposed:** transferred and other_inactive end as Academic `withdrawn` (separate statuses need `0018`). A future-dated exit closes the case now and attendance runs to the exit date. Leaving before day one deletes the unstarted placement, and the audit keeps it. Open catch-up tasks are cancelled, untouched later-test rows removed, rows with marks kept. A coordinator ending an enrolment in Academic does not tell Ops. Ops "on hold" does not pause Academic.
+- **Leaver (PPL-006, Proposed):** assignments and tasks stay; the manager, ops managers and coordinators are told; nothing moves automatically.
+- **Partly done:** `batchEndDate` is in the contract (IR-OPS-EXIT-2); the completion list stays limited (see `apps/business-ops-os/docs/INTEGRATION_REQUESTS.md`).
+- **Evidence:** `apps/academic-os/tests/integration/enrolment-exit.test.ts`, `apps/business-ops-os/tests/integration/exit-handoff.test.ts`, `apps/platform/tests/integration/student-exit-loop.test.ts`; on the first package 44 of 44 per outcome, leaver 37 of 37.
+
+## D-116 — Seeds are insert-only for anything staff can edit (Implemented, technical, 31 Oct 2026)
+- **Why:** SCR-002. Re-running `db:seed` overwrote screen edits on real records: staff notes, batch status, programme status, course and chapter text, department and lead-source names.
+- **Decision:** reference seeds insert on the natural key and never overwrite (`apps/academic-os/seed/ensure.ts`, renamed from `upsert.ts`). Sample and demo rows still refresh. One narrow exception: a seed still sets course `CAF-ACC-SEP27` back from paused to active (D-037). So `db:seed` is now safe to repeat, which `HANDOFF.md` had promised before it was true.
+- **Not recovered:** anything an earlier run overwrote stays as it is.
+- **Evidence:** `apps/platform/tests/integration/reseed-keeps-edits.test.ts`.
+
+## D-117 — A jobs panel on the Overview; housekeeping job (Implemented, technical, 31 Oct 2026; who runs them is an owner question)
+- **Why:** F-03, CHK-016, F-11. A confirmed admission could not finish its handoff from any screen, and sessions and form keys were never purged.
+- **Decision:** `JobsPanel` (`apps/business-ops-os/src/app/_components/jobs-panel.tsx`) shows one button per job for holders of `ops:jobs:run`: Apply Academic replies, Send exits to Academic, Send follow-up reminders, Send task reminders, Read demo attendance from Academic, Clear expired sign-ins. Pressing one twice is safe. New job `housekeeping` deletes sessions ended over 30 days ago and expired idempotency keys. The audit trail and event history stay.
+- **Still open (owner):** a scheduler, who runs the jobs and how often; 30 days.
+- **Evidence:** `apps/business-ops-os/tests/integration/exit-handoff.test.ts`; on the first package CHK-016 17 of 17 and 6 jobs × 10 roles refused, with a control.
+
+## D-118 — Hindi prints in PDFs (Implemented, technical, 31 Oct 2026; amends D-042)
+- **Decision:** a second vendored font, Noto Sans Devanagari 2.007 Regular and Bold (OFL), in `apps/business-ops-os/assets/fonts`, with shaping through fontkit. `document.ts` holds a `regeneratorRuntime` stand-in, which a fontkit upgrade should remove.
+- **Limits:** copy and search of Hindi from a PDF do not round-trip (शर्मा extracts as शमार्). Tamil, emoji and Devanagari Extended print "?" per character with a footer note. No warning appears when such a name is typed.
+- **Evidence:** `apps/business-ops-os/tests/unit/pdf-toolkit.test.ts`; on the first package 7 PDF kinds with a Hindi name, page images looked at.
+
+## D-119 — Duplicate matches are shaped by what the viewer may see (Implemented, technical, 31 Oct 2026; choice Proposed)
+- **Why:** HAT-005, Medium. `POST /leads/check-duplicates`, `getLead` flags and lead history told someone about a lead they may not open.
+- **Decision, Proposed:** a hidden match shows only its level, with no id, code, owner, signals, score or count. A name-and-school match with no shared contact is omitted for hidden leads and still flagged for merge review. The merge and dismiss forms show only when the other lead can be opened. Each check writes the audit action `lead.duplicate_check`.
+- **Remaining oracle:** any phone or email answers "on file" (the warning itself); a guardian contact plus a guessed name on `POST /leads` gives 409 against 201 (a wrong guess saves a real flagged lead). Sweeps are audited, not throttled: there is no shared limiter, and one needs `0018` or a per-process counter (owner question).
+- **Evidence:** `apps/business-ops-os/tests/integration/leads.test.ts`; on the first package live proof 14 of 14; the saved duplicate as a counsellor held nothing of the hidden lead, with an ops-manager control.
+
+## D-120 — Plain links stay; NavPending shows the click (Implemented, technical, 31 Oct 2026)
+- **Why:** the owner's "lag". Measured causes, in order: dev servers on a memory-short PC; `/ops` server cost; a record panel opening late; no click feedback; `/ops` layout shift 0.429.
+- **Decision:** navigation stays plain `<a>`: soft navigation was rejected on the numbers. `NavPending`, mounted by `ShellFrame` and `LoginForm`, shows a 3 px bar through the Navigation API; there is no `loading.tsx` (D-022). `RecordModal` renders open on the server. The overview has a reserved slot.
+- **Not the cause:** prefetch, blur with a GPU, JS size. Long tasks over 200 ms during load are Next and React boot; no fix.
+- **Evidence:** on the first package click to first change 47 of 48 under 100 ms (`/ops` 517 to 28 ms); panel 405 to 118 ms at 1x; `/ops` layout shift 0.429 to 0; phone scroll 60 fps at 4x. Panel and filter INP were not faster, and phone panel close sits at the 200 ms line.
+
+## D-121 — A longer read limit in development only (Implemented, technical, 31 Oct 2026)
+- **Why:** FEE-003. On three dev servers, 10 of 12 overview loads falsely said "Source unavailable (Timed out)", because a page being compiled exceeded the read limit.
+- **Decision:** in dev the internal read limit is at least 30 s (`DEV_TIMEOUT_MS`, `packages/server-kit/src/internal.ts`). Production is unchanged.
+- **Evidence:** 0 of 20 against a slow stub. Not re-measured on three real dev servers.
+
+## D-122 — The 26 Oct pass, recorded after the fact (Implemented, technical; recorded 31 Oct 2026, F-15)
+A pass on 26 Oct 2026 changed 115 tracked files with no decision, status row or handoff entry. It is written down here so nobody reads it as unreviewed drift. Behaviour changes:
+- **Authentication:** a third throttle per email from any address (20 failures in 15 minutes), because `x-forwarded-for` can be forged.
+- **Schema:** `0017` refuses control characters in notification links **and** adds seven indexes (`placements_campaign_idx`, `attempts_student_idx`, `results_assessment_idx`, `duplicate_flags_matched_idx`, `demos_lead_idx`, `appointments_lead_idx`, `fee_records_lead_idx`). `core-seed`: all programmes active.
+- **Admissions and fees:** the admission-level fee approval is removed end to end (route, action, inbox source, readiness field). A discount request at conversion opens no approval; it is noted in audit metadata and shown to fee readers.
+- **HR and tasks:** the EOD report read and inbox are limited to HR's scope. `hrScopeStaff` moved to `hr-scope.ts` and includes staff with no department.
+- **Leads:** history hides `campaignRef` and `contentRef` without `ops:lead_attribution:read`. The calls list gains a `q` filter.
+- **Marketing:** the monthly report counts planned dates over the whole month. `publishAction` is removed, so `POST placements/[id]/publish` has no screen.
+- **Platform:** `leadsBase` sends a marketing role to `/marketing` leads, never `/ops`.
+- **Seeds:** `clear-samples` deletes a sample teacher's assignment on a real batch.
+- **Evidence:** checked by the 30 Oct passes against `docs/CASELETS.md`. No owner approved these at the time; anything that sets business policy stays Proposed.

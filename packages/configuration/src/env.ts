@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { APP_URL_DEFAULTS } from './workspaces';
 
 /**
- * Every environment variable Elevate OS reads, with its validation rule and a
- * human explanation used in error messages. Apps load only the subset they
+ * The environment variables Elevate OS validates, with the rule and a human
+ * explanation used in error messages. Optional ones with no rule here are read where
+ * they are used; .env.example lists them all. Apps load only the subset they
  * need (see `ENV_SUBSETS`), so a module app does not demand the platform's
  * rewrite URLs and a test run does not demand the seed password.
  */

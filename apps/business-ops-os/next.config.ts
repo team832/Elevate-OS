@@ -33,6 +33,9 @@ const platformHost = new URL(appOrigin('platform')).host;
 const nextConfig: NextConfig = {
   /** Business Ops OS lives under /ops: on its own workspace origin (D-072) and behind the platform's rewrite. */
   basePath: '/ops',
+  env: { ELEVATE_BASE_PATH: '/ops' },
+  // Only `npm run release:package` sets this; dev, office and next start keep the normal output.
+  ...(process.env.ELEVATE_RELEASE_STANDALONE ? { output: 'standalone' as const } : {}),
   // The workspace origin's root opens the workspace (outside the basePath, so basePath: false).
   async redirects() {
     return [{ source: '/', destination: '/ops', basePath: false, permanent: false }];

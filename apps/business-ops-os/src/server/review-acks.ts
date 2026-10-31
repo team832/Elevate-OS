@@ -12,6 +12,7 @@ import {
   ForbiddenError,
   InvalidStateTransitionError,
   NotFoundError,
+  sourceReasonWords,
 } from '@elevate/shared-contracts';
 import type { z } from 'zod';
 import { counselledStudents, visibleReviews } from './academic-reviews';
@@ -37,7 +38,7 @@ export async function acknowledgeReview(
   const source = await fetchAcademicReviews({ coreStudentId: input.coreStudentId });
   if (source.status === 'unavailable')
     throw new ConflictError(
-      `Academic OS could not be reached (${source.reason}), so the review cannot be checked. Try again later.`,
+      `Academic OS could not be reached (${sourceReasonWords(source.reason)}), so the review cannot be checked. Try again later.`,
     );
   const review = visibleReviews(source.data.reviews).find(
     (r) =>

@@ -11,6 +11,7 @@ import {
   Select,
   StatusBadge,
   TextInput,
+  ListEmpty,
 } from '@elevate/shared-ui';
 import {
   COURSE_PREFIXES,
@@ -40,10 +41,12 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
       title="Ideas"
       description="Every idea gets a code (COURSE-NNN) that is never reused. Submit an idea for review; once approved, plan it onto the calendar."
       searchParams={sp}
-      actions={
-        <ButtonLink variant="primary" href={modulePath('ideas/new')}>
-          New idea
-        </ButtonLink>
+      actions={(user) =>
+        can(user, 'marketing:ideas:write') ? (
+          <ButtonLink variant="primary" href={modulePath('ideas/new')}>
+            New idea
+          </ButtonLink>
+        ) : null
       }
     >
       {(user) => (
@@ -77,7 +80,7 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
                       <option value="">All</option>
                       {IDEA_STATUSES.map((s) => (
                         <option key={s} value={s}>
-                          {s}
+                          {IDEA_STATUS_LABELS[s]}
                         </option>
                       ))}
                     </Select>
@@ -94,13 +97,10 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
                   rows={ideas}
                   rowKey={(i) => i.id}
                   empty={
-                    <EmptyState
-                      title="No ideas match"
-                      description={
-                        q || course || status
-                          ? 'Clear the filters to see everything.'
-                          : 'Capture the first idea.'
-                      }
+                    <ListEmpty
+                      noun="ideas"
+                      params={{ q, course, status }}
+                      first="Capture the first idea."
                       action={
                         can(user, 'marketing:ideas:write') ? (
                           <ButtonLink href={modulePath('ideas/new')}>New idea</ButtonLink>
@@ -142,7 +142,7 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
                         <>
                           {IDEA_STATUS_LABELS[i.status]}
                           {i.legacyStatus && i.legacyStatus !== i.status ? (
-                            <span className="el-field-hint"> (legacy: {i.legacyStatus})</span>
+                            <span className="el-field-hint"> (old tracker: {i.legacyStatus.replace(/_/g, ' ')})</span>
                           ) : null}
                         </>
                       ),
@@ -151,8 +151,8 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
                   ]}
                 />
                 <Card
-                  title={`Quarantine — duplicate legacy IDs (${quarantine.length} groups)`}
-                  description="Each legacy ID below was used for two different ideas. Neither row has a live code; the proposed renumbering is shown but not applied until the owner decides."
+                  title={`Quarantine — duplicate old tracker IDs (${quarantine.length} groups)`}
+                  description="Each old tracker ID below was used for two different ideas. Neither row has a live code; the proposed renumbering is shown but not applied until the owner decides."
                 >
                   {quarantine.length === 0 ? (
                     <EmptyState title="No quarantined ideas" />

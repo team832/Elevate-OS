@@ -42,12 +42,12 @@ export const dynamic = 'force-dynamic';
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined) => (typeof v === 'string' ? v : undefined);
 
-const dateLabel = (iso: string) =>
-  new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  }).format(new Date(`${iso}T00:00:00Z`));
+const DATE_LABEL = new Intl.DateTimeFormat('en-IN', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+});
+const dateLabel = (iso: string) => DATE_LABEL.format(new Date(`${iso}T00:00:00Z`));
 
 /** "Overdue · 29 days (22 Sept)", "Today", "Tomorrow" or the date. */
 function dueLabel(due: string, today: string, tomorrow: string) {
@@ -271,7 +271,7 @@ async function Pipeline({ deps }: { deps: OverviewDeps }) {
       <EmptyState
         title="No admission cases yet"
         description="Cases appear here once enquiries are recorded in Business Operations."
-        action={<a href="/ops/admissions">Open admissions</a>}
+        action={canLeads ? <a href="/ops/admissions">Open admissions</a> : undefined}
       />
     );
   return (

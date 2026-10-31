@@ -115,7 +115,9 @@ describe('A-FEE-1/2 ledger invariants over 2,000 seeded ledgers', () => {
       expect(Math.min(t.outstandingPaise, t.creditPaise), msg).toBe(0);
       const a = allocateInstalments(PLAN, ledger, today);
       const applied = a.reduce((s, x) => s + x.allocatedPaise, 0);
-      expect(applied, msg).toBe(Math.min(Math.max(0, t.netPaidPaise + t.reductionsPaise), TOTAL));
+      // A net debit undoes no payment; more refunded than paid lowers the reductions.
+      const reductions = Math.max(0, t.reductionsPaise + Math.min(0, t.netPaidPaise));
+      expect(applied, msg).toBe(Math.min(Math.max(0, t.netPaidPaise) + reductions, TOTAL));
       for (const x of a) {
         expect(x.paidPaise >= 0 && x.adjustedPaise >= 0, msg).toBe(true);
         expect(x.allocatedPaise + x.remainingPaise, msg).toBe(x.instalment.amountPaise);

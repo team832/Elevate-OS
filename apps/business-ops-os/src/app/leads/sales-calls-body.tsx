@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { OPS_ACTIVITY_OUTCOMES } from '@elevate/database';
-import { ButtonLink, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { ButtonLink, EmptyState, PageHeader, ListEmpty } from '@elevate/shared-ui';
 import { isIsoDate } from '../../domain';
 import { CALL_LIST_LIMIT, listCalls } from '../../server/lead-calls';
 import { listLeads } from '../../server/leads';
@@ -52,7 +52,8 @@ export function SalesCallsBody({
         title="Sales calls"
         description={
           <>
-            {CALL_NOTE} Next steps live in <a href={`${base}/follow-ups`}>Follow-ups</a>.
+            {CALL_NOTE} Next steps live in{' '}
+            <a href={base === '/ops' ? '/ops#my-follow-ups' : `${base}/follow-ups`}>Follow-ups</a>.
           </>
         }
         actions={
@@ -153,10 +154,7 @@ async function Calls({
         rowHref={(c) => `${base}/leads/${c.leadId}`}
         linkColumn="lead"
         empty={
-          <EmptyState
-            title="No calls logged"
-            description="Log a call after you speak to a lead, or clear a filter."
-          />
+          <ListEmpty noun="calls" params={sp} first="Log a call after you speak to a lead." />
         }
         columns={[
           { key: 'occurredAt', header: 'When', render: (c) => fmtDateTime(c.occurredAt) },

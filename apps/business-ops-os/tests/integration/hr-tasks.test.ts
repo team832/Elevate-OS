@@ -4,7 +4,7 @@
  * marketer through Marketing OS's (D-072: a workspace's API refuses non-members).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { authedRequest, callRoute, setupTestDatabase, type TestUser } from '@elevate/testing';
 import {
   departments,
@@ -16,7 +16,9 @@ import {
   staffMembers,
 } from '@elevate/database';
 import { addDays, istToday } from '../../src/domain/dates';
+import { taskListQuery } from '../../src/server/staff-tasks-schemas';
 import { hrTaskCounts } from '../../src/server/staff-tasks-hr';
+import { listTasks } from '../../src/server/task-list';
 import { taskDetail } from '../../src/server/task-detail';
 import { GET as listRoute, POST as createRoute } from '../../src/app/api/v1/staff-tasks/route';
 import { GET as getRoute, PATCH as patchRoute } from '../../src/app/api/v1/staff-tasks/[id]/route';
@@ -354,6 +356,13 @@ describe('several assignees, drafts, blocked flag and scope', () => {
     expect(r.data).toMatchObject({ status: 'in_progress', blockedAt: null });
   });
 
+  it('nobody ticked: the refusal says so, not something about the reviewer (RVC-010)', async () => {
+    const { staffId: _none, ...noOwner } = brief(teacher.staffId);
+    const res = await create(hr, noOwner);
+    expect(res.status).toBe(400);
+    expect(res.error!.message).toBe('Choose who this task is for: tick at least one person, or name a reviewer other than yourself.');
+  });
+
   it('HR assigns only within hr.staff_scope_departments', async () => {
     expect((await create(hr, brief(financeClerk.staffId, { reviewerStaffId: null }))).status).toBe(
       403,
@@ -378,6 +387,19 @@ describe('several assignees, drafts, blocked flag and scope', () => {
       value: expect.any(Number),
       href: '/ops/hr/review',
     });
+  });
+});
+
+describe('Submissions awaiting approval (RVB-002)', () => {
+  it('the tile counts what the review list shows: never your own work', async () => {
+    const mine = (await create(hr, brief(hr.staffId, { title: 'Sample own submission', reviewerStaffId: null }))).data!;
+    const theirs = (await create(hr, brief(teacher.staffId, { title: 'Sample their submission' }))).data!;
+    const submittedAt = new Date();
+    await ctx.db.update(opsStaffTasks).set({ status: 'in_review', acknowledgedAt: submittedAt, acknowledgedByUserId: hr.id, firstSubmittedAt: submittedAt, lastSubmittedAt: submittedAt }).where(inArray(opsStaffTasks.id, [mine.id, theirs.id] as never));
+    const listed = await listTasks(ctx.db, hr, taskListQuery.parse({ status: 'in_review', reviewable: '1', groups: 'exclude' }));
+    expect(listed.rows.map((r) => r.id)).toContain(theirs.id);
+    expect(listed.rows.map((r) => r.id)).not.toContain(mine.id);
+    expect((await hrTaskCounts(ctx.db, hr)).find((c) => c.key === 'tasks_awaiting_approval')!.value).toBe(listed.total);
   });
 });
 

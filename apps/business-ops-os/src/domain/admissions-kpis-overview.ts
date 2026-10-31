@@ -174,29 +174,42 @@ export function overdueOnboarding<
   };
 }
 
-type CollectedRecord = FeeRecordLike & { paymentDate: string | null };
+type CollectedRecord = FeeRecordLike & { paymentDate: string | null; isSample?: boolean };
 
 /**
  * Money recorded as received minus refunds, by payment date (IST) in the window, per charge.
- * Voided and reversed rows never count. null = no fee record at all (unknown, not ₹0).
+ * Voided and reversed rows never count (a reversal cancels whatever the status asked for, so the
+ * status narrows only after that). null = no fee record at all (unknown, not ₹0). `samplePaise`:
+ * the part on sample records, so a total that includes them can say so.
  */
-export function feeCollections(records: readonly CollectedRecord[], window: KpiWindow) {
+export function feeCollections(
+  records: readonly CollectedRecord[],
+  window: KpiWindow,
+  status?: FeeRecordLike['status'],
+) {
   if (!records.length) return null;
   const counted = effectiveRecords(records).filter(
-    (r) => r.paymentDate && inWindow(r.paymentDate, window),
+    (r) => r.paymentDate && inWindow(r.paymentDate, window) && (!status || r.status === status),
   );
+  const sample = ledgerSums(counted.filter((r) => r.isSample));
   const byCategory = Object.fromEntries(
     FEE_CHARGE_CATEGORIES.map((c) => {
       const s = ledgerSums(counted.filter((r) => (r.chargeCategory ?? 'tuition') === c));
       return [c, s.received - s.refund];
     }),
   ) as Record<FeeChargeCategory, number>;
-  return { byCategory, netPaise: Object.values(byCategory).reduce((n, v) => n + v, 0) };
+  return {
+    byCategory,
+    netPaise: Object.values(byCategory).reduce((n, v) => n + v, 0),
+    samplePaise: sample.received - sample.refund,
+  };
 }
 
-/** Tuition still owed (and credit held) across active agreements; null = no active agreement. */
+/** Tuition still owed (and credit held) across agreements in force; null = none. */
 export function tuitionOutstanding(
-  totals: readonly Pick<PlanTotals, 'outstandingPaise' | 'creditPaise'>[],
+  totals: readonly (Pick<PlanTotals, 'outstandingPaise' | 'creditPaise'> & {
+    isSample?: boolean;
+  })[],
 ) {
   if (!totals.length) return null;
   const sum = (k: 'outstandingPaise' | 'creditPaise') => totals.reduce((n, t) => n + t[k], 0);
@@ -204,5 +217,6 @@ export function tuitionOutstanding(
     agreements: totals.length,
     outstandingPaise: sum('outstandingPaise'),
     creditPaise: sum('creditPaise'),
+    samplePaise: totals.reduce((n, t) => n + (t.isSample ? t.outstandingPaise : 0), 0),
   };
 }

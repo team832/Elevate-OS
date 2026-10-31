@@ -45,6 +45,8 @@ export function createDatabase(url: string, options: CreateDatabaseOptions = {})
   }
   if (/^postgres(ql)?:\/\//.test(url)) {
     const pool = new pg.Pool({ connectionString: url, max: options.maxConnections ?? 10 });
+    // A dropped idle connection (database restart) reaches only this event; unheard, Node calls it uncaught. The pool replaces the connection itself.
+    pool.on('error', (error) => console.warn('database: idle connection dropped:', error.message));
     const db = drizzleNodePg({ client: pool, schema }) as unknown as Database;
     return { db, driver: 'node-postgres', close: () => pool.end() };
   }

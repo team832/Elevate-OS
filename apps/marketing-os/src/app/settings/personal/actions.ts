@@ -53,12 +53,12 @@ export async function savePersonalSettingsAction(form: FormData): Promise<void> 
     },
   });
   if (!parsed.success)
-    go(BACK, {
+    return go(BACK, {
       error: parsed.error.issues
         .map((i) => `${String(i.path.at(-1) ?? 'Settings')}: ${i.message}`)
         .join('; '),
     });
   const res = await run((db, user) => saveMyPreferences(db, user, parsed.data));
-  if (!res.ok) go(BACK, { error: res.error });
-  go(BACK, { notice: 'Personal settings saved.' });
+  if (!res.ok) return go(BACK, { error: res.error });
+  return go(BACK, { notice: 'Personal settings saved.' });
 }

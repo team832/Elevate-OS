@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import type { AuthenticatedUser } from '@elevate/authentication';
+import { LINK_LOGIN_HELP } from '@elevate/shared-contracts';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { listTasks, taskListQuery } from '@elevate/business-ops-os/work';
@@ -80,8 +81,8 @@ async function Deliverables({
           </>
         ) : (
           <p>
-            Your account is not linked to a staff record, so you have no tasks of your own. Staff
-            records are linked by HR in the Staff directory.
+            Your account is not linked to a staff record, so you have no tasks of your own.{' '}
+            {LINK_LOGIN_HELP}
           </p>
         )}
       </Card>

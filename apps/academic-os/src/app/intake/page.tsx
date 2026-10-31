@@ -5,7 +5,7 @@ import { Alert, Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@el
 import { getIntakeQueue } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiButton } from '../../ui/api-form';
-import { StateBadge, fmtDateTime } from '../../ui/badges';
+import { StateBadge, fmtDateTime, programmeName } from '../../ui/badges';
 import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, gate, load } from '../../ui/shell';
 
@@ -27,10 +27,10 @@ async function Body({ access }: { access: PageAccess }) {
   const canRun = can(access.user, 'academic:enrolments:decide');
   return (
     <>
-      <PageHeader title="Enrolment intake" description="Confirmed admissions from Business Operations. Each run checks every waiting request and either creates the enrolment or rejects it with a reason that Business Operations sees." />
+      <PageHeader title="Enrolment intake" description="Confirmed admissions and recorded exits from Business Operations. Each run ends the enrolment of every student who left, then checks every waiting request and either creates the enrolment or rejects it with a reason that Business Operations sees." />
       <div className="el-stack">
         <Alert tone="warning" title="Intake does not run by itself yet">
-          Waiting requests are processed only when someone presses “Process intake now”. Until then, Business Ops shows the admission as awaiting Academic OS.
+          Waiting requests and exits are processed only when someone presses “Process intake now” here, or an operations manager runs “Send exits to Academic” in Business Operations. Until then, Business Operations shows the admission as awaiting Academic OS.
         </Alert>
         {!data.ok ? (
           <LoadError error={data.error} />
@@ -39,6 +39,7 @@ async function Body({ access }: { access: PageAccess }) {
             <Card title="Queue">
               <p>
                 <StatusBadge tone={data.data.waiting > 0 ? 'warning' : 'neutral'}>{data.data.waiting} waiting</StatusBadge>{' '}
+                <StatusBadge tone={data.data.waitingExits > 0 ? 'warning' : 'neutral'}>{data.data.waitingExits} exits waiting</StatusBadge>{' '}
                 <StatusBadge tone={data.data.problems.length > 0 ? 'danger' : 'neutral'}>{data.data.problems.length} failed or dead</StatusBadge>
               </p>
               {canRun ? <ApiButton action={MODULE_PATHS.api('enrolment-intake/run')} label="Process intake now" variant="primary" successMessage="Intake run finished." showResult /> : null}
@@ -49,9 +50,10 @@ async function Body({ access }: { access: PageAccess }) {
                 rowKey={(p) => p.eventId}
                 empty={<EmptyState title="No failed deliveries" />}
                 columns={[
-                  { key: 'when', header: 'Requested', render: (p) => fmtDateTime(p.occurredAt) },
+                  { key: 'when', header: 'Recorded', render: (p) => fmtDateTime(p.occurredAt) },
+                  { key: 'kind', header: 'Kind', render: (p) => (p.kind === 'exit' ? 'Exit' : 'Enrolment request') },
                   { key: 'student', header: 'Student', render: (p) => p.studentName ?? '—' },
-                  { key: 'programme', header: 'Programme', render: (p) => p.programmeCode ?? '—' },
+                  { key: 'programme', header: 'Programme', render: (p) => (p.programmeCode ? programmeName(p.programmeCode) : '—') },
                   { key: 'status', header: 'Delivery', render: (p) => <><StateBadge state={p.status} /> {p.attempts} attempt(s)</> },
                   { key: 'error', header: 'Last error', render: (p) => p.lastError ?? '' },
                 ]}
@@ -61,11 +63,12 @@ async function Body({ access }: { access: PageAccess }) {
               <DataTable compact
                 rows={data.data.processed}
                 rowKey={(p) => p.id}
+                sampleOf={(p) => Boolean(p.isSample)}
                 empty={<EmptyState title="Nothing processed yet" />}
                 columns={[
                   { key: 'when', header: 'Processed', render: (p) => fmtDateTime(p.processedAt) },
                   { key: 'student', header: 'Student', render: (p) => (p.studentId ? <a href={MODULE_PATHS.student(p.studentId)}>{p.studentName}</a> : p.studentName) },
-                  { key: 'programme', header: 'Programme', render: (p) => p.programmeCode },
+                  { key: 'programme', header: 'Programme', render: (p) => programmeName(p.programmeCode) },
                   { key: 'attempt', header: 'Attempt', numeric: true, render: (p) => p.attempt },
                   { key: 'outcome', header: 'Outcome', render: (p) => <StateBadge state={p.outcome} /> },
                   { key: 'reason', header: 'Reason', render: (p) => (p.reasonCode ? p.reason : `${p.existingStudent ? 'Existing student reused' : 'New student'}${p.reason ? `. ${p.reason}` : ''}`) },

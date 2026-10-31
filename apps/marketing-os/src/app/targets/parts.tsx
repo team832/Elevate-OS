@@ -10,7 +10,6 @@ import {
   formatPeriod,
 } from '../../domain/metrics';
 import type { TargetVsActualRow } from '../../server/targets';
-import { ProposedBadge } from '../../ui/badges';
 
 type Row = Pick<TargetVsActualRow, 'target' | 'staffName' | 'campaignCode' | 'campaignName'>;
 
@@ -79,9 +78,7 @@ export function MetricDefinitions({
       </dl>
       <p>{NO_CALL_TARGET}</p>
       <p>
-        Admission credit rule (setting {credit.key}):{' '}
-        {ADMISSION_CREDIT_LABELS[credit.value] ?? credit.value}.{' '}
-        <ProposedBadge status={credit.status} />
+        Admission credit rule: {ADMISSION_CREDIT_LABELS[credit.value] ?? credit.value}.
       </p>
     </>
   );

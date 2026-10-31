@@ -8,6 +8,7 @@ export const MODULE_PATHS = {
   logoutApi: modulePath('api/v1/auth/logout'),
   curriculum: modulePath('curriculum'),
   plan: (id: string) => modulePath(`curriculum/plans/${id}`),
+  course: (id: string) => modulePath(`curriculum/courses/${id}`),
   conceptBooks: modulePath('curriculum/concept-books'),
   batches: modulePath('batches'),
   batch: (id: string) => modulePath(`batches/${id}`),

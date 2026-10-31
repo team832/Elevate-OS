@@ -21,6 +21,7 @@ import {
   type Class12Plan,
   type IpmatBaseline,
 } from './legacy';
+import { ensure } from './ensure';
 
 type BatchInsert = typeof academicBatches.$inferInsert;
 
@@ -30,15 +31,11 @@ async function courseOf(db: Database, code: string) {
   return c;
 }
 
-async function upsertBatch(db: Database, values: BatchInsert): Promise<BatchId> {
-  const { code: _c, ...set } = values;
-  const [row] = await db
-    .insert(academicBatches)
-    .values(values)
-    .onConflictDoUpdate({ target: academicBatches.code, set })
-    .returning({ id: academicBatches.id });
-  return row!.id;
-}
+const ensureBatch = (db: Database, values: BatchInsert): Promise<BatchId> =>
+  ensure(
+    () => db.select({ id: academicBatches.id }).from(academicBatches).where(eq(academicBatches.code, values.code)),
+    () => db.insert(academicBatches).values(values).returning({ id: academicBatches.id }),
+  );
 
 /** Insert a calendar rule unless one with the same label exists for the batch. */
 async function ensureRule(db: Database, values: typeof academicCalendarRules.$inferInsert) {
@@ -51,12 +48,7 @@ async function ensureRule(db: Database, values: typeof academicCalendarRules.$in
         eq(academicCalendarRules.label, values.label),
       ),
     );
-  if (found)
-    await db
-      .update(academicCalendarRules)
-      .set(values)
-      .where(eq(academicCalendarRules.id, found.id));
-  else await db.insert(academicCalendarRules).values(values);
+  if (!found) await db.insert(academicCalendarRules).values(values);
 }
 
 async function ensureExclusion(
@@ -72,12 +64,7 @@ async function ensureExclusion(
         eq(academicCalendarExclusions.label, values.label),
       ),
     );
-  if (found)
-    await db
-      .update(academicCalendarExclusions)
-      .set(values)
-      .where(eq(academicCalendarExclusions.id, found.id));
-  else await db.insert(academicCalendarExclusions).values(values);
+  if (!found) await db.insert(academicCalendarExclusions).values(values);
 }
 
 export const batchesSeed = defineSeed({
@@ -90,7 +77,7 @@ export const batchesSeed = defineSeed({
     const plan = readLegacy<Class12Plan>('class12-plan.json');
     const base = readLegacy<IpmatBaseline>('ipmat-baseline.json');
     const c12 = await courseOf(db, 'IPMAT-C12-2027');
-    const batchId = await upsertBatch(db, {
+    const batchId = await ensureBatch(db, {
       code: 'IPMAT-C12-APR27',
       name: 'IPMAT Class 12 — April 2027 (planning)',
       courseId: c12.id,
@@ -172,7 +159,7 @@ export const batchesSeed = defineSeed({
     });
 
     const caf = await courseOf(db, 'CAF-ACC-SEP27');
-    await upsertBatch(db, {
+    await ensureBatch(db, {
       code: 'CAF-SEP27-REG',
       name: 'CA Foundation — September 2027 Regular (planning)',
       courseId: caf.id,

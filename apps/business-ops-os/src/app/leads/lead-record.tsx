@@ -136,37 +136,38 @@ export function leadTabs(
             .filter((x) => x.status === 'open')
             .map((x) => (
               <Alert
-                key={x.id}
+                key={x.otherAccessible ? x.id : x.level}
                 tone="warning"
                 title={x.level === 'exact' ? 'Existing contact' : 'Possible duplicate'}
               >
-                Matches{' '}
                 {x.otherAccessible ? (
-                  <a href={`${base}/leads/${x.otherLeadId}`}>{x.otherCode}</a>
+                  <>
+                    Matches <a href={`${base}/leads/${x.otherLeadId}`}>{x.otherCode}</a> on{' '}
+                    {x.signals.join(', ').replace(/_/g, ' ')}. Nothing was merged.
+                    {can(user, 'ops:leads:merge') ? (
+                      <div className="el-stack">
+                        <ActionForm
+                          action={`${base}/api/v1/leads/${x.leadId}/merge`}
+                          submitLabel={`Merge ${x.leadId === lead.id ? 'this lead' : x.otherCode} into ${x.leadId === lead.id ? x.otherCode : 'this lead'}`}
+                          extra={{ targetLeadId: x.matchedLeadId }}
+                          fields={[{ name: 'note', label: 'Merge note', required: true }]}
+                          variant="danger"
+                          compact
+                        />
+                        <ActionForm
+                          action={`${base}/api/v1/leads/duplicates/${x.id}`}
+                          submitLabel="Not a duplicate: dismiss"
+                          extra={{ decision: 'dismissed' }}
+                          fields={[{ name: 'note', label: 'Why', required: true }]}
+                          variant="secondary"
+                          compact
+                        />
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
-                  x.otherCode
-                )}{' '}
-                on {x.signals.join(', ').replace(/_/g, ' ')}. Nothing was merged.
-                {can(user, 'ops:leads:merge') ? (
-                  <div className="el-stack">
-                    <ActionForm
-                      action={`${base}/api/v1/leads/${x.leadId}/merge`}
-                      submitLabel={`Merge ${x.leadId === lead.id ? 'this lead' : x.otherCode} into ${x.leadId === lead.id ? x.otherCode : 'this lead'}`}
-                      extra={{ targetLeadId: x.matchedLeadId }}
-                      fields={[{ name: 'note', label: 'Merge note', required: true }]}
-                      variant="danger"
-                      compact
-                    />
-                    <ActionForm
-                      action={`${base}/api/v1/leads/duplicates/${x.id}`}
-                      submitLabel="Not a duplicate: dismiss"
-                      extra={{ decision: 'dismissed' }}
-                      fields={[{ name: 'note', label: 'Why', required: true }]}
-                      variant="secondary"
-                      compact
-                    />
-                  </div>
-                ) : null}
+                  'Matches a lead you cannot open. Nothing was merged. Ask an operations manager.'
+                )}
               </Alert>
             ))}
           <StageSegment d={d} user={user} level={level} base={base} changeHref={actHref('stage')} />
@@ -425,6 +426,7 @@ export function leadTabs(
                 { key: 'kind', header: 'Channel', render: (a) => humanise(a.kind) },
                 { key: 'outcome', header: 'Outcome', render: (a) => humanise(a.outcome) },
                 ...callColumns<(typeof d.activities)[number]>(),
+                { key: 'note', header: 'Note', render: (a) => a.note ?? '—' },
                 { key: 'staffName', header: 'By', render: (a) => a.staffName ?? 'Not recorded' },
               ]}
             />
@@ -441,12 +443,14 @@ export function leadTabs(
               empty="No history recorded."
               columns={[
                 { key: 'at', header: 'When', render: (h) => fmtDateTime(h.at) },
-                { key: 'action', header: 'Action', render: (h) => humanise(h.action) },
+                { key: 'action', header: 'Action', render: (h) => humanise(h.action.replace(/\./g, '_')) },
                 {
                   key: 'actorType',
                   header: 'Actor',
                   render: (h) =>
-                    h.actorType === 'system' ? 'System (job or Academic OS)' : 'User',
+                    h.actorType === 'system'
+                      ? 'System (job or Academic OS)'
+                      : (h.actorName ?? 'Not recorded'),
                 },
                 {
                   key: 'detail',

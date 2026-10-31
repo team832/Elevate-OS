@@ -15,9 +15,10 @@
  *
  * There is NO scheduler yet (wave-3 item): the consumer runs when a coordinator
  * presses "Process intake" (POST /academic/api/v1/enrolment-intake/run) or when
- * code calls `runEnrolmentIntake(db)`.
+ * code calls `runEnrolmentIntake(db)`. Each run applies waiting exits first (./enrolment-exit), so
+ * a readmission is never refused as a duplicate of an enrolment that has already ended in Ops.
  */
-import { and, asc, count, desc, eq, inArray, isNull, notExists, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, notExists, or, sql } from 'drizzle-orm';
 import {
   academicBatches,
   academicCourses,
@@ -35,6 +36,7 @@ import { ACADEMIC_CONSUMERS, enrolmentKeys, type IntegrationEvent } from '@eleva
 import type { BatchId, CourseId, StudentId, StudentIdentityId, UserId } from '@elevate/shared-types';
 import { decideIntake } from '../../domain';
 import { audit, todayIst } from '../context';
+import { EXIT_CONSUMER, EXIT_EVENT, runEnrolmentExits } from './enrolment-exit';
 import { clashMessages, seatsTaken, startPlacement } from './placements';
 import { newStudentCode } from './students';
 
@@ -109,7 +111,7 @@ async function handleRequest(event: RequestEvent, { db: tx }: ConsumerContext, n
   }
 
   // D-036: the event carries no sample flag, so it comes from the canonical person.
-  const [core] = p.coreStudentId ? await tx.select({ isSample: coreStudents.isSample }).from(coreStudents).where(eq(coreStudents.id, p.coreStudentId as StudentIdentityId)) : [];
+  const [core] = p.coreStudentId ? await tx.select({ isSample: coreStudents.isSample, fullName: coreStudents.fullName }).from(coreStudents).where(eq(coreStudents.id, p.coreStudentId as StudentIdentityId)) : [];
   const isSample = core?.isSample ?? false;
   let student = existingStudent;
   if (student && p.coreStudentId && !student.coreStudentId) {
@@ -121,7 +123,7 @@ async function handleRequest(event: RequestEvent, { db: tx }: ConsumerContext, n
       .insert(academicStudents)
       .values({
         code: newStudentCode(),
-        fullName: p.student.fullName,
+        fullName: core?.fullName ?? p.student.fullName, // a correction made while the request waited
         preferredName: p.student.preferredName ?? null,
         dateOfBirth: p.student.dateOfBirth ?? null,
         currentStage: p.student.currentStage ?? null,
@@ -189,41 +191,47 @@ async function handleRequest(event: RequestEvent, { db: tx }: ConsumerContext, n
   await audit(tx, null, { action: 'enrolment.created', entityType: 'enrolment', entityId: enrolment!.id, after: enrolment, metadata: { source: 'admission_event', requestEventId: event.id, triggeredBy } });
 }
 
-/** Run the intake consumer once (a batch of up to 50 pending requests). */
+/** Apply waiting exits, then run the intake consumer once (a batch of up to 50 pending requests). */
 export async function runEnrolmentIntake(db: Database, options: { triggeredByUserId?: UserId | null; now?: () => Date; maxAttempts?: number } = {}): Promise<ProcessResult> {
-  return processEvents(db, {
+  const exits = await runEnrolmentExits(db, options);
+  const intake = await processEvents(db, {
     consumer: INTAKE_CONSUMER,
     maxAttempts: options.maxAttempts ?? 5,
     handlers: {
       [REQUEST_TYPE]: (event: RequestEvent, ctx: ConsumerContext) => handleRequest(event, ctx, options.now?.() ?? new Date(), options.triggeredByUserId ?? null),
     },
   });
+  return { processed: exits.processed + intake.processed, failed: exits.failed + intake.failed, skipped: exits.skipped + intake.skipped };
 }
 
 /** The intake queue: processed outcomes, failed/dead deliveries, and how many requests are waiting. */
 export async function getIntakeQueue(db: Database) {
-  const processed = await db.select().from(academicEnrolmentIntakeLog).orderBy(desc(academicEnrolmentIntakeLog.processedAt)).limit(200);
+  const processed = await db
+    .select({ ...getTableColumns(academicEnrolmentIntakeLog), isSample: academicStudents.isSample })
+    .from(academicEnrolmentIntakeLog)
+    .leftJoin(academicStudents, eq(academicStudents.id, academicEnrolmentIntakeLog.studentId))
+    .orderBy(desc(academicEnrolmentIntakeLog.processedAt))
+    .limit(200);
   const problems = await db
-    .select({ eventId: integrationEvents.id, occurredAt: integrationEvents.occurredAt, payload: integrationEvents.payload, status: eventDeliveries.status, attempts: eventDeliveries.attempts, lastError: eventDeliveries.lastError })
+    .select({ eventId: integrationEvents.id, type: integrationEvents.type, occurredAt: integrationEvents.occurredAt, payload: integrationEvents.payload, status: eventDeliveries.status, attempts: eventDeliveries.attempts, lastError: eventDeliveries.lastError })
     .from(eventDeliveries)
     .innerJoin(integrationEvents, eq(integrationEvents.id, eventDeliveries.eventId))
-    .where(and(eq(eventDeliveries.consumer, INTAKE_CONSUMER), inArray(eventDeliveries.status, ['failed', 'dead'])))
+    .where(and(inArray(eventDeliveries.consumer, [INTAKE_CONSUMER, EXIT_CONSUMER]), inArray(eventDeliveries.status, ['failed', 'dead'])))
     .orderBy(asc(integrationEvents.occurredAt));
-  const [{ waiting } = { waiting: 0 }] = await db
-    .select({ waiting: count() })
-    .from(integrationEvents)
-    .where(
-      and(
-        eq(integrationEvents.type, REQUEST_TYPE),
-        notExists(db.select({ one: sql`1` }).from(eventDeliveries).where(and(eq(eventDeliveries.eventId, integrationEvents.id), eq(eventDeliveries.consumer, INTAKE_CONSUMER)))),
-      ),
-    );
+  const waitingOf = async (type: string, consumer: string) => {
+    const [{ n } = { n: 0 }] = await db
+      .select({ n: count() })
+      .from(integrationEvents)
+      .where(and(eq(integrationEvents.type, type), notExists(db.select({ one: sql`1` }).from(eventDeliveries).where(and(eq(eventDeliveries.eventId, integrationEvents.id), eq(eventDeliveries.consumer, consumer))))));
+    return Number(n);
+  };
   return {
-    waiting: Number(waiting),
+    waiting: await waitingOf(REQUEST_TYPE, INTAKE_CONSUMER),
+    waitingExits: await waitingOf(EXIT_EVENT, EXIT_CONSUMER),
     processed,
     problems: problems.map((p) => {
       const payload = p.payload as { admissionId?: string; programmeCode?: string; student?: { fullName?: string } };
-      return { eventId: p.eventId, occurredAt: p.occurredAt, status: p.status, attempts: p.attempts, lastError: p.lastError, admissionId: payload.admissionId ?? null, programmeCode: payload.programmeCode ?? null, studentName: payload.student?.fullName ?? null };
+      return { eventId: p.eventId, kind: p.type === EXIT_EVENT ? ('exit' as const) : ('request' as const), occurredAt: p.occurredAt, status: p.status, attempts: p.attempts, lastError: p.lastError, admissionId: payload.admissionId ?? null, programmeCode: payload.programmeCode ?? null, studentName: payload.student?.fullName ?? null };
     }),
     scheduler: 'none — run manually',
   };

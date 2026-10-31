@@ -8,17 +8,26 @@
  *   - text that looks like a credential (private keys, cloud/API tokens, JWTs,
  *     database URLs with real passwords, long secret-looking assignments).
  * Findings print file:line and the rule name — never the matched value.
+ * With `--path <folder>` it scans that folder instead, every file of any size (the release package).
  *
  * False positive? Prefer fixing the text (use a placeholder such as
  * `replace-with-…`). As a last resort add `secret-scan:allow` in a comment on
  * that line and explain why in the same comment.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const pathArg = process.argv.indexOf('--path');
+const folder = pathArg > -1 ? process.argv[pathArg + 1] : null;
+if (pathArg > -1 && !folder) {
+  console.error('secret-scan — --path needs a folder.');
+  process.exit(2);
+}
+const root = folder
+  ? path.resolve(folder)
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const PLACEHOLDER =
   /(replace[-_]with|test[-_]only|example|fictional|placeholder|dummy|changeme|change-me|\*\*\*|<[^>]*>|\$\{|xxxx)/i;
@@ -46,9 +55,13 @@ const RULES = [
   {
     name: 'secret-assignment',
     re: /\b([A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|API_KEY|APIKEY|PRIVATE_KEY)[A-Z0-9_]*)\s*[:=]\s*['"]?([^\s'"`,;]{16,})/i,
-    // Code expressions (calls, property access) are not literals.
-    check: (m) =>
-      !PLACEHOLDER.test(m[2]) && !/[().]/.test(m[2]) && /[0-9]/.test(m[2]) && /[A-Za-z]/.test(m[2]),
+    // Code expressions (calls, property access) are not literals; nor, in JavaScript, is anything unquoted.
+    check: (m, file) =>
+      !PLACEHOLDER.test(m[2]) &&
+      !/[().]/.test(m[2]) &&
+      /[0-9]/.test(m[2]) &&
+      /[A-Za-z]/.test(m[2]) &&
+      (!/\.[cm]?[jt]sx?$/.test(file) || /[:=]\s*['"]/.test(m[0])),
   },
 ];
 
@@ -71,6 +84,10 @@ const SKIP_EXT = new Set([
 const MAX_BYTES = 2 * 1024 * 1024;
 
 function listFiles() {
+  if (folder)
+    return readdirSync(root, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)));
   const out = execFileSync(
     'git',
     ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
@@ -82,7 +99,7 @@ function listFiles() {
 const findings = [];
 for (const rel of listFiles()) {
   const base = path.basename(rel);
-  if (/^\.env(\..+)?$/.test(base) && base !== '.env.example') {
+  if (/^\.env(\..+)?$/.test(base) && !base.endsWith('.example')) {
     findings.push({ file: rel, line: 0, rule: 'env-file-not-ignored' });
     continue;
   }
@@ -90,7 +107,7 @@ for (const rel of listFiles()) {
   const full = path.join(root, rel);
   let text;
   try {
-    if (statSync(full).size > MAX_BYTES) continue;
+    if (!folder && statSync(full).size > MAX_BYTES) continue;
     text = readFileSync(full, 'utf8');
   } catch {
     continue;
@@ -100,8 +117,9 @@ for (const rel of listFiles()) {
   lines.forEach((line, i) => {
     if (line.includes('secret-scan:allow')) return;
     for (const rule of RULES) {
-      const m = rule.re.exec(line);
-      if (m && (!rule.check || rule.check(m)))
+      // Every match: in a minified bundle one long line holds many, and the first may be harmless.
+      const matches = line.matchAll(new RegExp(rule.re.source, `${rule.re.flags}g`));
+      if ([...matches].some((m) => !rule.check || rule.check(m, rel)))
         findings.push({ file: rel, line: i + 1, rule: rule.name });
     }
   });

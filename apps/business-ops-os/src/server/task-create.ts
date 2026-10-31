@@ -9,7 +9,7 @@
 import { opsTaskCollaborators, type Database } from '@elevate/database';
 import { can } from '@elevate/authorization';
 import { withTransaction } from '@elevate/server-kit';
-import { ForbiddenError } from '@elevate/shared-contracts';
+import { ForbiddenError, sourceReasonWords } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import { istToday } from '../domain/dates';
 import { resolveTaskState } from '../domain/staff-tasks';
@@ -37,6 +37,8 @@ const NOT_YOURS = 'You can assign tasks only to yourself and the people you mana
 export async function createTask(db: Database, actor: Actor, input: TaskInput, requestId?: string) {
   const access = await taskAccess(db, actor, 'ops:tasks:write');
   const people = input.assignees?.length ? [...new Set(input.assignees)] : null;
+  if (!people && !input.staffId && input.reviewerStaffId && input.reviewerStaffId === access.self)
+    throw fieldError('assignees', 'Choose who this task is for: tick at least one person, or name a reviewer other than yourself.');
   const owners = people ?? [input.staffId ?? (await ownStaffId(db, actor))];
   for (const id of owners) {
     if (!coversOwner(access, id)) throw new ForbiddenError(NOT_YOURS);
@@ -155,7 +157,7 @@ async function checkRelated(
     if (r.status !== 'available')
       throw fieldError(
         'relatedId',
-        `Source unavailable: Academic OS could not confirm the ${kind} (${r.reason}). Try again, or assign without the link.`,
+        `Source unavailable: Academic OS could not confirm the ${kind} (${sourceReasonWords(r.reason)}). Try again, or assign without the link.`,
       );
     const hit = r.data.items.find(
       (a) => a.staffId === staffId && (kind === 'batch' ? a.batchId : a.subjectId) === id,

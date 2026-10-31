@@ -80,8 +80,22 @@ export async function academicDemoMarks(db: Database, ids: readonly string[]) {
       checkedAt: down.fetchedAt,
       marks: new Map<string, AcademicMark>(),
     };
-  for (const r of batches)
-    for (const i of r.status === 'available' ? r.data.items : [])
+  const items = batches.flatMap((r) => (r.status === 'available' ? r.data.items : []));
+  // One read, and a write only for a new link: every demo screen comes through here.
+  const known = items.length
+    ? await db
+        .select({ id: opsDemoSessions.id, ref: opsDemoSessions.academicSessionRef })
+        .from(opsDemoSessions)
+        .where(
+          inArray(
+            opsDemoSessions.id,
+            items.map((i) => i.opsDemoSessionId as OpsDemoSessionId),
+          ),
+        )
+    : [];
+  const refOf = new Map<string, string | null>(known.map((k) => [k.id, k.ref]));
+  for (const i of items)
+    if (refOf.get(i.opsDemoSessionId) !== i.academicSessionId)
       await db
         .update(opsDemoSessions)
         .set({ academicSessionRef: i.academicSessionId })
@@ -94,11 +108,7 @@ export async function academicDemoMarks(db: Database, ids: readonly string[]) {
   return {
     status: 'available' as const,
     checkedAt: batches[0]?.fetchedAt ?? new Date().toISOString(),
-    marks: new Map<string, AcademicMark>(
-      batches.flatMap((r) =>
-        r.status === 'available' ? r.data.items.map((i) => [i.opsDemoSessionId, i] as const) : [],
-      ),
-    ),
+    marks: new Map<string, AcademicMark>(items.map((i) => [i.opsDemoSessionId, i])),
   };
 }
 export type AcademicDemoMarks = Awaited<ReturnType<typeof academicDemoMarks>>;

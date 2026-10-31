@@ -458,6 +458,10 @@ export type OpsDemoSessionsForDayV1 = z.output<typeof opsDemoSessionsForDayV1Sch
 
 // --- Consumer side ------------------------------------------------------------------
 
+/** Why a read failed, for people: status codes and contract checks mean nothing to staff. */
+export const sourceReasonWords = (reason: string) =>
+  /^HTTP \d|the contract$/.test(reason) ? 'the other workspace reported a problem' : reason;
+
 /** What a consumer holds after trying to fetch a summary. Never substitute zeros. */
 export type SourceResult<T> =
   | { status: 'available'; data: T; fetchedAt: string }

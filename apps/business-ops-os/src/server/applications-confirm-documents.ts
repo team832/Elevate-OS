@@ -4,7 +4,7 @@
  */
 import { eq } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
-import { opsAdmissionApprovals, opsApplications, type Database } from '@elevate/database';
+import { opsAdmissionApprovals, opsApplications, students, type Database } from '@elevate/database';
 import { InvalidStateTransitionError } from '@elevate/shared-contracts';
 import { ADMISSION_STATUS_LABELS, type AdmissionStatus } from '../domain';
 import type { ApplicationSnapshot } from '../domain/applications';
@@ -110,7 +110,19 @@ export async function admissionConfirmation(db: Database, actor: Actor, admissio
     academicDeliveryOf(db, admission.lastRequestEventId),
   ]);
   const names = await namesOf(db, [approval?.approvedBy ?? null, admission.legacyVerifiedBy]);
+  const issuedName =
+    approval &&
+    (approval.acceptedSnapshot as { application: ApplicationSnapshot }).application.student
+      .fullName;
+  const [current] = admission.studentId
+    ? await db
+        .select({ fullName: students.fullName })
+        .from(students)
+        .where(eq(students.id, admission.studentId))
+    : [];
   return {
+    /** Proposed (owner's question): the name the issued documents still print, when it has since been corrected. */
+    nameAtIssue: issuedName && current && issuedName !== current.fullName ? issuedName : null,
     application: application && {
       id: application.id,
       reference: application.reference,

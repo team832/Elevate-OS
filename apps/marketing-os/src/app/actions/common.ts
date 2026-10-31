@@ -2,10 +2,10 @@
  * Helpers for server actions. Every action re-checks the session on the server and the
  * services re-check permissions (assertCan), so hiding a button is never the control.
  */
-import { redirect } from 'next/navigation';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { getDb, type Database } from '@elevate/database';
-import { getCurrentUser, toAppPath } from '@elevate/server-kit/next';
+import { headers } from 'next/headers';
+import { actionRedirect, getCurrentUser } from '@elevate/server-kit/next';
 import { isAppError } from '@elevate/shared-contracts';
 import { MODULE, modulePath } from '../../domain';
 import { MODULE_PATHS } from '../../server/paths';
@@ -54,13 +54,18 @@ export function describeError(error: unknown): string {
   return parts.join(' — ').slice(0, 600);
 }
 
-/** Redirect to an in-module page with a notice or error (Next adds the basePath itself). */
-export function go(subpath: string, message: { notice?: string; error?: string } = {}): never {
+/** Redirect to an in-module page with a notice or error. Always `return go(...)`. */
+export async function go(
+  subpath: string,
+  message: { notice?: string; error?: string } = {},
+): Promise<never> {
   const qs = new URLSearchParams();
   if (message.notice) qs.set('notice', message.notice);
   if (message.error) qs.set('error', message.error);
-  const browser = `${modulePath(subpath)}${qs.size ? `?${qs.toString()}` : ''}`;
-  redirect(toAppPath(browser, MODULE.basePath));
+  return actionRedirect(
+    `${modulePath(subpath)}${qs.size ? `?${qs.toString()}` : ''}`,
+    MODULE.basePath,
+  );
 }
 
 /**
@@ -71,7 +76,12 @@ export async function run<T>(
   fn: (db: Database, user: AuthenticatedUser) => Promise<T>,
 ): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
   const user = await getCurrentUser();
-  if (!user) redirect(toAppPath(MODULE_PATHS.login, MODULE.basePath));
+  if (!user) {
+    // Only a post the session guard did not catch (no scripts yet) gets here: at least come back to the page.
+    const from = new URL((await headers()).get('referer') ?? MODULE_PATHS.home, 'http://local');
+    const next = encodeURIComponent(from.pathname + from.search);
+    return actionRedirect(`${MODULE_PATHS.login}?next=${next}`, MODULE.basePath);
+  }
   try {
     return { ok: true, value: await fn(getDb(), user) };
   } catch (error) {

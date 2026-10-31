@@ -2,9 +2,10 @@
  * Small server-rendered list helpers: the search panel and the older inline GET
  * filter form (both work without JavaScript), a pager and select options.
  */
+import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Icon } from '@elevate/shared-ui';
-import { fmtDate, humanise } from './format';
+import { fmtDate, humanise, routerPath } from './format';
 
 export interface FilterField {
   name: string;
@@ -189,6 +190,8 @@ export function Pager({
   if (total === 0) return null;
   const last = Math.max(1, Math.ceil(total / pageSize));
   const href = (p: number) => listHref(basePath, params, { page: String(p) });
+  // A stale bookmark or a list that shrank: the rows are on the last page, not gone.
+  if (page > last) redirect(routerPath(href(last)));
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
   return (

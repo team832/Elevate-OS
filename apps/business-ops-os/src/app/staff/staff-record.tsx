@@ -62,14 +62,31 @@ export function StaffProfile({
           },
           { label: 'Role labels', value: d.profile?.roleLabels.join(', ') || 'None' },
           { label: 'Status', value: humanise(d.staff.status) },
-          { label: 'Login', value: d.staff.userId ? 'Linked' : 'None' },
+          {
+            label: 'Login',
+            value: d.staff.userId ? (
+              'Linked'
+            ) : can(user, 'ops:organisation:manage') ? (
+              <a href={editHref}>Not linked: link a login</a>
+            ) : (
+              'Not linked. An operations manager links it on this record.'
+            ),
+          },
         ]}
       />
     </Segment>
   );
 }
 
-export function StaffEditModal({ d, closeHref }: { d: StaffDetail; closeHref: string }) {
+export function StaffEditModal({
+  d,
+  logins,
+  closeHref,
+}: {
+  d: StaffDetail;
+  logins: { value: string; label: string }[];
+  closeHref: string;
+}) {
   return (
     <FormModal
       id="staff-edit"
@@ -98,6 +115,15 @@ export function StaffEditModal({ d, closeHref }: { d: StaffDetail; closeHref: st
             defaultValue: d.staff.status,
             options: options(['active', 'on_leave', 'inactive']),
             section: 'Role',
+          },
+          {
+            name: 'userId',
+            label: 'Login',
+            type: 'select',
+            defaultValue: d.staff.userId ?? '',
+            options: logins,
+            hint: 'Lists logins with no staff record, such as someone added on Users & roles. Linking gives this person their own classes, tasks and requests. Leaving it empty changes nothing.',
+            section: 'Login',
           },
         ]}
       />

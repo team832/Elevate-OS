@@ -63,6 +63,7 @@ function DataToggle({ label, data, format }: Required<Omit<ChartProps, 'emptyTex
               <th scope="col" className="el-num">
                 Value
               </th>
+              {data.some((d) => d.note) ? <th scope="col">Detail</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -70,6 +71,7 @@ function DataToggle({ label, data, format }: Required<Omit<ChartProps, 'emptyTex
               <tr key={d.label}>
                 <th scope="row">{d.label}</th>
                 <td className="el-num">{show(d.value, format)}</td>
+                {data.some((x) => x.note) ? <td>{d.note}</td> : null}
               </tr>
             ))}
           </tbody>
@@ -371,11 +373,12 @@ export function StatCard({
   format?: Format;
 }) {
   const cls = `el-stat${value === null ? ' el-stat-missing' : ''}`;
+  const shown = value === null ? missingLabel : typeof value === 'number' ? format(value) : value;
   const body = (
     <>
       <span className="el-stat-label">{label}</span>
-      <span className="el-stat-value">
-        {value === null ? missingLabel : typeof value === 'number' ? format(value) : value}
+      <span className={`el-stat-value${/^[₹\d].{10}/.test(String(shown)) ? ' el-stat-value-long' : ''}`}>
+        {shown}
       </span>
       {note ? <span className="el-stat-note">{note}</span> : null}
       {trend ? <Sparkline values={trend} /> : null}

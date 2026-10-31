@@ -152,10 +152,10 @@ describe('A-FEE-7 overall status and next due', () => {
       null,
     ],
     [
-      'all paid but a debit is still owed',
+      'all paid but a debit is still owed, on no instalment',
       [row('received', TOTAL), row('adjustment', 100, { direction: 'debit' })],
       'part_paid',
-      'i3',
+      null,
     ],
   ])('%s', (_, ledger, overall, next) => {
     const allocated = allocateInstalments(plan, ledger, today);

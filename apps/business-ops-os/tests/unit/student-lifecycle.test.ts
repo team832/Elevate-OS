@@ -99,13 +99,16 @@ describe('past outcomes (brief §11: withdrawn early vs completed)', () => {
 describe('populations', () => {
   it.each([
     [{ status: 'enrolled' }, 'active'],
+    [{ status: 'admitted' }, 'active'],
+    [{ status: 'enrolment_requested' }, 'active'],
     [{ status: 'on_hold', heldFromStatus: 'enrolled' }, 'on_hold'],
+    [{ status: 'on_hold', heldFromStatus: 'admitted' }, 'on_hold'],
     [{ status: 'on_hold', heldFromStatus: 'counselled' }, 'in_admission'],
     [{ status: 'withdrawn' }, 'former'],
     [{ status: 'cancelled_before_enrolment' }, 'former'],
     [{ status: 'lost', admittedAt: '2026-01-01' }, 'former'],
     [{ status: 'lost', admittedAt: null }, 'in_admission'],
-    [{ status: 'admitted' }, 'in_admission'],
+    [{ status: 'admission_pending' }, 'in_admission'],
   ] as const)('%o → %s', (input, expected) => {
     expect(studentPopulation(input)).toBe(expected);
   });

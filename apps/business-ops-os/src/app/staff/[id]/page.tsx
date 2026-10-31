@@ -1,7 +1,7 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { PageHeader } from '@elevate/shared-ui';
-import { getStaffDetail } from '../../../server/organisation';
+import { getStaffDetail, linkableLogins } from '../../../server/organisation';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { StaffEditModal, StaffProfile } from '../staff-record';
 
@@ -28,17 +28,18 @@ export default async function StaffMemberPage({
 }
 
 async function Detail({ user, id, edit }: { user: AuthenticatedUser; id: string; edit: boolean }) {
-  const r = await load(async (db) =>
-    getStaffDetail(db, user, id),
-  );
+  const r = await load(async (db) => ({
+    d: await getStaffDetail(db, user, id),
+    logins: edit ? await linkableLogins(db, user, id) : [],
+  }));
   if (!r.ok) return r.view;
-  const d = r.data;
+  const { d, logins } = r.data;
   const self = `/ops/staff/${d.staff.id}`;
   return (
     <div className="el-stack">
       <PageHeader title={d.staff.fullName} description={<a href="/ops/staff">Staff directory</a>} />
       <StaffProfile d={d} user={user} editHref={`${self}?act=edit`} level={2} />
-      {edit ? <StaffEditModal d={d} closeHref={self} /> : null}
+      {edit ? <StaffEditModal d={d} logins={logins} closeHref={self} /> : null}
     </div>
   );
 }

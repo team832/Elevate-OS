@@ -1,5 +1,5 @@
 /** Sections of the assessment page: scoring rule, validation issues, results, analysis. */
-import { Alert, Card, DataTable, EmptyState, StatusBadge } from '@elevate/shared-ui';
+import { Alert, Card, DataTable, EmptyState, StatusBadge, fmtDay } from '@elevate/shared-ui';
 import type {
   getAssessment,
   getAssessmentAnalysis,
@@ -249,7 +249,7 @@ export function AnalysisSection({ x }: { x: Analysis }) {
                 <a href={MODULE_PATHS.assessment(c.id)}>{c.code}</a>
               ),
           },
-          { key: 'date', header: 'Date', render: (c) => c.date ?? 'Not recorded' },
+          { key: 'date', header: 'Date', render: (c) => fmtDay(c.date, 'Not recorded') },
           { key: 'kind', header: 'Kind', render: (c) => c.kind.replace(/_/g, ' ') },
           { key: 'max', header: 'Out of', numeric: true, render: (c) => c.max },
           {
@@ -276,9 +276,6 @@ export function AnalysisSection({ x }: { x: Analysis }) {
         {t.status === 'ok'
           ? `${t.direction} — ${t.slope > 0 ? '+' : ''}${t.slope} percentage points per assessment over ${t.pointsUsed} assessments`
           : `not shown — ${t.reason}`}
-        {x.comparison.trendSetting === 'proposed'
-          ? ' (trend rule proposed, not approved by the owner)'
-          : ''}
       </p>
     </Card>
   );

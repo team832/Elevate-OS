@@ -1,10 +1,17 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { marketingPublishingAttempts, marketingPublishingRecords } from '@elevate/database';
+import {
+  marketingContentItems,
+  marketingPlacements,
+  marketingPublishingAttempts,
+  marketingPublishingRecords,
+} from '@elevate/database';
 import { setupTestDatabase } from '@elevate/testing';
 import { POST as createIdeaRoute } from '../../src/app/api/v1/ideas/route';
 import { POST as createItemRoute } from '../../src/app/api/v1/ideas/[id]/content-items/route';
 import { GET as itemRoute } from '../../src/app/api/v1/content-items/[id]/route';
+import { GET as dashboardRoute } from '../../src/app/api/v1/dashboard/route';
+import { GET as weeklyRoute } from '../../src/app/api/v1/metrics/weekly/route';
 import { POST as submitRoute } from '../../src/app/api/v1/content-items/[id]/submit/route';
 import { POST as decisionRoute } from '../../src/app/api/v1/content-items/[id]/decision/route';
 import { POST as placeRoute } from '../../src/app/api/v1/content-items/[id]/placements/route';
@@ -231,10 +238,48 @@ describe('publishing', () => {
       message: string;
     }>(publishRoute, team.manager, '/x', { params: { id: p.placementId } });
     expect(res.status).toBe(200);
-    expect(res.data!.outcome).toBe('published');
+    expect(res.data!.outcome).toBe('sandbox');
     expect(res.data!.record.isSandbox).toBe(true);
     expect(res.data!.record.publishedUrl).toBeNull();
     expect(res.data!.message).toMatch(/SANDBOX/);
+  });
+
+  it('a sandbox run never counts as published (D-014): placement and item stay scheduled, the dashboard does not move, the weekly column still shows the run', async () => {
+    const published = async () =>
+      (
+        await call<{ itemsByState: Record<string, number> }>(dashboardRoute, team.manager, '/x')
+      ).data!.itemsByState.published ?? 0;
+    const p = await approvedPlacement();
+    const at = slot();
+    await call(scheduleRoute, team.manager, '/x', { params: { id: p.placementId }, json: { publishAt: at } });
+    const before = await published();
+    const res = await call(publishRoute, team.manager, '/x', { params: { id: p.placementId } });
+    expect(res.status).toBe(200);
+    const [placement] = await ctx.db.select().from(marketingPlacements).where(eq(marketingPlacements.id, p.placementId as never));
+    expect(placement).toMatchObject({ status: 'scheduled', publishedAt: null, publishedUrl: null, publicationMode: 'sandbox' });
+    const [item] = await ctx.db.select().from(marketingContentItems).where(eq(marketingContentItems.id, placement!.contentItemId!));
+    expect(item!.state).toBe('scheduled');
+    expect(await published()).toBe(before);
+    const week = await call<{ accounts: { publishedSandbox: number; publishedReal: number }[] }>(weeklyRoute, team.manager, `/marketing/api/v1/metrics/weekly?week=${at.slice(0, 10)}`);
+    expect(week.data!.accounts.reduce((n, a) => n + a.publishedSandbox, 0)).toBeGreaterThan(0);
+    expect(week.data!.accounts.reduce((n, a) => n + a.publishedReal, 0)).toBe(0);
+  });
+
+  it('after a sandbox run a person can still record the real publication: then it counts', async () => {
+    const p = await approvedPlacement();
+    await call(scheduleRoute, team.manager, '/x', { params: { id: p.placementId }, json: { publishAt: slot() } });
+    await call(publishRoute, team.manager, '/x', { params: { id: p.placementId } });
+    const ok = await call<{ placement: { status: string; publicationMode: string } }>(publicationRoute, team.manager, '/x', {
+      params: { id: p.placementId },
+      json: { publishedAt: '2026-10-10T10:00:00Z', url: 'https://www.instagram.com/p/fictional-after-sandbox/' },
+    });
+    expect(ok.status).toBe(201);
+    expect(ok.data!.placement).toMatchObject({ status: 'published', publicationMode: 'manual' });
+    const [record] = await ctx.db.select().from(marketingPublishingRecords).where(eq(marketingPublishingRecords.placementId, p.placementId as never));
+    expect(record).toMatchObject({ isSandbox: false, adapter: 'manual', status: 'succeeded', attempts: 2 });
+    expect(await ctx.db.select().from(marketingPublishingAttempts).where(eq(marketingPublishingAttempts.recordId, record!.id))).toHaveLength(2);
+    const [item] = await ctx.db.select({ state: marketingContentItems.state }).from(marketingContentItems).innerJoin(marketingPlacements, eq(marketingPlacements.contentItemId, marketingContentItems.id)).where(eq(marketingPlacements.id, p.placementId as never));
+    expect(item!.state).toBe('published');
   });
 
   it('prevents duplicate publication (same placement + version)', async () => {
@@ -262,9 +307,9 @@ describe('publishing', () => {
       '/x',
       { params: { id: p.placementId } },
     );
-    expect(first.data!.outcome).toBe('published');
+    expect(first.data!.outcome).toBe('sandbox');
     expect(second.status).toBe(200);
-    expect(second.data!.duplicate).toBe(true);
+    expect(second.data).toMatchObject({ duplicate: true, outcome: 'sandbox' });
     expect(calls).toBe(1);
     const records = await ctx.db
       .select()

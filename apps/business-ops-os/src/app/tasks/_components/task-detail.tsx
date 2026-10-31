@@ -2,6 +2,7 @@
  * Task detail sections (brief 2 §6, §12B, §16): facts, actions the caller may take (the server
  * checks again) and dependencies (work: task-work.tsx; report and history: task-history.tsx).
  */
+import { safeRelativePath } from '@elevate/shared-contracts';
 import { Alert, StatusBadge } from '@elevate/shared-ui';
 import { ACTION_RULES, type TaskAction } from '../../../domain/task-lifecycle';
 import { istWhen, TASK_STATUS_LABELS } from '../../../domain/staff-tasks';
@@ -107,7 +108,14 @@ export function TaskFacts({ d, base, level = 2 }: { d: TaskDetail; base: string;
           { label: '% done', value: `${d.progressPercent}% (self-reported)` },
           d.reason && { label: 'Reason', value: d.reason },
           d.completedAt && { label: 'Completed', value: fmtDateTime(d.completedAt) },
-          d.linkedRef && { label: 'Linked record', value: d.linkedRef },
+          d.linkedRef && {
+            label: 'Linked record',
+            value: safeRelativePath(d.linkedRef, '') ? (
+              <a href={d.linkedRef}>Open the linked record</a>
+            ) : (
+              d.linkedRef
+            ),
+          },
           d.leadId && {
             label: 'Related lead',
             value:

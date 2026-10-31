@@ -20,6 +20,7 @@ import {
 } from '@elevate/shared-contracts';
 import { addDays, toIsoDateTime, type IsoDate } from '@elevate/shared-types';
 import { aggregateMetric, istMidnightUtc, latestPerPost } from '../domain';
+import { formatPeriod } from '../domain/metrics';
 import { getPublishingAdapter } from './adapters/publishing';
 import { contentApprovalPolicy } from './content';
 import { loadPostSnapshots } from './reports';
@@ -40,7 +41,7 @@ function publishedMetric(
   return legacy > 0
     ? metric.estimated(
         real + legacy,
-        `${legacy} publication(s) come from the legacy tracker (reported, not verified in Elevate OS); sandbox publications are excluded.`,
+        `${legacy} publication(s) come from the old tracker (reported, not verified in Elevate OS); test runs are excluded.`,
         meta,
       )
     : metric.ok(real, meta);
@@ -74,7 +75,11 @@ export async function buildMarketingSummary(
   window: { from: IsoDate; to: IsoDate },
   now: Date = new Date(),
 ): Promise<MarketingSummaryV1> {
-  const w = { from: window.from, to: window.to, label: `${window.from} to ${window.to} (IST)` };
+  const w = {
+    from: window.from,
+    to: window.to,
+    label: `${formatPeriod(window.from, window.to)} (IST)`,
+  };
   const fromUtc = istMidnightUtc(window.from);
   const toUtc = istMidnightUtc(addDays(window.to, 1));
   const m = (definition: string, unit: Metric['unit'] = 'count') => ({
@@ -144,7 +149,7 @@ export async function buildMarketingSummary(
       postsPublished: publishedMetric(
         published,
         m(
-          'Placements published in the window with a live link (manual record or real adapter); sandbox excluded.',
+          'Placements published in the window with a live link (recorded by hand or posted automatically); test runs excluded.',
         ),
       ),
       totalReach: reachMetric(
@@ -175,14 +180,14 @@ export async function buildMarketingSummary(
           connection: a.integrationStatus,
           postsPublished: publishedMetric(
             published.filter((p) => p.accountId === a.id),
-            m(`Placements published on ${a.code} in the window (sandbox excluded).`),
+            m(`Placements published on ${a.code} in the window (test runs excluded).`),
           ),
           reach: reachMetric(mine, m(`Sum of reach for ${a.code} posts published in the window.`)),
         };
       }),
     dataSources: [
       {
-        name: `Publishing adapter (${adapter.name})`,
+        name: 'Automatic posting',
         connection: adapter.name === 'mock' ? 'sandbox' : 'not_configured',
         lastSyncAt: null,
       },

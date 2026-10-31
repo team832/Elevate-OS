@@ -2,7 +2,7 @@
  * Notifications inbox (brief §9): own rows only, newest first, paged; mark read by id or all;
  * links open in the viewer's workspace (Ops code hosted by Academic/Marketing, D-073).
  */
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { prerender } from 'react-dom/static';
 import { eq } from 'drizzle-orm';
@@ -160,6 +160,38 @@ describe('GET <base>/notifications/{id}/open across workspaces (NOTIFY)', () => 
     });
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe(`${appOrigin('ops')}/ops/admissions`);
+  });
+
+  describe('under Next, where request.url has lost the base path', () => {
+    afterEach(() => vi.unstubAllEnvs());
+
+    it.each([
+      ['/academic', '/ops/admissions', `${appOrigin('ops')}/ops/admissions`],
+      ['/academic', '/academic/tasks', '/academic/tasks'],
+      ['/ops', '/academic/tasks', `${appOrigin('academic')}/academic/tasks`],
+      ['/academic', '/academic', '/academic'],
+      ['/ops', '/academic', `${appOrigin('academic')}/academic`],
+      ['/academic', '/marketing', `${appOrigin('marketing')}/marketing`],
+      ['/academic', '/ops', `${appOrigin('ops')}/ops`],
+      ['/ops', null, '/ops/notifications?open=no_link'],
+      ['/academic', null, '/academic/notifications?open=no_link'],
+      ['/marketing', null, '/marketing/notifications?open=no_link'],
+    ])('served at %s, link %s: redirects to %s', async (basePath, link, location) => {
+      vi.stubEnv('ELEVATE_BASE_PATH', basePath);
+      const both = await createTestUser(ctx.db, {
+        roles: ['teacher', 'operations_manager', 'marketing_manager'],
+      });
+      const [id] = await notify(ctx.db, {
+        userIds: [both.id],
+        module: 'ops',
+        kind: 'x',
+        title: 'Sample notice',
+        link,
+      });
+      const res = await callRoute(open, authedRequest(both, `/notifications/${id}/open`), { id: id! });
+      expect(res.status).toBe(303);
+      expect(res.headers.get('location')).toBe(location);
+    });
   });
 
   it('says "You no longer have access to this item" when sent back refused', async () => {

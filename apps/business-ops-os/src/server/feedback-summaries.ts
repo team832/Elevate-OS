@@ -33,7 +33,8 @@ import type {
   summaryPatchBody,
 } from './feedback-schemas';
 import { feedbackPolicy } from './feedback-refs';
-import { defined, fieldError, notifyOthers, opsAudit, rowById } from './ops-common';
+import { defined, fieldError, opsAudit, rowById } from './ops-common';
+import { notifyHosted } from './task-links';
 
 const auditSummary = opsAudit('teacher_feedback_summary');
 const auditAction = opsAudit('teacher_development_action');
@@ -184,11 +185,10 @@ export async function updateSummary(
       .returning();
     await auditSummary(tx, actor, id, `feedback_summary.${action}`, { before, after }, requestId);
     if (action === 'approve' && teacherVisibility !== 'nothing')
-      await notifyOthers(tx, actor, await userIdsForStaff(tx, [before.teacherStaffId]), {
+      await notifyHosted(tx, actor, await userIdsForStaff(tx, [before.teacherStaffId]), 'feedback', '/my-feedback', {
         kind: 'feedback_summary.approved',
         title: 'Your feedback summary is ready',
         body: `Student feedback for ${before.periodStart} to ${before.periodEnd}, with agreed follow-ups.`,
-        link: '/academic/my-feedback',
         entityType: 'teacher_feedback_summary',
         entityId: before.id,
       });

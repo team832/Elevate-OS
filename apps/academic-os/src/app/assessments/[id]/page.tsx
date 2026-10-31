@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { ButtonLink, Card, PageHeader } from '@elevate/shared-ui';
+import { ButtonLink, Card, PageHeader, fmtDay } from '@elevate/shared-ui';
 import { checkAssessmentScheduleFor, getAssessment, getAssessmentAnalysis, getResults, validateAssessment } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiButton, ApiForm } from '../../../ui/api-form';
@@ -40,7 +40,7 @@ export default async function AssessmentPage({ params, searchParams }: { params:
       schedule: await checkAssessmentScheduleFor(db, actor, { batchId: a.scheduleBatchId }),
     };
   });
-  if (!data.ok) return <AcademicShell access={access} active="assessments"><LoadError error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="assessments"><LoadError level={1} error={data.error} /></AcademicShell>;
   const { a, validation, results, analysis, schedule } = data.data;
   const canWrite = can(access.user, 'academic:assessments:write') && a.status !== 'cancelled';
   const canFinalise = can(access.user, 'academic:assessments:finalise');
@@ -55,7 +55,7 @@ export default async function AssessmentPage({ params, searchParams }: { params:
       <PageHeader
         title={`${a.code} — ${a.title}`}
         meta={<><StateBadge state={a.status} /> {publication !== 'not_published' ? <StateBadge state={publication} /> : a.status === 'finalised' ? <StateBadge state="not published" /> : null}</>}
-        description={`${a.kind.replace(/_/g, ' ')} · batch ${a.batchCode} · ${a.scheduledDate ?? 'not scheduled'} · ${a.durationMinutes === null ? 'duration unknown' : `${a.durationMinutes} min`}`}
+        description={`${a.kind.replace(/_/g, ' ')} · batch ${a.batchCode} · ${fmtDay(a.scheduledDate, 'not scheduled')} · ${a.durationMinutes === null ? 'duration unknown' : `${a.durationMinutes} min`}`}
         actions={<>{canMark ? <ButtonLink variant="primary" href={MODULE_PATHS.marks(a.id)}>Enter marks</ButtonLink> : null}<ButtonLink href={MODULE_PATHS.assessments}>All assessments</ButtonLink></>}
       />
       <div className="el-stack">
@@ -79,6 +79,7 @@ export default async function AssessmentPage({ params, searchParams }: { params:
                 { name: 'marksPerCorrect', label: 'Marks per correct', defaultValue: a.marksPerCorrect ? String(Number(a.marksPerCorrect)) : undefined },
                 { name: 'marksPerWrong', label: 'Marks per wrong (e.g. -0.25)', defaultValue: a.marksPerWrong ? String(Number(a.marksPerWrong)) : undefined },
                 { name: 'marksUnattempted', label: 'Marks per unattempted', defaultValue: a.marksUnattempted ? String(Number(a.marksUnattempted)) : undefined },
+                // shortcut: sections are still typed as JSON; a section-by-section form is a larger job, reported to the coordinator.
                 { name: 'sections', label: 'Sections (JSON)', type: 'json', required: true, hint: `Example: ${SECTIONS_EXAMPLE.replace(/\s+/g, ' ')}`, defaultValue: a.sections.length ? JSON.stringify(a.sections.map((s) => ({ code: s.code, name: s.name, questionCount: s.questionCount, answerFormat: s.answerFormat, options: s.options, ...(s.marksPerCorrect ? { marksPerCorrect: String(Number(s.marksPerCorrect)) } : {}), ...(s.marksPerWrong ? { marksPerWrong: String(Number(s.marksPerWrong)) } : {}), ...(s.marksUnattempted ? { marksUnattempted: String(Number(s.marksUnattempted)) } : {}), ...(s.capMarks ? { capMarks: String(Number(s.capMarks)) } : {}) })), null, 2) : SECTIONS_EXAMPLE },
               ]}
             />
@@ -86,13 +87,22 @@ export default async function AssessmentPage({ params, searchParams }: { params:
         ) : null}
         {canWrite ? (
           <Card title="Answer key and responses">
+            {a.sections.length ? null : (
+              <p className="el-field-hint">Configure scoring first: the answer key follows its sections.</p>
+            )}
             <ApiForm
               action={api('answer-keys')}
               submitLabel="Add answer-key version"
               successMessage="Answer key added (new version)."
               idPrefix="key"
               fields={[
-                { name: 'answers', label: 'Answers (JSON: section code → answers by question; null = dropped)', type: 'json', required: true, placeholder: '{ "QA": ["A", "C", null, "D"] }' },
+                ...a.sections.map((s) => ({
+                  name: `answers.${s.code}`,
+                  label: `${s.name}: ${s.questionCount} answers`,
+                  type: 'answer-list' as const,
+                  required: true,
+                  hint: 'In question order, separated by spaces, for example: A C - D. Type - for a dropped question.',
+                })),
                 { name: 'note', label: 'Note' },
               ]}
             />
@@ -116,13 +126,13 @@ export default async function AssessmentPage({ params, searchParams }: { params:
             <ApiForm action={api('rescore')} submitLabel="Re-score into a new version" successMessage="Re-scored; the previous version is kept." idPrefix="rescore" fields={[{ name: 'reason', label: 'Reason (audited)', required: true }]} />
           ) : null}
         </Card>
-        <Card title="Publication" description="Publishing is separate from finalising. Only published results reach Business Ops, students and parents; a later re-score publishes its new version.">
+        <Card title="Publication" description="Publishing is separate from finalising. Only published results reach Business Operations, students and parents; a later re-score publishes its new version.">
           {a.roster ? (
             <p>Publication: {a.roster.publicationState.replace(/_/g, ' ')}. Results of this test are published, re-published and withdrawn in Business Operations, with a version and ranking scope.</p>
           ) : a.publishedAt ? (
             <p>Published {fmtDateTime(a.publishedAt)}.</p>
           ) : (
-            <p>Not published. Students, parents and Business Ops do not see these results.</p>
+            <p>Not published. Students, parents and Business Operations do not see these results.</p>
           )}
           {canPublish ? <ApiButton action={api('publish')} label="Publish results" variant="primary" successMessage="Results published." /> : null}
         </Card>

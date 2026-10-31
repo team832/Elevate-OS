@@ -2,6 +2,7 @@ node_modules
 .next
 .data
 coverage
+dist
 package-lock.json
 packages/database/migrations
 data/legacy

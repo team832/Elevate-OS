@@ -12,6 +12,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { can, scopeFor } from '@elevate/authorization';
 import {
   opsTeacherReportExports,
+  staffMembers,
   users,
   type Database,
   type OpsTeacherReportExportId,
@@ -32,6 +33,7 @@ import { fmtDateTime } from '../ui/format';
 import { reviewDate } from './academic-reviews';
 import { fetchTeacherActivity } from './academic-summary';
 import { accessScope, assertScope, staffIdForUser, type Actor } from './context';
+import { rowById } from './ops-common';
 import { isConflicted } from './feedback-access';
 import { teacherReportPdf as renderPdf } from './pdf/teacher-report';
 import { MAX_PERIOD_DAYS, PERIOD_DEFINITIONS, periodReport } from './task-period-report';
@@ -212,6 +214,7 @@ export async function generateTeacherReport(
 export async function listTeacherReports(db: Database, actor: Actor, staffId: string) {
   const access = await accessScope(db, actor, 'ops:teacher_reports:generate');
   assertScope(access, [staffId], 'teacher reports');
+  await rowById(db, staffMembers, staffId, 'Teacher');
   const e = opsTeacherReportExports;
   return db
     .select({

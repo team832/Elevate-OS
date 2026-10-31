@@ -45,6 +45,12 @@ export interface PageAccessOptions {
   workspace?: WorkspaceKey;
 }
 
+/** The sign-in page, returning to this page with the query it was opened with (the proxy forwards it). */
+async function signInPath({ loginPath, returnTo, basePath }: PageAccessOptions) {
+  const search = returnTo.includes('?') ? '' : ((await headers()).get('x-return-search') ?? '');
+  return `${toAppPath(loginPath, basePath)}?next=${encodeURIComponent(returnTo + search)}`;
+}
+
 /**
  * For a page that needs `permission`:
  * - not signed in → 307 redirect to `loginPath?next=<returnTo>`
@@ -58,11 +64,7 @@ export async function requirePageAccess(
   options: PageAccessOptions,
 ): Promise<PageAccess> {
   const user = await getCurrentUser();
-  if (!user) {
-    redirect(
-      `${toAppPath(options.loginPath, options.basePath)}?next=${encodeURIComponent(options.returnTo)}`,
-    );
-  }
+  if (!user) redirect(await signInPath(options));
   if (options.workspace && !can(user, `${options.workspace}:module:access` as Permission)) {
     const landing = resolveLanding({
       workspaces: workspacesFor(user),
@@ -78,6 +80,16 @@ export async function requirePageAccess(
     : { status: 'forbidden', user, modules };
 }
 
+/**
+ * Redirect from a server action. Next adds the basePath when scripts sent the form (`next-action`
+ * header), but a plain form post before scripts have run gets the path as written, so the browser
+ * path is what that case needs. Always `return` this: it is what stops the action.
+ */
+export async function actionRedirect(browserPath: string, basePath = ''): Promise<never> {
+  const scripted = (await headers()).has('next-action');
+  redirect(scripted ? toAppPath(browserPath, basePath) : browserPath);
+}
+
 /** Absolute URL of every app's home, for the shell's workspace switcher (D-072). */
 export function workspaceHrefs(): Record<ModuleKey, string> {
   return Object.fromEntries(
@@ -88,10 +100,7 @@ export function workspaceHrefs(): Record<ModuleKey, string> {
 /** Signed-in user or a redirect to the sign-in page (paths as in `requirePageAccess`). */
 export async function requireUser(options: PageAccessOptions): Promise<AuthenticatedUser> {
   const user = await getCurrentUser();
-  if (!user)
-    redirect(
-      `${toAppPath(options.loginPath, options.basePath)}?next=${encodeURIComponent(options.returnTo)}`,
-    );
+  if (!user) redirect(await signInPath(options));
   return user;
 }
 

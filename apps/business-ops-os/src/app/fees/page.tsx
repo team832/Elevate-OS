@@ -63,9 +63,11 @@ export default async function FeesPage({ searchParams }: { searchParams: Promise
         description="Annual tuition billed, paid and outstanding for an academic year, then course fees by programme and mode."
         tabs={<FeesNav current="structure" user={access.user} />}
       />
-      <Section label="Loading annual tuition…">
-        <AnnualTuition user={access.user} sp={sp} />
-      </Section>
+      <div className="ops-overview-slot">
+        <Section label="Loading annual tuition…">
+          <AnnualTuition user={access.user} sp={sp} />
+        </Section>
+      </div>
       <Section label="Loading the fee structure…">
         <Fees user={access.user} sp={sp} />
       </Section>
@@ -80,12 +82,9 @@ async function Fees({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
   });
   if (!r.ok) return r.view;
   const { items } = r.data.fees;
-  // formOptions labels read "CODE — Name (status)"; the name is all a combination label needs.
+  // formOptions labels read "Name (status)"; the name is all a combination label needs.
   const names = Object.fromEntries(
-    r.data.opts.programmes.map((p) => [
-      p.value,
-      p.label.replace(`${p.value} — `, '').replace(/ \([a-z_]+\)$/, ''),
-    ]),
+    r.data.opts.programmes.map((p) => [p.value, p.label.replace(/ \([a-z_]+\)$/, '')]),
   );
   const order = new Map(ALLOWED_PROGRAMME_COMBINATIONS.map((c, i) => [comboKey(c), i]));
   const inCatalog = items
@@ -173,7 +172,11 @@ async function Fees({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
       </Segment>
       {missing.length ? (
         <Alert tone="warning" title="No fee recorded for these combinations">
-          {missing.map((c) => combinationLabel(c, names)).join('; ')}.
+          {Object.keys(names).length
+            ? `${missing.map((c) => combinationLabel(c, names)).join('; ')}.`
+            : 'The programme list is not loaded, so the combinations cannot be named yet.'}{' '}
+          This screen changes fee rows that already exist; it cannot add a new one. How new rows get
+          in (added here or imported) is waiting on the owner&apos;s decision.
         </Alert>
       ) : null}
       {others.length ? (

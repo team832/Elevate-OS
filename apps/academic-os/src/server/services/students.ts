@@ -3,7 +3,7 @@
  * every guardian field) are returned only to holders of academic:students:write (the
  * coordinator) — PLT-014 minimisation. Teachers see students of their batches only.
  */
-import { and, asc, eq, ilike, inArray, or } from 'drizzle-orm';
+import { and, asc, eq, exists, ilike, inArray, not, notExists, or, sql, type SQL } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
   academicBatches,
@@ -13,7 +13,7 @@ import {
   programmes,
   type Database,
 } from '@elevate/database';
-import { withTransaction } from '@elevate/server-kit';
+import { withTransaction, containsPattern } from '@elevate/server-kit';
 import { NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import type { BatchId, StudentId } from '@elevate/shared-types';
 import type { z } from 'zod';
@@ -43,13 +43,23 @@ export function presentStudent(row: StudentRow, view: View) {
   return { ...row, dateOfBirth: null, email: null, phone: null, guardianName: null, guardianRelationship: null, guardianEmail: null, guardianPhone: null, contactsHidden: true as const };
 }
 
-export async function listStudents(db: Database, actor: Actor, filter: { batchId?: string; q?: string } = {}) {
+/** SQL: has enrolments and none of them is running. Their records stay readable; lists show them only when asked. */
+function leftSql(db: Database) {
+  const enrolmentsOf = (extra?: SQL) => db.select({ one: sql`1` }).from(academicEnrolments).where(and(eq(academicEnrolments.studentId, academicStudents.id), extra));
+  return and(exists(enrolmentsOf()), notExists(enrolmentsOf(inArray(academicEnrolments.status, ['active', 'paused']))))!;
+}
+
+export const STUDENT_LIST_LIMIT = 500;
+
+export async function listStudents(db: Database, actor: Actor, filter: { batchId?: string; q?: string; state?: 'current' | 'left' | 'all' } = {}) {
   const scope = await resolveScope(db, actor, 'academic:students:read');
   const visible = await studentIdsInScope(db, scope);
   if (visible && visible.length === 0) return [];
   const conditions = [];
   if (visible) conditions.push(inArray(academicStudents.id, visible));
-  if (filter.q) conditions.push(or(ilike(academicStudents.fullName, `%${filter.q}%`), ilike(academicStudents.code, `%${filter.q}%`)));
+  if (filter.state === 'left') conditions.push(leftSql(db));
+  else if (filter.state !== 'all') conditions.push(not(leftSql(db)));
+  if (filter.q) conditions.push(or(ilike(academicStudents.fullName, containsPattern(filter.q)), ilike(academicStudents.code, containsPattern(filter.q))));
   if (filter.batchId) {
     const ids = await db
       .select({ id: academicEnrolments.studentId })
@@ -58,7 +68,7 @@ export async function listStudents(db: Database, actor: Actor, filter: { batchId
     if (ids.length === 0) return [];
     conditions.push(inArray(academicStudents.id, ids.map((i) => i.id)));
   }
-  const rows = await db.select().from(academicStudents).where(conditions.length ? and(...conditions) : undefined).orderBy(asc(academicStudents.fullName)).limit(500);
+  const rows = await db.select().from(academicStudents).where(conditions.length ? and(...conditions) : undefined).orderBy(asc(academicStudents.fullName)).limit(STUDENT_LIST_LIMIT);
   const enrolments = rows.length
     ? await db
         .select({ studentId: academicEnrolments.studentId, batchCode: academicBatches.code, status: academicEnrolments.status })

@@ -269,7 +269,7 @@ export async function mergeLeads(
       throw new ConflictError('One of these leads was already merged.');
     if (siblingsOnly(source, target))
       throw new ConflictError(
-        `${source.code} and ${target.code} have different names, so they may be siblings sharing a parent's contact. They are not merged: dismiss the duplicate flag, or correct the name first if this really is the same student.`,
+        `${source.code} and ${target.code} do not match closely enough to merge: their names are not similar, or they share no phone or email, so they may be siblings or different students. Dismiss the duplicate flag, or correct the details first if this really is the same student.`,
       );
     const admissions = await tx
       .select()

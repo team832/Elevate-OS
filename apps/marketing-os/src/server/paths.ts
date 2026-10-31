@@ -6,4 +6,5 @@ export const MODULE_PATHS = {
   login: modulePath('login'),
   loginApi: modulePath('api/v1/auth/login'),
   logoutApi: modulePath('api/v1/auth/logout'),
+  sessionApi: modulePath('api/v1/auth/session'),
 } as const;

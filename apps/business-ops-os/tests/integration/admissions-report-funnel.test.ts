@@ -1,4 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { listDemos } from '../../src/server/demos-read';
+import { demoListQuery } from '../../src/server/demos-schemas';
 import { eq } from 'drizzle-orm';
 import { opsAdmissions, opsDemos, opsDemoSessions } from '@elevate/database';
 import { callRoute, createTestUser, setupTestDatabase, type TestUser } from '@elevate/testing';
@@ -114,7 +116,7 @@ describe('admissions funnel and demo conversion (A-REP-1, A-REP-2)', () => {
     expect(f.demoConversion.byProgramme).toEqual([
       expect.objectContaining({ demos: 2, decided: 2, converted: 1, ratePct: 50 }),
     ]);
-    expect(f.demoConversion.bySource?.[0]).toMatchObject({ group: 'WEBINAR', demos: 2 });
+    expect(f.demoConversion.bySource?.[0]).toMatchObject({ group: 'Webinar', demos: 2 });
     expect(f.demoConversion.byOutcome.map((g) => [g.group, g.demos])).toEqual([
       ['converted', 1],
       ['declined', 1],
@@ -132,5 +134,22 @@ describe('admissions funnel and demo conversion (A-REP-1, A-REP-2)', () => {
     const f = await funnelOf(manager);
     expect(f.funnel.find((st) => st.key === 'attended')?.count).toBeGreaterThan(0);
     expect(f.funnel.find((st) => st.key === 'completed')?.count).toBe(before);
+  });
+});
+
+describe('Conversions this month: the tile and the list it opens agree', () => {
+  it('a conversion of another month is not on the list', async () => {
+    const thisMonth = await pendingCase(counsellor);
+    const earlier = await pendingCase(counsellor);
+    await demo(thisMonth, 3, { outcome: 'converted' });
+    await demo(earlier, 3, { outcome: 'converted' });
+    await ctx.db.update(opsDemos).set({ outcomeAt: new Date(Date.now() - 62 * 86_400_000) }).where(eq(opsDemos.admissionId, earlier.admissionId as never));
+    const all = await listDemos(ctx.db, counsellor, demoListQuery.parse({ view: 'previous', outcome: 'converted' }));
+    const tile = await listDemos(ctx.db, counsellor, demoListQuery.parse({ view: 'previous', outcome: 'converted', outcomeMonth: all.month }));
+    const ids = (l: typeof all) => l.rows.map((r) => r.demo.admissionId as string);
+    expect(ids(all)).toContain(earlier.admissionId);
+    expect(ids(tile)).toContain(thisMonth.admissionId);
+    expect(ids(tile)).not.toContain(earlier.admissionId);
+    expect(tile.total).toBe(tile.kpis.conversions);
   });
 });

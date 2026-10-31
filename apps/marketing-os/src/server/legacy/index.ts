@@ -16,14 +16,25 @@ export { importLegacyAccounts, importLegacyRules } from './import-registry';
 export { importLegacyIdeas, importLegacyPlacements } from './import-tracker';
 export { importLegacyPostAudit, POST_AUDIT_LABEL } from './import-audit';
 
-export async function importLegacyMarketing(db: Database, data: LegacyMarketingData) {
+/** The configuration part of the import: policy settings, rules, accounts. */
+export async function importLegacyRegistry(
+  db: Database,
+  data: Pick<LegacyMarketingData, 'accounts' | 'rules'>,
+) {
   return withTransaction(db, async (tx) => {
     const settings = await seedPolicySettings(tx);
     const rules = await importLegacyRules(tx, data.rules);
     const accounts = await importLegacyAccounts(tx, data.accounts, data.rules);
+    return { settings, rules, accounts };
+  });
+}
+
+export async function importLegacyMarketing(db: Database, data: LegacyMarketingData) {
+  return withTransaction(db, async (tx) => {
+    const registry = await importLegacyRegistry(tx, data);
     const ideas = await importLegacyIdeas(tx, data.ideas);
     const placements = await importLegacyPlacements(tx, data.placements);
     const postAudit = await importLegacyPostAudit(tx, data.postAudit);
-    return { settings, rules, accounts, ideas, placements, postAudit };
+    return { ...registry, ideas, placements, postAudit };
   });
 }

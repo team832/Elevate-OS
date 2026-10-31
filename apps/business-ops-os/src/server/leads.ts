@@ -3,19 +3,26 @@
  * duplicate warnings (never auto-merge; matching and review in ./lead-duplicates.ts),
  * assignment and acceptance, contact attempts, explicit audited merge, and history.
  */
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 import {
   opsAdmissions,
   opsEnquiries,
   opsLeads,
   opsLeadSources,
+  students,
   type Database,
 } from '@elevate/database';
-import { withTransaction } from '@elevate/server-kit';
-import { ConflictError, ForbiddenError, ValidationError } from '@elevate/shared-contracts';
+import { publishEvent, withTransaction } from '@elevate/server-kit';
+import {
+  ConflictError,
+  enrolmentKeys,
+  ForbiddenError,
+  ValidationError,
+} from '@elevate/shared-contracts';
 import type { LeadId, ProgrammeId, StaffMemberId, UserId } from '@elevate/shared-types';
 import { findDuplicateMatches, isOpenStatus } from '../domain';
 import {
+  auditDuplicateCheck,
   CONTACT_KEYS,
   describeMatches,
   duplicateCandidates,
@@ -42,7 +49,7 @@ import type { CreateLeadInput, EnquiryInput, UpdateLeadInput } from './schemas';
 import { loadSettings } from './settings';
 
 export type { LeadRow } from './leads-access';
-export { getLead, LEAD_LIST_FLAGS, listLeads } from './leads-read';
+export { getLead, LEAD_LIST_FLAGS, leadCounts, listLeads } from './leads-read';
 export { acceptLead, assignLead, logActivity, mergeLeads } from './leads-actions';
 
 async function assertSource(db: Database, code: string) {
@@ -114,14 +121,10 @@ export async function createLead(
   const previousSchool = clean(input.previousSchool);
   const acknowledgement = input.acknowledgeDuplicates?.reason ?? null;
 
-  return withTransaction(db, async (tx) => {
+  const outcome = await withTransaction(db, async (tx) => {
     const matches = await matchesForNew(tx, contacts, input.studentName, previousSchool);
-    if (matches.some((m) => m.level === 'exact') && !input.acknowledgeDuplicates) {
-      throw new ConflictError(
-        'This contact already exists. Attach a new enquiry to the existing lead, or confirm with a reason that this is a different person.',
-        { details: { duplicates: await describeMatches(tx, access, matches) } },
-      );
-    }
+    if (matches.some((m) => m.level === 'exact') && !input.acknowledgeDuplicates)
+      return { refused: matches };
     const code = await nextCode(tx, 'lead', 'ops.leads');
     const now = new Date();
     const [inserted] = await tx
@@ -199,6 +202,15 @@ export async function createLead(
       duplicates: await describeMatches(tx, access, matches),
     };
   });
+  if (outcome.refused) {
+    // Outside the transaction: a refusal saves nothing, but this lookup stays on record.
+    await auditDuplicateCheck(db, actor, contacts, outcome.refused, requestId);
+    throw new ConflictError(
+      'This contact already exists. Attach a new enquiry to the existing lead, or confirm with a reason that this is a different person.',
+      { details: { duplicates: await describeMatches(db, access, outcome.refused) } },
+    );
+  }
+  return outcome;
 }
 
 /** Lead text fields: trimmed, empty → null. */
@@ -210,6 +222,60 @@ const TEXT_FIELDS = [
   'guardianName',
   'notes',
 ] as const;
+
+/**
+ * A corrected name reaches the canonical student and the person's other leads in this
+ * transaction, and Academic through `ops.student.renamed` v1. Documents already issued keep the
+ * name at issue (Proposed, the owner's question): see `admissionConfirmation`.
+ */
+async function renameStudent(
+  tx: Database,
+  actor: Actor,
+  leadId: LeadRow['id'],
+  fullName: string,
+  requestId?: string,
+) {
+  const cases = await tx
+    .selectDistinct({ id: opsAdmissions.studentId })
+    .from(opsAdmissions)
+    .where(and(eq(opsAdmissions.leadId, leadId), isNotNull(opsAdmissions.studentId)));
+  const ids = cases.map((c) => c.id!);
+  if (!ids.length) return;
+  await tx
+    .update(opsLeads)
+    .set({ studentName: fullName })
+    .where(
+      inArray(
+        opsLeads.id,
+        tx
+          .select({ id: opsAdmissions.leadId })
+          .from(opsAdmissions)
+          .where(inArray(opsAdmissions.studentId, ids)),
+      ),
+    );
+  const renamed = await tx
+    .update(students)
+    .set({ fullName })
+    .where(and(inArray(students.id, ids), ne(students.fullName, fullName)))
+    .returning({ id: students.id });
+  const renamedAt = new Date().toISOString();
+  for (const { id } of renamed) {
+    await opsAudit('student')(
+      tx,
+      actor,
+      id,
+      'student.renamed',
+      { after: { fullName }, metadata: { leadId } },
+      requestId,
+    );
+    await publishEvent(tx, {
+      type: 'ops.student.renamed',
+      version: 1,
+      idempotencyKey: enrolmentKeys.renamed(id, renamedAt),
+      payload: { coreStudentId: id, fullName, renamedAt, renamedByUserId: actor.id } as never,
+    });
+  }
+}
 
 export async function updateLead(
   db: Database,
@@ -269,6 +335,7 @@ export async function updateLead(
       { before, after, metadata: { leadId: before.id } },
       requestId,
     );
+    if (patch.studentName) await renameStudent(tx, actor, before.id, patch.studentName, requestId);
     return maskedLead(tx, actor, after as LeadRow);
   });
 }

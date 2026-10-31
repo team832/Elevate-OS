@@ -39,6 +39,34 @@ export function EmptyState({
   );
 }
 
+/** URL values that pick a record or a page, not a filter. */
+const NOT_FILTERS = new Set(['page', 'open', 'act', 'new', 'newEvent', 'section', 'notice', 'error', 'view', 'tab']);
+
+/** True when a list's URL holds a filter (a search box or select left blank is not one). */
+export const hasFilter = (params: Record<string, unknown>) =>
+  Object.entries(params).some(([k, v]) => !NOT_FILTERS.has(k) && v !== undefined && v !== '');
+
+/** A list with no rows: with a filter set, it says so; with none, it says what to do first. */
+export function ListEmpty({
+  noun,
+  params,
+  first,
+  action,
+}: {
+  /** Plural, as in "No leads yet". */
+  noun: string;
+  /** The list's URL parameters. */
+  params: Record<string, unknown>;
+  first: ReactNode;
+  action?: ReactNode;
+}) {
+  return hasFilter(params) ? (
+    <EmptyState title={`No ${noun} match these filters`} description="Change or clear the filters." />
+  ) : (
+    <EmptyState title={`No ${noun} yet`} description={first} action={action} />
+  );
+}
+
 export function ErrorState({
   title = 'Something went wrong',
   description = 'This could not be loaded. Try again in a moment; if it keeps happening, tell a platform administrator.',

@@ -1,12 +1,18 @@
 import type { ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { ButtonLink, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { ADMISSION_STATUS_LABELS, isIsoDate, type AdmissionStatus } from '../../domain';
+import { REFERENCE_DATA_HELP } from '@elevate/shared-contracts';
+import { ButtonLink, PageHeader, StatusBadge, ListEmpty, Alert } from '@elevate/shared-ui';
+import {
+  ADMISSION_STATUSES,
+  ADMISSION_STATUS_LABELS,
+  isIsoDate,
+  type AdmissionStatus,
+} from '../../domain';
 import { listDuplicateQueue } from '../../server/lead-duplicates';
 import { NOT_STAGED } from '../../server/lead-funnel';
 import { listLeadStages, type LeadStage } from '../../server/lead-stages';
-import { getLead, LEAD_LIST_FLAGS, listLeads } from '../../server/leads';
+import { getLead, LEAD_LIST_FLAGS, leadCounts, listLeads } from '../../server/leads';
 import { formOptions } from '../../server/options';
 import { StatCard } from '../../ui/charts';
 import { fmtDateTime, statusTone } from '../../ui/format';
@@ -46,7 +52,7 @@ const FLAG_LABELS: Record<string, string> = {
   duplicate: 'Duplicate review',
 };
 
-/** Early pipeline stages shown as filter figures (counts from the same list query). */
+/** Early pipeline stages shown as filter figures (counted in SQL over the whole search). */
 const STAGES = [
   'new',
   'contacted',
@@ -95,18 +101,27 @@ async function Body({ user, sp, base }: { user: AuthenticatedUser; sp: Params; b
   if (sp.from && sp.to && isIsoDate(sp.from) && isIsoDate(sp.to))
     return <FunnelDrill user={user} base={base} sp={sp} from={sp.from} to={sp.to} />;
   const act = LEAD_ACTS.find((a) => a === sp.act);
+  const filters = {
+    q: sp.q,
+    status: ADMISSION_STATUSES.find((s) => s === sp.stage),
+    leadStage: sp.leadStage === NOT_STAGED ? null : sp.leadStage || undefined,
+    flag: LEAD_LIST_FLAGS.find((f) => f === sp.flag),
+  };
+  const page = Math.max(1, Number(sp.page) || 1);
   const r = await load(async (db) => {
-    const [leads, duplicates, open, opts, stages] = await Promise.all([
-      listLeads(db, user, { q: sp.q }),
+    const [leads, matching, tiles, duplicates, open, opts, stages] = await Promise.all([
+      listLeads(db, user, { ...filters, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
+      leadCounts(db, user, filters),
+      leadCounts(db, user, { q: sp.q }),
       can(user, 'ops:leads:merge') ? listDuplicateQueue(db, user) : null,
       sp.open ? getLead(db, user, sp.open) : null,
       sp.new || act ? formOptions(db) : null,
       listLeadStages(db, user),
     ]);
-    return { leads, duplicates, open, opts, stages };
+    return { leads, total: matching.total, tiles, duplicates, open, opts, stages };
   });
   if (!r.ok) return r.view;
-  const { leads, duplicates, open, opts, stages } = r.data;
+  const { leads, total, tiles, duplicates, open, opts, stages } = r.data;
   const closeHref = listHref(BASE, sp, { open: undefined, act: undefined });
   return (
     <div className="el-stack">
@@ -115,14 +130,22 @@ async function Body({ user, sp, base }: { user: AuthenticatedUser; sp: Params; b
           <li key={stage}>
             <StatCard
               label={ADMISSION_STATUS_LABELS[stage]}
-              value={leads.filter((l) => l.status === stage).length}
+              value={tiles.byStatus[stage] ?? 0}
               href={listHref(BASE, { stage })}
               current={sp.stage === stage}
             />
           </li>
         ))}
       </ul>
-      <LeadList sp={sp} rows={leads} base={base} stages={stages} />
+      <LeadList
+        user={user}
+        sp={sp}
+        rows={leads}
+        total={total}
+        page={page}
+        base={base}
+        stages={stages}
+      />
       {duplicates ? (
         <Segment
           title="Merge review"
@@ -198,27 +221,23 @@ async function Body({ user, sp, base }: { user: AuthenticatedUser; sp: Params; b
 type LeadRow = Awaited<ReturnType<typeof listLeads>>[number];
 
 function LeadList({
+  user,
   sp,
-  rows: all,
+  rows,
+  total,
+  page,
   base,
   stages,
 }: {
+  user: AuthenticatedUser;
   sp: Params;
   rows: LeadRow[];
+  total: number;
+  page: number;
   base: string;
   stages: LeadStage[];
 }) {
   const BASE = `${base}/leads`;
-  const flag = LEAD_LIST_FLAGS.get(sp.flag ?? '');
-  const stage = sp.stage && sp.stage in ADMISSION_STATUS_LABELS ? sp.stage : undefined;
-  const leadStage = sp.leadStage === NOT_STAGED ? null : sp.leadStage;
-  const rows = all.filter(
-    (l) =>
-      (!flag || flag(l)) &&
-      (!stage || l.status === stage) &&
-      (!sp.leadStage || l.stageKey === leadStage),
-  );
-  const page = Math.max(1, Number(sp.page) || 1);
   return (
     <div className="el-stack">
       <SearchPanel
@@ -239,7 +258,7 @@ function LeadList({
             name: 'stage',
             label: 'Admission status',
             type: 'select',
-            value: stage,
+            value: ADMISSION_STATUSES.find((s) => s === sp.stage),
             options: Object.entries(ADMISSION_STATUS_LABELS).map(([value, label]) => ({
               value,
               label,
@@ -249,19 +268,27 @@ function LeadList({
             name: 'flag',
             label: 'Needs attention',
             type: 'select',
-            value: flag ? sp.flag : undefined,
+            value: LEAD_LIST_FLAGS.find((f) => f === sp.flag),
             options: Object.entries(FLAG_LABELS).map(([value, label]) => ({ value, label })),
           },
         ]}
       />
       <RecordTable
-        caption={`${rows.length} lead${rows.length === 1 ? '' : 's'}`}
-        rows={rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+        caption={`${total} lead${total === 1 ? '' : 's'}`}
+        rows={rows}
         rowKey={(l) => l.id}
         rowHref={(l) => listHref(BASE, sp, { open: l.id, act: undefined, new: undefined })}
         linkColumn="studentName"
         empty={
-          <EmptyState title="No leads match" description="Clear a filter, or add a new lead." />
+          <ListEmpty
+            noun="leads"
+            params={sp}
+            first={
+              can(user, 'ops:leads:write')
+                ? 'Add the first lead with New lead.'
+                : 'Leads appear here once someone adds them.'
+            }
+          />
         }
         columns={[
           {
@@ -333,7 +360,7 @@ function LeadList({
           { key: 'receivedAt', header: 'Received', render: (l) => fmtDateTime(l.receivedAt) },
         ]}
       />
-      <Pager basePath={BASE} params={sp} page={page} pageSize={PAGE_SIZE} total={rows.length} />
+      <Pager basePath={BASE} params={sp} page={page} pageSize={PAGE_SIZE} total={total} />
     </div>
   );
 }
@@ -356,6 +383,11 @@ function NewLead({
       meta="Student name and at least one phone or email. Indian numbers are normalised to +91."
       closeHref={closeHref}
     >
+      {opts.sources.length ? null : (
+        <Alert tone="warning" title="A lead cannot be saved yet: no enquiry sources are loaded">
+          {REFERENCE_DATA_HELP}
+        </Alert>
+      )}
       <LeadCreateForm
         base={base}
         cancelHref={closeHref}

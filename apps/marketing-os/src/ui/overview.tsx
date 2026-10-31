@@ -4,6 +4,7 @@
  * ("Not available yet", "Could not be loaded"), never as 0; each block names its source.
  */
 import type { ReactNode } from 'react';
+import { LINK_LOGIN_HELP } from '@elevate/shared-contracts';
 import type { followUpDaySummary } from '@elevate/business-ops-os/leads';
 import { STANDING_LABELS, type taskDaySummary } from '@elevate/business-ops-os/work';
 import {
@@ -20,7 +21,7 @@ import {
   TextInput,
 } from '@elevate/shared-ui';
 import { formatIst, modulePath } from '../domain';
-import { TARGET_METRICS } from '../domain/metrics';
+import { formatDay, formatPeriod, TARGET_METRICS } from '../domain/metrics';
 import { notFiltered, type DashboardFilters, type FilterKey } from '../server/dashboard-filters';
 import type { LeadFigures, Overview } from '../server/dashboard-overview';
 import { PickField, type Option } from './fields';
@@ -33,7 +34,7 @@ type TaskCount = Overview['tasks']['overdue'];
 const words = (s: string) => s.replace('_', ' ');
 const asOf = (at: Date) => `as of ${formatIst(at)}`;
 const noStaff = (what: string) =>
-  `No staff record is linked to your account, so your ${what} cannot be shown.`;
+  `No staff record is linked to your account, so your ${what} cannot be shown. ${LINK_LOGIN_HELP}`;
 const missing = (label: string, note: string, missingLabel = 'Not available') => (
   <StatCard label={label} value={null} missingLabel={missingLabel} note={note} />
 );
@@ -57,7 +58,7 @@ export const Explain = ({ children }: { children: ReactNode }) => (
 );
 
 export const periodText = (f: Pick<DashboardFilters, 'from' | 'to'>) =>
-  `${f.from} to ${f.to} (IST)`;
+  `${formatPeriod(f.from, f.to)} (IST)`;
 
 export function OverviewFilters({
   f,
@@ -355,7 +356,7 @@ export function TargetsChart({
           max={100}
           format={(n) => `${Math.round(n)}%`}
           data={targets.map((t) => ({
-            label: `${TARGET_METRICS[t.target.metricKey].label} · ${t.staffName ?? t.campaignCode ?? 'Team'} · ${t.target.periodStart} to ${t.target.periodEnd}`,
+            label: `${TARGET_METRICS[t.target.metricKey].label} · ${t.staffName ?? t.campaignCode ?? 'Team'} · ${formatPeriod(t.target.periodStart, t.target.periodEnd)}`,
             value:
               t.actual.value === null
                 ? null
@@ -399,7 +400,7 @@ export function PersonalTiles({
             label="EOD report"
             value={words(tasks.eod)}
             href={modulePath('tasks?tab=eod')}
-            note={`For ${tasks.day}`}
+            note={`For ${formatDay(tasks.day)}`}
           />
         </>
       )}

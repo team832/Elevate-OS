@@ -12,7 +12,7 @@ import { Alert, StatusBadge } from '@elevate/shared-ui';
 import { CLASS_CATEGORY_LABELS } from '../../../domain/demos';
 import { getStudentKyc } from '../../../server/kyc';
 import { ActionForm } from '../../../ui/action-form';
-import { fmtDateTime, humanise } from '../../../ui/format';
+import { fmtDate, fmtDateTime, humanise } from '../../../ui/format';
 import { load } from '../../../ui/frame';
 import { listHref } from '../../../ui/list-controls';
 import { FormModal } from '../../../ui/record-modal';
@@ -170,7 +170,7 @@ export async function KycTab({
       <Segment
         title="Identity documents"
         flush
-        description={`Masked reference and verification only; no document is mandatory. Types: ${documentTypes.decisionState} setting.`}
+        description="Masked reference and verification only; no document is mandatory."
         actions={
           write ? (
             <a href={listHref(base, { tab: 'kyc', action: 'document' })}>Record a document</a>
@@ -315,6 +315,11 @@ function ContactSegment({ d, user }: { d: Profile; user: AuthenticatedUser }) {
     >
       <DetailTable
         rows={[
+          {
+            label: 'Date of birth',
+            value: p.dateOfBirth ? fmtDate(p.dateOfBirth) : 'Not recorded',
+          },
+          { label: 'Address', value: p.address ?? 'Not recorded' },
           { label: 'Student phone', value: p.studentPhone ?? 'Not recorded' },
           { label: 'Student email', value: p.studentEmail ?? 'Not recorded' },
           { label: 'School', value: p.previousSchool ?? 'Not recorded' },

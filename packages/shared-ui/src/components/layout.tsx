@@ -386,9 +386,6 @@ function TopBar(props: AppShellProps) {
         {typeof unreadNotifications === 'number' ? (
           <Bell count={unreadNotifications} base={MODULES[current].basePath} />
         ) : null}
-        {typeof unreadNotifications === 'number' && MODULES[current].basePath ? (
-          <NotificationToaster base={MODULES[current].basePath} unread={unreadNotifications} />
-        ) : null}
         <details className="el-user-menu">
           <summary className="el-avatar-button">
             <span className="el-avatar" aria-hidden="true">
@@ -428,12 +425,17 @@ function TopBar(props: AppShellProps) {
  */
 export function AppShell(props: AppShellProps) {
   const sidebarId = `el-sidebar-${props.current}`;
+  const base = MODULES[props.current].basePath;
   return (
     <ShellFrame
       sidebarId={sidebarId}
       sidebar={<Sidebar {...props} />}
       topbar={<TopBar {...props} />}
     >
+      {/* Not in the top bar: its blur would make that bar their fixed frame, over the menu and bell. */}
+      {typeof props.unreadNotifications === 'number' && base ? (
+        <NotificationToaster base={base} unread={props.unreadNotifications} />
+      ) : null}
       {props.children}
     </ShellFrame>
   );
@@ -485,7 +487,7 @@ export function Subnav({
   return (
     <nav className="el-subnav" aria-label={label}>
       {items.map(([href, text]) => (
-        <a key={href} href={href} aria-current={href === current ? 'page' : undefined}>
+        <a key={href + text} href={href} aria-current={href === current ? 'page' : undefined}>
           {text}
         </a>
       ))}

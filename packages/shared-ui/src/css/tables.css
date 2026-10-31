@@ -1,0 +1,182 @@
+/* Data tables (DataTable, RecordTable): a rounded well; the header row is raised; rows warm on hover.
+ * Mobile first: compact tables are labelled blocks on phones and a real table from 720px. */
+.el-table-wrap {
+  /* Contains visually hidden text (and the hidden compact header), so it never widens the page. */
+  position: relative;
+  overflow-x: auto;
+  background: var(--el-well);
+  border: 1px solid var(--el-border);
+  border-radius: var(--el-radius-sm);
+  box-shadow: var(--el-shadow-inset);
+}
+.el-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--el-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.el-table caption {
+  text-align: left;
+  padding: var(--el-space-2) var(--el-space-3);
+  color: var(--el-text-muted);
+}
+.el-table th,
+.el-table td {
+  padding: 0.625rem var(--el-space-3);
+  border-bottom: 1px solid var(--el-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+/* A header wraps rather than pushing the last columns out of view, and a column never gets
+ * narrower than 5rem, so a long note elsewhere cannot squeeze a date to one word per line. */
+.el-table th {
+  min-width: 5rem;
+  background: var(--el-surface-muted);
+  color: var(--el-text-muted);
+  font-size: var(--el-text-xs);
+  font-weight: 650;
+  border-bottom-color: var(--el-border-strong);
+}
+/* Numbers need less, so a wide report of figures still fits. */
+.el-table th.el-num {
+  min-width: 3.5rem;
+}
+/* A long status wraps inside its column or phone card instead of running past the edge. */
+.el-table .el-badge {
+  padding-block: 0.1875rem;
+  border-radius: var(--el-radius-sm); /* a pill on one line, a rounded box on two */
+  line-height: 1.25;
+  white-space: normal;
+}
+.el-table th[aria-sort='ascending']::after {
+  content: ' ↑' / '';
+}
+.el-table th[aria-sort='descending']::after {
+  content: ' ↓' / '';
+}
+.el-table tbody tr:hover {
+  background: var(--el-accent-wash);
+}
+.el-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.el-table-compact th,
+.el-table-compact td {
+  padding: 0.5rem var(--el-space-3);
+}
+/* Compact tables: labelled blocks on phones (mobile first), a real table from 720px. */
+.el-table-compact,
+.el-table-compact tbody,
+.el-table-compact tr,
+.el-table-compact td {
+  display: block;
+}
+.el-table-compact caption {
+  display: block;
+}
+.el-table-compact thead {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.el-table-compact tr {
+  padding: var(--el-space-3);
+  border-bottom: 1px solid var(--el-border);
+}
+.el-table-compact tbody tr:last-child {
+  border-bottom: 0;
+}
+.el-table-compact td,
+.el-table-compact tbody tr:last-child td {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: var(--el-space-3);
+  padding: 0.1875rem 0;
+  border: 0;
+}
+.el-table-compact td::before {
+  content: attr(data-label);
+  color: var(--el-text-muted);
+  font-size: var(--el-text-xs);
+  font-weight: 600;
+  padding-top: 0.0625rem;
+}
+.el-table-compact td > * {
+  justify-self: start;
+}
+/* A long unbroken value (a code, a link, a name) breaks instead of running off the card. */
+.el-table-compact td {
+  overflow-wrap: anywhere;
+}
+.el-table td.el-num,
+.el-table th.el-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* In a phone card a number lines up with the other values, not against the far edge, and a value
+ * with no label (row actions) takes the whole width. */
+@media (max-width: 719.98px) {
+  .el-table-compact td.el-num {
+    text-align: left;
+  }
+  .el-table-compact tbody tr td[data-label=''] {
+    display: block;
+  }
+}
+
+/* A list longer than a page gets a well of its own, so its header can stay in view; on paper it
+ * prints in full. */
+@media screen and (min-width: 720px) {
+  .el-table-well {
+    max-height: min(70dvh, 52rem);
+    overflow: auto;
+  }
+  .el-table-well thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+}
+@media (min-width: 720px) {
+  .el-table-compact {
+    display: table;
+  }
+  .el-table-compact td > * {
+    justify-self: auto;
+  }
+  .el-table-compact caption {
+    display: table-caption;
+  }
+  .el-table-compact thead {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    display: table-header-group;
+  }
+  .el-table-compact tbody {
+    display: table-row-group;
+  }
+  .el-table-compact tr {
+    display: table-row;
+    padding: 0;
+  }
+  .el-table-compact td,
+  .el-table-compact tbody tr:last-child td {
+    display: table-cell;
+    padding: 0.5rem var(--el-space-3);
+    border-bottom: 1px solid var(--el-border);
+    overflow-wrap: break-word;
+  }
+  .el-table-compact tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .el-table-compact td::before {
+    content: none;
+  }
+}

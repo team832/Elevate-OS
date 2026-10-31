@@ -1,4 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { users } from '@elevate/database';
 import {
   authedRequest,
   callRoute,
@@ -8,6 +10,8 @@ import {
 } from '@elevate/testing';
 import { GET as directory } from '../../src/app/api/v1/organisation/route';
 import { POST as createStaff } from '../../src/app/api/v1/staff/route';
+import { PATCH as patchStaff } from '../../src/app/api/v1/staff/[id]/route';
+import { linkableLogins } from '../../src/server/organisation';
 import { POST as hrAction } from '../../src/app/api/v1/hr/staff/[id]/[action]/route';
 import { GET as listSettings } from '../../src/app/api/v1/settings/route';
 import { PUT as putSetting } from '../../src/app/api/v1/settings/[key]/route';
@@ -25,6 +29,55 @@ beforeAll(async () => {
   manager = await staffUser(ctx.db, ['operations_manager']);
   counsellor = await staffUser(ctx.db, ['admissions_counsellor'], { managerId: manager.staffId });
   auditor = await createTestUser(ctx.db, { roles: ['auditor'] });
+});
+
+describe('linking a login to a staff record (PPL-005, PPL-007)', () => {
+  const addStaff = async (fullName: string) =>
+    (await callRoute<{ id: string }>(createStaff, req(manager, { fullName }))).data!.id;
+
+  it('the picker offers active logins with no staff record, and the one this record holds', async () => {
+    const free = await createTestUser(ctx.db, { roles: ['teacher'] });
+    const disabled = await createTestUser(ctx.db, { roles: ['teacher'] });
+    await ctx.db.update(users).set({ status: 'disabled' }).where(eq(users.id, disabled.id));
+    const staffId = await addStaff('Sample Link Teacher');
+    const ids = async () => (await linkableLogins(ctx.db, manager, staffId)).map((o) => o.value);
+    expect(await ids()).toContain(free.id);
+    expect(await ids()).not.toContain(disabled.id);
+    expect(await ids()).not.toContain(counsellor.id);
+    const link = await callRoute(patchStaff, req(manager, { userId: free.id }, 'PATCH'), {
+      id: staffId,
+    });
+    expect(link.status).toBe(200);
+    expect(await ids()).toContain(free.id); // this record's own login stays on its list
+    const other = await addStaff('Sample Other Teacher');
+    expect((await linkableLogins(ctx.db, manager, other)).map((o) => o.value)).not.toContain(
+      free.id,
+    );
+    const taken = await callRoute(patchStaff, req(manager, { userId: free.id }, 'PATCH'), {
+      id: other,
+    });
+    expect(taken.status).toBe(409);
+  });
+
+  it('only holders of ops:organisation:manage may read the picker or link', async () => {
+    const staffId = await addStaff('Sample Guarded Teacher');
+    await expect(linkableLogins(ctx.db, counsellor, staffId)).rejects.toThrow();
+    const res = await callRoute(patchStaff, req(counsellor, { userId: counsellor.id }, 'PATCH'), {
+      id: staffId,
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('a rename reaches the login, which is what the header and account menu show', async () => {
+    const person = await createTestUser(ctx.db, { roles: ['teacher'] });
+    const staffId = await addStaff('Sample Old Name');
+    await callRoute(patchStaff, req(manager, { userId: person.id }, 'PATCH'), { id: staffId });
+    await callRoute(patchStaff, req(manager, { fullName: 'Sample New Name' }, 'PATCH'), {
+      id: staffId,
+    });
+    const [row] = await ctx.db.select().from(users).where(eq(users.id, person.id));
+    expect(row!.displayName).toBe('Sample New Name');
+  });
 });
 
 describe('staff directory (steward of core tables)', () => {

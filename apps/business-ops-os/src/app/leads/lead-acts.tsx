@@ -8,6 +8,7 @@ import type { formOptions } from '../../server/options';
 import { ActionForm, type ActionFormProps } from '../../ui/action-form';
 import { options as optionList } from '../../ui/list-controls';
 import { FormModal } from '../../ui/record-modal';
+import { noStaffHint } from '../../ui/sections';
 import { LEAD_CONTACT_FIELDS, type LeadDetail } from './lead-record';
 import { CALL_FIELDS, CALL_NOTE, stageFields } from './lead-stage-record';
 
@@ -60,6 +61,7 @@ export function LeadActModal({
             type: 'select',
             required: true,
             options: options.staff,
+            emptyHint: noStaffHint(base),
             section: 'Owner',
           },
         ],

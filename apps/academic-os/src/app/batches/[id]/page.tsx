@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Card, DataTable, EmptyState, PageHeader, Subnav } from '@elevate/shared-ui';
+import { Card, DataTable, EmptyState, PageHeader, Subnav, fmtDay } from '@elevate/shared-ui';
 import { getBatch, getBatchCoverage, getBatchFeasibility, getCourse, listBatchPlacements, listStaff, todayIst } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
-import { PlanBadge, StateBadge } from '../../../ui/badges';
+import { PlanBadge, StateBadge, programmeName } from '../../../ui/badges';
 import { CoverageSection, FeasibilitySection } from '../../../ui/batch-sections';
 import { BatchDetails, BatchStudents, BatchTeachers } from '../../../ui/batch-tabs';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
@@ -25,7 +25,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
   const db = getDb();
   const actor = actorFor(access.user);
   const batch = await load(() => getBatch(db, actor, id));
-  if (!batch.ok) return <AcademicShell access={access} active="batches"><LoadError error={batch.error} /></AcademicShell>;
+  if (!batch.ok) return <AcademicShell access={access} active="batches"><LoadError level={1} error={batch.error} /></AcademicShell>;
   const b = batch.data;
   const canAssign = can(access.user, 'academic:assignments:write');
   const canWrite = can(access.user, 'academic:batches:write');
@@ -46,7 +46,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
     <PageHeader
       title={`${b.code} — ${b.name}`}
       meta={<StateBadge state={b.status} />}
-      description={<>{b.programmeCode} / {b.courseCode} · {b.activeEnrolments} enrolled{b.capacity ? ` of ${b.capacity}` : ''} · class length {b.classLength.minutes ? `${b.classLength.minutes} min` : 'unknown'} <PlanBadge status={b.classLength.status} /></>}
+      description={<>{programmeName(b.programmeCode)} / {b.courseCode} · {b.activeEnrolments} enrolled{b.capacity ? ` of ${b.capacity}` : ''} · class length {b.classLength.minutes ? `${b.classLength.minutes} min` : 'unknown'} <PlanBadge status={b.classLength.status} /></>}
       tabs={<Subnav label="Batch" items={links} current={links[TABS.indexOf(tab)]![0]} />}
     />
   );
@@ -77,7 +77,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
         <BatchDetails batch={b} staff={staff} canWrite={canWrite} />
         {b.targetExamDate ? (
           <p>
-            Target exam: {b.targetExam ?? 'exam'} on {b.targetExamDate} <PlanBadge status={b.targetExamDateStatus} />
+            Target exam: {b.targetExam ?? 'exam'} on {fmtDay(b.targetExamDate)} <PlanBadge status={b.targetExamDateStatus} />
           </p>
         ) : null}
         {coverage.ok ? <CoverageSection data={coverage.data} /> : <LoadError error={coverage.error} />}
@@ -89,7 +89,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
             empty={<EmptyState title="No calendar rules" />}
             columns={[
               { key: 'label', header: 'Rule' },
-              { key: 'period', header: 'Period', render: (r) => `${r.periodStart} to ${r.periodEnd}` },
+              { key: 'period', header: 'Period', render: (r) => `${fmtDay(r.periodStart)} to ${fmtDay(r.periodEnd)}` },
               { key: 'days', header: 'Days', render: (r) => r.weekdays.map((d) => WEEKDAY[d]).join(', ') },
               { key: 'slots', header: 'Slots/day', numeric: true, render: (r) => `${r.slotsPerDay}${r.kind === 'extra' ? ' extra' : ''}` },
               { key: 'status', header: 'Status', render: (r) => <PlanBadge status={r.status} /> },
@@ -122,7 +122,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
             columns={[
               { key: 'label', header: 'Label' },
               { key: 'kind', header: 'Kind' },
-              { key: 'when', header: 'When', render: (x) => x.date ?? `${x.periodStart} to ${x.periodEnd}` },
+              { key: 'when', header: 'When', render: (x) => (x.date ? fmtDay(x.date) : `${fmtDay(x.periodStart)} to ${fmtDay(x.periodEnd)}`) },
               { key: 'slots', header: 'Allowance', render: (x) => (x.days !== null ? `${x.days} day(s) × ${x.slotsPerDay ?? 'not recorded'} slots` : '—') },
               { key: 'scope', header: 'Scope', render: (x) => (x.batchId ? 'This batch' : 'Centre-wide') },
               { key: 'status', header: 'Status', render: (x) => <PlanBadge status={x.status} /> },

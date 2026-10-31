@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { withContentSecurityPolicy } from '@elevate/configuration/security-headers';
+import { isAllowedActionOrigin } from '@elevate/configuration/workspaces';
 
 /**
  * Module proxy (Next.js 16's renamed middleware): sets the Content-Security-Policy with a
@@ -7,7 +8,10 @@ import { withContentSecurityPolicy } from '@elevate/configuration/security-heade
  * Static security headers are in next.config.ts. Access is checked on each page and route.
  */
 export function proxy(request: NextRequest) {
+  if (request.method === 'POST' && !isAllowedActionOrigin(request))
+    return new NextResponse('This request came from another site, so it was refused.', { status: 403 });
   const { headers, csp } = withContentSecurityPolicy(request.headers);
+  headers.set('x-return-search', request.nextUrl.search);
   const response = NextResponse.next({ request: { headers } });
   response.headers.set('Content-Security-Policy', csp);
   return response;

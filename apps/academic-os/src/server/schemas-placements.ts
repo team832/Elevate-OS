@@ -46,6 +46,7 @@ export const updateAssignmentBody = z
 export const teachingAssignmentsQuery = z.object({
   staffId: z.uuid().optional(),
   status: z.enum(TEACHING_ASSIGNMENT_STATUSES).optional(),
+  programmeCode: z.string().trim().min(1).max(40).optional(),
   q: z.string().trim().min(1).max(100).optional(),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),

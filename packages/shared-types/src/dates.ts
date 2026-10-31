@@ -6,6 +6,18 @@
  */
 export const TIMEZONE = 'Asia/Kolkata' as const;
 
+const DAY = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeZone: 'UTC' });
+/** "30 Oct 2026" for a calendar day (YYYY-MM-DD): staff never read raw ISO dates. No date gives `missing`. */
+export function fmtDay(iso: string | null | undefined, missing = '—'): string {
+  if (!iso) return missing;
+  const day = new Date(`${iso}T00:00:00Z`);
+  return Number.isNaN(day.getTime()) ? iso : DAY.format(day);
+}
+
+/** Every date in a sentence in words: "2026-10-01 to open" reads "1 Oct 2026 to open". A code holding a date stays whole. */
+export const fmtDaysIn = (text: string) =>
+  text.replace(/(?<![\w-])\d{4}-\d{2}-\d{2}(?![\w-])/g, (iso) => fmtDay(iso));
+
 /** `YYYY-MM-DD` calendar date. */
 export type IsoDate = string & { readonly __isoDate: true };
 /** ISO 8601 instant, e.g. `2026-10-17T05:30:00.000Z`. */
@@ -29,17 +41,24 @@ export function parseIsoDate(value: string): IsoDate {
   return value;
 }
 
+const ISO_DAY = new Map<string, Intl.DateTimeFormat>();
+
 /** The calendar date of `instant` in `timeZone` (default Asia/Kolkata). */
 export function toIsoDate(instant: Date = new Date(), timeZone: string = TIMEZONE): IsoDate {
   if (Number.isNaN(instant.getTime())) throw new RangeError('Invalid Date');
-  // en-CA formats as YYYY-MM-DD.
-  const formatted = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(instant);
-  return formatted as IsoDate;
+  // Building a formatter costs about 90 us and using one about 1 us; a page formats thousands of dates.
+  let day = ISO_DAY.get(timeZone);
+  if (!day) {
+    // en-CA formats as YYYY-MM-DD.
+    day = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    ISO_DAY.set(timeZone, day);
+  }
+  return day.format(instant) as IsoDate;
 }
 
 export function toIsoDateTime(instant: Date = new Date()): IsoDateTime {

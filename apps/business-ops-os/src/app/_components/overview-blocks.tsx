@@ -6,14 +6,17 @@
  * own read failed says "Could not load", never 0.
  */
 import type { ReactNode } from 'react';
+import type { Principal } from '@elevate/authorization';
 import { MetricStrip, type MetricStripItem } from '@elevate/shared-ui';
 import type { Metric } from '@elevate/shared-contracts';
 import type { activitySeries } from '../../server/dashboard';
 import type { Overview } from '../../server/overview';
 import { BarChart, LineChart, StatCard } from '../../ui/charts';
-import { ACADEMIC_LABELS, MARKETING_LABELS, Unavailable } from '../../ui/cross-module';
-import { fmtDate, fmtDateTime, fmtPaise } from '../../ui/format';
+import { NOT_LINKED_TO_STAFF } from '../../domain/feedback';
+import { ACADEMIC_LABELS, MARKETING_LABELS, sourceGap, Unavailable } from '../../ui/cross-module';
+import { fmtDate, fmtDateTime, fmtPaise, sampleNote } from '../../ui/format';
 import { listHref } from '../../ui/list-controls';
+import { openHref } from '../../ui/open-link';
 import { RecordTable } from '../../ui/record-table';
 import { Segment } from '../../ui/sections';
 import {
@@ -42,12 +45,21 @@ const val = <T,>(p: Part<T>, pick: (d: T) => number | string | null) =>
 
 const couldNotLoad = <p className="el-field-hint">{COULD_NOT_LOAD}</p>;
 
+/** Expected days split into covered and missing, so the figures beside each other add up. */
+function eodCoverage({ totals, people }: Extract<Overview['team'], { ok: true }>['data']) {
+  const expected = people.reduce((n, p) => n + (p.eod.days ?? 0), 0);
+  const covered = expected - totals.eodMissing;
+  const others = totals.eodSubmitted - covered;
+  return `${covered} of ${expected} expected days${others > 0 ? `; ${others} for other days` : ''}`;
+}
+
 function Block(props: {
   id: string;
   title: string;
   definition: string;
   freshness: string;
-  href: string;
+  /** Undefined when the list does not open for this person: the block keeps its figures. */
+  href?: string;
   link: string;
   className?: string;
   children: ReactNode;
@@ -58,7 +70,7 @@ function Block(props: {
       className={props.className}
       title={props.title}
       description={`${props.definition} ${props.freshness}`}
-      actions={<a href={props.href}>{props.link}</a>}
+      actions={props.href ? <a href={props.href}>{props.link}</a> : undefined}
     >
       {props.children}
     </Segment>
@@ -92,7 +104,8 @@ const strip = <K extends string>(
   keys: K[],
 ) => keys.map((k): MetricStripItem => ({ label: labels[k], metric: metrics[k] }));
 
-export function OverviewBlocks({ o }: { o: Overview }) {
+export function OverviewBlocks({ o, user }: { o: Overview; user: Principal }) {
+  const to = (href: string) => openHref(user, href);
   const r = { ...o.range };
   const now = asOf(o.asOf);
   const { funnel, pipeline, collections, outstanding, crossModule, reviews, team, report, kpis } =
@@ -101,12 +114,18 @@ export function OverviewBlocks({ o }: { o: Overview }) {
   const academic = crossModule?.ok ? crossModule.data.academic : null;
   const marketing = crossModule?.ok ? crossModule.data.marketing : null;
   const views = outstanding?.ok ? outstanding.data.views : null;
+  const withSample = (note: string, paise?: number) =>
+    paise ? `${note}. ${sampleNote(paise)}` : note;
+  const collectedNote = withSample(
+    'Payments minus refunds, INR',
+    collections?.ok ? (collections.data.collected?.samplePaise ?? 0) : 0,
+  );
   const trend = (pick: (s: Series) => readonly { count: number }[]) =>
     series?.ok ? pick(series.data).map((d) => d.count) : undefined;
   const perDay = series?.ok
     ? series.data.leadsPerDay.map((d) => ({ label: day(d.date), value: d.count }))
     : [];
-  const reportHref = listHref('/ops/reports/admissions', r);
+  const reportHref = to(listHref('/ops/reports/admissions', r));
 
   const headline: (Figure | null)[] = [
     funnel && {
@@ -116,7 +135,7 @@ export function OverviewBlocks({ o }: { o: Overview }) {
         funnel.ok && funnel.data.scope === 'own'
           ? 'Your own leads only'
           : 'First received in the period',
-      href: `${reportHref}#funnel`,
+      href: reportHref && `${reportHref}#funnel`,
       trend: trend((s) => s.leadsPerDay),
     },
     funnel && {
@@ -125,39 +144,44 @@ export function OverviewBlocks({ o }: { o: Overview }) {
       note: funnel.ok
         ? `Of ${funnel.data.demoConversion.total} demo(s) with a class in the period`
         : undefined,
-      href: demoListHref(r),
+      href: to(demoListHref(r, { view: 'previous', outcome: 'converted' })),
       trend: trend((s) => s.conversionsPerDay),
     },
     pipeline && {
       label: 'Admissions confirmed',
       value: val(pipeline, (d) => d.confirmed.metric.value),
       note: 'In the period',
-      href: `${listHref('/ops/admissions/overview', r)}#confirmed`,
+      href: to(`${listHref('/ops/admissions/overview', r)}#confirmed`),
     },
     collections && {
       label: 'Collected in the period',
       value: val(collections, (d) => (d.collected ? fmtPaise(d.collected.netPaise) : null)),
       missingLabel: 'No payment recorded yet',
-      note: 'Payments minus refunds, INR',
-      href: listHref('/ops/fees/collections', r),
+      note: collectedNote,
+      href: to(listHref('/ops/fees/collections', r)),
     },
     outstanding && {
       label: 'Overdue instalments',
       value: val(outstanding, (d) => d.views.overdue.count),
-      note: views ? `${fmtPaise(views.overdue.owedPaise)} past its due date` : undefined,
-      href: '/ops/fees/outstanding?status=overdue',
+      note: views
+        ? withSample(
+            `${fmtPaise(views.overdue.owedPaise)} past its due date`,
+            views.overdue.samplePaise,
+          )
+        : undefined,
+      href: to('/ops/fees/outstanding?status=overdue'),
     },
     team && {
       label: 'EOD reports missing',
       value: team.ok ? team.data.totals.eodMissing : 'Not available',
       note: team.ok ? 'One expected per person per day' : (team.reason ?? COULD_NOT_LOAD),
-      href: listHref('/ops/tasks/reports', r),
+      href: to(listHref('/ops/tasks/reports', r)),
     },
     team && {
       label: 'Overdue tasks',
       value: team.ok ? team.data.totals.overdue : 'Not available',
       note: team.ok ? 'Open and past due at the cut-off' : (team.reason ?? COULD_NOT_LOAD),
-      href: '/ops/tasks?tab=all',
+      href: to('/ops/tasks?tab=all&due=overdue'),
     },
   ];
 
@@ -173,7 +197,7 @@ export function OverviewBlocks({ o }: { o: Overview }) {
             title="Leads received per day"
             definition={`Leads first received on each day of the period, merged duplicates excluded; a day with none is a real 0.${series.ok && series.data.scope === 'own' ? ' Your own leads only.' : ''}`}
             freshness={now}
-            href="/ops/leads"
+            href={to('/ops/leads')}
             link="Leads"
           >
             {!series.ok ? (
@@ -205,10 +229,10 @@ export function OverviewBlocks({ o }: { o: Overview }) {
             title="Demos by outcome"
             definition="Demos with a class in the period by their recorded outcome."
             freshness={now}
-            href={demoListHref(r)}
+            href={to(demoListHref(r))}
             link="Demo students"
           >
-            <OutcomeDonut report={funnel.data} />
+            <OutcomeDonut report={funnel.data} user={user} />
           </Block>
         ) : null}
 
@@ -218,7 +242,7 @@ export function OverviewBlocks({ o }: { o: Overview }) {
             title="Admission confirmations"
             definition="Applications with both signatures waiting for the approver's password confirmation (right now), and admissions confirmed in the period."
             freshness={now}
-            href="/ops/admissions/applications?status=signatures_confirmed"
+            href={to('/ops/admissions/applications?status=signatures_confirmed')}
             link="Applications awaiting approval"
           >
             <Figures
@@ -228,7 +252,7 @@ export function OverviewBlocks({ o }: { o: Overview }) {
                   label: 'Waiting for confirmation',
                   value: val(pipeline, (d) => d.applications.awaiting.signatures_confirmed.value),
                   note: 'Signed, right now',
-                  href: '/ops/admissions/applications?status=signatures_confirmed',
+                  href: to('/ops/admissions/applications?status=signatures_confirmed'),
                 },
                 {
                   label: 'Blocked by a missing item',
@@ -236,12 +260,12 @@ export function OverviewBlocks({ o }: { o: Overview }) {
                   note: pipeline.ok
                     ? `Of the ${pipeline.data.applications.approvalChecked} oldest checked`
                     : undefined,
-                  href: '/ops/admissions/applications?status=signatures_confirmed',
+                  href: to('/ops/admissions/applications?status=signatures_confirmed'),
                 },
                 {
                   label: 'Confirmed in the period',
                   value: val(pipeline, (d) => d.confirmed.metric.value),
-                  href: `${listHref('/ops/admissions/overview', r)}#confirmed`,
+                  href: to(`${listHref('/ops/admissions/overview', r)}#confirmed`),
                 },
               ]}
             />
@@ -252,9 +276,9 @@ export function OverviewBlocks({ o }: { o: Overview }) {
           <Block
             id="fees"
             title="Fee collections"
-            definition="Manually recorded, not verified payments: payments minus refunds with a payment date in the period (voided and reversed entries never count), and tuition instalments of active agreements due by today with money still owed."
+            definition="Manually recorded, not verified payments: payments minus refunds with a payment date in the period (voided and reversed entries never count), and tuition instalments of agreements in force due by today with money still owed."
             freshness={now}
-            href={listHref('/ops/fees/collections', r)}
+            href={to(listHref('/ops/fees/collections', r))}
             link="Collections"
           >
             <Figures
@@ -266,22 +290,30 @@ export function OverviewBlocks({ o }: { o: Overview }) {
                     d.collected ? fmtPaise(d.collected.netPaise) : null,
                   ),
                   missingLabel: 'No payment recorded yet',
-                  note: 'Payments minus refunds, INR',
-                  href: listHref('/ops/fees/collections', r),
+                  note: collectedNote,
+                  href: to(listHref('/ops/fees/collections', r)),
                 },
                 {
                   label: 'Instalments due and unpaid',
                   value: val(outstanding, (d) => d.views.due.count),
-                  note: views ? `${fmtPaise(views.due.owedPaise)} still owed` : undefined,
-                  href: '/ops/fees/outstanding?status=due',
+                  note: views
+                    ? withSample(
+                        `${fmtPaise(views.due.owedPaise)} still owed`,
+                        views.due.samplePaise,
+                      )
+                    : undefined,
+                  href: to('/ops/fees/outstanding?status=due'),
                 },
                 {
                   label: 'Overdue instalments',
                   value: val(outstanding, (d) => d.views.overdue.count),
                   note: views
-                    ? `${fmtPaise(views.overdue.owedPaise)} past its due date`
+                    ? withSample(
+                        `${fmtPaise(views.overdue.owedPaise)} past its due date`,
+                        views.overdue.samplePaise,
+                      )
                     : undefined,
-                  href: '/ops/fees/outstanding?status=overdue',
+                  href: to('/ops/fees/outstanding?status=overdue'),
                 },
               ]}
             />
@@ -294,7 +326,7 @@ export function OverviewBlocks({ o }: { o: Overview }) {
             title="Student onboarding"
             definition="Checklist items of current students that are completed or not applicable, and items past their due date. Right now, not limited to the period."
             freshness={now}
-            href="/ops/admissions/overview#overdue-onboarding"
+            href={to('/ops/admissions/overview#overdue-onboarding')}
             link="Overdue onboarding"
           >
             <Figures
@@ -306,7 +338,7 @@ export function OverviewBlocks({ o }: { o: Overview }) {
                     c.total ? `${c.done} of ${c.total}` : null,
                   ),
                   missingLabel: 'No checklist built yet',
-                  href: '/ops/students',
+                  href: to('/ops/students'),
                 },
                 {
                   label: 'Overdue items',
@@ -315,7 +347,7 @@ export function OverviewBlocks({ o }: { o: Overview }) {
                   note: pipeline.ok
                     ? `${pipeline.data.onboarding.admissions} student(s)`
                     : undefined,
-                  href: '/ops/admissions/overview#overdue-onboarding',
+                  href: to('/ops/admissions/overview#overdue-onboarding'),
                 },
               ]}
             />
@@ -334,7 +366,7 @@ export function OverviewBlocks({ o }: { o: Overview }) {
                   ? checked(academic)
                   : now
             }
-            href={listHref('/ops/academic-summary', r)}
+            href={to(listHref('/ops/academic-summary', r))}
             link="Academic summary"
           >
             {academic?.status === 'available' ? (
@@ -358,13 +390,15 @@ export function OverviewBlocks({ o }: { o: Overview }) {
                   {
                     label: 'Teacher reviews published',
                     value: val(reviews, (d) =>
-                      d.status === 'available' ? d.total : 'Source unavailable',
+                      d.status === 'available' ? d.total : sourceGap(d.reason),
                     ),
                     note:
                       reviews.ok && reviews.data.status === 'unavailable'
-                        ? `Checked ${fmtDateTime(reviews.data.checkedAt)}`
+                        ? reviews.data.reason === NOT_LINKED_TO_STAFF
+                          ? NOT_LINKED_TO_STAFF
+                          : `Checked ${fmtDateTime(reviews.data.checkedAt)}`
                         : 'Latest version submitted in the period',
-                    href: `${listHref('/ops/academic-summary', r)}#reviews`,
+                    href: to(`${listHref('/ops/academic-summary', r)}#reviews`),
                   },
                 ]}
               />
@@ -376,9 +410,9 @@ export function OverviewBlocks({ o }: { o: Overview }) {
           <Block
             id="team"
             title="Tasks and EOD reports"
-            definition="Submitted EOD reports against one expected per person per day up to today (staff with a sign-in; no working-days policy yet), and tasks overdue or blocked at the end of the period. Scope: everyone, or you and the people who report to you."
+            definition="Submitted EOD reports against the finished workdays each person was scheduled for (staff with a sign-in; today is not counted yet), and tasks overdue or blocked at the end of the period. Scope: everyone, or you and the people who report to you."
             freshness={team.ok ? asOf(team.data.asOf) : now}
-            href={listHref('/ops/tasks/reports', r)}
+            href={to(listHref('/ops/tasks/reports', r))}
             link="Task reports"
           >
             {team.ok ? (
@@ -388,24 +422,24 @@ export function OverviewBlocks({ o }: { o: Overview }) {
                   {
                     label: 'EOD reports submitted',
                     value: team.data.totals.eodSubmitted,
-                    note: `Of ${team.data.people.reduce((n, p) => n + (p.eod.days ?? 0), 0)} expected`,
-                    href: listHref('/ops/tasks/reports', r),
+                    note: eodCoverage(team.data),
+                    href: to(listHref('/ops/tasks/reports', r)),
                   },
                   {
                     label: 'EOD reports missing',
                     value: team.data.totals.eodMissing,
-                    href: listHref('/ops/tasks/reports', r),
+                    href: to(listHref('/ops/tasks/reports', r)),
                   },
                   {
                     label: 'Overdue tasks',
                     value: team.data.totals.overdue,
                     note: 'Open and past due at the cut-off',
-                    href: '/ops/tasks?tab=all',
+                    href: to('/ops/tasks?tab=all&due=overdue'),
                   },
                   {
                     label: 'Blocked tasks',
                     value: team.data.totals.blocked,
-                    href: listHref('/ops/tasks/reports', r),
+                    href: to(listHref('/ops/tasks/reports', r)),
                   },
                 ]}
               />
@@ -427,7 +461,7 @@ export function OverviewBlocks({ o }: { o: Overview }) {
                   ? checked(marketing)
                   : now
             }
-            href={listHref('/ops/marketing-summary', r)}
+            href={to(listHref('/ops/marketing-summary', r))}
             link="Marketing summary"
           >
             {report?.ok ? (
@@ -460,7 +494,7 @@ export function OverviewBlocks({ o }: { o: Overview }) {
             title="Leads, follow-ups and workload"
             definition="Each figure states its own window. Workload is open items per person, a capacity view, not a score."
             freshness={kpis.ok ? asOf(kpis.data.asOf) : now}
-            href="/ops/leads"
+            href={to('/ops/leads')}
             link="Leads"
           >
             {kpis.ok ? (
@@ -468,13 +502,13 @@ export function OverviewBlocks({ o }: { o: Overview }) {
                 <MetricStrip
                   label="Defined KPIs"
                   items={[
-                    { label: 'New leads', metric: kpis.data.kpis.newLeads, href: '/ops/leads' },
+                    { label: 'New leads', metric: kpis.data.kpis.newLeads, href: to('/ops/leads') },
                     { label: 'Lead → admission conversion', metric: kpis.data.kpis.conversion },
                     { label: 'Follow-up compliance', metric: kpis.data.kpis.followUpCompliance },
                     {
                       label: 'Overdue follow-ups',
                       metric: kpis.data.kpis.overdueWork,
-                      href: '/ops/leads?flag=overdue',
+                      href: to('/ops/leads?flag=overdue'),
                     },
                   ]}
                 />

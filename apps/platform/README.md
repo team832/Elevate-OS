@@ -5,6 +5,10 @@ The root zone (basePath `''`, port 3003 since 22 Oct 2026, `PLATFORM_URL`): sign
 ## `/` for signed-out visitors (21 Oct 2026)
 Without a valid session, `/` shows the public Elevate Education front page (`src/app/_components/front-page.tsx`): programmes as the owner confirmed them (D-034, D-037), mentors and contact details as listed on elevateeducation.in, links to the public site, its privacy policy and "Staff sign in". It reads no database and shows no internal data. With a session, `/` is the workspace overview as before. The proxy lets `/`, `/login`, `/favicon.ico` and `/icon.svg` through without a cookie; every other page still redirects to `/login`. The site's metadata keeps `robots: noindex`.
 
+## Release and rewrites (31 Oct 2026)
+- Rewrites exclude `/*/api/internal/**`, which answer 404 here (HAT-004). The rewrites are not a go-live gateway (F-05, `docs/RELEASE.md`).
+- `apps/platform/tests/integration/` holds the package and seed checks: `release-package.test.ts`, `reference-seed.test.ts`, `reseed-keeps-edits.test.ts`, `student-exit-loop.test.ts`.
+
 ## Users & roles additions (23 Oct 2026, D-080, D-090)
 - Role **HR manager** (`hr_manager`, Proposed) can be assigned on the user screen; it opens Business Operations only.
 - **Change login email** (`PUT /api/v1/admin/users/{id}/email`, `platform:users:manage`): the same account id, every session ended, audited `user.email_changed`; never your own; an email already in use → 409. Test: `tests/integration/admin-users.test.ts`.

@@ -6,6 +6,7 @@ import {
   requirePermission,
   type GrantScope,
   type Permission,
+  type WorkspaceKey,
 } from '@elevate/authorization';
 import { createLogger, isAllowedRequestOrigin, type Logger } from '@elevate/configuration';
 import { getDb, type Database } from '@elevate/database';
@@ -15,6 +16,7 @@ import {
   UnauthenticatedError,
   ValidationError,
   errorResponse,
+  seeOther,
   successResponse,
   type ApiMeta,
 } from '@elevate/shared-contracts';
@@ -154,6 +156,27 @@ export interface DefineRouteOptions {
 
 const baseLog = createLogger({ component: 'route' });
 
+/**
+ * The workspace of the app serving this request. Next removes the base path from `request.url`
+ * before a handler runs (next dev and next start alike), so each app declares it in the `env` of
+ * its next.config.ts. Only outside Next (route tests) does the URL still carry it. A production
+ * build without the value refuses: skipping the membership check would open every workspace.
+ */
+export function requestWorkspace(request: Request): WorkspaceKey | undefined {
+  const basePath = process.env.ELEVATE_BASE_PATH;
+  if (basePath === undefined && process.env.NODE_ENV === 'production')
+    throw new Error('ELEVATE_BASE_PATH is missing from this build, so membership cannot be checked.');
+  const path = basePath ?? new URL(request.url).pathname;
+  return WORKSPACE_KEYS.find((k) => `${path}/`.startsWith(`${MODULES[k].basePath}/`));
+}
+
+/** Sign-in with a way back, for a link followed in the browser (a notice, a PDF, an export). */
+function signInLocation(request: Request, url: URL): string {
+  const base = MODULES[requestWorkspace(request) ?? 'platform'].basePath;
+  const path = url.pathname.startsWith(`${base}/`) ? url.pathname : `${base}${url.pathname}`;
+  return `${base}/login?next=${encodeURIComponent(path + url.search)}`;
+}
+
 function requestIdFrom(request: Request): string {
   const incoming = request.headers.get(HEADERS.requestId);
   return incoming && /^[\w.:-]{8,100}$/.test(incoming) ? incoming : crypto.randomUUID();
@@ -232,9 +255,7 @@ export function defineRoute<
         userId = user.id;
         // A route served under a workspace's base path needs membership of that workspace
         // (D-072), as its pages do: holding a permission never opens another workspace's API.
-        const workspace = WORKSPACE_KEYS.find((k) =>
-          `${url.pathname}/`.startsWith(`${MODULES[k].basePath}/`),
-        );
+        const workspace = requestWorkspace(request);
         if (workspace && !can(user, `${workspace}:module:access` as Permission))
           throw new ForbiddenError('Your roles do not include this workspace.');
         if (spec.permission !== 'authenticated') {
@@ -302,7 +323,7 @@ export function defineRoute<
         }
         const parsed = spec.body.safeParse(rawBody);
         if (!parsed.success)
-          throw new ValidationError('The request body is not valid.', {
+          throw new ValidationError('Check the details and try again.', {
             details: zodIssues(parsed.error, 'body'),
           });
         body = parsed.data;
@@ -372,7 +393,12 @@ export function defineRoute<
     } catch (error) {
       const appError = toAppError(error);
       if (appError.status >= 500) log.error('request failed', { error, userId });
-      response = errorResponse(appError, requestId);
+      response =
+        appError.code === 'UNAUTHENTICATED' &&
+        request.method === 'GET' &&
+        request.headers.get('accept')?.includes('text/html')
+          ? seeOther(signInLocation(request, url))
+          : errorResponse(appError, requestId);
     }
     log.info('request', { status: response.status, ms: Date.now() - started, userId });
     return response;

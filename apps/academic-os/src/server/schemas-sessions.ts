@@ -1,5 +1,6 @@
 /** Request schemas for delivery, substitution, availability, patterns, teachers and demo attendees (A2). */
 import { z } from 'zod';
+import { httpUrlSchema } from '@elevate/shared-contracts';
 import { isIsoDate } from '@elevate/shared-types';
 import { eachDate } from '../domain';
 
@@ -34,7 +35,7 @@ const patternFields = {
   subjectId: z.uuid(),
   staffId: z.uuid(),
   roomId: z.uuid().optional(),
-  onlineLink: z.url().max(500).optional(),
+  onlineLink: httpUrlSchema.max(500).optional(),
   weekday: z.coerce.number().int().min(1).max(7),
   startTime: clock,
   durationMinutes: z.int().min(5).max(600),
@@ -51,7 +52,7 @@ export const deleteDraftBody = z.object({ version: z.int().min(1), confirm: z.li
 
 /** Edit a draft pattern (any field; version-checked). Published patterns change through a series edit. */
 export const patternUpdateBody = z
-  .object({ ...patternFields, roomId: z.uuid().nullable(), onlineLink: z.url().max(500).nullable(), effectiveFrom: isoDate, effectiveTo: isoDate })
+  .object({ ...patternFields, roomId: z.uuid().nullable(), onlineLink: httpUrlSchema.max(500).nullable(), effectiveFrom: isoDate, effectiveTo: isoDate })
   .partial()
   .extend({ version: z.int().min(1) })
   .strict();
@@ -82,7 +83,7 @@ export const buildTimetableBody = z
   })
   .strict()
   .refine((b) => b.from <= b.to, { error: 'from must not be after to', path: ['to'] })
-  .refine((b) => b.from > b.to || eachDate(b.from, b.to).length <= 400, { error: 'Build at most 400 days at a time.', path: ['to'] })
+  .refine((b) => !isIsoDate(b.from) || !isIsoDate(b.to) || b.from > b.to || eachDate(b.from, b.to).length <= 400, { error: 'Build at most 400 days at a time.', path: ['to'] })
   .refine((b) => b.dayStart < b.dayEnd, { error: 'The day must end after it starts.', path: ['dayEnd'] })
   .refine((b) => new Set(b.subjects.map((s) => s.subjectId)).size === b.subjects.length, { error: 'Each subject may appear once.', path: ['subjects'] });
 

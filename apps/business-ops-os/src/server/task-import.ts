@@ -34,6 +34,7 @@ import {
   type ImportedTaskValues,
   type StaffOption,
 } from '../domain/task-import';
+import { fmtDay, toIsoDate } from '@elevate/shared-types';
 import { istInstant } from '../domain/dates';
 import { accessScope, activeStaff, notFound, type Actor } from './context';
 import { fieldError, opsAudit, rowById } from './ops-common';
@@ -190,7 +191,7 @@ export async function commitImport(db: Database, actor: Actor, id: string, reque
     const batch = await rowById(tx, batches, id, 'Import', true);
     if (batch.status === 'committed')
       throw new ConflictError(
-        `This file was already imported on ${batch.committedAt!.toISOString().slice(0, 10)}.`,
+        `This file was already imported on ${fmtDay(toIsoDate(batch.committedAt!))}.`,
       );
     const mapped = mapBackup(batch.raw);
     if (!mapped.ok) throw new ConflictError(mapped.error);

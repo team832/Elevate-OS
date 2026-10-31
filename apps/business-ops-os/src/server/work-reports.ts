@@ -8,6 +8,7 @@
  * never ranked (R13).
  */
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { containsPattern } from '@elevate/server-kit';
 import type { PgSelect } from 'drizzle-orm/pg-core';
 import {
   departments,
@@ -178,7 +179,7 @@ export async function workReportList(db: Database, actor: Actor, q: WorkReportLi
     eq(staffMembers.status, 'active'),
     sql`${staffMembers.userId} is not null`,
     hrScopeWhere(await hrScopeFor(db, actor)),
-    q.q ? ilike(staffMembers.fullName, `%${q.q.replace(/[%_\\]/g, '\\$&')}%`) : undefined,
+    q.q ? ilike(staffMembers.fullName, containsPattern(q.q)) : undefined,
     q.departmentId ? eq(staffMembers.departmentId, q.departmentId as DepartmentId) : undefined,
   );
   // shortcut: derives every listed person's days for the period (as ATT's own lists do); page people in SQL past a few hundred staff.

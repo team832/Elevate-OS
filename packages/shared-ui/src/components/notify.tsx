@@ -8,8 +8,7 @@
  * seen marker. Non-modal: a polite live region that never takes focus, auto-dismisses after
  * 8 s, pauses while hovered or focused, and has no motion under prefers-reduced-motion
  * (css/notify.css). The person's "pop-ups off" setting (`popUps: false`) shows nothing.
- * DOM order: the region sits right after the bell in the top bar, so Tab goes bell → toasts →
- * account menu even though the toasts are drawn in the bottom corner (no aria-flowto needed).
+ * DOM order: the region opens the page's main area, so Tab goes top bar → toasts → page.
  */
 import { useEffect, useState, type FocusEvent, type MouseEvent } from 'react';
 

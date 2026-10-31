@@ -8,6 +8,16 @@
 import { useId, type ReactNode } from 'react';
 import { StatusBadge } from '@elevate/shared-ui';
 
+/** For a staff select with no options; `/ops` is the only app with the screen that adds staff. */
+export const noStaffHint = (base: string): ReactNode =>
+  base === '/ops' ? (
+    <>
+      No staff records yet. <a href="/ops/staff?new=1">Add a staff member</a> first.
+    </>
+  ) : (
+    'No staff records yet. An operations manager adds them in Business Operations.'
+  );
+
 export function Segment({
   title,
   level = 2,

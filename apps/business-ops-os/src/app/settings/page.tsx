@@ -14,7 +14,7 @@ import { FormModal, RecordModal } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
 import { DetailTable, Segment } from '../../ui/sections';
 import { OnboardingTemplates } from './_components/onboarding-templates';
-import { decisionCodes, StateBadge, valueRows } from './_components/setting-value';
+import { decisionWords, StateBadge, valueRows } from './_components/setting-value';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Settings' };
@@ -33,7 +33,7 @@ const ADMISSIONS_PREFIXES = [
 const inAdmissions = (key: string) => ADMISSIONS_PREFIXES.some((p) => key.startsWith(p));
 
 const ORIGIN_TEXT: Record<string, string> = {
-  default: 'Default from the legacy record',
+  default: 'Default',
   stored: 'Changed in Elevate OS',
 };
 const INVALID = 'Stored value invalid: default used';
@@ -48,12 +48,6 @@ const GROUPS: [string, RegExp][] = [
   ['Other', /./],
 ];
 const groupOf = (key: string) => GROUPS.find(([, re]) => re.test(key))![0];
-
-/** "Source: D-038" (a small hint), or nothing when no decision record is named. */
-const SourceHint = ({ s }: { s: ResolvedSetting }) => {
-  const codes = decisionCodes(s.ownerDecision);
-  return codes ? <p className="el-field-hint">Source: {codes}</p> : null;
-};
 
 /** A one-field value reads inline ("Amount: ₹1,000"); larger values become label/value rows. */
 function Value({ s }: { s: ResolvedSetting }) {
@@ -75,7 +69,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     <Frame access={access} active="settings">
       <PageHeader
         title={admissions ? 'Admissions settings' : 'Configuration and policy states'}
-        description="What each rule is set to now. A change made here stays Proposed until leadership approves it."
+        description="What each rule is set to now. Proposed means it is in use but the owner has not decided it yet; a change made here stays Proposed until leadership approves it."
         tabs={admissions ? <AdmissionsNav current="settings" user={access.user} /> : undefined}
       />
       <Section>
@@ -170,7 +164,6 @@ async function Settings({
                   render: (s) => (
                     <>
                       <StateBadge state={s.decisionState} />
-                      <SourceHint s={s} />
                       {ORIGIN_TEXT[s.origin] ? null : (
                         <StatusBadge tone="warning">{INVALID}</StatusBadge>
                       )}
@@ -201,7 +194,9 @@ async function Settings({
             fields={[
               {
                 name: 'value',
-                label: 'Value (JSON)',
+                // shortcut: free-form JSON until each setting has its own typed fields; reported to the coordinator.
+                label: 'New value',
+                hint: 'Change only the values; keep the quotes, brackets and commas as they are. It is checked before saving.',
                 type: 'json',
                 required: true,
                 defaultValue: JSON.stringify(open.value, null, 2),
@@ -227,13 +222,12 @@ async function Settings({
               rows={[
                 { label: 'What it controls', value: open.description },
                 { label: 'Decision state', value: <StateBadge state={open.decisionState} /> },
-                open.ownerDecision && { label: 'Owner decision', value: open.ownerDecision },
+                open.ownerDecision && { label: 'Owner decision', value: decisionWords(open.ownerDecision) },
                 { label: 'Value from', value: ORIGIN_TEXT[open.origin] ?? INVALID },
                 { label: 'Editable here', value: open.editable ? 'Yes' : 'No' },
               ]}
             />
           </Segment>
-          <p className="el-field-hint">Source: {open.source}</p>
         </RecordModal>
       ) : null}
     </div>

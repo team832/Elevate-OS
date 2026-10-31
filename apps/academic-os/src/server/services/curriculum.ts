@@ -3,7 +3,7 @@
  * core programme), subjects, chapters, curriculum plan versions with approval-
  * gated status changes, coverage and concept-book indices.
  */
-import { and, asc, count, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import {
   academicChapters,
   academicClassRecords,
@@ -71,8 +71,9 @@ export const planStatusPolicy = defineApprovalPolicy({
 
 // --- programmes and courses ---------------------------------------------------------------
 
+/** Programmes a new course may use: a retired one stays on its old courses, never in the picker. */
 export async function listProgrammes(db: Database) {
-  return db.select().from(programmes).orderBy(asc(programmes.code));
+  return db.select().from(programmes).where(ne(programmes.status, 'retired')).orderBy(asc(programmes.code));
 }
 
 export async function listCourses(db: Database) {
@@ -98,6 +99,7 @@ export async function createCourse(db: Database, actor: Actor, input: z.output<t
   return withTransaction(db, async (tx) => {
     const [programme] = await tx.select().from(programmes).where(eq(programmes.code, input.programmeCode));
     if (!programme) throw new ValidationError(`Programme ${input.programmeCode} is not in the catalogue.`);
+    if (programme.status === 'retired') throw new ValidationError(`Programme ${programme.code} is retired.`);
     const [row] = await tx
       .insert(academicCourses)
       .values({

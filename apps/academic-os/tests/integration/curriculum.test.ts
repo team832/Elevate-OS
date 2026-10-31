@@ -1,8 +1,9 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { academicClassSessions, auditEvents } from '@elevate/database';
+import { academicClassSessions, auditEvents, programmes } from '@elevate/database';
 import { authedRequest, buildRequest, callRoute, createTestUser, setupTestDatabase } from '@elevate/testing';
 import { GET as listCoursesRoute, POST as createCourseRoute } from '../../src/app/api/v1/courses/route';
+import { GET as programmesRoute } from '../../src/app/api/v1/programmes/route';
 import { POST as createPlanRoute } from '../../src/app/api/v1/plans/route';
 import { GET as getPlanRoute } from '../../src/app/api/v1/plans/[id]/route';
 import { POST as addItemsRoute } from '../../src/app/api/v1/plans/[id]/items/route';
@@ -10,6 +11,9 @@ import { POST as requestRoute } from '../../src/app/api/v1/plans/[id]/approval/r
 import { POST as decideRoute } from '../../src/app/api/v1/plans/[id]/approval/decision/route';
 import { GET as coverageRoute } from '../../src/app/api/v1/batches/[id]/coverage/route';
 import { GET as conceptBooksRoute } from '../../src/app/api/v1/concept-books/route';
+import { POST as subjectsRoute } from '../../src/app/api/v1/courses/[id]/subjects/route';
+import { POST as chaptersRoute } from '../../src/app/api/v1/courses/[id]/chapters/route';
+import { POST as retireRoute } from '../../src/app/api/v1/chapters/[id]/retire/route';
 import { createSessions, recordClass, verifyClassRecord } from '../../src/server';
 import { actor, uniq, users, world, type Users, type World } from './fixtures';
 
@@ -43,6 +47,14 @@ describe('courses routes', () => {
     const body = { programmeCode: w.programmeCode, code: uniq('C-'), familyCode: uniq('F-'), name: 'New course', classMinutes: 60, classMinutesStatus: 'proposed' };
     expect((await callRoute(createCourseRoute, authedRequest(u.teacher, '/academic/api/v1/courses', { json: body }))).status).toBe(403);
     expect((await callRoute(createCourseRoute, authedRequest(u.director, '/academic/api/v1/courses', { json: body }))).status).toBe(403);
+    const code = uniq('P');
+    await ctx.db.insert(programmes).values({ code, name: `Retired ${code}`, status: 'retired' });
+    const offered = await callRoute<{ code: string }[]>(programmesRoute, authedRequest(u.coordinator, '/academic/api/v1/programmes'));
+    expect(offered.data!.map((p) => p.code)).not.toContain(code);
+    expect(offered.data!.map((p) => p.code)).toContain(w.programmeCode);
+    const onRetired = await callRoute(createCourseRoute, authedRequest(u.coordinator, '/academic/api/v1/courses', { json: { ...body, programmeCode: code, code: uniq('C-') } }));
+    expect(onRetired.status).toBe(400);
+    expect(onRetired.error?.message).toMatch(/retired/);
     const bad = await callRoute(createCourseRoute, authedRequest(u.coordinator, '/academic/api/v1/courses', { json: { ...body, classMinutes: 5 } }));
     expect(bad.status).toBe(400);
     expect(bad.error?.code).toBe('VALIDATION_FAILED');
@@ -136,6 +148,50 @@ describe('coverage (planned vs completed from class records)', () => {
     expect(notMine.status).toBe(404);
     const theirs = await callRoute(coverageRoute, authedRequest(stranger, `/academic/api/v1/batches/${other.batch.id}/coverage`), { id: other.batch.id });
     expect(theirs.status).toBe(200);
+  });
+
+  describe('authoring a course on screen or by API (F-08): subjects, chapters, retiring', () => {
+    type Route = typeof subjectsRoute;
+    const call = (route: Route, path: string, id: string, user: Parameters<typeof authedRequest>[0] | null, json: unknown) =>
+      callRoute<Record<string, unknown>>(route, user ? authedRequest(user, path, { json }) : buildRequest(path, { method: 'POST', json }), { id });
+    const retireBody = (aliasOfChapterId: string) => ({ status: 'retired', aliasOfChapterId, reason: 'Merged (test)' });
+    const routes: [string, Route, () => string, (id: string) => string, () => unknown][] = [
+      ['subjects', subjectsRoute, () => w.course.id, (id) => `/academic/api/v1/courses/${id}/subjects`, () => ({ code: uniq('SUB'), name: 'Logic (test)' })],
+      ['chapters', chaptersRoute, () => w.course.id, (id) => `/academic/api/v1/courses/${id}/chapters`, () => ({ subjectId: w.quant.id, code: uniq('CH'), title: 'Sets (test)' })],
+      ['chapter retire', retireRoute, () => w.ch2.id, (id) => `/academic/api/v1/chapters/${id}/retire`, () => retireBody(w.ch1.id)],
+    ];
+    it.each(routes)('%s: 401 signed out, 403 without the permission, 400 on a bad body, 404 or 400 on an unknown id', async (_name, route, idOf, path, body) => {
+      const id = idOf();
+      expect((await call(route, path(id), id, null, body())).status).toBe(401);
+      for (const user of [u.teacher, u.director, u.auditor, u.counsellor]) expect((await call(route, path(id), id, user, body())).status).toBe(403);
+      expect((await call(route, path(id), id, u.coordinator, { nope: 1 })).status).toBe(400);
+      expect((await call(route, path('x'), 'x', u.coordinator, body())).status).toBe(400);
+      expect([400, 404]).toContain((await call(route, path(crypto.randomUUID()), crypto.randomUUID(), u.coordinator, body())).status);
+    });
+
+    it('adds a subject and a chapter (audited), refuses a duplicate code, and keeps a retired code as an alias', async () => {
+      const coord = u.coordinator;
+      const code = uniq('SUB');
+      const subjectsPath = `/academic/api/v1/courses/${w.course.id}/subjects`;
+      const subject = await call(subjectsRoute, subjectsPath, w.course.id, coord, { code, name: 'Logic (test)' });
+      expect(subject.status).toBe(201);
+      expect(subject.data).toMatchObject({ code, courseId: w.course.id });
+      expect((await call(subjectsRoute, subjectsPath, w.course.id, coord, { code, name: 'Again (test)' })).status).toBe(409);
+      const chaptersPath = `/academic/api/v1/courses/${w.course.id}/chapters`;
+      const chapter = (title: string) => call(chaptersRoute, chaptersPath, w.course.id, coord, { subjectId: subject.data!.id, code: uniq('CH'), title });
+      const [first, second] = [await chapter('Sets (test)'), await chapter('Maps (test)')];
+      expect(first.status).toBe(201);
+      const firstId = first.data!.id as string;
+      const retirePath = `/academic/api/v1/chapters/${firstId}/retire`;
+      const refused = await call(retireRoute, retirePath, firstId, coord, retireBody(firstId));
+      expect(refused.status).toBe(400);
+      const retired = await call(retireRoute, retirePath, firstId, coord, retireBody(second.data!.id as string));
+      expect(retired.status).toBe(200);
+      expect(retired.data).toMatchObject({ status: 'retired', aliasOfChapterId: second.data!.id });
+      expect((await call(retireRoute, retirePath, firstId, coord, retireBody(second.data!.id as string))).status).toBe(409);
+      const logged = await ctx.db.select().from(auditEvents).where(and(eq(auditEvents.entityId, firstId), eq(auditEvents.action, 'chapter.retired')));
+      expect(logged).toHaveLength(1);
+    });
   });
 
   it('concept books list is readable by teachers and empty until seeded', async () => {

@@ -2,17 +2,32 @@
  * The drawing layer under ./document (split from it): light-paper colours, the logo, page sizes,
  * wrapping and missing-value text, table rows, page breaks, and the running header and footer.
  */
+import type { Font } from '@pdf-lib/fontkit';
 import {
+  beginText,
+  endText,
   LineCapStyle,
   LineJoinStyle,
   type PDFDocument,
+  PDFHexString,
+  popGraphicsState,
+  pushGraphicsState,
   rgb,
+  setFillingColor,
+  setFontAndSize,
   setLineJoin,
+  setTextMatrix,
+  showText,
   type Color,
   type PDFFont,
   type PDFPage,
 } from 'pdf-lib';
 import { fmtDateTime } from '../../ui/format';
+
+/** The Devanagari block (all in the font) and the joiners that change how its letters combine. */
+const HINDI_RUN = /([\u0900-\u097F\u200C\u200D]+)/;
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+const UNSUPPORTED_NOTE = 'Some characters are not in the print fonts and show as "?".';
 
 const hex = (h: string) =>
   rgb(...([1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255) as [number, number, number]));
@@ -70,12 +85,17 @@ export interface Style {
   color: Color;
   align?: 'left' | 'right';
 }
+/** The Hindi partner of a Latin font: the embedded font, and fontkit's parse of it for shaping. */
+export interface HindiFont {
+  font: PDFFont;
+  shaper: Font;
+}
 
 /** Page geometry, text primitives and the running header/footer; content blocks are in PdfBuilder. */
 export class PdfCanvas {
   /** Every text line drawn, in order — lets tests check output without a PDF text extractor. */
   readonly lines: string[] = [];
-  /** True when some character was not in the font and printed as "?". */
+  /** True when some character was in neither font and printed as "?". */
   unsupportedCharacters = false;
   protected readonly p: (typeof SIZES)['a4'];
   protected readonly charset: Set<number>;
@@ -87,6 +107,7 @@ export class PdfCanvas {
     protected readonly doc: PDFDocument,
     protected readonly regular: PDFFont,
     protected readonly bold: PDFFont,
+    private readonly hindi: Map<PDFFont, HindiFont>,
     protected readonly meta: PdfMeta,
   ) {
     this.p = SIZES[meta.size ?? 'a4'];
@@ -113,15 +134,30 @@ export class PdfCanvas {
     value === null || value === undefined || value === ''
       ? '—'
       : Array.from(String(value).replace(/\r\n?/g, '\n'), (ch) => {
-          if (ch === '\n' || this.charset.has(ch.codePointAt(0)!)) return ch;
+          if (ch === '\n' || this.charset.has(ch.codePointAt(0)!) || HINDI_RUN.test(ch)) return ch;
           if (/\s/.test(ch)) return ' ';
           this.unsupportedCharacters = true;
           return '?';
         }).join('');
 
-  /** Word wrap; a word wider than the line (a long reference, an email) breaks between characters. */
+  /** Width of a line as `text` draws it. */
+  protected widthOf(s: string, font: PDFFont, size: number) {
+    const { shaper } = this.hindi.get(font)!;
+    return s
+      .split(HINDI_RUN)
+      .reduce(
+        (w, run, i) =>
+          w +
+          (i % 2
+            ? (shaper.layout(run).advanceWidth * size) / shaper.unitsPerEm
+            : font.widthOfTextAtSize(run, size)),
+        0,
+      );
+  }
+
+  /** Word wrap; a word wider than the line (a long reference, an email) breaks between letters. */
   protected wrap(text: string, font: PDFFont, size: number, width: number): string[] {
-    const fits = (s: string) => font.widthOfTextAtSize(s, size) <= width;
+    const fits = (s: string) => this.widthOf(s, font, size) <= width;
     const out: string[] = [];
     for (const para of text.split('\n')) {
       let line = '';
@@ -133,12 +169,12 @@ export class PdfCanvas {
         }
         if (line) out.push(line);
         line = '';
-        for (const ch of word) {
-          if (line && !fits(line + ch)) {
+        for (const { segment } of GRAPHEMES.segment(word)) {
+          if (line && !fits(line + segment)) {
             out.push(line);
             line = '';
           }
-          line += ch;
+          line += segment;
         }
       }
       out.push(line);
@@ -147,8 +183,36 @@ export class PdfCanvas {
   }
 
   protected text(s: string, x: number, y: number, font: PDFFont, size: number, color: Color = INK) {
-    this.page.drawText(s, { x, y, font, size, color });
+    s.split(HINDI_RUN).forEach((run, i) => {
+      if (i % 2) x = this.shaped(run, x, y, font, size, color);
+      else if (run) {
+        this.page.drawText(run, { x, y, font, size, color });
+        x += font.widthOfTextAtSize(run, size);
+      }
+    });
     this.lines.push(s);
+  }
+
+  /** drawText keeps fontkit's glyph choice but drops its positions (marks, kerning), so place each glyph. */
+  private shaped(run: string, x: number, y: number, on: PDFFont, size: number, color: Color) {
+    const { font, shaper } = this.hindi.get(on)!;
+    const scale = size / shaper.unitsPerEm;
+    const glyphs = font.encodeText(run).asString(); // four hex digits per glyph, in layout order
+    const ops = [
+      pushGraphicsState(),
+      beginText(),
+      setFillingColor(color),
+      setFontAndSize(this.page.node.newFontDictionary(font.name, font.ref), size),
+    ];
+    shaper.layout(run).positions.forEach((p, i) => {
+      ops.push(
+        setTextMatrix(1, 0, 0, 1, x + p.xOffset * scale, y + p.yOffset * scale),
+        showText(PDFHexString.of(glyphs.slice(i * 4, i * 4 + 4))),
+      );
+      x += p.xAdvance * scale;
+    });
+    this.page.pushOperators(...ops, endText(), popGraphicsState());
+    return x;
   }
 
   protected hline(y: number, from: number, to: number, color: Color, thickness = 0.5) {
@@ -221,8 +285,7 @@ export class PdfCanvas {
       cols.forEach((lines, i) => {
         const { font, color, align } = styles[i]!;
         lines.slice(0, take).forEach((line, n) => {
-          const dx =
-            align === 'right' ? widths[i]! - PAD - font.widthOfTextAtSize(line, size) : PAD;
+          const dx = align === 'right' ? widths[i]! - PAD - this.widthOf(line, font, size) : PAD;
           this.text(line, x + dx, this.y - PAD - (n + 1) * lead + 3, font, size, color);
         });
         x += widths[i]!;
@@ -243,32 +306,33 @@ export class PdfCanvas {
     if (this.meta.size !== 'card') {
       const { w, h, margin } = this.p;
       const right = (s: string, y: number, font: PDFFont, size: number, color: Color = INK) =>
-        this.text(s, w - margin - font.widthOfTextAtSize(s, size), y, font, size, color);
+        this.text(s, w - margin - this.widthOf(s, font, size), y, font, size, color);
       const [title, reference, footer] = [
         this.meta.title,
         this.meta.reference,
         `${this.meta.templateVersion} · Generated ${fmtDateTime(this.generatedAt)}`,
       ].map(this.clean) as [string, string, string];
+      // The reference takes the room the title leaves, at most three lines above the rule (the file's title keeps all of it).
+      const wrapped = this.wrap(reference, this.regular, 9, w - 2 * margin - 88 - this.widthOf(title, this.bold, 11));
+      const refLines = wrapped.length > 3 ? [...wrapped.slice(0, 2), `${wrapped[2]!.slice(0, -1)}…`] : wrapped;
       pages.forEach((page, i) => {
         this.page = page;
         this.logo(margin, h - 30, 16);
         this.text(title, margin + 72, h - 44, this.bold, 11);
-        right(reference, h - 44, this.regular, 9, MUTED);
+        refLines.forEach((l, n) => right(l, h - 44 + (refLines.length - 1 - n) * 10, this.regular, 9, MUTED));
         this.hline(h - 56, margin, w - margin, ACCENT, 1);
         this.hline(44, margin, w - margin, LINE);
         this.text(footer, margin, 32, this.regular, 8, MUTED);
         right(`Page ${i + 1} of ${pages.length}`, 32, this.regular, 8, MUTED);
         if (this.unsupportedCharacters)
-          this.text(
-            'Some characters are not in the print font and show as "?".',
-            margin,
-            20,
-            this.regular,
-            8,
-            MUTED,
-          );
+          this.text(UNSUPPORTED_NOTE, margin, 20, this.regular, 8, MUTED);
       });
-    }
+    } else if (this.unsupportedCharacters)
+      // A card has no footer, so the note sits in its bottom margin.
+      pages.forEach((page) => {
+        this.page = page;
+        this.text(UNSUPPORTED_NOTE, this.p.margin, 4, this.regular, 5, MUTED);
+      });
     this.doc.setTitle(`${this.meta.title} — ${this.meta.reference}`);
     this.doc.setCreator('Elevate OS');
     this.doc.setCreationDate(this.generatedAt);

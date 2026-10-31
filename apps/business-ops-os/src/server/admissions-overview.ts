@@ -35,18 +35,16 @@ import {
   overdueOnboarding,
   tuitionOutstanding,
 } from '../domain/admissions-kpis';
-import { planTotals } from '../domain/fee-plans';
 import type { FeeRecordLike } from '../domain/fees';
 import { itemStatus, netIssued, type OnboardingTemplateItem } from '../domain/onboarding';
 import { studentPopulation } from '../domain/student-lifecycle';
 import { ownAdmissionFilter } from './admissions';
-import { confirmationCheck } from './applications';
+import { approvalChecks } from './applications';
 import { accessScope, type Actor } from './context';
 import { listDemos } from './demos';
+import { inForceOf, plansWithLedger } from './fee-agreements';
 import { loadSettings } from './settings';
 
-/** Most applications at "signatures confirmed" whose gaps are re-checked per page view. */
-export const APPROVAL_CHECK_LIMIT = 50;
 
 const groupBy = <T>(rows: readonly T[], key: (r: T) => string | null) => {
   const m = new Map<string | null, T[]>();
@@ -129,6 +127,7 @@ export async function buildAdmissionsOverview(
           admissionNumber: opsAdmissionApprovals.admissionNumber,
           studentId: opsAdmissions.studentId,
           studentName: students.fullName,
+          isSample: students.isSample,
           programme: programmes.name,
         })
         .from(opsAdmissionApprovals)
@@ -150,6 +149,7 @@ export async function buildAdmissionsOverview(
           admittedAt: opsAdmissions.admittedAt,
           studentId: opsAdmissions.studentId,
           studentName: students.fullName,
+          isSample: students.isSample,
         })
         .from(opsOnboardingItems)
         .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsOnboardingItems.admissionId))
@@ -162,17 +162,19 @@ export async function buildAdmissionsOverview(
         .where(where(opsAdmissions.id)),
       fees
         ? db
-            .select({ r: opsFeeRecords })
+            .select({ r: opsFeeRecords, isSample: opsLeads.isSample })
             .from(opsFeeRecords)
             .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsFeeRecords.admissionId))
+            .innerJoin(opsLeads, eq(opsLeads.id, opsAdmissions.leadId))
             .leftJoin(programmes, eq(programmes.id, opsAdmissions.programmeId))
             .where(where(opsAdmissions.id))
         : null,
       fees
         ? db
-            .select({ p: opsFeePlans })
+            .select({ p: opsFeePlans, isSample: opsLeads.isSample })
             .from(opsFeePlans)
             .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsFeePlans.admissionId))
+            .innerJoin(opsLeads, eq(opsLeads.id, opsAdmissions.leadId))
             .leftJoin(programmes, eq(programmes.id, opsAdmissions.programmeId))
             .where(where(opsAdmissions.id))
         : null,
@@ -188,14 +190,10 @@ export async function buildAdmissionsOverview(
   // Applications at "signatures confirmed": what the confirmation gap check still finds (oldest
   // first, at most APPROVAL_CHECK_LIMIT). Onboarding: status events and material moves of the
   // current students' items, in the same round trip.
-  const toCheck = applications
-    .filter((a) => a.app.status === 'signatures_confirmed')
-    .sort((a, b) => +a.app.createdAt - +b.app.createdAt)
-    .slice(0, APPROVAL_CHECK_LIMIT);
   const current = items.filter((i) => studentPopulation(i) !== 'former');
   const itemIds = current.map((i) => i.id);
   const [checks, events, moves] = await Promise.all([
-    Promise.all(toCheck.map((a) => confirmationCheck(db, a.app, a.admission, settings))),
+    approvalChecks(db, applications, settings),
     itemIds.length
       ? db
           .select({
@@ -227,6 +225,18 @@ export async function buildAdmissionsOverview(
     return { ...i, status: itemStatus(i.kind, eventsOf.get(i.id) ?? [], net, required) };
   });
 
+  // The whole version chain, wherever it lives: the case filter chooses agreements, never receipts.
+  const standing = feePlans
+    ? await plansWithLedger(
+        db,
+        await inForceOf(
+          db,
+          feePlans.map(({ p }) => p),
+        ),
+        now,
+      )
+    : [];
+  const sample = new Set(feePlans?.filter((x) => x.isSample).map((x) => x.p.id as string));
   const confirmed = admissionsConfirmed(approvals, window);
   const onboarding = overdueOnboarding(checklist, now);
   return {
@@ -268,37 +278,16 @@ export async function buildAdmissionsOverview(
       feeRecords && feePlans
         ? {
             collected: feeCollections(
-              feeRecords.map(({ r }) => r as FeeRecordLike & { paymentDate: string | null }),
+              feeRecords.map(({ r, isSample }) => ({
+                ...(r as FeeRecordLike & { paymentDate: string | null }),
+                isSample,
+              })),
               window,
             ),
             outstanding: tuitionOutstanding(
-              activeTotals(
-                feePlans.map(({ p }) => p),
-                feeRecords.map(({ r }) => r),
-              ),
+              standing.map((d) => ({ ...d.totals, isSample: sample.has(d.plan.id) })),
             ),
           }
         : null,
   };
-}
-
-/** Totals of each active agreement from the ledger rows of its whole version chain (A-FEE-1). */
-function activeTotals(
-  plans: (typeof opsFeePlans.$inferSelect)[],
-  records: (typeof opsFeeRecords.$inferSelect)[],
-) {
-  const byId = new Map(plans.map((p) => [p.id as string, p]));
-  return plans
-    .filter((p) => p.status === 'active')
-    .map((p) => {
-      const chain = new Set<string>();
-      for (let q: typeof p | undefined = p; q; q = byId.get(q.supersedesPlanId ?? ''))
-        chain.add(q.id);
-      // Instalments only feed `scheduledPaise`, which is not used here.
-      return planTotals(
-        p.totalPaise,
-        [],
-        records.filter((r) => r.planId && chain.has(r.planId)) as never,
-      );
-    });
 }

@@ -7,5 +7,5 @@ export const dynamic = 'force-dynamic';
 /** POST /ops/api/v1/leads/check-duplicates — Preview duplicate warnings for contact details (nothing is saved). */
 export const POST = defineRoute(
   { permission: 'ops:leads:write', body: duplicateCheckBody },
-  async ({ user, db, body }) => checkDuplicates(db, user, body),
+  async ({ user, db, body, requestId }) => checkDuplicates(db, user, body, requestId),
 );

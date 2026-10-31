@@ -103,6 +103,12 @@ export async function AdmissionConfirmation({
                 <>
                   <a href={`${api}/acknowledgement`}>Admission acknowledgement (PDF)</a> ·{' '}
                   <a href={`${api}/id-card`}>ID card (PDF)</a>
+                  {c.nameAtIssue ? (
+                    <p className="el-field-hint">
+                      Issued under the name {c.nameAtIssue}. These keep the name they were issued
+                      with.
+                    </p>
+                  ) : null}
                 </>
               ),
             },

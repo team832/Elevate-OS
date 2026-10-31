@@ -14,9 +14,10 @@ import { buildAdmissionsOverview } from '../../../server/admissions-overview';
 import { formOptions } from '../../../server/options';
 import { AdmissionsNav } from '../../../ui/admissions-nav';
 import { StatCard } from '../../../ui/charts';
-import { fmtDate, fmtDateTime, fmtPaise } from '../../../ui/format';
+import { fmtDate, fmtDateTime, fmtPaise, sampleNote } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref } from '../../../ui/list-controls';
+import { openHref } from '../../../ui/open-link';
 import { RecordTable } from '../../../ui/record-table';
 import { DetailTable, Segment } from '../../../ui/sections';
 import { programmeName } from '../_components/demo-bits';
@@ -81,8 +82,8 @@ async function Overview({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
   if (!r.ok) return r.view;
   const [o, opts] = r.data;
   const demoList = (patch: Params) => listHref('/ops/admissions', { programme }, patch);
-  const apps = (status?: string) =>
-    listHref('/ops/admissions/applications', {}, { status, programme });
+  const apps = (status?: string, blocked?: string) =>
+    listHref('/ops/admissions/applications', {}, { status, programme, blocked });
   const list = o.demos.list;
   const days = o.demos.days;
   const c = o.conversion;
@@ -106,7 +107,7 @@ async function Overview({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
       label: JOURNEY.application,
       count: total([waiting.draft, waiting.ready_for_review, waiting.form_generated]),
       note: 'Open, not signed yet',
-      href: apps(),
+      href: apps('unsigned'),
     },
     {
       key: 'signed',
@@ -159,7 +160,7 @@ async function Overview({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
                 ? `Of the ${o.applications.approvalChecked} oldest checked`
                 : 'Signed, but an item is missing'
             }
-            href={apps('signatures_confirmed')}
+            href={apps('signatures_confirmed', '1')}
           />
         </li>
         <Kpi
@@ -218,8 +219,9 @@ async function Overview({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
             caption={`${o.confirmed.rows.length} admission(s)`}
             rows={o.confirmed.rows}
             rowKey={(a) => a.admissionNumber}
-            rowHref={(a) => `/ops/students/${a.studentId}`}
+            rowHref={(a) => openHref(user, `/ops/students/${a.studentId}`)}
             linkColumn="student"
+            sampleOf={(a) => Boolean(a.isSample)}
             empty={
               <EmptyState
                 title="No admission was confirmed in this period"
@@ -253,7 +255,7 @@ async function Overview({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
               { label: 'Converted', value: c.converted },
               { label: 'Demos whose window has ended', value: c.cohort },
               { label: `Inside their ${c.windowDays} days (not counted yet)`, value: c.waiting },
-              { label: 'Setting', value: `${c.setting.label} (${c.setting.decisionState})` },
+              { label: 'Setting', value: c.setting.label },
               { label: 'Definition', value: c.rate.definition },
             ]}
           />
@@ -269,7 +271,8 @@ async function Overview({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
             caption={`${o.onboarding.rows.length} overdue item(s)`}
             rows={o.onboarding.rows}
             rowKey={(i) => i.id}
-            rowHref={(i) => `/ops/students/${i.studentId}?tab=onboarding`}
+            rowHref={(i) => openHref(user, `/ops/students/${i.studentId}?tab=onboarding`)}
+            sampleOf={(i) => Boolean(i.isSample)}
             empty="Nothing overdue."
             columns={[
               { key: 'student', header: 'Student', render: (i) => i.studentName ?? 'Not linked' },
@@ -309,12 +312,18 @@ async function Overview({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
                   label: 'Tuition outstanding now',
                   value: o.fees.outstanding
                     ? `${fmtPaise(o.fees.outstanding.outstandingPaise)} across ${o.fees.outstanding.agreements} agreement(s)`
-                    : 'No active fee agreement',
+                    : 'No fee agreement in force',
                 },
                 o.fees.outstanding?.creditPaise
                   ? {
                       label: 'Credit held (recorded above what is owed)',
                       value: fmtPaise(o.fees.outstanding.creditPaise),
+                    }
+                  : null,
+                o.fees.collected?.samplePaise || o.fees.outstanding?.samplePaise
+                  ? {
+                      label: 'Sample data in these figures',
+                      value: `Collected: ${sampleNote(o.fees.collected?.samplePaise ?? 0)} Outstanding: ${sampleNote(o.fees.outstanding?.samplePaise ?? 0)}`,
                     }
                   : null,
               ]}

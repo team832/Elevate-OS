@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
+import { REFERENCE_DATA_HELP } from '@elevate/shared-contracts';
 import { Alert, Button, Card, DataTable, EmptyState, StatusBadge } from '@elevate/shared-ui';
 import { formatIst, modulePath } from '../../domain';
 import { listAccounts, listLegacyConflicts } from '../../server';
@@ -31,7 +32,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
               return (
                 <EmptyState
                   title="No accounts yet"
-                  description="Run `npm run db:seed` to import the legacy registry."
+                  description={REFERENCE_DATA_HELP}
                 />
               );
             }
@@ -41,15 +42,14 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
                   <Alert
                     key={c.id}
                     tone="warning"
-                    title={`${c.title} (owner decision needed)`}
+                    title="Older records name other accounts"
                   >
-                    {c.description} Other model lists:{' '}
                     {(
                       (c.details as { accountsInOtherModel?: string[] } | null)
                         ?.accountsInOtherModel ?? []
-                    ).join(', ')}
-                    . The registry below follows the approved 9-account model plus IGN (later);
-                    nothing from the other model is created until the owner decides.
+                    ).join(', ')}{' '}
+                    are not listed here until the owner decides. The list below has the 9 approved
+                    accounts, plus IGN later.
                   </Alert>
                 ))}
                 <DataTable
@@ -132,7 +132,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
                             <form action={verifyAccountAction}>
                               <input type="hidden" name="accountId" value={a.id} />
                               <Button type="submit" variant="ghost">
-                                Check adapter
+                                Check connection
                               </Button>
                             </form>
                           ) : null}

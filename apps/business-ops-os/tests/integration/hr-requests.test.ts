@@ -5,6 +5,7 @@
  * where the sender may already look; HR acts only inside its scope; in-app notifications only.
  * Fictional people only.
  */
+import { hrReadsRequestsFrom } from '../../src/server/hr-requests-read';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import os from 'node:os';
@@ -34,7 +35,7 @@ import { PATCH as patchRoute } from '../../src/app/api/v1/hr-requests/[id]/route
 import { POST as actionRoute } from '../../src/app/api/v1/hr-requests/[id]/[action]/route';
 import { POST as taskActionRoute } from '../../src/app/api/v1/staff-tasks/[id]/[action]/route';
 import { addDays, istToday } from '../../src/domain/dates';
-import { getHrRequest, hrQueue, type HrRequestView } from '../../src/server/hr-requests-read';
+import { activeStaffOptions, getHrRequest, hrQueue, type HrRequestView } from '../../src/server/hr-requests-read';
 import { updateHrSetting } from '../../src/server/hr-settings';
 import { updateSetting } from '../../src/server/settings';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
@@ -203,6 +204,22 @@ async function taskFor(owner: StaffUser) {
   return t!;
 }
 
+describe('forwarding only to someone who can answer (PPL-003)', () => {
+  it.each(['auditor', 'hr_manager', 'platform_admin'] as const)('%s is refused by name and left off the picker', async (role) => {
+    const person = await staffUser(ctx.db, [role], { name: `Sample No Reply ${role}` });
+    await inDept(person, 'ACADEMICS');
+    const id = await reviewed();
+    const refused = await act(hr, id, 'forward', { toStaffId: person.staffId, body: 'Please answer' });
+    expect(refused.status).toBe(400);
+    expect(JSON.stringify(refused.error)).toContain(`Sample No Reply ${role} cannot reply`);
+    expect(await notesFor(person, id)).not.toContain('hr_request.forwarded');
+    expect((await getHrRequest(ctx.db, hr, id)).request?.status).toBe('reviewed');
+    const people = (await activeStaffOptions(ctx.db)).map((p) => p.value);
+    expect(people).not.toContain(person.staffId);
+    expect(people).toContain(asha.staffId);
+  });
+});
+
 describe('forwarding: each recipient sees only their own forward', () => {
   it('two recipients, HR notes, replies to HR and the relay to the sender', async () => {
     const id = await reviewed();
@@ -328,6 +345,11 @@ describe('Schar: a configured recipient that is not set up stays with HR', () =>
 });
 
 describe('who may manage', () => {
+  it('the page names who reads first: HR for staff in its departments, otherwise an operations manager', async () => {
+    expect(await hrReadsRequestsFrom(ctx.db, sender)).toBe(true);
+    expect(await hrReadsRequestsFrom(ctx.db, finance)).toBe(false);
+  });
+
   it.each<[string, () => TestUser, number]>([
     ['the sender', () => sender, 403],
     ['another teacher (cannot see it)', () => asha, 404],

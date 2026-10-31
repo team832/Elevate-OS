@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { OnboardingTemplates } from '../../src/app/settings/_components/onboarding-templates';
-import { decisionCodes, valueRows } from '../../src/app/settings/_components/setting-value';
+import { decisionWords, valueRows } from '../../src/app/settings/_components/setting-value';
 import { SETTING_DEFINITIONS } from '../../src/domain/policies';
 
 vi.mock('next/navigation', () => ({
@@ -27,6 +27,11 @@ describe('setting values as readable rows (never raw JSON)', () => {
     ],
     [{ sharesPercent: [50, 25, 25] }, [['Shares', '50 %, 25 %, 25 %']]],
     [{ closedWeekdays: [0, 6] }, [['Closed weekdays', 'Sunday, Saturday']]],
+    [{ departmentCodes: ['ACADEMICS', 'MARKETING_GROWTH'] }, [['Departments', 'Academics, Marketing growth']]],
+    [
+      { scheduleReference: 'Sample — replace (not approved, OD-013): amounts' },
+      [['Schedule reference', 'Sample — replace (not approved, Still open): amounts']],
+    ],
     [
       { guardian: 'if_under_18', mandatory: [] },
       [
@@ -56,13 +61,12 @@ describe('setting values as readable rows (never raw JSON)', () => {
   });
 
   it.each([
-    ['D-037, D-040', 'D-037, D-040'],
-    ['OD-046: confirm the reason list', 'OD-046'],
-    ['Owner to set the registration fee (OD-013)', 'OD-013'],
-    ['Owner to confirm the signature rule', null],
-    [null, null],
-  ])('decision codes in %j', (owner, codes) => {
-    expect(decisionCodes(owner)).toBe(codes);
+    ['D-037, D-040', 'Decided'],
+    ['OD-046: confirm the reason list', 'Still open: confirm the reason list'],
+    ['Owner to set the registration fee (OD-013)', 'Owner to set the registration fee (Still open)'],
+    ['Owner to confirm the signature rule', 'Owner to confirm the signature rule'],
+  ])('no decision-record code in %j (HUS-040)', (owner, words) => {
+    expect(decisionWords(owner)).toBe(words);
   });
 });
 

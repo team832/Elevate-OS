@@ -92,7 +92,9 @@ async function Settings({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
             fields={[
               {
                 name: 'value',
-                label: 'Value (JSON)',
+                // shortcut: free-form JSON until each setting has its own typed fields; reported to the coordinator.
+                label: 'New value',
+                hint: 'Change only the values; keep the quotes, brackets and commas as they are. It is checked before saving.',
                 type: 'json',
                 required: true,
                 defaultValue: JSON.stringify(open.value, null, 2),

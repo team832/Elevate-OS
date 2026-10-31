@@ -184,6 +184,8 @@ describe('teacher reports (owner brief 22 Oct 2026)', () => {
     for (const user of [teacher, coordinator, auditor])
       expect((await generate(user, teacher.staffId)).status).toBe(403);
     expect((await generate(manager, crypto.randomUUID())).status).toBe(404);
+    const unknown = crypto.randomUUID(); // API-004: the list was 200 and empty
+    expect((await callRoute(listReports, req(manager, `${unknown}/report`), { id: unknown })).status).toBe(404);
     expect(
       (await generate(manager, teacher.staffId, { from: period.to, to: period.from })).status,
     ).toBe(400);

@@ -37,12 +37,12 @@ export async function addVersionAction(form: FormData): Promise<void> {
       : [],
   });
   if (!parsed.success)
-    go(back(id), {
+    return go(back(id), {
       error: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
     });
   const res = await run((db, user) => addVersion(db, user, id, parsed.data));
-  if (!res.ok) go(back(id), { error: res.error });
-  go(back(id), {
+  if (!res.ok) return go(back(id), { error: res.error });
+  return go(back(id), {
     notice: res.value.approvalVoided
       ? `Version ${res.value.version.versionNumber} saved. The previous approval no longer applies; the item is back in review.`
       : `Version ${res.value.version.versionNumber} saved.`,
@@ -52,9 +52,9 @@ export async function addVersionAction(form: FormData): Promise<void> {
 export async function submitAction(form: FormData): Promise<void> {
   const id = str(form, 'itemId') ?? '';
   const res = await run((db, user) => submitForReview(db, user, id, str(form, 'comment') ?? null));
-  if (!res.ok) go(back(id), { error: res.error });
+  if (!res.ok) return go(back(id), { error: res.error });
   const blocks = res.value.ruleCheck.blocking.length;
-  go(back(id), {
+  return go(back(id), {
     notice: `Submitted for review.${blocks ? ` ${blocks} blocking flag(s) must be fixed before it can be approved.` : ''}`,
   });
 }
@@ -62,8 +62,8 @@ export async function submitAction(form: FormData): Promise<void> {
 export async function withdrawAction(form: FormData): Promise<void> {
   const id = str(form, 'itemId') ?? '';
   const res = await run((db, user) => withdrawFromReview(db, user, id));
-  if (!res.ok) go(back(id), { error: res.error });
-  go(back(id), { notice: 'Withdrawn to draft.' });
+  if (!res.ok) return go(back(id), { error: res.error });
+  return go(back(id), { notice: 'Withdrawn to draft.' });
 }
 
 export async function decideAction(form: FormData): Promise<void> {
@@ -76,8 +76,8 @@ export async function decideAction(form: FormData): Promise<void> {
       acknowledgedRuleCodes: strs(form, 'ack'),
     }),
   );
-  if (!res.ok) go(back(id), { error: res.error });
-  go(back(id), {
+  if (!res.ok) return go(back(id), { error: res.error });
+  return go(back(id), {
     notice: decision === 'approve' ? 'Approved this version.' : 'Changes requested.',
   });
 }
@@ -85,15 +85,15 @@ export async function decideAction(form: FormData): Promise<void> {
 export async function archiveAction(form: FormData): Promise<void> {
   const id = str(form, 'itemId') ?? '';
   const res = await run((db, user) => archiveContentItem(db, user, id, str(form, 'reason') ?? ''));
-  if (!res.ok) go(back(id), { error: res.error });
-  go(back(id), { notice: 'Archived.' });
+  if (!res.ok) return go(back(id), { error: res.error });
+  return go(back(id), { notice: 'Archived.' });
 }
 
 export async function commentAction(form: FormData): Promise<void> {
   const id = str(form, 'itemId') ?? '';
   const res = await run((db, user) => addComment(db, user, id, { body: str(form, 'body') ?? '' }));
-  if (!res.ok) go(back(id), { error: res.error });
-  go(back(id), { notice: 'Comment added.' });
+  if (!res.ok) return go(back(id), { error: res.error });
+  return go(back(id), { notice: 'Comment added.' });
 }
 
 export async function assignAction(form: FormData): Promise<void> {
@@ -106,8 +106,8 @@ export async function assignAction(form: FormData): Promise<void> {
       staffMemberId: str(form, 'staffMemberId') ?? null,
     }),
   );
-  if (!res.ok) go(back(id), { error: res.error });
-  go(back(id), { notice: `Assignment for ${role} saved.` });
+  if (!res.ok) return go(back(id), { error: res.error });
+  return go(back(id), { notice: `Assignment for ${role} saved.` });
 }
 
 export async function createPlacementAction(form: FormData): Promise<void> {
@@ -119,9 +119,9 @@ export async function createPlacementAction(form: FormData): Promise<void> {
       variant: variant === 'short' || variant === 'long' ? variant : null,
     }),
   );
-  if (!res.ok) go(back(id), { error: res.error });
+  if (!res.ok) return go(back(id), { error: res.error });
   const w = res.value.warnings.map((x) => x.message).join(' ');
-  go(back(id), {
+  return go(back(id), {
     notice: `Placement ${res.value.placement.code} planned.${w ? ` Note: ${w}` : ''}`,
   });
 }

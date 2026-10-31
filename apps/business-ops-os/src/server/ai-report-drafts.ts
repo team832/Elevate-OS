@@ -154,11 +154,13 @@ export async function summariseStudent(
       ? [`Fees: not included (${id ? 'no fee permission' : 'no student record yet'}).`]
       : !fees.plans.length
         ? ['Fees: no fee agreement recorded.']
-        : fees.plans.map(({ plan, totals, instalments, status, nextDue }) => {
-            const n = (s: string) => instalments.filter((i) => i.status === s);
-            const overdue = n('overdue');
-            return `Fee agreement (${plan.status}): ${INSTALMENT_STATUS_LABELS[status]}; tuition ${formatPaise(totals.totalPaise)}, paid (net, as recorded) ${formatPaise(totals.netPaidPaise)}, outstanding ${formatPaise(totals.outstandingPaise)}; instalments: ${n('paid').length} paid, ${n('unpaid').length + n('part_paid').length} due, ${overdue.length} overdue${overdue.length ? ` (${formatPaise(overdue.reduce((t, i) => t + i.remainingPaise, 0))} overdue)` : ''}; next due ${nextDue ? `${fmtDate(nextDue.instalment.dueDate)}, ${formatPaise(nextDue.remainingPaise)}` : 'none'}.`;
-          })),
+        : fees.plans
+            .filter((p) => !p.proposedChange)
+            .map(({ plan, inForce, totals, instalments, status, nextDue }) => {
+              const n = (s: string) => instalments.filter((i) => i.status === s);
+              const overdue = n('overdue');
+              return `Fee agreement (${inForce ? 'active' : plan.status}): ${INSTALMENT_STATUS_LABELS[status]}; tuition ${formatPaise(totals.totalPaise)}, paid (net, as recorded) ${formatPaise(totals.netPaidPaise)}, outstanding ${formatPaise(totals.outstandingPaise)}; instalments: ${n('paid').length} paid, ${n('unpaid').length + n('part_paid').length} due, ${overdue.length} overdue${overdue.length ? ` (${formatPaise(overdue.reduce((t, i) => t + i.remainingPaise, 0))} overdue)` : ''}; next due ${nextDue ? `${fmtDate(nextDue.instalment.dueDate)}, ${formatPaise(nextDue.remainingPaise)}` : 'none'}.`;
+            })),
     ...(academic.status === 'not_enrolled'
       ? ['Academic OS: not enrolled yet; attendance and results not available.']
       : academic.status === 'unavailable'

@@ -20,6 +20,7 @@ import {
 import type { AcademicStudentReviewsV1 } from '@elevate/shared-contracts';
 import type { StaffMemberId, StudentIdentityId } from '@elevate/shared-types';
 import { istToday } from '../domain';
+import { NOT_LINKED_TO_STAFF } from '../domain/feedback';
 import { fetchAcademicReviews } from './academic-summary';
 import { ownAdmissionFilter } from './admissions';
 import { accessScope, type AccessScope, type Actor } from './context';
@@ -120,7 +121,7 @@ async function readReviews(
   if (access.scope === 'own' && !access.staffId)
     return {
       status: 'unavailable',
-      reason: 'Your account is not linked to a staff record',
+      reason: NOT_LINKED_TO_STAFF,
       checkedAt: new Date().toISOString(),
     };
   const r = await fetchAcademicReviews(query);

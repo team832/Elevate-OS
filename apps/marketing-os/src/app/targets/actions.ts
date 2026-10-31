@@ -16,9 +16,9 @@ const num = (form: FormData, key: string) => {
   return v === undefined ? undefined : Number(v);
 };
 
-function targetId(form: FormData): string {
+async function targetId(form: FormData): Promise<string> {
   const id = str(form, 'id') ?? '';
-  if (!z.uuid().safeParse(id).success) go('targets', { error: 'Target not found.' });
+  if (!z.uuid().safeParse(id).success) return go('targets', { error: 'Target not found.' });
   return id;
 }
 
@@ -34,14 +34,14 @@ export async function createTargetAction(form: FormData): Promise<void> {
     periodEnd: str(form, 'periodEnd'),
     note: str(form, 'note'),
   });
-  if (!parsed.success) go('targets', { error: issues(parsed.error) });
+  if (!parsed.success) return go('targets', { error: issues(parsed.error) });
   const res = await run((db, user) => createTarget(db, user, parsed.data));
-  if (!res.ok) go('targets', { error: res.error });
-  go(`targets/${res.value.id}`, { notice: 'Target set.' });
+  if (!res.ok) return go('targets', { error: res.error });
+  return go(`targets/${res.value.id}`, { notice: 'Target set.' });
 }
 
 export async function updateTargetAction(form: FormData): Promise<void> {
-  const id = targetId(form);
+  const id = await targetId(form);
   const back = `targets/${id}`;
   const parsed = targetUpdateBody.safeParse({
     targetValue: num(form, 'targetValue'),
@@ -49,14 +49,14 @@ export async function updateTargetAction(form: FormData): Promise<void> {
     periodEnd: str(form, 'periodEnd'),
     note: str(form, 'note'),
   });
-  if (!parsed.success) go(back, { error: issues(parsed.error) });
+  if (!parsed.success) return go(back, { error: issues(parsed.error) });
   const res = await run((db, user) => updateTarget(db, user, id, parsed.data));
-  go(back, res.ok ? { notice: 'Target changed.' } : { error: res.error });
+  return go(back, res.ok ? { notice: 'Target changed.' } : { error: res.error });
 }
 
 export async function deleteTargetAction(form: FormData): Promise<void> {
-  const id = targetId(form);
+  const id = await targetId(form);
   const res = await run((db, user) => deleteTarget(db, user, id));
-  if (!res.ok) go(`targets/${id}`, { error: res.error });
-  go('targets', { notice: 'Target removed.' });
+  if (!res.ok) return go(`targets/${id}`, { error: res.error });
+  return go('targets', { notice: 'Target removed.' });
 }

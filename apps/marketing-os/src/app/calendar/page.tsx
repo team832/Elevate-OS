@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Button, ButtonLink, Card, DataTable, EmptyState, Subnav } from '@elevate/shared-ui';
+import { Button, ButtonLink, Card, DataTable, EmptyState, Subnav, fmtDay } from '@elevate/shared-ui';
 import { redirect } from 'next/navigation';
 import { getCurrentUser, toAppPath } from '@elevate/server-kit/next';
 import { addDays, daysBetween, isIsoDate, toIsoDate, type IsoDate } from '@elevate/shared-types';
@@ -334,7 +334,7 @@ function Grid({
       </div>
       <ol
         className="mkt-calendar"
-        aria-label={`Days from ${from} to ${to} (IST)`}
+        aria-label={`Days from ${fmtDay(from)} to ${fmtDay(to)} (IST)`}
         style={{ '--mkt-start': weekdayIndex(from) + 1 } as CSSProperties}
       >
         {days.map((day) => {

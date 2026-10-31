@@ -9,6 +9,7 @@ import {
   Field,
   Select,
   StatusBadge,
+  StoredLink,
   TextArea,
   TextInput,
 } from '@elevate/shared-ui';
@@ -63,7 +64,7 @@ export function VersionsPanel({ d }: { d: D }) {
                     {a.externalUrl ? (
                       <>
                         {' '}
-                        · <a href={a.externalUrl}>link</a>
+                        · <StoredLink href={a.externalUrl}>link</StoredLink>
                       </>
                     ) : null}
                   </li>
@@ -291,7 +292,19 @@ export function HistoryPanel({ d }: { d: D }) {
   );
 }
 
-export function PeoplePanel({ d, canWrite }: { d: D; canWrite: boolean }) {
+export function PeoplePanel({
+  d,
+  canWrite,
+  canAssign,
+  people = [],
+}: {
+  d: D;
+  canWrite: boolean;
+  /** Marketing and Growth staff who can be assigned. */
+  people?: readonly { id: string; name: string }[];
+  /** Assigning grants access to the content, so only team-wide readers may (setAssignment). */
+  canAssign: boolean;
+}) {
   return (
     <Card title="Assignees and comments">
       <ul>
@@ -309,11 +322,12 @@ export function PeoplePanel({ d, canWrite }: { d: D; canWrite: boolean }) {
           );
         })}
       </ul>
-      {canWrite ? (
+      {canAssign ? (
         <form action={assignAction} className="el-grid">
           <input type="hidden" name="itemId" value={d.item.id} />
           <Field id="as-role" label="Role">
-            <Select id="as-role" name="role">
+            <Select id="as-role" name="role" required>
+              <option value="">Choose…</option>
               {ASSIGNEE_ROLES.map((r) => (
                 <option key={r} value={r}>
                   {r}
@@ -321,8 +335,15 @@ export function PeoplePanel({ d, canWrite }: { d: D; canWrite: boolean }) {
               ))}
             </Select>
           </Field>
-          <Field id="as-user" label="User id (blank clears)">
-            <TextInput id="as-user" name="userId" />
+          <Field id="as-staff" label="Person">
+            <Select id="as-staff" name="staffMemberId" defaultValue="">
+              <option value="">Nobody (clears the role)</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
           </Field>
           <div>
             <Button type="submit" variant="secondary">

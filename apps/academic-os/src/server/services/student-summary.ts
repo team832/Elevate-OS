@@ -30,7 +30,7 @@ import {
   academicStudentSummaryV1Schema,
   type AcademicStudentSummaryV1,
 } from '@elevate/shared-contracts';
-import type { StaffMemberId, StudentId } from '@elevate/shared-types';
+import type { IsoDate, StaffMemberId, StudentId } from '@elevate/shared-types';
 import { attendanceDefinition, summariseAttendance, type AttendanceStatus } from '../../domain';
 import { NO_BATCH_HISTORY, inPlacement, placementsOf } from './progress';
 import { rankVisible } from './results';
@@ -51,6 +51,7 @@ export async function buildStudentSummary(
       e: academicEnrolments,
       programmeCode: programmes.code,
       batchName: academicBatches.name,
+      batchEndDate: academicBatches.endDate,
     })
     .from(academicEnrolments)
     .innerJoin(programmes, eq(programmes.id, academicEnrolments.programmeId))
@@ -67,7 +68,7 @@ export async function buildStudentSummary(
     enrolments.map(({ e }) => e.id),
   );
   const attendanceNotRecorded: { enrolmentId: string; reason: string }[] = [];
-  for (const { e, programmeCode, batchName } of enrolments) {
+  for (const { e, programmeCode, batchName, batchEndDate } of enrolments) {
     const windows = placements.filter((p) => p.enrolmentId === e.id);
     if (e.batchId && windows.length === 0) attendanceNotRecorded.push({ enrolmentId: e.id, reason: NO_BATCH_HISTORY });
     const batchIds = [...new Set(windows.map((w) => w.batchId))];
@@ -139,6 +140,7 @@ export async function buildStudentSummary(
       batchName,
       status: e.status,
       teachers: [...teachers.values()],
+      batchEndDate: batchEndDate as IsoDate | null,
     });
   }
 

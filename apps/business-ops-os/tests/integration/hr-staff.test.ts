@@ -4,11 +4,12 @@
  * one transaction; ending employment disables the login and keeps history; HR settings.
  * Fictional people only.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { and, eq, isNull } from 'drizzle-orm';
 import {
   auditEvents,
   departments,
+  notifications,
   opsStaffDepartments,
   opsStaffManagerHistory,
   opsStaffProfiles,
@@ -243,6 +244,88 @@ describe('HR staff record and private details', () => {
     expect((await action(director, teacher.staffId, 'manager', { managerId: null })).status).toBe(
       403,
     );
+  });
+});
+
+describe('End employment tells who can act (PPL-006); nothing moves by itself', () => {
+  const notes = (kind: string) =>
+    db().select().from(notifications).where(eq(notifications.kind, kind));
+  const academicAnswers = (items: object[]) =>
+    vi.fn(async () =>
+      Response.json({
+        data: { contract: 'academic.teaching_assignments', version: 1, generatedAt: new Date().toISOString(), total: items.length, page: 1, pageSize: 100, items },
+      }),
+    );
+  const assignment = (staffId: string, status: string) => ({
+    assignmentId: crypto.randomUUID(), staffId, teacherName: 'Sample', courseName: 'CLAT', subjectName: 'Quant', classLevel: null,
+    batchCode: 'SAMPLE-A', academicYear: null, branchName: null, startDate: null, endDate: null, role: 'primary', status,
+  });
+  const leaverWith = async (name: string, managerId?: string) => {
+    const leaver = await staffUser(db(), ['teacher'], { name });
+    await placeIn(leaver.staffId, 'ACADEMICS');
+    if (managerId) await db().update(staffMembers).set({ managerId: managerId as never }).where(eq(staffMembers.id, leaver.staffId));
+    await db().insert(opsStaffTasks).values({ staffId: leaver.staffId, title: 'Sample handover task', dueOn: '2026-10-30', originalDueOn: '2026-10-30', status: 'in_progress', isSample: true, createdBy: hr.id });
+    return leaver;
+  };
+  let manager: StaffUser;
+  let opsManager: StaffUser;
+  let coordinator: StaffUser;
+  beforeAll(async () => {
+    manager = await staffUser(db(), ['teacher'], { name: 'Sample Reporting Manager' });
+    opsManager = await staffUser(db(), ['operations_manager'], { name: 'Sample Ops Manager' });
+    coordinator = await staffUser(db(), ['academic_coordinator'], { name: 'Sample Coordinator' });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('the manager, operations managers and coordinators are told who left and what they still hold; the task stays open', async () => {
+    await db().delete(notifications).where(eq(notifications.kind, 'staff.employment_ended'));
+    const leaver = await leaverWith('Sample Leaver One', manager.staffId);
+    vi.stubGlobal('fetch', academicAnswers([assignment(leaver.staffId, 'active'), assignment(leaver.staffId, 'ended')]));
+    const res = await action(hr, leaver.staffId, 'end-employment', { leftOn: '2026-10-31', reason: 'Resigned' });
+    expect(res.status).toBe(200);
+    const rows = await notes('staff.employment_ended');
+    const to = (u: StaffUser) => rows.find((n) => n.userId === u.id);
+    for (const u of [manager, opsManager, coordinator]) {
+      expect(to(u)?.title).toContain('Sample Leaver One');
+      expect(to(u)?.body).toMatch(/1 open task/);
+      expect(to(u)?.body).toMatch(/1 teaching assignment: Quant, SAMPLE-A/);
+      expect(to(u)?.body).toMatch(/Nothing was moved/);
+    }
+    expect(to(leaver as StaffUser)).toBeUndefined();
+    expect(to(hr)).toBeUndefined(); // HR did it
+    expect(to(coordinator)!.link).toBe(`/academic/teachers/${leaver.staffId}`);
+    expect(to(opsManager)!.link).toBe(`/ops/hr/staff/${leaver.staffId}`);
+    expect(to(manager)!.link).toBe('/academic/tasks');
+    const [task] = await db().select().from(opsStaffTasks).where(eq(opsStaffTasks.staffId, leaver.staffId));
+    expect(task!.status).toBe('in_progress');
+  });
+
+  it('a coordinator who is also the manager of the leaver is told once, with the link that opens the leaver (RVB-004)', async () => {
+    await db().delete(notifications).where(eq(notifications.kind, 'staff.employment_ended'));
+    const leaver = await leaverWith('Sample Leaver Both', coordinator.staffId);
+    vi.stubGlobal('fetch', academicAnswers([assignment(leaver.staffId, 'active')]));
+    expect((await action(hr, leaver.staffId, 'end-employment', { leftOn: '2026-10-31', reason: 'Resigned' })).status).toBe(200);
+    const rows = (await notes('staff.employment_ended')).filter((n) => n.userId === coordinator.id);
+    expect(rows.map((n) => n.link)).toEqual([`/academic/teachers/${leaver.staffId}`]);
+  });
+
+  it('with Academic down the notice says so instead of claiming no classes, and coordinators are still told', async () => {
+    await db().delete(notifications).where(eq(notifications.kind, 'staff.employment_ended'));
+    const leaver = await leaverWith('Sample Leaver Two');
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed'); }));
+    expect((await action(hr, leaver.staffId, 'end-employment', { leftOn: '2026-10-31', reason: 'Resigned' })).status).toBe(200);
+    const rows = await notes('staff.employment_ended');
+    expect(rows.find((n) => n.userId === coordinator.id)?.body).toMatch(/could not be read/);
+    expect(rows.some((n) => n.userId === opsManager.id)).toBe(true);
+  });
+
+  it('someone holding nothing causes no notice', async () => {
+    await db().delete(notifications).where(eq(notifications.kind, 'staff.employment_ended'));
+    const leaver = await staffUser(db(), ['teacher'], { name: 'Sample Leaver Three' });
+    await placeIn(leaver.staffId, 'ACADEMICS');
+    vi.stubGlobal('fetch', academicAnswers([]));
+    expect((await action(hr, leaver.staffId, 'end-employment', { leftOn: '2026-10-31', reason: 'Resigned' })).status).toBe(200);
+    expect(await notes('staff.employment_ended')).toEqual([]);
   });
 });
 

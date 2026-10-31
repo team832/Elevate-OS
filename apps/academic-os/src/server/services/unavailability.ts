@@ -18,21 +18,23 @@ export const UNAVAILABILITY_LABEL = 'Academic availability record — not HR lea
 
 /**
  * Scheduled classes from `from` to `to` where anyone teaching them (planned teacher not
- * replaced, co-teacher or substitute) has an active unavailability record on the date.
+ * replaced, co-teacher or substitute) has an active unavailability record on the date, or has
+ * left (HR ended their employment, core.staff_members inactive). Nothing here reassigns them.
  */
 export async function uncoveredSessions(db: Database, actor: Actor, range: { from: string; to: string; staffId?: string }) {
   const records = await db
     .select()
     .from(academicTeacherUnavailability)
     .where(and(isNull(academicTeacherUnavailability.cancelledAt), lte(academicTeacherUnavailability.fromDate, range.to), gte(academicTeacherUnavailability.toDate, range.from), range.staffId ? eq(academicTeacherUnavailability.staffId, range.staffId as StaffMemberId) : undefined));
-  if (records.length === 0) return [];
+  const ended = new Set((await db.select({ id: staffMembers.id }).from(staffMembers).where(and(eq(staffMembers.status, 'inactive'), range.staffId ? eq(staffMembers.id, range.staffId as StaffMemberId) : undefined))).map((r) => r.id as string));
+  if (records.length === 0 && ended.size === 0) return [];
   const sessions = await listSessions(db, actor, { from: range.from, to: range.to, status: 'scheduled' });
   const teachers = await teachersBySession(db, sessions);
-  const away = (s: (typeof sessions)[number]) => (teachers.get(s.id) ?? []).filter((t) => records.some((r) => r.staffId === t && s.date >= r.fromDate && s.date <= r.toDate));
+  const away = (s: (typeof sessions)[number]) => (teachers.get(s.id) ?? []).filter((t) => ended.has(t) || records.some((r) => r.staffId === t && s.date >= r.fromDate && s.date <= r.toDate));
   const flagged = sessions.filter((s) => away(s).length > 0);
   const ids = [...new Set(flagged.flatMap(away))];
   const names = new Map(ids.length ? (await db.select({ id: staffMembers.id, name: staffMembers.fullName }).from(staffMembers).where(inArray(staffMembers.id, ids as StaffMemberId[]))).map((r) => [r.id as string, r.name]) : []);
-  return flagged.map((s) => ({ ...s, unavailableStaffIds: away(s), unavailableNames: away(s).map((id) => names.get(id) ?? 'Unknown staff member') }));
+  return flagged.map((s) => ({ ...s, unavailableStaffIds: away(s), unavailableNames: away(s).map((id) => `${names.get(id) ?? 'Unknown staff member'}${ended.has(id) ? ' (left)' : ''}`) }));
 }
 
 export async function listUnavailability(db: Database, actor: Actor, filter: { staffId?: string } = {}) {

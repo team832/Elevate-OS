@@ -305,6 +305,15 @@ describe('student reports (acceptance 5, 17, 21)', () => {
   let guardianRef: string;
   let before: ReportSnapshot;
 
+  it('a guardian given only on the enquiry is on the internal report, not "No guardians recorded" (RVB-007)', async () => {
+    academicUp();
+    const made = await report(manager, { audience: 'internal' });
+    const got = await open(manager, made.data!.referenceCode);
+    expect(got.data!.view!.kyc!.guardians).toEqual([
+      expect.objectContaining({ name: expect.stringContaining('on the enquiry'), phone: expect.any(String), consent: 'not_recorded' }),
+    ]);
+  });
+
   it('setup: a guardian with a phone; one shareable and one internal submitted review, both carrying the raw-remark sentinel', async () => {
     await ctx.db.insert(opsGuardians).values({
       studentId: studentId as never,

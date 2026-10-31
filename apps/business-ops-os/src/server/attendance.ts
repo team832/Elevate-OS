@@ -6,6 +6,7 @@
  * (scenario 10). Own scope = your own days only; another person's id → 404.
  */
 import { and, asc, eq, gte, ilike, inArray, lt, lte, ne, or, sql, type SQL } from 'drizzle-orm';
+import { containsPattern } from '@elevate/server-kit';
 import {
   departments,
   opsAttendancePunches,
@@ -83,9 +84,9 @@ export function attendanceStaff(
         where.branch ? eq(opsStaffProfiles.branchId, where.branch as never) : undefined,
         where.q
           ? or(
-              ilike(staffMembers.fullName, `%${where.q}%`),
-              ilike(opsStaffProfiles.displayName, `%${where.q}%`),
-              ilike(opsStaffProfiles.staffCode, `%${where.q}%`),
+              ilike(staffMembers.fullName, containsPattern(where.q)),
+              ilike(opsStaffProfiles.displayName, containsPattern(where.q)),
+              ilike(opsStaffProfiles.staffCode, containsPattern(where.q)),
             )
           : undefined,
       ),

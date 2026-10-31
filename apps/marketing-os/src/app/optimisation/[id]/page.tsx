@@ -11,6 +11,7 @@ import {
   Field,
   Select,
   StatusBadge,
+  StoredLink,
   TextArea,
   TextInput,
 } from '@elevate/shared-ui';
@@ -88,9 +89,9 @@ export default async function OptimisationItemPage({
                   <dl className="mkt-facts">
                     <dt>Page</dt>
                     <dd>
-                      <a href={item.pageUrl} rel="noreferrer noopener" target="_blank">
+                      <StoredLink href={item.pageUrl} rel="noreferrer noopener" target="_blank">
                         {item.pageUrl}
-                      </a>
+                      </StoredLink>
                     </dd>
                     <dt>Category</dt>
                     <dd>{item.categoryLabel}</dd>
@@ -209,7 +210,8 @@ export default async function OptimisationItemPage({
                     <form action={reviewOptimisationAction} className="el-grid">
                       {hidden}
                       <Field id="decision" label="Decision">
-                        <Select id="decision" name="decision">
+                        <Select id="decision" name="decision" required>
+                          <option value="">Choose…</option>
                           <option value="approved">Approve</option>
                           <option value="changes_requested">Ask for changes</option>
                         </Select>

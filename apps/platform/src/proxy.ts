@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { withContentSecurityPolicy } from '@elevate/configuration/security-headers';
+import { isAllowedActionOrigin } from '@elevate/configuration/workspaces';
 
 /**
  * Platform proxy (Next.js 16's renamed middleware).
@@ -18,6 +19,8 @@ const SESSION_COOKIE = 'elevate_session';
 const PUBLIC_PATHS = ['/login'];
 
 export function proxy(request: NextRequest) {
+  if (request.method === 'POST' && !isAllowedActionOrigin(request))
+    return new NextResponse('This request came from another site, so it was refused.', { status: 403 });
   const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
   const { pathname, search } = request.nextUrl;
 

@@ -3,9 +3,10 @@
  * rules (per assessment, overridable per section), answer-key versions and
  * student attempts (responses). Finalisation and results: ./results.ts.
  */
-import { and, asc, count, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, exists, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import {
   academicAnswerKeys,
+  academicAssessmentBatches,
   academicAssessmentRoster,
   academicAssessmentSections,
   academicAssessments,
@@ -65,14 +66,31 @@ export async function getAssessmentOrThrow(db: Database, id: string) {
 }
 
 const P = academicResultPublications;
+const AB = academicAssessmentBatches;
+
+/** Every batch a test covers, primary first ("A, B"), with academicBatches joined on the primary. The subquery's own join shadows that outer table. */
+export const batchCodes = sql<string>`${academicBatches.code} || coalesce((select ', ' || string_agg(${academicBatches.code}, ', ' order by ${academicBatches.code}) from ${AB} join ${academicBatches} on ${academicBatches.id} = ${AB.batchId} where ${AB.assessmentId} = ${academicAssessments.id} and ${AB.batchId} <> ${academicAssessments.batchId}), '')`;
 
 /** `provisional`: the current publication is provisional (then `publishedAt` is set but results are not final). */
 export async function listAssessments(db: Database, actor: Actor, filter: { batchId?: string } = {}) {
   const scope = await resolveScope(db, actor, 'academic:assessments:read');
   const conditions = [assessmentInScope(scope)];
-  if (filter.batchId) conditions.push(eq(academicAssessments.batchId, filter.batchId as BatchId));
+  if (filter.batchId) {
+    const batchId = filter.batchId as BatchId;
+    conditions.push(
+      or(
+        eq(academicAssessments.batchId, batchId),
+        exists(
+          db
+            .select({ id: AB.batchId })
+            .from(AB)
+            .where(and(eq(AB.assessmentId, academicAssessments.id), eq(AB.batchId, batchId))),
+        ),
+      )!,
+    );
+  }
   const rows = await db
-    .select({ a: academicAssessments, batchCode: academicBatches.code, provisional: sql<boolean>`exists (select 1 from ${P} where ${P.assessmentId} = ${academicAssessments.id} and ${P.status} = 'current' and ${P.provisional})` })
+    .select({ a: academicAssessments, batchCode: batchCodes, provisional: sql<boolean>`exists (select 1 from ${P} where ${P.assessmentId} = ${academicAssessments.id} and ${P.status} = 'current' and ${P.provisional})` })
     .from(academicAssessments)
     .innerJoin(academicBatches, eq(academicBatches.id, academicAssessments.batchId))
     .where(and(...conditions))
@@ -140,7 +158,11 @@ export async function getAssessment(db: Database, actor: Actor, id: string) {
   const scope = await resolveScope(db, actor, 'academic:assessments:read');
   const assessment = await getAssessmentOrThrow(db, id);
   await assertAssessmentInScope(db, scope, assessment.id);
-  const [batch] = await db.select().from(academicBatches).where(eq(academicBatches.id, assessment.batchId));
+  const [batch] = await db
+    .select({ code: batchCodes })
+    .from(academicAssessments)
+    .innerJoin(academicBatches, eq(academicBatches.id, academicAssessments.batchId))
+    .where(eq(academicAssessments.id, assessment.id));
   const sections = await db.select().from(academicAssessmentSections).where(eq(academicAssessmentSections.assessmentId, assessment.id)).orderBy(asc(academicAssessmentSections.sortOrder));
   const keys = await db
     .select({ id: academicAnswerKeys.id, version: academicAnswerKeys.version, note: academicAnswerKeys.note, createdAt: academicAnswerKeys.createdAt })

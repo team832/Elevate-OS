@@ -68,6 +68,7 @@
 }
 .mkt-day-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--el-space-2);
   margin: 0;
   padding: 0;
@@ -84,6 +85,11 @@
   box-shadow: var(--el-shadow);
   font-size: var(--el-text-sm);
   overflow-wrap: anywhere;
+}
+.mkt-slot .el-badge {
+  padding-block: var(--el-space-1);
+  line-height: 1.25;
+  white-space: normal;
 }
 .mkt-slot-when {
   font-weight: 650;

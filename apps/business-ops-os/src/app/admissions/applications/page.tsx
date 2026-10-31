@@ -17,6 +17,7 @@ import { StatCard } from '../../../ui/charts';
 import { fmtDateTime } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref, Pager, SearchPanel } from '../../../ui/list-controls';
+import { OpenLink } from '../../../ui/open-link';
 import { RecordModal } from '../../../ui/record-modal';
 import { RecordTable } from '../../../ui/record-table';
 import { programmeName } from '../_components/demo-bits';
@@ -74,7 +75,7 @@ async function List({ user, params }: { user: AuthenticatedUser; params: Params 
   );
   if (!r.ok) return r.view;
   const [{ items, total, page, pageSize, statusCounts }, { programmes }] = r.data;
-  const filtered = Boolean(params.q || params.status || params.programme);
+  const filtered = Boolean(params.q || params.status || params.programme || params.blocked);
   return (
     <div className="el-stack">
       <ul className="el-grid ops-kpis" aria-label="Applications waiting">
@@ -92,6 +93,14 @@ async function List({ user, params }: { user: AuthenticatedUser; params: Params 
           </li>
         ))}
       </ul>
+      {params.blocked ? (
+        <p className="el-field-hint">
+          Only signed applications with an item still missing.{' '}
+          <a href={listHref(BASE, params, { blocked: undefined, page: undefined })}>
+            Show every application
+          </a>
+        </p>
+      ) : null}
       <SearchPanel
         action={BASE}
         search={{ name: 'q', label: 'Name or application reference', value: params.q }}
@@ -107,10 +116,13 @@ async function List({ user, params }: { user: AuthenticatedUser; params: Params 
             name: 'status',
             label: 'Status',
             type: 'select',
-            options: APPLICATION_STATUSES.map((s) => ({
-              value: s,
-              label: APPLICATION_STATUS_LABELS[s],
-            })),
+            options: [
+              { value: 'unsigned', label: 'Open, not signed yet' },
+              ...APPLICATION_STATUSES.map((s) => ({
+                value: s,
+                label: APPLICATION_STATUS_LABELS[s],
+              })),
+            ],
             value: params.status,
           },
           {
@@ -132,6 +144,14 @@ async function List({ user, params }: { user: AuthenticatedUser; params: Params 
         rowKey={(a) => a.id}
         rowHref={(a) => listHref(BASE, params, { open: a.id })}
         linkColumn="student"
+        sortedBy={
+          params.sort === 'name'
+            ? { column: 'student', direction: 'ascending' }
+            : {
+                column: 'updated',
+                direction: params.sort === 'oldest' ? 'ascending' : 'descending',
+              }
+        }
         columns={[
           {
             key: 'student',
@@ -184,7 +204,9 @@ async function List({ user, params }: { user: AuthenticatedUser; params: Params 
               filtered ? (
                 <a href={BASE}>Clear filters</a>
               ) : (
-                <a href="/ops/admissions">Open demo students</a>
+                <OpenLink user={user} href="/ops/admissions" fallback={null}>
+                  Open demo students
+                </OpenLink>
               )
             }
           />
@@ -217,7 +239,7 @@ async function Quick({
       closeHref={closeHref}
       returnId={id}
     >
-      <ApplicationDetail d={d} level={3} page={page} />
+      <ApplicationDetail user={user} d={d} level={3} page={page} />
     </RecordModal>
   );
 }

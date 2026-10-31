@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
+import { LINK_LOGIN_HELP } from '@elevate/shared-contracts';
 import { Card, DataTable, EmptyState } from '@elevate/shared-ui';
 import { modulePath } from '../../domain';
+import { formatDay } from '../../domain/metrics';
 import { CAMPAIGN_MEMBER_ROLE_LABELS, campaignResults, myCampaigns } from '../../server';
 import { CampaignResultsTable } from '../../ui/campaigns';
 import { MarketingPage, Section, type SearchParams } from '../../ui/shell';
@@ -28,7 +30,7 @@ export default async function MyCampaignsPage({ searchParams }: { searchParams: 
               return (
                 <EmptyState
                   title="No staff record"
-                  description="Your account is not linked to a staff record, so no campaign can be assigned to you. HR links staff records in the Staff directory."
+                  description={`Your account is not linked to a staff record, so no campaign can be assigned to you. ${LINK_LOGIN_HELP}`}
                 />
               );
             const results = await campaignResults(
@@ -63,7 +65,7 @@ export default async function MyCampaignsPage({ searchParams }: { searchParams: 
                         header: 'Role',
                         render: (m) => CAMPAIGN_MEMBER_ROLE_LABELS[m.role],
                       },
-                      { key: 'from', header: 'Since', render: (m) => m.fromDate },
+                      { key: 'from', header: 'Since', render: (m) => formatDay(m.fromDate) },
                     ]}
                   />
                 </Card>

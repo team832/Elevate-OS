@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   addDays,
   asId,
@@ -37,6 +37,14 @@ describe('dates (Asia/Kolkata)', () => {
     // 19:00 UTC on 17 Oct is 00:30 IST on 18 Oct.
     expect(toIsoDate(new Date('2026-10-17T19:00:00Z'))).toBe('2026-10-18');
     expect(toIsoDate(new Date('2026-10-17T18:00:00Z'))).toBe('2026-10-17');
+  });
+  it('builds one formatter per time zone, however many dates it formats (API-006)', () => {
+    const built = vi.spyOn(Intl, 'DateTimeFormat');
+    const at = new Date('2026-10-17T19:00:00Z');
+    for (let i = 0; i < 50; i++) expect(toIsoDate(at, 'Pacific/Apia')).toBe('2026-10-18');
+    for (let i = 0; i < 50; i++) expect(toIsoDate(at, 'America/Lima')).toBe('2026-10-17');
+    expect(built).toHaveBeenCalledTimes(2);
+    built.mockRestore();
   });
   it('validates real calendar dates', () => {
     expect(isIsoDate('2026-12-06')).toBe(true);

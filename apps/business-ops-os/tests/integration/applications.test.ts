@@ -43,6 +43,7 @@ import { POST as legacy } from '../../src/app/api/v1/admissions/[id]/legacy-veri
 import { POST as check } from '../../src/app/api/v1/admissions/[id]/checks/route';
 import { DECLARATIONS_MISSING } from '../../src/domain/applications';
 import { admissionConfirmation } from '../../src/server/applications-confirm';
+import { updateLead } from '../../src/server/leads';
 import { admissionRecord } from '../../src/server/application-record';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 import { get, pendingCase, post } from './admissions-fixtures';
@@ -564,6 +565,32 @@ describe('documents (acceptance 18, 21)', () => {
       expect(
         (await form(post(user, {}), { params: Promise.resolve({ id: s.applicationId }) })).status,
       ).toBe(403);
+  });
+
+  it('a corrected name: the issued documents keep the name at issue, and the case page says so (HMO-016)', async () => {
+    const s = await signedApplication(ctx.db, people);
+    expect((await confirmAs(director, s.applicationId, confirmBody(s.version))).status).toBe(201);
+    const view = () => admissionConfirmation(ctx.db, director, s.admissionId);
+    expect((await view()).nameAtIssue).toBeNull();
+    const issued = await one(
+      ctx.db
+        .select({ leadId: opsAdmissions.leadId, fullName: students.fullName })
+        .from(opsAdmissions)
+        .innerJoin(students, eq(students.id, opsAdmissions.studentId))
+        .where(eq(opsAdmissions.id, s.admissionId as never)),
+    );
+    await updateLead(ctx.db, counsellor, issued.leadId, {
+      studentName: 'Sample Corrected Name',
+    } as never);
+    expect((await view()).nameAtIssue).toBe(issued.fullName);
+    const [card] = await ctx.db
+      .select({ snapshot: opsAdmissionApprovals.acceptedSnapshot })
+      .from(opsAdmissionApprovals)
+      .where(eq(opsAdmissionApprovals.admissionId, s.admissionId as never));
+    expect(
+      (card!.snapshot as { application: { student: { fullName: string } } }).application.student
+        .fullName,
+    ).toBe(issued.fullName);
   });
 
   it('acknowledgement and ID card do not exist before confirmation', async () => {

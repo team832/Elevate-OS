@@ -6,6 +6,7 @@
  */
 import { PageHeader, StatusBadge } from '@elevate/shared-ui';
 import type { TeacherFacingSummary } from '../domain/feedback';
+import { istToday } from '../domain/dates';
 import { meanLabel } from '../domain/feedback';
 import type { BodyProps } from '../app/tasks/_components/bodies';
 import { myFeedback } from '../server/feedback-teacher';
@@ -45,9 +46,7 @@ export function SummaryView({
       level={level}
       flush={s.enough}
       description={
-        s.approvedAt
-          ? `Approved by HR on ${fmtDate(s.approvedAt.toISOString().slice(0, 10))}.`
-          : undefined
+        s.approvedAt ? `Approved by HR on ${fmtDate(istToday(s.approvedAt))}.` : undefined
       }
     >
       {!s.enough ? (
@@ -103,7 +102,7 @@ export function ActionsTable({ rows }: { rows: Mine['actions'] }) {
         {
           key: 'agreed',
           header: 'Agreed',
-          render: (a) => (a.agreedAt ? fmtDate(a.agreedAt.toISOString().slice(0, 10)) : 'Not yet'),
+          render: (a) => (a.agreedAt ? fmtDate(istToday(a.agreedAt)) : 'Not yet'),
         },
       ]}
     />

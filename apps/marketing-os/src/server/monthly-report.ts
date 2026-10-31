@@ -14,10 +14,10 @@ import { z } from 'zod';
 import { loadRoles } from '@elevate/authentication';
 import { can, scopeFor } from '@elevate/authorization';
 import {
+  callOutcomeCounts,
   leadMetricRecords,
   leadStageEntries,
   leadStageFunnel,
-  listCalls,
 } from '@elevate/business-ops-os/leads';
 import {
   marketingCalendarItems as cal,
@@ -33,6 +33,7 @@ import {
   metric,
   type MarketingMonthlySnapshotV1,
   type MetricMeta,
+  LINK_LOGIN_HELP,
 } from '@elevate/shared-contracts';
 import { toIsoDate, type IsoDate, type UserId } from '@elevate/shared-types';
 import { monthRange, periodBounds } from '../domain/metrics';
@@ -54,10 +55,12 @@ export const monthlySnapshotQuery = z.object({
   cutoffAt: z.iso.datetime({ offset: true }).optional(),
 });
 
-const monthLabel = (from: IsoDate) =>
-  new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
-    new Date(`${from}T00:00:00Z`),
-  );
+const MONTH_NAME = new Intl.DateTimeFormat('en-IN', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const monthLabel = (from: IsoDate) => MONTH_NAME.format(new Date(`${from}T00:00:00Z`));
 
 const words = (key: string) => key.replaceAll('_', ' ');
 
@@ -118,11 +121,7 @@ async function leadFacts(
     const noted = entries.filter((e) => e.stageKey === key && e.ownerNote);
     return noted.length ? `${label} (${noted.length} with ${noted[0]!.ownerNote})` : label;
   };
-  // shortcut: listCalls returns at most 500 calls a month; page through it if anyone logs more.
-  const calls = (await listCalls(db, actor, { ...range, staffId })).filter(
-    (c) => c.occurredAt <= cutoff && c.createdAt <= cutoff,
-  );
-  const outcomes = [...new Set(calls.map((c) => c.outcome))].sort();
+  const calls = await callOutcomeCounts(db, actor, { ...range, staffId, cutoff });
   const followUps = await leadMetricRecords(db, actor, { ...q, metric: 'follow_ups_completed' });
   return {
     funnel: stages.length
@@ -146,15 +145,15 @@ async function leadFacts(
       row(
         'calls_logged',
         'Calls logged',
-        calls.length,
+        calls.reduce((n, c) => n + c.n, 0),
         'Calls this person logged in the month. A call count is not a sales count.',
       ),
-      ...outcomes.map((o) =>
+      ...calls.map((c) =>
         row(
-          `call_${o}`,
-          `Calls: ${words(o)}`,
-          calls.filter((c) => c.outcome === o).length,
-          `Logged calls with the outcome "${words(o)}".`,
+          `call_${c.outcome}`,
+          `Calls: ${words(c.outcome!)}`,
+          c.n,
+          `Logged calls with the outcome "${words(c.outcome!)}".`,
         ),
       ),
       row(
@@ -181,6 +180,7 @@ export async function buildMonthlySnapshot(
 ): Promise<MarketingMonthlySnapshotV1> {
   const range = monthRange(input.month);
   if (!range) throw new NotFoundError('Month not found.');
+  if (range.from > toIsoDate()) throw new NotFoundError('This month has not started yet.');
   const cutoff = input.cutoffAt ?? new Date();
   const { start, end } = periodBounds(range.from, range.to, cutoff);
   const meta = (definition: string): MetricMeta => ({
@@ -312,8 +312,11 @@ export async function monthlySnapshotFor(
   const staffId = q.staffId ?? own;
   if (!staffId || (scopeFor(actor, 'marketing:reports:read') !== 'all' && staffId !== own))
     throw new NotFoundError(
-      own || q.staffId ? 'Report not found.' : 'Your login is not linked to a staff record yet.',
+      own || q.staffId
+        ? 'Report not found.'
+        : `Your login is not linked to a staff record yet. ${LINK_LOGIN_HELP}`,
     );
+  if (staffId !== own) await staffActor(db, staffId); // nobody is 404, never a report of zeros
   const month = q.month ?? toIsoDate().slice(0, 7);
   return {
     staffId,

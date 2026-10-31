@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 import { scopeFor } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
+import { LINK_LOGIN_HELP } from '@elevate/shared-contracts';
 import {
   Button,
   ButtonLink,
   Card,
   DataTable,
+  EmptyState,
   Field,
   MetricStrip,
   Select,
@@ -17,7 +19,8 @@ import { TARGET_METRICS, monthRange, type TargetMetricKey } from '../../../domai
 import { REVIEW_STATE_LABELS, type ReviewState } from '../../../domain/optimisation';
 import { memberOptions } from '../../../server/campaign-members';
 import { NO_SPEND_DATA, monthlySnapshotFor } from '../../../server/monthly-report';
-import { myStaffId } from '../../../server/scope';
+import { listCampaigns } from '../../../server/groups';
+import { campaignFilter, myStaffId } from '../../../server/scope';
 import { MarketingPage, Section, param, type SearchParams } from '../../../ui/shell';
 import { PrintButton } from './print-button';
 
@@ -50,6 +53,13 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
             const everyone = scopeFor(user, 'marketing:reports:read') === 'all';
             const people = everyone ? await memberOptions(db) : [];
             const me = await myStaffId(db, user.id);
+            if (!me && !people.length)
+              return (
+                <EmptyState
+                  title="No staff record"
+                  description={`Your login is not linked to a staff record yet, so there is no monthly report to show. ${LINK_LOGIN_HELP}`}
+                />
+              );
             const r = await monthlySnapshotFor(db, user, {
               month,
               // A reader of everyone's reports without a staff record of their own starts on the first person.
@@ -60,6 +70,10 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
                   : people[0]?.id,
             });
             const s = r.snapshot;
+            // A link only where the campaign page opens for this person.
+            const visible = new Set<string>(
+              (await listCampaigns(db, await campaignFilter(db, user))).map((c) => c.id),
+            );
             const [name] = await memberOptions(db, r.staffId);
             const own = r.staffId === me;
             const range = monthRange(r.month)!;
@@ -163,11 +177,14 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
                       {
                         key: 'name',
                         header: 'Campaign',
-                        render: (c) => (
-                          <a href={modulePath(`campaigns/${c.campaignId}`)}>
-                            {c.code} {c.name}
-                          </a>
-                        ),
+                        render: (c) =>
+                          visible.has(c.campaignId) ? (
+                            <a href={modulePath(`campaigns/${c.campaignId}`)}>
+                              {c.code} {c.name}
+                            </a>
+                          ) : (
+                            `${c.code} ${c.name}`
+                          ),
                       },
                       ...(['planned', 'approved', 'published'] as const).map((k) => ({
                         key: k,

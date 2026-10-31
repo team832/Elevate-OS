@@ -4,7 +4,7 @@
  * capture time and per-value states, and keeps the import idempotent per (account, file hash).
  */
 import { createHash } from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   marketingMetricImports,
@@ -72,6 +72,7 @@ async function matchRows(db: Database, accountId: string, rows: readonly ParsedM
       and(
         eq(marketingPlacements.accountId, accountId as never),
         eq(marketingPlacements.status, 'published'),
+        sql`${marketingPlacements.publicationMode} IS DISTINCT FROM 'sandbox'`,
       ),
     );
   const byUrl = new Map(placements.filter((p) => p.url).map((p) => [p.url!, p.id as string]));

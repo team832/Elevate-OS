@@ -15,9 +15,17 @@ import { directoryState, DIRECTORY_STATE_LABELS } from './students';
 export type StudentPopulation = 'active' | 'on_hold' | 'former' | 'in_admission';
 
 /**
- * Where an admission belongs once it has a student identity:
- * - active  = admission AND enrolment satisfied (`enrolled`);
- * - on_hold = paused after enrolment (on hold, held from `enrolled`);
+ * Cases that keep a student active (directory status is per student, brief §3/§11): admission
+ * confirmed, awaiting or in enrolment, or paused after one of those (on hold is not past).
+ */
+export const ACTIVE_CASE_STATUSES = ['admitted', 'enrolment_requested', 'enrolled'] as const;
+const isActiveCase = (s: string | null | undefined) =>
+  (ACTIVE_CASE_STATUSES as readonly (string | null | undefined)[]).includes(s);
+
+/**
+ * Where an admission belongs once it has a student identity, as the student lists define it:
+ * - active  = admission confirmed, awaiting or in enrolment (ACTIVE_CASE_STATUSES);
+ * - on_hold = paused after one of those;
  * - former  = an exit status, or the legacy "lost after admission";
  * - in_admission = everything still in the admissions pipeline.
  */
@@ -26,8 +34,8 @@ export function studentPopulation(a: {
   heldFromStatus?: string | null;
   admittedAt?: Date | string | null;
 }): StudentPopulation {
-  if (a.status === 'enrolled') return 'active';
-  if (a.status === 'on_hold' && a.heldFromStatus === 'enrolled') return 'on_hold';
+  if (isActiveCase(a.status)) return 'active';
+  if (a.status === 'on_hold' && isActiveCase(a.heldFromStatus)) return 'on_hold';
   if ((EXIT_STATUSES as readonly string[]).includes(a.status)) return 'former';
   if (a.status === 'lost' && a.admittedAt) return 'former';
   return 'in_admission';
@@ -35,12 +43,6 @@ export function studentPopulation(a: {
 
 export const isExitStatus = (s: string): s is ExitStatus =>
   (EXIT_STATUSES as readonly string[]).includes(s);
-
-/**
- * Cases that keep a student active (directory status is per student, brief §3/§11): admission
- * confirmed, awaiting or in enrolment, or paused after one of those (on hold is not past).
- */
-export const ACTIVE_CASE_STATUSES = ['admitted', 'enrolment_requested', 'enrolled'] as const;
 
 /** Past-student outcomes (brief §11): `withdrawn` is the early withdrawal, `completed` the normal end. */
 export const PAST_OUTCOMES = ['withdrawn_early', 'completed', 'other'] as const;
@@ -75,6 +77,12 @@ export function hasStudentRecord(a: CaseRow): boolean {
   return Boolean(a.admittedAt || state || population !== 'in_admission');
 }
 
+/** Where a fee row opens: the student's Fees tab, or before admission (no record to open) the case's fee section. */
+export const feeLedgerHref = (a: CaseRow & { id: string; studentId: string | null }) =>
+  a.studentId && hasStudentRecord(a)
+    ? `/ops/students/${a.studentId}?tab=fees`
+    : `/ops/admissions/${a.id}#fee-agreement`;
+
 /** Status, population and directory state of an admission row. */
 export function caseState(a: CaseRow) {
   const status = a.status;
@@ -96,11 +104,12 @@ export function caseState(a: CaseRow) {
  * same student, the recommended path, brief §11) or `reactivate` (the existing approver flow).
  */
 export function lifecycleOptions(a: CaseRow) {
-  const { status, population } = caseState(a);
+  const { status } = a;
   const base = status === 'on_hold' ? a.heldFromStatus : status;
   return {
     hold: status === 'enrolled',
-    resume: population === 'on_hold',
+    // Held from admitted resumes through the admission pipeline, not the student lifecycle.
+    resume: status === 'on_hold' && a.heldFromStatus === 'enrolled',
     exitStatuses: EXIT_STATUSES.filter(
       (s) => base === (s === 'cancelled_before_enrolment' ? 'admitted' : 'enrolled'),
     ),

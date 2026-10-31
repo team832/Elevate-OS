@@ -136,7 +136,8 @@ export default async function TargetsPage({ searchParams }: { searchParams: Sear
                         label="For"
                         hint="Choose the person or campaign below when needed."
                       >
-                        <Select id="scope" name="scope">
+                        <Select id="scope" name="scope" required>
+                          <option value="">Choose…</option>
                           {MARKETING_TARGET_SCOPES.map((s) => (
                             <option key={s} value={s}>
                               {TARGET_SCOPE_LABELS[s]}
@@ -165,7 +166,8 @@ export default async function TargetsPage({ searchParams }: { searchParams: Sear
                         </Select>
                       </Field>
                       <Field id="metricKey" label="Metric">
-                        <Select id="metricKey" name="metricKey">
+                        <Select id="metricKey" name="metricKey" required>
+                          <option value="">Choose…</option>
                           {TARGET_METRIC_KEYS.map((k) => (
                             <option key={k} value={k}>
                               {TARGET_METRICS[k].label}

@@ -3,6 +3,7 @@
  * statuses mean, a correction request form and your requests. Shown in Ops, Academic and Marketing.
  * The person is always the signed-in user; nothing in the URL can point it at someone else.
  */
+import { LINK_LOGIN_HELP } from '@elevate/shared-contracts';
 import { EmptyState, PageHeader, StatCard } from '@elevate/shared-ui';
 import {
   monthRange,
@@ -64,7 +65,7 @@ async function MyAttendance({ user, base, searchParams }: BodyProps) {
         {header}
         <EmptyState
           title="No staff record"
-          description="Your login is not linked to a staff record yet, so there is no attendance to show. Ask HR to link it."
+          description={`Your login is not linked to a staff record yet, so there is no attendance to show. ${LINK_LOGIN_HELP}`}
         />
       </>
     );

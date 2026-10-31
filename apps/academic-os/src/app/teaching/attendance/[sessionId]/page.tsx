@@ -9,11 +9,14 @@ import {
   EmptyState,
   PageHeader,
   StatusBadge,
+  StoredLink,
+  fmtDay,
 } from '@elevate/shared-ui';
 import {
   demoCandidates,
   getSessionAttendance,
   listStaff,
+  rosterReviewLinks,
   sessionHistory,
   sessionRows,
   sessionTeachers,
@@ -70,15 +73,16 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
           ? await demoCandidates(db, actor, sessionId)
           : null,
       staff: can(user, 'academic:timetable:publish') ? await listStaff(db) : [],
+      reviewLinks: await rosterReviewLinks(db, actor, sessionId),
     };
   });
   if (!data.ok)
     return (
       <AcademicShell access={access} active="attendance">
-        <LoadError error={data.error} />
+        <LoadError level={1} error={data.error} />
       </AcademicShell>
     );
-  const { session, info, roster, demoAttendees, counts, teachers, history, candidates, staff } =
+  const { session, info, roster, demoAttendees, counts, teachers, history, candidates, staff, reviewLinks } =
     data.data;
   const live = session.status === 'scheduled' || session.status === 'held';
   const past = session.date <= todayIst();
@@ -94,11 +98,13 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
       <PageHeader
         title={`${info.batchCode} · ${info.subjectName ?? 'Class'}`}
         meta={<StateBadge state={session.status === 'held' ? 'delivered' : session.status} />}
-        description={`${session.date}, ${session.startTime} IST · ${session.durationMinutes} min · ${where} · Planned teacher: ${info.teacherName ?? 'not set'}`}
+        description={`${fmtDay(session.date)}, ${session.startTime} IST · ${session.durationMinutes} min · ${where} · Planned teacher: ${info.teacherName ?? 'not set'}`}
         actions={
           <>
             {session.onlineLink ? (
-              <ButtonLink href={session.onlineLink}>Open class link</ButtonLink>
+              <StoredLink button href={session.onlineLink}>
+                Open class link
+              </StoredLink>
             ) : null}
             <ButtonLink href={MODULE_PATHS.teachingLog(session.id)}>Teaching log</ButtonLink>
           </>
@@ -152,7 +158,7 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
                 Not delivered yet.{' '}
                 {past
                   ? ''
-                  : `A class can be marked delivered on or after its date (${session.date}).`}
+                  : `A class can be marked delivered on or after its date (${fmtDay(session.date)}).`}
               </p>
             )
           ) : (
@@ -162,7 +168,7 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
 
         <Card
           title="Roster and attendance"
-          description={`Students placed in the batch on ${session.date}, plus demo students. Present ${counts.present} · Late ${counts.late} · Partial ${counts.partial} · Absent ${counts.absent} · Excused ${counts.excused} · Not recorded ${counts.notRecorded}. Not recorded is never counted as absent.`}
+          description={`Students placed in the batch on ${fmtDay(session.date)}, plus demo students. Present ${counts.present} · Late ${counts.late} · Partial ${counts.partial} · Absent ${counts.absent} · Excused ${counts.excused} · Not recorded ${counts.notRecorded}. Not recorded is never counted as absent.`}
         >
           {roster.length + demoAttendees.length === 0 ? (
             <EmptyState
@@ -182,7 +188,9 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
                 onPlacement: r.onPlacement,
                 status: r.mark?.status ?? null,
                 minutesPresent: r.mark?.minutesPresent ?? null,
-                reviewHref: `${MODULE_PATHS.newReview}?studentId=${r.studentId}&sessionId=${session.id}`,
+                reviewHref: reviewLinks.enrolled(r.studentId)
+                  ? `${MODULE_PATHS.newReview}?studentId=${r.studentId}&sessionId=${session.id}`
+                  : null,
               }))}
               demos={demoAttendees.map((d) => ({
                 attendeeId: d.id,
@@ -190,7 +198,9 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
                 dayNumber: d.demoDayNumber,
                 status: d.status,
                 isSample: d.isSample,
-                reviewHref: `${MODULE_PATHS.newReview}?coreStudentId=${d.coreStudentId}&opsDemoSessionId=${d.opsDemoSessionId}`,
+                reviewHref: reviewLinks.demo
+                  ? `${MODULE_PATHS.newReview}?coreStudentId=${d.coreStudentId}&opsDemoSessionId=${d.opsDemoSessionId}`
+                  : null,
               }))}
             />
           )}
@@ -199,7 +209,7 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
         {candidates ? (
           <Card
             title="Add a demo student"
-            description="Demo students booked in Business Ops for this date. A demo student gets no enrolment; their mark here feeds the Day 1/2/3 view in Business Ops."
+            description="Demo students booked in Business Operations for this date. A demo student gets no enrolment; their mark here feeds the Day 1/2/3 view in Business Operations."
           >
             {demoAttendees
               .filter((d) => d.status === 'not_recorded')
@@ -219,12 +229,12 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
               ))}
             {candidates.status === 'unavailable' ? (
               <Alert tone="warning" title="Source unavailable">
-                Business Ops demo bookings could not be loaded ({candidates.reason}). Try again later.
+                Business Operations demo bookings could not be loaded ({candidates.reason}). Try again later.
               </Alert>
             ) : candidates.data.items.length === 0 ? (
               <EmptyState
                 title="No other demo students on this date"
-                description="Book demo sessions in Business Ops; they appear here for the class date."
+                description="Book demo sessions in Business Operations; they appear here for the class date."
               />
             ) : (
               <ApiForm

@@ -82,7 +82,7 @@ export function DemoFees({ d, user, level }: DemoTabProps) {
               },
               {
                 label: 'Credit toward tuition',
-                value: `${d.demoCredit.value.creditTowardTuition ? 'Allowed' : 'Not given'} (setting “Demo fee credit”, ${d.demoCredit.decisionState}); never assumed`,
+                value: `${d.demoCredit.value.creditTowardTuition ? 'Allowed' : 'Not given'}; never assumed`,
               },
             ]}
           />

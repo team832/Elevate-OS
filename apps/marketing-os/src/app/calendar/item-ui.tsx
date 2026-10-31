@@ -61,7 +61,7 @@ export function Choice({
   return (
     <Field id={id} label={label} hint={hint}>
       <Select id={id} name={id} defaultValue={value ?? ''} required={!empty}>
-        {empty ? <option value="">{empty}</option> : null}
+        {empty || !value ? <option value="">{empty ?? 'Choose…'}</option> : null}
         {options.map(([v, text]) => (
           <option key={v} value={v}>
             {text}

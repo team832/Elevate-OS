@@ -12,6 +12,7 @@ import { PastSummary } from '../_components/student-dashboard';
 import {
   listHref,
   parseQuery,
+  pastTabs,
   STUDENT_COLUMNS as C,
   StudentListSection,
   StudentQuickView,
@@ -22,11 +23,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Past students' };
 
 const BASE = '/ops/students/past';
-const TABS = [
-  { key: 'former', label: 'Former students' },
-  { key: 'demos', label: 'Past demos (never enrolled)' },
-] as const;
-type Tab = (typeof TABS)[number]['key'];
+type Tab = ReturnType<typeof pastTabs>[number]['key'];
 const CLOSED_WITHOUT_CONVERSION = ['declined', 'withdrawn', 'not_converted', 'cancelled'] as const;
 
 /**
@@ -40,12 +37,18 @@ export default async function PastStudentsPage({
 }) {
   const access = await gate('ops:students:read', BASE);
   const { open, ...params } = await searchParams;
-  const tab: Tab = TABS.find((t) => t.key === params.tab)?.key ?? 'former';
+  const tabs = pastTabs(access.user);
+  const tab: Tab = tabs.find((t) => t.key === params.tab)?.key ?? 'former';
+  const demosOffered = tabs.length > 1;
   return (
     <Frame access={access} active="past">
       <PageHeader
         title="Past students"
-        description="Former students, and demos that never became admissions."
+        description={
+          demosOffered
+            ? 'Former students, and demos that never became admissions.'
+            : 'Former students.'
+        }
         tabs={<AdmissionsNav current="past" user={access.user} />}
       />
       <div className="el-stack">
@@ -54,7 +57,8 @@ export default async function PastStudentsPage({
           <p>
             Left means withdrawn early, completed or another exit. A student still studying another
             programme stays under Active students. Each past student keeps their exit record and
-            full history; nothing is deleted. Demo students who never enrolled are under Past demos.
+            full history; nothing is deleted.
+            {demosOffered ? ' Demo students who never enrolled are under Past demos.' : ''}
           </p>
         </details>
         <Section label="Loading…">
@@ -98,23 +102,24 @@ async function PastTabs({
   params: Record<string, string | undefined>;
   tab: Tab;
 }) {
+  const tabs = pastTabs(user);
   // Tab counts come from the same queries as the rows (filters applied).
   const [former, demos] = await Promise.all([
     load(
       async (db) => (await listStudents(db, user, parseQuery(params, 'former', user).query)).total,
     ),
-    pastDemos(user),
+    tabs.length > 1 ? pastDemos(user) : null,
   ]);
   const counts: Record<Tab, number | null> = {
     former: former.ok ? former.data : null,
-    demos: demos.ok ? demos.data.total : null,
+    demos: demos?.ok ? demos.data.total : null,
   };
   return (
     <Tabs
       idBase="past"
       label="Past students"
       selected={tab}
-      items={TABS.map((t) => ({
+      items={tabs.map((t) => ({
         key: t.key,
         label: t.label,
         href: listHref(BASE, { tab: t.key }),
@@ -153,7 +158,7 @@ async function PastTabs({
             }
           />
         </div>
-      ) : demos.ok ? (
+      ) : demos?.ok ? (
         <>
           <RecordTable
             caption={`${demos.data.total} demo(s) closed without conversion`}
@@ -212,7 +217,7 @@ async function PastTabs({
           ) : null}
         </>
       ) : (
-        demos.view
+        demos?.view
       )}
     </Tabs>
   );

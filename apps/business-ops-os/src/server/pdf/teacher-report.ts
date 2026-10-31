@@ -113,7 +113,7 @@ export async function teacherReportPdf(
       ],
       { max: w.eod.days ?? w.eod.submitted },
     );
-    pdf.paragraph(`Cut-off ${fmtDateTime(w.cutOff)}. HR attendance unavailable (no HR module).`, {
+    pdf.paragraph(`Cut-off ${fmtDateTime(w.cutOff)}. HR attendance is kept in HR, Attendance, not in this report.`, {
       muted: true,
     });
   }

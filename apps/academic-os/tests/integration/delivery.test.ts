@@ -1,7 +1,7 @@
 /** Brief §9/§11, R12, acceptance tests 4, 6 and 10: delivery, reopening, substitutes, unavailability, cancel/reschedule. */
 import { and, eq, ne } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { academicAttendance, academicClassSessions, academicSessionTeachers, auditEvents, staffMembers } from '@elevate/database';
+import { academicAttendance, academicClassSessions, academicSessionTeachers, notifications, auditEvents, staffMembers } from '@elevate/database';
 import { authedRequest, buildRequest, callRoute, setupTestDatabase } from '@elevate/testing';
 import { POST as deliverRoute } from '../../src/app/api/v1/sessions/[id]/deliver/route';
 import { POST as reopenRoute } from '../../src/app/api/v1/sessions/[id]/reopen/route';
@@ -89,6 +89,10 @@ describe('unavailability and substitutes (test 4)', () => {
     const ok = await post<{ role: string; replacesStaffId: string; authorisedByUserId: string }>(substituteRoute, u.coordinator, path, s.future2!, { staffId: w.teacherStaff, reason: 'Covering exam duty (fictional)' });
     expect(ok.status).toBe(201);
     expect(ok.data).toMatchObject({ role: 'substitute', replacesStaffId: w.teacher2Staff, authorisedByUserId: u.coordinator.id });
+    // Only the substitute is told (FLB-005); the reason may be about the other teacher, so it stays out.
+    const told = await ctx.db.select().from(notifications).where(and(eq(notifications.kind, 'class_session.substitute_assigned'), eq(notifications.entityId, s.future2!)));
+    expect(told.map((n) => [n.userId, n.link])).toEqual([[u.teacher.id, `/academic/teaching/log/${s.future2}`]]);
+    expect(JSON.stringify(told[0])).not.toContain('Covering exam');
     const rows = await ctx.db.select().from(academicSessionTeachers).where(eq(academicSessionTeachers.sessionId, s.future2 as never));
     expect(rows.map((r) => [r.staffId, r.role])).toEqual(expect.arrayContaining([[w.teacher2Staff, 'primary'], [w.teacherStaff, 'substitute']]));
     const [row] = await ctx.db.select().from(academicClassSessions).where(eq(academicClassSessions.id, s.future2 as never));

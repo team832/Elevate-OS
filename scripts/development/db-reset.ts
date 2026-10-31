@@ -45,11 +45,7 @@ try {
 
 const root = findRepoRoot() ?? process.cwd();
 for (const script of ['db:migrate', 'db:seed']) {
-  const result = spawnSync('npm', ['run', script], {
-    cwd: root,
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-  });
+  const result = spawnSync(`npm run ${script}`, { cwd: root, stdio: 'inherit', shell: true });
   if (result.status !== 0) {
     console.error(`db:reset — ${script} failed.`);
     process.exit(result.status ?? 1);

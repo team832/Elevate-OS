@@ -47,10 +47,11 @@ import {
 } from './admissions';
 import { accessScope, scopeCovers, type Actor } from './context';
 import { demoFeeStates } from './demos-read';
-import { feeSummaryFor } from './fees';
+import { feeStatementFor } from './fee-statement';
 import { privateDataOf } from './guardians';
 import { loadSettings } from './settings';
 import {
+  exitClosuresOf,
   primaryGuardianOf,
   programmesOf,
   repliesOf,
@@ -183,7 +184,7 @@ export async function getStudent(db: Database, actor: Actor, id: string) {
       .where(and(inArray(opsFollowUps.admissionId, caseIds), eq(opsFollowUps.status, 'open')))
       .orderBy(asc(opsFollowUps.dueDate)),
     /** null = the caller may not read fee records. */
-    can(actor, 'ops:fees:read') ? feeSummaryFor(db, a.id) : null,
+    can(actor, 'ops:fees:read') ? feeStatementFor(db, a) : null,
     identityId ? primaryGuardianOf(db, identityId) : null,
     db
       .select({ academicYear: opsApplications.academicYear })
@@ -213,6 +214,8 @@ export async function getStudent(db: Database, actor: Actor, id: string) {
       guardianEmail: lead.guardianEmail,
       city: lead.city,
       previousSchool: lead.previousSchool,
+      dateOfBirth: lead.dateOfBirth,
+      address: lead.address,
       consent: prefs
         ? {
             status: prefs.consentStatus,
@@ -257,6 +260,10 @@ export async function getStudent(db: Database, actor: Actor, id: string) {
       )
     : null;
   const canLifecycle = can(actor, 'ops:students:lifecycle');
+  const closureOf = await exitClosuresOf(
+    db,
+    exitRecords.map((r) => r.e.id),
+  );
   return {
     identity: identity
       ? { id: identity.id, fullName: identity.fullName, isSample: identity.isSample }
@@ -350,6 +357,7 @@ export async function getStudent(db: Database, actor: Actor, id: string) {
       reasonLabel: e.reasonCode ? (reasonLabels.get(e.reasonCode) ?? e.reasonCode) : null,
       /** undefined = the caller may not read fees; null = not known (never 0). */
       balancePaise: can(actor, 'ops:fees:read') ? e.balancePaise : undefined,
+      academicClosure: closureOf(e.id),
     })),
     /** Reason codes offered on the exit form (setting admissions.closure_reasons). */
     closureReasons: settings['admissions.closure_reasons'].value.codes,

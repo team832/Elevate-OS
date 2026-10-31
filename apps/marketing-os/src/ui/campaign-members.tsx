@@ -1,6 +1,7 @@
 /** Campaign owner and members, with add/end forms for whoever may manage campaigns. */
 import { Button, Card, DataTable, EmptyState, Field, Select, TextInput } from '@elevate/shared-ui';
 import { addCampaignMemberAction, endCampaignMemberAction } from '../app/actions/campaigns';
+import { formatDay } from '../domain/metrics';
 import { CAMPAIGN_MEMBER_ROLE_LABELS, type listCampaignMembers } from '../server';
 
 type Member = Awaited<ReturnType<typeof listCampaignMembers>>[number];
@@ -28,8 +29,12 @@ export function CampaignMembers({
         columns={[
           { key: 'name', header: 'Person', render: (m) => m.staffName },
           { key: 'role', header: 'Role', render: (m) => CAMPAIGN_MEMBER_ROLE_LABELS[m.role] },
-          { key: 'from', header: 'From', render: (m) => m.fromDate },
-          { key: 'to', header: 'Until', render: (m) => m.toDate ?? 'Current' },
+          { key: 'from', header: 'From', render: (m) => formatDay(m.fromDate) },
+          {
+            key: 'to',
+            header: 'Until',
+            render: (m) => (m.toDate ? formatDay(m.toDate) : 'Current'),
+          },
           ...(options
             ? [
                 {
@@ -57,6 +62,7 @@ export function CampaignMembers({
             <input type="hidden" name="campaignId" value={campaignId} />
             <Field id="staffId" label="Person">
               <Select id="staffId" name="staffId" required>
+                <option value="">Choose…</option>
                 {options.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.name}

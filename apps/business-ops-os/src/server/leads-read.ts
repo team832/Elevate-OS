@@ -2,9 +2,12 @@
  * Lead list and lead record (OPS-001, OPS-005): list flags, the record with its enquiries,
  * activity, cases, follow-ups, duplicate flags and audit history (private fields masked).
  */
-import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { containsPattern } from '@elevate/server-kit';
+import { alias } from 'drizzle-orm/pg-core';
 import { can } from '@elevate/authorization';
 import {
+  users,
   auditEvents,
   opsAdmissions,
   opsDuplicateFlags,
@@ -18,19 +21,19 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import type { LeadId } from '@elevate/shared-types';
+import type { LeadId, StaffMemberId } from '@elevate/shared-types';
 import {
-  followUpFlags,
+  ADMISSION_STATUSES,
   isOpenStatus,
+  istInstant,
   istToday,
   istWeekContaining,
   type AdmissionStatus,
-  type IsoDate,
 } from '../domain';
 import { CONTACT_AND_KYC_KEYS, KYC_KEY_SET, stripPrivateKeys } from '../domain/students';
 import { programmeRef, staffRef } from './admissions';
 import { accessScope, type AccessScope, type Actor } from './context';
-import { leadCovered } from './lead-duplicates';
+import { leadCovered, visibleFlags, withoutHiddenLeads } from './lead-duplicates';
 import {
   assertLeadAccess,
   canSeeLeadPrivate,
@@ -39,7 +42,6 @@ import {
   type LeadRow,
 } from './leads-access';
 import { admissionConversions, stageHistory } from './lead-stages';
-import { loadSettings } from './settings';
 
 function assignmentStatus(
   lead: Pick<LeadRow, 'ownerStaffId' | 'acceptedAt'>,
@@ -48,27 +50,78 @@ function assignmentStatus(
   return lead.acceptedAt ? 'accepted' : 'handoff_pending';
 }
 
-type LeadListRow = {
-  assignment: ReturnType<typeof assignmentStatus>;
-  flags: {
-    overdue: boolean;
-    missingNextAction: boolean;
-    openDuplicates: number;
-    newThisWeek: boolean;
-    awaitingContact: boolean;
+/** The `flag` filters of the lead list; each is the same SQL as the row's own flag. */
+export const LEAD_LIST_FLAGS = [
+  'new_this_week',
+  'awaiting_contact',
+  'unassigned',
+  'handoff_pending',
+  'overdue',
+  'due_today',
+  'missing_next_action',
+  'duplicate',
+] as const;
+export type LeadFlag = (typeof LEAD_LIST_FLAGS)[number];
+
+const NOT_OPEN = ADMISSION_STATUSES.filter((s) => !isOpenStatus(s));
+/** The case a lead's row shows: an open one first, then the newest. */
+const currentCase = alias(opsAdmissions, 'current_case');
+const isCurrentCase = eq(
+  currentCase.id,
+  sql`(select a.id from ops.admissions a where a.lead_id = ${opsLeads.id}
+        order by a.status in ${NOT_OPEN}, a.created_at desc, a.id desc limit 1)`,
+);
+const hasOpenCase = sql<boolean>`(${currentCase.id} is not null and ${currentCase.status} not in ${NOT_OPEN})`;
+const openFollowUp = (due: SQL) =>
+  sql<boolean>`exists (select 1 from ops.follow_ups f where f.lead_id = ${opsLeads.id} and f.status = 'open' and ${due})`;
+const openDuplicate = (also: SQL) =>
+  sql`from ops.duplicate_flags d where d.status = 'open' and (d.lead_id = ${opsLeads.id} or d.matched_lead_id = ${opsLeads.id}) and ${also}`;
+
+/** Each flag as SQL, so a tile or filter can count it over every lead, not over a page of rows. */
+function leadFlags(now: Date): Record<LeadFlag, SQL<boolean>> {
+  const today = istToday(now);
+  const weekStart = istInstant(istWeekContaining(today).from).toISOString();
+  return {
+    new_this_week: sql`${opsLeads.firstReceivedAt} >= ${weekStart}`,
+    // An open lead nobody has reached two-way yet (BR-OPS-4).
+    awaiting_contact: sql`(${opsLeads.firstSuccessfulContactAt} is null and (${currentCase.id} is null or ${hasOpenCase}))`,
+    unassigned: sql`${opsLeads.ownerStaffId} is null`,
+    handoff_pending: sql`(${opsLeads.ownerStaffId} is not null and ${opsLeads.acceptedAt} is null)`,
+    overdue: openFollowUp(sql`f.due_date < ${today}`),
+    due_today: openFollowUp(sql`f.due_date = ${today}`),
+    missing_next_action: sql`(${hasOpenCase} and not ${openFollowUp(sql`true`)})`,
+    duplicate: sql`exists (select 1 ${openDuplicate(sql`true`)})`,
   };
+}
+
+export type LeadFilters = {
+  q?: string;
+  status?: AdmissionStatus;
+  /** null: leads without a stage. */
+  leadStage?: string | null;
+  flag?: LeadFlag;
+  /** Any of these flags. */
+  anyFlag?: readonly LeadFlag[];
+  ownerStaffId?: string;
 };
 
-/** The `flag` filters of the lead list (an unknown flag filters nothing); pages count with them too. */
-export const LEAD_LIST_FLAGS = new Map<string, (r: LeadListRow) => boolean>([
-  ['new_this_week', (r) => r.flags.newThisWeek],
-  ['awaiting_contact', (r) => r.flags.awaitingContact],
-  ['unassigned', (r) => r.assignment === 'unassigned'],
-  ['handoff_pending', (r) => r.assignment === 'handoff_pending'],
-  ['overdue', (r) => r.flags.overdue],
-  ['missing_next_action', (r) => r.flags.missingNextAction],
-  ['duplicate', (r) => r.flags.openDuplicates > 0],
-]);
+function leadWhere(scope: SQL, f: LeadFilters, flags: ReturnType<typeof leadFlags>) {
+  const q = f.q && containsPattern(f.q);
+  return and(
+    isNull(opsLeads.mergedIntoLeadId),
+    scope,
+    q ? or(sql`${opsLeads.studentName} ILIKE ${q}`, sql`${opsLeads.code} ILIKE ${q}`) : undefined,
+    f.status ? eq(currentCase.status, f.status) : undefined,
+    f.leadStage === null
+      ? isNull(opsLeads.stageKey)
+      : f.leadStage
+        ? eq(opsLeads.stageKey, f.leadStage)
+        : undefined,
+    f.ownerStaffId ? eq(opsLeads.ownerStaffId, f.ownerStaffId as StaffMemberId) : undefined,
+    f.flag ? flags[f.flag] : undefined,
+    f.anyFlag ? or(...f.anyFlag.map((k) => flags[k])) : undefined,
+  );
+}
 
 /** SQL for the leads a scope covers (own: owner or counsellor of a case); null = none. */
 export function leadScope(db: Database, access: AccessScope): SQL | null {
@@ -86,112 +139,99 @@ export function leadScope(db: Database, access: AccessScope): SQL | null {
   ) as SQL;
 }
 
+/**
+ * Leads under the filters, newest first: `limit` (default 500) from `offset`. A count over the
+ * same filters is `leadCounts`, never the length of this list.
+ */
 export async function listLeads(
   db: Database,
   actor: Actor,
-  filters: { q?: string; status?: AdmissionStatus; flag?: string } = {},
+  filters: LeadFilters & { limit?: number; offset?: number } = {},
   now: Date = new Date(),
 ) {
   const scope = leadScope(db, await accessScope(db, actor, 'ops:leads:read'));
   if (!scope) return [];
-  const conditions: SQL[] = [isNull(opsLeads.mergedIntoLeadId), scope];
-  if (filters.q) {
-    const q = `%${filters.q.replace(/[%_]/g, '')}%`;
-    conditions.push(
-      or(sql`${opsLeads.studentName} ILIKE ${q}`, sql`${opsLeads.code} ILIKE ${q}`) as SQL,
-    );
-  }
-  const leads = await db
+  const flags = leadFlags(now);
+  const rows = await db
     .select({
       lead: opsLeads,
       ownerName: staffMembers.fullName,
       programmeCode: programmes.code,
       programmeName: programmes.name,
+      admissionId: currentCase.id,
+      status: currentCase.status,
+      handoffStatus: currentCase.handoffStatus,
+      newThisWeek: flags.new_this_week,
+      awaitingContact: flags.awaiting_contact,
+      overdue: flags.overdue,
+      dueToday: flags.due_today,
+      missingNextAction: flags.missing_next_action,
+      openDuplicates: sql`(select count(*) ${openDuplicate(sql`true`)})`.mapWith(Number),
+      exactDuplicate: sql<boolean>`exists (select 1 ${openDuplicate(sql`d.level = 'exact'`)})`,
     })
     .from(opsLeads)
+    .leftJoin(currentCase, isCurrentCase)
     .leftJoin(staffMembers, eq(staffMembers.id, opsLeads.ownerStaffId))
     .leftJoin(programmes, eq(programmes.id, opsLeads.programmeId))
-    .where(and(...conditions))
+    .where(leadWhere(scope, filters, flags))
     .orderBy(desc(opsLeads.firstReceivedAt), desc(opsLeads.code))
-    .limit(500);
-  const ids = leads.map((l) => l.lead.id);
-  if (ids.length === 0) return [];
-  const [admissions, followUps, flags] = await Promise.all([
-    db.select().from(opsAdmissions).where(inArray(opsAdmissions.leadId, ids)),
-    db
-      .select({
-        leadId: opsFollowUps.leadId,
-        status: opsFollowUps.status,
-        dueDate: opsFollowUps.dueDate,
-      })
-      .from(opsFollowUps)
-      .where(and(inArray(opsFollowUps.leadId, ids), eq(opsFollowUps.status, 'open'))),
-    db
-      .select({
-        leadId: opsDuplicateFlags.leadId,
-        matched: opsDuplicateFlags.matchedLeadId,
-        level: opsDuplicateFlags.level,
-      })
-      .from(opsDuplicateFlags)
-      .where(
-        and(
-          eq(opsDuplicateFlags.status, 'open'),
-          or(inArray(opsDuplicateFlags.leadId, ids), inArray(opsDuplicateFlags.matchedLeadId, ids)),
-        ),
-      ),
-  ]);
-  const settings = await loadSettings(db);
-  const window = settings['followups.due_rules'].value.upcomingWindowDays;
-  const isOpen = (a: { status: AdmissionStatus }) => isOpenStatus(a.status);
-  const weekStart = istWeekContaining(istToday(now)).from;
-  const rows = leads.map(({ lead, ownerName, programmeCode, programmeName }) => {
-    const current =
-      admissions
-        .filter((a) => a.leadId === lead.id)
-        .sort(
-          (a, b) =>
-            Number(isOpen(b)) - Number(isOpen(a)) || b.createdAt.getTime() - a.createdAt.getTime(),
-        )[0] ?? null;
-    const fu = followUpFlags(
-      followUps
-        .filter((f) => f.leadId === lead.id)
-        .map((f) => ({ status: f.status, dueDate: f.dueDate as IsoDate })),
-      now,
-      window,
-    );
-    const duplicateFlags = flags.filter((f) => f.leadId === lead.id || f.matched === lead.id);
-    return {
-      id: lead.id,
-      code: lead.code,
-      studentName: lead.studentName,
-      isSample: lead.isSample,
-      stageKey: lead.stageKey,
-      doNotContact: lead.doNotContact,
-      programmeCode,
-      programmeName,
-      ownerStaffId: lead.ownerStaffId,
-      ownerName,
-      receivedAt: lead.firstReceivedAt,
-      assignment: assignmentStatus(lead),
-      admissionId: current?.id ?? null,
-      status: (current?.status as AdmissionStatus | undefined) ?? null,
-      handoffStatus: current?.handoffStatus ?? null,
-      flags: {
-        overdue: fu.overdue,
-        dueToday: fu.dueToday,
-        missingNextAction: (current ? isOpen(current) : false) && fu.missingNextAction,
-        openDuplicates: duplicateFlags.length,
-        exactDuplicate: duplicateFlags.some((f) => f.level === 'exact'),
-        newThisWeek: istToday(lead.firstReceivedAt) >= weekStart,
-        // An open lead nobody has reached two-way yet (BR-OPS-4).
-        awaitingContact: !lead.firstSuccessfulContactAt && (!current || isOpen(current)),
-      },
-    };
-  });
-  const flagFilter = filters.flag ? LEAD_LIST_FLAGS.get(filters.flag) : undefined;
-  return rows.filter(
-    (r) => (!filters.status || r.status === filters.status) && (!flagFilter || flagFilter(r)),
-  );
+    .limit(filters.limit ?? 500)
+    .offset(filters.offset ?? 0);
+  return rows.map(({ lead, ...r }) => ({
+    id: lead.id,
+    code: lead.code,
+    studentName: lead.studentName,
+    isSample: lead.isSample,
+    stageKey: lead.stageKey,
+    doNotContact: lead.doNotContact,
+    programmeCode: r.programmeCode,
+    programmeName: r.programmeName,
+    ownerStaffId: lead.ownerStaffId,
+    ownerName: r.ownerName,
+    receivedAt: lead.firstReceivedAt,
+    assignment: assignmentStatus(lead),
+    admissionId: r.admissionId,
+    status: r.status as AdmissionStatus | null,
+    handoffStatus: r.handoffStatus,
+    flags: {
+      overdue: r.overdue,
+      dueToday: r.dueToday,
+      missingNextAction: r.missingNextAction,
+      openDuplicates: r.openDuplicates,
+      exactDuplicate: r.exactDuplicate,
+      newThisWeek: r.newThisWeek,
+      awaitingContact: r.awaitingContact,
+    },
+  }));
+}
+
+/** How many leads match, in SQL over the whole set: in all, per current case status, and how many are sample. */
+export async function leadCounts(
+  db: Database,
+  actor: Actor,
+  filters: LeadFilters = {},
+  now: Date = new Date(),
+) {
+  const scope = leadScope(db, await accessScope(db, actor, 'ops:leads:read'));
+  const rows = scope
+    ? await db
+        .select({
+          status: currentCase.status,
+          n: count(),
+          samples: sql`count(*) filter (where ${opsLeads.isSample})`.mapWith(Number),
+        })
+        .from(opsLeads)
+        .leftJoin(currentCase, isCurrentCase)
+        .where(leadWhere(scope, filters, leadFlags(now)))
+        .groupBy(currentCase.status)
+    : [];
+  return {
+    total: rows.reduce((n, r) => n + r.n, 0),
+    samples: rows.reduce((n, r) => n + r.samples, 0),
+    byStatus: Object.fromEntries(rows.map((r) => [r.status, r.n])) as Partial<
+      Record<AdmissionStatus, number>
+    >,
+  };
 }
 
 /** Duplicate flags of a lead in one direction, with the other lead of each pair. */
@@ -278,12 +318,10 @@ export async function getLead(db: Database, actor: Actor, id: string) {
     stageHistory(db, family),
     admissionConversions(db, lead.id),
   ]);
-  const duplicates = await Promise.all(
+  const flags = await Promise.all(
     [...flagsOut, ...flagsIn].map(async (f) => ({
-      ...f.flag,
-      otherLeadId: f.otherId,
-      otherCode: f.otherCode,
-      otherAccessible: await leadCovered(db, access, { id: f.otherId, ownerStaffId: f.otherOwner }),
+      ...f,
+      open: await leadCovered(db, access, { id: f.otherId, ownerStaffId: f.otherOwner }),
     })),
   );
   const privateVisible = await canSeeLeadPrivate(db, actor, lead);
@@ -324,7 +362,7 @@ export async function getLead(db: Database, actor: Actor, id: string) {
     followUps: followUps
       .filter((f) => cases || f.followUp.admissionId === null)
       .map((f) => ({ ...f.followUp, ownerName: f.ownerName })),
-    duplicates,
+    duplicates: visibleFlags(flags),
     stages,
     stageChanges,
     // Marketing sees number, status and meaning only; Ops case readers also get the case id.
@@ -334,15 +372,14 @@ export async function getLead(db: Database, actor: Actor, id: string) {
       conversion,
       ...(cases ? { id } : {}),
     })),
-    history: hidden.size
-      ? history
-          .filter((h) => kycVisible || h.action !== 'lead.kyc_updated')
-          .map((h) => ({
-            ...h,
-            before: stripPrivateKeys(h.before, hidden),
-            after: stripPrivateKeys(h.after, hidden),
-          }))
-      : history,
+    history: history
+      .filter((h) => kycVisible || h.action !== 'lead.kyc_updated')
+      .map((h) => (access.scope === 'all' ? h : withoutHiddenLeads(h, flags)))
+      .map((h) => ({
+        ...h,
+        before: stripPrivateKeys(h.before, hidden),
+        after: stripPrivateKeys(h.after, hidden),
+      })),
   };
 }
 
@@ -359,11 +396,13 @@ async function leadHistory(db: Database, leadIds: LeadId[], all: boolean) {
       entityId: auditEvents.entityId,
       actorType: auditEvents.actorType,
       actorUserId: auditEvents.actorUserId,
+      actorName: users.displayName,
       before: auditEvents.before,
       after: auditEvents.after,
       metadata: auditEvents.metadata,
     })
     .from(auditEvents)
+    .leftJoin(users, eq(users.id, auditEvents.actorUserId))
     .where(
       and(
         eq(auditEvents.module, 'ops'),

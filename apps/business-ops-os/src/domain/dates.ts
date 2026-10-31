@@ -46,14 +46,15 @@ export function nextServiceDay(date: IsoDate, closedWeekdays: readonly number[])
   return current;
 }
 
+const WINDOW_DAY = new Intl.DateTimeFormat('en-IN', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
 /** Human label for a window, e.g. "12 Oct 2026 – 18 Oct 2026". */
 export function windowLabel(from: IsoDate, to: IsoDate): string {
-  const fmt = (d: IsoDate) =>
-    new Intl.DateTimeFormat('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).format(new Date(`${d}T00:00:00Z`));
+  const fmt = (d: IsoDate) => WINDOW_DAY.format(new Date(`${d}T00:00:00Z`));
   return from === to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`;
 }

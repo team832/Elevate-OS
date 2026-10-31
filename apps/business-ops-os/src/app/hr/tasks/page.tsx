@@ -5,7 +5,7 @@
  * `?new=1` assigns a task, `?open=<id>` inspects one.
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { ButtonLink, EmptyState, PageHeader, Tabs } from '@elevate/shared-ui';
+import { ButtonLink, EmptyState, PageHeader, Tabs, ListEmpty } from '@elevate/shared-ui';
 import { isIsoDate } from '../../../domain/dates';
 import { TASK_PRIORITIES, TASK_STATUSES, taskStatusLabel } from '../../../domain/staff-tasks';
 import { can } from '@elevate/authorization';
@@ -84,6 +84,7 @@ async function HrTasks({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
       status,
       due,
       ...tab.query,
+      groups: 'exclude',
       page: Math.max(1, Number(sp.page) || 1),
     });
     const [list, counts, people, self, related, ai] = await Promise.all([
@@ -172,7 +173,7 @@ async function HrTasks({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
         {board ? (
           <Board rows={list.rows} open={open} />
         ) : (
-          <HrTaskTable rows={list.rows} total={list.total} open={open} />
+          <HrTaskTable rows={list.rows} total={list.total} open={open} sp={sp} />
         )}
         <Pager
           basePath={BASE}
@@ -224,12 +225,12 @@ async function HrTasks({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
   );
 }
 
-/** Batch and subject choices from Academic's teaching assignments (I5); none when unavailable. */
+/** Batch and subject choices from Academic's teaching assignments (I5); none when unavailable, null without the permission. */
 async function relatedOptions(
   db: Parameters<typeof listTeachingAssignments>[0],
   user: AuthenticatedUser,
 ) {
-  if (!can(user, 'ops:teaching_assignments:read')) return [];
+  if (!can(user, 'ops:teaching_assignments:read')) return null;
   // shortcut: the first page (25) of assignments; filter by assignee when lists grow.
   const r = await listTeachingAssignments(db, user, {});
   if (r.status !== 'available') return [];
@@ -254,10 +255,12 @@ function HrTaskTable({
   rows,
   total,
   open,
+  sp,
 }: {
   rows: TaskListRow[];
   total: number;
   open: (t: TaskListRow) => string;
+  sp: Record<string, unknown>;
 }) {
   return (
     <RecordTable
@@ -265,7 +268,7 @@ function HrTaskTable({
       rows={rows}
       rowKey={(t) => t.id}
       rowHref={open}
-      empty={<EmptyState title="No tasks match" description="Clear a filter, or assign a task." />}
+      empty={<ListEmpty noun="tasks" params={sp} first="Assign the first task." />}
       columns={[
         { key: 'title', header: 'Task', render: (t) => `${t.title}${group(t)}` },
         { key: 'staffName', header: 'Assignee' },

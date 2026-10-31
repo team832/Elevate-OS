@@ -2,6 +2,7 @@
  * Admissions report pieces shared by the reports pages and the Ops dashboard: each chart is
  * drawn from buildAdmissionsFunnel output and comes with its table (denominators included).
  */
+import type { Principal } from '@elevate/authorization';
 import { DataTable, EmptyState } from '@elevate/shared-ui';
 import { DEMO_OUTCOMES } from '../../../domain/demos';
 import type { ConversionGroup } from '../../../domain/admissions-funnel';
@@ -10,6 +11,7 @@ import { BarChart, DonutChart, FunnelChart } from '../../../ui/charts';
 import { fmtPercent } from '../../../ui/chart-math';
 import { humanise } from '../../../ui/format';
 import { listHref } from '../../../ui/list-controls';
+import { OpenLink, openHref } from '../../../ui/open-link';
 
 export type FunnelReport = Awaited<ReturnType<typeof buildAdmissionsFunnel>>;
 type Window = FunnelReport['window'];
@@ -70,15 +72,17 @@ export function ConversionBreakdown<G extends ConversionGroup>({
   rows,
   window,
   filter,
+  user,
 }: {
   title: string;
   rows: readonly G[];
   window: Window;
   filter?: (g: G) => Record<string, string> | null;
+  user: Principal;
 }) {
   const href = (g: G, patch: Record<string, string> = {}) => {
     const f = filter?.(g);
-    return f ? demoListHref(window, { ...f, ...patch }) : undefined;
+    return f ? openHref(user, demoListHref(window, { ...f, ...patch })) : undefined;
   };
   return (
     <>
@@ -123,7 +127,7 @@ export function ConversionBreakdown<G extends ConversionGroup>({
 }
 
 /** Demos with a class in the window by outcome, in the fixed outcome order (stable colours). */
-export function OutcomeDonut({ report }: { report: FunnelReport }) {
+export function OutcomeDonut({ report, user }: { report: FunnelReport; user: Principal }) {
   const count = new Map(report.demoConversion.byOutcome.map((g) => [g.group, g.demos]));
   const rows = DEMO_OUTCOMES.map((o) => ({
     outcome: o,
@@ -153,7 +157,11 @@ export function OutcomeDonut({ report }: { report: FunnelReport }) {
             key: 'demos',
             header: 'Demos',
             numeric: true,
-            render: (r) => <a href={r.href}>{r.demos}</a>,
+            render: (r) => (
+              <OpenLink user={user} href={r.href}>
+                {r.demos}
+              </OpenLink>
+            ),
           },
         ]}
       />
@@ -161,14 +169,20 @@ export function OutcomeDonut({ report }: { report: FunnelReport }) {
   );
 }
 
-const POPULATIONS = [
+export const POPULATIONS = [
   ['active', 'Active (admitted and enrolled)', '/ops/students'],
-  ['on_hold', 'On hold', '/ops/students/past?tab=on_hold'],
+  ['on_hold', 'On hold', '/ops/students?view=on_hold'],
   ['former', 'Former (left, completed or transferred)', '/ops/students/past?tab=former'],
 ] as const;
 
 /** Students right now by population, with links to each student list. */
-export function StudentSummary({ students }: { students: FunnelReport['students'] }) {
+export function StudentSummary({
+  students,
+  user,
+}: {
+  students: FunnelReport['students'];
+  user: Principal;
+}) {
   const rows = POPULATIONS.map(([key, label, href]) => ({ key, label, href, n: students[key] }));
   return (
     <>
@@ -188,7 +202,11 @@ export function StudentSummary({ students }: { students: FunnelReport['students'
             key: 'n',
             header: 'Count',
             numeric: true,
-            render: (r) => <a href={r.href}>{r.n}</a>,
+            render: (r) => (
+              <OpenLink user={user} href={r.href}>
+                {r.n}
+              </OpenLink>
+            ),
           },
         ]}
       />

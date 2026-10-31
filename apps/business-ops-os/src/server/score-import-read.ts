@@ -15,6 +15,7 @@ import {
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, isAppError, ValidationError } from '@elevate/shared-contracts';
+import { fmtDay, toIsoDate } from '@elevate/shared-types';
 import { SHEET_COLUMNS } from '../domain/ai-assist';
 import { attachmentProblem, cleanFileName } from '../domain/attachments';
 import {
@@ -133,7 +134,7 @@ export async function startImport(
     );
   const refuse = (at?: Date) =>
     new ConflictError(
-      `This file was already imported into this test${at ? ` on ${at.toISOString().slice(0, 10)}` : ''}, so nothing was changed. Cancel that import to read the file again.`,
+      `This file was already imported into this test${at ? ` on ${fmtDay(toIsoDate(at))}` : ''}, so nothing was changed. Cancel that import to read the file again.`,
     );
   const earlier = await repeat();
   if (earlier) throw refuse(earlier.at);

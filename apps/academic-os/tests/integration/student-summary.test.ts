@@ -164,6 +164,7 @@ describe('GET /academic/api/internal/v1/students/{id}/summary (IR-OPS-STU-1)', (
     });
     expect(d.enrolments).toHaveLength(1);
     expect(d.enrolments[0]!.batchName).toBe('Test batch (fictional)');
+    expect(d.enrolments[0]!.batchEndDate).toBeNull(); // IR-OPS-EXIT-2: this batch has no planned last day
     expect(d.enrolments[0]!.teachers).toEqual(
       expect.arrayContaining([
         { staffId: w.teacherStaff, subject: 'Quant' },

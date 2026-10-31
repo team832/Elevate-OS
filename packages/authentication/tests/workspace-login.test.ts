@@ -161,6 +161,19 @@ describe('workspace chooser form (D-072)', () => {
     return choose(req);
   };
 
+  it('a broken form body answers 400, not 500 (API-003)', async () => {
+    const [u] = await db.select({ id: users.id }).from(users).where(eq(users.email, 'ops.only@example.test'));
+    const { token } = await createSession(db, { userId: u!.id, secret: SECRET });
+    const res = await choose(
+      new Request('http://localhost/academic/api/v1/auth/workspace', {
+        method: 'POST',
+        headers: { 'content-type': 'multipart/form-data', cookie: `elevate_session=${token}` },
+        body: 'x',
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('opens a permitted workspace and remembers it (audited)', async () => {
     const res = await post('two.noprefs@example.test', { workspace: 'marketing', remember: 'yes' });
     expect(res.status).toBe(303);

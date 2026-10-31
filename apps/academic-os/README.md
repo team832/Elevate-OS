@@ -164,7 +164,9 @@ Browser-facing REST under `/academic/api/v1/…` built with `defineRoute` (401 �
 | `academic.enrolment.rejected` v1 | produced | Intake rejected the request (`reasonCode` + human `reason`) | same key rule |
 | `academic.assessment.finalised` v1 | produced (defined in `packages/shared-contracts/src/modules/academic.ts`; no consumer yet) | Results finalised (version 1) or re-scored (version n) | key `assessment-finalised:<assessmentId>:v<version>`; payload carries counts only, no names or scores |
 
-Consumer name constant: `ACADEMIC_CONSUMERS.enrolmentIntake` (`academic.enrolment-intake`).
+| `ops.enrolment.closed` v1, `ops.student.renamed` v1 | **consumed** by `academic.enrolment-exit` (31 Oct 2026, D-115) | Ops recorded an exit or corrected a name; runs when Ops presses "Send exits to Academic" | delivery unique per (event, consumer) |
+
+Consumer name constants: `ACADEMIC_CONSUMERS.enrolmentIntake` (`academic.enrolment-intake`), `ACADEMIC_CONSUMERS.enrolmentExit` (`academic.enrolment-exit`).
 
 ## 8. Enrolment intake (no scheduler yet)
 `src/server/services/intake.ts → runEnrolmentIntake(db, { triggeredByUserId? })` calls `processEvents` with consumer `academic.enrolment-intake`. For each waiting `ops.admission.enrolment_requested` v1, in **one transaction** with the delivery row:
@@ -280,3 +282,10 @@ Exposed as labels, approval states or configuration — never silently decided.
 - **Seeds:** `seed/sample-tests.ts` (five sample tests: one published with a tie and negative marking, one in progress with a pending import, one awaiting publication, two upcoming), called by `apps/platform/seed/sample-tests.ts`; sample teachers only, `is_sample` (checked by `apps/platform/tests/integration/seeds-reconciliation.test.ts`).
 - **Tests:** `tests/integration/assessment-ops.test.ts`, `teacher-scope.test.ts`, `teacher-privacy.test.ts`, `students-progress.test.ts`; `tests/unit/assessment-bounds.test.ts`, `screens.test.tsx`; `packages/shared-contracts/tests/academic-assessments.test.ts`; `packages/server-kit/tests/internal.test.ts`; `packages/database/tests/constraints/academic-0016.test.ts`.
 - **Open owner questions:** register `ACD-NW-049` (a teacher's own score entry is verified at once), `ACD-NW-050` (rank display), `ACD-NW-051` (reviews with no subject).
+
+## 16. Debug pass, 30–31 Oct 2026 (D-113, D-115, D-116)
+- **Consumer** `academic.enrolment-exit` (`ACADEMIC_CONSUMERS.enrolmentExit`): takes `ops.enrolment.closed` v1 and `ops.student.renamed` v1; algorithm A25. Internal run route: `POST /academic/api/internal/v1/enrolment-exits/run`.
+- **Seeds** are insert-only (`seed/ensure.ts`, renamed from `upsert.ts`); a seed still sets `CAF-ACC-SEP27` back from paused to active (D-037).
+- **Screens:** course record page `/academic/curriculum/courses/[id]`; marks correction by a coordinator with a required reason (RVC-007; the path through this sheet to final results is not tested); "First 500" on `/academic/students` was listed as a small to-do. Settings JSON and scoring sections stay JSON boxes (marked shortcut).
+- **Reports:** `/academic/reports/*` tables keep sideways scroll on phones (print pages).
+- **Coordinator contacts:** a coordinator sees student and guardian contacts here; owner question.

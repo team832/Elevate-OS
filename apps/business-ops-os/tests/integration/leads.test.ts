@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   authedRequest,
   buildRequest,
@@ -7,7 +7,13 @@ import {
   createTestUser,
   setupTestDatabase,
 } from '@elevate/testing';
-import { opsAdmissions, opsDuplicateFlags, opsFollowUps, opsLeads } from '@elevate/database';
+import {
+  auditEvents,
+  opsAdmissions,
+  opsDuplicateFlags,
+  opsFollowUps,
+  opsLeads,
+} from '@elevate/database';
 import { GET as listLeads, POST as createLead } from '../../src/app/api/v1/leads/route';
 import { GET as getLead, PATCH as patchLead } from '../../src/app/api/v1/leads/[id]/route';
 import { POST as checkDuplicates } from '../../src/app/api/v1/leads/check-duplicates/route';
@@ -17,6 +23,7 @@ import { POST as activity } from '../../src/app/api/v1/leads/[id]/activities/rou
 import { POST as enquiry } from '../../src/app/api/v1/leads/[id]/enquiries/route';
 import { POST as merge } from '../../src/app/api/v1/leads/[id]/merge/route';
 import { GET as history } from '../../src/app/api/v1/leads/[id]/history/route';
+import { POST as dismissFlag } from '../../src/app/api/v1/leads/duplicates/[id]/route';
 import { e164, phone, setupReference, staffUser, uniqueEmail, type StaffUser } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -168,6 +175,224 @@ describe('POST /ops/api/v1/leads', () => {
       accessible: false,
       studentName: null,
     });
+  });
+});
+
+describe('duplicate warnings are shaped for the viewer (HAT-005)', () => {
+  type Warning = Record<string, unknown>;
+  const check = async (user: StaffUser, body: Warning) =>
+    (
+      await callRoute<{ matches: Warning[] }>(
+        checkDuplicates,
+        post(user, '/ops/api/v1/leads/check-duplicates', body),
+      )
+    ).data!.matches;
+  const refused = async (user: StaffUser, body: Warning) =>
+    ((await newLead(user, body)).error?.details as { duplicates: Warning[] }).duplicates;
+  const ROUTES = [
+    ['POST /leads/check-duplicates', check],
+    ['the 409 of POST /leads', refused],
+  ] as const;
+  const DETAIL = ['leadId', 'code', 'nameSimilarity', 'signals', 'ownerName'];
+
+  it.each(ROUTES)(
+    '%s: a lead the caller cannot open is only a warning; one they can open has the detail',
+    async (_, ask) => {
+      const raw = phone();
+      const { data } = await newLead(otherCounsellor, {
+        studentPhone: raw,
+        studentName: 'Hidden Person',
+      });
+      const body = { studentName: 'Hidden Person', studentPhone: raw };
+      expect(await ask(counsellor, body)).toEqual([
+        { accessible: false, level: 'exact', studentName: null },
+      ]);
+      for (const reader of [otherCounsellor, manager]) {
+        const [seen] = await ask(reader, body);
+        for (const field of DETAIL) expect(seen).toHaveProperty(field);
+        expect(seen).toMatchObject({
+          accessible: true,
+          leadId: data!.lead.id,
+          code: data!.lead.code,
+          studentName: 'Hidden Person',
+          nameSimilarity: 1,
+        });
+      }
+    },
+  );
+
+  it.each([
+    ['student', 'studentPhone', 'exact'],
+    ['guardian', 'guardianPhone', 'possible'],
+  ])(
+    'a %s phone on a hidden lead answers the same for a wrong and a right name',
+    async (_, field, level) => {
+      const raw = phone();
+      await newLead(otherCounsellor, { [field]: raw, studentName: 'Hidden Person' });
+      for (const studentName of ['Completely Different', 'Hidden', 'Hidden Person'])
+        expect(await check(counsellor, { studentName, [field]: raw })).toEqual([
+          { accessible: false, level, studentName: null },
+        ]);
+    },
+  );
+
+  it('several hidden leads on one phone give one warning, so the count stays hidden', async () => {
+    const raw = phone();
+    await newLead(otherCounsellor, { studentPhone: raw });
+    await newLead(otherCounsellor, {
+      studentPhone: raw,
+      acknowledgeDuplicates: { reason: 'Twin sibling, different student' },
+    });
+    expect(await check(counsellor, { studentName: 'Someone', studentPhone: raw })).toHaveLength(1);
+    expect(await check(manager, { studentName: 'Someone', studentPhone: raw })).toHaveLength(2);
+  });
+
+  it('name and school alone: hidden from own scope, shown to a reader, still flagged for merge review', async () => {
+    const probe = { studentName: 'Zara Hidden', previousSchool: `Test School ${phone()}` };
+    await newLead(otherCounsellor, probe);
+    expect(await check(counsellor, probe)).toEqual([]);
+    expect(await check(manager, probe)).toEqual([
+      expect.objectContaining({ accessible: true, level: 'possible' }),
+    ]);
+    const saved = await newLead(counsellor, probe);
+    expect(saved.status).toBe(201);
+    expect(saved.data?.duplicates).toEqual([]);
+    const flags = await ctx.db
+      .select()
+      .from(opsDuplicateFlags)
+      .where(eq(opsDuplicateFlags.leadId, saved.data!.lead.id as never));
+    expect(flags).toEqual([expect.objectContaining({ level: 'possible', status: 'open' })]);
+  });
+
+  it.each(ROUTES)(
+    "%s: each check is audited in the actor's name, without a phone number or a name",
+    async (_, ask) => {
+      const raw = phone();
+      const { data } = await newLead(otherCounsellor, {
+        studentPhone: raw,
+        studentName: 'Hidden Person',
+      });
+      await ask(counsellor, { studentName: 'Guessed Name', studentPhone: raw });
+      const rows = await ctx.db
+        .select()
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.actorUserId, counsellor.id),
+            eq(auditEvents.action, 'lead.duplicate_check'),
+          ),
+        );
+      const row = rows.find((r) =>
+        (r.metadata as { matchedLeadIds: string[] }).matchedLeadIds.includes(data!.lead.id),
+      );
+      expect(row?.metadata).toMatchObject({ searchedOn: ['studentPhone'], results: 1 });
+      const text = JSON.stringify(row);
+      for (const secret of [raw, e164(raw), 'Guessed Name', 'Hidden Person'])
+        expect(text).not.toContain(secret);
+    },
+  );
+});
+
+describe('a saved duplicate flag is shaped for the reader too (HAT-005)', () => {
+  type Row = Record<string, unknown>;
+  const flagged = async (first: StaffUser, second: StaffUser) => {
+    const raw = phone();
+    const older = (await newLead(first, { studentPhone: raw })).data!.lead;
+    const newer = (
+      await newLead(second, {
+        studentPhone: raw,
+        acknowledgeDuplicates: { reason: 'Twin sibling, different student' },
+      })
+    ).data!.lead;
+    return { older, newer };
+  };
+  const PATHS = [
+    [
+      'the flag list',
+      async (user: StaffUser, id: string) =>
+        (await callRoute<{ duplicates: Row[] }>(getLead, authedRequest(user, '/x'), { id })).data!
+          .duplicates,
+    ],
+    [
+      'the history',
+      async (user: StaffUser, id: string) =>
+        (await callRoute<Row[]>(history, authedRequest(user, '/x'), { id })).data!,
+    ],
+  ] as const;
+  const DIRECTIONS = [
+    ['the newer lead, whose flag points out', 'newer', 'older', () => counsellor],
+    ['the older lead, whose flag points in', 'older', 'newer', () => otherCounsellor],
+  ] as const;
+  const CASES = PATHS.flatMap(([path, read]) =>
+    DIRECTIONS.map(([where, own, other, reader]) => [path, where, read, own, other, reader] as const),
+  );
+  const secretsOf = (lead: { id: string; code: string }) => [lead.id, lead.code, 'student_phone'];
+
+  it.each(CASES)('%s of %s has nothing of a lead the reader cannot open', async (...c) => {
+    const [, , read, own, other, reader] = c;
+    const pair = await flagged(otherCounsellor, counsellor);
+    const text = JSON.stringify(await read(reader(), pair[own].id));
+    for (const secret of secretsOf(pair[other])) expect(text).not.toContain(secret);
+  });
+
+  it.each(DIRECTIONS)('%s still warns that a flag exists', async (_, own, __, reader) => {
+    const pair = await flagged(otherCounsellor, counsellor);
+    const { data } = await callRoute<{ duplicates: Row[] }>(getLead, authedRequest(reader(), '/x'), {
+      id: pair[own].id,
+    });
+    expect(data!.duplicates).toEqual([{ level: 'exact', status: 'open', otherAccessible: false }]);
+  });
+
+  it.each(CASES)('%s of %s keeps the detail for a reader of both leads', async (...c) => {
+    const [, , read, own, other] = c;
+    for (const [first, reader] of [
+      [counsellor, counsellor],
+      [otherCounsellor, manager],
+    ] as const) {
+      const pair = await flagged(first, counsellor);
+      const text = JSON.stringify(await read(reader, pair[own].id));
+      // The older lead's own history names no match: only the newer one was created with a flag.
+      if (c[0] === 'the flag list' || own === 'newer') {
+        expect(text).toContain(pair[other].code);
+        expect(text).toContain('student_phone');
+      }
+    }
+  });
+
+  it('a dismissed flag keeps its status for the owner, and its audit row hides the other lead', async () => {
+    const pair = await flagged(otherCounsellor, counsellor);
+    const flags = await ctx.db
+      .select()
+      .from(opsDuplicateFlags)
+      .where(eq(opsDuplicateFlags.leadId, pair.newer.id as never));
+    expect(
+      await status(
+        dismissFlag,
+        post(manager, '/x', { decision: 'dismissed', note: 'Two different people' }),
+        { id: flags[0]!.id },
+      ),
+    ).toBe(200);
+    const [, readHistory] = PATHS[1];
+    const rows = await readHistory(counsellor, pair.newer.id);
+    expect(rows.find((r) => r.action === 'duplicate.dismissed')?.after).toMatchObject({
+      status: 'dismissed',
+    });
+    const text = JSON.stringify(rows);
+    for (const secret of [...secretsOf(pair.older), 'Two different people'])
+      expect(text).not.toContain(secret);
+    expect(JSON.stringify(await readHistory(manager, pair.newer.id))).toContain(pair.older.id);
+  });
+
+  it('several hidden flags are one warning, so the count stays hidden', async () => {
+    const raw = phone();
+    await newLead(otherCounsellor, { studentPhone: raw });
+    const ack = { acknowledgeDuplicates: { reason: 'Twin sibling, different student' } };
+    await newLead(otherCounsellor, { studentPhone: raw, ...ack });
+    const mine = await newLead(counsellor, { studentPhone: raw, ...ack });
+    const { data } = await callRoute<{ duplicates: Row[] }>(getLead, authedRequest(counsellor, '/x'), {
+      id: mine.data!.lead.id,
+    });
+    expect(data!.duplicates).toHaveLength(1);
   });
 });
 

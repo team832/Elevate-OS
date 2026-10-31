@@ -2,13 +2,14 @@
  * Admissions funnel, demo conversion and student summary (owner brief §15; A-REP-1 … A-REP-3),
  * shown beside the admissions dashboard (./admissions.ts). Own scope as there.
  */
-import { asc, isNull } from 'drizzle-orm';
+import { asc, eq, isNull } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
   opsAdmissions,
   opsDemos,
   opsDemoSessions,
   opsEnquiries,
+  opsLeadSources,
   opsLeads,
   programmes,
   staffMembers,
@@ -71,9 +72,11 @@ export async function buildAdmissionsFunnel(
         leadId: opsEnquiries.leadId,
         receivedAt: opsEnquiries.receivedAt,
         sourceCode: opsEnquiries.sourceCode,
+        sourceLabel: opsLeadSources.label,
         campaignRef: opsEnquiries.campaignRef,
       })
       .from(opsEnquiries)
+      .leftJoin(opsLeadSources, eq(opsLeadSources.code, opsEnquiries.sourceCode))
       .orderBy(asc(opsEnquiries.receivedAt)),
     db.select({ id: programmes.id, code: programmes.code, name: programmes.name }).from(programmes),
     db.select({ id: staffMembers.id, name: staffMembers.fullName }).from(staffMembers),
@@ -128,7 +131,7 @@ export async function buildAdmissionsFunnel(
           : 'No counsellor',
         counsellorId: d.counsellorStaffId,
         source: enquiry
-          ? `${enquiry.sourceCode}${enquiry.campaignRef ? ` · ${enquiry.campaignRef}` : ''}`
+          ? `${enquiry.sourceLabel ?? enquiry.sourceCode}${enquiry.campaignRef ? ` · ${enquiry.campaignRef}` : ''}`
           : 'No enquiry recorded',
       };
     });

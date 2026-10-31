@@ -15,6 +15,7 @@ import {
   ValidationError,
   withTransaction,
 } from '@elevate/server-kit';
+import { httpUrlSchema } from '@elevate/shared-contracts';
 import {
   CALENDAR_ACTION_TEXT,
   CALENDAR_ITEM_TYPES,
@@ -56,7 +57,7 @@ const calendarFields = {
   ownerStaffId: optUuid,
   brief: optText(5000),
   assetLinks: z
-    .array(z.url({ protocol: /^https?$/ }).max(2000))
+    .array(httpUrlSchema.max(2000))
     .max(20)
     .optional(),
 };

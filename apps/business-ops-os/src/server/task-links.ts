@@ -5,7 +5,7 @@
  * `linkUrl` turns one into an absolute URL for a page on another origin.
  */
 import { loadRoles } from '@elevate/authentication';
-import { workspacesFor, type WorkspaceKey } from '@elevate/authorization';
+import { can, inBase, workspacesFor, type Permission, type WorkspaceKey } from '@elevate/authorization';
 import { appOrigin } from '@elevate/configuration/workspaces';
 import { opsStaffTasks, opsTaskEvents, type Database } from '@elevate/database';
 import { eq } from 'drizzle-orm';
@@ -21,20 +21,36 @@ export const HOSTS = {
   work: ['ops', 'academic', 'marketing'],
   leads: ['ops', 'marketing'],
   meetings: ['ops', 'academic'],
+  feedback: ['academic'],
 } as const satisfies Record<string, readonly WorkspaceKey[]>;
 export type HostedArea = keyof typeof HOSTS;
 
 /** `path` (e.g. `/tasks/<id>`) under the base of the first host of `area` the user belongs to. */
 export async function linkFor(db: Database, userId: UserId, area: HostedArea, path: string) {
   const mine = workspacesFor({ id: userId, roles: await loadRoles(db, userId) });
-  // No membership at all: Ops, whose sign-in sends them to "access pending".
-  const key = HOSTS[area].find((k) => mine.includes(k)) ?? 'ops';
-  return `${MODULES[key].basePath}${path}`;
+  const key = HOSTS[area].find((k) => mine.includes(k));
+  if (key) return `${MODULES[key].basePath}${path}`;
+  // In no workspace showing this page: their own home, so the notice still opens. In none at all: Ops, whose sign-in says "access pending".
+  return mine[0] ? MODULES[mine[0]].basePath : `${MODULES.ops.basePath}${path}`;
+}
+
+/** `page` when the person passes its gate, else `path` in their own workspace: a notice must open for whoever gets it. */
+export async function linkOr(
+  db: Database,
+  userId: UserId,
+  permission: Permission,
+  page: string,
+  area: HostedArea,
+  path: string,
+) {
+  const me = { id: userId, roles: await loadRoles(db, userId) };
+  const inWorkspace = workspacesFor(me).some((k) => inBase(page, MODULES[k].basePath));
+  return inWorkspace && can(me, permission) ? page : linkFor(db, userId, area, path);
 }
 
 /** Absolute URL of a stored workspace link (`/academic/tasks/…` → `http://…:3001/academic/tasks/…`). */
 export function linkUrl(link: string): string {
-  const key = HOSTS.work.find((k) => link.startsWith(`${MODULES[k].basePath}/`)) ?? 'ops';
+  const key = HOSTS.work.find((k) => inBase(link, MODULES[k].basePath)) ?? 'ops';
   return `${appOrigin(key)}${link}`;
 }
 

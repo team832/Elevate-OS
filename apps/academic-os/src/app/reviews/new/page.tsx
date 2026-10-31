@@ -23,7 +23,7 @@ export default async function NewReviewPage({ searchParams }: { searchParams: Pr
   const actor = actorFor(access.user);
   const prefilled = Boolean(ref.studentId || ref.coreStudentId);
   const data = await load(async () => ({ ...(prefilled ? { target: await reviewTarget(db, actor, ref), students: [] } : { target: null, students: await reviewableStudents(db, actor) }), choices: ref.coreStudentId ? undefined : await reviewChoices(db, actor) }));
-  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError level={1} error={data.error} /></AcademicShell>;
   const { target, students, choices } = data.data;
   const extra = target?.demo
     ? { coreStudentId: ref.coreStudentId, opsDemoSessionId: ref.opsDemoSessionId, sessionId: target.sessionId ?? undefined }

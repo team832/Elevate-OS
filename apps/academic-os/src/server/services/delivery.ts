@@ -7,15 +7,18 @@
  */
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { academicClassSessions, academicSessionTeachers, staffMembers, type Database } from '@elevate/database';
+import { notify } from '@elevate/notifications';
 import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, ForbiddenError, InvalidStateTransitionError, ValidationError } from '@elevate/shared-contracts';
-import type { StaffMemberId } from '@elevate/shared-types';
+import { fmtDay, type StaffMemberId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { audit, resolveScope, todayIst, type Actor } from '../context';
+import { MODULE_PATHS } from '../paths';
 import type { deliverBody, substituteBody } from '../schemas-sessions';
+import { activeStaffOrThrow } from './assignments';
 import { assertLoggable, assertSessionAccess, lockSession } from './session-guards';
 import { getSetting } from './settings';
-import { checkAgainst, conflictContext, lockTimetable, refuseConflicts, teachersBySession, toTimetableSession } from './timetable';
+import { checkAgainst, conflictContext, lockTimetable, refuseConflicts, teachersBySession, teacherUserId, toTimetableSession } from './timetable';
 
 const activeRows = (tx: Database, sessionId: string, participation: 'planned' | 'actual') =>
   tx
@@ -91,8 +94,7 @@ export async function assignSubstitute(db: Database, actor: Actor, sessionId: st
     if (session.status !== 'scheduled') throw new InvalidStateTransitionError(`A substitute can be assigned only to a scheduled session (it is ${session.status}).`);
     if (!session.teacherStaffId) throw new ValidationError('The session has no planned teacher to replace; set its teacher instead.');
     if (input.staffId === session.teacherStaffId) throw new ValidationError('The substitute must be a different teacher.');
-    const [staff] = await tx.select({ id: staffMembers.id }).from(staffMembers).where(eq(staffMembers.id, input.staffId as StaffMemberId));
-    if (!staff) throw new ValidationError('Teacher (staff member) not found.');
+    await activeStaffOrThrow(tx, input.staffId);
     const planned = await activeRows(tx, session.id, 'planned');
     if (planned.some((p) => p.staffId === input.staffId)) throw new ConflictError('That teacher is already on this session.');
     const ctx = await conflictContext(tx, session.date, session.date);
@@ -112,6 +114,9 @@ export async function assignSubstitute(db: Database, actor: Actor, sessionId: st
       .returning();
     await tx.update(academicClassSessions).set({ version: session.version + 1 }).where(eq(academicClassSessions.id, session.id));
     await audit(tx, actor, { action: 'class_session.substitute_assigned', entityType: 'class_session', entityId: session.id, after: row, metadata: { reason: input.reason, replacesStaffId: session.teacherStaffId, substituteStaffId: input.staffId } });
+    const substitute = await teacherUserId(tx, input.staffId);
+    // The reason can be about the other teacher, so it stays out of the notice.
+    if (substitute) await notify(tx, { userIds: [substitute], module: 'academic', kind: 'class_session.substitute_assigned', title: `You are covering a class on ${fmtDay(session.date)} at ${session.startTime}`, link: MODULE_PATHS.teachingLog(session.id), entityType: 'class_session', entityId: session.id });
     return row!;
   });
 }

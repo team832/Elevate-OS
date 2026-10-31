@@ -15,7 +15,7 @@ import {
   users,
   type Database,
 } from '@elevate/database';
-import { NotFoundError } from '@elevate/shared-contracts';
+import { ACADEMIC_CONSUMERS, enrolmentKeys, NotFoundError } from '@elevate/shared-contracts';
 import type {
   AdmissionId,
   IntegrationEventId,
@@ -23,12 +23,23 @@ import type {
   StudentIdentityId,
 } from '@elevate/shared-types';
 import { stripPrivateKeys } from '../domain/students';
-import { caseState } from '../domain/student-lifecycle';
+import { caseState, hasStudentRecord } from '../domain/student-lifecycle';
 import { ENROLMENT_REPLIES_CONSUMER } from './enrolment';
 import { KYC_ACTIONS } from './kyc';
 
 /** Population order used to pick the case a profile opens on. */
-const POPULATION_RANK = { active: 0, on_hold: 1, in_admission: 2, former: 3 } as const;
+const POPULATION_RANK = { active: 2, on_hold: 1, in_admission: 2, former: 3 } as const;
+
+/** The case a profile opens on; a case with no student record yet (a pending readmission) never leads one that has. */
+function leadCase<T extends { a: typeof opsAdmissions.$inferSelect }>(cases: readonly T[]) {
+  const rank = (c: T) =>
+    !hasStudentRecord(c.a)
+      ? 4
+      : c.a.status === 'enrolled'
+        ? 0
+        : POPULATION_RANK[caseState(c.a).population];
+  return [...cases].sort((x, y) => rank(x) - rank(y))[0]!;
+}
 
 /** Resolve a canonical student id (or an admission id from older links) to its cases. */
 export async function resolveStudent(db: Database, id: string) {
@@ -41,11 +52,7 @@ export async function resolveStudent(db: Database, id: string) {
   const byIdentity = await cases()
     .where(eq(opsAdmissions.studentId, id as StudentIdentityId))
     .orderBy(desc(opsAdmissions.admittedAt));
-  if (byIdentity.length) {
-    const rank = (c: (typeof byIdentity)[number]) => POPULATION_RANK[caseState(c.a).population];
-    const primary = [...byIdentity].sort((x, y) => rank(x) - rank(y))[0]!;
-    return { primary, cases: byIdentity };
-  }
+  if (byIdentity.length) return { primary: leadCase(byIdentity), cases: byIdentity };
   const [row] = await cases()
     .where(eq(opsAdmissions.id, id as AdmissionId))
     .limit(1);
@@ -56,7 +63,7 @@ export async function resolveStudent(db: Database, id: string) {
         .where(eq(opsAdmissions.studentId, row.a.studentId))
         .orderBy(desc(opsAdmissions.admittedAt))
     : [row];
-  return { primary: row, cases: all };
+  return { primary: hasStudentRecord(row.a) ? row : leadCase(all), cases: all };
 }
 
 /** Audit events of the student's cases and identity, newest first (private keys removed). */
@@ -123,6 +130,27 @@ export async function repliesOf(db: Database, requestEventId: IntegrationEventId
         ]),
       ),
     );
+}
+
+type ExitClosure = 'not_sent' | 'waiting' | 'processed' | 'failed' | 'dead';
+
+/** What became of each exit in Academic, by exit record id; no event = no enrolment to close. */
+export async function exitClosuresOf(db: Database, exitRecordIds: readonly string[]) {
+  const rows = exitRecordIds.length
+    ? await db
+        .select({ key: integrationEvents.idempotencyKey, status: eventDeliveries.status })
+        .from(integrationEvents)
+        .leftJoin(
+          eventDeliveries,
+          and(
+            eq(eventDeliveries.eventId, integrationEvents.id),
+            eq(eventDeliveries.consumer, ACADEMIC_CONSUMERS.enrolmentExit),
+          ),
+        )
+        .where(inArray(integrationEvents.idempotencyKey, exitRecordIds.map(enrolmentKeys.closed)))
+    : [];
+  const byKey = new Map(rows.map((r) => [r.key, (r.status ?? 'waiting') as ExitClosure]));
+  return (id: string): ExitClosure => byKey.get(enrolmentKeys.closed(id)) ?? 'not_sent';
 }
 
 /** Code and name of the programmes of these cases, by id. */

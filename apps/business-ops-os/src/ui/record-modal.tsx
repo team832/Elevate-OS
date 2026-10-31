@@ -11,6 +11,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
@@ -18,6 +19,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { Icon, nextTabIndex } from '@elevate/shared-ui';
 import { routerPath } from './format';
+
+const noSubscribe = () => () => {};
 
 export interface ModalTab {
   key: string;
@@ -36,7 +39,7 @@ export interface RecordModalProps {
   fullHref?: string;
   /** The list URL without `open` (browser path, with the basePath). */
   closeHref: string;
-  /** Row id to focus after closing (matches `data-drawer-return` on the row link). */
+  /** Row to focus after closing (matches `data-drawer-return` on the row link); default: `?open=`. */
   returnId?: string;
   /** Splits a long record into sections; rendered after `children`. */
   tabs?: readonly ModalTab[];
@@ -59,18 +62,34 @@ export function RecordModal({
   const ref = useRef<HTMLDialogElement>(null);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const router = useRouter();
-  const [tab, setTab] = useState(tabs?.[0]?.key);
+  // The open section lives in the URL, so a reload or a shared link keeps it.
+  const inUrl = useSyncExternalStore(
+    noSubscribe,
+    () => new URLSearchParams(location.search).get('section'),
+    () => null,
+  );
+  const [chosen, setChosen] = useState<string>();
+  const tab = chosen ?? (tabs?.some((t) => t.key === inUrl) ? inUrl! : tabs?.[0]?.key);
+  const chooseTab = (key: string) => {
+    setChosen(key);
+    const url = new URL(location.href);
+    url.searchParams.set('section', key);
+    history.replaceState(null, '', url);
+  };
+  // Rendered open so it paints with the page, not after hydration (ops.css); this makes it the real modal.
   useEffect(() => {
     const dialog = ref.current;
-    if (dialog && !dialog.open) dialog.showModal();
+    if (!dialog) return;
+    dialog.removeAttribute('open');
+    dialog.showModal();
   }, []);
   const onClose = () => {
     router.replace(routerPath(closeHref), { scroll: false });
-    if (returnId) {
-      document
-        .querySelector<HTMLElement>(`[data-drawer-return="${CSS.escape(returnId)}"]`)
-        ?.focus();
-    }
+    // The row's key is the `open` value on almost every list, so most callers need not pass it.
+    const row = returnId ?? new URLSearchParams(location.search).get('open');
+    const rowLink = row && document.querySelector<HTMLElement>(`[data-drawer-return="${CSS.escape(row)}"]`);
+    // Opened from a page button (New lead): back to the page's own actions.
+    (rowLink || document.querySelector<HTMLElement>('.el-page-actions a, .el-page-actions button') || document.getElementById('main'))?.focus();
   };
   // A click on the ::backdrop targets the <dialog> itself, not its content.
   const onBackdrop = (e: MouseEvent<HTMLDialogElement>) => {
@@ -80,7 +99,7 @@ export function RecordModal({
     const next = tabs ? nextTabIndex(e.key, index, tabs.length) : null;
     if (next === null || !tabs?.[next]) return;
     e.preventDefault();
-    setTab(tabs[next].key);
+    chooseTab(tabs[next].key);
     tabRefs.current[next]?.focus();
   };
   return (
@@ -89,6 +108,7 @@ export function RecordModal({
       id={id}
       className={`el-dialog ops-modal${size === 'form' ? ' ops-modal-form' : ''}`}
       aria-labelledby={`${id}-title`}
+      open
       onClose={onClose}
       onClick={onBackdrop}
     >
@@ -123,7 +143,7 @@ export function RecordModal({
                 aria-controls={`${id}-panel-${t.key}`}
                 tabIndex={t.key === tab ? 0 : -1}
                 className="el-tab"
-                onClick={() => setTab(t.key)}
+                onClick={() => chooseTab(t.key)}
                 onKeyDown={(e) => onTabKey(e, i)}
               >
                 {t.label}

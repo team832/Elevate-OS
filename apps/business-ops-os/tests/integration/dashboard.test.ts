@@ -125,7 +125,7 @@ describe('cross-module summaries (stubbed fetch)', () => {
       }),
     );
     expect(html).toContain('Source unavailable');
-    expect(html).toContain('HTTP 503');
+    expect(html).toContain('the other workspace reported a problem');
     expect(html).toContain('Missing');
   });
 

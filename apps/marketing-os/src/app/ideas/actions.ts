@@ -44,11 +44,11 @@ export async function createIdeaAction(form: FormData): Promise<void> {
     scope: str(form, 'scope'),
     scopePrefixes: strs(form, 'scopePrefixes').length ? strs(form, 'scopePrefixes') : undefined,
   });
-  if (!parsed.success) go('ideas/new', { error: issues(parsed.error) });
+  if (!parsed.success) return go('ideas/new', { error: issues(parsed.error) });
   const res = await run((db, user) => createIdea(db, user, parsed.data));
-  if (!res.ok) go('ideas/new', { error: res.error });
+  if (!res.ok) return go('ideas/new', { error: res.error });
   const warn = res.value.duplicates.candidates.length;
-  go(`ideas/${res.value.idea.id}`, {
+  return go(`ideas/${res.value.idea.id}`, {
     notice: `Created ${res.value.idea.code}.${warn ? ` ${warn} possible duplicate(s) listed below — check them.` : ''}`,
   });
 }
@@ -56,9 +56,9 @@ export async function createIdeaAction(form: FormData): Promise<void> {
 export async function updateIdeaAction(form: FormData): Promise<void> {
   const id = str(form, 'ideaId') ?? '';
   const parsed = updateIdeaBody.safeParse(boardFields(form));
-  if (!parsed.success) go(`ideas/${id}`, { error: issues(parsed.error) });
+  if (!parsed.success) return go(`ideas/${id}`, { error: issues(parsed.error) });
   const res = await run((db, user) => updateIdea(db, user, id, parsed.data));
-  go(`ideas/${id}`, res.ok ? { notice: 'Idea saved.' } : { error: res.error });
+  return go(`ideas/${id}`, res.ok ? { notice: 'Idea saved.' } : { error: res.error });
 }
 
 /** Submit for review, approve or request changes (the service enforces who may). */
@@ -68,9 +68,9 @@ export async function reviewIdeaAction(form: FormData): Promise<void> {
     status: str(form, 'status'),
     reason: str(form, 'reason'),
   });
-  if (!parsed.success) go(`ideas/${id}`, { error: issues(parsed.error) });
+  if (!parsed.success) return go(`ideas/${id}`, { error: issues(parsed.error) });
   const res = await run((db, user) => changeIdeaStatus(db, user, id, parsed.data));
-  go(`ideas/${id}`, res.ok ? { notice: 'Review state updated.' } : { error: res.error });
+  return go(`ideas/${id}`, res.ok ? { notice: 'Review state updated.' } : { error: res.error });
 }
 
 /** "Plan it": one linked calendar item, and the owner's task when asked for. */
@@ -81,19 +81,19 @@ export async function planIdeaAction(form: FormData): Promise<void> {
     itemType: str(form, 'itemType'),
     createTask: form.get('createTask') === 'on',
   });
-  if (!parsed.success) go(`ideas/${id}`, { error: issues(parsed.error) });
+  if (!parsed.success) return go(`ideas/${id}`, { error: issues(parsed.error) });
   const { createTask, ...input } = parsed.data;
   const planned = await run((db, user) => planIdea(db, user, id, input));
-  if (!planned.ok) go(`ideas/${id}`, { error: planned.error });
+  if (!planned.ok) return go(`ideas/${id}`, { error: planned.error });
   const itemId = planned.value.item.id;
   if (createTask) {
     const task = await run((db, user) => createCalendarTask(db, user, itemId));
     if (!task.ok)
-      go(`calendar/${itemId}`, {
+      return go(`calendar/${itemId}`, {
         error: `The calendar item is saved, but the task was not created: ${task.error}`,
       });
   }
-  go(`calendar/${itemId}`, {
+  return go(`calendar/${itemId}`, {
     notice: planned.value.created
       ? 'Added to the calendar.'
       : 'This idea is already on the calendar.',

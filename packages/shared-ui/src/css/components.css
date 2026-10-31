@@ -75,102 +75,6 @@
   gap: var(--el-space-4);
 }
 
-/* --- table: a rounded well; the header row is raised; rows warm on hover -------- */
-.el-table-wrap {
-  /* Contains visually hidden text (and the hidden compact header), so it never widens the page. */
-  position: relative;
-  overflow-x: auto;
-  background: var(--el-well);
-  border: 1px solid var(--el-border);
-  border-radius: var(--el-radius-sm);
-  box-shadow: var(--el-shadow-inset);
-}
-.el-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: var(--el-text-sm);
-  font-variant-numeric: tabular-nums;
-}
-.el-table caption {
-  text-align: left;
-  padding: var(--el-space-2) var(--el-space-3);
-  color: var(--el-text-muted);
-}
-.el-table th,
-.el-table td {
-  padding: 0.625rem var(--el-space-3);
-  border-bottom: 1px solid var(--el-border);
-  text-align: left;
-  vertical-align: top;
-  overflow-wrap: break-word;
-}
-.el-table th {
-  background: var(--el-surface-muted);
-  color: var(--el-text-muted);
-  font-size: var(--el-text-xs);
-  font-weight: 650;
-  white-space: nowrap;
-  border-bottom-color: var(--el-border-strong);
-}
-.el-table tbody tr:hover {
-  background: var(--el-accent-wash);
-}
-.el-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-.el-table-compact th,
-.el-table-compact td {
-  padding: 0.5rem var(--el-space-3);
-}
-/* Compact tables: labelled blocks on phones (mobile first), a real table from 720px. */
-.el-table-compact,
-.el-table-compact tbody,
-.el-table-compact tr,
-.el-table-compact td {
-  display: block;
-}
-.el-table-compact caption {
-  display: block;
-}
-.el-table-compact thead {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-}
-.el-table-compact tr {
-  padding: var(--el-space-3);
-  border-bottom: 1px solid var(--el-border);
-}
-.el-table-compact tbody tr:last-child {
-  border-bottom: 0;
-}
-.el-table-compact td,
-.el-table-compact tbody tr:last-child td {
-  display: grid;
-  grid-template-columns: 6.5rem minmax(0, 1fr);
-  gap: var(--el-space-3);
-  padding: 0.1875rem 0;
-  border: 0;
-}
-.el-table-compact td::before {
-  content: attr(data-label);
-  color: var(--el-text-muted);
-  font-size: var(--el-text-xs);
-  font-weight: 600;
-  padding-top: 0.0625rem;
-}
-.el-table-compact td > * {
-  justify-self: start;
-}
-.el-table td.el-num,
-.el-table th.el-num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
 /* --- status pill: a tint plus a word, never colour alone ----------------------- */
 .el-badge {
   display: inline-flex;
@@ -376,9 +280,12 @@
   color: inherit;
 }
 /* Empty, error and loading: a quiet well with the brand chevron, saying what to do next. */
+/* --el-state-pad moves the chevron with the text; a state inside a table row sets it to 0. */
 .el-state {
+  --el-state-pad: var(--el-space-5);
   position: relative;
-  padding: var(--el-space-5) var(--el-space-5) var(--el-space-5) 3.25rem;
+  padding: var(--el-state-pad) var(--el-state-pad) var(--el-state-pad)
+    calc(var(--el-state-pad) + 1.75rem);
   border-radius: var(--el-radius);
   background: var(--el-well);
   box-shadow: var(--el-shadow-inset);
@@ -386,8 +293,8 @@
 .el-state::before {
   content: '';
   position: absolute;
-  left: var(--el-space-5);
-  top: calc(var(--el-space-5) + 0.4rem);
+  left: var(--el-state-pad);
+  top: calc(var(--el-state-pad) + 0.4rem);
   width: 0.625rem;
   height: 0.625rem;
   border-top: 3px solid var(--el-accent);
@@ -499,6 +406,12 @@
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--el-text);
+  /* A figure breaks at a space, never in the middle of a number. */
+  overflow-wrap: normal;
+}
+.el-stat-value-long {
+  font-size: var(--el-text-md);
+  line-height: 2.15rem;
 }
 .el-stat-note,
 .el-metric-note {
@@ -510,6 +423,15 @@
 .el-metric[data-status='missing'] {
   background: var(--el-well);
   box-shadow: var(--el-shadow-inset), var(--el-edge);
+}
+/* Phones show two tiles a row: a rupee figure has to fit half a screen. */
+@media (max-width: 719.98px) {
+  .el-stat {
+    padding: var(--el-space-3) var(--el-space-4);
+  }
+  .el-stat-value {
+    font-size: var(--el-text-lg);
+  }
 }
 .el-stat-missing .el-stat-value,
 .el-metric[data-status='missing'] .el-metric-value {
@@ -644,8 +566,9 @@ a.el-journey-body:focus-visible {
   background: var(--el-surface);
   box-shadow: var(--el-shadow);
 }
+/* Stages stay opaque: the line that joins them runs behind, never through the words. */
 .el-journey-stage[data-state='current'] {
-  background: var(--el-accent-soft);
+  background: linear-gradient(var(--el-accent-soft), var(--el-accent-soft)), var(--el-surface);
   box-shadow: inset 0 0 0 2px var(--el-accent);
 }
 .el-journey-stage[data-state='current'] .el-journey-body {
@@ -664,28 +587,23 @@ a.el-journey-body:focus-visible {
   transform: rotate(45deg);
 }
 .el-journey-stage[data-state='upcoming'] {
-  background: transparent;
+  background: var(--el-well);
   box-shadow: inset 0 0 0 1px var(--el-border-strong);
 }
 
 /* --- tabs (in-page view switch): a pill segmented control ----------------------- */
+/* Wraps instead of hiding the last tabs behind a scrollbar; radius-lg is a pill on one row. */
 .el-tablist {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   width: fit-content;
   max-width: 100%;
   padding: 3px;
   border: 1px solid var(--el-border);
-  border-radius: var(--el-radius-pill);
+  border-radius: var(--el-radius-lg);
   background: var(--el-well);
   box-shadow: var(--el-shadow-inset);
-  overflow-x: auto;
-}
-/* Phones: wrap instead of hiding the last tabs off-screen. */
-@media (max-width: 719px) {
-  .el-tablist {
-    flex-wrap: wrap;
-  }
 }
 .el-tab {
   display: inline-flex;
@@ -863,7 +781,11 @@ a.el-journey-body:focus-visible {
   gap: var(--el-space-2);
   align-items: flex-end;
 }
+/* Filter fields line up in equal columns, whatever their longest option happens to be. */
 .el-inline-form .el-field {
+  flex: 1 1 10rem;
+  min-width: 0;
+  max-width: 20rem;
   margin: 0;
 }
 
@@ -881,39 +803,6 @@ a.el-journey-body:focus-visible {
   }
 }
 @media (min-width: 720px) {
-  .el-table-compact {
-    display: table;
-  }
-  .el-table-compact caption {
-    display: table-caption;
-  }
-  .el-table-compact thead {
-    position: static;
-    width: auto;
-    height: auto;
-    overflow: visible;
-    clip: auto;
-    display: table-header-group;
-  }
-  .el-table-compact tbody {
-    display: table-row-group;
-  }
-  .el-table-compact tr {
-    display: table-row;
-    padding: 0;
-  }
-  .el-table-compact td,
-  .el-table-compact tbody tr:last-child td {
-    display: table-cell;
-    padding: 0.5rem var(--el-space-3);
-    border-bottom: 1px solid var(--el-border);
-  }
-  .el-table-compact tbody tr:last-child td {
-    border-bottom: 0;
-  }
-  .el-table-compact td::before {
-    content: none;
-  }
   .el-button {
     min-height: 2.5rem;
   }

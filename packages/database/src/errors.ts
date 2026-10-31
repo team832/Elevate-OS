@@ -2,6 +2,44 @@
  * Helpers to recognise PostgreSQL errors through Drizzle's wrappers
  * (DrizzleQueryError keeps the driver error in `cause`).
  */
+import { DrizzleQueryError } from 'drizzle-orm/errors';
+import { PgPreparedQuery } from 'drizzle-orm/pg-core';
+
+/**
+ * Drizzle writes every bound value into a failed query's message, and PostgreSQL quotes values in
+ * `detail`, `where`, `hint` and some messages. Whatever handles the error next (our logger,
+ * console.error, Next itself, an event's stored last error) prints that, so it goes here, where the
+ * error is made. The statement holds only placeholders; code, constraint, table and column stay.
+ */
+function withoutValues(error: unknown): unknown {
+  if (!(error instanceof DrizzleQueryError)) return error;
+  const retitle = (e: { message: string; stack?: string }, message: string) => {
+    if (e.stack) e.stack = e.stack.replace(e.message, () => message);
+    e.message = message;
+  };
+  retitle(error, `Failed query: ${error.query}`);
+  (error as unknown as { params: unknown[] }).params = [];
+  const pg = findPgError(error.cause);
+  if (pg) {
+    retitle(pg, `PostgreSQL error ${pg.code}`);
+    // `params` and `queryOptions` are PGlite's own copies.
+    for (const field of ['detail', 'hint', 'where', 'internalQuery', 'params', 'queryOptions'])
+      delete (pg as unknown as Record<string, unknown>)[field];
+  }
+  return error;
+}
+
+// shortcut: patches an @internal Drizzle method, pinned by the exact version; query-errors.test.ts fails if it moves.
+const prepared = PgPreparedQuery.prototype as unknown as {
+  queryWithCache(...args: unknown[]): Promise<unknown>;
+};
+const runQuery = prepared.queryWithCache;
+prepared.queryWithCache = function (this: unknown, ...args: unknown[]) {
+  return runQuery.apply(this, args).catch((error: unknown) => {
+    throw withoutValues(error);
+  });
+};
+
 export interface PgErrorLike {
   code: string;
   constraint?: string;

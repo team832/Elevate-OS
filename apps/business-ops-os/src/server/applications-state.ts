@@ -3,7 +3,7 @@
  * would print, version/staleness checks, the confirmation re-check, and the locked status change.
  */
 import { createHash } from 'node:crypto';
-import { and, asc, desc, eq, isNull, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, notInArray, or } from 'drizzle-orm';
 import {
   opsAdmissions,
   opsApplicationForms,
@@ -42,6 +42,7 @@ import {
   type ApplicationStatus,
 } from '../domain/applications';
 import { EMPTY_FORM_FIELDS, type ApplicationFormFields } from '../domain/admission-form';
+import { ledgerSums, type FeeRecordLike } from '../domain/fees';
 import { leadOwnerOf, lockAccessible, readinessOf } from './admissions';
 import type { AccessScope, Actor } from './context';
 import { inOrder, opsAudit, rowById } from './ops-common';
@@ -82,7 +83,7 @@ export async function liveSnapshot(
 ): Promise<ApplicationSnapshot> {
   const bundle = await bundleOf(tx, app);
   const primary = bundle[0]!.a;
-  const [[lead], [student], guardians, [plan]] = await inOrder([
+  const [[lead], [student], guardians, plans] = await inOrder([
     tx.select().from(opsLeads).where(eq(opsLeads.id, primary.leadId)),
     tx.select({ fullName: students.fullName }).from(students).where(eq(students.id, app.studentId)),
     tx
@@ -93,8 +94,21 @@ export async function liveSnapshot(
     tx
       .select()
       .from(opsFeePlans)
-      .where(and(eq(opsFeePlans.admissionId, primary.id), eq(opsFeePlans.status, 'active'))),
+      .where(
+        and(
+          inArray(
+            opsFeePlans.admissionId,
+            bundle.map((b) => b.a.id),
+          ),
+          eq(opsFeePlans.status, 'active'),
+        ),
+      ),
   ]);
+  // One agreement covers the bundle (D-039), on whichever of its cases it was made.
+  const plan =
+    plans.find((p) => p.academicYear === app.academicYear) ??
+    plans.find((p) => p.admissionId === primary.id) ??
+    plans[0];
   const instalments = plan
     ? await tx
         .select()
@@ -231,23 +245,40 @@ export const gapSettings = (s: ResolvedSettings) => ({
   paymentRule: s['admission.payment_gate'].value.rule,
 });
 
-/** Money received (not voided, net of refunds) per charge category for the bundle's primary case. */
-async function paidOf(tx: Database, admissionId: AdmissionId) {
-  const rows = await tx
-    .select({
-      category: opsFeeRecords.chargeCategory,
-      net: sql<string>`coalesce(sum(case ${opsFeeRecords.kind} when 'received' then ${opsFeeRecords.amountPaise} when 'refund' then -${opsFeeRecords.amountPaise} else 0 end), 0)`,
-    })
+/** Money received (voided and reversed rows never count, net of refunds) per charge across the bundle's cases. */
+export async function paidOf(tx: Database, admissionIds: readonly AdmissionId[]) {
+  const rows = (await tx
+    .select()
     .from(opsFeeRecords)
-    .where(
-      and(eq(opsFeeRecords.admissionId, admissionId), sql`${opsFeeRecords.status} <> 'voided'`),
-    )
-    .groupBy(opsFeeRecords.chargeCategory);
-  const net = (c: string) => Number(rows.find((r) => r.category === c)?.net ?? 0);
+    .where(inArray(opsFeeRecords.admissionId, [...admissionIds]))) as FeeRecordLike[];
+  const net = (category: string) => {
+    const s = ledgerSums(rows.filter((r) => r.chargeCategory === category));
+    return s.received - s.refund;
+  };
   return { registrationPaise: net('registration'), tuitionPaise: net('tuition') };
 }
 
 /** Everything final confirmation re-checks, except the password (shared by the preview and confirm). */
+/** At most this many signed applications are checked per read: each check runs about 18 queries. */
+export const APPROVAL_CHECK_LIMIT = 50;
+
+/** The confirmation check of signed applications, oldest first: one reading for the Overview tile and the list it opens. */
+export const approvalChecks = (
+  db: Database,
+  rows: readonly { app: ApplicationRow; admission: AdmissionRow }[],
+  settings: ResolvedSettings,
+) =>
+  Promise.all(
+    rows
+      .filter((a) => a.app.status === 'signatures_confirmed')
+      .sort((a, b) => +a.app.createdAt - +b.app.createdAt)
+      .slice(0, APPROVAL_CHECK_LIMIT)
+      .map(async (a) => ({
+        id: a.app.id,
+        ...(await confirmationCheck(db, a.app, a.admission, settings)),
+      })),
+  );
+
 export async function confirmationCheck(
   tx: Database,
   app: ApplicationRow,
@@ -255,7 +286,7 @@ export async function confirmationCheck(
   settings: ResolvedSettings,
 ) {
   const state = await currentState(tx, app, settings);
-  const [[signature], docs, paid, leadOwner, readiness, bundle] = await inOrder([
+  const [[signature], docs, leadOwner, readiness, bundle] = await inOrder([
     tx
       .select({ s: opsSignatureConfirmations, formVersion: opsApplicationForms.version })
       .from(opsSignatureConfirmations)
@@ -277,11 +308,14 @@ export async function confirmationCheck(
           isNull(opsKycDocuments.supersededAt),
         ),
       ),
-    () => paidOf(tx, admission.id),
     () => leadOwnerOf(tx, admission),
     () => readinessOf(tx, admission),
     () => bundleOf(tx, app),
   ]);
+  const paid = await paidOf(
+    tx,
+    bundle.map((b) => b.a.id),
+  );
   const declarations = settings['admissions.declarations'];
   const gaps = confirmationGaps({
     snapshot: state.live,

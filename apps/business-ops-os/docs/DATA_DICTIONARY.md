@@ -88,7 +88,7 @@ One member of staff (teacher, counsellor, manager…), with or without a login. 
 
 One real person who is (or was) a student: the canonical student identity shared by Business Ops and Academic OS. No contact data here.
 
-- **Written by:** `src/server/pipeline.ts`
+- **Written by:** `src/server/leads.ts`, `src/server/pipeline.ts`
 - **Sample or real:** Own flag: `is_sample = true` marks a sample row.
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
@@ -103,7 +103,7 @@ One real person who is (or was) a student: the canonical student identity shared
 
 One login account. Written only by authentication and platform admin.
 
-- **Written by:** `src/server/hr-staff-actions.ts`
+- **Written by:** `src/server/hr-staff-actions.ts`, `src/server/organisation.ts`
 - **Sample or real:** Reference or configuration data (not person data).
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |

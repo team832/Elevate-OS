@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { metric } from '@elevate/shared-contracts';
 import {
+  fmtDaysIn,
   JourneyRail,
   PageHeader,
   AppShell,
@@ -18,10 +19,12 @@ import {
   Tabs,
   defaultBreadcrumbs,
   initialsOf,
+  loadsNewPage,
   navSections,
   nextTabIndex,
   type AppShellProps,
   type NavItem,
+  fmtDay,
 } from '../src/index';
 
 const meta = {
@@ -30,7 +33,33 @@ const meta = {
   unit: 'count' as const,
 };
 
+describe('fmtDay', () => {
+  it.each([
+    ['2026-10-30', undefined, '30 Oct 2026'],
+    ['2026-02-01', undefined, '1 Feb 2026'],
+    [null, undefined, '—'],
+    [null, 'Not recorded', 'Not recorded'],
+    ['not-a-date', undefined, 'not-a-date'],
+  ])('%s gives %s', (iso, missing, expected) => {
+    expect(fmtDay(iso, missing)).toBe(expected);
+  });
+
+  it.each([
+    ['2026-10-01 to open', '1 Oct 2026 to open'],
+    ['added 2026-10-21, checked 2026-02-01', 'added 21 Oct 2026, checked 1 Feb 2026'],
+    ['STU-2026-10-01', 'STU-2026-10-01'],
+  ])('dates inside %j read as words', (text, expected) => {
+    expect(fmtDaysIn(text)).toBe(expected);
+  });
+});
+
 describe('StatTile — missing is not zero', () => {
+  it('names its window in words, never raw ISO dates', () => {
+    const html = renderToStaticMarkup(<StatTile label="Classes" metric={metric.ok(0, meta)} />);
+    expect(html).toContain('(12 Oct 2026 to 18 Oct 2026)');
+    expect(html).not.toContain('2026-10-12');
+  });
+
   it('renders a measured zero as 0', () => {
     const html = renderToStaticMarkup(
       <StatTile label="Classes delivered" metric={metric.ok(0, meta)} />,
@@ -242,6 +271,30 @@ describe('AppShell sidebar', () => {
   });
 });
 
+describe('loadsNewPage: when the pending bar shows', () => {
+  const nav = (url: string, over = {}) => ({
+    destination: { url, sameDocument: false },
+    downloadRequest: null,
+    formData: null,
+    ...over,
+  });
+  it.each([
+    ['a page', nav('http://x/ops/fees'), true],
+    ['another workspace', nav('http://y/academic'), true],
+    ['sign-out, a POST under /api/', nav('http://x/ops/api/v1/auth/logout', { formData: {} }), true],
+    ['a PDF link under /api/', nav('http://x/ops/api/v1/students/1/report/2/pdf'), false],
+    ['a link with download', nav('http://x/ops/file', { downloadRequest: '' }), false],
+    ['a phone link', nav('tel:+910000000000'), false],
+    [
+      'a jump within the page',
+      nav('', { destination: { url: 'http://x/ops/fees#a', sameDocument: true } }),
+      false,
+    ],
+  ])('%s', (_name, event, want) => {
+    expect(loadsNewPage(event)).toBe(want);
+  });
+});
+
 describe('navSections and breadcrumbs', () => {
   it('groups items in order and flattens one-item groups named like the item', () => {
     const sections = navSections(opsNav.map((n, i) => ({ ...n, active: i === 3 })));
@@ -368,8 +421,8 @@ describe('DataTable and states', () => {
       />,
     );
     expect(html).toContain('class="el-table el-table-compact"');
-    expect(html).toContain('<td data-label="Name">CLAT</td>');
-    expect(html).toContain('class="el-num" data-label="Count">3</td>');
+    expect(html).toContain('<td data-label="Name"><div>CLAT</div></td>');
+    expect(html).toContain('class="el-num" data-label="Count"><div>3</div></td>');
   });
   it('error state: a reference only when it exists, and an action slot for Try again', () => {
     const plain = renderToStaticMarkup(<ErrorState />);

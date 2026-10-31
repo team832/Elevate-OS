@@ -6,7 +6,7 @@ import { go, run, str, strs } from '../actions/common';
 
 export async function updateCampaignAction(form: FormData): Promise<void> {
   const id = str(form, 'campaignId') ?? '';
-  if (!z.uuid().safeParse(id).success) go('campaigns', { error: 'Campaign not found.' });
+  if (!z.uuid().safeParse(id).success) return go('campaigns', { error: 'Campaign not found.' });
   const back = `campaigns/${id}`;
   const parsed = updateCampaignBody.safeParse({
     name: str(form, 'name'),
@@ -19,10 +19,10 @@ export async function updateCampaignAction(form: FormData): Promise<void> {
     channels: strs(form, 'channels'),
   });
   if (!parsed.success)
-    go(back, {
+    return go(back, {
       error: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
     });
   const res = await run((db, user) => updateCampaign(db, user, id, parsed.data));
-  if (!res.ok) go(back, { error: res.error });
-  go(back, { notice: 'Campaign saved.' });
+  if (!res.ok) return go(back, { error: res.error });
+  return go(back, { notice: 'Campaign saved.' });
 }

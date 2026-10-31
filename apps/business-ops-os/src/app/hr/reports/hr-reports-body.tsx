@@ -1,5 +1,5 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { EmptyState } from '@elevate/shared-ui';
+import { ListEmpty } from '@elevate/shared-ui';
 import { addDays, istToday } from '../../../domain/dates';
 import {
   KIND_LABELS,
@@ -23,6 +23,7 @@ import { BarChart, StatCard } from '../../../ui/charts';
 import { fmtDate, fmtDateTime } from '../../../ui/format';
 import { load } from '../../../ui/frame';
 import { listHref, Pager, SearchPanel } from '../../../ui/list-controls';
+import { openHref } from '../../../ui/open-link';
 import { RecordTable } from '../../../ui/record-table';
 import { Segment } from '../../../ui/sections';
 import { ReportPane } from '../../tasks/reports/_components/report-views';
@@ -109,9 +110,10 @@ export async function ByPeriod({ user, sp }: { user: AuthenticatedUser; sp: Para
         }
         linkColumn="name"
         empty={
-          <EmptyState
-            title="No one matches"
-            description="Clear a filter, or check which departments HR manages in HR settings."
+          <ListEmpty
+            noun="employees"
+            params={sp}
+            first="This lists the staff HR manages: check which departments HR manages in HR settings."
           />
         }
         columns={[
@@ -342,12 +344,12 @@ export async function Summary({ user, sp }: { user: AuthenticatedUser; sp: Param
               {
                 label: 'Due, not submitted',
                 value: b.dueNotSubmitted,
-                href: '/ops/hr/tasks?tab=overdue',
+                href: openHref(user, '/ops/hr/tasks?tab=overdue'),
               },
               {
                 label: 'Submitted, waiting for review',
                 value: b.awaitingReview,
-                href: '/ops/hr/review',
+                href: openHref(user, '/ops/hr/review'),
               },
               { label: 'Changes requested, not resubmitted', value: b.changesRequested },
               {

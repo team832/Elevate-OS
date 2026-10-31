@@ -1,5 +1,5 @@
 /** Renders conflict-check results: hard constraints separately from preferences. Never says "optimal". */
-import { Alert, DataTable, StatusBadge } from '@elevate/shared-ui';
+import { Alert, DataTable, StatusBadge, fmtDay } from '@elevate/shared-ui';
 import { StateBadge } from './badges';
 
 interface Finding {
@@ -17,7 +17,7 @@ export function ConflictList({ verdict, hard, preferences, notes = [] }: { verdi
       rowKey={(r) => r.key}
       columns={[
         { key: 'code', header: 'Constraint', render: (r) => r.code.replace(/_/g, ' ').toLowerCase() },
-        { key: 'date', header: 'Date', render: (r) => r.date ?? '—' },
+        { key: 'date', header: 'Date', render: (r) => fmtDay(r.date) },
         { key: 'message', header: 'Detail', render: (r) => <>{r.message} {r.unverified ? <StatusBadge tone="danger">date unverified</StatusBadge> : null}</> },
       ]}
     />

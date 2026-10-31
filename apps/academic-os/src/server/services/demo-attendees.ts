@@ -16,7 +16,7 @@ import {
   type Database,
 } from '@elevate/database';
 import { fetchInternal, withTransaction } from '@elevate/server-kit';
-import { ConflictError, NotFoundError, ValidationError, academicDemoAttendanceV1Schema, opsDemoSessionsForDayV1Schema, type AcademicDemoAttendanceV1, type OpsDemoSessionsForDayV1, type SourceResult } from '@elevate/shared-contracts';
+import { ConflictError, NotFoundError, ValidationError, sourceReasonWords, academicDemoAttendanceV1Schema, opsDemoSessionsForDayV1Schema, type AcademicDemoAttendanceV1, type OpsDemoSessionsForDayV1, type SourceResult } from '@elevate/shared-contracts';
 import type { StudentIdentityId } from '@elevate/shared-types';
 import { audit, resolveScope, type Actor } from '../context';
 import { demoAttendeesOf } from './attendance';
@@ -50,7 +50,7 @@ export async function addDemoAttendee(db: Database, actor: Actor, input: { sessi
   const { scope, session } = await sessionFor(db, actor, input.sessionId);
   if (session.status === 'cancelled' || session.status === 'rescheduled') throw new ValidationError(`The session was ${session.status}; add demo students to the replacement.`);
   const source = await load(session.date);
-  if (source.status === 'unavailable') throw new ConflictError(`Business Ops unavailable (${source.reason}); try again later.`);
+  if (source.status === 'unavailable') throw new ConflictError(`Business Ops unavailable (${sourceReasonWords(source.reason)}); try again later.`);
   const item = source.data.items.find((i) => i.demoSessionId === input.opsDemoSessionId);
   if (!item) throw new ValidationError('Business Ops has no such demo session on this class date.');
   return withTransaction(db, async (tx) => {

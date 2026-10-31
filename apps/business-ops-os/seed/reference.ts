@@ -1,13 +1,10 @@
 /**
- * Reference data: the configurable lead-source list (OPS-002, from the legacy
- * CRM Import dropdown), the 12 system lead stages (brief 23 Oct 2026 §11) and the SAMPLE staff (D-036). Business Ops writes
+ * The lead reference seeds (./lead-reference.ts) plus the SAMPLE staff (D-036). Business Ops writes
  * core.staff_members as steward.
  */
 import { eq, like } from 'drizzle-orm';
-import workflows from '../../../data/legacy/ops/workflows.json';
 import {
   departments,
-  opsLeadSources,
   opsStaffProfiles,
   opsStaffSubjectCapabilities,
   staffMembers,
@@ -16,29 +13,9 @@ import {
 } from '@elevate/database';
 import { defineSeed, syncStaffHistory } from '@elevate/database/seed';
 import type { StaffMemberId } from '@elevate/shared-types';
-import { ensureSystemLeadStages } from '../src/server/lead-stages';
+import { leadReferenceSeeds } from './lead-reference';
 
-/** Legacy label → stable code. "Unknown" stays its own source (BR-OPS-5). */
-export function leadSourceCode(label: string): string {
-  return label
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-}
-
-export async function seedLeadSources(db: Database) {
-  const labels = (workflows as { lead_sources: { crm_first_enquiry_source_dropdown: string[] } })
-    .lead_sources.crm_first_enquiry_source_dropdown;
-  let sortOrder = 0;
-  for (const label of labels) {
-    sortOrder += 10;
-    const code = leadSourceCode(label);
-    await db
-      .insert(opsLeadSources)
-      .values({ code, label, sortOrder })
-      .onConflictDoUpdate({ target: opsLeadSources.code, set: { label, sortOrder } });
-  }
-}
+export { leadSourceCode, seedLeadSources } from './lead-reference';
 
 /**
  * SAMPLE staff (D-036): one sample teacher per demo subject, without logins, plus the
@@ -131,20 +108,7 @@ export async function seedStaff(db: Database) {
 }
 
 export const referenceSeeds = [
-  defineSeed({
-    name: 'ops.lead-sources',
-    module: 'ops',
-    description:
-      '12 lead sources from the legacy CRM Import dropdown (Unknown kept as its own source)',
-    run: ({ db }) => seedLeadSources(db),
-  }),
-  defineSeed({
-    name: 'ops.lead-stages',
-    module: 'ops',
-    description:
-      'The 12 system lead stages (reference data, not sample: kept by db:clear-samples; labels, order and on/off stay the marketing manager’s)',
-    run: ({ db }) => ensureSystemLeadStages(db),
-  }),
+  ...leadReferenceSeeds,
   defineSeed({
     name: 'ops.staff',
     module: 'ops',

@@ -32,6 +32,9 @@ const academic = appOrigin('academic');
 const ops = appOrigin('ops');
 
 const nextConfig: NextConfig = {
+  env: { ELEVATE_BASE_PATH: '' },
+  // Only `npm run release:package` sets this; dev, office and next start keep the normal output.
+  ...(process.env.ELEVATE_RELEASE_STANDALONE ? { output: 'standalone' as const } : {}),
   reactStrictMode: true,
   poweredByHeader: false,
   // Static security headers on every response; the per-request CSP is set in src/proxy.ts.
@@ -40,6 +43,11 @@ const nextConfig: NextConfig = {
       // Module zones are excluded: their own app sets these headers and its CSP (src/proxy.ts).
       {
         source: '/((?!marketing(?:/|$)|academic(?:/|$)|ops(?:/|$)).*)',
+        headers: securityHeaders(),
+      },
+      // These stay here (see rewrites), so the 404 is ours and needs the headers.
+      {
+        source: '/:zone(marketing|academic|ops)/api/internal/:rest*',
         headers: securityHeaders(),
       },
     ];
@@ -67,16 +75,18 @@ const nextConfig: NextConfig = {
    * Multi-zone routing (D-004): the platform serves `/`, and forwards each
    * module's base path to its own app. The browser stays on this origin, so
    * the `elevate_session` cookie reaches every zone. Rewrites are resolved at
-   * build/start time from the *_OS_URL variables.
+   * build/start time from the *_OS_URL variables. /<zone>/api/internal/** is not forwarded:
+   * servers call it on the zone's own origin, so it never sits on the public host.
    */
   async rewrites() {
+    const path = ':path((?!api/internal(?:/|$)).+)';
     return [
       { source: '/marketing', destination: `${marketing}/marketing` },
-      { source: '/marketing/:path+', destination: `${marketing}/marketing/:path+` },
+      { source: `/marketing/${path}`, destination: `${marketing}/marketing/:path` },
       { source: '/academic', destination: `${academic}/academic` },
-      { source: '/academic/:path+', destination: `${academic}/academic/:path+` },
+      { source: `/academic/${path}`, destination: `${academic}/academic/:path` },
       { source: '/ops', destination: `${ops}/ops` },
-      { source: '/ops/:path+', destination: `${ops}/ops/:path+` },
+      { source: `/ops/${path}`, destination: `${ops}/ops/:path` },
     ];
   },
 };

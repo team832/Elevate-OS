@@ -1,7 +1,6 @@
 'use server';
 
-import { redirect } from 'next/navigation';
-import { toAppPath } from '@elevate/server-kit/next';
+import { actionRedirect } from '@elevate/server-kit/next';
 import {
   CALENDAR_ACTION_TEXT,
   isCalendarAction,
@@ -39,25 +38,25 @@ export async function createItemAction(form: FormData): Promise<void> {
     ...formFields(form),
     plannedAt: str(form, 'plannedAt'),
   });
-  if (!parsed.success) go('calendar/new', { error: issues(parsed.error) });
+  if (!parsed.success) return go('calendar/new', { error: issues(parsed.error) });
   const res = await run((db, user) => createCalendarItem(db, user, parsed.data));
-  if (!res.ok) go('calendar/new', { error: res.error });
-  go(`calendar/${res.value.id}`, { notice: 'Calendar item saved.' });
+  if (!res.ok) return go('calendar/new', { error: res.error });
+  return go(`calendar/${res.value.id}`, { notice: 'Calendar item saved.' });
 }
 
 export async function updateItemAction(form: FormData): Promise<void> {
   const id = str(form, 'itemId') ?? '';
   const parsed = updateCalendarItemBody.safeParse(formFields(form));
-  if (!parsed.success) go(`calendar/${id}`, { error: issues(parsed.error) });
+  if (!parsed.success) return go(`calendar/${id}`, { error: issues(parsed.error) });
   const res = await run((db, user) => updateCalendarItem(db, user, id, parsed.data));
-  go(`calendar/${id}`, res.ok ? { notice: 'Changes saved.' } : { error: res.error });
+  return go(`calendar/${id}`, res.ok ? { notice: 'Changes saved.' } : { error: res.error });
 }
 
 /** One workflow button (plan, start, submit, approve, request changes, schedule, publish, cancel). */
 export async function itemStepAction(form: FormData): Promise<void> {
   const id = str(form, 'itemId') ?? '';
   const action = str(form, 'step');
-  if (!isCalendarAction(action)) go(`calendar/${id}`, { error: 'Unknown step.' });
+  if (!isCalendarAction(action)) return go(`calendar/${id}`, { error: 'Unknown step.' });
   const parsed = calendarActionBody.safeParse(
     Object.fromEntries(
       ['plannedAt', 'note', 'reason', 'publishedAt', 'url', 'evidence'].flatMap((k) =>
@@ -65,9 +64,9 @@ export async function itemStepAction(form: FormData): Promise<void> {
       ),
     ),
   );
-  if (!parsed.success) go(`calendar/${id}`, { error: issues(parsed.error) });
+  if (!parsed.success) return go(`calendar/${id}`, { error: issues(parsed.error) });
   const res = await run((db, user) => actOnCalendarItem(db, user, id, action, parsed.data));
-  go(
+  return go(
     `calendar/${id}`,
     res.ok ? { notice: `${CALENDAR_ACTION_TEXT[action].button}: done.` } : { error: res.error },
   );
@@ -86,14 +85,17 @@ export async function moveItemAction(form: FormData): Promise<void> {
     res.ok ? 'notice' : 'error',
     res.ok ? 'Moved. The original date stays on the item.' : res.error,
   );
-  redirect(toAppPath(`${modulePath(back ? 'calendar' : `calendar/${id}`)}?${qs}`, MODULE.basePath));
+  return actionRedirect(
+    `${modulePath(back ? 'calendar' : `calendar/${id}`)}?${qs}`,
+    MODULE.basePath,
+  );
 }
 
 /** The item's Ops task, created by the Ops task service. */
 export async function createTaskAction(form: FormData): Promise<void> {
   const id = str(form, 'itemId') ?? '';
   const res = await run((db, user) => createCalendarTask(db, user, id));
-  go(
+  return go(
     `calendar/${id}`,
     res.ok
       ? {

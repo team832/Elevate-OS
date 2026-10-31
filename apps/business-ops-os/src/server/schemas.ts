@@ -212,6 +212,8 @@ export const OPS_JOBS = [
   'enrolment-replies',
   'demo-academic-marks',
   'task-reminders',
+  'enrolment-exits',
+  'housekeeping',
 ] as const;
 export const jobParams = z.object({ job: z.enum(OPS_JOBS) });
 export const dashboardQuery = z.object({

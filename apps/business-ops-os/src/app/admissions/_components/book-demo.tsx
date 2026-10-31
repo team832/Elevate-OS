@@ -5,7 +5,7 @@
  * what the lead already has).
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { EmptyState } from '@elevate/shared-ui';
+import { Alert, EmptyState } from '@elevate/shared-ui';
 import { bookableAdmissions } from '../../../server/demos';
 import { formOptions } from '../../../server/options';
 import { loadSettings } from '../../../server/settings';
@@ -35,8 +35,8 @@ export async function BookDemo({
     return (
       <EmptyState
         title="No student is ready for a demo"
-        description="A demo is booked after counselling. Open the lead, go to its admission case and record the counselling there, then come back."
-        action={<a href="/ops/leads">Go to leads</a>}
+        description="A demo is booked after counselling. Book the session from the lead's admission case; once it is held, open it under Events and counselling and use Record outcome, then come back."
+        action={<a href="/ops/meetings">Open Events and counselling</a>}
       />
     );
   /** Slot `k` of day `day`: the first class is required, the second optional (dropped if blank). */
@@ -74,13 +74,20 @@ export async function BookDemo({
   ]).flat();
   return (
     <>
+      {leadId && !cases.some((c) => c.leadId === leadId) ? (
+        <Alert tone="warning" title="This lead cannot book a demo yet">
+          A demo is booked after counselling, and only when no demo is open.{' '}
+          <a href={`/ops/leads/${leadId}`}>Open the lead</a> to book the session from its admission
+          case; once held, record its outcome under{' '}
+          <a href="/ops/meetings">Events and counselling</a>. Or choose another student below.
+        </Alert>
+      ) : null}
       <p className="el-field-hint">
         Only counselled students without an open demo are listed. Missing someone? Record their
-        counselling on the admission case first: <a href="/ops/leads">open the lead</a>, then its
-        admission case.
+        counselling outcome under <a href="/ops/meetings">Events and counselling</a>.
       </p>
       <p className="el-field-hint">
-        {count.value.count} demo days ({count.decisionState} setting), each on its own date with one
+        {count.value.count} demo days, each on its own date with one
         or more classes. Teachers with a login get an in-app notification. Details left blank keep
         what the lead already has.
       </p>

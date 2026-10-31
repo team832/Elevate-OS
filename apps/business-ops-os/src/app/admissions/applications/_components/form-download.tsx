@@ -18,8 +18,8 @@ export function FormDownload({ applicationId, label }: { applicationId: string; 
     const res = await fetch(`/ops/api/v1/applications/${applicationId}/form`, {
       method: 'POST',
       credentials: 'same-origin',
-    });
-    if (!res.ok) {
+    }).catch(() => null);
+    if (!res?.ok) {
       setError(await refusal(res, 'The form could not be generated'));
       setBusy(false);
       return;

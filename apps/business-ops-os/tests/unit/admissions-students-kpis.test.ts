@@ -84,6 +84,8 @@ describe('student identity and directory', () => {
       fullName: 'A',
       studentPhone: '+919800000000',
       guardianName: 'G',
+      dateOfBirth: '2010-05-04',
+      address: 'Sample Road, Sikar',
     };
     expect(redactStudentPrivate(rec, false)).toEqual({
       fullName: 'A',
@@ -115,6 +117,9 @@ describe('handoff view and retry rule', () => {
   };
   it('never says enrolled before Academic confirmed', () => {
     expect(deriveHandoffView(base).view).toBe('awaiting_pickup');
+    // A student who left is no longer shown as enrolled (the exit record says what Academic did).
+    expect(deriveHandoffView({ ...base, status: 'withdrawn', handoffStatus: 'enrolled' })).toMatchObject({ view: 'closed', label: 'Left after enrolment' });
+    expect(deriveHandoffView({ ...base, status: 'on_hold', handoffStatus: 'enrolled' }).view).toBe('enrolled');
     for (const [status, attempts, lastError, view] of [
       ['failed', 2, 'x', 'academic_retrying'],
       ['dead', 5, null, 'failed_needs_action'],

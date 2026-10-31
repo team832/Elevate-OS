@@ -3,6 +3,7 @@
  * §8). Fictional people only; the teacher calls through Academic OS's paths (D-072).
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { toIsoDate } from '@elevate/shared-types';
 import type { ReactNode } from 'react';
 import { prerender } from 'react-dom/static';
 import { and, eq } from 'drizzle-orm';
@@ -11,13 +12,16 @@ import {
   notifications,
   opsStaffTasks,
   opsTaskReminders,
+  staffMembers,
   userPreferences,
+  users,
 } from '@elevate/database';
 import { notify } from '@elevate/notifications';
 import { authedRequest, callRoute, setupTestDatabase } from '@elevate/testing';
 import { deadlineInstant } from '../../src/domain/staff-tasks';
 import { updateHrSetting } from '../../src/server/hr-settings';
 import { taskDetail } from '../../src/server/task-detail';
+import { openNotification } from '../../src/server/notification-open';
 import { dueWork, runTaskReminders } from '../../src/server/task-reminders';
 import { GET as inbox } from '../../src/app/api/v1/notifications/route';
 import { GET as open } from '../../src/app/notifications/[id]/open/route';
@@ -145,6 +149,49 @@ describe('task reminder job', () => {
     expect(unack.length).toBeLessThan(3 * 2);
   });
 
+  it('a disabled login is never reminded: the manager is told who left, else operations managers; nobody is asked to acknowledge for them (PPL-006)', async () => {
+    const opsManager = await staffUser(ctx.db, ['operations_manager'], {
+      name: 'Sample Ops Manager',
+    });
+    const manager = await staffUser(ctx.db, ['teacher'], { name: 'Sample Manager' });
+    const withManager = await staffUser(ctx.db, ['teacher'], { name: 'Sample Leaver A' });
+    const noManager = await staffUser(ctx.db, ['teacher'], { name: 'Sample Leaver B' });
+    await ctx.db
+      .update(staffMembers)
+      .set({ managerId: manager.staffId as never })
+      .where(eq(staffMembers.id, withManager.staffId));
+    const due = '2030-06-01';
+    const a = await addTask(withManager, due, {
+      acknowledgedAt: null,
+      acknowledgedByUserId: null,
+      deliveredAt: new Date('2030-05-01T00:00:00Z'),
+    });
+    const b = await addTask(noManager, due);
+    for (const leaver of [withManager, noManager]) {
+      await ctx.db
+        .update(staffMembers)
+        .set({ status: 'inactive' })
+        .where(eq(staffMembers.id, leaver.staffId));
+      await ctx.db.update(users).set({ status: 'disabled' }).where(eq(users.id, leaver.id));
+    }
+    await runTaskReminders(ctx.db, { now: at(a.deadline, -2) });
+    const onA = await notesOf(a.id);
+    expect(onA.map((n) => [n.userId, n.kind])).toEqual([[manager.id, 'task.due_soon']]);
+    expect(onA[0]!.body).toContain('Sample Leaver A has left');
+    const onB = await notesOf(b.id);
+    expect(onB.map((n) => n.userId)).toEqual([opsManager.id]);
+    const first = onA.length + onB.length;
+    await runTaskReminders(ctx.db, { now: at(a.deadline, -2) });
+    expect((await notesOf(a.id)).length + (await notesOf(b.id)).length).toBe(first);
+    // The link opens for the person told.
+    const open = await openNotification(
+      ctx.db,
+      { id: manager.id, roles: ['teacher'] } as never,
+      onA[0]!.id,
+    );
+    expect(open).toMatchObject({ href: expect.stringContaining(a.id) });
+  });
+
   it('the job route needs ops:jobs:run', async () => {
     const res = await callRoute(
       runJob,
@@ -269,7 +316,7 @@ describe('notifications survive a refresh (server-side store, read through the A
 describe('due-soon and overdue panel', () => {
   it('shows the person’s overdue and due-soon open work, not later or closed work', async () => {
     const now = new Date();
-    const day = (d: number) => new Date(+now + d * 86_400_000).toISOString().slice(0, 10);
+    const day = (d: number) => toIsoDate(new Date(+now + d * 86_400_000));
     const late = await addTask(hr, day(-2), { title: 'Sample late report' });
     await addTask(hr, day(10), { title: 'Sample far-off plan' });
     await addTask(hr, day(-3), {

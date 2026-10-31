@@ -3,7 +3,8 @@
  * make from their own phone; nothing is dialled or recorded by the app. Logging goes through
  * logActivity (./leads-actions.ts); this file lists calls and keeps the next follow-up.
  */
-import { and, asc, desc, eq, gte, ilike, isNull, lt, or, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, ilike, isNull, lt, lte, or, type SQL } from 'drizzle-orm';
+import { containsPattern } from '@elevate/server-kit';
 import {
   opsFollowUps,
   opsLeadActivities,
@@ -87,17 +88,6 @@ export const CALL_LIST_LIMIT = 500;
 export async function listCalls(db: Database, actor: Actor, filters: CallFilters = {}) {
   const scope = leadScope(db, await accessScope(db, actor, 'ops:leads:read'));
   if (!scope) return [];
-  const where: SQL[] = [eq(opsLeadActivities.kind, 'call'), scope];
-  if (filters.from) where.push(gte(opsLeadActivities.occurredAt, istInstant(filters.from)));
-  if (filters.to) where.push(lt(opsLeadActivities.occurredAt, istInstant(addDays(filters.to, 1))));
-  if (filters.direction) where.push(eq(opsLeadActivities.direction, filters.direction));
-  if (filters.outcome) where.push(eq(opsLeadActivities.outcome, filters.outcome));
-  if (filters.staffId) where.push(eq(opsLeadActivities.staffId, filters.staffId as StaffMemberId));
-  if (filters.leadId) where.push(eq(opsLeadActivities.leadId, filters.leadId as LeadRow['id']));
-  if (filters.q) {
-    const q = `%${filters.q.replace(/[%_\\]/g, '')}%`;
-    where.push(or(ilike(opsLeads.studentName, q), ilike(opsLeads.code, q))!);
-  }
   const rows = await db
     .select({
       call: opsLeadActivities,
@@ -110,8 +100,46 @@ export async function listCalls(db: Database, actor: Actor, filters: CallFilters
     .from(opsLeadActivities)
     .innerJoin(opsLeads, eq(opsLeads.id, opsLeadActivities.leadId))
     .leftJoin(staffMembers, eq(staffMembers.id, opsLeadActivities.staffId))
-    .where(and(...where))
+    .where(and(...callWhere(scope, filters)))
     .orderBy(desc(opsLeadActivities.occurredAt))
     .limit(CALL_LIST_LIMIT);
   return rows.map(({ call, ...rest }) => ({ ...call, ...rest }));
+}
+
+/** Calls per outcome over the same filters, in SQL (no list limit), known by `cutoff`. */
+export async function callOutcomeCounts(
+  db: Database,
+  actor: Actor,
+  filters: CallFilters & { cutoff: Date },
+) {
+  const scope = leadScope(db, await accessScope(db, actor, 'ops:leads:read'));
+  if (!scope) return [];
+  return db
+    .select({ outcome: opsLeadActivities.outcome, n: count() })
+    .from(opsLeadActivities)
+    .innerJoin(opsLeads, eq(opsLeads.id, opsLeadActivities.leadId))
+    .where(
+      and(
+        ...callWhere(scope, filters),
+        lte(opsLeadActivities.occurredAt, filters.cutoff),
+        lte(opsLeadActivities.createdAt, filters.cutoff),
+      ),
+    )
+    .groupBy(opsLeadActivities.outcome)
+    .orderBy(opsLeadActivities.outcome);
+}
+
+function callWhere(scope: SQL, filters: CallFilters) {
+  const where: SQL[] = [eq(opsLeadActivities.kind, 'call'), scope];
+  if (filters.from) where.push(gte(opsLeadActivities.occurredAt, istInstant(filters.from)));
+  if (filters.to) where.push(lt(opsLeadActivities.occurredAt, istInstant(addDays(filters.to, 1))));
+  if (filters.direction) where.push(eq(opsLeadActivities.direction, filters.direction));
+  if (filters.outcome) where.push(eq(opsLeadActivities.outcome, filters.outcome));
+  if (filters.staffId) where.push(eq(opsLeadActivities.staffId, filters.staffId as StaffMemberId));
+  if (filters.leadId) where.push(eq(opsLeadActivities.leadId, filters.leadId as LeadRow['id']));
+  if (filters.q) {
+    const q = containsPattern(filters.q);
+    where.push(or(ilike(opsLeads.studentName, q), ilike(opsLeads.code, q))!);
+  }
+  return where;
 }

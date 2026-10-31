@@ -5,7 +5,9 @@
  * (competition ranking), rosters equal the eligible batches, and db:clear-samples removes every
  * sample row of the new tables while real rows survive.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createElement, type FunctionComponent, type ReactNode } from 'react';
+import { prerender } from 'react-dom/static';
 import { and, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { hashPassword, type AuthenticatedUser } from '@elevate/authentication';
 import {
@@ -70,6 +72,30 @@ import { listCalendarItems } from '../../../marketing-os/src/server/calendar-que
 import { targetDrilldown } from '../../../marketing-os/src/server/targets';
 import { istMidnightUtc } from '../../../marketing-os/src/domain';
 import { addDays, toIsoDate } from '@elevate/shared-types';
+import AdmissionsOverviewPage from '../../../business-ops-os/src/app/admissions/overview/page';
+import ApplicationsPage from '../../../business-ops-os/src/app/admissions/applications/page';
+import HrAttendancePage from '../../../business-ops-os/src/app/hr/attendance/page';
+import HrTasksPage from '../../../business-ops-os/src/app/hr/tasks/page';
+import PastStudentsPage from '../../../business-ops-os/src/app/students/past/page';
+import StudentsPage from '../../../business-ops-os/src/app/students/page';
+import TasksPage from '../../../business-ops-os/src/app/tasks/page';
+import { OverviewBlocks } from '../../../business-ops-os/src/app/_components/overview-blocks';
+import { POPULATIONS } from '../../../business-ops-os/src/app/reports/_components/admissions-charts';
+import { hrAttendanceCounts } from '../../../business-ops-os/src/server/attendance-hr';
+import { buildAdmissionsFunnel } from '../../../business-ops-os/src/server/reports/admissions-funnel';
+import { hrTabCounts, hrTaskCounts } from '../../../business-ops-os/src/server/staff-tasks-hr';
+import { periodReport } from '../../../business-ops-os/src/server/task-period-report';
+
+// Pages check access through Next's request context; here the gate lets the test's user in.
+const access = vi.hoisted(() => ({ user: null as unknown }));
+vi.mock('../../../business-ops-os/src/ui/frame', async (orig) => ({
+  ...(await orig<object>()),
+  gate: async () => ({ status: 'allowed', user: access.user, modules: ['ops'] }),
+}));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh() {}, push() {}, replace() {} }),
+  usePathname: () => '/',
+}));
 
 const ctx = setupTestDatabase();
 const db = () => ctx.db as Database;
@@ -117,6 +143,33 @@ async function userOf(email: string): Promise<AuthenticatedUser> {
 
 /** Competition ranking (1, 2, 2, 4) of verified present scores, highest first. */
 const competition = (scores: number[]) => scores.map((s) => 1 + scores.filter((x) => x > s).length);
+
+type OpsPage = FunctionComponent<{ searchParams: Promise<Record<string, string>> }>;
+const OPS_PAGES: Record<string, OpsPage> = {
+  '/ops/admissions/applications': ApplicationsPage as never,
+  '/ops/hr/attendance': HrAttendancePage as never,
+  '/ops/hr/tasks': HrTasksPage as never,
+  '/ops/students': StudentsPage as never,
+  '/ops/students/past': PastStudentsPage as never,
+  '/ops/tasks': TasksPage as never,
+};
+const html = async (user: AuthenticatedUser, node: ReactNode) => {
+  access.user = user;
+  return new Response((await prerender(node)).prelude).text();
+};
+const pageAt = (user: AuthenticatedUser, href: string) => {
+  const url = new URL(href, 'http://ops');
+  const Page = OPS_PAGES[url.pathname];
+  if (!Page) throw new Error(`No page in this table for ${url.pathname}`);
+  const searchParams = Promise.resolve(Object.fromEntries(url.searchParams));
+  return html(user, createElement(Page, { searchParams }));
+};
+/** The count a list states about itself: the first table caption that starts with a number. */
+const listCount = (page: string) =>
+  [...page.replaceAll('<!-- -->', '').matchAll(/<caption[^>]*>([\d,]+) /g)].map((m) =>
+    Number(m[1]!.replaceAll(',', '')),
+  )[0];
+const unescape = (href: string) => href.replaceAll('&amp;', '&');
 
 describe('development sample set (db:seed) reconciles', () => {
   it('seeds everything and a second run changes no counts', async () => {
@@ -290,6 +343,88 @@ describe('development sample set (db:seed) reconciles', () => {
       if (t.actual.value !== null && drill.records.status === 'ok')
         expect(drill.records.rows.length).toBe(t.actual.value);
     }
+  });
+
+  describe('each Business Ops tile equals the list it opens (tile, drill-down, count)', () => {
+    const today = toIsoDate();
+    const range = { from: addDays(today, -6), to: today };
+    type Tile = [string, (u: AuthenticatedUser) => Promise<{ value: number; href: string }>];
+    const counted = (
+      read: (
+        u: AuthenticatedUser,
+      ) => Promise<{ key: string; value: number | null; href: string }[]>,
+      keys: string[],
+    ) =>
+      keys.map((key): Tile => [
+        `HR overview: ${key}`,
+        async (u) => {
+          const t = (await read(u)).find((c) => c.key === key)!;
+          return { value: t.value!, href: t.href };
+        },
+      ]);
+    const TILES: Tile[] = [
+      ...(['active', 'on_hold', 'former'] as const).map((key): Tile => [
+        `admissions report: ${key} students`,
+        async (u) => ({
+          value: (await buildAdmissionsFunnel(db(), u, range)).students[key],
+          href: POPULATIONS.find(([k]) => k === key)![2],
+        }),
+      ]),
+      ...counted(
+        (u) => hrTaskCounts(db(), u),
+        ['tasks_due_today', 'tasks_overdue', 'tasks_blocked', 'tasks_draft'],
+      ),
+      ...counted(
+        (u) => hrAttendanceCounts(db(), u),
+        ['attendance_review', 'attendance_missing_checkout', 'attendance_unmarked_yesterday'],
+      ),
+      [
+        'HR tasks tab "All"',
+        async (u) => ({ value: (await hrTabCounts(db(), u, {})).all, href: '/ops/hr/tasks' }),
+      ],
+      [
+        'Overview: overdue tasks',
+        async (u) => {
+          const team = await periodReport(db(), u, range);
+          const page = await html(
+            u,
+            createElement(OverviewBlocks, {
+              o: { range, asOf: new Date().toISOString(), team: { ok: true, data: team } } as never,
+              user: u,
+            }),
+          );
+          const tile = /<a href="([^"]+)"[^>]*><span class="el-stat-label">Overdue tasks</.exec(
+            page,
+          );
+          return { value: team.totals.overdue, href: unescape(tile![1]!) };
+        },
+      ],
+      [
+        'Admissions overview: Application, open, not signed yet',
+        async (u) => {
+          const page = (
+            await html(
+              u,
+              createElement(AdmissionsOverviewPage as never, {
+                searchParams: Promise.resolve({}),
+              }),
+            )
+          ).replaceAll('<!-- -->', '');
+          const tile =
+            /<a class="el-journey-body" href="([^"]+)"><span class="el-journey-count"[^>]*>([\d,]+)<\/span><span class="el-journey-label">Application/.exec(
+              page,
+            );
+          expect(tile![1]).toContain('status=unsigned');
+          return { value: Number(tile![2]!.replaceAll(',', '')), href: unescape(tile![1]!) };
+        },
+      ],
+    ];
+
+    it.each(TILES)('%s', async (_label, read) => {
+      const user = await userOf('operations-manager@example.test');
+      const { value, href } = await read(user);
+      expect({ href, count: listCount(await pageAt(user, href)) }).toEqual({ href, count: value });
+    });
   });
 
   it('db:clear-samples removes every sample row of the new tables, keeps real rows, and runs clean twice', async () => {

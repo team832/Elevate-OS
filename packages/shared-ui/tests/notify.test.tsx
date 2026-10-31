@@ -111,4 +111,10 @@ describe('AppShell mounts the toaster once, only in a workspace with a count', (
   ] as const)('%s with unread %s → %s', (current, unread, n) => {
     expect(shell(current, unread).split('class="el-toasts"').length - 1).toBe(n);
   });
+
+  it('outside the frosted top bar, whose blur would make it their fixed frame (HUS-024)', () => {
+    const out = shell('ops', 2);
+    expect(out.indexOf('class="el-toasts"')).toBeGreaterThan(out.indexOf('</header>'));
+    expect(out.indexOf('class="el-toasts"')).toBeGreaterThan(out.indexOf('<main'));
+  });
 });

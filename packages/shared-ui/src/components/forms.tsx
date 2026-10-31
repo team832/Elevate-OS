@@ -35,6 +35,16 @@ export function ButtonLink({
   return <a className={buttonClass(variant, block, className)} {...rest} />;
 }
 
+/** A link whose address is stored data: only http(s) opens, an older bad value stays readable text. */
+export function StoredLink({
+  href,
+  button,
+  ...rest
+}: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; button?: boolean }) {
+  if (!/^https?:\/\//i.test(href)) return <span>Not a web link: {href}</span>;
+  return button ? <ButtonLink href={href} {...rest} /> : <a href={href} {...rest} />;
+}
+
 /**
  * Label + control + hint + error, wired with ids for screen readers. Pass the
  * control as children and give it `id={id}` and `aria-describedby` from

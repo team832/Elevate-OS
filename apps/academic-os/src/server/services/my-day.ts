@@ -33,9 +33,11 @@ import { uncoveredSessions } from './unavailability';
 
 export const LOOKBACK_DAYS = 13;
 
+const IST_CLOCK = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+
 /** Minutes after midnight now, Asia/Kolkata. */
 export function istMinutes(now: Date): number {
-  const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now).split(':').map(Number);
+  const [h, m] = IST_CLOCK.format(now).split(':').map(Number);
   return h! * 60 + m!;
 }
 

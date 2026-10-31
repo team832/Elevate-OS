@@ -136,6 +136,8 @@ describe('campaign members (marketing manager only, audited)', () => {
       expect((await call(route, anika, '/x', { params: { id: other.id } })).status).toBe(404);
       expect((await call(route, bharat, '/x', { params: { id: mine.id } })).status).toBe(404);
     }
+    // API-004: an id that does not exist is 404 for all-scope too (was 200 and an empty list).
+    expect((await call(membersRoute, manager, '/x', { params: { id: crypto.randomUUID() } })).status).toBe(404);
     const detail = await call<{ members: { staffName: string }[] }>(campaignRoute, manager, '/x', {
       params: { id: mine.id },
     });

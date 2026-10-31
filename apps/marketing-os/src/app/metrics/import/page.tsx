@@ -13,7 +13,7 @@ import {
   TextArea,
   TextInput,
 } from '@elevate/shared-ui';
-import { DATE_FORMATS, formatIst, modulePath } from '../../../domain';
+import { CSV_FORMAT_LABELS, DATE_FORMATS, formatIst, modulePath, type CsvFormatId } from '../../../domain';
 import { listAccounts, listMetricImports } from '../../../server';
 import { importMetricsAction } from '../../actions/placements';
 import { MarketingPage, Section, type SearchParams } from '../../../ui/shell';
@@ -50,6 +50,7 @@ export default async function MetricsImportPage({ searchParams }: { searchParams
                     <form action={importMetricsAction} className="el-stack">
                       <Field id="accountCode" label="Account">
                         <Select id="accountCode" name="accountCode" required>
+                          <option value="">Choose…</option>
                           {accounts.map((a) => (
                             <option key={a.code} value={a.code}>
                               {a.code} ({a.platform})
@@ -120,7 +121,7 @@ export default async function MetricsImportPage({ searchParams }: { searchParams
                       {
                         key: 'file',
                         header: 'File',
-                        render: (r) => `${r.imp.fileName} (${r.imp.format})`,
+                        render: (r) => `${r.imp.fileName} (${CSV_FORMAT_LABELS[r.imp.format as CsvFormatId] ?? r.imp.format})`,
                       },
                       {
                         key: 'captured',

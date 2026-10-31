@@ -17,7 +17,8 @@ import {
   type Ref,
 } from 'react';
 import { parseRupeesToPaise } from '../domain/fees';
-import { fmtPaise, routerPath } from './format';
+import { fmtPaise, humanise, routerPath } from './format';
+import { UNREACHABLE } from './pdf-download';
 import { FormSection } from './sections';
 
 export interface FieldSpec {
@@ -44,6 +45,8 @@ export interface FieldSpec {
   defaultValue?: string;
   /** Heading of the form section this field belongs to (consecutive fields share one). */
   section?: string;
+  /** A select with nothing to choose from: what to do first. */
+  emptyHint?: ReactNode;
 }
 
 export interface ActionFormProps {
@@ -69,6 +72,8 @@ export interface ActionFormProps {
   labelSuffix?: string;
   /** Empty the fields after a success (repeatable entries such as comments). */
   resetOnSuccess?: boolean;
+  /** Add the numbers the server answered to the success text (job counts). */
+  showCounts?: boolean;
 }
 
 const WIDE = new Set<FieldSpec['type']>(['textarea', 'json', 'checkbox']);
@@ -101,7 +106,7 @@ const newKey = () =>
  * One request at a time per form. A failed request keeps its Idempotency-Key while the body is
  * unchanged, so a retry after a network error replays on the server instead of posting twice.
  * A changed body or a success starts a new key (the server refuses a key reused for a different
- * body, and a second identical payment after a success is deliberate).
+ * body). The same payment sent again under a new key is refused by fee-ledger.ts, not here.
  */
 export function submitGate(makeKey: () => string = newKey) {
   let key = '';
@@ -127,26 +132,64 @@ export const plainError = (e: ApiError): ApiError =>
     ? { ...e, message: 'This form was already sent. Reload the page to see what was saved.' }
     : e;
 
+/** Required fields left blank, in words, before anything is sent (the server remains the check). */
+export function missingRequired(fields: readonly FieldSpec[], form: FormData): Issue[] {
+  return fields
+    .filter((f) => f.required && f.type !== 'hidden' && f.type !== 'checkbox')
+    .filter((f) => !String(form.get(f.name) ?? '').trim())
+    .map((f) => ({
+      path: [f.name],
+      message: `${f.type === 'select' ? 'Choose' : 'Enter'} ${f.label.charAt(0).toLowerCase()}${f.label.slice(1)}.`,
+    }));
+}
+
+/** The refusal for blank required fields, in the shape the server's refusals have. */
+export const missingError = (issues: readonly Issue[]): ApiError => ({
+  code: 'VALIDATION_FAILED',
+  message: issues[0]?.message ?? 'Fill in the missing details.',
+  details: issues,
+});
+
+/** What a money form tells the person after a success. */
+export const recordedText = (paise: number, receipt: unknown) =>
+  `Recorded ${fmtPaise(paise)}${receipt ? `, receipt ${String(receipt)}` : ''}.`;
+
+/** The sign-in page of the app a form posts to: `/ops/api/v1/x` gives `/ops/login`. */
+export const signInHref = (action: string) => `${action.split('/api/')[0]}/login`;
+
 /** Request error: with 2+ field issues a GOV.UK-style summary linking to each field. */
 export function FormAlert({
   error,
   issues,
   fieldFor,
+  signIn,
   ref,
 }: {
   error: ApiError;
   issues: readonly Issue[];
   /** The input id and label of the field an issue belongs to, if any. */
   fieldFor: (issue: Issue) => { id: string; label: string } | undefined;
+  /** Where to sign in when the session has ended: a new tab, so what was typed here stays. */
+  signIn?: string;
   ref?: Ref<HTMLDivElement>;
 }) {
   const linked = issues.filter((i) => fieldFor(i)).length;
+  // With fewer than two field links the title is the refusal itself: do not read it out twice.
+  const listed = linked >= 2 ? issues : issues.filter((i) => !error.message.includes(i.message));
   return (
     <div className="el-alert el-tone-danger" role="alert" tabIndex={-1} ref={ref}>
       <p className="el-alert-title">{linked >= 2 ? 'There is a problem' : error.message}</p>
-      {linked >= 2 || linked < issues.length ? (
+      {error.code === 'UNAUTHENTICATED' && signIn ? (
+        <p>
+          <a href={signIn} target="_blank" rel="noopener">
+            Sign in again in a new tab
+          </a>
+          , then come back and press the button again. What you typed stays here.
+        </p>
+      ) : null}
+      {linked >= 2 || (linked < issues.length && listed.length) ? (
         <ul>
-          {issues.map((i, n) => {
+          {listed.map((i, n) => {
             const f = fieldFor(i);
             return (
               <li key={n}>
@@ -231,10 +274,13 @@ export function ActionForm({
   amountLabel,
   labelSuffix,
   resetOnSuccess,
+  showCounts,
 }: ActionFormProps) {
   const router = useRouter();
   const [error, setError] = useState<ApiError | null>(null);
   const [done, setDone] = useState(false);
+  const [counts, setCounts] = useState('');
+  const [recorded, setRecorded] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [pending, startTransition] = useTransition();
   const [gate] = useState(() => submitGate());
@@ -248,7 +294,14 @@ export function ActionForm({
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const body = toBody(fields, new FormData(form), extra);
+    const data = new FormData(form);
+    const blank = missingRequired(fields, data);
+    if (blank.length) {
+      setDone(false);
+      setError(missingError(blank));
+      return;
+    }
+    const body = toBody(fields, data, extra);
     // Disabled before the request starts: a double click never posts twice.
     setSubmitting(true);
     const json = await gate(JSON.stringify(body), async (key) => {
@@ -271,7 +324,7 @@ export function ActionForm({
         return {
           error: {
             code: 'NETWORK',
-            message: 'Could not reach the server. Check the connection and try again.',
+            message: UNREACHABLE,
           },
         };
       }
@@ -281,7 +334,20 @@ export function ActionForm({
     setError(json.error ?? null);
     setDone(!json.error);
     if (json.error) return;
-    if (resetOnSuccess) form.reset();
+    if (showCounts)
+      setCounts(
+        Object.entries(json.data ?? {})
+          .filter(([, v]) => typeof v === 'number')
+          .map(([k, v]) => `${humanise(k)}: ${v}`)
+          .join(', '),
+      );
+    // A second press must not record the money again: the form empties unless it holds a stated value.
+    const moneyDone = Boolean(money && !money.defaultValue);
+    setRecorded(moneyDone && paise ? recordedText(paise, body.receiptReference) : '');
+    if (resetOnSuccess || moneyDone) {
+      form.reset();
+      if (moneyDone) setPaise(0);
+    }
     startTransition(() => {
       if (redirectTo)
         router.push(
@@ -310,6 +376,9 @@ export function ActionForm({
     };
     const notes = (
       <>
+        {f.type === 'select' && !f.options?.length ? (
+          <p className="el-field-hint">{f.emptyHint ?? 'Nothing to choose from yet.'}</p>
+        ) : null}
         {f.hint ? (
           <p id={hintId} className="el-field-hint">
             {f.hint}
@@ -363,7 +432,9 @@ export function ActionForm({
             required={f.required}
             {...a11y}
           >
-            {!f.required ? <option value="">—</option> : null}
+            {!f.required || !f.defaultValue ? (
+              <option value="">{f.required ? 'Choose…' : '—'}</option>
+            ) : null}
             {f.options?.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -379,7 +450,8 @@ export function ActionForm({
             autoComplete={f.type === 'tel' ? 'tel' : undefined}
             defaultValue={f.defaultValue}
             required={f.required}
-            onChange={f === money ? (e) => setPaise(parseRupeesToPaise(e.target.value)) : undefined}
+            // onInput: after form.reset() React's onChange misses a pasted repeat of the same amount.
+            onInput={f === money ? (e) => setPaise(parseRupeesToPaise(e.currentTarget.value)) : undefined}
             {...a11y}
           />
         )}
@@ -390,11 +462,17 @@ export function ActionForm({
   const footer = (
     <>
       {error ? (
-        <FormAlert ref={alertRef} error={error} issues={issues} fieldFor={fieldFor} />
+        <FormAlert
+          ref={alertRef}
+          error={error}
+          issues={issues}
+          fieldFor={fieldFor}
+          signIn={signInHref(action)}
+        />
       ) : null}
       {done && !error ? (
-        <p className="el-field-hint" role="status">
-          {successText}
+        <p className={recorded ? 'el-alert el-tone-success' : 'el-field-hint'} role="status">
+          {recorded || successText} {counts}
         </p>
       ) : null}
       {secondary}

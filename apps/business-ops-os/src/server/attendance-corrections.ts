@@ -6,7 +6,8 @@
  */
 import { and, count, desc, eq, getTableColumns, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { can, grantsForRole } from '@elevate/authorization';
+import { loadRoles } from '@elevate/authentication';
+import { can } from '@elevate/authorization';
 import {
   isUniqueViolation,
   opsAttendanceCorrections,
@@ -18,7 +19,7 @@ import {
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, InvalidStateTransitionError } from '@elevate/shared-contracts';
-import { ROLE_KEYS, type StaffMemberId, type UserId } from '@elevate/shared-types';
+import { fmtDay, type StaffMemberId, type UserId } from '@elevate/shared-types';
 import { addDays, istToday, toIsoDate } from '../domain/dates';
 import { hrAttendanceStaff } from './attendance';
 import { hrReachWhere, hrScopeFor } from './organisation';
@@ -33,7 +34,7 @@ import {
   notFound,
   staffIdForUser,
   userIdsForStaff,
-  userIdsWithRole,
+  userIdsHolding,
   type Actor,
 } from './context';
 import { fieldError, opsAudit, rowById } from './ops-common';
@@ -87,12 +88,12 @@ export async function requestCorrection(
     await notifyHosted(
       tx,
       actor,
-      await attendanceManagers(tx),
+      await attendanceManagers(tx, staffId),
       'work',
       '/hr/attendance?tab=corrections',
       {
         kind: 'attendance.correction_requested',
-        title: `Attendance correction requested for ${body.workDate}`,
+        title: `${(await rowById(tx, staffMembers, staffId, 'Staff member')).fullName} asks to correct attendance for ${fmtDay(body.workDate)}`,
       },
     );
     return row!;
@@ -180,7 +181,7 @@ export async function decideCorrection(
       '/my-attendance',
       {
         kind: `attendance.correction_${body.decision}`,
-        title: `Your attendance correction for ${c.workDate} was ${body.decision}`,
+        title: `Your attendance correction for ${fmtDay(c.workDate)} was ${body.decision}`,
         body: [body.note, decisionKept && KEPT].filter(Boolean).join(' ') || undefined,
       },
     );
@@ -190,12 +191,15 @@ export async function decideCorrection(
 
 const KEPT = 'The times were added; the status HR decided earlier for this day still stands.';
 
-/** Everyone who may decide requests (holders of ops:attendance:manage), for notifications. */
-async function attendanceManagers(db: Database): Promise<UserId[]> {
-  const roles = ROLE_KEYS.filter((r) => grantsForRole(r).has('ops:attendance:manage'));
-  const ids: UserId[] = [];
-  for (const r of roles) ids.push(...(await userIdsWithRole(db, r)));
-  return [...new Set(ids)];
+/** Who can decide this person's request: holders of ops:attendance:manage reaching them, never themselves. */
+async function attendanceManagers(db: Database, staffId: string): Promise<UserId[]> {
+  const out: UserId[] = [];
+  for (const id of await userIdsHolding(db, 'ops:attendance:manage')) {
+    const holder: Actor = { id, roles: await loadRoles(db, id) };
+    if ((await staffIdForUser(db, id)) === staffId) continue;
+    if ((await hrAttendanceStaff(db, holder, { ids: [staffId] })).length) out.push(id);
+  }
+  return out;
 }
 
 /** Correction requests, newest first; own scope = your own; HR sees its department scope. */

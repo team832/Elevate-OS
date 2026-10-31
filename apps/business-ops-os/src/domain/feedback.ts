@@ -8,6 +8,9 @@
  */
 import { istToday } from './dates';
 
+/** Why own-scope reviews cannot be read for a login with no staff record (nothing is down). */
+export const NOT_LINKED_TO_STAFF = 'Your account is not linked to a staff record';
+
 export const MODERATION_STATUSES = ['pending', 'approved', 'rejected', 'hidden'] as const;
 export type ModerationStatus = (typeof MODERATION_STATUSES)[number];
 

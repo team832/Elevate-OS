@@ -12,8 +12,9 @@ import { MetricStrip, StatusBadge } from '@elevate/shared-ui';
 import { REVIEW_STATE_LABELS } from '../../domain/feedback';
 import type { getTeacherProfile } from '../../server/teachers';
 import { ActionForm } from '../../ui/action-form';
-import { Unavailable } from '../../ui/cross-module';
-import { fmtDate, fmtDateTime, humanise } from '../../ui/format';
+import { sourceGap, Unavailable } from '../../ui/cross-module';
+import { fmtDate, fmtDateTime, humanise, plainNote } from '../../ui/format';
+import { openHref } from '../../ui/open-link';
 import type { ModalTab } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
 import { DetailTable, Segment } from '../../ui/sections';
@@ -94,10 +95,10 @@ export function teacherTabs(
         ? 'Not shared with you'
         : t.reviewsAuthored.status === 'available'
           ? `Fresh — checked ${fmtDateTime(t.reviewsAuthored.checkedAt)}`
-          : `Source unavailable (${t.reviewsAuthored.reason}), checked ${fmtDateTime(t.reviewsAuthored.checkedAt)}`,
+          : `${sourceGap(t.reviewsAuthored.reason)} (${t.reviewsAuthored.reason}), checked ${fmtDateTime(t.reviewsAuthored.checkedAt)}`,
     },
     {
-      source: 'Business Ops — tasks and EOD reports',
+      source: 'Business Operations — tasks and EOD reports',
       state: t.tasks ? 'Fresh — read now' : 'Not shared with you',
     },
   ];
@@ -148,8 +149,11 @@ export function teacherTabs(
                       <VerificationBadge status={t.profile?.verificationStatus} />
                     ),
                 },
-                { label: 'Source', value: t.profile?.sourceNote ?? 'Not recorded' },
                 {
+                  label: 'Source',
+                  value: t.profile?.sourceNote ? plainNote(t.profile.sourceNote) : 'Not recorded',
+                },
+                openHref(user, `/ops/staff/${t.staff.id}`) && {
                   label: 'Contacts',
                   value: <a href={`/ops/staff/${t.staff.id}`}>On the staff record</a>,
                 },
@@ -184,7 +188,7 @@ export function teacherTabs(
             ) : null}
           </Segment>
           <Segment
-            title="Workload in Business Ops"
+            title="Workload in Business Operations"
             level={level}
             flush
             description="Booked appointments and scheduled demo classes: a capacity view, not a performance score."
@@ -272,7 +276,7 @@ export function teacherTabs(
           title="Tasks and updates"
           level={level}
           flush
-          description="Operational tasks in Business Ops. A task update is not attendance and does not prove a class was taught."
+          description="Operational tasks in Business Operations. A task update is not attendance and does not prove a class was taught."
           actions={
             t.tasks ? (
               <a href={`/ops/tasks?tab=all&staffId=${t.staff.id}`}>Open tasks</a>
@@ -361,7 +365,7 @@ export function teacherTabs(
           ) : null}
           {t.feedbackWritten?.length ? (
             <Segment
-              title="Earlier reviews — recorded in Business Ops before 21 Oct 2026"
+              title="Earlier reviews — recorded in Business Operations before 21 Oct 2026"
               level={level}
               flush
               description="Read-only history; latest version of each."

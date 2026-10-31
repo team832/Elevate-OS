@@ -46,7 +46,7 @@ import {
   type AssessmentRow,
 } from './assessment-roster';
 import { dbMark, sectionValues } from './assessments';
-import { rescoreLocked } from './results';
+import { finaliseLocked, rescoreLocked } from './results';
 
 type Fields = z.output<typeof updateAssessmentInternalBody>;
 
@@ -333,7 +333,14 @@ export async function publishInternal(
   id: string,
   body: z.output<typeof publishResultsBody>,
 ) {
-  return withTransaction(db, async (tx) => publishLocked(tx, actor, await lock(tx, id), body));
+  const { finalise, ...input } = body;
+  return withTransaction(db, async (tx) => {
+    const a = await lock(tx, id);
+    // In one transaction, so a refused publish leaves the test as it was and marks stay open (CHK-018).
+    if (!finalise || a.status === 'finalised') return publishLocked(tx, actor, a, input);
+    await finaliseLocked(tx, actor, a);
+    return publishLocked(tx, actor, { ...a, status: 'finalised' }, input);
+  });
 }
 
 export async function withdrawInternal(

@@ -15,6 +15,74 @@ import { Icon } from './icons';
 /** Width (px) from which the sidebar is permanently visible. Keep in sync with css/shell.css. */
 export const SIDEBAR_BREAKPOINT = 1024;
 
+interface NavigateEventLike {
+  destination: { url: string; sameDocument: boolean };
+  downloadRequest: string | null;
+  formData: unknown;
+}
+
+/** True when a navigation replaces this page: not a download, a mail or phone link, or a jump within it. */
+export function loadsNewPage({ destination, downloadRequest, formData }: NavigateEventLike) {
+  const { protocol, pathname } = new URL(destination.url);
+  // GET links into /api/ are PDFs and exports: the page stays. Sign-in and sign-out POST there and leave.
+  const download = downloadRequest !== null || (pathname.includes('/api/') && !formData);
+  return !destination.sameDocument && !download && /^https?:$/.test(protocol);
+}
+
+/**
+ * Feedback from a click until the next page paints: a thin bar along the top. Links are plain <a>
+ * (each click is a full page load) and D-022 rules out loading.tsx, so this listens to the
+ * browser's Navigation API; a browser without it just shows nothing extra.
+ */
+export function NavPending() {
+  useEffect(() => {
+    const nav = (window as unknown as { navigation?: EventTarget }).navigation;
+    const root = document.documentElement;
+    let timer: ReturnType<typeof setTimeout>;
+    const hide = () => {
+      clearTimeout(timer);
+      root.removeAttribute('data-nav-pending');
+    };
+    const onNavigate = (e: Event) => {
+      if (!loadsNewPage(e as Event & NavigateEventLike)) return;
+      root.setAttribute('data-nav-pending', '');
+      clearTimeout(timer);
+      timer = setTimeout(hide, 15000); // a load the person stopped must not leave the bar up
+    };
+    nav?.addEventListener('navigate', onNavigate);
+    window.addEventListener('pageshow', hide); // Back from the browser's page cache
+    return () => {
+      hide();
+      nav?.removeEventListener('navigate', onNavigate);
+      window.removeEventListener('pageshow', hide);
+    };
+  }, []);
+  return null;
+}
+
+/** A wrong password reloads the page empty: keep the email for this tab (never in the URL). */
+export function KeepLoginEmail() {
+  useEffect(() => {
+    const input = document.querySelector<HTMLInputElement>('.el-login input[name="email"]');
+    if (!input) return;
+    const remember = () => {
+      try {
+        sessionStorage.setItem('el-login-email', input.value);
+      } catch {
+        // storage blocked: the field is just empty next time
+      }
+    };
+    try {
+      if (location.search.includes('error=')) input.value = sessionStorage.getItem('el-login-email') ?? '';
+    } catch {
+      // as above
+    }
+    input.form?.addEventListener('submit', remember);
+    return () => input.form?.removeEventListener('submit', remember);
+  }, []);
+  return null;
+}
+
 export function ShellFrame({
   sidebarId,
   sidebar,
@@ -64,6 +132,7 @@ export function ShellFrame({
 
   return (
     <div className="el-shell" data-sidebar-open={open ? 'true' : undefined}>
+      <NavPending />
       <a className="el-skip-link" href="#main">
         Skip to content
       </a>

@@ -1,8 +1,5 @@
-/* Academic report print views (R7): A4, ink on paper via system colours, shell hidden, long names wrap. */
-.report-table td,
-.report-table th {
-  overflow-wrap: anywhere;
-}
+/* Academic report print views (R7): A4, ink on paper via system colours, shell hidden. On screen the
+ * table keeps whole words and scrolls inside its well; only paper, which cannot scroll, breaks them. */
 @media print {
   @page {
     size: A4;
@@ -38,6 +35,7 @@
   .report-table td {
     border: 0.5pt solid CanvasText;
     padding: 2pt 4pt;
+    overflow-wrap: anywhere;
   }
   .report-table thead {
     display: table-header-group;

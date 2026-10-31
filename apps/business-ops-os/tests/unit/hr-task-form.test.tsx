@@ -32,3 +32,14 @@ describe('HR assign-task form with the AI brief helper', () => {
       expect(html, name).toContain(`name="${name}"`);
   });
 });
+
+describe('Related batch or subject (RVC-021)', () => {
+  const field = (related: { value: string; label: string }[] | null) =>
+    newTaskFields([], [], [], null, related).find((f) => f.name === 'relatedRef');
+  it('a role that cannot read teaching assignments is not offered the field, nor told of an outage', () => {
+    expect(field(null)).toBeUndefined();
+  });
+  it('none to choose from says so', () => {
+    expect(field([])?.hint).toMatch(/could be loaded/);
+  });
+});

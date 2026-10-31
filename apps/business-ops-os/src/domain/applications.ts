@@ -17,6 +17,12 @@ export const APPLICATION_STATUSES = [
   'withdrawn',
 ] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+/** Open, not signed yet: what the admission journey's Application stage counts. */
+export const UNSIGNED_APPLICATION_STATUSES = [
+  'draft',
+  'ready_for_review',
+  'form_generated',
+] as const;
 
 /** List wording: what each status is waiting for (brief §4 "awaiting information, signatures or approval"). */
 export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {

@@ -93,7 +93,7 @@ export const POLICY_DEFINITIONS = {
     defaultValue: 3,
     status: 'proposed',
     ownerDecision: null,
-    description: 'Adapter publish attempts per (placement, version) before a person must step in.',
+    description: 'Automatic posting attempts per placement and version before a person must step in.',
     source: 'apps/marketing-os/docs/ALGORITHMS.md §6',
   }),
   accountModel: def<string>({
@@ -103,7 +103,7 @@ export const POLICY_DEFINITIONS = {
     status: 'proposed',
     ownerDecision: 'OD-001',
     description:
-      'The registry follows the Content OS model (9 approved accounts + IGN later). The handover lists "Elevate CA" and "Elevate Online" pages (ACC-CONFLICT-001); they are not created until the owner decides.',
+      'The account list has 9 approved accounts, plus IGN later. "Elevate CA" and "Elevate Online" pages named in older records are not created until the owner decides.',
     source: 'data/legacy/marketing/accounts.json conflicts',
   }),
   admissionAttribution: def<'lead_owner_at_confirmation'>({

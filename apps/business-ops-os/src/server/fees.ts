@@ -36,7 +36,6 @@ import {
   canVoidFee,
   FEE_METHODS,
   MANUAL_FEE_DISCLAIMER,
-  summariseFees,
   type FeeRecordStatus,
 } from '../domain/fees';
 import {
@@ -47,9 +46,9 @@ import {
   ownAdmissionFilter,
 } from './admissions';
 import { accessScope, clean, type Actor } from './context';
+import { feeStatementFor } from './fee-statement';
 import {
   amountFields,
-  asLike,
   issuesError,
   optText,
   paiseOf,
@@ -63,12 +62,7 @@ import { loadSettings } from './settings';
 export * from './fee-agreements';
 export { recordFee, recordFeeEntry, type FeeEntryInput, type FeeRecordRow } from './fee-ledger';
 
-/** Summary of an admission's fee records (no permission check — callers check `ops:fees:read`). */
-export async function feeSummaryFor(db: Database, admissionId: string) {
-  return summariseFees(asLike(await recordsOf(db, admissionId)));
-}
-
-/** GET /admissions/{id}/fees — records, summary, the disclaimer and the fee settings. */
+/** GET /admissions/{id}/fees — the case's records, the student's statement, the disclaimer and the fee settings. */
 export async function listAdmissionFees(db: Database, actor: Actor, admissionId: string) {
   const access = await accessScope(db, actor, 'ops:fees:read');
   const admission = await admissionRow(db, admissionId);
@@ -82,7 +76,7 @@ export async function listAdmissionFees(db: Database, actor: Actor, admissionId:
   return {
     admission: { id: admission.id, code: admission.code, status: admission.status },
     records: rows.map((r) => present(r, names)),
-    summary: summariseFees(asLike(rows)),
+    summary: await feeStatementFor(db, admission),
     disclaimer: MANUAL_FEE_DISCLAIMER,
     settings: { recording: settings['fees.recording'], schedule: settings['fees.schedule'] },
   };

@@ -15,7 +15,7 @@ import {
 import { getDb } from '@elevate/database';
 import { countUnread } from '@elevate/notifications';
 import { requirePageAccess, workspaceHrefs, type PageAccess } from '@elevate/server-kit/next';
-import { AppError } from '@elevate/shared-contracts';
+import { toAppError } from '@elevate/server-kit';
 import { workNav } from '@elevate/business-ops-os/work';
 import { AppShell, ErrorState, LoadingState } from '@elevate/shared-ui';
 import { MODULE } from '../domain';
@@ -313,19 +313,22 @@ export async function AcademicShell({
   );
 }
 
-/** Render a load failure honestly (never as empty data). Only AppError 4xx messages are shown; anything else stays generic (6.6). */
-export function LoadError({ error }: { error: unknown }) {
-  if (error instanceof AppError && error.status < 500) {
+/** Render a load failure honestly (never as empty data). Only AppError 4xx messages are shown; anything else stays generic (6.6). `level` 1 when it replaces the whole page. */
+export function LoadError({ error, level }: { error: unknown; level?: 1 | 2 }) {
+  const known = toAppError(error);
+  if (known.status < 500) {
     return (
       <ErrorState
-        title={error.code === 'NOT_FOUND' ? 'Not found' : 'Could not load this page'}
-        description={error.message}
+        level={level}
+        title={known.code === 'NOT_FOUND' ? 'Not found' : 'Cannot show this'}
+        description={known.message}
       />
     );
   }
   console.error('academic page load failed', error);
   return (
     <ErrorState
+      level={level}
       title="Could not load this page"
       description="The data could not be loaded. Try again; if it keeps happening, tell a platform administrator."
     />

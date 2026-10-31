@@ -2,15 +2,15 @@
  * Printable documents (admission form, acknowledgement, ID card, progress report) as real PDFs.
  * Light paper look: white page, dark text, brand orange only in the logo and the header rule.
  * Colours are the light tokens in packages/shared-ui/src/styles.css; the logo is BrandLogo's SVG.
- * Font: Noto Sans 2.015 (SIL OFL 1.1, assets/fonts/OFL.txt), embedded as a subset.
+ * Fonts: Noto Sans 2.015 (assets/fonts/OFL.txt) and, for Hindi, Noto Sans Devanagari 2.007
+ * (assets/fonts/OFL-NotoSansDevanagari.txt), both SIL OFL 1.1, embedded as subsets.
  *
- * shortcut: no complex-script shaping (Devanagari etc.) and Latin + ₹ glyphs only; any character the
- * font lacks prints as "?" and the footer says so. Upgrade by vendoring Noto Sans Devanagari and
- * picking the font per text run.
+ * shortcut: Latin + ₹ + Devanagari only; any other character (Tamil, emoji) prints as "?" and the
+ * page says so. Upgrade by vendoring that script's Noto font the way Devanagari is done.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import fontkit from '@pdf-lib/fontkit';
+import fontkit, { type Font } from '@pdf-lib/fontkit';
 import { PDFDocument } from 'pdf-lib';
 import {
   HEAD_FILL,
@@ -37,19 +37,49 @@ const FONT_DIR =
   ['assets/fonts', 'apps/business-ops-os/assets/fonts', '../business-ops-os/assets/fonts']
     .map((p) => path.resolve(p))
     .find(existsSync) ?? 'assets/fonts';
-let fontBytes: [Buffer, Buffer] | undefined;
+const FONT_FILES = [
+  'NotoSans-Regular',
+  'NotoSans-Bold',
+  'NotoSansDevanagari-Regular',
+  'NotoSansDevanagari-Bold',
+];
+let fontBytes: Buffer[] | undefined;
+let shapers: Font[] | undefined;
+
+// @pdf-lib/fontkit 1.1.1 ships one compiled generator (the Indic shaper's syllable matcher) that calls
+// this global without bundling it; without it every Hindi text throws "regeneratorRuntime is not defined".
+(globalThis as { regeneratorRuntime?: unknown }).regeneratorRuntime ??= {
+  mark: (fn: unknown) => fn,
+  wrap(step: (context: { next: number; done: boolean; stop(): void }) => unknown) {
+    const context = {
+      next: 0,
+      done: false,
+      stop() {
+        this.done = true;
+      },
+    };
+    return { next: () => ({ value: step(context), done: context.done }) };
+  },
+};
 
 export async function createPdf(meta: PdfMeta): Promise<PdfBuilder> {
-  fontBytes ??= [
-    readFileSync(path.join(FONT_DIR, 'NotoSans-Regular.ttf')),
-    readFileSync(path.join(FONT_DIR, 'NotoSans-Bold.ttf')),
-  ];
+  fontBytes ??= FONT_FILES.map((f) => readFileSync(path.join(FONT_DIR, `${f}.ttf`)));
+  shapers ??= fontBytes.slice(2).map((b) => fontkit.create(b));
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
-  const [regular, bold] = await Promise.all(
+  const [regular, bold, hindi, hindiBold] = await Promise.all(
     fontBytes.map((b) => doc.embedFont(b, { subset: true })),
   );
-  return new PdfBuilder(doc, regular!, bold!, meta);
+  return new PdfBuilder(
+    doc,
+    regular!,
+    bold!,
+    new Map([
+      [regular!, { font: hindi!, shaper: shapers[0]! }],
+      [bold!, { font: hindiBold!, shaper: shapers[1]! }],
+    ]),
+    meta,
+  );
 }
 
 /** The content blocks of a document (headings, key–value grids, tables, charts, banners, signatures). */

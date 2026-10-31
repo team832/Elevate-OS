@@ -4,6 +4,7 @@
  * stay in Business Ops. Names only: `getAppointment` restricts guardians and never returns
  * contacts. Every link is built from `base`.
  */
+import { LINK_LOGIN_HELP } from '@elevate/shared-contracts';
 import { EmptyState, PageHeader } from '@elevate/shared-ui';
 import { addDays, istToday, isIsoDate } from '../../domain';
 import { APPOINTMENT_TYPE_LABELS } from '../../domain/appointments';
@@ -49,7 +50,7 @@ async function Meetings({ user, base, searchParams: sp }: BodyProps) {
     return (
       <EmptyState
         title="No staff record"
-        description="Your sign-in is not linked to a staff record, so no meetings can be shown. Ask an academic coordinator."
+        description={`Your sign-in is not linked to a staff record, so no meetings can be shown. ${LINK_LOGIN_HELP}`}
       />
     );
   const shift = (days: number) =>

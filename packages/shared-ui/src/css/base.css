@@ -186,6 +186,8 @@ body {
 }
 html {
   background: var(--el-bg);
+  /* A jump or the browser's own refusal keeps the field clear of the sticky top bar. */
+  scroll-padding-top: 5.5rem;
 }
 /* The canvas: warm linen with a soft light at the top-left (the same light the shadows fall from). */
 body {
@@ -197,6 +199,8 @@ body {
   font-family: var(--el-font);
   font-size: var(--el-text-md);
   line-height: 1.5;
+  /* A pasted link or a long title wraps; it never widens the page for everyone who sees it. */
+  overflow-wrap: anywhere;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -214,6 +218,22 @@ a:hover {
   outline: 2px solid var(--el-focus);
   outline-offset: 2px;
 }
+/* Scrollers inside the page (rail, table wells, record panels): a slim thumb and no arrow
+ * buttons. Windows draws its arrows in the corners, where the curved panels cut them off. */
+@supports selector(::-webkit-scrollbar) {
+  body *::-webkit-scrollbar {
+    width: 0.5rem;
+    height: 0.5rem;
+  }
+  body *::-webkit-scrollbar-thumb {
+    border-radius: var(--el-radius-pill);
+    background: var(--el-control-border);
+  }
+  body *::-webkit-scrollbar-track,
+  body *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
 .el-visually-hidden {
   position: absolute;
   width: 1px;
@@ -229,6 +249,11 @@ a:hover {
   flex: none;
   display: inline-block;
   vertical-align: middle;
+}
+/* `anywhere` would let a table squeeze a column to a letter per line. */
+td,
+th {
+  overflow-wrap: break-word;
 }
 .el-num,
 .el-tabular {

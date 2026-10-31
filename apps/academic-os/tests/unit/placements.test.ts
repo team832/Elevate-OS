@@ -1,7 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { assignmentPhase, enrolmentView, findSessionClashes, isBatchFull, transferEndDate, type PlacementSession } from '../../src/domain/placements';
+import { sessionInput } from '../../src/server/schemas';
+import { patternBody, patternUpdateBody } from '../../src/server/schemas-sessions';
 
 const s = (over: Partial<PlacementSession>): PlacementSession => ({ id: 'x', batchId: 'A', date: '2026-11-02', startTime: '09:00', durationMinutes: 60, status: 'scheduled', ...over });
+
+describe('onlineLink takes web addresses only (HAT-006)', () => {
+  const id = '00000000-0000-4000-8000-000000000001';
+  const SCHEMAS = [
+    ['sessionInput', sessionInput, { batchId: id, date: '2026-11-02', startTime: '09:00', durationMinutes: 60 }],
+    ['patternBody', patternBody, { batchId: id, subjectId: id, staffId: id, weekday: 1, startTime: '09:00', durationMinutes: 60, effectiveFrom: '2026-11-02', effectiveTo: '2026-11-09' }],
+    ['patternUpdateBody', patternUpdateBody, { version: 1 }],
+  ] as const;
+  const LINKS = [
+    ['https://meet.example/a', true],
+    ['http://meet.example/a', true],
+    ['javascript:alert(1)', false],
+    ['data:text/html,x', false],
+    ['vbscript:msgbox(1)', false],
+    ['ms-msdt:/id', false],
+    ['file:///c:/win.ini', false],
+  ] as const;
+  it.each(SCHEMAS.flatMap(([name, schema, base]) => LINKS.map(([link, ok]) => [name, link, ok, schema, base] as const)))('%s: %s -> %s', (_, onlineLink, ok, schema, base) => {
+    expect(schema.safeParse({ ...base, onlineLink }).success).toBe(ok);
+  });
+});
 
 describe('placement rules (ACD-019)', () => {
   it.each([

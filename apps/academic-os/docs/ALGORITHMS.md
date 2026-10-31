@@ -303,3 +303,15 @@ Finalisation (service `results.ts`): validation → `aggregateResults` → inser
 8. **Permissions** — `academic:timetable:write` (coordinator); teachers 403. Publishing stays `timetable:publish` through A21.
 9. **Tests** — `tests/unit/timetable-builder.test.ts` (clean build has no hard conflict and spreads a subject; deterministic; avoids a busy teacher, a booked room, a student in two batches, a holiday; an unavailable teacher, a hard workload cap, too many classes and the daily limit are unplaced with reasons; preferences reported; unknown class length, weekdays, teacher, window; summary never "optimal"); `tests/integration/timetable-build.test.ts` (401/403/400, drafts only and no sessions, audit, 409 re-run, another batch's drafts avoided, AI note simulated with no names sent, AI not set up / bad answer → system summary); `tests/unit/screens.test.tsx` › "Build draft timetable".
 10. **Known limitations** — greedy: an earlier slot is never moved to make room for a later subject, so a feasible arrangement can be missed (the unplaced list says so); room size is not compared with the batch size; the classes-per-day limit counts only this build's slots, not one-off sessions already on the timetable (those still block by `BATCH_OVERLAP`); weekday changes inside the dates use the common weekdays only; extra-slot calendar rules are not used; no AI daily limit in Academic (Business Ops has one).
+
+## A25. Exit and name correction from Ops (`server/services/enrolment-exit.ts`, D-115)
+1. **Purpose** — when Ops records that a student left, Academic stops holding them on later classes and tests. A name corrected in Ops reaches Academic's own copy.
+2. **Inputs** — `ops.enrolment.closed` v1 and `ops.student.renamed` v1 from the outbox.
+3. **Output** — enrolment ended on the exit date (`completed` or `withdrawn`), placement ended, audit row keeping the true outcome.
+4. **Preconditions** — run by `POST /academic/api/internal/v1/enrolment-exits/run`, from the Ops job `enrolment-exits`. Nothing runs by itself.
+5. **Rules** — transferred and other_inactive end as `withdrawn` (Proposed; separate statuses need `0018`). A future exit date closes now and attendance runs to that date. Leaving before day one deletes the unstarted placement. Open catch-up tasks are cancelled, untouched later-test rows removed, rows with marks kept.
+6. **Steps** — one delivery per (event, consumer) through `processEvents`.
+7. **Errors and edge cases** — an enrolment already ended in Academic: audited as ignored. Never placed: nothing to end. Replay: processed 0, no audit row. An exit does not reach Academic until the button is pressed; the Ops profile says it is waiting.
+8. **Permissions** — service token, caller `ops`; the button needs `ops:jobs:run`.
+9. **Tests** — `tests/integration/enrolment-exit.test.ts`; `apps/platform/tests/integration/student-exit-loop.test.ts`.
+10. **Known limitations** — a coordinator ending an enrolment in Academic does not tell Ops. Ops "on hold" does not pause Academic. A same-day return to a full batch may still say full.

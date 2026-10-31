@@ -26,7 +26,7 @@ export default async function MarksPage({ params }: { params: Promise<{ id: stri
 async function Body({ access, id }: { access: PageAccess; id: string }) {
   const data = await load(() => getMarksSheet(getDb(), actorFor(access.user), id));
   if (!data.ok) return <LoadError error={data.error} />;
-  const { assessment: a, bounds, canWithhold, rows } = data.data;
+  const { assessment: a, bounds, canWithhold, canCorrect, rows } = data.data;
   const states = Object.entries(STATE_LABELS)
     .filter(([v]) => v !== 'withheld' || canWithhold)
     .map(([value, label]) => ({ value, label }));
@@ -51,7 +51,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
         )}
         {a.rosterManaged ? (
           <Alert tone="info" title="Roster from Business Operations">
-            This test was scheduled in Tests and Mock Tests. Saving a score records a verified mark for a present student. To change a verified mark, or any mark once results are final, ask the academic coordinator: the change needs a reason.
+            This test was scheduled in Tests and Mock Tests. Saving a score records a verified mark for a present student. To change a verified mark, or any mark once results are final, {canCorrect ? 'use Correct mark and give a reason.' : 'ask the academic coordinator: the change needs a reason.'}
           </Alert>
         ) : null}
         {a.status === 'finalised' && !a.rosterManaged ? (
@@ -73,25 +73,30 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
               {
                 key: 'enter',
                 header: '',
-                render: (r) =>
-                  bounds && !(a.rosterManaged && a.status === 'finalised') ? (
+                render: (r) => {
+                  if (!bounds) return null;
+                  const needsReason = a.rosterManaged && (r.marksState === 'verified' || a.status === 'finalised');
+                  if (needsReason && !canCorrect) return 'Ask the academic coordinator to change it.';
+                  return (
                     <details>
-                      <summary>Enter mark</summary>
+                      <summary>{needsReason ? 'Correct mark' : 'Enter mark'}</summary>
                       <ApiForm
                         action={MODULE_PATHS.api(`assessments/${a.id}/marks`)}
                         method="PUT"
                         wrapAs="marks"
                         extra={{ studentId: r.studentId, version: r.version }}
                         submitLabel={`Save mark for ${r.fullName}`}
-                        successMessage={a.status === 'finalised' ? 'Saved. Results are final: ask the academic coordinator to re-score so this change counts.' : 'Mark saved.'}
+                        successMessage={a.status !== 'finalised' ? 'Mark saved.' : a.rosterManaged ? 'Mark corrected; the results were re-scored as a new version.' : 'Saved. Results are final: ask the academic coordinator to re-score so this change counts.'}
                         idPrefix={`mk-${r.studentId}`}
                         fields={[
-                          { name: 'state', label: 'Result', type: 'select', required: true, options: states, defaultValue: r.state },
+                          { name: 'state', label: 'Result', type: 'select', required: true, options: states, defaultValue: r.state === 'pending' ? 'scored' : r.state },
                           { name: 'manualScore', label: `Score (out of ${bounds.max})`, defaultValue: r.manualScore ?? undefined, hint: 'Only for Scored.' },
+                          ...(needsReason ? [{ name: 'reason', label: 'Reason for the change', required: true, hint: 'Kept in the audit trail.' }] : []),
                         ]}
                       />
                     </details>
-                  ) : null,
+                  );
+                },
               },
             ]}
           />

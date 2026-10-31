@@ -1,7 +1,16 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, ButtonLink, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
+import {
+  Alert,
+  ButtonLink,
+  Card,
+  DataTable,
+  EmptyState,
+  PageHeader,
+  fmtDay,
+  fmtDaysIn,
+} from '@elevate/shared-ui';
 import { getCourse, getPlan } from '../../../../server';
 import { MODULE_PATHS } from '../../../../server/paths';
 import { ApiForm } from '../../../../ui/api-form';
@@ -20,7 +29,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
     const plan = await getPlan(db, id);
     return { ...plan, course: await getCourse(db, plan.plan.courseId) };
   });
-  if (!data.ok) return <AcademicShell access={access} active="curriculum"><LoadError error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="curriculum"><LoadError level={1} error={data.error} /></AcademicShell>;
   const { plan, items, totals, totalClasses, totalHours, approvals, supersededBy, course } = data.data;
   const canWrite = can(access.user, 'academic:courses:write');
   const canApprove = can(access.user, 'academic:curriculum:approve');
@@ -42,8 +51,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
         {plan.scopeNote || plan.changeLog ? (
           <Card title="Scope and change log">
             {plan.scopeNote ? <p>{plan.scopeNote}</p> : null}
-            {plan.changeLog ? <p>{plan.changeLog}</p> : null}
-            {plan.sourceRef ? <p className="el-field-hint">Source: {plan.sourceRef}</p> : null}
+            {plan.changeLog ? <p>{fmtDaysIn(plan.changeLog)}</p> : null}
           </Card>
         ) : null}
         <Card title="Planned classes by subject">
@@ -64,7 +72,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
           <DataTable compact
             rows={approvals}
             rowKey={(a) => a.id}
-            empty={<EmptyState title="No approval requests" description={plan.legacyApprovedOn ? `Imported legacy status; recorded in the source as approved on ${plan.legacyApprovedOn}.` : undefined} />}
+            empty={<EmptyState title="No approval requests" description={plan.legacyApprovedOn ? `Imported legacy status; recorded in the source as approved on ${fmtDay(plan.legacyApprovedOn)}.` : undefined} />}
             columns={[
               { key: 'requestedAt', header: 'Requested', render: (a) => fmtDateTime(a.requestedAt) },
               { key: 'requestComment', header: 'Request', render: (a) => a.requestComment ?? '—' },
@@ -111,7 +119,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
               { key: 'sessionType', header: 'Type' },
               { key: 'plannedClasses', header: 'Classes', numeric: true },
               { key: 'plannedMinutes', header: 'Minutes', numeric: true },
-              { key: 'plannedDate', header: 'Planned date', render: (i) => i.plannedDate ?? 'undated' },
+              { key: 'plannedDate', header: 'Planned date', render: (i) => fmtDay(i.plannedDate, 'undated') },
               { key: 'coverage', header: 'Coverage', render: (i) => i.coverage ?? '' },
             ]}
           />

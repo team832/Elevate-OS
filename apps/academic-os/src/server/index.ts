@@ -16,6 +16,7 @@ export * from './services/results';
 export * from './services/students';
 export * from './services/progress';
 export * from './services/intake';
+export * from './services/enrolment-exit';
 export * from './services/summary';
 export * from './services/settings';
 export * from './services/marks';

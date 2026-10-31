@@ -414,10 +414,10 @@ Final totals (21 Oct 2026, run by the coordinator after the last change): `npm r
 
 ### Known limitations
 - Accounts that sign in only with Google cannot confirm admissions (D-041; owner decision on Google re-authentication).
-- Characters outside the PDF font (for example Devanagari) print as "?" with a footer note.
+- Characters outside the PDF font (for example Devanagari) print as "?" with a footer note. *Since 31 Oct 2026 Devanagari prints (D-118); Tamil, emoji and Devanagari Extended still print "?".*
 - Event messages and EOD "share" are simulated; no messaging provider.
 - Weekly / monthly EOD range report and calendar view not built.
-- Academic does not yet receive `ops.enrolment.closed` (IR-OPS-EXIT-1) or serve batch end dates (IR-OPS-EXIT-2).
+- Academic does not yet receive `ops.enrolment.closed` (IR-OPS-EXIT-1) or serve batch end dates (IR-OPS-EXIT-2). *Since 31 Oct 2026 it does receive it (D-115); end dates partly.*
 - The prototype (`C:\OPENBOT\Elevate`) does not show applications, fee agreements, tasks or the new layout.
 
 ## Academic OS teacher workspace and Business Ops task tracker, teacher operations and EOD (owner briefs 1 and 2, 21 Oct 2026)
@@ -524,7 +524,7 @@ _Coordinator test pass over the database, the screens and the live apps. No new 
 
 ### Known limitations found
 - On this computer Windows Application Control blocks Next's native compiler file (`next-swc.win32-x64-msvc.node`), so `npm run dev` (Turbopack) fails. `npm run dev -w <app> -- --webpack` works meanwhile. This is a Windows security setting only the owner controls (`HANDOFF.md`, register `PLT-SWC-BLOCK`).
-- About 66 of 84 data tables have no caption; their accessible name comes from the heading above them (register `PLT-TABLE-CAPTIONS`).
+- About 66 of 84 data tables have no caption; their accessible name comes from the heading above them (register `PLT-TABLE-CAPTIONS`). *Now `DataTable` names itself from its headers; 76 of 147 `RecordTable` uses still have no caption (31 Oct 2026).*
 - Business Ops student profile, Attendance: when every class was excused it says "No classes recorded in this period" next to a count of excused classes (register `OPS-ATT-ALL-EXCUSED`).
 - Deleting a user who is the only assignee of a Marketing content assignment is refused: `ON DELETE SET NULL` plus the `content_assignments_has_assignee` check act as a restrict (owner question, `MKT-NW-048`).
 - Audit events are append-only by convention only; no database rule stops an update or delete (owner question, `PLT-AUDIT-APPEND`).
@@ -741,7 +741,7 @@ _Owner brief of 23 Oct 2026 and the owner's answers 1–6 of the same day. Every
 - Requests through HR refuse campaign and test links (Ops cannot verify them); HR's create-task from a request cannot carry a batch link.
 - Between uploading a new paper or key version and releasing it, readers see no version.
 - Shortcuts: the sales-calls list returns the newest 500 calls for any filter (`server/lead-calls.ts`, no `shortcut:` comment yet); the Tests page lists the newest 200 pending imports.
-- The database check `notifications_link_relative` does not refuse control characters (the code does) → migration `0017`.
+- The database check `notifications_link_relative` does not refuse control characters (the code does) → migration `0017`, which also adds seven indexes (D-122).
 - Sample leads never reach Converted (sample admissions need legacy verification); external analytics not connected; no outbound email, calls or publishing; the prototype does not show this milestone.
 
 ## Integration (wave 3)
@@ -761,3 +761,71 @@ _Owned by the Integration agent._ Pending: baseline migration, cross-module test
 | OPS-183 … 187 | AI Overall comment on progress (`progress-report/3`) and teacher (`teacher-report/2`) reports; monthly marketing draft gets marketing facts; AI student summary; admission documents deliberately not built | Tested | `apps/business-ops-os/tests/integration/ai-report-drafts.test.ts` (17), `progress-report-pdf.test.ts`, `teacher-report.test.ts` |
 
 Checks (coordinator, 24 Oct 2026): `npm run validate` → exit 0: typecheck all workspaces, lint 0 warnings, `Test Files 261 passed (261)`, `Tests 4121 passed (4121)`, secret scan OK (1,788 files). `npm run office:build` (webpack builds of all four apps) → exit 0, 4 × "Compiled successfully". No schema change. Browser pass of the new screens: **not done**. Status: **Implemented and Tested — not Deployed**.
+
+## Debug pass: 26 Oct and 30–31 Oct 2026 (D-112 … D-122)
+_Owner's brief of 30 Oct: debug everything, follow every caselet, structure it, package it, write it down; "if a student is entering, there is no point of exiting for him"; API calls; a different workspace per teacher; HR integration and messaging; parallel use; versions; every script and data file. Agents were split into structure, check and do, then re-verification on a real package. The tree is uncommitted. Status per D-013; **nothing is Deployed**. "Tested" below means a passing automated test exists. "First package" means the re-test on the package built on 31 Oct 2026 from the tree at that time; work after it is **Implemented** until the final re-test: `[coordinator fills final numbers]`._
+
+### 26 Oct 2026 (found undocumented, F-15; D-122)
+| Area | What changed | Status |
+|---|---|---|
+| Sign-in | Third throttle per email from any address (20 failures in 15 minutes) | Tested; first package held |
+| Schema | `0017`: link rule refuses control characters, plus seven indexes. Status on the owner's computer unknown | Tested |
+| Fees | Admission-level fee approval removed end to end; a discount request at conversion opens no approval | Tested |
+| HR, tasks | EOD report read and inbox limited to HR's scope; `hrScopeStaff` includes staff with no department | Tested |
+| Leads | History hides campaign and content references without `ops:lead_attribution:read`; calls list `q` filter | Tested |
+| Marketing | Monthly report counts planned dates over the whole month; `publishAction` removed | Tested |
+| Platform | `leadsBase` sends marketing roles to `/marketing` leads | Tested |
+| Seeds | `clear-samples` deletes a sample teacher's assignment on a real batch | Tested |
+
+### 30–31 Oct 2026
+| # | What | Fixes | Status | Evidence |
+|---|---|---|---|---|
+| DP-01 | Workspace membership enforced on every signed-in API route, failing closed (D-113). Until now it held on pages only | CHK-010, HAT-001 | Tested; first package PASS | `packages/server-kit/tests/define-route.test.ts`; 22/22 refused, 42/42 own 200; 481 handlers × 11 roles, 6,281 requests, 3,567 non-member all refused, 0 5xx, 0 false 403 on 1,343 member GETs. Fail-closed proven from source only |
+| DP-02 | An exit reaches Academic: `ops.enrolment.closed` v1, consumer `academic.enrolment-exit`, internal run route (D-115) | CHK-017, F-04, IR-OPS-EXIT-1 | Tested; first package PASS | `enrolment-exit.test.ts`, `exit-handoff.test.ts`, `student-exit-loop.test.ts`; 44/44 per outcome, edges 17/17 |
+| DP-03 | A corrected name reaches `core.students`, other leads and Academic: `ops.student.renamed` v1 | HMO-016 | Tested; first package PASS | 22/22; one delivery, one audit, replay adds none |
+| DP-04 | Jobs panel on the Overview; handoff finishes from a screen; `housekeeping` job (D-117) | CHK-016, F-03, F-11 | Tested; first package PASS | CHK-016 17/17; 6 jobs × 10 roles 403, control 200. No scheduler |
+| DP-05 | One fee statement, `domain/fee-statement.ts` (D-114) | HMO-001 to 006, 009, 010, 013, 021 | Tested; first package PASS | `fee-figures.test.ts`, `fee-plans.test.ts`; 160 hand values 0 mismatch; 60,000 ledgers 0 failures |
+| DP-06 | Refusals, **Proposed**: above what is owed, credited demo fee, refund before payment, identical receipt | HMO-007, 008, 012, API-008, HUS-008 | Tested; first package PASS | Races 3/3 and sequential; different amount 201 (control) |
+| DP-07 | Seeds insert-only (D-116) | SCR-002 | Tested | `reseed-keeps-edits.test.ts` |
+| DP-08 | Release package and reference seed (D-112) | RELEASE-1..4, F-06, F-05 preflight | Tested; first package run | `release-package.test.ts`, `reference-seed.test.ts`; smoke 32/32; `docs/RELEASE.md` |
+| DP-09 | API and sign-in faults | API-001 to 005, 007, 009; CHK-019; PPL-001 | Tested; first package PASS | `api/sweep` 4,122 and `fuzz2` 3,871 probes 0 5xx; 60 wrong at once 5 checked; real failed INSERT in 3 bundles, no values in logs (shortcut: patches an internal Drizzle method, a test fails if it moves) |
+| DP-10 | `/ops` server cost | API-006 | Tested; first package PASS | Alone 264–298 ms (was 1,220–1,802); 40 at once p50 9.47 s (was 61.9), 685 MB (was 3,343) |
+| DP-11 | Security fixes: duplicate oracle, link schemes, internal routes off the Platform, Origin compared with Host on `127.0.0.1` and the Wi-Fi address (D-119) | HAT-004, 005, 006; FEE-004 | Tested; first package PASS | `leads.test.ts`; live proof 14/14; 124 origin checks |
+| DP-12 | Attacks never run before, now run with controls: self-approval, nested ids, XSS, EOD CSV, server-action replay, audit text, log privacy, `@example.test`, bootstrap, demo seed, jobs, tokens, Secure cookie, SSRF | | RUN on first package, all held | `rv-a` results (coordinator folder). Replay held and answered 500 (RVA-004, fixed after) |
+| DP-13 | Hindi in PDFs (D-118) | HUS-018, OPS-PDF-DEVANAGARI | Tested; first package looked at | `pdf-toolkit.test.ts`; 7 kinds. Typing warning not built |
+| DP-14 | Click feedback, record panel, Overview layout (D-120) | FEL-001, 002, 003, 007 | Implemented; first package PASS | 47 of 48 under 100 ms; panel 405 to 118 ms; `/ops` shift 0.429 to 0 |
+| DP-15 | Dev read limit, hung forms, overlays, Try again (D-121) | FEE-001, 002, 003, 005, 006, 007, 008 | Partly: production items PASS; **dev-only items not re-run** | FEE-002 partial on Marketing at first package, then RVC-004 fixed in source |
+| DP-16 | Tables: chevrons, scrollbars, journey line, cards, headers, sort state | FET-001 to 021 | First package 18 PASS, FET-005 and 008 partial, FET-009 fail then fixed in source (RVC-009) | `css/tables.css`; 81 lists, 146 row opens, 57 pagers as ops manager. **Finance, counsellor, director list runs not done** |
+| DP-17 | Counts agree with their lists: lead and call counts in SQL, tiles, BOM in CSVs, IST guard | HMO-014 to 019, 022 to 026 | Tested; first package PASS, sibling RVB-002 fixed after | `rvb-counts`, 640 leads, 520 calls |
+| DP-18 | Forms and screens: refusals visible, selects start on Choose…, marks really save, session end keeps typing | HUS-001 to 012, 020 to 038, CHK-006, 011, 014, 015, 020 to 023, FLA, FLB, PPL | Most first package PASS | `rv-b`, `rv-c` results |
+| DP-19 | Teacher, HR and leaver flows: requests reach someone who can decide, teaching assignments, notices, leaver notice | PPL-002 to 010, FLA-001 to 006, FLB-001 to 012 | Tested; first package PASS except FLA-006 (fixed after), FLA-004 owner question | p1-refuse 110/110, leaver 37/37 |
+| DP-20 | Fix round after the first package: RVA-001 to 004, 006; RVB-002 to 007; RVC-001, 003 to 014, 016 to 022, 024; search literal; Marketing Assign picker; RVC-015, 016, 023 | | **Implemented** (source and tests), not re-run on a build | `[coordinator fills final numbers]` |
+| DP-21 | Versions: `.nvmrc`, `packageManager`, exact-dependency test | CHK-001, SCR | Tested | `npm ci --dry-run` on a copy of the manifests, exit 0 |
+
+### Stayed partial or open
+- **Not fixed, by decision or waiting on the owner:** API-010 (session address until a proxy overwrites `x-forwarded-for`), API-011 Low (unknown API path answers HTML 404; wrong method an empty 405), FLA-004 (nobody hears a task comment), FEE-010 (overview calls Academic once per person), FEL-005, FEL-006, HUS-043 (name pairs).
+- **Partial:** HUS-013 (department form added; lead sources and programmes have no route), HUS-014 (no POST route for fee structure rows; the page says it awaits the owner), HUS-031 (future birth date refused; no warnings for old instalment or calendar dates), HUS-039 (answer key typed; Settings JSON and scoring sections stay JSON, marked shortcut), RVC-007 (the path through this sheet to final results was not tested).
+- **Known risks from the last fix round:** `.ops-detail` table-layout fixed affects every detail table and was not seen on desktop; a same-day return to a full batch may still say full; `overflow-wrap:anywhere` on body could break mid-word in squeezed rows (RVC-018 was this).
+- **Capped lists with no note on screen:** calendar and deliverables 500, ideas and optimisation 500, funnel drill 2,000, placements 2,000, pending imports 200, teaching-log exceptions 1,000 sessions, pickers 200 and 500. `/academic/students`: "First 500 of N" was listed as a small to-do.
+- **Stored data not rewritten:** old report snapshots, printed forms, downloaded acknowledgements, frozen exit balances (`HANDOFF.md` 11a); sandbox "published" placements (`HANDOFF.md` 11b); leads renamed before the fix keep the old name in `core.students` until renamed again; demo credits already refunded stay ₹1,000 short until reversed.
+- **Not reached anywhere:** real Google sign-in, a real phone, a restore, Linux, Turbopack, overview tiles in all-scope, lead tiles above 500 through the package, cohort rank, two admissions charged registration at once. Dev mode walked on Ops only.
+- **Notices:** a class-session notice to someone with no Academic role has no page to open (noted by the fixer, not chased).
+- **Prototype:** `C:\OPENBOT\Elevate` does not show any of this (register `OPS-P-DEBUG-31OCT`).
+
+### Commands run and results
+| Command | Result | When |
+|---|---|---|
+| `npm run validate` | `[coordinator fills final numbers]` | final |
+| `npm run release:package`, final package | "release: 11016 files, 310.7 MB; archive elevate-os-0.1.0.tar.gz 92.7 MB"; four apps compiled; secret scan OK on 11,016 files; about 7 minutes | 31 Oct |
+| Four webpack builds with the owner's `.env`, `npm run office:build` | `[coordinator fills final numbers]` | final |
+| Re-test on the final package | `[coordinator fills final numbers]` | final |
+| Register, first package | 266 rows: 260 pass, 3 fail (TASK-17, HR-01, APP-06), 3 held (AUTH-13, STU-03, WIFI-01) | 31 Oct |
+| `npm run db:migrate`, `npm run db:check` on a scratch database | "18 migration file(s) … applied or already up to date"; "19/19 checks passed" | 31 Oct |
+| `node bin/preflight.mjs`, `node db/migrate.mjs`, `node db/seed-reference.mjs`, `node bin/start.mjs`, `node bin/smoke.mjs` on a scratch database | All files match the manifest; 18 migrations; 16 seeds; ready in 9.1 s; "Smoke: 32 passed, 0 failed" | 31 Oct, first package |
+| `npm run office:build` | exit 0 after 427 s; no standalone folder left | 31 Oct |
+| `npm run office` with `OFFICE_HOST=127.0.0.1`, scratch database | Smoke 32 passed, 0 failed, with a real sign-in and a Hindi PDF on three addresses | 31 Oct |
+| `npm audit` | 4 moderate, dev only; `--omit=dev --audit-level=high` 0 | 30 Oct |
+| `npm run docs:code-map` | "wrote docs/code-map.html: 1977 files, 158 tables, 441 foreign keys, 285 test files." | 31 Oct |
+| `node build.mjs` (Elevate-Not-Working) | "Not-Working.html + README.md built: 214 items (owner_decision 75, needs_credentials 7, not_built 100, prototype_limitation 32) from 4 file(s)." | 31 Oct |
+| `npm run docs:permissions`, `npm run docs:data-dictionary` | Not run by the docs pass (generated files) | see coordinator |
+| `npm run check` (Elevate) | Not run: the prototype was not changed | |

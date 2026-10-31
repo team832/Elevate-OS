@@ -4,6 +4,7 @@
  * test uses unique contacts.
  */
 import { createTestUser, type TestUser } from '@elevate/testing';
+import { toIsoDate } from '@elevate/shared-types';
 import { departments, programmes, staffMembers, type Database } from '@elevate/database';
 import { SEED_DEPARTMENTS, SEED_PROGRAMMES } from '@elevate/database/seed';
 import type { RoleKey, StaffMemberId } from '@elevate/shared-types';
@@ -51,5 +52,5 @@ export function uniqueEmail(prefix = 'student'): string {
 
 /** ISO date offset from today (UTC date; fine for "past"/"future" fixtures). */
 export function isoDaysFromNow(days: number): string {
-  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  return toIsoDate(new Date(Date.now() + days * 86_400_000));
 }

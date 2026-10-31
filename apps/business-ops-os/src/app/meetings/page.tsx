@@ -1,6 +1,6 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { ButtonLink, EmptyState, PageHeader, Tabs, type Column } from '@elevate/shared-ui';
+import { ButtonLink, PageHeader, Tabs, type Column, ListEmpty } from '@elevate/shared-ui';
 import { addDays, istToday, istWeekContaining, isIsoDate, type IsoDate } from '../../domain';
 import {
   APPOINTMENT_STATUSES,
@@ -231,11 +231,10 @@ async function Body({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
               rowKey={(a) => a.id}
               rowHref={rowHref}
               empty={
-                <EmptyState
-                  title={
-                    view === 'past' ? 'No past appointments match' : 'Nothing booked after today'
-                  }
-                  description="Clear a filter, or schedule one if you can book appointments."
+                <ListEmpty
+                  noun={view === 'past' ? 'past appointments' : 'upcoming appointments'}
+                  params={sp}
+                  first="Schedule one if you can book appointments."
                 />
               }
               linkColumn="student"

@@ -533,6 +533,31 @@ describe('monthly report facts', () => {
     expect(counts(later.callOutcomes)).toMatchObject({ calls_logged: 2, call_no_answer: 1 });
   });
 
+  it('counts every call of the month in SQL: 520 calls are not 500 (HMO-019)', async () => {
+    const [lead] = await ctx.db.select({ id: opsLeads.id }).from(opsLeads).limit(1);
+    const when = new Date('2026-09-10T11:00:00+05:30');
+    await ctx.db.insert(opsLeadActivities).values(
+      Array.from({ length: 520 }, (_, i) => ({
+        leadId: lead!.id,
+        kind: 'call',
+        outcome: i < 20 ? 'no_answer' : 'connected_two_way',
+        occurredAt: when,
+        staffId: anika.staffId as never,
+        createdBy: anika.id,
+        createdAt: when,
+      })),
+    );
+    const snap = await buildMonthlySnapshot(ctx.db, manager, {
+      staffId: anika.staffId,
+      month: '2026-09',
+    });
+    expect(Object.fromEntries(snap.callOutcomes.map((r) => [r.key, r.count.value]))).toMatchObject({
+      calls_logged: 520,
+      call_connected_two_way: 500,
+      call_no_answer: 20,
+    });
+  });
+
   it('the live view explains a missing lead fact in terms of the viewer', async () => {
     const snap = await buildMonthlySnapshot(
       ctx.db,
@@ -609,6 +634,12 @@ describe('monthly report facts', () => {
     expect((await call(monthlyRoute, anika, path(anika.staffId))).status).toBe(200);
     expect((await call(monthlyRoute, manager, path(bharat.staffId))).status).toBe(200);
     expect((await call(monthlyRoute, null, path(anika.staffId))).status).toBe(401);
+    // Missing is not zero (FLB-009): nobody, or a month that has not started, is not a report of zeros.
+    expect((await call(monthlyRoute, manager, path(crypto.randomUUID()))).status).toBe(404);
+    const future = `/marketing/api/v1/reports/monthly?month=2099-01&staffId=${anika.staffId}`;
+    const refused = await call(monthlyRoute, manager, future);
+    expect(refused.status).toBe(404);
+    expect(refused.error?.message).toMatch(/not started/);
   });
 
   it('the internal snapshot route answers Business Ops only', async () => {

@@ -13,6 +13,10 @@ import { METRIC_KEYS, type MetricKey, type MetricState } from './vocabulary';
 
 export const CSV_FORMATS = ['instagram_meta_business_suite', 'youtube_studio_table_data'] as const;
 export type CsvFormatId = (typeof CSV_FORMATS)[number];
+export const CSV_FORMAT_LABELS: Record<CsvFormatId, string> = {
+  instagram_meta_business_suite: 'Instagram, Meta Business Suite',
+  youtube_studio_table_data: 'YouTube Studio',
+};
 
 export const DATE_FORMATS = [
   'YYYY-MM-DD',

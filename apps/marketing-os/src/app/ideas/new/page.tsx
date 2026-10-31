@@ -36,7 +36,8 @@ export default async function NewIdeaPage({ searchParams }: { searchParams: Sear
                   label="Course"
                   hint="GEN = founder, parents, careers — not tied to one exam."
                 >
-                  <Select id="coursePrefix" name="coursePrefix" required defaultValue="CLAT">
+                  <Select id="coursePrefix" name="coursePrefix" required>
+                    <option value="">Choose…</option>
                     {COURSE_PREFIXES.map((c) => (
                       <option key={c} value={c}>
                         {c}

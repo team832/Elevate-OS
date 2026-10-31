@@ -3,7 +3,7 @@
  * core.departments and core.staff_members: these are the only writers.
  * Out of scope (D-015, OD-026): payroll, biometrics, leave, appraisal, HRIS.
  */
-import { and, asc, count, eq, exists, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, exists, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   branches,
@@ -17,7 +17,7 @@ import {
   type CoreBranchId,
   type Database,
 } from '@elevate/database';
-import { withTransaction } from '@elevate/server-kit';
+import { withTransaction, containsPattern } from '@elevate/server-kit';
 import { ConflictError, ValidationError } from '@elevate/shared-contracts';
 import type { DepartmentId, StaffMemberId, UserId } from '@elevate/shared-types';
 import type { z } from 'zod';
@@ -65,7 +65,7 @@ export async function getDirectory(
   // A GET filter form sends empty fields; they mean "any".
   const f = directoryQuery.parse(Object.fromEntries(Object.entries(query).filter(([, v]) => v)));
   const scope = view === 'hr' ? await hrScopeFor(db, actor) : null;
-  const q = f.q ? `%${f.q.replace(/[\\%_]/g, '\\$&')}%` : null;
+  const q = f.q ? containsPattern(f.q) : null;
   const where = and(
     hrReachWhere(actor, scope),
     q
@@ -206,6 +206,26 @@ async function assertUserFree(tx: Database, userId: string | null | undefined, s
     throw new ConflictError('That login is already linked to another staff member.');
 }
 
+/**
+ * Logins the staff record's picker may offer: active ones with no staff record, plus the one this
+ * record already holds. A person added on Users & roles shows up here until someone links them.
+ */
+export async function linkableLogins(db: Database, actor: Actor, staffId: string) {
+  await accessScope(db, actor, 'ops:organisation:manage');
+  const rows = await db
+    .select({ id: users.id, name: users.displayName, email: users.email })
+    .from(users)
+    .leftJoin(staffMembers, eq(staffMembers.userId, users.id))
+    .where(
+      or(
+        and(isNull(staffMembers.id), eq(users.status, 'active')),
+        eq(staffMembers.id, staffId as StaffMemberId),
+      ),
+    )
+    .orderBy(asc(users.displayName));
+  return rows.map((u) => ({ value: u.id, label: `${u.name} (${u.email})` }));
+}
+
 export async function createStaff(
   db: Database,
   actor: Actor,
@@ -283,6 +303,8 @@ export async function updateStaff(
     const [after] = Object.keys(patch).length
       ? await tx.update(staffMembers).set(patch).where(eq(staffMembers.id, before.id)).returning()
       : [before];
+    if (input.fullName && after?.userId)
+      await tx.update(users).set({ displayName: input.fullName }).where(eq(users.id, after.userId));
     if (input.employmentType || input.roleLabels) {
       const values = {
         staffId: before.id,

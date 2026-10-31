@@ -6,8 +6,30 @@ import {
   messageStatus,
   reachable,
 } from '../../src/domain/appointments';
+import { eventBody } from '../../src/server/appointments-schemas';
 
 const given = { consentStatus: 'given', allowedChannels: ['email', 'whatsapp'] };
+
+describe('an event online link takes web addresses only (HAT-006)', () => {
+  it.each([
+    ['https://meet.example/a', true],
+    ['http://meet.example/a', true],
+    ['javascript:alert(1)', false],
+    ['data:text/html,x', false],
+    ['vbscript:msgbox(1)', false],
+    ['ms-msdt:/id', false],
+    ['file:///c:/win.ini', false],
+  ])('%s -> %s', (onlineLink, ok) => {
+    const body = {
+      type: 'webinar',
+      title: 'Sample webinar',
+      startsAt: '2026-11-02T10:00:00+05:30',
+      mode: 'online',
+      onlineLink,
+    };
+    expect(eventBody.safeParse(body).success).toBe(ok);
+  });
+});
 
 describe('group types', () => {
   it.each([

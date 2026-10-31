@@ -1,7 +1,7 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { ButtonLink, PageHeader } from '@elevate/shared-ui';
-import { getStaffDetail } from '../../server/organisation';
+import { getStaffDetail, linkableLogins } from '../../server/organisation';
 import { PeopleNav } from '../../ui/admissions-nav';
 import { Frame, gate, load, Section } from '../../ui/frame';
 import { listHref } from '../../ui/list-controls';
@@ -50,9 +50,10 @@ export default async function StaffPage({ searchParams }: { searchParams: Promis
 async function OpenStaff({ user, sp, id }: { user: AuthenticatedUser; sp: Params; id: string }) {
   const close = (patch: Params) => listHref(BASE, sp, patch);
   const edit = sp.act === 'edit' && can(user, 'ops:organisation:manage');
-  const r = await load(async (db) =>
-    getStaffDetail(db, user, id),
-  );
+  const r = await load(async (db) => ({
+    d: await getStaffDetail(db, user, id),
+    logins: edit ? await linkableLogins(db, user, id) : [],
+  }));
   if (!r.ok)
     return (
       <RecordModal
@@ -63,9 +64,9 @@ async function OpenStaff({ user, sp, id }: { user: AuthenticatedUser; sp: Params
         {r.view}
       </RecordModal>
     );
-  const d = r.data;
+  const { d, logins } = r.data;
   return edit ? (
-    <StaffEditModal d={d} closeHref={close({ act: undefined })} />
+    <StaffEditModal d={d} logins={logins} closeHref={close({ act: undefined })} />
   ) : (
     <RecordModal
       id="staff-modal"

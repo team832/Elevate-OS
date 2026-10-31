@@ -21,6 +21,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
+import { containsPattern } from '@elevate/server-kit';
 import { opsStaffTasks as tasks, staffMembers, type Database } from '@elevate/database';
 import { addDays, istToday, istWeekContaining } from '../domain/dates';
 import { WORK_STATUSES, type TaskStatus } from '../domain/staff-tasks';
@@ -77,7 +78,7 @@ export function dueFilter(due: TaskListQuery['due'], now: Date): SQL | undefined
 export function listWhere(access: TaskAccess, q: Partial<TaskListQuery>) {
   return and(
     visibleFilter(access, q.staffId),
-    q.q ? ilike(tasks.title, `%${q.q.replace(/[%_\\]/g, '\\$&')}%`) : undefined,
+    q.q ? ilike(tasks.title, containsPattern(q.q)) : undefined,
     q.priority ? eq(tasks.priority, q.priority) : undefined,
     q.departmentId ? eq(tasks.departmentId, q.departmentId as never) : undefined,
     q.from ? gte(tasks.dueOn, q.from) : undefined,
@@ -103,7 +104,7 @@ const lastSubmitter = sql`(select s.submitted_by_user_id from ops.task_submissio
  * or collaborator visibility alone does not make anyone a reviewer, and nobody decides a version
  * they handed in for someone else.
  */
-function reviewableBy(a: TaskAccess) {
+export function reviewableBy(a: TaskAccess) {
   const notMine = a.self ? sql`${tasks.staffId} <> ${a.self}` : undefined;
   const reports = [
     ...(a.review === 'all' ? (a.scopeStaff ?? []) : a.review === 'own' ? a.managed : []),

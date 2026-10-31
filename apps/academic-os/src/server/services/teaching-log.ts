@@ -22,11 +22,13 @@ import {
   type AcademicClassRecordId,
   type Database,
 } from '@elevate/database';
+import { notify } from '@elevate/notifications';
 import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, InvalidStateTransitionError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import { addDays, type BatchId, type IsoDate, type StaffMemberId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { audit, resolveScope, staffIdForUser, todayIst, type Actor } from '../context';
+import { MODULE_PATHS } from '../paths';
 import type { classRecordsQuery, correctClassBody, logExceptionsQuery, recordClassBody, requestCorrectionBody, updateClassBody } from '../schemas-teaching';
 import { assertLoggable, assertSessionAccess, lockSession, taughtBy } from './session-guards';
 import { getSetting } from './settings';
@@ -214,6 +216,7 @@ export async function requestClassCorrection(db: Database, actor: Actor, recordI
     const [teacher] = await tx.select({ userId: staffMembers.userId }).from(staffMembers).where(eq(staffMembers.id, original.teacherStaffId));
     const { superseded, next } = await supersede(tx, original, { state: 'draft', correctionReason: input.reason, recordedByUserId: teacher?.userId ?? original.recordedByUserId });
     await audit(tx, actor, { action: 'class_record.correction_requested', entityType: 'class_record', entityId: original.id, before: original, after: next, metadata: { reason: input.reason, supersededAt: superseded.supersededAt, draftId: next.id } });
+    if (teacher?.userId) await notify(tx, { userIds: [teacher.userId], module: 'academic', kind: 'class_record.sent_back', title: 'Your class log was sent back for correction', body: input.reason, link: MODULE_PATHS.teachingLog(original.sessionId), entityType: 'class_record', entityId: next.id });
     return { original: superseded, draft: next };
   });
 }

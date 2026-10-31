@@ -21,7 +21,6 @@ import { formOptions } from '../../../server/options';
 import { ActionForm } from '../../../ui/action-form';
 import { AdmissionsNav } from '../../../ui/admissions-nav';
 import {
-  decisionTone,
   fmtDate,
   fmtDateTime,
   fmtPaise,
@@ -29,8 +28,9 @@ import {
   statusTone,
 } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
+import { OpenLink, openHref } from '../../../ui/open-link';
 import { RecordTable } from '../../../ui/record-table';
-import { DetailTable, Segment } from '../../../ui/sections';
+import { DetailTable, Segment, noStaffHint } from '../../../ui/sections';
 import { StudentFeesSection } from '../../../ui/student-fees-section';
 import { AdmissionConfirmation } from './confirmation';
 
@@ -83,7 +83,15 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             {a.code}
           </>
         }
-        description={<a href="/ops/admissions">Back to demo students</a>}
+        description={
+          <OpenLink
+            user={user}
+            href="/ops/admissions"
+            fallback={<a href="/ops/admissions/overview">Back to admissions</a>}
+          >
+            Back to demo students
+          </OpenLink>
+        }
         tabs={tabs}
       />
       <div className="el-stack">
@@ -108,17 +116,25 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                 label: 'Admission no.',
                 value: a.admissionNumber ?? 'Not assigned (given at final confirmation)',
               },
-              { label: 'Lead', value: <a href={`/ops/leads/${a.leadId}`}>{d.lead?.code}</a> },
+              {
+                label: 'Lead',
+                value: (
+                  <OpenLink user={user} href={`/ops/leads/${a.leadId}`}>
+                    {d.lead?.code}
+                  </OpenLink>
+                ),
+              },
               { label: 'Programme', value: d.programme?.name ?? 'Not chosen' },
               { label: 'Admission owner (counsellor)', value: d.counsellor?.fullName ?? 'None' },
               {
                 label: 'Admitted on',
                 value: a.admissionDate ? fmtDate(a.admissionDate) : 'Not admitted yet',
               },
-              profile && {
-                label: 'Student profile',
-                value: <a href={`/ops/students/${a.studentId}`}>Open the student profile</a>,
-              },
+              profile &&
+                openHref(user, `/ops/students/${a.studentId}`) && {
+                  label: 'Student profile',
+                  value: <a href={`/ops/students/${a.studentId}`}>Open the student profile</a>,
+                },
             ]}
           />
         </Segment>
@@ -181,15 +197,12 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                   label: 'Reason code (when closing as lost)',
                   type: 'select',
                   options: d.closureReasons.map((c) => ({ value: c.code, label: c.label })),
-                  hint: `Used in reports; a closure without a code is counted as not coded. Code list: ${d.settings.closureReasons.decisionState}.`,
+                  hint: 'Used in reports; a closure without a code is counted as not coded.',
                 },
               ]}
             />
             <p className="el-field-hint">
               Admission without a demo:{' '}
-              <StatusBadge tone={decisionTone(d.settings.demoSkip.decisionState)}>
-                {d.settings.demoSkip.decisionState}
-              </StatusBadge>{' '}
               {d.settings.demoSkip.value.allowed ? 'allowed with a reason' : 'switched off'}.
             </p>
           </Segment>
@@ -223,9 +236,6 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                 label: 'Documents item required',
                 value: (
                   <>
-                    <StatusBadge tone={decisionTone(d.settings.confirmation.decisionState)}>
-                      {d.settings.confirmation.decisionState}
-                    </StatusBadge>{' '}
                     {d.settings.confirmation.value.requireDocuments ? 'Yes' : 'No'}. Payment before
                     admission is the setting &ldquo;Payment before admission&rdquo;.
                   </>
@@ -270,6 +280,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                     <ActionForm
                       action={`${api}/checks`}
                       submitLabel="Record"
+                      labelSuffix={` — ${ADMISSION_CHECK_LABELS[x.k]}`}
                       compact
                       extra={{ itemKey: x.k }}
                       fields={[
@@ -292,14 +303,24 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             ]}
           />
         </Segment>
-        <Segment title="Fee-agreement approval">
+        <Segment id="fee-agreement" title="Fee-agreement approval">
           <p>
             Each version of the annual fee agreement is approved on its own, from the student&apos;s
             Fees tab or the Approvals inbox (the requester never approves their own request).{' '}
             {profile ? (
-              <a href={`/ops/students/${a.studentId}?tab=fees`}>Open the student&apos;s Fees tab</a>
+              <OpenLink
+                user={user}
+                href={`/ops/students/${a.studentId}?tab=fees`}
+                fallback="The Fees tab is on the student's record, which your role does not open."
+              >
+                Open the student&apos;s Fees tab
+              </OpenLink>
             ) : a.studentId ? (
-              'Create it below.'
+              can(user, 'ops:fees:record') ? (
+                'Create it below.'
+              ) : (
+                'A finance officer or an operations manager creates it here.'
+              )
             ) : (
               'The student record is created at conversion.'
             )}{' '}
@@ -319,15 +340,19 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           <Segment
             id="fees"
             title="Fee records (manually recorded)"
-            description={`${fees.disclaimer} No fee schedule is approved (${fees.settings.schedule.decisionState}); each entry quotes its own pricing reference.`}
+            description={`${fees.disclaimer} No fee schedule is approved; each entry quotes its own pricing reference.`}
           >
             <DetailTable
-              caption="Fee summary"
+              caption="Fee statement for the student (agreement, registration and demo fees, all their cases)"
               rows={[
                 { label: 'State', value: FEE_BALANCE_LABELS[fees.summary.balanceState] },
                 { label: 'Due', value: fmtPaise(fees.summary.duePaise) },
                 { label: 'Credits', value: fmtPaise(fees.summary.creditAdjustmentsPaise) },
                 { label: 'Received', value: fmtPaise(fees.summary.netReceivedPaise) },
+                fees.summary.unchargedPaise > 0 && {
+                  label: 'Of which no charge is recorded',
+                  value: fmtPaise(fees.summary.unchargedPaise),
+                },
                 {
                   label: 'Checked by a second person',
                   value: fmtPaise(fees.summary.verifiedNetReceivedPaise),
@@ -352,7 +377,12 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                   render: (f) =>
                     `${FEE_KIND_LABELS[f.kind]}${f.direction ? ` (${f.direction})` : ''}`,
                 },
-                { key: 'amount', header: 'Amount', render: (f) => fmtPaise(f.amountPaise) },
+                {
+                  key: 'amount',
+                  header: 'Amount',
+                  numeric: true,
+                  render: (f) => fmtPaise(f.amountPaise),
+                },
                 {
                   key: 'date',
                   header: 'Date',
@@ -447,6 +477,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                     name: 'amountRupees',
                     section: 'New fee entry',
                     label: 'Amount in ₹',
+                    type: 'money',
                     required: true,
                     hint: 'Up to two decimals, e.g. 15000 or 15000.50. Stored as whole paise.',
                   },
@@ -522,7 +553,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
               />
             }
             columns={[
-              { key: 'n', header: 'Attempt', render: (x) => x.attempt },
+              { key: 'n', header: 'Attempt', numeric: true, render: (x) => x.attempt },
               { key: 'kind', header: 'Why', render: (x) => humanise(x.kind) },
               {
                 key: 'at',
@@ -544,13 +575,22 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
               },
             ]}
           />
-          {['admitted', 'enrolment_requested', 'enrolled'].includes(status) ? (
+          {['admitted', 'enrolment_requested', 'enrolled'].includes(status) &&
+          openHref(user, `/ops/students/${a.id}`) ? (
             <p>
               <a href={`/ops/students/${a.id}`}>Open the student profile</a>
             </p>
           ) : null}
         </Segment>
         <Segment title="Counselling">
+          {status === 'new' ? (
+            <p className="el-field-hint">
+              Counselling can be booked after a successful contact.{' '}
+              <OpenLink user={user} href={`/ops/leads/${a.leadId}?act=contact`} fallback={null}>
+                Log contact on the lead
+              </OpenLink>
+            </p>
+          ) : null}
           <RecordTable
             rows={d.counselling}
             rowKey={(s) => s.id}
@@ -583,6 +623,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                   required: true,
                   defaultValue: a.counsellorStaffId ?? '',
                   options: options.staff,
+                  emptyHint: noStaffHint('/ops'),
                 },
               ]}
               variant="secondary"
@@ -593,12 +634,16 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           <RecordTable
             rows={d.demos}
             rowKey={(x) => x.id}
-            rowHref={(x) => `/ops/admissions?open=${x.id}`}
+            rowHref={(x) => openHref(user, `/ops/admissions?open=${x.id}`)}
             empty={
               <EmptyState
                 title="No demo booked"
                 description="Book the demo classes from Demo students."
-                action={<a href="/ops/admissions">Open demo students</a>}
+                action={
+                  <OpenLink user={user} href="/ops/admissions" fallback={null}>
+                    Open demo students
+                  </OpenLink>
+                }
               />
             }
             columns={[

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, ButtonLink, Card, DataTable, PageHeader } from '@elevate/shared-ui';
+import { Alert, ButtonLink, Card, DataTable, PageHeader, fmtDay } from '@elevate/shared-ui';
 import { getReview, reviewChoices } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiButton, ApiForm } from '../../../ui/api-form';
@@ -17,7 +17,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   const access = await gate('academic:reviews:read', MODULE_PATHS.review(id));
   if (access.status !== 'allowed') return <AcademicShell access={access} active="reviews">{null}</AcademicShell>;
   const data = await load(() => getReview(getDb(), actorFor(access.user), id));
-  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError level={1} error={data.error} /></AcademicShell>;
   const r = data.data;
   const canWrite = r.isAuthor && can(access.user, 'academic:reviews:write');
   const choices = canWrite && r.status === 'draft' && !r.coreStudentId ? await reviewChoices(getDb(), actorFor(access.user)) : undefined;
@@ -27,11 +27,11 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
       <PageHeader
         title={`${TYPE_LABELS[r.reviewType]} — ${r.studentName}`}
         meta={<><StateBadge state={r.status} /> <span>Version {r.version}</span></>}
-        description={`By ${r.authorName}${r.subjectName ? ` · ${r.subjectName}` : ''}${r.batchCode ? ` · ${r.batchCode}` : ''}${r.observationOn ? ` · observed ${r.observationOn}` : ''}${r.sessionDate ? ` · class on ${r.sessionDate}` : ''}${r.periodFrom ? ` · ${r.periodFrom} to ${r.periodTo}` : ''} · ${VISIBILITY_LABELS[r.visibility]}`}
+        description={`By ${r.authorName}${r.subjectName ? ` · ${r.subjectName}` : ''}${r.batchCode ? ` · ${r.batchCode}` : ''}${r.observationOn ? ` · observed ${fmtDay(r.observationOn)}` : ''}${r.sessionDate ? ` · class on ${fmtDay(r.sessionDate)}` : ''}${r.periodFrom ? ` · ${fmtDay(r.periodFrom)} to ${fmtDay(r.periodTo)}` : ''} · ${VISIBILITY_LABELS[r.visibility]}`}
         actions={<ButtonLink href={MODULE_PATHS.reviews}>All reviews</ButtonLink>}
       />
       <div className="el-stack">
-        {r.status === 'withdrawn' ? <Alert tone="warning" title="Withdrawn">{`${fmtDateTime(r.withdrawnAt)}: ${r.withdrawnReason}. Business Ops no longer shows it.`}</Alert> : null}
+        {r.status === 'withdrawn' ? <Alert tone="warning" title="Withdrawn">{`${fmtDateTime(r.withdrawnAt)}: ${r.withdrawnReason}. Business Operations no longer shows it.`}</Alert> : null}
         {canWrite && r.status === 'draft' ? (
           <Card title="Your draft" description="Only you can see this draft.">
             <ApiForm action={MODULE_PATHS.api(`reviews/${r.id}`)} method="PATCH" extra={{ updatedAt: new Date(r.updatedAt).toISOString() }} fields={reviewFields(r, choices)} submitLabel="Publish review" draftLabel="Save draft" successMessage="Published." stickyActions idPrefix={`r-${r.id}`} />
@@ -47,13 +47,13 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
               ))}
               <div>
                 <dt className="el-field-hint">Follow-up date</dt>
-                <dd>{r.followUpOn ?? 'No date set'}</dd>
+                <dd>{fmtDay(r.followUpOn, 'No date set')}</dd>
               </div>
             </dl>
           </Card>
         )}
         {canWrite && r.status === 'submitted' && isLatest ? (
-          <Card title="Change this review" description="A submitted review is never edited. A revision becomes the next version; Business Ops then shows the new version and marks this one as superseded.">
+          <Card title="Change this review" description="A submitted review is never edited. A revision becomes the next version; Business Operations then shows the new version and marks this one as superseded.">
             <ApiButton action={MODULE_PATHS.api(`reviews/${r.id}/revise`)} label="Revise as a new version" successMessage="Draft of the next version opened below in Versions." />
             <details>
               <summary>Withdraw this review</summary>

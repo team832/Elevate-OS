@@ -42,6 +42,14 @@ import {
 
 export { listHref };
 export const PAGE_SIZE = 25;
+
+/** Past-students tabs: past demos come from the demo list, so that tab needs its permission. */
+export const pastTabs = (user: AuthenticatedUser) => [
+  { key: 'former' as const, label: 'Former students' },
+  ...(can(user, 'ops:leads:read')
+    ? [{ key: 'demos' as const, label: 'Past demos (never enrolled)' }]
+    : []),
+];
 type Params = Record<string, string | undefined>;
 export type Row = Awaited<ReturnType<typeof listStudents>>['items'][number];
 
@@ -211,7 +219,7 @@ export const FeeBadge = ({ status }: { status: Row['feeStatus'] }) =>
 function nextEvent(s: Row) {
   const f = s.nextFollowUp;
   const m = s.nextMeeting;
-  const meetingFirst = m && (!f || m.startsAt.toISOString().slice(0, 10) <= f.dueDate);
+  const meetingFirst = m && (!f || istToday(m.startsAt) <= f.dueDate);
   if (meetingFirst) return `${fmtDateTime(m.startsAt)} · ${humanise(m.type)} with ${m.staffName}`;
   if (!f) return 'Nothing scheduled';
   const late = f.dueDate < istToday(new Date()) ? ' (overdue)' : '';
@@ -328,6 +336,9 @@ export async function StudentListSection({
         rowKey={(s) => s.id}
         rowHref={(s) => listHref(basePath, params, { open: s.id })}
         linkColumn="student"
+        sortedBy={
+          params.sort === 'name' ? { column: 'student', direction: 'ascending' } : undefined
+        }
         empty={empty}
       />
       <Pager basePath={basePath} params={params} page={page} pageSize={PAGE_SIZE} total={total} />
@@ -382,7 +393,7 @@ export async function StudentQuickView({
           label: 'Overview',
           content: (
             <Segment title="Admission" level={3} flush>
-              <AdmissionFacts d={d} />
+              <AdmissionFacts d={d} user={user} />
             </Segment>
           ),
         },
@@ -392,7 +403,7 @@ export async function StudentQuickView({
           count: d.cases.length,
           content: (
             <Segment title="Programmes and batches" level={3} flush>
-              <ProgrammesTable d={d} />
+              <ProgrammesTable d={d} user={user} />
             </Segment>
           ),
         },

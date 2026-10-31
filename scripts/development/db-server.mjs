@@ -10,6 +10,7 @@
  *
  * Refuses to run unless the URL host is localhost/127.0.0.1. Listens on
  * 127.0.0.1 only. Keep this terminal open; Ctrl+C stops the server cleanly.
+ * ELEVATE_PG_DATA names another data folder (tests only: never the owner's cluster).
  *
  *   npm run db:start            start (initialising the cluster on first run)
  *   npm run db:start -- --stop  stop a server left running by a crashed session
@@ -23,7 +24,7 @@ import { parseEnv } from 'node:util';
 import pg from 'pg';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const dataDir = path.join(repoRoot, '.data', 'postgres');
+const dataDir = path.resolve(process.env.ELEVATE_PG_DATA || path.join(repoRoot, '.data', 'postgres'));
 
 function loadRootEnv() {
   const file = path.join(repoRoot, '.env');
@@ -53,7 +54,7 @@ if (!/^postgres(ql)?:$/.test(url.protocol)) {
   );
 }
 if (!['localhost', '127.0.0.1'].includes(url.hostname)) {
-  fail(`refusing to start: DATABASE_URL host is "${url.hostname}", not localhost/127.0.0.1.`);
+  fail(`refusing: DATABASE_URL host is "${url.hostname}", not localhost/127.0.0.1.`);
 }
 const user = decodeURIComponent(url.username || 'postgres');
 const password = decodeURIComponent(url.password || '');
@@ -85,17 +86,24 @@ if (process.argv.includes('--stop')) {
 
 const pidFile = path.join(dataDir, 'postmaster.pid');
 if (existsSync(pidFile)) {
+  // Line 4 of postmaster.pid is the port that server uses, which DATABASE_URL may no longer name.
+  const pidPort = Number(readFileSync(pidFile, 'utf8').split(/\r?\n/)[3]) || port;
   const listening = await new Promise((resolve) => {
-    const socket = net.connect({ host: '127.0.0.1', port }, () => {
+    const socket = net.connect({ host: '127.0.0.1', port: pidPort }, () => {
       socket.end();
       resolve(true);
     });
     socket.on('error', () => resolve(false));
   });
-  if (listening) fail(`a server is already listening on port ${port}.`);
+  if (listening)
+    fail(
+      pidPort === port
+        ? `a server is already listening on port ${port}.`
+        : `this data folder's server is running on port ${pidPort}, but DATABASE_URL says ${port}. Stop it first: npm run db:stop. Nothing was changed.`,
+    );
   // A crash leaves the pid file behind and Windows may reuse its PID, so pg_ctl can neither stop nor start.
   rmSync(pidFile);
-  console.log(`db:start — removed a stale postmaster.pid (nothing listening on port ${port}).`);
+  console.log(`db:start — removed a stale postmaster.pid (nothing listening on port ${pidPort}).`);
 }
 
 const quiet = (message) => {
@@ -152,4 +160,6 @@ async function shutdown() {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 process.on('SIGBREAK', shutdown);
+// dev.mjs: on Windows a signal kills this process outright, so it closes this pipe instead.
+if (process.argv.includes('--stop-with-pipe')) process.stdin.resume().on('end', shutdown);
 setInterval(() => {}, 1 << 30);

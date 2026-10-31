@@ -2,16 +2,22 @@ import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Alert, Button, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
-import { listBatches, listStudents } from '../../server';
+import { STUDENT_LIST_LIMIT, listBatches, listStudents } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
-import { StateBadge } from '../../ui/badges';
+import { StateBadge, words } from '../../ui/badges';
 import { Filter } from '../../ui/filters';
 import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Academic students' };
+
+const STATES = [
+  { value: 'current', label: 'Current students' },
+  { value: 'left', label: 'Students who left' },
+  { value: 'all', label: 'Everyone' },
+] as const;
 
 export default async function StudentsPage({
   searchParams,
@@ -36,22 +42,24 @@ async function Body({
 }) {
   const sp = await searchParams;
   const q = typeof sp.q === 'string' ? sp.q.slice(0, 100) : undefined;
+  const state = STATES.find((s) => s.value === sp.state)?.value ?? 'current';
   const db = getDb();
   const actor = actorFor(access.user);
   const canWrite = can(access.user, 'academic:students:write');
   const canEnrol = can(access.user, 'academic:enrolments:decide');
   const data = await load(async () => ({
-    students: await listStudents(db, actor, { q }),
+    students: await listStudents(db, actor, { q, state }),
     batches: canEnrol ? await listBatches(db, actor) : [],
   }));
   return (
     <>
       <PageHeader
         title="Students"
-        description="Teachers see only students in their batches. Development data is fictional."
+        description="Teachers see only students in their batches."
       />
       <form method="get" className="el-inline-form">
         <Filter id="st-q" name="q" label="Search name or code" value={q} />
+        <Filter id="st-state" name="state" label="Show" type="select" all={null} value={state} options={STATES} />
         <Button type="submit" variant="secondary">
           Search
         </Button>
@@ -66,11 +74,18 @@ async function Body({
               role.
             </Alert>
           ) : null}
+          {data.data.students.length === STUDENT_LIST_LIMIT ? (
+            <Alert tone="info">
+              Showing the first {STUDENT_LIST_LIMIT} students, A to Z. Search by name or code to
+              find anyone else.
+            </Alert>
+          ) : null}
           <Card>
             <DataTable
               compact
               rows={data.data.students}
               rowKey={(s) => s.id}
+              sampleOf={(s) => s.isSample}
               empty={
                 <EmptyState
                   title="No students"
@@ -88,7 +103,7 @@ async function Body({
                   render: (s) => <a href={MODULE_PATHS.student(s.id)}>{s.code}</a>,
                 },
                 { key: 'fullName', header: 'Name' },
-                { key: 'stage', header: 'Stage', render: (s) => s.currentStage ?? '—' },
+                { key: 'stage', header: 'Stage', render: (s) => (s.currentStage ? words(s.currentStage) : '—') },
                 {
                   key: 'batches',
                   header: 'Active batches',
@@ -111,7 +126,7 @@ async function Body({
           {canWrite ? (
             <Card
               title="Add a student by hand"
-              description="Normally students come from Business Ops through the enrolment intake. Collect only what is needed; a guardian contact is required for minors."
+              description="Normally students come from Business Operations through the enrolment intake. Collect only what is needed; a guardian contact is required for minors."
             >
               <ApiForm
                 action={MODULE_PATHS.api('students')}
@@ -134,11 +149,11 @@ async function Body({
                       'gap_year',
                       'graduate',
                       'other',
-                    ].map((v) => ({ value: v, label: v.replace(/_/g, ' ') })),
+                    ].map((v) => ({ value: v, label: words(v) })),
                   },
                   { name: 'schoolBoard', label: 'Board' },
                   { name: 'email', label: 'Email' },
-                  { name: 'phone', label: 'Phone (E.164, e.g. +919800000000)' },
+                  { name: 'phone', label: 'Phone', hint: 'Indian numbers with or without +91; other countries with + first.' },
                   { name: 'city', label: 'City' },
                   { name: 'guardianName', label: 'Guardian name' },
                   {
@@ -151,7 +166,7 @@ async function Body({
                     })),
                   },
                   { name: 'guardianEmail', label: 'Guardian email' },
-                  { name: 'guardianPhone', label: 'Guardian phone' },
+                  { name: 'guardianPhone', label: 'Guardian phone', hint: 'Indian numbers with or without +91; other countries with + first.' },
                 ]}
               />
             </Card>
@@ -159,7 +174,7 @@ async function Body({
           {canEnrol ? (
             <Card
               title="Manual enrolment"
-              description="Only for cases outside the Business Ops handoff; the reason is audited."
+              description="Only for cases outside the Business Operations handoff; the reason is audited."
             >
               <ApiForm
                 action={MODULE_PATHS.api('enrolments')}

@@ -65,14 +65,14 @@ export const ReviewBadge = ({ state }: { state: ReviewState }) => (
 export const reviewTeachers = (d: DemoRecord) => d.feedback.flatMap((day) => day.teachers);
 
 type Option = { value: string; label: string };
-/** "CUET (UG) preparation" from the picker option "CUET — CUET (UG) preparation"; an unknown code stays. */
+/** The programme's name from the picker options; an unknown code stays. */
 export const programmeName = (code: string, programmes: readonly Option[]) =>
-  programmes.find((p) => p.value === code)?.label.replace(`${code} — `, '') ?? code;
+  programmes.find((p) => p.value === code)?.label ?? code;
 export const programmeNames = (codes: readonly string[], programmes: readonly Option[]) =>
   codes.map((c) => programmeName(c, programmes)).join(', ');
 
 export const SampleBadge = ({ show }: { show: boolean }) =>
-  show ? <SourceBadge source="sample" note="Sample record (development data)." /> : null;
+  show ? <SourceBadge source="sample" note="Sample record." /> : null;
 
 /** Day summary → the progress-mark shapes in ops.css (each mark also has hidden text). */
 const MARK: Record<DayState, string> = {

@@ -33,7 +33,7 @@ import {
 } from '@elevate/database';
 import { recordAudit } from '@elevate/server-kit';
 import { ForbiddenError, NotFoundError } from '@elevate/shared-contracts';
-import type { BatchId, StaffMemberId, StudentId } from '@elevate/shared-types';
+import { toIsoDate, type BatchId, type StaffMemberId, type StudentId } from '@elevate/shared-types';
 
 export interface Actor {
   user: AuthenticatedUser;
@@ -188,10 +188,5 @@ export function audit(
 
 /** Today's calendar date in Asia/Kolkata (overridable in tests through `now`). */
 export function todayIst(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(now);
+  return toIsoDate(now);
 }

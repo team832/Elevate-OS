@@ -4,17 +4,19 @@
  * same query, the sender's and the recipient's lists, one request as that viewer may see it, and
  * the file rule for `hr_request` attachments. HR never sees drafts; nobody handles their own request.
  */
-import { and, asc, count, desc, eq, ilike, inArray, isNotNull, ne, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, ne, or } from 'drizzle-orm';
+import { containsPattern } from '@elevate/server-kit';
 import { z } from 'zod';
-import { can } from '@elevate/authorization';
+import { can, grantsForRole } from '@elevate/authorization';
 import {
   opsHrRequestEvents as events,
   opsHrRequests as requests,
   staffMembers,
+  userRoles,
   users,
   type Database,
 } from '@elevate/database';
-import type { StaffMemberId } from '@elevate/shared-types';
+import { ROLE_KEYS, type StaffMemberId } from '@elevate/shared-types';
 import {
   decideHrRequest,
   eventsFor,
@@ -27,13 +29,20 @@ import {
 } from '../domain/hr-requests';
 import { accessScope, notFound, staffIdForUser, type Actor } from './context';
 import type { HrRequestListQuery } from './hr-requests-schemas';
-import { hrReachWhere, hrScopeFor, inHrReach } from './hr-scope';
+import { hrReachWhere, hrScopeFor, hrScopeStaff, inHrReach } from './hr-scope';
 
 export { inHrReach };
 import { rowById } from './ops-common';
 import { loadSettings } from './settings';
 
 export type HrRequestRow = typeof requests.$inferSelect;
+
+/** Does HR's department scope (a proposed setting) reach this person? If not, only an operations manager reads their requests. */
+export async function hrReadsRequestsFrom(db: Database, actor: Actor) {
+  const [self, scope] = await Promise.all([staffIdForUser(db, actor.id), hrScopeStaff(db)]);
+  return !self || !scope || scope.has(self);
+}
+
 export const HR_REQUESTS_PAGE_SIZE = 25;
 const isUuid = (id: string) => z.uuid().safeParse(id).success;
 
@@ -143,13 +152,16 @@ async function lookups(db: Database, staffIds: readonly (string | null)[] = []) 
 
 /** Active staff with a login (who a request can be for, or forwarded to), by name. */
 export async function activeStaffOptions(db: Database, exclude?: string | null) {
+  // Replying needs ops:hr_requests:create (viewerOn): someone without it could only be a dead end.
+  const roles = ROLE_KEYS.filter((r) => grantsForRole(r).has('ops:hr_requests:create'));
   const rows = await db
-    .select({ id: staffMembers.id, name: staffMembers.fullName })
+    .selectDistinct({ id: staffMembers.id, name: staffMembers.fullName })
     .from(staffMembers)
+    .innerJoin(userRoles, eq(userRoles.userId, staffMembers.userId))
     .where(
       and(
         eq(staffMembers.status, 'active'),
-        isNotNull(staffMembers.userId),
+        inArray(userRoles.role, roles),
         exclude ? ne(staffMembers.id, exclude as StaffMemberId) : undefined,
       ),
     )
@@ -206,7 +218,7 @@ async function withLabels<
 export async function hrQueue(db: Database, actor: Actor, q: HrRequestListQuery) {
   await accessScope(db, actor, 'ops:hr_requests:read');
   const self = await staffIdForUser(db, actor.id);
-  const text = q.q ? `%${q.q}%` : null;
+  const text = q.q ? containsPattern(q.q) : null;
   const where = and(
     ne(requests.status, 'draft'),
     self ? ne(requests.senderStaffId, self) : undefined,

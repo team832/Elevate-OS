@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { and, eq } from 'drizzle-orm';
 import { academicChapters, academicCourses } from '@elevate/database';
 import { defineSeed } from '@elevate/database/seed';
-import { programmeId, upsertChapter, upsertCourse, upsertSubject } from './upsert';
+import { programmeId, ensureChapter, ensureCourse, ensureSubject } from './ensure';
 
 export const SYLLABUS_FILE = 'data/syllabus/syllabus-distribution-2026-10-21.json';
 
@@ -28,6 +28,7 @@ interface Syllabus {
 export const readSyllabus = () =>
   JSON.parse(readFileSync(new URL(`../../../${SYLLABUS_FILE}`, import.meta.url), 'utf8')) as Syllabus;
 
+const DEFAULT_WEIGHT = 1;
 const MATHS = 'Mathematics (041) and Applied Mathematics (241) are separate subjects; each student or batch takes one of them.';
 const DRAFTS: Record<string, { name: string; note: string }> = {
   'CLAT-SYL-2027': { name: 'CLAT UG 2027 syllabus (draft)', note: 'Official syllabus page: https://consortiumofnlus.ac.in/clat-2027/ug-syllabus.html. Chapters marked "derived" come from observed papers, not the syllabus.' },
@@ -49,17 +50,18 @@ export const syllabusDraftsSeed = defineSeed({
         // IPMAT weights = mean of IIM Indore, IIMB UG-AT, IIM Rohtak and JIPMAT 2026 subject shares (owner, 21 Oct 2026).
         const [course] = await db.select({ id: academicCourses.id }).from(academicCourses).where(eq(academicCourses.code, p.courseCode));
         for (const ch of p.subjects.flatMap((s) => s.chapters)) {
-          const updated = await db
-            .update(academicChapters)
-            .set({ weight: ch.weight })
-            .where(and(eq(academicChapters.courseId, course!.id), eq(academicChapters.code, ch.code), eq(academicChapters.title, ch.title)))
-            .returning({ id: academicChapters.id });
-          if (updated.length !== 1) throw new Error(`${p.courseCode} chapter ${ch.code} "${ch.title}" not found — weights only apply to existing chapters`);
+          const [chapter] = await db
+            .select({ id: academicChapters.id, weight: academicChapters.weight })
+            .from(academicChapters)
+            .where(and(eq(academicChapters.courseId, course!.id), eq(academicChapters.code, ch.code)));
+          if (!chapter) throw new Error(`${p.courseCode} chapter ${ch.code} "${ch.title}" not found — weights only apply to existing chapters`);
+          // 1 is the column default: any other weight was set earlier, by this seed or by a person.
+          if (chapter.weight === DEFAULT_WEIGHT) await db.update(academicChapters).set({ weight: ch.weight }).where(eq(academicChapters.id, chapter.id));
         }
         continue;
       }
       const { url, title, year, retrieved } = p.source;
-      const courseId = await upsertCourse(db, {
+      const courseId = await ensureCourse(db, {
         programmeId: await programmeId(db, p.programmeCode),
         code: p.courseCode,
         familyCode: p.familyCode!,
@@ -72,8 +74,8 @@ export const syllabusDraftsSeed = defineSeed({
         sourceRef: `${SYLLABUS_FILE} ${p.courseCode}`,
       });
       for (const [i, s] of p.subjects.entries()) {
-        const subjectId = await upsertSubject(db, courseId, s.code, s.name, i);
-        for (const ch of s.chapters) await upsertChapter(db, { courseId, subjectId, code: ch.code, title: ch.title, sortOrder: ch.sortOrder, weight: ch.weight });
+        const subjectId = await ensureSubject(db, courseId, s.code, s.name, i);
+        for (const ch of s.chapters) await ensureChapter(db, { courseId, subjectId, code: ch.code, title: ch.title, sortOrder: ch.sortOrder, weight: ch.weight });
       }
     }
   },

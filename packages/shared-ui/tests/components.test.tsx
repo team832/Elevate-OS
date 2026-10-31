@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup as render } from 'react-dom/server';
 import { metric } from '@elevate/shared-contracts';
@@ -13,6 +13,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  ListEmpty,
   ErrorState,
   Field,
   ICON_NAMES,
@@ -23,6 +24,7 @@ import {
   MetricStrip,
   PageHeader,
   Select,
+  StoredLink,
   Subnav,
   Tabs,
   TextArea,
@@ -49,6 +51,45 @@ const shell = (props: Partial<AppShellProps> = {}) =>
       <p>content</p>
     </AppShell>,
   );
+
+describe('StoredLink (HAT-006)', () => {
+  it.each(['https://meet.example/a', 'http://meet.example/a', 'HTTPS://meet.example/a'])(
+    '%s is a link',
+    (href) => {
+      expect(render(<StoredLink href={href}>Class link</StoredLink>)).toBe(
+        `<a href="${href}">Class link</a>`,
+      );
+      expect(
+        render(
+          <StoredLink href={href} button>
+            Open
+          </StoredLink>,
+        ),
+      ).toContain('class="el-button el-button-secondary"');
+    },
+  );
+
+  it.each([
+    'javascript:alert(1)',
+    'data:text/html,x',
+    'vbscript:msgbox(1)',
+    'ms-msdt:/id',
+    'file:///c:/win.ini',
+    'java\tscript:alert(1)',
+    ' javascript:alert(1)',
+    'meet.example/a',
+  ])('%j stays plain text', (href) => {
+    for (const button of [false, true]) {
+      const html = render(
+        <StoredLink href={href} button={button}>
+          Class link
+        </StoredLink>,
+      );
+      expect(html).not.toMatch(/<a\b|href=/);
+      expect(html).toBe(`<span>Not a web link: ${href}</span>`);
+    }
+  });
+});
 
 describe('Buttons', () => {
   it.each([
@@ -318,6 +359,18 @@ describe('Navigation', () => {
     );
   });
 
+  it('subnav keys stay unique when two items share an href (Last 30 days = This month on the 30th)', () => {
+    const nav = Subnav({
+      label: 'Quick periods',
+      items: [
+        ['/ops?from=2026-10-01&to=2026-10-30', 'Last 30 days'],
+        ['/ops?from=2026-10-01&to=2026-10-30', 'This month'],
+      ],
+    });
+    const keys = nav.props.children.map((a: { key: string }) => a.key);
+    expect(new Set(keys).size).toBe(2);
+  });
+
   it('a card is a section named by its heading only when the heading has an id', () => {
     expect(
       render(
@@ -462,14 +515,87 @@ describe('DataTable', () => {
     expect(
       render(<DataTable columns={cols} rows={[{ name: long, fee: 1 }]} rowKey={(r) => r.name} />),
     ).toContain(`>${long}</td>`);
-    const css = readFileSync(new URL('../src/css/components.css', import.meta.url), 'utf8');
+    const css = readFileSync(new URL('../src/css/tables.css', import.meta.url), 'utf8');
     expect(css).not.toMatch(/text-overflow:\s*ellipsis/);
     expect(css).toMatch(/\.el-table td \{[^}]*overflow-wrap: break-word/);
+  });
+
+  it.each([
+    [3, 'class="el-table"'],
+    [4, 'class="el-table el-table-compact"'],
+  ])('%i columns on a phone: %s (four or more become labelled cards)', (n, cls) => {
+    const many = Array.from({ length: n }, (_, i) => ({ key: `c${i}`, header: `C${i}` }));
+    expect(render(<DataTable columns={many} rows={[{}]} rowKey={() => 'r'} />)).toContain(cls);
+  });
+
+  it.each([
+    [25, 'class="el-table-wrap"'],
+    [26, 'class="el-table-wrap el-table-well"'],
+  ])('%i rows: %s (a list longer than a page keeps its header in view)', (n, cls) => {
+    const rows = Array.from({ length: n }, (_, i) => ({ name: `R${i}`, fee: i }));
+    expect(render(<DataTable columns={cols} rows={rows} rowKey={(r) => r.name} />)).toContain(cls);
+  });
+
+  it('a phone card holds one element per value, or its grid would break a mixed cell apart', () => {
+    const mixed = { key: 'name', header: 'Name', render: () => <><b>A</b> and <i>B</i></> };
+    expect(render(<DataTable compact columns={[mixed]} rows={[{}]} rowKey={() => 'r'} />)).toContain(
+      '<div><b>A</b> and <i>B</i></div>',
+    );
+  });
+
+  it('a column of row actions is named for screen readers and adds nothing to the table name', () => {
+    const html = render(
+      <DataTable
+        columns={[...cols, { key: 'go', header: '', render: () => 'Open' }]}
+        rows={[{ name: 'A', fee: 1 }]}
+        rowKey={(r) => r.name}
+      />,
+    );
+    expect(html).toContain('<span class="el-visually-hidden">Actions</span>');
+    expect(html).toContain('<caption class="el-visually-hidden">Name, Fee</caption>');
   });
 
   it('a field whose control is required shows a visible marker', () => {
     const css = readFileSync(new URL('../src/css/components.css', import.meta.url), 'utf8');
     expect(css).toMatch(/\.el-field:has\([^)]*:required[^{]*> label::after \{[^}]*content: ' \*'/);
+  });
+});
+
+describe('Nothing sits behind or through a table', () => {
+  const css = (f: string) => readFileSync(new URL(`../src/css/${f}.css`, import.meta.url), 'utf8');
+  const rule = (f: string, selector: string) =>
+    css(f)
+      .replace(/\r\n/g, '\n')
+      .split('\n}')
+      .find((block) => block.trimStart().endsWith(`${selector} {`) || block.includes(`\n${selector} {`))
+      ?.split(`${selector} {`)[1] ?? '';
+
+  it('the empty-state chevron takes its place from one variable, so it moves with the text', () => {
+    expect(rule('components', '.el-state')).toMatch(/calc\(var\(--el-state-pad\) \+ 1\.75rem\)/);
+    expect(rule('components', '.el-state::before')).toMatch(/left: var\(--el-state-pad\)/);
+  });
+
+  it.each([
+    ['upcoming', /background: var\(--el-well\)/],
+    ['current', /, var\(--el-surface\);/],
+  ])('journey stage %s is opaque, so the joining line never strikes through its words', (s, re) => {
+    expect(rule('components', `.el-journey-stage[data-state='${s}']`)).toMatch(re);
+  });
+
+  it('tabs wrap at every width; no scrollbar with arrows inside the pill', () => {
+    const tabs = rule('components', '.el-tablist');
+    expect(tabs).toContain('flex-wrap: wrap');
+    expect(tabs).not.toContain('overflow');
+  });
+
+  it('table headers may wrap, so the last columns stay in view', () => {
+    expect(rule('tables', '.el-table th')).not.toContain('nowrap');
+    expect(rule('tables', '.el-table th')).toContain('min-width: 5rem');
+  });
+
+  it('inner scrollers have no arrow buttons: standard scrollbar properties would bring them back', () => {
+    expect(css('base')).toMatch(/body \*::-webkit-scrollbar \{/);
+    expect(rule('shell', '.el-sidebar')).not.toContain('scrollbar-');
   });
 });
 
@@ -587,5 +713,91 @@ describe('Missing is not zero (strip and journey)', () => {
     );
     expect(html).toContain(`<span class="el-visually-hidden">${words}</span>`);
     expect(html).not.toContain('aria-current');
+  });
+});
+
+/** D-036: a sample record shows the SAMPLE DATA badge on every list, marked once by the table. */
+describe('sample rows on lists (HUS-034)', () => {
+  it('DataTable marks the first column of a sample row, and only that row', () => {
+    const out = render(
+      <DataTable
+        rows={[
+          { id: 's', name: 'Saanvi Sample Student', sample: true },
+          { id: 'r', name: 'Real Person', sample: false },
+        ]}
+        rowKey={(r) => r.id}
+        sampleOf={(r) => r.sample}
+        columns={[{ key: 'name', header: 'Name' }, { key: 'id', header: 'Id' }]}
+      />,
+    );
+    expect(out.split('el-badge-sample').length - 1).toBe(1);
+    expect(out).toMatch(/Saanvi Sample Student <span class="el-badge el-badge-sample">SAMPLE DATA/);
+  });
+
+  it.each([
+    'business-ops-os/src/app/fees/outstanding/page.tsx',
+    'business-ops-os/src/app/fees/collections/page.tsx',
+    'business-ops-os/src/app/operations/approvals/page.tsx',
+    'business-ops-os/src/app/admissions/overview/page.tsx',
+    'academic-os/src/app/students/page.tsx',
+    'academic-os/src/app/assessments/page.tsx',
+    'academic-os/src/app/batches/page.tsx',
+    'academic-os/src/app/reviews/page.tsx',
+    'academic-os/src/app/timetable/page.tsx',
+    'academic-os/src/app/teachers/page.tsx',
+    'academic-os/src/app/intake/page.tsx',
+    'academic-os/src/app/attendance/page.tsx',
+  ])('%s says which rows are sample', (page) => {
+    const source = readFileSync(new URL(`../../../apps/${page}`, import.meta.url), 'utf8');
+    expect(source).toContain('sampleOf=');
+  });
+});
+
+describe('a long unbroken string (HUS-023)', () => {
+  const css = readFileSync(new URL('../src/css/base.css', import.meta.url), 'utf8');
+  it('wraps everywhere, and table cells keep their columns from being squeezed', () => {
+    expect(css).toMatch(/body \{[^}]*overflow-wrap: anywhere;/);
+    expect(css).toMatch(/td,\s*th \{\s*overflow-wrap: break-word;/);
+  });
+});
+
+describe('an empty list says the true thing (HUS-016)', () => {
+  it.each([
+    ['nothing in the URL', {}, 'No leads yet', 'Add the first lead.'],
+    ['a blank search box and a page number are not filters', { q: '', page: '2', open: 'x' }, 'No leads yet', 'Add the first lead.'],
+    ['a real filter', { status: 'won' }, 'No leads match these filters', 'Change or clear the filters.'],
+  ])('%s', (_, params, title, text) => {
+    const out = render(<ListEmpty noun="leads" params={params} first="Add the first lead." />);
+    expect(out).toContain(title);
+    expect(out).toContain(text);
+  });
+});
+
+describe('staff screens never carry builder words (HUS-017, HUS-041, HUS-040)', () => {
+  const roots = ['business-ops-os', 'academic-os', 'marketing-os'].flatMap((app) =>
+    ['src/app', 'src/ui'].map((dir) => new URL(`../../../apps/${app}/${dir}/`, import.meta.url)),
+  );
+  const lines = roots.flatMap((root) =>
+    readdirSync(root, { recursive: true, encoding: 'utf8' })
+      .filter((f) => f.endsWith('.tsx'))
+      .flatMap((f) =>
+        readFileSync(new URL(f.replaceAll('\\', '/'), root), 'utf8')
+          .split('\n')
+          .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l))
+          .map((l) => `${f}: ${l.trim()}`),
+      ),
+  );
+  it.each([
+    ['a terminal command', /npm run|db:seed|Run the .* seed/],
+    ['development data', /Development data/],
+    ['a mock', /this mock returns|Sandbox adapter|sandbox \(mock/],
+    ['simulated sends', /simulated, not sent|Simulated —/],
+    ['a contract name', /delivery_summary v1|marketing\.summary v1/],
+    ['a phone standard', /E\.164/],
+    ['a builder rule', /missing is never zero/],
+    ['a settings state on a working screen', /\$\{[\w.]*\.decisionState\}|\{d\.[\w.]*decisionState\} setting/],
+    ['the old workspace name', /Business Ops(?! OS)/],
+  ])('no %s', (_, pattern) => {
+    expect(lines.filter((l) => pattern.test(l)).map((l) => l.slice(0, 120))).toEqual([]);
   });
 });

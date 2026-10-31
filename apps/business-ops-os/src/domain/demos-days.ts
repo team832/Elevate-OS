@@ -181,15 +181,19 @@ export function demoProgress(sessions: readonly DaySession[], planned: number) {
 }
 
 /**
- * D-2 View. Previous = outcome decided. Otherwise Current from 00:00 IST on the
- * calendar day of the earliest session that is not cancelled; before that (or with
- * no live session) Upcoming.
+ * D-2 View. Previous = outcome decided, or the case was closed as lost with the demo left open.
+ * Otherwise Current from 00:00 IST on the calendar day of the earliest session that is not
+ * cancelled; before that (or with no live session) Upcoming.
  */
 export function demoView(
-  demo: { outcome: string; sessions: readonly Pick<SessionLike, 'startsAt' | 'attendance'>[] },
+  demo: {
+    outcome: string;
+    caseStatus?: string;
+    sessions: readonly Pick<SessionLike, 'startsAt' | 'attendance'>[];
+  },
   now: Date,
 ): DemoView {
-  if (demo.outcome !== 'open') return 'previous';
+  if (demo.outcome !== 'open' || demo.caseStatus === 'lost') return 'previous';
   const live = demo.sessions.filter((s) => s.attendance !== 'cancelled');
   if (live.length === 0) return 'upcoming';
   const first = Math.min(...live.map((s) => s.startsAt.getTime()));

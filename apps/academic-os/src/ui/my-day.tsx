@@ -4,7 +4,8 @@
  * Server components: missing is shown in words, never 0.
  */
 import { STANDING_LABELS, type myReports, type taskDaySummary } from '@elevate/business-ops-os/work';
-import { StatCard } from '@elevate/shared-ui';
+import { LINK_LOGIN_HELP } from '@elevate/shared-contracts';
+import { fmtDay, StatCard } from '@elevate/shared-ui';
 import { MODULE_PATHS } from '../server/paths';
 import { fmtDateTime } from './badges';
 
@@ -15,7 +16,7 @@ type TaskDay = Awaited<ReturnType<typeof taskDaySummary>>;
 type Reports = Awaited<ReturnType<typeof myReports>>;
 
 const NO_STAFF = 'No staff record';
-const LINK_STAFF = 'Your sign-in is not linked to a staff record; ask an academic coordinator.';
+const LINK_STAFF = `Your sign-in is not linked to a staff record. ${LINK_LOGIN_HELP}`;
 const EOD: Record<NonNullable<TaskDay>['eod'], [word: string, note: string]> = {
   not_started: ['Not started', 'Nothing written yet.'],
   draft: ['Draft', 'Saved, not submitted.'],
@@ -43,7 +44,7 @@ export function TasksDay({ summary, week, month }: { summary: TaskDay; week: Rep
         note={summary ? 'Your tasks you submitted that a reviewer has not decided yet.' : LINK_STAFF}
         href={`${MODULE_PATHS.tasks}?status=in_review`}
       />
-      <StatCard label={`EOD report, ${summary?.day ?? 'today'}`} value={eod} missingLabel={NO_STAFF} note={eodNote} href={`${MODULE_PATHS.tasks}?tab=eod`} />
+      <StatCard label={`EOD report, ${summary ? fmtDay(summary.day) : 'today'}`} value={eod} missingLabel={NO_STAFF} note={eodNote} href={`${MODULE_PATHS.tasks}?tab=eod`} />
       {REPORT_TILES.map(([kind, label]) => {
         const [now, last] = (kind === 'week' ? week : month)?.recent ?? [];
         return (
@@ -64,7 +65,7 @@ export function MeetingsDay({ day, total }: { day: string; total: number | null 
       note={
         total === null
           ? LINK_STAFF
-          : `Meetings and events you take part in that start on ${day} (IST), any status.`
+          : `Meetings and events you take part in that start on ${fmtDay(day)} (IST), any status.`
       }
       href={MODULE_PATHS.meetings}
     />

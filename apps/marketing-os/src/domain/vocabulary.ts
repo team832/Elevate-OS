@@ -138,6 +138,11 @@ export const METRIC_STATES = ['reported', 'estimated', 'missing', 'not_applicabl
 export type MetricState = (typeof METRIC_STATES)[number];
 
 export const SNAPSHOT_SOURCES = ['csv_import', 'manual_audit', 'adapter'] as const;
+export const SNAPSHOT_SOURCE_LABELS: Record<(typeof SNAPSHOT_SOURCES)[number], string> = {
+  csv_import: 'CSV export',
+  manual_audit: 'Historical audit, entered by hand',
+  adapter: 'Platform connection',
+};
 export type SnapshotSource = (typeof SNAPSHOT_SOURCES)[number];
 
 export const MATCH_STATUSES = [

@@ -8,7 +8,7 @@
  * `progress-report/1` snapshots keep their table layout.
  */
 import { DOCUMENT_STATE_LABELS } from '../../domain/admission-form';
-import { formatPaise } from '../../domain/fees';
+import { feeStatementLines } from '../../domain/fee-statement';
 import {
   attendanceRateText,
   REPORT_HEADINGS,
@@ -309,16 +309,12 @@ export async function progressReportPdf(
         { header: 'Relationship', width: 0.25 },
         { header: 'Consent', width: 0.25 },
       ],
-      s.guardians.map((g) => [g.name, g.relationship, g.consent]),
+      s.guardians.map((g) => [g.name, humanise(g.relationship), humanise(g.consent)]),
     );
   }
   if (s.fees) {
     pdf.heading('Fee statement');
-    pdf.keyValues([
-      ['Amount due', formatPaise(s.fees.duePaise)],
-      ['Received (net)', formatPaise(s.fees.netReceivedPaise)],
-      ['Balance', `${formatPaise(s.fees.balancePaise)} (${s.fees.balance})`],
-    ]);
+    pdf.keyValues(feeStatementLines(s.fees));
     pdf.paragraph(s.fees.disclaimer, { muted: true });
   }
 

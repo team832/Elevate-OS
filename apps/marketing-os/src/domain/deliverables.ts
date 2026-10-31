@@ -23,23 +23,23 @@ export const contentDeliverableStates = (state: ContentState) => ({
   published: state === 'published' ? 'Published externally' : 'Not published',
 });
 
+const DUE_DAY = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+const DUE_TIME = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+});
+
 /** A task deadline in IST, e.g. "24 Oct 2026, 5:00 pm" (no time = end of day). */
 export function dueText(dueOn: string, dueTime: string | null): string {
   const at = new Date(`${dueOn}T${dueTime ?? '12:00'}+05:30`);
-  const day = new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(at);
+  const day = DUE_DAY.format(at);
   if (!dueTime) return `${day}, end of day`;
-  const time = new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-    .format(at)
-    .toLowerCase();
-  return `${day}, ${time}`;
+  return `${day}, ${DUE_TIME.format(at).toLowerCase()}`;
 }

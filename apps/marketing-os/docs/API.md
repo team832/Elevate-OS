@@ -45,7 +45,7 @@ Screens use server actions (`src/app/actions/*.ts`) that call the same services;
 | POST | `/placements/:id/schedule` | `marketing:schedule:manage` | `{publishAt}` (ISO with offset) | `{placement, warnings}`; 409 with `details.hard` |
 | POST | `/placements/:id/unschedule` | `marketing:schedule:manage` | — | placement |
 | POST | `/placements/:id/cancel` | content:write (planned) / schedule:manage (scheduled) | `{reason}` | placement |
-| POST | `/placements/:id/publish` | `marketing:content:publish` | — | `{outcome, duplicate, record, message, attemptsLeft?}`; 409 not eligible / `MAX_ATTEMPTS` / running |
+| POST | `/placements/:id/publish` | `marketing:content:publish` | — | `{outcome, duplicate, record, message, attemptsLeft?}`. `outcome` adds `sandbox` (31 Oct 2026): nothing was posted, the placement stays scheduled, the item stays as it was; `already_published` means real publications only. 409 not eligible / `MAX_ATTEMPTS` / running / only scheduled placements. No screen calls it since 26 Oct |
 | POST | `/placements/:id/publication` | `marketing:content:publish` | `{publishedAt, url}` (both required) | 201 `{placement, record}`; 400; 409 |
 | PUT | `/placements/:id/campaign` | `marketing:campaigns:write` | `{campaignId \| null}` | placement |
 | POST | `/placement-groups` | `marketing:schedule:manage` | `{ideaId, platform: instagram|youtube, placementIds[2..10]}` | 201 `{group, validation}`; 400 with `details.errors` |
@@ -76,6 +76,7 @@ Screens use server actions (`src/app/actions/*.ts`) that call the same services;
 |---|---|---|---|---|
 | POST | `/marketing/api/v1/auth/login` (changed) | public | form `email`, `password`, `next?` (relative path; control characters and backslashes refused) | form post: 303 to the landing: stay in Marketing OS (at `next`) if you belong here; else your remembered workspace; else your only one; else `/marketing/workspaces`; 403 cross-site `Origin`; 401 wrong email or password |
 | POST | `/marketing/api/v1/auth/logout` (changed) | session | — | 303 to sign-in; the session ends on every port; 403 cross-site `Origin` |
+| GET | `/marketing/api/v1/auth/session` (31 Oct 2026) | session | — | Whether the session is alive, so a form can say "You have been signed out" and keep the typing (HUS-022) |
 | POST | `/marketing/api/v1/auth/workspace` (new) | signed in | form `workspace` (`ops` \| `academic` \| `marketing`), `remember=yes` (optional) | 303 to that workspace's home; `remember=yes` stores `core.users.preferred_workspace`, audited `user.workspace_preference_set`; 303 to sign-in when signed out; 403 a workspace you do not belong to; 403 cross-site `Origin` |
 
 ## Leads, follow-ups, tasks and EOD reports mounted from Business Ops (22 Oct 2026, D-073)
@@ -148,3 +149,10 @@ Schemas: `src/server/optimisation.ts`. Observations are typed in by staff; no an
 - **Notifications:** `GET /marketing/notifications/:id/open` (page route; `notificationOpen`).
 
 Pages: `/marketing/calendar` (+ `/new`, `/:id`), `/marketing/optimisation` (+ `/:id`), `/marketing/targets` (+ `/:id`), `/marketing/reports/monthly`, `/marketing/sales-calls`, `/marketing/leads/stages`, `/marketing/settings/personal`, `/marketing/hr-requests`.
+
+## Changed on 30–31 Oct 2026
+- `GET /reports/monthly`: unknown person 404; a future month 404 (FLB-009, owner question).
+- `GET /campaigns` permission is `marketing:campaigns:read` (this document said `marketing:content:read`).
+- A cross-site POST to a server action is refused by the proxy (`isAllowedActionOrigin`, RVA-004).
+- Stored links accept only `http` and `https` (`httpUrlSchema`, HAT-006). A title is capped at 300 characters.
+- A contributor no longer sees the Assign form; Assign is a staff picker, not a typed user id.

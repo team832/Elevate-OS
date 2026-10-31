@@ -2,6 +2,17 @@
 import { daysBetween, type IsoDate } from './dates';
 
 const days = (n: number) => `${n} day${n === 1 ? '' : 's'}`;
+const DAY_MONTH = new Intl.DateTimeFormat('en-IN', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+});
+const DAY_MONTH_YEAR = new Intl.DateTimeFormat('en-IN', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
 
 export function followUpAge(dueDate: string, today: IsoDate): string {
   const late = daysBetween(dueDate as IsoDate, today);
@@ -13,11 +24,8 @@ export function followUpAge(dueDate: string, today: IsoDate): string {
         : late === -1
           ? 'Due tomorrow'
           : `Due in ${days(-late)}`;
-  const date = new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: dueDate.slice(0, 4) === today.slice(0, 4) ? undefined : 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${dueDate}T00:00:00Z`));
+  const date = (dueDate.slice(0, 4) === today.slice(0, 4) ? DAY_MONTH : DAY_MONTH_YEAR).format(
+    new Date(`${dueDate}T00:00:00Z`),
+  );
   return `${age} (${date})`;
 }

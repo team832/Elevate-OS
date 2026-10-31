@@ -2,7 +2,9 @@
 
 HR and Operations (tasks, SOPs, registers, policies, HR records/lifecycle/time) were removed by the owner on 2026-10-20 (D-032); their routes are recoverable from commit 63da4e4.
 
-Every route is built with `defineRoute` (`@elevate/server-kit`). Check order: **401** no session → **403** missing permission (before validation) → **400** `VALIDATION_FAILED` with `details: [{ location, path, message }]` → handler. Envelope: `{ "data": … }` / `{ "error": { code, message, details?, requestId } }` (D-012). Bodies are JSON (`Content-Type: application/json`).
+Removed on 26 Oct 2026 (D-122): `POST /ops/api/v1/admissions/{id}/fee-approval`. Fee approval is per agreement version: see "Fee agreements".
+
+Every route is built with `defineRoute` (`@elevate/server-kit`). Check order: **401** no session → **403** not a member of this workspace (enforced since 31 Oct 2026, D-113), then **403** missing permission (before validation) → **400** `VALIDATION_FAILED` with `details: [{ location, path, message }]` → handler. Envelope: `{ "data": … }` / `{ "error": { code, message, details?, requestId } }` (D-012). Bodies are JSON (`Content-Type: application/json`).
 
 **Scope.** A permission held with scope `own` (admissions counsellor) limits records to those whose owner/counsellor is the staff member linked to the signed-in user. Out-of-scope records return **403**. Services re-check permissions, so pages that call services directly are protected too.
 
@@ -19,8 +21,8 @@ Request/response schemas: `src/server/schemas.ts` (zod). Response shapes are the
 | Method | Path | Permission | Purpose |
 |---|---|---|---|
 | GET | `/ops/api/v1/leads` | `ops:leads:read` | List leads (own scope for counsellors). |
-| POST | `/ops/api/v1/leads` | `ops:leads:write` | Create a lead + first enquiry + admission case; 409 CONFLICT with details.duplicates on an exact duplicate unless acknowledged. |
-| POST | `/ops/api/v1/leads/check-duplicates` | `ops:leads:write` | Preview duplicate warnings for contact details (nothing is saved). |
+| POST | `/ops/api/v1/leads` | `ops:leads:write` | Create a lead + first enquiry + admission case; 409 CONFLICT with details.duplicates on an exact duplicate unless acknowledged. `details.duplicates` is shaped as in check-duplicates. `GET /leads/{id}` `duplicates` and history apply the same shape (`visibleFlags`, `withoutHiddenLeads`). |
+| POST | `/ops/api/v1/leads/check-duplicates` | `ops:leads:write` | Preview duplicate warnings for contact details (nothing is saved; audited `lead.duplicate_check`). A match on a lead the caller may not open carries only `level`: no id, code, owner, signals, score or count. A name-and-school match with no shared contact is left out for such a lead (D-119, Proposed). No screen calls it. |
 | GET | `/ops/api/v1/leads/duplicates` | `ops:leads:merge` | Open duplicate flags (merge-review queue). |
 | POST | `/ops/api/v1/leads/duplicates/{id}` | `ops:leads:merge` | Dismiss a duplicate flag after review. |
 | GET | `/ops/api/v1/leads/{id}` | `ops:leads:read` | Lead detail: enquiries, activity, admissions, follow-ups, duplicates, history. |
@@ -42,7 +44,6 @@ Request/response schemas: `src/server/schemas.ts` (zod). Response shapes are the
 | PATCH | `/ops/api/v1/admissions/{id}` | `ops:admissions:write` | Edit programme, counsellor (managers), mode, intended start/course/batch. |
 | POST | `/ops/api/v1/admissions/{id}/transitions` | `ops:admissions:write` | Move the admission along the legal-transition table. |
 | POST | `/ops/api/v1/admissions/{id}/checks` | `ops:admissions:write` | Record a checklist item (status + reference only). |
-| POST | `/ops/api/v1/admissions/{id}/fee-approval` | any of [`ops:admissions:write`, `ops:admissions:approve`] | Request, approve, reject or withdraw the admission-level fee-arrangement approval. Since 21 Oct 2026 (round 4) these approvals activate nothing; they stay readable as history. Fee approval is per agreement version: see "Fee agreements". |
 | POST | `/ops/api/v1/admissions/{id}/enrolment-request` | `ops:admissions:write` | admitted → enrolment_requested and publish ops.admission.enrolment_requested v1 in one transaction. |
 
 ## Follow-ups, counselling, demos, schedule
@@ -85,7 +86,7 @@ Check order and errors as above. Fee and retry creates accept an optional `Idemp
 | Method | Path | Permission | Body / query | Response | Errors |
 |---|---|---|---|---|---|
 | POST | `/ops/api/v1/admissions/{id}/transitions` | `ops:admissions:write` (own) | `{ to, reason?, reasonCode? }` | admission row | 400 reason/reasonCode, 403 scope, 409 illegal/gate |
-| GET | `/ops/api/v1/admissions/{id}/fees` | `ops:fees:read` (own) | — | `{ admission, records[] (manuallyRecorded: true, recorder/checker names), summary, disclaimer, settings }` | 403, 404 |
+| GET | `/ops/api/v1/admissions/{id}/fees` | `ops:fees:read` (own) | — | `{ admission, records[] (manuallyRecorded: true, recorder/checker names), summary (the student's statement, `domain/fee-statement.ts`, D-114), disclaimer, settings }` | 403, 404 |
 | POST | `/ops/api/v1/admissions/{id}/fees` | `ops:fees:record` | `{ kind, direction?, amountPaise? \| amountRupees?, pricingReference?, receiptReference?, method?, paymentDate?, dueDate?, demoId?, notes? }`; `Idempotency-Key` optional | 201 record + `disclaimer` | 400 per field (non-integer/≤0/over limit, future date, missing reference, refund > received, demo mismatch), 403, 404. Since 21 Oct 2026 a `refund` here fails 400 (use `POST /fees/{id}` refund), and tuition rows are refused while the student has an open agreement ("Record tuition on the annual agreement.") |
 | POST | `/ops/api/v1/fees/{id}` | `ops:fees:record` | `{ action: 'verify', note? }` or `{ action: 'void', reason }` | record | 400, 403 (self-check / scope), 404, 409 (state) |
 | GET | `/ops/api/v1/fees` | `ops:fees:read` (own) | `?status=&limit=&cursor=FEE-…` | `{ items, disclaimer }`, `meta.page.nextCursor` | 400, 403 |
@@ -104,7 +105,7 @@ All idempotent; there is no scheduler yet (IR-OPS-02). Each is also exported fro
 
 | Job | Route | Permission |
 |---|---|---|
-| `follow-up-reminders`, `enrolment-replies` | `POST /ops/api/v1/jobs/{job}` | `ops:jobs:run` |
+| `follow-up-reminders`, `enrolment-replies`, `enrolment-exits` (runs Academic's `academic.enrolment-exit`), `housekeeping` (sessions ended over 30 days ago, expired idempotency keys). All have buttons on the Overview since 31 Oct 2026 (`JobsPanel`, D-117) | `POST /ops/api/v1/jobs/{job}` | `ops:jobs:run` |
 | `demo-academic-marks` (open, unfinished demos re-read Academic's marks for their started classes in one batched call, so a class the teacher marked in Academic moves the case to demo attended without an Ops edit; nothing moves while Academic cannot be read; D-066) | `POST /ops/api/v1/jobs/demo-academic-marks` | `ops:jobs:run`; the service also needs all-scope `ops:leads:write` |
 
 ## Pre-existing routes
@@ -166,7 +167,7 @@ Same check order (401 → 403 → 400 → handler), envelope and error codes as 
 
 | Method | Path | Permission | Body / query | Response | Errors |
 |---|---|---|---|---|---|
-| GET | `/ops/api/v1/demos` | `ops:leads:read` (own) | `view=current\|upcoming\|previous`, `q`, `programme`, `counsellor`, `outcome`, `stage`, `from`, `to` (IST dates of any session), `followUp=due\|overdue`, `page` (25 per page) | `{ view, counts, kpis, month, total, page, pageSize, rows }` | 400, 403 |
+| GET | `/ops/api/v1/demos` | `ops:leads:read` (own) | `view=current\|upcoming\|previous`, `q`, `programme`, `counsellor`, `outcome`, `stage`, `from`, `to` (IST dates of any session), `followUp=due\|overdue`, `outcomeMonth`, `page` (25 per page) | `{ view, counts, kpis, month, total, page, pageSize, rows }`; a lost or merged demo moves to Previous with `leftOpen` when classes remain open | 400, 403 |
 | POST | `/ops/api/v1/demos` | `ops:leads:write` (own) | `{ admissionId, sessions[]: { dayNumber?, startsAt, endsAt?, subject, teacherStaffId? }, durationMinutes = 60, programmeCode?, counsellorStaffId?, notes? }`; without `dayNumber`, classes on the same IST date form one demo day; the days must equal `admissions.demo.day_count` (approved, 3; D-038) | 201 demo + sessions; case → `demo_scheduled`; the canonical `core.students` identity is created here (identity at booking, 21 Oct 2026) | 400 wrong day count or fields, 403, 409 the case already has an open demo |
 | GET | `/ops/api/v1/demos/{id}` | `ops:leads:read` (own) | — | sessions, changes, checklist with history, follow-ups, counselling, activity (audit rows) | 403, 404 |
 | POST | `/ops/api/v1/demos/{id}` | `ops:leads:write` (own) | `{ action: 'outcome', outcome: not_converted\|cancelled\|no_show\|declined\|withdrawn, reason }` or `{ action: 'kyc', …student details }` (the demo fee is recorded with `POST /fees`, `chargeCategory: 'demo'`) | demo | 400 missing reason or `converted`, 403, 409 already closed |
@@ -219,21 +220,21 @@ Same check order (401 → 403 → 400 → handler), envelope and error codes as 
 | GET | `/ops/api/v1/feedback/about-students` | `ops:feedback:read` (own = your own rows) | `studentId` | teacher → student reviews recorded in Ops **before 21 Oct 2026**: read-only history (current and superseded versions; drafts only for their author; own scope = rows you wrote, or all rows of a student you counsel). New reviews are written in Academic OS (D-058) | 400, 403 |
 | POST | `/ops/api/v1/feedback/about-students` | — | **Removed 21 Oct 2026** (D-058). `ops:feedback:write` and `ops:feedback:manage` are still defined but held by no role | — | — |
 | PATCH | `/ops/api/v1/feedback/about-students/{id}` | — | **Removed 21 Oct 2026** (D-058); the route file is deleted | — | — |
-| GET | `/ops/api/v1/feedback/about-teachers` | `ops:feedback:read` (teacher: approved rows shared with them) | `teacherStaffId` | student/guardian → teacher feedback + rating summary with denominator | 400, 403 |
-| POST | `/ops/api/v1/feedback/about-teachers` | `ops:feedback:record` | `{ teacherStaffId, studentId?, submittedByKind: student\|guardian, subjectRef?, feedbackOn, rating? (1–5), comment }` | 201, status `pending` | 400, 403 |
-| PATCH | `/ops/api/v1/feedback/about-teachers/{id}` | `ops:feedback:moderate` | `{ action: approve\|reject\|hide, note?, visibility? }` (approve also un-hides) | row | 400, 403 (moderating feedback about yourself), 404, 409 illegal move |
+| GET | `/ops/api/v1/feedback/about-teachers` | `ops:teacher_feedback:read` | `teacherStaffId` | student/guardian → teacher feedback + rating summary with denominator | 400, 403 |
+| POST | `/ops/api/v1/feedback/about-teachers` | `ops:teacher_feedback:manage` | `{ teacherStaffId, studentId?, submittedByKind: student\|guardian, subjectRef?, feedbackOn, rating? (1–5), comment }` | 201, status `pending` | 400, 403 |
+| PATCH | `/ops/api/v1/feedback/about-teachers/{id}` | `ops:teacher_feedback:manage` | `{ action: approve\|reject\|hide, note?, visibility? }` (approve also un-hides) | row | 400, 403 (moderating feedback about yourself), 404, 409 illegal move |
 
 ## Fee agreements (fee plans; annual since 21 Oct 2026)
 
 | Method | Path | Permission | Body / query | Response | Errors |
 |---|---|---|---|---|---|
-| GET | `/ops/api/v1/fee-plans` | `ops:fees:read` (own) | `studentId` | annual agreements with `status`, `nextDue`, `versions`, instalments with status, ledger, totals (incl. `creditPaise`), reconciliation, `pendingApproval { subjectId, requestedBy } \| null`, `canActivate`; plus `registration { configuredPaise, summary }`, `demo`, `otherCharges`, `admissions`, `tuitionOutsideAgreement`, disclaimer | 400, 403 |
+| GET | `/ops/api/v1/fee-plans` | `ops:fees:read` (own) | `studentId` | annual agreements with `status`, `nextDue`, `versions`, instalments with status, ledger, totals (incl. `creditPaise`), reconciliation, `pendingApproval { subjectId, requestedBy } \| null`, `canActivate`, `inForce`, `proposedChange`, `aboveInstalmentsPaise` (31 Oct 2026; a version closed only by a newer draft still takes money); plus `registration { configuredPaise, summary }`, `demo`, `otherCharges`, `admissions`, `tuitionOutsideAgreement`, disclaimer | 400, 403 |
 | POST | `/ops/api/v1/fee-plans` | `ops:fees:record` | `{ admissionId \| admissionCode, studentId (must equal the admission's student), label, pricingReference?, academicYear "2026-27", totalPaise \| totalRupees, dueDates[3] }`; instalments come from `fees.tuition_split` 50/25/25 (D-039; `instalments[]` removed); `Idempotency-Key` optional | 201 draft agreement (`tuitionDiffers` when it differs from the configured figure) | 400 (admission has no student, student mismatch, tuition over ₹1,00,00,000), 403, 404, 409 the student already has an agreement for that year or the admission has an open one |
 | POST | `/ops/api/v1/fee-plans/{id}` | `ops:fees:record` (activate, close a draft); closing or adjusting an ACTIVE agreement also needs `ops:admissions:approve` | `{ action: 'activate' }`, `{ action: 'close', reason }`, `{ action: 'adjust', totalPaise \| totalRupees, dueDates, reason ≥ 10, academicYear? (legacy only) }`; `Idempotency-Key` optional | agreement. Adjust closes vN ("Replaced by version N+1: reason") and inserts vN+1 as a draft with a new plan-bound approval request | 403, 404, 409 activation without the version's own approved `ops.fee_agreement.version` approval (decided by someone other than the maker), agreement closed, other academic year |
 | POST | `/ops/api/v1/fee-plans/{id}/approval-request` | `ops:admissions:write` (own) | `{ comment? }` | core approval request for this exact draft version (`ops.fee_agreement.version`, subject = `fee_plans.id`) | 400 both fee verifications by two different people missing (BR-OPS-7), 403, 404, 409 not a draft / one already pending |
 | POST | `/ops/api/v1/fee-plans/{id}/decision` | `ops:admissions:approve` (own) | `{ decision: approved \| rejected, comment? }` | the approval row (approves or rejects only; finance activates with `activate`) | 403 the maker or the requester, 404, 409 not a draft / nothing pending |
 | POST | `/ops/api/v1/fee-plans/{id}/entries` | `ops:fees:record` | `{ kind: received \| discount \| waiver \| adjustment, direction?, amountPaise \| amountRupees, instalmentId?, paymentDate?, receiptReference?, method?, demoId?, notes? }` (refunds and reversals: `POST /fees/{id}`); `Idempotency-Key` optional | 201 ledger row, labelled "manually recorded, not a verified payment" | 400 (reason in `notes` for a reduction, instalment of another agreement), 403 a discount, waiver or credit (not a demo credit) without `ops:admissions:approve` or by the agreement's maker (rule O2, **Proposed**: owner to confirm whether one approver alone may do it), 404, 409 agreement not active |
-| POST | `/ops/api/v1/fees` | `ops:fees:record` | `{ admissionId, chargeCategory: registration \| demo, kind: due \| received \| discount \| waiver, amountPaise \| amountRupees, demoId?, paymentDate?, receiptReference?, method?, notes? }`; `Idempotency-Key` optional | 201 fee record. A registration `due` takes its amount from `fees.registration` (₹5,000, D-044) and is charged once per student | 400 "Registration fee not configured." when the setting is empty, 403, 404, 409 already charged |
+| POST | `/ops/api/v1/fees` | `ops:fees:record` | `{ admissionId, chargeCategory: registration \| demo, kind: due \| received \| discount \| waiver, amountPaise \| amountRupees, demoId?, paymentDate?, receiptReference?, method?, notes? }`; `Idempotency-Key` optional | 201 fee record. A registration `due` takes its amount from `fees.registration` (₹5,000, D-044) and is charged once per student | 400 "Registration fee not configured." when the setting is empty, 403, 404, 400 `VALIDATION_FAILED` already charged |
 | GET | `/ops/api/v1/fee-structures` | `ops:fees:read` | — | `{ items: fee structure rows (programmeCodes, label, mode, amountPaise, billingPeriod, instalmentCount, instalmentNote, billingNote, source sample\|website_stated\|owner_approved, sourceNote, status draft\|approved, isSample), anyApproved }` | 401, 403 |
 | PATCH | `/ops/api/v1/fee-structures/{id}` | `ops:fees:record`; promoting to `owner_approved` / `approved`, or changing an approved row, also needs `ops:admissions:approve` | `{ label?, mode?, amountPaise \| amountRupees?, billingPeriod?, instalmentCount?, instalmentNote?, billingNote?, sourceNote?, source?: 'owner_approved', status?: draft\|approved, reason? }` (promoting needs `reason` ≥ 10 characters) | updated row; audit `fee_structure.updated` with the reason | 400 (sample/website figure approved, reason missing, amount ≤ 0), 403, 404 |
 | POST | `/ops/api/v1/fees/{id}` (changed 21 Oct 2026) | `ops:fees:record` | `{ action: 'verify', note? }`, `{ action: 'void', reason }`, `{ action: 'refund', amount…, paymentDate, receiptReference?, method?, notes? }` (only on a `received` row; ≤ that payment less its earlier refunds), `{ action: 'reverse', reason }`; `Idempotency-Key` optional | record, or 201 linked row with audit `fee_record.refunded` / `fee_record.reversed` | 409 void of an agreement row, a registration/demo row or a reversal (reverse instead); 409 reversing or voiding a payment that still has live refunds (\"Reverse its refunds first\") |
@@ -291,7 +292,7 @@ Same check order, envelope and error codes as above. Status: Implemented, Tested
 
 | Method | Path | Permission | Body / query | Response | Errors |
 |---|---|---|---|---|---|
-| GET | `/ops/api/v1/applications` | `ops:admissions:read` (own) | `q`, `status`, `programme`, `sort = updated \| oldest \| name`, `page` (25 per page) | page of applications | 400, 403 |
+| GET | `/ops/api/v1/applications` | `ops:admissions:read` (own) | `q`, `status` (also `unsigned`), `blocked=1`, `programme`, `sort = updated \| oldest \| name`, `page` (25 per page) | page of applications | 400, 403 |
 | POST | `/ops/api/v1/applications` | `ops:admissions:write` (own) | `{ admissionId, academicYear?, existingStudentIdentityId?, createNewStudent? }`; `Idempotency-Key` optional | 201 direct application (reference `APP-nnnnnn` mirrors the case code) | 403, 409 case not `admission_pending` or has an open demo |
 | GET | `/ops/api/v1/applications/{id}` | `ops:admissions:read` (own) | — | application, versions, gaps (`fix: contact | counsellor` marks a gap fixed on the lead, not in the application form); KYC and the paper-form answers only with `ops:student_private:read`; fee agreement only with `ops:fees:read` | 403, 404 |
 | PATCH | `/ops/api/v1/applications/{id}` | `ops:admissions:write` (own); private fields also need `ops:student_private:read` | `{ version, academicYear?, intendedStartDate?, deliveryMode?, intendedBatchId?, student?: {…KYC on the lead}, form?: { gender, whatsapp, guardianOccupation, guardianOfficeAddress, guardianAlternateContact, qualification, yearOfPassing, percentageOrGrade, subjectsOrStream, batchTiming }, resultPublicityConsent? }` | application; a material change makes version N+1, status draft, live signature confirmation invalidated | 400, 403, 409 `STALE_VERSION` |
@@ -386,8 +387,8 @@ Business Operations is its own workspace at `http://localhost:3000/ops` (`BUSINE
 | `/ops` (Overview) | `ops:module:access`; each block its own permission | `from`, `to` (IST `YYYY-MM-DD`) | Default this month to date. Invalid, reversed or longer than 366 days → this month plus a message. Task/EOD figures for a range over 92 days are explained, not computed. A source that fails says "Source unavailable". Since 22 Oct 2026 (D-074) the overview also carries a `series` part — leads per day, funnel stages, demo outcomes, leads by source — only for holders of `ops:leads:read`, built by `activitySeries` from the same rows as the figures (own scope labelled); the four permanently-missing tiles are no longer rendered (D-076) |
 | `/ops/academic-summary` | `ops:dashboard:read` | `from`, `to` | Academic delivery summary and reviews published in the range (one Academic call per teacher: IR-OPS-WS-1) |
 | `/ops/marketing-summary` | `ops:dashboard:read` | `from`, `to` | From the Marketing summary route |
-| `/ops/fees/collections` | `ops:fees:read` (own for counsellors) | `status`, `page` | 25 per page (`FEE_PAGE_SIZE`), net total |
-| `/ops/fees/outstanding` | `ops:fees:read` (own for counsellors) | `status` = `due` \| `overdue` \| `upcoming`, `from`, `to`, `page` | Count and amount owed per view; 25 per page |
+| `/ops/fees/collections` | `ops:fees:read` (own for counsellors) | `status`, `page` | 25 per page (`FEE_PAGE_SIZE`), net total; rows carry `reversed` and a link, `collected.samplePaise` says how much is on sample records |
+| `/ops/fees/outstanding` | `ops:fees:read` (own for counsellors) | `status` = `due` \| `overdue` \| `upcoming`, `from`, `to`, `page` | Count and amount owed per view; 25 per page; `samplePaise`; rows with `sequence` null are money above the instalments (a debit) |
 | `/ops/workspaces` | signed in | — | The chooser: only the workspaces your roles grant |
 
 ## Mounted in other workspaces (D-073)
@@ -530,3 +531,12 @@ No new API route. The annual tuition figures and drill-down (owner brief §22) a
 
 ## Pages (23–24 Oct 2026)
 `/ops/hr-requests` (your requests and those forwarded to you), `/ops/hr/requests` (HR queue), `/ops/tests`, `/ops/tests/new`, `/ops/tests/{id}`, `/ops/tests/{id}/edit`, `/ops/tests/{id}/imports/{importId}` (import review), `/ops/leads/stages`, `/ops/leads/sales-calls`.
+
+## Changed on 30–31 Oct 2026
+- **Exit:** `POST /admissions/{id}/lifecycle` with `exit` publishes `ops.enrolment.closed` v1 in the same transaction. Exit from `enrolment_requested` answers 409: run intake and replies first. A name correction writes `core.students` and other leads and publishes `ops.student.renamed` v1 (D-115).
+- **Fees:** `feeSummary(snapshot, records)` gains `debitPaise`; `discountPaise` is gross; `feeSummaryFor` is removed. `POST /fee-plans/{id}/entries` refuses, all Proposed (D-114): a discount, waiver or credit above what is owed (demo credits exempt); the same receipt, amount, date, charge and instalment; a refund dated before its payment. `POST /fees/{id}` refuses a refund or reversal of a credited demo fee until the credit is undone. Fee rows gain `href`.
+- **Teachers:** `GET /teachers?programmeCode=` answers from teaching assignments (shortcut: first 100). `/ops/teachers` has no HR attendance column.
+- **HR:** `POST /hr-requests/{id}/decline` only after review. A forward target without `ops:hr_requests:create` is refused 400 by name. Notices: the HR manager hears requests only for staff in HR's scope; others go to the operations managers.
+- **Notices:** a link goes to the recipient's own workspace (`task-links.ts` `linkOr`). New kinds: `timetable_pattern.series_changed`, `class_session.substitute_assigned`, `class_record.sent_back`. `HOSTS` gains `feedback`. A refused open goes to `<base>/notifications?open=denied` with words.
+- **Reports:** every CSV starts with a BOM. A report snapshot with no fee basis shows "Check before relying on this".
+- **Signed out:** a GET from a browser link answers 303 to sign-in with `next`; a JSON request answers 401.

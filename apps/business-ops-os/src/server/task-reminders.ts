@@ -10,6 +10,7 @@ import {
   opsStaffTasks as tasks,
   opsTaskReminders,
   staffMembers,
+  users,
   type Database,
 } from '@elevate/database';
 import { loadNotificationPreferences, notify } from '@elevate/notifications';
@@ -18,7 +19,7 @@ import type { UserId } from '@elevate/shared-types';
 import { istToday } from '../domain/dates';
 import { deadlineText, WORK_STATUSES, type TaskStatus } from '../domain/staff-tasks';
 import { dueState, remindersDue, type ReminderKind } from '../domain/task-notices';
-import { accessScope, staffIdForUser, type Actor } from './context';
+import { accessScope, actingFor, staffIdForUser, type Actor } from './context';
 import { loadSettings } from './settings';
 import { isGroup } from './task-list';
 import { linkFor } from './task-links';
@@ -50,9 +51,14 @@ export async function runTaskReminders(
         acknowledgedAt: tasks.acknowledgedAt,
         staffId: tasks.staffId,
         userId: staffMembers.userId,
+        ownerName: staffMembers.fullName,
+        managerId: staffMembers.managerId,
+        // Employment ended or login disabled (PPL-006): remind someone who can act instead.
+        gone: sql<boolean>`${staffMembers.status} = 'inactive' OR ${users.status} <> 'active'`,
       })
       .from(tasks)
       .innerJoin(staffMembers, eq(staffMembers.id, tasks.staffId))
+      .leftJoin(users, eq(users.id, staffMembers.userId))
       .where(
         and(
           open(),
@@ -71,22 +77,25 @@ export async function runTaskReminders(
     for (const r of rows) {
       const userId = r.userId as UserId;
       for (const rem of remindersDue(r, now, s, prefs.get(userId)!.reminderIntervalHours)) {
+        if (r.gone && rem.kind === 'unacknowledged') continue; // only the owner can acknowledge
         const [claimed] = await tx
           .insert(opsTaskReminders)
           .values({ taskId: r.id, staffId: r.staffId, ...rem, sentAt: now })
           .onConflictDoNothing()
           .returning({ id: opsTaskReminders.id });
         if (!claimed) continue;
-        await notify(tx, {
-          userIds: [userId],
-          module: 'ops',
-          kind: `task.${rem.kind}`,
-          title: `${TITLE[rem.kind]}: ${r.title}`,
-          body: `Due ${deadlineText(r.dueOn, r.dueTime)}.`,
-          link: await linkFor(tx, userId, 'work', `/tasks/${r.id}`),
-          entityType: 'staff_task',
-          entityId: r.id,
-        });
+        const due = `Due ${deadlineText(r.dueOn, r.dueTime)}.`;
+        for (const to of r.gone ? await actingFor(tx, r.managerId) : [userId])
+          await notify(tx, {
+            userIds: [to],
+            module: 'ops',
+            kind: `task.${rem.kind}`,
+            title: `${TITLE[rem.kind]}: ${r.title}`,
+            body: r.gone ? `${r.ownerName} has left. ${due} Reassign it or close it.` : due,
+            link: await linkFor(tx, to, 'work', `/tasks/${r.id}`),
+            entityType: 'staff_task',
+            entityId: r.id,
+          });
         sent[rem.kind] += 1;
       }
     }
@@ -104,7 +113,9 @@ export async function runTaskReminders(
   });
 }
 
-/** The caller's open work that is overdue or due within the due-soon hours; null = no staff record. */
+const DUE_WORK_LIMIT = 50;
+
+/** The caller's open work that is overdue or due within the due-soon hours, earliest first; null = no staff record. */
 export async function dueWork(db: Database, actor: Actor, now = new Date()) {
   await accessScope(db, actor, 'ops:tasks:read');
   const staffId = await staffIdForUser(db, actor.id);
@@ -115,12 +126,12 @@ export async function dueWork(db: Database, actor: Actor, now = new Date()) {
     .from(tasks)
     .where(and(eq(tasks.staffId, staffId), open(), lte(tasks.dueOn, horizon(now, dueSoonHours))))
     .orderBy(asc(tasks.dueOn), asc(tasks.dueTime))
-    .limit(50);
+    .limit(DUE_WORK_LIMIT);
   const items = rows.flatMap((r) => {
     const state = dueState(r, now, dueSoonHours);
     return state ? [{ ...r, state }] : [];
   });
-  return { dueSoonHours, items };
+  return { dueSoonHours, items, capped: rows.length === DUE_WORK_LIMIT };
 }
 
 /** When the owner first read the task's assignment notification (the "Read" state); null = not yet. */

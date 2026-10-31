@@ -35,7 +35,7 @@ export async function formOptions(db: Database) {
     staff: staff.map((s) => ({ value: s.id as string, label: s.fullName })),
     programmes: progs.map((p) => ({
       value: p.code,
-      label: `${p.code} — ${p.name}${p.status !== 'active' ? ` (${p.status})` : ''}`,
+      label: `${p.name}${p.status !== 'active' ? ` (${p.status})` : ''}`,
     })),
     sources: sources.map((s) => ({ value: s.code, label: s.label })),
     departments: depts.map((d) => ({ value: d.id as string, label: d.name })),

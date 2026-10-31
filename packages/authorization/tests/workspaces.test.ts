@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { asId, type ModuleKey, type RoleKey, type UserId } from '@elevate/shared-types';
+import { asId, ROLE_KEYS, type ModuleKey, type RoleKey, type UserId } from '@elevate/shared-types';
 import {
+  grantsForRole,
+  isWorkspaceKey,
   resolveLanding,
   scopeFor,
   workspacesFor,
@@ -11,6 +13,26 @@ import {
 const as = (...roles: RoleKey[]) => ({
   id: asId<UserId>('00000000-0000-4000-8000-000000000001'),
   roles,
+});
+
+describe('a workspace permission implies membership of it (HAT-001: server actions have no route gate)', () => {
+  // D-073: Business Ops services these roles use from the workspace they do belong to.
+  const OWN_WORK = ['ops:attendance:read', 'ops:attendance:request', 'ops:hr_requests:create', 'ops:tasks:read', 'ops:tasks:write'];
+  const LEADS = ['ops:lead_contacts:read', 'ops:leads:read', 'ops:leads:write'];
+  const HOSTED: Partial<Record<RoleKey, string[]>> = {
+    teacher: [...OWN_WORK, 'ops:appointments:read', 'ops:teacher_feedback_summaries:read'],
+    marketing_contributor: [...OWN_WORK, ...LEADS],
+    marketing_manager: [...OWN_WORK, ...LEADS, 'ops:leads:assign', 'ops:leads:merge', 'ops:tasks:review'],
+  };
+
+  it.each(ROLE_KEYS)('%s', (role) => {
+    const held = [...grantsForRole(role).keys()] as string[];
+    const outside = held.filter((p) => {
+      const workspace = p.split(':')[0];
+      return isWorkspaceKey(workspace) && !held.includes(`${workspace}:module:access`);
+    });
+    expect(outside.sort()).toEqual((HOSTED[role] ?? []).sort());
+  });
 });
 
 describe('workspacesFor (D-072: membership = a stored role granting <workspace>:module:access)', () => {

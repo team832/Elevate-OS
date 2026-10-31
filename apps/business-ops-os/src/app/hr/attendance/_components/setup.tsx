@@ -88,6 +88,7 @@ export function SchedulesTab({ setup, canManage }: { setup: AttendanceSetup; can
           {
             key: 'grace',
             header: 'Late grace',
+            numeric: true,
             render: (s) => (s.graceMinutes ? `${s.graceMinutes} min` : 'HR setting'),
           },
           { key: 'staff', header: 'Staff following it', numeric: true, render: followers },

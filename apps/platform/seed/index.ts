@@ -10,7 +10,7 @@
 import { and, eq } from 'drizzle-orm';
 import { opsAdmissions, opsLeads } from '@elevate/database';
 import { defineSeed, type SeedDefinition } from '@elevate/database/seed';
-import { runEnrolmentIntake } from '@elevate/academic-os/server';
+import { runEnrolmentExits, runEnrolmentIntake } from '@elevate/academic-os/server';
 import { processEnrolmentReplies } from '@elevate/business-ops-os/server';
 import { seedSampleLifecycle } from '@elevate/business-ops-os/seed';
 import { sampleTestSeed } from './sample-tests';
@@ -37,6 +37,7 @@ export const seeds: readonly SeedDefinition[] = [
         `platform.sample-enrolments: intake ${JSON.stringify(intake)}, replies ${JSON.stringify(replies)}`,
       );
       await seedSampleLifecycle(db, log);
+      log(`platform.sample-enrolments: exits ${JSON.stringify(await runEnrolmentExits(db))}`);
     },
   }),
   sampleTestSeed,

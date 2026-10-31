@@ -4,8 +4,8 @@
  * decimal strings with at most 4 decimals (exact; see domain/marks.ts).
  */
 import { z } from 'zod';
-import { phoneSchema, programmeCodeSchema } from '@elevate/shared-contracts';
-import { isIsoDate } from '@elevate/shared-types';
+import { httpUrlSchema, phoneInputSchema, programmeCodeSchema } from '@elevate/shared-contracts';
+import { isIsoDate, toIsoDate } from '@elevate/shared-types';
 import { isExactMark } from '../domain';
 
 /** A real calendar date `YYYY-MM-DD` (Asia/Kolkata day), kept as a plain string for services. */
@@ -134,6 +134,7 @@ export const updateBatchBody = z
   .object({
     status: z.enum(['planning', 'active', 'completed', 'cancelled']).optional(),
     capacity: z.int().min(1).max(10_000).nullable().optional(),
+    classMinutesOverride: z.int().min(15).max(300).nullable().optional(),
     startDate: isoDateSchema.nullable().optional(),
     endDate: isoDateSchema.nullable().optional(),
     mode: mode.nullable().optional(),
@@ -220,7 +221,7 @@ export const sessionInput = z
     date: isoDateSchema,
     startTime: clock,
     durationMinutes: z.int().min(5).max(600),
-    onlineLink: z.url().max(500).optional(),
+    onlineLink: httpUrlSchema.max(500).optional(),
   })
   .strict();
 
@@ -391,16 +392,16 @@ export const createStudentBody = z
   .object({
     fullName: text(),
     preferredName: optionalText(200),
-    dateOfBirth: isoDateSchema.optional(),
+    dateOfBirth: isoDateSchema.refine((d) => d <= toIsoDate(new Date()), { error: 'A date of birth cannot be in the future.' }).optional(),
     currentStage: z.enum(['class_9', 'class_10', 'class_11', 'class_12', 'gap_year', 'graduate', 'other']).optional(),
     schoolBoard: optionalText(60),
     email: z.email().optional(),
-    phone: phoneSchema.optional(),
+    phone: phoneInputSchema.optional(),
     city: optionalText(100),
     guardianName: optionalText(200),
     guardianRelationship: z.enum(['mother', 'father', 'guardian', 'other']).optional(),
     guardianEmail: z.email().optional(),
-    guardianPhone: phoneSchema.optional(),
+    guardianPhone: phoneInputSchema.optional(),
   })
   .strict();
 
@@ -413,7 +414,7 @@ export const manualEnrolmentBody = z
   })
   .strict();
 
-export const studentsQuery = z.object({ batchId: z.uuid().optional(), q: z.string().max(100).optional() });
+export const studentsQuery = z.object({ batchId: z.uuid().optional(), q: z.string().max(100).optional(), state: z.enum(['current', 'left', 'all']).optional() });
 
 export const catchupUpdateBody = z
   .object({

@@ -1,4 +1,5 @@
 /** Teaching assignments as read from Academic OS (shared by the list and the staff record). */
+import { sourceReasonWords } from '@elevate/shared-contracts';
 import { Alert, EmptyState, StatusBadge } from '@elevate/shared-ui';
 import type { listTeachingAssignments } from '../../../server/hr-assignments';
 import { fmtDate, fmtDateTime, humanise } from '../../../ui/format';
@@ -22,7 +23,7 @@ export function AssignmentsTable({
   if (result.status === 'unavailable')
     return (
       <Alert tone="warning">
-        Source unavailable — Academic OS could not be read ({result.reason}, checked{' '}
+        Source unavailable — Academic OS could not be read ({sourceReasonWords(result.reason)}, checked{' '}
         {fmtDateTime(result.fetchedAt)}). Assignments are not shown rather than shown as none.
       </Alert>
     );

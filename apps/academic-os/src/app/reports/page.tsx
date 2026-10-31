@@ -64,7 +64,7 @@ async function Body({ access }: { access: PageAccess }) {
   );
   return (
     <>
-      <PageHeader title="Reports" description="Print views (A4) with a CSV download. Each report states how its figures are counted. Parent progress reports are prepared and reviewed in Business Ops." />
+      <PageHeader title="Reports" description="Print views (A4) with a CSV download. Each report states how its figures are counted. Parent progress reports are prepared and reviewed in Business Operations." />
       <div className="el-stack">
         {batches.length === 0 && assessments.length === 0 && !has('academic:classes:read') ? <p>No reports are available for your role.</p> : null}
         {has('academic:attendance:read') && batches.length > 0 ? (

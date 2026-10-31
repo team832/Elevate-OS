@@ -1,5 +1,6 @@
 import { DataTable, EmptyState, SourceBadge } from '@elevate/shared-ui';
 import { formatIst, modulePath, type AggregateGroup } from '../domain';
+import { formatDay } from '../domain/metrics';
 import { MetricCell } from './badges';
 
 export interface CampaignRow {
@@ -23,7 +24,7 @@ export const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
 };
 
 export const campaignDates = (c: Pick<CampaignRow, 'startsOn' | 'endsOn'>) =>
-  `${c.startsOn ?? 'no start date'} to ${c.endsOn ?? 'no end date'}`;
+  `${c.startsOn ? formatDay(c.startsOn) : 'no start date'} to ${c.endsOn ? formatDay(c.endsOn) : 'no end date'}`;
 
 /** Campaigns with their verified results (placements, live posts, imported numbers). */
 export function CampaignResultsTable({

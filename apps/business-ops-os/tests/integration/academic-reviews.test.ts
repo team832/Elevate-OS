@@ -28,6 +28,7 @@ import { GET as demoSessionsRoute } from '../../src/app/api/internal/v1/demo-ses
 import { POST as sessionAction } from '../../src/app/api/v1/demos/[id]/sessions/[sessionId]/route';
 import { istToday } from '../../src/domain';
 import { reviewsAuthored, studentReviews } from '../../src/server/academic-reviews';
+import { academicDemoMarks } from '../../src/server/academic-summary';
 import { previewConversion } from '../../src/server/conversion';
 import { getDemo, listDemos, syncDemosFromAcademic } from '../../src/server/demos';
 import { getTeacherProfile, listTeachers } from '../../src/server/teachers';
@@ -335,6 +336,20 @@ describe('linked demo classes: the teacher marks in Academic (owner answer 3)', 
     expect(d.feedback[0]!.teachers).toEqual([
       expect.objectContaining({ staffId: otherTeacher.staffId, state: 'submitted' }),
     ]);
+  });
+
+  it('a read records a new link once, then writes nothing (API-006)', async () => {
+    linked('not_recorded');
+    await academicDemoMarks(ctx.db, [sessionIds[0]!]);
+    const [seen] = await ctx.db
+      .select()
+      .from(opsDemoSessions)
+      .where(eq(opsDemoSessions.id, sessionIds[0] as never));
+    expect(seen!.academicSessionRef).toBeTruthy();
+    const update = vi.spyOn(ctx.db, 'update');
+    await academicDemoMarks(ctx.db, [sessionIds[0]!]);
+    expect(update).not.toHaveBeenCalled();
+    update.mockRestore();
   });
 
   it('refuses the counsellor’s mark on a linked class (409); an unlinked class still takes it', async () => {

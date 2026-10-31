@@ -10,6 +10,10 @@ import CalendarItemPage from '../../src/app/calendar/[id]/page';
 import DeliverablesPage from '../../src/app/deliverables/page';
 import IdeaDetailPage from '../../src/app/ideas/[id]/page';
 import IdeasPage from '../../src/app/ideas/page';
+import { readdirSync, readFileSync } from 'node:fs';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { archiveContentItem, cancelPlacement } from '../../src/server';
+import { PeoplePanel } from '../../src/ui/content-panels';
 import { IDEA_SCOPE_LABELS, IDEA_STATUS_LABELS } from '../../src/domain';
 import {
   calendarCounts,
@@ -73,6 +77,17 @@ describe('Marketing calendar screens', () => {
     },
   );
 
+  it.each([
+    ['director', false],
+    ['auditor', false],
+    ['marketing_manager', true],
+  ])('New idea is offered to %s only with write access: %s', async (role, offered) => {
+    const page = (await IdeasPage(sp({}))) as React.ReactElement<{
+      actions: (user: unknown) => React.ReactNode;
+    }>;
+    expect(Boolean(page.props.actions({ id: 'u1', roles: [role] }))).toBe(offered);
+  });
+
   it('without ?view the calendar opens in the view chosen in Personal Settings', async () => {
     const isList = (html: string) => /aria-current="page">List</.test(html);
     expect(isList(await render(CalendarPage(sp({})), anika))).toBe(false);
@@ -109,8 +124,8 @@ describe('Marketing calendar screens', () => {
       'draggable="true"',
     );
     const list = await render(CalendarPage(sp({ view: 'list' })), anika);
-    expect(list).toContain('data-label="Owner">Sample Marketer Anika<');
-    expect(list).toContain('data-label="Publication">Not published<');
+    expect(list).toContain('data-label="Owner"><div>Sample Marketer Anika<');
+    expect(list).toContain('data-label="Publication"><div>Not published<');
   });
 
   it('a scheduled post is named by its content title (code as secondary text) in month and list views', async () => {
@@ -277,5 +292,39 @@ describe('Idea screen', () => {
     );
     expect(theirs).not.toContain('Plan it');
     expect(theirs).toContain('Not planned yet.');
+  });
+});
+
+describe('round 2 defects on Marketing screens', () => {
+  it('Assign is offered only to those the service lets through (FLB-011)', () => {
+    const d = { item: { id: 'i1' }, assignments: [], comments: [] } as never;
+    const panel = (canAssign: boolean) =>
+      renderToStaticMarkup(<PeoplePanel d={d} canWrite canAssign={canAssign} people={[{ id: 's1', name: 'Sample Writer' }]} />);
+    expect(panel(true)).toContain('>Assign<');
+    expect(panel(true)).toContain('<option value="s1">Sample Writer</option>');
+    expect(panel(true)).not.toContain('User id');
+    expect(panel(false)).not.toContain('>Assign<');
+    expect(panel(false)).toContain('>Comment<'); // a contributor can still comment
+  });
+
+  it.each(['', 'ab'])(
+    'a reason %j is refused by the service, on every path (FLB-008)',
+    async (reason) => {
+      const refusal = /at least 3 characters/;
+      await expect(archiveContentItem(ctx.db, manager, 'unused', reason)).rejects.toThrow(refusal);
+      await expect(cancelPlacement(ctx.db, manager, 'unused', reason)).rejects.toThrow(refusal);
+    },
+  );
+
+  it('every go() in a server action is returned, so nothing runs after a redirect (FLB-010)', () => {
+    const app = new URL('../../src/app/', import.meta.url);
+    const unreturned = readdirSync(app, { recursive: true, encoding: 'utf8' })
+      .filter((f) => f.endsWith('.ts'))
+      .flatMap((f) =>
+        readFileSync(new URL(f.split('\\').join('/'), app), 'utf8')
+          .split('\n')
+          .filter((l) => /(^|[^.\w])go\(/.test(l) && !/return go\(|function go\(/.test(l)),
+      );
+    expect(unreturned).toEqual([]);
   });
 });

@@ -39,7 +39,7 @@ export {
   NOT_STAGED,
   type LeadFunnelFilters,
 } from './server/lead-funnel';
-export { listCalls } from './server/lead-calls';
+export { callOutcomeCounts, listCalls } from './server/lead-calls';
 export {
   campaignLeadOutcomes,
   leadMetricRecords,
@@ -50,7 +50,7 @@ export {
   type LeadMetricRecord,
 } from './server/lead-metrics';
 // Dashboard lists: row flags awaitingContact, dueToday, overdue (own scope applied).
-export { LEAD_LIST_FLAGS, listLeads } from './server/leads';
+export { LEAD_LIST_FLAGS, leadCounts, listLeads } from './server/leads';
 
 /** Route handlers by path under `<base>/api/v1/`. */
 export const leadsRoutes = {

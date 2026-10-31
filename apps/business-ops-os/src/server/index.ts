@@ -12,6 +12,7 @@ export {
   requestEnrolment,
   retryEnrolmentHandoff,
 } from './enrolment';
+export { changeStudentLifecycle } from './student-lifecycle';
 export { runFollowUpReminders } from './follow-ups';
 export { APPROVAL_SOURCES, listApprovalInbox, type ApprovalSource } from './approvals';
 export { updateStaff } from './organisation';

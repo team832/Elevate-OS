@@ -12,7 +12,8 @@ import {
   TextInput,
 } from '@elevate/shared-ui';
 import { isIsoDate, toIsoDate, type IsoDate } from '@elevate/shared-types';
-import { METRIC_KEYS, formatIst, modulePath } from '../../../domain';
+import { METRIC_KEYS, SNAPSHOT_SOURCE_LABELS, formatIst, modulePath } from '../../../domain';
+import { formatPeriod } from '../../../domain/metrics';
 import { teamWide, weeklyReport } from '../../../server';
 import { IntegrationBadge, MetricCell } from '../../../ui/badges';
 import { MarketingPage, Section, param, type SearchParams } from '../../../ui/shell';
@@ -62,8 +63,8 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
                   </div>
                 </form>
                 <p>
-                  <strong>{r.window.label}</strong> ({r.window.from} to {r.window.to}) · as of{' '}
-                  {formatIst(r.asOf)}
+                  <strong>{r.window.label}</strong> ({formatPeriod(r.window.from, r.window.to)}) ·
+                  as of {formatIst(r.asOf)}
                 </p>
                 {r.aggregation.groups.length === 0 ? (
                   <EmptyState
@@ -93,7 +94,17 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
                                 fewer than 6 — pattern not reliable
                               </StatusBadge>
                             )}
-                            <div className="el-field-hint">sources: {g.sources.join(', ')}</div>
+                            <div className="el-field-hint">
+                              Source:{' '}
+                              {g.sources
+                                .map(
+                                  (s) =>
+                                    SNAPSHOT_SOURCE_LABELS[
+                                      s as keyof typeof SNAPSHOT_SOURCE_LABELS
+                                    ] ?? s,
+                                )
+                                .join(', ')}
+                            </div>
                           </>
                         ),
                       },
@@ -118,6 +129,7 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
                       {
                         key: 'median',
                         header: 'Median views',
+                        numeric: true,
                         render: (g) =>
                           g.medianViews.value === null ? (
                             <StatusBadge>missing</StatusBadge>
@@ -138,7 +150,7 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
                 )}
                 <Card
                   title="Planned vs published (by account)"
-                  description="Planned uses the ORIGINAL publish time. Sandbox publications are not real posts."
+                  description="Planned uses the original publish time. Test runs are not real posts."
                 >
                   <DataTable
                     compact
@@ -165,13 +177,13 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
                       },
                       {
                         key: 'legacy',
-                        header: 'Reported by legacy tracker',
+                        header: 'Reported by old tracker',
                         numeric: true,
                         render: (a) => a.publishedLegacyReported,
                       },
                       {
                         key: 'sandbox',
-                        header: 'Sandbox (nothing posted)',
+                        header: 'Test run (nothing posted)',
                         numeric: true,
                         render: (a) => a.publishedSandbox,
                       },

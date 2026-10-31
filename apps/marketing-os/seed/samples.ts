@@ -14,7 +14,6 @@ import {
   marketingCalendarItems,
   marketingCampaigns,
   marketingIdeas,
-  marketingOptimisationCategories,
   marketingOptimisationItems,
   marketingTargets,
   programmes,
@@ -47,38 +46,9 @@ import {
   updateOptimisationItem,
 } from '../src/server/optimisation';
 import { createTarget } from '../src/server/targets';
+import { optimisationCategoriesSeed } from './reference';
 
 const [POOJA, ROHIT] = [POOJA_EMAIL, ROHIT_EMAIL];
-
-/** SEO / AIO / GEO as the brief labels them (§14); reference data, kept by db:clear-samples. */
-export const OPTIMISATION_CATEGORIES = [
-  {
-    key: 'seo',
-    label: 'SEO',
-    meaning:
-      'Search engine optimization: work that helps a page be found and read well in ordinary search results (page title, headings, content, links, speed).',
-  },
-  {
-    key: 'aio',
-    label: 'AIO',
-    meaning:
-      'AI search optimization: work that helps AI answers shown by search engines find and quote the page correctly.',
-  },
-  {
-    key: 'geo',
-    label: 'GEO',
-    meaning:
-      'Generative engine optimization: work that helps chat assistants that write answers describe Elevate accurately and point to the right page.',
-  },
-] as const;
-
-/** Inserted only when missing: the marketing manager may relabel or switch them off. */
-export async function seedOptimisationCategories(db: Database) {
-  await db
-    .insert(marketingOptimisationCategories)
-    .values([...OPTIMISATION_CATEGORIES])
-    .onConflictDoNothing();
-}
 
 export const SAMPLE_CAMPAIGNS = [
   {
@@ -536,13 +506,7 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
 }
 
 export const marketingSampleSeeds = [
-  defineSeed({
-    name: 'marketing.optimisation-categories',
-    module: 'marketing',
-    description:
-      'SEO, AIO and GEO work categories with their meanings (reference data, not sample)',
-    run: ({ db }) => seedOptimisationCategories(db),
-  }),
+  optimisationCategoriesSeed,
   defineSeed({
     name: 'marketing.samples',
     module: 'marketing',

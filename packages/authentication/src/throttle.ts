@@ -59,6 +59,15 @@ export class LoginThrottle {
     }
   }
 
+  /** Take back one recorded failure: the attempt turned out not to be a wrong guess. */
+  undo(key: string): void {
+    const entry = this.entries.get(key);
+    if (!entry) return;
+    entry.failures -= 1;
+    if (entry.failures < this.maxFailures) entry.lockedUntil = 0;
+    if (entry.failures <= 0) this.entries.delete(key);
+  }
+
   reset(key: string): void {
     this.entries.delete(key);
   }

@@ -16,7 +16,7 @@
  */
 import { and, desc, eq, gte, inArray, isNull, lte, max, ne, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { scopeFor } from '@elevate/authorization';
+import { can, scopeFor } from '@elevate/authorization';
 import {
   academicBatches,
   academicBatchPlacements,
@@ -140,6 +140,14 @@ async function assertMayReview(db: Database, actor: Actor, ref: StudentRef, now:
     if (!fits) throw new ValidationError('The subject is not part of the student’s course.');
   }
   return { staffId: who.staffId, sessionId };
+}
+
+/** Which "Write review" links on a class's roster will open for this person (the rules of assertMayReview). */
+export async function rosterReviewLinks(db: Database, actor: Actor, sessionId: string, now = new Date()) {
+  const who = await reviewer(db, actor, now);
+  if (!who.staffId || !can(actor.user, 'academic:reviews:write')) return { enrolled: () => false, demo: false };
+  const [taught] = await db.select({ id: academicClassSessions.id }).from(academicClassSessions).where(and(eq(academicClassSessions.id, sessionId as never), taughtBy(db, who.staffId)));
+  return { enrolled: (studentId: string) => Boolean(taught) && (!who.placed || who.placed.includes(studentId as StudentId)), demo: true };
 }
 
 function assertSubmittable(review: Pick<Review, 'reviewType' | 'periodFrom' | 'periodTo' | (typeof TEXT_FIELDS)[number]>) {

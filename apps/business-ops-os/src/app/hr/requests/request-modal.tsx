@@ -140,7 +140,7 @@ export async function HrRequestModal({
             them, or you forward it to a person yourself.
           </Alert>
         ) : null}
-        <RequestFacts view={view} base="/ops" />
+        <RequestFacts user={user} view={view} base="/ops" />
         <Segment title="Original request (as sent)" level={3}>
           <p className="el-pre">{req?.message}</p>
         </Segment>

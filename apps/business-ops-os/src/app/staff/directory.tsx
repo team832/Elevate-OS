@@ -7,7 +7,7 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { can, ROLES } from '@elevate/authorization';
 import { OPS_EMPLOYMENT_STATUSES } from '@elevate/database';
 import { ROLE_KEYS } from '@elevate/shared-types';
-import { EmptyState, StatusBadge } from '@elevate/shared-ui';
+import { ListEmpty, StatusBadge } from '@elevate/shared-ui';
 import { EMPLOYMENT_TYPES } from '../../domain';
 import { formOptions } from '../../server/options';
 import { getDirectory } from '../../server/organisation';
@@ -85,7 +85,7 @@ export async function Directory({
       {view === 'hr' && d.scope ? (
         <details className="el-explain">
           <summary>Who is listed</summary>
-          Staff in the departments HR covers (HR Settings → Staff HR manages, a proposed setting),
+          Staff in the departments HR covers (HR Settings → Staff HR manages),
           counting additional departments, plus staff with no department yet so HR can place them.
         </details>
       ) : null}
@@ -95,7 +95,17 @@ export async function Directory({
         rowKey={(s) => s.id}
         rowHref={(s) => close({ open: s.id, act: undefined, new: undefined })}
         linkColumn="displayName"
-        empty={<EmptyState title="No staff match" description="Clear a filter to see everyone." />}
+        empty={
+          <ListEmpty
+            noun="staff"
+            params={sp}
+            first={
+              manage
+                ? 'Start here: add the first staff member. Leads, tasks and classes are assigned to staff records.'
+                : 'An operations manager adds staff records here.'
+            }
+          />
+        }
         columns={[
           { key: 'displayName', header: 'Name' },
           { key: 'staffCode', header: 'Employee ID', render: (s) => s.staffCode ?? 'Not recorded' },
@@ -129,16 +139,19 @@ export async function Directory({
         <Segment
           title="Departments"
           flush
-          description="13 provisional departments from the legacy model; confirming them is an owner decision. Open one to list its staff."
+          description="Provisional until the owner confirms them. Open one to list its staff."
+          actions={
+            manage ? <a href={close({ newDepartment: '1' })}>Add a department</a> : undefined
+          }
         >
           <RecordTable
             rows={d.departments}
             rowKey={(x) => x.id}
             rowHref={(x) => listHref(base, { department: x.id })}
             linkColumn="name"
+            empty="No departments yet. They come with the reference data, which a platform administrator loads; you can also add one here."
             columns={[
               { key: 'name', header: 'Department' },
-              { key: 'code', header: 'Code' },
               {
                 key: 'status',
                 header: 'Status',
@@ -152,6 +165,31 @@ export async function Directory({
             ]}
           />
         </Segment>
+      ) : null}
+      {manage && sp.newDepartment ? (
+        <FormModal
+          id="department-new"
+          title="Add a department"
+          meta="It starts as provisional."
+          closeHref={close({ newDepartment: undefined })}
+        >
+          <ActionForm
+            action="/ops/api/v1/departments"
+            submitLabel="Add department"
+            redirectTo={close({ newDepartment: undefined }).replace(/^\/ops/, '')}
+            secondary={<a href={close({ newDepartment: undefined })}>Cancel</a>}
+            fields={[
+              { name: 'name', label: 'Name', required: true },
+              {
+                name: 'code',
+                label: 'Short code',
+                required: true,
+                hint: 'Capitals and underscores, for example MARKETING_GROWTH.',
+              },
+              { name: 'description', label: 'Description', type: 'textarea' },
+            ]}
+          />
+        </FormModal>
       ) : null}
       {o ? (
         <FormModal id="staff-new" title="Add staff member" closeHref={close({ new: undefined })}>

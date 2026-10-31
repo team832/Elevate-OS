@@ -24,47 +24,51 @@ function istLocalToIso(local: string | undefined): string | undefined {
 export async function scheduleAction(form: FormData): Promise<void> {
   const id = str(form, 'placementId') ?? '';
   const publishAt = istLocalToIso(str(form, 'publishAt'));
-  if (!publishAt) go(back(form), { error: 'Enter a publish date and time (IST).' });
+  if (!publishAt) return go(back(form), { error: 'Enter a publish date and time (IST).' });
   const res = await run((db, user) => schedulePlacement(db, user, id, { publishAt }));
-  if (!res.ok) go(back(form), { error: res.error });
+  if (!res.ok) return go(back(form), { error: res.error });
   const w = res.value.warnings.map((x) => x.message).join(' ');
-  go(back(form), { notice: `Scheduled ${res.value.placement.code}.${w ? ` Warnings: ${w}` : ''}` });
+  return go(back(form), {
+    notice: `Scheduled ${res.value.placement.code}.${w ? ` Warnings: ${w}` : ''}`,
+  });
 }
 
 export async function unscheduleAction(form: FormData): Promise<void> {
   const res = await run((db, user) =>
     unschedulePlacement(db, user, str(form, 'placementId') ?? ''),
   );
-  if (!res.ok) go(back(form), { error: res.error });
-  go(back(form), { notice: `Unscheduled ${res.value.code}.` });
+  if (!res.ok) return go(back(form), { error: res.error });
+  return go(back(form), { notice: `Unscheduled ${res.value.code}.` });
 }
 
 export async function cancelPlacementAction(form: FormData): Promise<void> {
   const res = await run((db, user) =>
-    cancelPlacement(db, user, str(form, 'placementId') ?? '', str(form, 'reason') ?? 'Cancelled'),
+    cancelPlacement(db, user, str(form, 'placementId') ?? '', str(form, 'reason') ?? ''),
   );
-  if (!res.ok) go(back(form), { error: res.error });
-  go(back(form), { notice: `Cancelled ${res.value.code}.` });
+  if (!res.ok) return go(back(form), { error: res.error });
+  return go(back(form), { notice: `Cancelled ${res.value.code}.` });
 }
 
 export async function manualPublicationAction(form: FormData): Promise<void> {
   const publishedAt = istLocalToIso(str(form, 'publishedAt'));
   const url = str(form, 'url');
   if (!publishedAt || !url)
-    go(back(form), { error: 'Both the actual publish time and the live link are required.' });
+    return go(back(form), {
+      error: 'Both the actual publish time and the live link are required.',
+    });
   const res = await run((db, user) =>
     recordManualPublication(db, user, str(form, 'placementId') ?? '', { publishedAt, url }),
   );
-  if (!res.ok) go(back(form), { error: res.error });
-  go(back(form), { notice: `Recorded publication of ${res.value.placement.code}.` });
+  if (!res.ok) return go(back(form), { error: res.error });
+  return go(back(form), { notice: `Recorded publication of ${res.value.placement.code}.` });
 }
 
 export async function setCampaignAction(form: FormData): Promise<void> {
   const res = await run((db, user) =>
     setPlacementCampaign(db, user, str(form, 'placementId') ?? '', str(form, 'campaignId') ?? null),
   );
-  if (!res.ok) go(back(form), { error: res.error });
-  go(back(form), { notice: 'Campaign updated.' });
+  if (!res.ok) return go(back(form), { error: res.error });
+  return go(back(form), { notice: 'Campaign updated.' });
 }
 
 export async function createCampaignAction(form: FormData): Promise<void> {
@@ -77,10 +81,10 @@ export async function createCampaignAction(form: FormData): Promise<void> {
     status: str(form, 'status') ?? 'draft',
   });
   if (!parsed.success)
-    go('campaigns', { error: parsed.error.issues.map((i) => i.message).join('; ') });
+    return go('campaigns', { error: parsed.error.issues.map((i) => i.message).join('; ') });
   const res = await run((db, user) => createCampaign(db, user, parsed.data));
-  if (!res.ok) go('campaigns', { error: res.error });
-  go('campaigns', { notice: `Campaign ${res.value.code} created.` });
+  if (!res.ok) return go('campaigns', { error: res.error });
+  return go('campaigns', { notice: `Campaign ${res.value.code} created.` });
 }
 
 export async function importMetricsAction(form: FormData): Promise<void> {
@@ -98,11 +102,11 @@ export async function importMetricsAction(form: FormData): Promise<void> {
     dryRun: form.get('dryRun') === 'on',
   });
   if (!parsed.success)
-    go('metrics/import', {
+    return go('metrics/import', {
       error: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
     });
   const res = await run((db, user) => importMetricsCsv(db, user, parsed.data));
-  if (!res.ok) go('metrics/import', { error: res.error });
+  if (!res.ok) return go('metrics/import', { error: res.error });
   const r = res.value;
   const summary = `${r.dryRun ? 'Dry run' : r.duplicate ? 'Already imported (no change)' : 'Imported'}: ${r.rowsAccepted} accepted, ${r.rowsRejected} rejected, ${r.rowsSkipped} skipped; matched by link ${r.matchCounts.matched_link}, suggested ${r.matchCounts.suggested_title_date}, unmatched ${r.matchCounts.unmatched}.`;
   const rejected = r.rejected
@@ -110,6 +114,6 @@ export async function importMetricsAction(form: FormData): Promise<void> {
     .map((x) => `row ${x.rowNumber}: ${x.reasons.join(' ')}`)
     .join(' | ');
   if (r.rowsRejected)
-    go('metrics/import', { notice: summary, error: `Rejected rows — ${rejected}` });
-  go('metrics/import', { notice: summary });
+    return go('metrics/import', { notice: summary, error: `Rejected rows — ${rejected}` });
+  return go('metrics/import', { notice: summary });
 }

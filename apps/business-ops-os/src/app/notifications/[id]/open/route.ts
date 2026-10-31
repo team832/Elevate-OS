@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { defineRoute } from '@elevate/server-kit';
+import { inBase } from '@elevate/authorization';
+import { defineRoute, requestWorkspace } from '@elevate/server-kit';
+import { MODULES } from '@elevate/shared-types';
 import { openNotification } from '../../../../server/notification-open';
 import { linkUrl } from '../../../../server/task-links';
 
@@ -14,11 +16,11 @@ export const dynamic = 'force-dynamic';
 export const GET = defineRoute(
   { permission: 'platform:notifications:read', params: z.object({ id: z.uuid() }) },
   async ({ request, user, db, params }) => {
-    const base = new URL(request.url).pathname.split('/notifications/')[0]!;
+    const base = MODULES[requestWorkspace(request) ?? 'platform'].basePath;
     const r = await openNotification(db, user, params.id);
     const to =
       'href' in r
-        ? r.href.startsWith(`${base}/`)
+        ? inBase(r.href, base)
           ? r.href
           : linkUrl(r.href)
         : `${base}/notifications?open=${r.refused}`;

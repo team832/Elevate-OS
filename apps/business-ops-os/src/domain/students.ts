@@ -8,7 +8,7 @@
  * Students may be minors: contact, guardian and consent fields are private
  * (`ops:student_private:read`) and are removed from every other response.
  */
-import type { AdmissionStatus } from './pipeline';
+import { EXIT_STATUSES, type AdmissionStatus } from './pipeline';
 
 export const DIRECTORY_STATES = [
   'admitted',
@@ -83,6 +83,8 @@ export interface HandoffViewResult {
 
 /** What the handoff looks like to a person. "Enrolled" only after Academic confirmed. */
 export function deriveHandoffView(h: HandoffInput): HandoffViewResult {
+  if (h.handoffStatus === 'enrolled' && (EXIT_STATUSES as readonly string[]).includes(h.status))
+    return { view: 'closed', label: 'Left after enrolment', tone: 'neutral', detail: null };
   if (h.status === 'enrolled' || h.handoffStatus === 'enrolled')
     return { view: 'enrolled', label: 'Enrolled', tone: 'success', detail: null };
   if (h.status === 'enrolment_requested') {
@@ -92,7 +94,7 @@ export function deriveHandoffView(h: HandoffInput): HandoffViewResult {
         view: 'awaiting_pickup',
         label: 'Requested — waiting for Academic OS to pick it up',
         tone: 'info',
-        detail: `Attempt ${h.enrolmentAttempt}.`,
+        detail: `Attempt ${h.enrolmentAttempt}. An academic coordinator processes it: Academic OS, Enrolment intake, "Process intake now".`,
       };
     if (d.status === 'failed')
       return {
@@ -112,7 +114,8 @@ export function deriveHandoffView(h: HandoffInput): HandoffViewResult {
       view: 'awaiting_reply',
       label: 'Processed by Academic OS — reply not yet applied',
       tone: 'info',
-      detail: 'Run "enrolment replies" (or wait for the scheduler) to apply the answer.',
+      detail:
+        'An operations manager applies the answer: Overview, Background jobs, "Apply Academic replies".',
     };
   }
   if (h.handoffStatus === 'rejected')
@@ -163,7 +166,8 @@ export function retryDecision(h: HandoffInput): RetryDecision {
   if (d.status === 'dead') return { allowed: true, kind: 'after_failure', via: 'retry' };
   return {
     allowed: false,
-    reason: 'Academic OS processed the request; apply its reply (enrolment replies job).',
+    reason:
+      'Academic OS processed the request. An operations manager applies its reply: Overview, Background jobs, "Apply Academic replies".',
   };
 }
 
@@ -182,6 +186,8 @@ export const PRIVATE_STUDENT_FIELDS = [
   'guardianEmail',
   'city',
   'previousSchool',
+  'dateOfBirth',
+  'address',
   'consent',
 ] as const;
 export type PrivateStudentField = (typeof PRIVATE_STUDENT_FIELDS)[number];

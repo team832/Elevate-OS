@@ -8,7 +8,7 @@
  * fees under its own demo permission). Rows are never deleted or rewritten: a refund names the
  * payment it returns and a reversal names the entry it cancels (`reverses_record_id`).
  */
-import { and, desc, eq, ne, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   opsAdmissions,
@@ -24,10 +24,16 @@ import { withTransaction } from '@elevate/server-kit';
 import { ValidationError } from '@elevate/shared-contracts';
 import type { AdmissionId, StudentIdentityId } from '@elevate/shared-types';
 import { istToday } from '../domain';
+import { planTotals, versionChain } from '../domain/fee-plans';
+import { acceptedVersions } from '../domain/fee-year';
 import {
+  chargeSummary,
+  duplicatePaymentIssue,
   effectiveRecords,
+  lowersOwed,
   MANUAL_FEE_DISCLAIMER,
   parseRupeesToPaise,
+  reductionAboveOwedIssue,
   validateFeeRecord,
   type FeeChargeCategory,
   type FeeDirection,
@@ -81,6 +87,51 @@ export const amountFields = {
 export const paiseOf = (paise: number | null | undefined, rupees: string | null | undefined) =>
   rupees ? parseRupeesToPaise(rupees) : (paise ?? null);
 
+/** Every ledger row of the student's cases, or of the case when it has no student yet. */
+const studentRows = async (tx: Database, admission: FeeAdmission) =>
+  admission.studentId
+    ? tx
+        .select({ r: opsFeeRecords })
+        .from(opsFeeRecords)
+        .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsFeeRecords.admissionId))
+        .where(eq(opsAdmissions.studentId, admission.studentId))
+        .then((rows) => rows.map(({ r }) => r))
+    : recordsOf(tx, admission.id);
+
+const familyOf = (tx: Database, studentId: StudentIdentityId) =>
+  tx.select().from(opsFeePlans).where(eq(opsFeePlans.studentId, studentId));
+
+/** What is still owed on the charge an entry lowers; null = no amount due recorded. */
+async function owedOn(
+  tx: Database,
+  entry: FeeEntryInput,
+  category: FeeChargeCategory,
+  existing: FeeRecordRow[],
+) {
+  if (!entry.planId)
+    return chargeSummary(
+      asLike(
+        existing.filter((r) => !r.planId && (category !== 'demo' || r.demoId === entry.demoId)),
+      ),
+      category,
+    ).balancePaise;
+  const [plan] = await tx
+    .select()
+    .from(opsFeePlans)
+    .where(eq(opsFeePlans.id, entry.planId as OpsFeePlanId));
+  const chain = versionChain(plan!, await familyOf(tx, plan!.studentId));
+  const rows = await tx
+    .select()
+    .from(opsFeeRecords)
+    .where(
+      inArray(
+        opsFeeRecords.planId,
+        chain.map((p) => p.id),
+      ),
+    );
+  return planTotals(plan!.totalPaise, [], asLike(rows)).outstandingPaise;
+}
+
 export interface FeeEntryInput {
   kind: FeeRecordKind;
   /** Default `tuition`; a refund or reversal takes the category of the entry it links to. */
@@ -100,7 +151,7 @@ export interface FeeEntryInput {
   reversesRecordId?: string | null;
 }
 
-/** An instalment is recorded through its agreement, which must be this admission's active one. */
+/** An instalment is recorded through its agreement, which must be this admission's and in force. */
 async function planLinkIssues(tx: Database, admissionId: string, input: FeeEntryInput) {
   if (!input.planId)
     return [{ path: 'instalmentId', message: 'An instalment is recorded through its agreement.' }];
@@ -110,7 +161,7 @@ async function planLinkIssues(tx: Database, admissionId: string, input: FeeEntry
     .where(eq(opsFeePlans.id, input.planId as OpsFeePlanId));
   if (plan?.admissionId !== admissionId)
     return [{ path: 'planId', message: 'That fee agreement does not belong to this admission.' }];
-  if (plan.status !== 'active')
+  if (!acceptedVersions(await familyOf(tx, plan.studentId)).inForce.some((p) => p.id === plan.id))
     return [
       {
         path: 'planId',
@@ -154,19 +205,9 @@ async function categoryIssues(
   );
   if (category === 'registration' && input.kind === 'due') {
     // Once per student (bundle): look across every admission of the student.
-    const bundle = admission.studentId
-      ? await tx
-          .select()
-          .from(opsFeeRecords)
-          .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsFeeRecords.admissionId))
-          .where(
-            and(
-              eq(opsAdmissions.studentId, admission.studentId),
-              eq(opsFeeRecords.chargeCategory, 'registration'),
-            ),
-          )
-          .then((rows) => rows.map((r) => r.fee_records))
-      : existing.filter((r) => r.chargeCategory === 'registration');
+    const bundle = (await studentRows(tx, admission)).filter(
+      (r) => r.chargeCategory === 'registration',
+    );
     if (effectiveRecords(asLike(bundle)).some((r) => r.kind === 'due'))
       return [
         { path: 'kind', message: 'The registration fee is already charged for this student.' },
@@ -176,22 +217,19 @@ async function categoryIssues(
     return [{ path: 'kind', message: 'The demo fee is already charged (charged once).' }];
   if (category === 'tuition' && !input.planId) {
     // Tuition lives on the annual agreement; no second tuition ledger beside it.
-    const [plan] = await tx
-      .select({ id: opsFeePlans.id })
+    const plans = await tx
+      .select()
       .from(opsFeePlans)
       .where(
-        and(
-          ne(opsFeePlans.status, 'closed'),
-          admission.studentId
-            ? or(
-                eq(opsFeePlans.admissionId, admission.id),
-                eq(opsFeePlans.studentId, admission.studentId),
-              )
-            : eq(opsFeePlans.admissionId, admission.id),
-        ),
-      )
-      .limit(1);
-    if (plan) return [{ path: 'planId', message: 'Record tuition on the annual agreement.' }];
+        admission.studentId
+          ? or(
+              eq(opsFeePlans.admissionId, admission.id),
+              eq(opsFeePlans.studentId, admission.studentId),
+            )
+          : eq(opsFeePlans.admissionId, admission.id),
+      );
+    if (plans.some((p) => p.status !== 'closed') || acceptedVersions(plans).inForce.length)
+      return [{ path: 'planId', message: 'Record tuition on the annual agreement.' }];
   }
   if (category !== 'tuition' || !demoId) return [];
   // A tuition row naming a demo = the demo fee credited against tuition (setting fees.demo_credit).
@@ -285,6 +323,17 @@ export async function recordFeeEntry(
       issues.push(...(await planLinkIssues(tx, admission.id, entry)));
   }
   if (issues.length) throw issuesError(issues);
+  if (!target) {
+    const facts = { ...entry, amountPaise: amount!, chargeCategory: category };
+    // A demo credit is real money already paid: its bound is the demo fee (categoryIssues).
+    const refused =
+      lowersOwed(entry) && !entry.demoId
+        ? reductionAboveOwedIssue(facts, await owedOn(tx, entry, category, existing))
+        : entry.kind === 'received'
+          ? duplicatePaymentIssue(facts, asLike(await studentRows(tx, admission)))
+          : null;
+    if (refused) throw issuesError([refused]);
+  }
   const [row] = await tx
     .insert(opsFeeRecords)
     .values({

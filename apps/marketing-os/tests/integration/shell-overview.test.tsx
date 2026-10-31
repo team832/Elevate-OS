@@ -405,7 +405,9 @@ describe('Overview figures equal the lists they open (§10, §27)', () => {
     const today = toIsoDate();
     const html = await render(DashboardPage(sp({ from: today, to: today })), manager);
     const rows = [
-      ...html.matchAll(/<a href="([^"]+reached=1)">([^<]+)<\/a><\/td><td[^>]*>(\d+)</g),
+      ...html.matchAll(
+        /<a href="([^"]+reached=1)">([^<]+)<\/a>(?:<\/div>)?<\/td><td[^>]*>(?:<div>)?(\d+)</g,
+      ),
     ];
     expect(rows.map((r) => [r[2], Number(r[3])])).toEqual([
       ['New', 2],

@@ -8,7 +8,6 @@ import {
   opsAppointments,
   opsDemos,
   opsDemoSessions,
-  opsFeeRecords,
   opsFollowUps,
   opsLeads,
   programmes,
@@ -24,7 +23,6 @@ import {
   type AdmissionStatus,
 } from '../domain';
 import { demoAttendanceStatus, demoDaysAndSubjects } from '../domain/demos';
-import { summariseFees, type FeeRecordLike } from '../domain/fees';
 import { deriveHandoffView, retryDecision } from '../domain/students';
 import { academicDemoMarks, withMarks } from './academic-summary';
 import {
@@ -40,6 +38,7 @@ import {
   transitionsOf,
 } from './admissions-lookups';
 import { accessScope, type Actor } from './context';
+import { feeStatementFor } from './fee-statement';
 
 export async function listAdmissions(
   db: Database,
@@ -175,17 +174,6 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
         .orderBy(desc(auditEvents.at))
         .limit(1)
     : [];
-  const feeRecords = feesVisible
-    ? await db
-        .select({
-          kind: opsFeeRecords.kind,
-          direction: opsFeeRecords.direction,
-          amountPaise: opsFeeRecords.amountPaise,
-          status: opsFeeRecords.status,
-        })
-        .from(opsFeeRecords)
-        .where(eq(opsFeeRecords.admissionId, admission.id))
-    : null;
   const closure = settings['admissions.closure_reasons'];
   return {
     admission,
@@ -231,7 +219,7 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
     retry: retryDecision(handoffInput),
     attempts: await attemptsOf(db, admission.id),
     /** null = the caller may not read fee records. */
-    feeSummary: feeRecords ? summariseFees(feeRecords as FeeRecordLike[]) : null,
+    feeSummary: feesVisible ? await feeStatementFor(db, admission) : null,
     closureReasons: closure.value.codes.filter((c) => !SYSTEM_CLOSURE_REASONS.includes(c.code)),
     closureReasonLabels: Object.fromEntries(closure.value.codes.map((c) => [c.code, c.label])),
     settings: {

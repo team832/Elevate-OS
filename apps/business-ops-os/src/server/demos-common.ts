@@ -16,6 +16,7 @@ import { createRuleFollowUp } from './follow-ups';
 import { opsAudit, type AuditData } from './ops-common';
 import { applyTransition, type AdmissionRow } from './pipeline';
 import { loadSettings } from './settings';
+import { linkOr } from './task-links';
 
 type Demo = typeof opsDemos.$inferSelect;
 type Session = typeof opsDemoSessions.$inferSelect;
@@ -61,15 +62,15 @@ export async function notifyTeachers(
   demoId: string,
   body: string,
 ) {
-  const userIds = await userIdsForStaff(tx, staffIds);
-  if (userIds.length)
+  for (const id of await userIdsForStaff(tx, staffIds))
     await notify(tx, {
-      userIds,
+      userIds: [id],
       module: 'ops',
       kind: 'demo.booked',
       title: 'Demo class booked',
       body,
-      link: `/ops/admissions/demos/${demoId}`,
+      // A teacher is not in Ops: their own home holds "Demo students awaiting your feedback".
+      link: await linkOr(tx, id, 'ops:leads:read', `/ops/admissions/demos/${demoId}`, 'work', ''),
       entityType: 'demo',
       entityId: demoId,
     });

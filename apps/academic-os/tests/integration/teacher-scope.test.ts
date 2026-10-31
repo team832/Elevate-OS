@@ -246,7 +246,7 @@ describe('teacher scope (brief §5)', () => {
     as.user = u.director;
     expect(
       JSON.stringify(await StudentPage({ params: Promise.resolve({ id: ids.sa! }) })),
-    ).toContain('Admission, KYC and fees in Business Ops');
+    ).toContain('Admission, KYC and fees in Business Operations');
   });
 
   it('no unrestricted student export: another batch’s CSV is 404; the own-batch CSV carries no private fields', async () => {

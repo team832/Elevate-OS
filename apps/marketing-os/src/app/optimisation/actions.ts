@@ -30,9 +30,9 @@ const TEXT_FIELDS = [
 const fields = (form: FormData, keys: readonly string[]) =>
   Object.fromEntries(keys.map((k) => [k, str(form, k)]));
 
-function itemId(form: FormData): string {
+async function itemId(form: FormData): Promise<string> {
   const id = str(form, 'id') ?? '';
-  if (!z.uuid().safeParse(id).success) go('optimisation', { error: 'Item not found.' });
+  if (!z.uuid().safeParse(id).success) return go('optimisation', { error: 'Item not found.' });
   return id;
 }
 
@@ -42,47 +42,50 @@ export async function createOptimisationAction(form: FormData): Promise<void> {
     ownerStaffId: str(form, 'ownerStaffId'),
     checks: strs(form, 'checks'),
   });
-  if (!parsed.success) go('optimisation', { error: issues(parsed.error) });
+  if (!parsed.success) return go('optimisation', { error: issues(parsed.error) });
   const res = await run((db, user) => createOptimisationItem(db, user, parsed.data));
-  if (!res.ok) go('optimisation', { error: res.error });
-  go(`optimisation/${res.value.id}`, { notice: 'Work item added.' });
+  if (!res.ok) return go('optimisation', { error: res.error });
+  return go(`optimisation/${res.value.id}`, { notice: 'Work item added.' });
 }
 
 export async function updateOptimisationAction(form: FormData): Promise<void> {
-  const id = itemId(form);
+  const id = await itemId(form);
   const back = `optimisation/${id}`;
   const parsed = optimisationUpdateBody.safeParse({
     ...fields(form, [...TEXT_FIELDS, 'evidence']),
     checks: strs(form, 'checks'),
     done: strs(form, 'done'),
   });
-  if (!parsed.success) go(back, { error: issues(parsed.error) });
+  if (!parsed.success) return go(back, { error: issues(parsed.error) });
   const res = await run((db, user) => updateOptimisationItem(db, user, id, parsed.data));
-  go(back, res.ok ? { notice: 'Saved.' } : { error: res.error });
+  return go(back, res.ok ? { notice: 'Saved.' } : { error: res.error });
 }
 
 export async function submitOptimisationAction(form: FormData): Promise<void> {
-  const id = itemId(form);
+  const id = await itemId(form);
   const res = await run((db, user) => submitOptimisationItem(db, user, id));
-  go(`optimisation/${id}`, res.ok ? { notice: 'Submitted for review.' } : { error: res.error });
+  return go(
+    `optimisation/${id}`,
+    res.ok ? { notice: 'Submitted for review.' } : { error: res.error },
+  );
 }
 
 export async function reviewOptimisationAction(form: FormData): Promise<void> {
-  const id = itemId(form);
+  const id = await itemId(form);
   const back = `optimisation/${id}`;
   const parsed = optimisationReviewBody.safeParse(fields(form, ['decision', 'note']));
-  if (!parsed.success) go(back, { error: issues(parsed.error) });
+  if (!parsed.success) return go(back, { error: issues(parsed.error) });
   const res = await run((db, user) => reviewOptimisationItem(db, user, id, parsed.data));
-  go(back, res.ok ? { notice: 'Review saved.' } : { error: res.error });
+  return go(back, res.ok ? { notice: 'Review saved.' } : { error: res.error });
 }
 
 export async function addObservationAction(form: FormData): Promise<void> {
-  const id = itemId(form);
+  const id = await itemId(form);
   const back = `optimisation/${id}`;
   const parsed = observationBody.safeParse(
     fields(form, ['platform', 'query', 'observedOn', 'result', 'note']),
   );
-  if (!parsed.success) go(back, { error: issues(parsed.error) });
+  if (!parsed.success) return go(back, { error: issues(parsed.error) });
   const res = await run((db, user) => addObservation(db, user, id, parsed.data));
-  go(back, res.ok ? { notice: 'Observation logged.' } : { error: res.error });
+  return go(back, res.ok ? { notice: 'Observation logged.' } : { error: res.error });
 }

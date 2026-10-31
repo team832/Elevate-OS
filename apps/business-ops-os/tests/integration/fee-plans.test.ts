@@ -411,7 +411,7 @@ describe('versioned adjustment keeps old receipts', () => {
     );
     expect(item).toMatchObject({
       title: `Fee Student ${admissionId.slice(0, 6)}: fee agreement 2026-27, version 2`,
-      link: `/ops/students/${studentId}?tab=fees`,
+      link: `/ops/admissions/${admissionId}#fee-agreement`,
       decide: `/ops/api/v1/fee-plans/${v2}/decision`,
     });
     expect(item).toMatchObject({ beforePaise: 1_00_000_00, afterPaise: 1_20_000_00 });
@@ -530,6 +530,8 @@ describe('bundle: a sibling admission cannot carry new terms through its old app
     expect((await callRoute(askApproval, post(finance, {}), { id })).status).toBe(403);
     expect((await callRoute(askApproval, post(counsellor, {}), { id })).status).toBe(201);
     expect((await callRoute(askApproval, post(counsellor, {}), { id })).status).toBe(409);
+    const listed = await feeAgreementSource.list(ctx.db, director);
+    expect(listed.find((i) => i.decide?.includes(id))?.link).toBe(`/ops/students/${sid}?tab=fees`);
     const reject = { decision: 'rejected', comment: 'Wrong tuition (test)' };
     expect((await callRoute(decide, post(director, reject), { id })).status).toBe(200);
     expect((await activate(id)).status).toBe(409);
@@ -703,6 +705,8 @@ describe('an approval binds one exact agreement version (every reuse path found 
     expect(item).toMatchObject({
       title: `Fee Student ${aid.slice(0, 6)}: fee agreement 2026-27, version 1`,
       requestedByUserId: counsellor.id,
+      // Not admitted yet: no student record to open, so the row opens the admission case.
+      link: `/ops/admissions/${aid}#fee-agreement`,
       decide: `/ops/api/v1/fee-plans/${id}/decision`,
     });
     expect(item).toMatchObject({ beforePaise: null, afterPaise: 1_00_000_00 });
@@ -720,7 +724,7 @@ describe('an approval binds one exact agreement version (every reuse path found 
 });
 
 describe('a retried payment never posts twice (Idempotency-Key)', () => {
-  it('same key → one ledger row and a replay; a new key → a deliberate second payment', async () => {
+  it('same key → one ledger row and a replay; a new key with its own receipt → a second payment', async () => {
     const aid = await verifiedCase();
     const id = (
       await callRoute<{ id: string }>(
@@ -729,22 +733,24 @@ describe('a retried payment never posts twice (Idempotency-Key)', () => {
       )
     ).data!.id;
     await approveAndActivate(id);
-    const send = (key: string) =>
+    const send = (key: string, receiptReference = 'TEST-RCPT-RETRY') =>
       callRoute<{ id: string }>(
         addEntry,
-        post(finance, pay(5_000_00), { 'idempotency-key': key }),
+        post(finance, pay(5_000_00, { receiptReference }), { 'idempotency-key': key }),
         {
           id,
         },
       );
-    const [a, b, c] = [
+    const [a, b, same, c] = [
       await send('test-only-pay-1'),
       await send('test-only-pay-1'),
       await send('test-only-pay-2'),
+      await send('test-only-pay-3', 'TEST-RCPT-SECOND'),
     ];
-    expect([a, b, c].map((r) => [r.status, r.headers.get('idempotency-replayed')])).toEqual([
+    expect([a, b, same, c].map((r) => [r.status, r.headers.get('idempotency-replayed')])).toEqual([
       [201, 'false'],
       [201, 'true'],
+      [400, null],
       [201, 'false'],
     ]);
     expect(b.data!.id).toBe(a.data!.id);

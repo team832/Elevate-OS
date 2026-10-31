@@ -20,7 +20,7 @@ import {
 } from '@elevate/authentication';
 import { ROLE_KEYS, requirePermission, type RoleKey } from '@elevate/authorization';
 import { auditEvents, userRoles, users, type Database } from '@elevate/database';
-import { recordAudit, withTransaction } from '@elevate/server-kit';
+import { recordAudit, withTransaction, containsPattern } from '@elevate/server-kit';
 import { ConflictError, ForbiddenError, NotFoundError } from '@elevate/shared-contracts';
 import type { UserId } from '@elevate/shared-types';
 
@@ -68,7 +68,7 @@ const holds = (role?: RoleKey) =>
 export async function listUsers(db: Database, query: ListUsersQuery) {
   const where: SQL[] = [];
   if (query.q) {
-    const like = `%${query.q.replace(/[\\%_]/g, '\\$&')}%`;
+    const like = containsPattern(query.q);
     where.push(or(ilike(users.displayName, like), ilike(users.email, like))!);
   }
   if (query.status) where.push(eq(users.status, query.status));

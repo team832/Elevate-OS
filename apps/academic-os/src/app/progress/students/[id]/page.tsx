@@ -1,7 +1,15 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, ButtonLink, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
+import {
+  Alert,
+  ButtonLink,
+  Card,
+  DataTable,
+  EmptyState,
+  PageHeader,
+  fmtDay,
+} from '@elevate/shared-ui';
 import type { PageAccess } from '@elevate/server-kit/next';
 import { getStudentProgress, listStaff, todayIst } from '../../../../server';
 import { MODULE_PATHS } from '../../../../server/paths';
@@ -48,7 +56,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
       <PageHeader
         title={p.student.fullName}
         meta={<span className="el-field-hint">{p.student.code}</span>}
-        description={`Four separate views of progress as of ${p.asOf}. There is no combined score; each figure says how it is counted.`}
+        description={`Four separate views of progress as of ${fmtDay(p.asOf)}. There is no combined score; each figure says how it is counted.`}
         actions={<ButtonLink href={MODULE_PATHS.student(p.student.id)}>Student record</ButtonLink>}
       />
       <div className="el-stack">
@@ -89,14 +97,14 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
             <h2 className="el-section-title">Batch {b.batchCode ?? 'not recorded'}</h2>
             <Card
               title="1. Attendance"
-              description={`${p.attendanceRule.definition}${p.attendanceRule.status === 'approved' ? '' : ' (Rule proposed, not approved by the owner.)'}`}
+              description={p.attendanceRule.definition}
             >
               <p>
                 {b.attendance.ratePercent === null
                   ? 'No countable attendance recorded yet.'
                   : `${b.attendance.ratePercent}%`}{' '}
                 · {b.attendance.heldSessions} delivered in placement (
-                {b.placements.map((w) => `${w.startDate} to ${w.endDate ?? 'now'}`).join(', ')}) ·
+                {b.placements.map((w) => `${fmtDay(w.startDate)} to ${fmtDay(w.endDate, 'now')}`).join(', ')}) ·
                 present {b.attendance.present}, late {b.attendance.late}, partial{' '}
                 {b.attendance.partial}, absent {b.attendance.absent}, excused {b.attendance.excused}{' '}
                 · <strong>not recorded {b.attendance.notRecorded}</strong>
@@ -108,7 +116,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
                 rowKey={(m) => m.sessionId}
                 empty={<EmptyState title="No missed classes recorded" />}
                 columns={[
-                  { key: 'date', header: 'Date' },
+                  { key: 'date', header: 'Date', render: (m) => fmtDay(m.date) },
                   { key: 'reason', header: 'Reason', render: (m) => m.reason.replace(/_/g, ' ') },
                 ]}
               />
@@ -147,7 +155,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
                     header: 'Assessment',
                     render: (r) => <a href={MODULE_PATHS.assessment(r.assessmentId)}>{r.code}</a>,
                   },
-                  { key: 'date', header: 'Date', render: (r) => r.date ?? 'Not recorded' },
+                  { key: 'date', header: 'Date', render: (r) => fmtDay(r.date, 'Not recorded') },
                   { key: 'kind', header: 'Kind', render: (r) => r.kind.replace(/_/g, ' ') },
                   {
                     key: 'score',
@@ -204,7 +212,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
           <p>
             {p.observations.submittedReviews} submitted review(s)
             {p.observations.lastSubmittedAt
-              ? `, the latest on ${todayIst(p.observations.lastSubmittedAt)}`
+              ? `, the latest on ${fmtDay(todayIst(p.observations.lastSubmittedAt))}`
               : ''}
             . <a href={MODULE_PATHS.reviews}>Teacher reviews</a>
           </p>
@@ -251,7 +259,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
             empty={<EmptyState title="No catch-up tasks" />}
             columns={[
               { key: 'reason', header: 'Reason', render: (t) => t.reason.replace(/_/g, ' ') },
-              { key: 'due', header: 'Due', render: (t) => t.dueDate ?? 'No date' },
+              { key: 'due', header: 'Due', render: (t) => fmtDay(t.dueDate, 'No date') },
               { key: 'status', header: 'Status', render: (t) => <StateBadge state={t.status} /> },
               { key: 'note', header: 'Note', render: (t) => t.note ?? '' },
             ]}

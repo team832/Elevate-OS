@@ -6,6 +6,7 @@
  * is left out.
  */
 import { and, asc, desc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { containsPattern } from '@elevate/server-kit';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { can, type Permission } from '@elevate/authorization';
 import {
@@ -51,7 +52,6 @@ export const toGroup = <K extends string>(key: K, rows: Hit[]) => ({
   more: rows.length > SEARCH_LIMIT,
 });
 
-const like = (text: string) => `%${text.replace(/[%_\\]/g, '\\$&')}%`;
 const phone = opsLeads.studentPhone;
 
 type Match = (cols: AnyPgColumn[]) => SQL;
@@ -177,7 +177,7 @@ export async function globalSearch(db: Database, actor: Actor, raw: string, requ
   if (text.length < 2) return { text, groups: [], contactDenied: false };
   const privateAccess = can(actor, 'ops:student_private:read');
   const contact = contactShaped && privateAccess ? contactCondition(db, text) : null;
-  const pattern = like(text);
+  const pattern = containsPattern(text);
   const match: Match = (cols) => or(...cols.map((c) => ilike(c, pattern)), contact?.sql) as SQL;
   const groups = await Promise.all(
     GROUPS.filter(([, permission]) => can(actor, permission)).map(async ([key, permission, q]) => {

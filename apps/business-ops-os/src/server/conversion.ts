@@ -298,7 +298,7 @@ export async function convertDemo(
         requestId,
         initial: {
           status: 'admission_pending',
-          reason: `Opened by the conversion of demo ${demo.id} together with ${admission.code}`,
+          reason: `Opened by a demo conversion together with ${admission.code}`,
         },
         patch: casePatch,
       }).catch((e: unknown) => {

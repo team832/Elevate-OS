@@ -144,6 +144,10 @@ describe('teaching assignments (R9)', () => {
     expect((await call(null, '')).status).toBe(401);
     expect((await call('marketing', '')).status).toBe(403);
     expect((await call('ops', '?pageSize=500')).status).toBe(400);
+    const inProgramme = teachingAssignmentsV1Schema.parse((await call('ops', `?programmeCode=${w.programmeCode}`)).data);
+    expect(inProgramme.total).toBeGreaterThan(0);
+    expect(inProgramme.items.map((a) => a.staffId)).toContain(staffId);
+    expect(teachingAssignmentsV1Schema.parse((await call('ops', '?programmeCode=NOPE')).data)).toMatchObject({ total: 0, items: [] });
     const mine = teachingAssignmentsV1Schema.parse((await call('ops', `?staffId=${staffId}`)).data);
     expect(mine.items.every((a) => a.staffId === staffId)).toBe(true);
     expect(mine.items.find((a) => a.status === 'pending')).toMatchObject({ batchCode: null, batchId: null, subjectId: w.verbal.id, subjectName: 'Verbal', courseName: 'Test course (fictional)' });

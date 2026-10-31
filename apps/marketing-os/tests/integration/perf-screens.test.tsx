@@ -147,7 +147,8 @@ describe('Targets screens', () => {
       expect(html).toContain(`Source: ${m.sourceLabel}.`);
     }
     expect(html).toContain(NO_CALL_TARGET);
-    expect(html).toContain('>proposed</span>');
+    expect(html).toContain('Admission credit rule:');
+    expect(html).not.toContain('>proposed</span>'); // the setting's status lives on Settings (HUS-040)
     expect(html).toContain('25%'); // 1 of 4
     expect(html).toContain('0%'); // no demo bookings yet: a counted zero, not a missing value
     expect(html).toContain('Set a target');
@@ -188,8 +189,9 @@ describe('Monthly report screen', () => {
   });
 
   it('an employee without a staff record gets a plain explanation', async () => {
-    await expect(render(contributor, MonthlyReportPage as Page)).rejects.toThrow(
-      /not linked to a staff record/,
-    );
+    const html = await render(contributor, MonthlyReportPage as Page);
+    expect(html).toContain('No staff record');
+    expect(html).toContain('not linked to a staff record');
+    expect(html).not.toContain('Something went wrong');
   });
 });

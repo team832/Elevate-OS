@@ -1,15 +1,17 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { PageHeader, SourceBadge, StatusBadge } from '@elevate/shared-ui';
 import { isIsoDate } from '../../../domain';
 import { INSTALMENT_STATUS_LABELS } from '../../../domain/fee-plans';
 import { MANUAL_FEE_DISCLAIMER } from '../../../domain/fees';
 import { listOutstanding, type OutstandingView } from '../../../server/fee-collections';
 import { FeesNav } from '../../../ui/admissions-nav';
 import { StatCard } from '../../../ui/charts';
-import { fmtDate, fmtPaise, statusTone } from '../../../ui/format';
+import { fmtDate, fmtPaise, sampleNote, statusTone } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref, Pager } from '../../../ui/list-controls';
+import { openHref } from '../../../ui/open-link';
 import { RecordTable } from '../../../ui/record-table';
+import { paymentNote } from '../_components/owing-dialog';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Outstanding instalments' };
@@ -30,7 +32,7 @@ export default async function OutstandingPage({ searchParams }: { searchParams: 
     <Frame access={access} active="fees">
       <PageHeader
         title="Outstanding instalments"
-        description="Tuition instalments of active fee agreements with money still owed, oldest due date first. To record a payment, open the student's fees."
+        description={`Tuition instalments of fee agreements in force with money still owed, oldest due date first. ${paymentNote(access.user)}`}
         tabs={<FeesNav current="outstanding" user={access.user} />}
       />
       <Section label="Loading outstanding instalments…">
@@ -85,6 +87,11 @@ async function Outstanding({ user, sp }: { user: AuthenticatedUser; sp: Params }
         </button>
         <a href={BASE}>Clear filters</a>
       </form>
+      {d.samplePaise ? (
+        <p className="el-field-hint">
+          <SourceBadge source="sample" /> {sampleNote(d.samplePaise)}
+        </p>
+      ) : null}
       <p className="el-field-hint">
         {MANUAL_FEE_DISCLAIMER} An instalment without a due date is never overdue.
       </p>
@@ -92,8 +99,9 @@ async function Outstanding({ user, sp }: { user: AuthenticatedUser; sp: Params }
         caption={`${d.total} instalment(s) · ${fmtPaise(d.owedPaise)} still owed${status ? ` · ${VIEW_LABELS[status]}` : ''}`}
         rows={d.rows}
         rowKey={(i) => i.id}
-        rowHref={(i) => `/ops/students/${i.studentId}?tab=fees`}
+        rowHref={(i) => openHref(user, i.href)}
         linkColumn="student"
+        sampleOf={(i) => i.isSample}
         empty={
           d.any
             ? 'No instalment matches these filters.'
@@ -104,7 +112,8 @@ async function Outstanding({ user, sp }: { user: AuthenticatedUser; sp: Params }
           {
             key: 'instalment',
             header: 'Instalment',
-            render: (i) => `${i.sequence} of ${i.of} · ${i.plan}`,
+            render: (i) =>
+              `${i.sequence === null ? 'Debit adjustments above the instalments' : `${i.sequence} of ${i.of}`} · ${i.plan}`,
           },
           {
             key: 'due',

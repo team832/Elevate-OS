@@ -10,7 +10,7 @@ import { MANUAL_FEE_DISCLAIMER } from '../../../domain/fees';
 import { feeYear, owingStudents, OWING_SORTS, type OwingSort } from '../../../server/fee-year';
 import { DonutChart, StatCard } from '../../../ui/charts';
 import { shareLabels } from '../../../ui/chart-math';
-import { fmtPaise, plural } from '../../../ui/format';
+import { fmtPaise, plural, sampleNote } from '../../../ui/format';
 import { load } from '../../../ui/frame';
 import { FilterForm, listHref } from '../../../ui/list-controls';
 import { Segment } from '../../../ui/sections';
@@ -175,6 +175,12 @@ export async function AnnualTuition({ user, sp }: { user: AuthenticatedUser; sp:
                 />
               </li>
             </ul>
+            {d.rows.some((x) => x.isSample) ? (
+              <p className="el-field-hint">
+                {sampleNote(d.rows.reduce((n, x) => n + (x.isSample ? x.billedPaise : 0), 0))} That
+                is tuition billed on sample students, counted in the figures above.
+              </p>
+            ) : null}
             <DonutChart
               label={`Annual tuition ${d.year}, paid and outstanding`}
               format={fmtPaise}

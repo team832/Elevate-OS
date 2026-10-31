@@ -3,6 +3,7 @@
  * links in the host workspace; meeting notifications open the recipient's own workspace.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
+import { toIsoDate } from '@elevate/shared-types';
 import type { ReactNode } from 'react';
 import { prerender } from 'react-dom/static';
 import { and, eq } from 'drizzle-orm';
@@ -15,7 +16,7 @@ import { setupReference, staffUser, type StaffUser } from './fixtures';
 const ctx = setupTestDatabase();
 const html = async (node: ReactNode) => new Response((await prerender(node)).prelude).text();
 const tomorrow = (hh: string) =>
-  new Date(`${new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)}T${hh}:00:00+05:30`);
+  new Date(`${toIsoDate(new Date(Date.now() + 86_400_000))}T${hh}:00:00+05:30`);
 
 let teacher: StaffUser;
 let otherTeacher: StaffUser;

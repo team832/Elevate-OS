@@ -46,7 +46,7 @@ export function DemoFeedback({ d, user, level }: DemoTabProps) {
       </Segment>
       {d.legacyReviews.length ? (
         <Segment
-          title="Earlier reviews — recorded in Business Ops before 21 Oct 2026"
+          title="Earlier reviews — recorded in Business Operations before 21 Oct 2026"
           level={level}
           flush
           description="Read-only history."

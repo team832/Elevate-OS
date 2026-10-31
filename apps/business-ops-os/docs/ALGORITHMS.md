@@ -29,7 +29,7 @@ Format (BUILD_PLAN): 1 Purpose · 2 Inputs · 3 Output · 4 Preconditions · 5 R
    5. otherwise none. **A similar name alone is never reported** (weak signal only).
    Order: exact first, then more signals, then lead code. *Deviation (proposal):* the PRD treats "exact match on any phone" as existing contact; a shared **parent** number alone is downgraded to "possible" because siblings share parents.
 6. **Steps.** Create: load candidates in the transaction → classify → if any `exact` and the request has no `acknowledgeDuplicates.reason` → 409 `CONFLICT` with `details.duplicates` (nothing written) → else insert the lead and one `ops.duplicate_flags` row per match (exact rows store the acknowledgement). Edit: new matches are flagged, never blocking. Merge (`mergeLeads`) is a separate explicit action by `ops:leads:merge`: enquiries (keep their source, marked `merged_from_lead_id`), contact activity and lead-level follow-ups move to the target; only empty target contact fields are filled; the source's open admissions become `lost` ("Merged duplicate into …"); flags become `merged`; both leads are audited. Refused when the source has an admitted/enrolment case.
-7. **Edge cases.** Merged leads are excluded from matching. A record never matches itself. Counsellors (own scope) see matched codes but not names/contacts of leads they cannot open. Dismissing a flag needs a note.
+7. **Edge cases.** Merged leads are excluded from matching. A record never matches itself. A viewer who cannot open the matched lead sees its level only (D-119, Proposed): no id, code, owner, signals or score; a name-and-school match is omitted for them. Dismissing a flag needs a note.
 8. **Permissions.** Detection runs for `ops:leads:write`; queue/merge/dismiss need `ops:leads:merge` (operations manager).
 9. **Tests.** Unit `contacts.test.ts` "duplicate detection (A-02)" (exact, student↔guardian, possible sibling, guardian+similar name, name+school, name alone ignored, missing data, deterministic order). Integration `leads.test.ts` "exact duplicate … → 409 … acknowledged → 201", "shared guardian phone … POSSIBLE", "preview hides names", "merge review".
 10. **Limitations.** Candidate pre-filter loads every lead with a school when the candidate has one (fine for thousands, not millions). Threshold 0.88 is a proposal.
@@ -760,7 +760,7 @@ Rules from the owner's brief of 21 Oct 2026 (admissions lifecycle) and the owner
 7. **Edge cases.** Declarations not configured → the block says so and confirmation is blocked.
 8. **Permissions.** As A-APP-1; KYC and form answers read only with `ops:student_private:read`.
 9. **Tests.** Unit `applications.test.ts` (canonical JSON), `admission-form.test.ts`, `admission-documents.test.ts` (3 A4 pages with long names, ₹, missing values).
-10. **Limitations.** Devanagari prints as "?" with a footer note (no complex-script shaping in pdf-lib).
+10. **Limitations.** Devanagari prints through Noto Sans Devanagari and fontkit shaping (D-118). Copy and search of Hindi from the PDF do not round-trip. Tamil, emoji and Devanagari Extended print "?" with a footer note.
 
 ## A-APP-3 Information and confirmation gaps — OPS-APP-4, BR-OPS-6/7
 1. **Purpose.** List what still stops "ready" and the final confirmation.
@@ -789,9 +789,9 @@ Rules from the owner's brief of 21 Oct 2026 (admissions lifecycle) and the owner
 ## A-FEE-1 … A-FEE-7 Annual fee agreements (replace A-76 … A-79) — D-039
 `domain/fee-plans.ts`, ledger helpers in `domain/fees.ts`. Permissions: read `ops:fees:read` (own scope); record `ops:fees:record`. Tests: unit `fee-plans.test.ts`, `fee-agreements.test.ts` (seeded property tests), `admissions-fees.test.ts`; integration `fee-plans.test.ts`, `admissions-fees.test.ts`. Money is integer paise; nothing here is a verified payment.
 - **A-FEE-1 `planTotals`.** Totals from effective ledger rows; `outstandingPaise = max(0, balance)`, `creditPaise = max(0, −balance)` (a credit is shown, never absorbed).
-- **A-FEE-2 `allocateInstalments(instalments, ledger, today)`.** Payments first, then reductions (discount + waiver + credit − debit). Each fills the instalments its rows name (`instalment_id`) first, then the others oldest due date first (no due date last). Links only set priority; the applied total = min(max(0, net + reductions), scheduled), never more than an instalment's amount.
+- **A-FEE-2 `allocateInstalments(instalments, ledger, today)`.** Payments first, then reductions (discount + waiver + credit; a debit sits on no instalment, has no due date, is never overdue, and is carried as `aboveInstalmentsPaise`: remaining + above = outstanding; which instalment, if any, is an owner question, D-114). Each fills the instalments its rows name (`instalment_id`) first, then the others oldest due date first (no due date last). Links only set priority; the applied total = min(max(0, net + reductions), scheduled), never more than an instalment's amount.
 - **A-FEE-3 `instalmentStatus`.** `paid` | `waived_adjusted` (covered with any reduction) | `overdue` (a real due date before today, money left) | `part_paid` | `unpaid`. No "due soon" state (`fees.allocation.dueWindowDays` unused).
-- **A-FEE-4 `reconcilePlan`.** Issues: schedule ≠ tuition, refunds > payments, debits > reductions, foreign kinds or instalments. A credit is not an issue.
+- **A-FEE-4 `reconcilePlan`.** Gone since 31 Oct 2026 (D-114): reductions above what is owed and refunds above payments are refused at entry. The whole-student figure is `feeStatement`, `domain/fee-statement.ts`.
 - **A-FEE-5 `splitTuition(totalPaise, sharesPercent)`.** 50 / 25 / 25 (`fees.tuition_split`, approved): floor each share, remainder to the LAST. Registration and demo charges are outside the split (`charge_category`).
 - **A-FEE-6 `checkFeeStructureChange`.** Only an owner-approved figure can be approved; promoting needs `ops:admissions:approve` and a reason ≥ 10.
 - **A-FEE-7 `agreementStatus`, `nextDue`.** Overall state; overdue wins; a debit above the instalments stays owed.
@@ -857,7 +857,7 @@ Tests: unit `events.test.ts`; integration `events.test.ts`.
 7. **Edge cases.** A second readmit → 409 naming the open one.
 8. **Permissions.** `ops:students:lifecycle` + `ops:admissions:write`.
 9. **Tests.** Integration `student-exit-readmission.test.ts`.
-10. **Limitations.** Academic does not yet stop attendance on exit (IR-OPS-EXIT-1 `ops.enrolment.closed`) and completion candidates need batch end dates (IR-OPS-EXIT-2).
+10. **Limitations.** Since 31 Oct 2026 an exit reaches Academic through `ops.enrolment.closed` v1, when someone presses "Send exits to Academic" (D-115); completion candidates still cannot be listed (IR-OPS-EXIT-2, partly done).
 
 ## A-TSK-1 … A-TSK-4 Daily tasks — owner decision 21 Oct 2026
 `domain/staff-tasks.ts` (pure), `server/staff-tasks.ts`. Tests: unit `staff-tasks.test.ts`; integration `staff-tasks.test.ts`. Permissions: `ops:tasks:read`, `ops:tasks:write` (own scope: see A-TSK-5 §8).
@@ -982,7 +982,7 @@ Code: `src/domain/lead-stages.ts`; `src/server/lead-stages.ts`, `lead-metrics.ts
 7. **Edge cases.** Running the job twice in one window sends nothing the second time. A changed deadline opens a new due-soon window. A reassigned task is delivered again, so "Work submitted" counts only submissions after this owner's delivery (`noticeStates`). Opening a notification goes through a permission-checked redirect (`/ops/notifications/{id}`, same in Academic and Marketing): it marks it read and refuses off-site or control-character links, links into a workspace the person does not belong to, and tasks they cannot see; someone else's notification is "missing" and stays unread.
 8. **Permissions.** Job `ops:jobs:run` (held only by the operations manager). Due-work panel (`dueWork`): `ops:tasks:read`, the caller's own open tasks, at most 50.
 9. **Tests.** Unit `tests/unit/task-notices.test.ts` (due soon and overdue windows, end of the IST day, personal preferences only reduce noise, noticeStates, relative links); integration `tests/integration/task-reminders.test.tsx` (idempotent per window, intervals from the setting, a preference cannot suppress an overdue reminder, the job needs `ops:jobs:run`, permission-checked open, survives a refresh, due-work panel); `packages/notifications/tests/preferences.test.ts`.
-10. **Limitations.** **No scheduler**: the job runs only when someone with `ops:jobs:run` triggers it (like the follow-up reminders); who runs it is an owner question. In-app only (no email or WhatsApp). The database check `notifications_link_relative` does not yet refuse control characters (the code does; planned for migration 0017).
+10. **Limitations.** **No scheduler**: the job runs only when someone with `ops:jobs:run` triggers it (like the follow-up reminders); who runs it is an owner question. In-app only (no email or WhatsApp). Since migration 0017 the database check `notifications_link_relative` also refuses control characters.
 Code: `src/domain/task-notices.ts`, `src/server/task-reminders.ts`, `src/server/notification-open.ts`, `packages/notifications/src/preferences.ts`, `src/app/api/v1/jobs/[job]/route.ts`.
 
 ## A-AI-1 AI drafts of report comments and the student summary — owner request 24 Oct 2026 (D-111)

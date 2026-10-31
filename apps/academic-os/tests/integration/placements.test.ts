@@ -324,6 +324,39 @@ describe('placements: allocate, capacity, clash, transfer, end (acceptance 19, 2
   });
 });
 
+describe('student search', () => {
+  it('an underscore in a name is a letter: it finds that name and not its neighbour', async () => {
+    const coord = actor(u.coordinator);
+    await createStudent(ctx.db, coord, { fullName: 'Sample Ac_ad (fictional)' });
+    await createStudent(ctx.db, coord, { fullName: 'Sample AcXad (fictional)' });
+    expect((await listStudents(ctx.db, coord, { q: 'Ac_ad', state: 'all' })).map((s) => s.fullName)).toEqual(['Sample Ac_ad (fictional)']);
+  });
+});
+
+describe('leaving and returning (fresh batches)', () => {
+  it('a student who left a batch can return to it the same day: their old classes are not "another batch" (RVB-003)', async () => {
+    const coord = actor(u.coordinator);
+    const other = await world(ctx.db, u);
+    const s = await createStudent(ctx.db, coord, { fullName: 'Sample Same Day Return (fictional)' });
+    const first = await enrolManually(ctx.db, coord, { studentId: s.id, batchId: other.batch.id, startDate: '2026-09-01', reason: 'Test (fictional)' });
+    await createSessions(ctx.db, coord, [{ batchId: other.batch.id, subjectId: other.quant.id, sessionType: 'teaching', date: '2027-01-11', startTime: '09:00', durationMinutes: 75 }]);
+    await ctx.db.update(academicBatchPlacements).set({ endDate: '2027-01-11' }).where(eq(academicBatchPlacements.enrolmentId, first.id as never));
+    await ctx.db.update(academicEnrolments).set({ status: 'withdrawn' }).where(eq(academicEnrolments.id, first.id as never));
+    const back = await enrolManually(ctx.db, coord, { studentId: s.id, batchId: other.batch.id, startDate: '2027-01-11', reason: 'Readmitted (fictional)' });
+    expect(back.status).toBe('active');
+  });
+
+  it('an enrolment that has not started cannot be ended here, and the refusal says where to go (RVB-005)', async () => {
+    const coord = actor(u.coordinator);
+    const other = await world(ctx.db, u);
+    const s = await createStudent(ctx.db, coord, { fullName: 'Sample Future Start (fictional)' });
+    const e = await enrolManually(ctx.db, coord, { studentId: s.id, batchId: other.batch.id, startDate: '2099-03-05', reason: 'Test (fictional)' });
+    const res = await post(endRoute, 'placements/end', u.coordinator, { enrolmentId: e.id, outcome: 'withdrawn', endDate: '2026-10-20', reason: 'Changed plans (fictional)', confirm: true });
+    expect(res.status).toBe(400);
+    expect(res.error!.message).toBe('This enrolment starts on 5 Mar 2099, so it cannot be ended yet. To take the student out before then, record an exit on their record in Business Operations.');
+  });
+});
+
 describe('teacher scope follows assignment dates', () => {
   it('a teacher sees students only while an assignment window is open on the day; reasons stay with coordinators', async () => {
     const coord = actor(u.coordinator);
@@ -408,5 +441,16 @@ describe('teacher assignments and batch fields', () => {
     expect(res.status).toBe(200);
     expect(res.data).toMatchObject({ campus: 'Sample campus', mode: 'hybrid', coordinatorStaffId: coordinatorStaff });
     expect(await audited(w2.batch.id, 'batch.updated')).toBeGreaterThan(0);
+  });
+
+  it('a batch with no class length can be given one, by the same permission (FLB-004)', async () => {
+    const req = (user: Parameters<typeof authedRequest>[0], json: unknown) =>
+      callRoute<Record<string, unknown>>(patchBatchRoute, authedRequest(user, `/academic/api/v1/batches/${w2.batch.id}`, { method: 'PATCH', json }), { id: w2.batch.id });
+    expect((await req(u.teacher, { classMinutesOverride: 60 })).status).toBe(403);
+    expect((await req(u.coordinator, { classMinutesOverride: 5 })).status).toBe(400);
+    expect((await req(u.coordinator, { classMinutesOverride: 60 })).data).toMatchObject({ classMinutesOverride: 60 });
+    const read = await callRoute<{ classLength: { minutes: number; source: string } }>(batchRoute, authedRequest(u.coordinator, `/academic/api/v1/batches/${w2.batch.id}`), { id: w2.batch.id });
+    expect(read.data!.classLength).toMatchObject({ minutes: 60, source: 'batch' });
+    expect((await req(u.coordinator, { classMinutesOverride: null })).data).toMatchObject({ classMinutesOverride: null });
   });
 });

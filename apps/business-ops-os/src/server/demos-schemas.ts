@@ -85,6 +85,8 @@ export const demoListQuery = z.object({
   programme: opt(programmeCodeSchema),
   counsellor: opt(z.uuid()),
   outcome: opt(z.enum(DEMO_OUTCOMES)),
+  /** Outcome decided in this IST month, YYYY-MM (the "Conversions this month" tile). */
+  outcomeMonth: opt(z.string().regex(/^\d{4}-\d{2}$/)),
   stage: opt(z.enum(ADMISSION_STATUSES)),
   from: opt(isoDateSchema),
   to: opt(isoDateSchema),

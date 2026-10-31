@@ -70,7 +70,7 @@ async function recipients(tx: Tx, appointmentId: Row['id'], channel: MessageChan
 }
 
 const NOT_CONNECTED =
-  'No messaging provider is connected: sending will be recorded as “Simulated — not sent”.';
+  'No messaging provider is connected: sending will be recorded as “Not sent”.';
 
 /** POST /appointments/{id}/messages — saves a draft and returns its preview; sends nothing. */
 export async function draftEventMessage(

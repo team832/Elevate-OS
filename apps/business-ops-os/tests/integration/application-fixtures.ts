@@ -25,6 +25,7 @@ import { POST as confirm } from '../../src/app/api/v1/applications/[id]/confirm/
 import { POST as check } from '../../src/app/api/v1/admissions/[id]/checks/route';
 import { feeAgreementPolicy } from '../../src/server/approval-policies';
 import { istToday } from '../../src/domain';
+import { splitTuition } from '../../src/domain/fee-plans';
 import { pendingCase, post, type Caller } from './admissions-fixtures';
 import { isoDaysFromNow } from './fixtures';
 
@@ -71,6 +72,15 @@ export async function activePlan(
   admissionId: string,
   studentId: string,
   createdBy: string,
+  {
+    totalPaise = 100_000_00,
+    ...version
+  }: {
+    totalPaise?: number;
+    version?: number;
+    supersedesPlanId?: string;
+    adjustmentReason?: string;
+  } = {},
 ) {
   const planId = randomUUID();
   const [approval] = await db
@@ -93,7 +103,8 @@ export async function activePlan(
       admissionId: admissionId as never,
       studentId: studentId as never,
       label: 'test-only annual plan',
-      totalPaise: 100_000_00,
+      totalPaise,
+      ...(version as { version?: number; supersedesPlanId?: never; adjustmentReason?: string }),
       academicYear: '2026-27',
       status: 'active',
       approvalId: approval!.id,
@@ -103,7 +114,7 @@ export async function activePlan(
     })
     .returning();
   await db.insert(opsFeeInstalments).values(
-    [50_000_00, 25_000_00, 25_000_00].map((amountPaise, i) => ({
+    splitTuition(totalPaise, [50, 25, 25]).map((amountPaise, i) => ({
       planId: plan!.id,
       sequence: i + 1,
       dueDate: isoDaysFromNow(30 + 90 * i),

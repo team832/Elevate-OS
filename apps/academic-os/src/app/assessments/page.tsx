@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { Card, DataTable, EmptyState, PageHeader, fmtDay } from '@elevate/shared-ui';
 import { getCourse, listAssessments, listBatches } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { assessmentsQuery } from '../../server/schemas';
@@ -50,14 +50,15 @@ async function Body({ access, batchId }: { access: PageAccess; batchId?: string 
             <DataTable compact
               rows={data.data.assessments}
               rowKey={(a) => a.id}
+              sampleOf={(a) => a.isSample}
               empty={<EmptyState title="No assessments" description={canWrite ? "Create one below." : "Assessments of your batches appear here once a coordinator creates them."} />}
               columns={[
                 { key: 'code', header: 'Code', render: (a) => <a href={MODULE_PATHS.assessment(a.id)}>{a.code}</a> },
                 { key: 'title', header: 'Title' },
                 { key: 'kind', header: 'Kind', render: (a) => a.kind.replace(/_/g, ' ') },
                 { key: 'batch', header: 'Batch', render: (a) => a.batchCode },
-                { key: 'date', header: 'Date', render: (a) => (a.scheduledDate ? `${a.scheduledDate}${a.startTime ? ` ${a.startTime}` : ''}` : 'not scheduled') },
-                { key: 'duration', header: 'Minutes', render: (a) => (a.durationMinutes === null ? 'unknown' : a.durationMinutes) },
+                { key: 'date', header: 'Date', render: (a) => (a.scheduledDate ? `${fmtDay(a.scheduledDate)}${a.startTime ? ` ${a.startTime}` : ''}` : 'not scheduled') },
+                { key: 'duration', header: 'Minutes', numeric: true, render: (a) => (a.durationMinutes === null ? 'unknown' : a.durationMinutes) },
                 { key: 'status', header: 'Status', render: (a) => <><StateBadge state={a.status} />{a.publishedAt ? <> <StateBadge state={a.provisional ? 'provisional' : 'published'} /></> : null}</> },
               ]}
             />

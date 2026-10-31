@@ -597,11 +597,9 @@ describe('publication and ranks from Academic', () => {
     );
     expect(final.status).toBe(409);
     expect(final.error!.message).toContain('Attendance not marked: 4.');
-    expect(fake.state.calls.map((c) => c.path)).toEqual([
-      `/${TEST_ID}`,
-      `/${TEST_ID}/finalise`,
-      `/${TEST_ID}/publications`,
-    ]);
+    // One request: Academic finalises and publishes in one transaction, so a refusal changes nothing (CHK-018).
+    expect(fake.state.calls.map((c) => c.path)).toEqual([`/${TEST_ID}`, `/${TEST_ID}/publications`]);
+    expect(fake.state.calls.at(-1)!.body).toMatchObject({ provisional: false, finalise: true });
     fake.state.calls.length = 0;
     const prov = await call(
       publishRoute,
@@ -612,7 +610,6 @@ describe('publication and ranks from Academic', () => {
       params,
     );
     expect(prov.status).toBe(200);
-    // The refused attempt already finalised result version 1; publishing reads and publishes.
     expect(fake.state.calls.map((c) => c.path)).toEqual([
       `/${TEST_ID}`,
       `/${TEST_ID}/publications`,
@@ -622,6 +619,7 @@ describe('publication and ranks from Academic', () => {
       rankingScope: 'cohort',
       cohortBatchIds: [BATCH_A],
       provisional: true,
+      finalise: true,
     });
   });
 

@@ -1,5 +1,5 @@
 /** Coverage and capacity sections of the batch page (server components). */
-import { Alert, Card, DataTable, EmptyState } from '@elevate/shared-ui';
+import { Alert, Card, DataTable, EmptyState, fmtDay } from '@elevate/shared-ui';
 import type { getBatchCoverage, getBatchFeasibility } from '../server';
 import { PlanBadge, StateBadge, fmtHours } from './badges';
 
@@ -69,7 +69,7 @@ export function FeasibilitySection({ data }: { data: Feasibility }) {
       ) : (
         <div className="el-stack">
           <p>
-            Verdict: <StateBadge state={r.verdict} /> {'window' in data && data.window ? `· window ${data.window.from} to ${data.window.to}` : null}
+            Verdict: <StateBadge state={r.verdict} /> {'window' in data && data.window ? `· window ${fmtDay(data.window.from)} to ${fmtDay(data.window.to)}` : null}
           </p>
           {r.errors.length > 0 ? (
             <Alert tone="danger" title="The calendar input has problems">

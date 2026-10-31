@@ -6,7 +6,7 @@
  * re-score (new result version with a reason; ./results.ts).
  * Roster-managed assessments (Tests and Mock Tests): the sheet reads and writes the roster through
  * the one-writer path — a score is a verified mark of a present student; changing a verified mark
- * or final results needs a reason, so it is done in Business Operations.
+ * or final results needs a reason and the academic coordinator (RVC-007).
  */
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
@@ -41,6 +41,7 @@ async function assertCanMark(db: Database, actor: Actor, a: Assessment): Promise
 }
 
 const canWithhold = (actor: Actor) => scopeFor(actor.user, 'academic:assessments:publish') !== null;
+const canCorrect = (actor: Actor) => scopeFor(actor.user, 'academic:assessments:finalise') !== null;
 
 interface SheetRow {
   studentId: string;
@@ -85,7 +86,7 @@ export async function getMarksSheet(db: Database, actor: Actor, assessmentId: st
   const bounds = await boundsOf(db, a);
   const sheet = { id: a.id, code: a.code, title: a.title, status: a.status, publishedAt: a.publishedAt, rosterManaged: Boolean(a.rosterSnapshotAt) };
   const shownBounds = bounds && { min: formatMarks(bounds.minUnits), max: formatMarks(bounds.maxUnits), negativeAllowed: bounds.negativeAllowed };
-  if (a.rosterSnapshotAt) return { assessment: sheet, bounds: shownBounds, canWithhold: false, rows: await rosterRows(db, a, await markStudentIds(db, scope, a)) };
+  if (a.rosterSnapshotAt) return { assessment: sheet, bounds: shownBounds, canWithhold: false, canCorrect: canCorrect(actor), rows: await rosterRows(db, a, await markStudentIds(db, scope, a)) };
   const attempts = await db.select().from(academicAttempts).where(eq(academicAttempts.assessmentId, a.id));
   const ids = [...new Set([...(await eligibleStudentIds(db, a)), ...attempts.map((t) => t.studentId as string)])];
   const students = ids.length ? await db.select({ id: academicStudents.id, code: academicStudents.code, fullName: academicStudents.fullName }).from(academicStudents).where(inArray(academicStudents.id, ids as StudentId[])).orderBy(asc(academicStudents.fullName)) : [];
@@ -94,6 +95,7 @@ export async function getMarksSheet(db: Database, actor: Actor, assessmentId: st
     assessment: sheet,
     bounds: shownBounds,
     canWithhold: canWithhold(actor),
+    canCorrect: false,
     rows: students.map((s): SheetRow => {
       const t = byStudent.get(s.id);
       return {
@@ -112,20 +114,37 @@ export async function getMarksSheet(db: Database, actor: Actor, assessmentId: st
 }
 
 export async function enterMarks(db: Database, actor: Actor, assessmentId: string, input: z.output<typeof marksBody>) {
+  // A score the person typed is never dropped, and Scored with no score records nothing.
+  const scoreProblem = (m: (typeof input.marks)[number]) =>
+    m.state === 'pending' && (m.manualScore ?? '') !== ''
+      ? 'A score needs the result Scored. Choose Scored, or clear the score.'
+      : m.state === 'scored' && (m.manualScore ?? '') === ''
+        ? 'Enter the score, or choose another result.'
+        : null;
+  const refused = input.marks.flatMap((m) => scoreProblem(m) ?? []);
+  if (refused.length)
+    throw new ValidationError(refused[0]!, {
+      details: refused.map((message) => ({ path: ['manualScore'], message })),
+    });
   return withTransaction(db, async (tx) => {
     const [a] = await tx.select().from(academicAssessments).where(eq(academicAssessments.id, assessmentId as AcademicAssessmentId)).for('update');
     if (!a) throw new NotFoundError('Assessment not found.');
     const scope = await assertCanMark(tx, actor, a);
     if (a.status === 'cancelled') throw new InvalidStateTransitionError('The assessment is cancelled.');
     if (a.rosterSnapshotAt) {
-      if (a.status === 'finalised') throw new InvalidStateTransitionError('Results are final: a correction needs a reason, so ask the academic coordinator to correct it in Tests and Mock Tests.');
+      const reason = canCorrect(actor) ? input.marks.find((m) => m.reason)?.reason : undefined;
+      if (a.status === 'finalised' && !reason) throw new InvalidStateTransitionError(canCorrect(actor) ? 'Results are final: say why the mark changes under Reason for the change; nothing was saved.' : 'Results are final: ask the academic coordinator to change this mark; nothing was saved.');
       const rows = input.marks.map(({ studentId, version, state, manualScore }) => {
         if (state === 'withheld') throw new ValidationError('This test’s roster is managed in Tests and Mock Tests: a result cannot be withheld here.');
         return { studentId: studentId as StudentId, version, ...ROSTER_FACTS[state], score: state === 'scored' ? (manualScore ?? null) : null };
       });
       const visible = await markStudentIds(tx, scope, a);
       if (visible && rows.some((r) => !visible.includes(r.studentId))) throw new NotFoundError('Student not found.');
-      const result = await recordScoresLocked(tx, actor, a, { source: 'manual', overwriteVerified: false, rows });
+      const result = await recordScoresLocked(tx, actor, a, { source: 'manual', overwriteVerified: Boolean(reason), reason, rows }).catch((error) => {
+        if (error instanceof ConflictError && (error.details as { overwriteRequired?: unknown })?.overwriteRequired)
+          throw new ConflictError(canCorrect(actor) ? 'This mark is verified. Say why it changes under Reason for the change; nothing was saved.' : 'This mark is verified. Ask the academic coordinator to change it; nothing was saved.', { details: error.details });
+        throw error;
+      });
       return { saved: result.changed, afterFinalisation: false, note: null };
     }
     if (input.marks.some((m) => m.state === 'withheld') && !canWithhold(actor)) throw new ForbiddenError('Only an academic coordinator can withhold a result.');
@@ -146,6 +165,7 @@ export async function enterMarks(db: Database, actor: Actor, assessmentId: strin
     const current = new Map(before.map((t) => [t.studentId as string, t]));
     const stale = input.marks.filter((m) => (current.get(m.studentId)?.version ?? 0) !== m.version);
     if (stale.length) throw new ConflictError('These marks changed since you opened it; reload the sheet and enter them again.', { details: { studentIds: stale.map((m) => m.studentId) } });
+    let saved = 0;
     for (const m of input.marks) {
       const existing = current.get(m.studentId);
       if (existing?.status === 'withheld' && !canWithhold(actor)) throw new ForbiddenError('A coordinator withheld this result; only a coordinator can change it.');
@@ -155,6 +175,7 @@ export async function enterMarks(db: Database, actor: Actor, assessmentId: strin
         const [used] = await tx.select({ id: academicResults.id }).from(academicResults).where(eq(academicResults.attemptId, existing.id)).limit(1);
         if (used) throw new InvalidStateTransitionError('A student with a finalised result cannot go back to pending; enter absent, exempt or a score, then ask the academic coordinator to re-score.');
         await tx.delete(academicAttempts).where(eq(academicAttempts.id, existing.id));
+        saved += 1;
         continue;
       }
       const values = {
@@ -167,6 +188,7 @@ export async function enterMarks(db: Database, actor: Actor, assessmentId: strin
       };
       if (existing) await tx.update(academicAttempts).set({ ...values, version: sql`${academicAttempts.version} + 1` }).where(eq(academicAttempts.id, existing.id));
       else await tx.insert(academicAttempts).values({ ...values, assessmentId: a.id, studentId: m.studentId as StudentId });
+      saved += 1;
     }
     if (a.status === 'draft' || a.status === 'scheduled') await tx.update(academicAssessments).set({ status: 'conducted' }).where(eq(academicAssessments.id, a.id));
     await audit(tx, actor, {
@@ -177,6 +199,6 @@ export async function enterMarks(db: Database, actor: Actor, assessmentId: strin
       after: input.marks,
       metadata: { afterFinalisation: a.status === 'finalised' },
     });
-    return { saved: input.marks.length, afterFinalisation: a.status === 'finalised', note: a.status === 'finalised' ? 'Saved. Results are final: ask the academic coordinator to re-score so this change counts.' : null };
+    return { saved, afterFinalisation: a.status === 'finalised', note: a.status === 'finalised' ? 'Saved. Results are final: ask the academic coordinator to re-score so this change counts.' : null };
   });
 }

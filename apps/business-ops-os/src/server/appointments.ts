@@ -41,7 +41,7 @@ import {
   type Actor,
 } from './context';
 import { createRuleFollowUp } from './follow-ups';
-import { fieldError, opsAudit, rowById } from './ops-common';
+import { fieldError, inOrder, opsAudit, rowById } from './ops-common';
 import { applyTransition } from './pipeline';
 import { loadSettings } from './settings';
 import { notifyHosted } from './task-links';
@@ -100,9 +100,9 @@ export async function scheduleAppointment(
   input: AppointmentInput,
   requestId?: string,
 ) {
-  const [settings, programme] = await Promise.all([
-    loadSettings(db),
-    input.programmeCode ? programmeByCode(db, input.programmeCode) : null,
+  const [settings, programme] = await inOrder([
+    () => loadSettings(db),
+    () => (input.programmeCode ? programmeByCode(db, input.programmeCode) : null),
   ]);
   const rule = settings['appointments.scheduling'].value;
   const slot = slotOf(input.startsAt, input.endsAt, rule.defaultDurationMinutes * 60_000);
@@ -225,11 +225,12 @@ export async function changeAppointment(
   change: StatusChange,
   requestId?: string,
 ) {
-  const [settings, programme] = await Promise.all([
-    loadSettings(db),
-    change.action === 'complete' && change.recommendedProgrammeCode
-      ? programmeByCode(db, change.recommendedProgrammeCode)
-      : null,
+  const [settings, programme] = await inOrder([
+    () => loadSettings(db),
+    () =>
+      change.action === 'complete' && change.recommendedProgrammeCode
+        ? programmeByCode(db, change.recommendedProgrammeCode)
+        : null,
   ]);
   const rule = settings['appointments.scheduling'].value;
   return withTransaction(db, async (tx) => {

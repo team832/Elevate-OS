@@ -30,7 +30,7 @@ import {
 import { can } from '@elevate/authorization';
 import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
-import type { BatchId, EnrolmentId, StudentId, UserId } from '@elevate/shared-types';
+import { fmtDay, type BatchId, type EnrolmentId, type StudentId, type UserId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { enrolmentView, findSessionClashes, isBatchFull, transferEndDate } from '../../domain/placements';
 import { assertBatchInScope, audit, resolveScope, todayIst, type Actor } from '../context';
@@ -58,12 +58,14 @@ export async function seatsTaken(db: Database, batchId: string, from: string): P
 }
 
 export async function clashMessages(tx: Database, enrolment: Enrolment, batch: Batch, from: string): Promise<string[]> {
-  const others = await tx
+  const placements = await tx
     .select({ batchId: pl.batchId, batchCode: academicBatches.code, startDate: pl.startDate, endDate: pl.endDate })
     .from(pl)
     .innerJoin(academicEnrolments, eq(academicEnrolments.id, pl.enrolmentId))
     .innerJoin(academicBatches, eq(academicBatches.id, pl.batchId))
     .where(and(eq(academicEnrolments.studentId, enrolment.studentId), ne(pl.enrolmentId, enrolment.id), holdsSeatFrom(from)));
+  // A placement in this batch that has ended on or after `from` holds the very classes being joined: no clash with itself.
+  const others = placements.filter((o) => !(o.batchId === batch.id && o.endDate));
   if (others.length === 0) return [];
   const s = academicClassSessions;
   const sessions = await tx
@@ -73,7 +75,7 @@ export async function clashMessages(tx: Database, enrolment: Enrolment, batch: B
   const existing = sessions.filter((x) => others.some((o) => o.batchId === x.batchId && x.date >= o.startDate && (!o.endDate || x.date <= o.endDate)));
   const code = (batchId: string) => others.find((o) => o.batchId === batchId)?.batchCode ?? batchId;
   return findSessionClashes(existing, sessions.filter((x) => x.batchId === batch.id), from).map(
-    (c) => `${c.date}: ${batch.code} at ${c.incoming.startTime} overlaps ${code(c.existing.batchId)} at ${c.existing.startTime}`,
+    (c) => `${fmtDay(c.date)}: ${batch.code} at ${c.incoming.startTime} overlaps ${code(c.existing.batchId)} at ${c.existing.startTime}`,
   );
 }
 
@@ -166,7 +168,7 @@ export async function transferPlacement(db: Database, actor: Actor, input: z.out
     if (!open) throw new ValidationError('This enrolment has no batch yet. Allocate it instead.');
     if (open.batchId === input.toBatchId) throw new ValidationError('The student is already in this batch.');
     const endDate = transferEndDate(input.effectiveDate);
-    if (endDate < open.startDate) throw new ValidationError(`The transfer date must be after ${open.startDate}, when the current placement started.`);
+    if (endDate < open.startDate) throw new ValidationError(`The transfer date must be after ${fmtDay(open.startDate)}, when the current placement started.`);
     const batch = await lockOpenBatch(tx, input.toBatchId);
     assertFits(enrolment, batch);
     const [ended] = await tx.update(pl).set({ endDate, endedByUserId: actor.user.id, endedReason: input.reason }).where(eq(pl.id, open.id)).returning();
@@ -192,9 +194,11 @@ export async function endEnrolment(db: Database, actor: Actor, input: z.output<t
   await resolveScope(db, actor, 'academic:enrolments:decide');
   return withTransaction(db, async (tx) => {
     const { enrolment, open } = await lockEnrolment(tx, input.enrolmentId, ['active', 'paused']);
-    if (input.endDate > todayIst(now)) throw new ValidationError('The end date cannot be in the future. End the enrolment on or after its last day.');
+    const today = todayIst(now);
     const earliest = [enrolment.startDate, open?.startDate].filter(Boolean).sort().at(-1);
-    if (earliest && input.endDate < earliest) throw new ValidationError(`The end date cannot be before ${earliest}, when the enrolment or placement started.`);
+    if (earliest && earliest > today) throw new ValidationError(`This enrolment starts on ${fmtDay(earliest)}, so it cannot be ended yet. To take the student out before then, record an exit on their record in Business Operations.`);
+    if (input.endDate > today) throw new ValidationError('The end date cannot be in the future. End the enrolment on or after its last day.');
+    if (earliest && input.endDate < earliest) throw new ValidationError(`The end date cannot be before ${fmtDay(earliest)}, when the enrolment or placement started.`);
     const [placement] = open ? await tx.update(pl).set({ endDate: input.endDate, endedByUserId: actor.user.id, endedReason: input.reason }).where(eq(pl.id, open.id)).returning() : [null];
     const [row] = await tx.update(academicEnrolments).set({ status: input.outcome }).where(eq(academicEnrolments.id, enrolment.id)).returning();
     await audit(tx, actor, { action: 'enrolment.ended', entityType: 'enrolment', entityId: enrolment.id, before: enrolment, after: row, metadata: { outcome: input.outcome, endDate: input.endDate, reason: input.reason, placementId: open?.id ?? null } });

@@ -6,28 +6,33 @@
  * employment exits the profile, makes the staff record inactive and disables the login with
  * its sessions; tasks, attendance, logs and reviews stay as they were.
  */
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNull, sql } from 'drizzle-orm';
 import { loadRoles, revokeAllSessionsForUser } from '@elevate/authentication';
 import {
   branches,
   departments,
+  opsHrRequestEvents,
+  opsHrRequests,
   opsStaffDepartments,
   opsStaffManagerHistory,
   opsStaffPrivateDetails,
   opsStaffProfiles,
+  opsStaffTasks,
   opsWorkSchedules,
   staffMembers,
   users,
   type CoreBranchId,
   type Database,
 } from '@elevate/database';
-import { withTransaction } from '@elevate/server-kit';
+import { fetchInternal, withTransaction } from '@elevate/server-kit';
 import { ROLES } from '@elevate/authorization';
-import { ConflictError, ForbiddenError } from '@elevate/shared-contracts';
-import type { DepartmentId, RoleKey, StaffMemberId, UserId } from '@elevate/shared-types';
+import { ConflictError, ForbiddenError, teachingAssignmentsV1Schema } from '@elevate/shared-contracts';
+import { fmtDay, type DepartmentId, type RoleKey, type StaffMemberId, type UserId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { istToday } from '../domain';
-import { accessScope, type Actor } from './context';
+import { WORK_STATUSES, type TaskStatus } from '../domain/staff-tasks';
+import { academicUrl } from './academic-summary';
+import { accessScope, userIdsForStaff, userIdsWithRole, type Actor } from './context';
 import type {
   departmentChangeBody,
   endEmploymentBody,
@@ -36,8 +41,9 @@ import type {
   privateDetailsBody,
 } from './hr-schemas';
 import { scopedStaff } from './hr-staff';
-import { fieldError, opsAudit, rowById } from './ops-common';
+import { fieldError, notifyOthers, opsAudit, rowById } from './ops-common';
 import { assertManager } from './organisation';
+import { linkOr } from './task-links';
 
 const audit = opsAudit('staff_member');
 
@@ -314,6 +320,88 @@ export async function changeManager(
 }
 
 /**
+ * Nothing the leaver holds moves by itself (whether it should is the owner's question, Proposed):
+ * their manager and the operations managers are told, and coordinators when they teach, naming
+ * what is left. `teaching` is read before the transaction; unavailable is said, never "none".
+ */
+async function tellWhoCanAct(
+  tx: Database,
+  actor: Actor,
+  staff: { id: string; fullName: string; managerId: string | null },
+  leftOn: string,
+  teaching: Awaited<ReturnType<typeof teachingOf>>,
+) {
+  const tasks = await tx.$count(
+    opsStaffTasks,
+    and(
+      eq(opsStaffTasks.staffId, staff.id as StaffMemberId),
+      inArray(opsStaffTasks.status, WORK_STATUSES as TaskStatus[]),
+    ),
+  );
+  const forwarded = await tx.$count(
+    opsHrRequests,
+    and(
+      eq(opsHrRequests.status, 'forwarded'),
+      exists(
+        tx
+          .select({ one: sql`1` })
+          .from(opsHrRequestEvents)
+          .where(
+            and(
+              eq(opsHrRequestEvents.requestId, opsHrRequests.id),
+              eq(opsHrRequestEvents.forwardedToStaffId, staff.id as StaffMemberId),
+            ),
+          ),
+      ),
+    ),
+  );
+  const of = (n: number, what: string) => (n ? `${n} ${what}${n === 1 ? '' : 's'}` : null);
+  const held = [
+    of(tasks, 'open task'),
+    of(forwarded, 'request forwarded to them'),
+    teaching === null
+      ? 'teaching assignments that could not be read (Academic OS did not answer)'
+      : teaching.length
+        ? `${of(teaching.length, 'teaching assignment')}: ${teaching.join('; ')}`
+        : null,
+  ].filter(Boolean);
+  if (!held.length) return;
+  const input = {
+    kind: 'staff.employment_ended',
+    title: `${staff.fullName} has left: work to hand over`,
+    body: `Last working day ${fmtDay(leftOn)}. Still holds ${held.join(', ')}. Nothing was moved automatically.`,
+    entityType: 'staff',
+    entityId: staff.id,
+  };
+  const ops = new Set([
+    ...(await userIdsForStaff(tx, [staff.managerId])),
+    ...(await userIdsWithRole(tx, 'operations_manager')),
+  ]);
+  const coordinators = teaching === null || teaching.length ? await userIdsWithRole(tx, 'academic_coordinator') : [];
+  for (const id of ops) {
+    if (coordinators.includes(id)) continue;
+    await notifyOthers(tx, actor, [id], {
+      ...input,
+      link: await linkOr(tx, id, 'ops:hr:read', `/ops/hr/staff/${staff.id}`, 'work', '/tasks'),
+    });
+  }
+  await notifyOthers(tx, actor, coordinators, { ...input, link: `/academic/teachers/${staff.id}` });
+}
+
+/** The leaver's live assignments as "Quant, IPMAT-A"; null = Academic OS could not be read. */
+async function teachingOf(staffId: string) {
+  const r = await fetchInternal(
+    academicUrl(`/academic/api/internal/v1/teaching-assignments?staffId=${staffId}&pageSize=100`),
+    teachingAssignmentsV1Schema,
+    { caller: 'ops', timeoutMs: 3000 },
+  );
+  if (r.status !== 'available') return null;
+  return r.data.items
+    .filter((a) => a.status !== 'ended')
+    .map((a) => `${a.subjectName}, ${a.batchCode ?? 'no batch yet'}`);
+}
+
+/**
  * End employment in ONE transaction: profile exited + last working day, staff record inactive,
  * login disabled and its sessions revoked (same steps as the platform's disable, D-072).
  */
@@ -325,6 +413,7 @@ export async function endEmployment(
   requestId?: string,
 ) {
   await accessScope(db, actor, 'ops:staff:manage');
+  const teaching = await teachingOf(id);
   return withTransaction(db, async (tx) => {
     const staff = await staffInRemit(tx, actor, id);
     const before = await profileOf(tx, staff.id);
@@ -366,6 +455,7 @@ export async function endEmployment(
       },
       requestId,
     );
+    await tellWhoCanAct(tx, actor, staff, input.leftOn, teaching);
     return { profile: after, userDisabled: Boolean(staff.userId), sessionsRevoked };
   });
 }

@@ -10,6 +10,7 @@ vi.mock('next/navigation', () => ({
 const student = (id: string, extra: Partial<FeeYearStudent>): FeeYearStudent => ({
   planId: `plan-${id}`,
   studentId: id,
+  href: `/ops/students/${id}?tab=fees`,
   studentName: `Sample Student ${id}`,
   isSample: false,
   admissionNumber: null,
@@ -91,8 +92,17 @@ describe('Outstanding tuition drill-down', () => {
     expect(render(true, many, 2).match(/data-row-link/g)).toHaveLength(5);
   });
 
+  it.each<[OwingSort, string, string]>([
+    ['overdue', 'Overdue', 'descending'],
+    ['outstanding', 'Outstanding', 'descending'],
+    ['name', 'Student', 'ascending'],
+  ])('order %s: the %s heading says %s', (sort, header, direction) => {
+    expect(render(true, rows, 1, sort)).toContain(`aria-sort="${direction}">${header}</th>`);
+  });
+
   it('marks the current order; changing it goes back to page 1', () => {
-    const out = render(true, rows, 2, 'name');
+    const many = Array.from({ length: 30 }, (_, i) => student(`m${i}`, {}));
+    const out = render(true, many, 2, 'name');
     expect(out).toContain(
       'href="/ops/fees?year=2026-27&amp;open=outstanding&amp;sort=name" aria-current="true"',
     );

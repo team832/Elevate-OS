@@ -93,6 +93,12 @@ export type FeeYearTotals = ReturnType<typeof feeYearTotals>;
  * approved figures count (`changing`). A closed accepted version keeps what its ledger shows as
  * owed. A chain never activated (`drafts`) bills nothing yet. Pass every version of the students
  * concerned: a chain may continue on another admission of the same student.
+ *
+ * `inForce`: the accepted version that stands today, for working lists and for taking money. It is
+ * the active one, or one closed only because a newer version was drafted (a change pending,
+ * rejected or withdrawn: nothing is in force but it). An agreement deliberately closed, with no
+ * newer version, is out of it and stays in `counted`. `proposed`: the draft of such a change.
+ * `abandoned`: a chain closed before any version was activated.
  */
 export function acceptedVersions<
   P extends { id: string; status: string; approvedAt: unknown; supersedesPlanId: string | null },
@@ -103,12 +109,18 @@ export function acceptedVersions<
     .filter((p) => !replaced.has(p.id))
     .map((head) => {
       let accepted: P | undefined = head;
-      while (accepted && !accepted.approvedAt) accepted = byId.get(accepted.supersedesPlanId ?? '');
+      while (accepted && !accepted.approvedAt && accepted.status !== 'active')
+        accepted = byId.get(accepted.supersedesPlanId ?? '');
       return { head, accepted };
     });
   return {
     counted: chains.flatMap((c) => c.accepted ?? []),
     changing: chains.flatMap((c) => (c.accepted && c.head.status === 'draft' ? c.accepted : [])),
     drafts: chains.flatMap((c) => (!c.accepted && c.head.status === 'draft' ? c.head : [])),
+    inForce: chains.flatMap((c) =>
+      c.accepted && (c.accepted.status === 'active' || c.accepted !== c.head) ? c.accepted : [],
+    ),
+    proposed: chains.flatMap((c) => (c.accepted && c.head.status === 'draft' ? c.head : [])),
+    abandoned: chains.flatMap((c) => (!c.accepted && c.head.status !== 'draft' ? c.head : [])),
   };
 }

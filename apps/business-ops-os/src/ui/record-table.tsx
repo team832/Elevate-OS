@@ -6,8 +6,8 @@
  * Only lists longer than one page get their own scroll well with a sticky header.
  * Columns use the shared-ui `Column<T>` type, so DataTable columns move over unchanged.
  */
-import type { CSSProperties, ReactNode } from 'react';
-import type { Column } from '@elevate/shared-ui';
+import { isValidElement, type ReactNode } from 'react';
+import { ActionsHeader, SampleBadge, tableWrapClass, type Column } from '@elevate/shared-ui';
 import { RowLinks } from './row-links';
 
 export interface RecordTableProps<T> {
@@ -18,14 +18,21 @@ export interface RecordTableProps<T> {
   caption?: ReactNode;
   /** Shown in a full-width row when `rows` is empty. */
   empty?: ReactNode;
-  /** Makes the whole row open this URL (usually the list URL with `open=<id>`). */
-  rowHref?: (row: T) => string;
+  /** Makes the whole row open this URL (usually the list URL with `open=<id>`); undefined leaves that row unlinked. */
+  rowHref?: (row: T) => string | undefined;
   /** Column whose cell holds the row link (default: the first). Keep that cell free of other links/buttons. */
   linkColumn?: string;
+  /** Which rows are fictional: they get the SAMPLE DATA badge in the link column (D-036). */
+  sampleOf?: (row: T) => boolean;
+  /** The column the rows are ordered by: announced by aria-sort, with its direction in the heading. */
+  sortedBy?: { column: string; direction: 'ascending' | 'descending' };
 }
 
-const cell = <T,>(c: Column<T>, row: T): ReactNode =>
-  c.render ? c.render(row) : String((row as Record<string, unknown>)[c.key] ?? '');
+const cell = <T,>(c: Column<T>, row: T): ReactNode => {
+  if (c.render) return c.render(row);
+  const value = (row as Record<string, unknown>)[c.key];
+  return isValidElement(value) ? value : String(value ?? '');
+};
 
 export function RecordTable<T>({
   columns,
@@ -35,18 +42,30 @@ export function RecordTable<T>({
   empty = 'No records match.',
   rowHref,
   linkColumn = columns[0]?.key,
+  sampleOf,
+  sortedBy,
 }: RecordTableProps<T>) {
+  const value = (c: Column<T>, row: T) =>
+    c.key === linkColumn && sampleOf?.(row) ? (
+      <>
+        {cell(c, row)} <SampleBadge />
+      </>
+    ) : (
+      cell(c, row)
+    );
   const table = (
-    <table
-      className="el-table el-table-compact ops-table"
-      style={{ '--ops-cols': columns.length } as CSSProperties}
-    >
+    <table className="el-table el-table-compact ops-table">
       {caption ? <caption>{caption}</caption> : null}
       <thead>
         <tr>
           {columns.map((c) => (
-            <th key={c.key} scope="col" className={c.numeric ? 'el-num' : undefined}>
-              {c.header}
+            <th
+              key={c.key}
+              scope="col"
+              className={c.numeric ? 'el-num' : undefined}
+              aria-sort={sortedBy?.column === c.key ? sortedBy.direction : undefined}
+            >
+              {c.header || <ActionsHeader />}
             </th>
           ))}
         </tr>
@@ -72,11 +91,11 @@ export function RecordTable<T>({
                   >
                     {href && c.key === linkColumn ? (
                       <a href={href} data-row-link="" data-drawer-return={key}>
-                        {cell(c, row)}
+                        {value(c, row)}
                       </a>
                     ) : (
                       // One element per value, so a phone card's grid stays label | value.
-                      <div>{cell(c, row)}</div>
+                      <div>{value(c, row)}</div>
                     )}
                   </td>
                 ))}
@@ -87,8 +106,7 @@ export function RecordTable<T>({
       </tbody>
     </table>
   );
-  // Lists page at 25 rows; only longer (unpaged) lists scroll inside their own well.
-  const wrap = rows.length > 25 ? 'el-table-wrap ops-table-well' : 'el-table-wrap';
+  const wrap = tableWrapClass(rows.length);
   return rowHref ? (
     <RowLinks className={wrap}>{table}</RowLinks>
   ) : (

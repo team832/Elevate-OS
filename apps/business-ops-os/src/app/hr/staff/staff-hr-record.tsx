@@ -65,8 +65,10 @@ export function HrOverview({
                     <StatusBadge tone="neutral">Login disabled</StatusBadge>
                   ) : null}
                 </>
+              ) : can(user, 'ops:organisation:manage') ? (
+                <a href={`/ops/staff/${d.staff.id}?act=edit`}>No login: link one</a>
               ) : (
-                'No login'
+                'No login. An operations manager links it on the staff record.'
               ),
             },
             {

@@ -76,7 +76,7 @@ async function Application({
         description={<a href="/ops/admissions/applications">All applications</a>}
         tabs={tabs}
       />
-      <ApplicationDetail d={d} level={2} page={page} />
+      <ApplicationDetail user={user} d={d} level={2} page={page} />
       {modal.edit && d.can.write ? <EditModal d={d} page={page} /> : null}
       {modal.sign && d.can.write && d.application.status === 'form_generated' ? (
         <SignModal d={d} page={page} />
@@ -87,12 +87,13 @@ async function Application({
             You are confirming <strong>{d.snapshot.student.fullName}</strong>, application{' '}
             {d.application.reference} version {d.application.currentVersion}. The server checks
             everything again, gives the admission number and asks Academic OS to set up the
-            enrolment. Who may confirm is a proposed setting awaiting the owner’s decision.
+            enrolment.
           </p>
           {d.confirmationGaps.length ? (
             <TaskList
               caption="What still blocks confirmation"
               items={taskItems(
+                user,
                 d,
                 page,
                 d.tasks.filter((t) => t.state !== 'completed'),
@@ -320,7 +321,7 @@ function SignModal({ d, page }: { d: ApplicationView; page: string }) {
     <FormModal id="confirm-signatures" title="Confirm signatures" closeHref={page}>
       <p>
         Confirm that the printed form of version {d.application.currentVersion} carries the required
-        physical signatures. Rule ({d.signerRule.decisionState}): student{' '}
+        physical signatures. Rule: student{' '}
         {rule.student ? 'signs' : 'does not sign'}; a guardian signs{' '}
         {rule.guardian === 'if_under_18'
           ? 'when the student is under 18 or the date of birth is not recorded'

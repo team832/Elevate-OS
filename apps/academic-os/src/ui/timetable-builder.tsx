@@ -112,7 +112,7 @@ export function BuildResultPanel({ result, patternsPath }: { result: BuildResult
             { key: 'subject', header: 'Subject', render: (d) => d.subjectName },
             { key: 'teacher', header: 'Teacher', render: (d) => d.teacherName },
             { key: 'room', header: 'Room', render: (d) => d.roomCode ?? 'No room' },
-            { key: 'classes', header: 'Classes', render: (d) => d.classes },
+            { key: 'classes', header: 'Classes', numeric: true, render: (d) => d.classes },
             { key: 'warnings', header: 'Warnings', render: (d) => d.warnings.join('; ') || 'None' },
           ]}
         />

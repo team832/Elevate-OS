@@ -10,7 +10,7 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import { ConflictError, ForbiddenError } from '@elevate/shared-contracts';
+import { ConflictError, ForbiddenError, LINK_LOGIN_HELP } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import {
   APPOINTMENT_TYPE_LABELS,
@@ -121,6 +121,6 @@ export async function assertFree(
 export async function ownStaff(db: Database, actor: Actor, access: AccessScope) {
   const staffId = access.scope === 'own' ? access.staffId : await staffIdForUser(db, actor.id);
   if (access.scope === 'own' && !staffId)
-    throw new ForbiddenError('Your login is not linked to a staff record.');
+    throw new ForbiddenError(`Your login is not linked to a staff record. ${LINK_LOGIN_HELP}`);
   return staffId;
 }

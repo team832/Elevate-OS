@@ -8,6 +8,7 @@ import { GET as previewRoute } from '../../src/app/api/v1/patterns/[id]/preview/
 import * as patternRoute from '../../src/app/api/v1/patterns/[id]/route';
 import { POST as publishRoute } from '../../src/app/api/v1/patterns/[id]/publish/route';
 import { POST as exclusionRoute } from '../../src/app/api/v1/exclusions/route';
+import { fmtDay } from '@elevate/shared-types';
 import { cancelSession, createPattern, createSessions, createStudent, editSeries, enrolManually, markDelivered, publishPattern } from '../../src/server';
 import { actor, staffFor, users, world, type Users, type World } from './fixtures';
 
@@ -102,6 +103,29 @@ describe('patterns: draft → preview → publish (test 3)', () => {
   });
 });
 
+describe('a teacher given a series is told (FLB-003)', () => {
+  const noticesTo = (user: Users['teacher']) => ctx.db.select().from(notifications).where(and(eq(notifications.userId, user.id), eq(notifications.kind, 'timetable_pattern.series_changed')));
+
+  it('moving a series tells the new teacher and the old one, once each, and nobody else; first publish tells its teacher', async () => {
+    const coord = actor(u.coordinator);
+    const [fromOld, fromNew] = [(await noticesTo(u.teacher)).length, (await noticesTo(u.teacher2)).length];
+    const created = await createPattern(ctx.db, coord, pattern({ startTime: '15:00', effectiveFrom: '2099-06-01', effectiveTo: '2099-06-30' }));
+    const first = await publishPattern(ctx.db, coord, created.id, 1);
+    const published = await noticesTo(u.teacher);
+    expect(published).toHaveLength(fromOld + 1);
+    expect(published.at(-1)!.title).toContain(`${first.created.length} classes`);
+    expect(await noticesTo(u.teacher2)).toHaveLength(fromNew);
+    const res = await editSeries(ctx.db, coord, created.id, { effectiveDate: '2099-06-15', staffId: w.teacher2Staff, reason: 'Teacher change (fictional)', version: 2 }, new Date('2099-06-02T06:00:00Z'));
+    const [oldNotes, newNotes] = [await noticesTo(u.teacher), await noticesTo(u.teacher2)];
+    expect(oldNotes).toHaveLength(fromOld + 2);
+    expect(oldNotes.at(-1)!.title).toContain(`${res.cancelled.length} classes`);
+    expect(newNotes).toHaveLength(fromNew + 1);
+    expect(newNotes.at(-1)).toMatchObject({ link: '/academic/timetable', body: 'Teacher change (fictional)' });
+    expect(newNotes.at(-1)!.title).toContain(`${res.created.length} classes`);
+    expect(await noticesTo(u.coordinator)).toEqual([]);
+  });
+});
+
 describe('editing a published series from a date (test 5)', () => {
   it('delivered and earlier classes stay; later undelivered ones move to the new series', async () => {
     const coord = actor(u.coordinator);
@@ -116,11 +140,14 @@ describe('editing a published series from a date (test 5)', () => {
     await expect(editSeries(ctx.db, coord, created.id, { ...edit, version: 1 }, now)).rejects.toMatchObject({ status: 409 });
     const res = await editSeries(ctx.db, coord, created.id, edit, now);
     expect(res.cancelled.map((c) => c.date).sort()).toEqual(['2099-03-16', '2099-03-23', '2099-03-30']);
-    expect(res.cancelled.every((c) => c.statusReason === 'Series changed from 2099-03-13: New room timings (fictional)')).toBe(true);
+    expect(res.cancelled.every((c) => c.statusReason === `Series changed from ${fmtDay('2099-03-13')}: New room timings (fictional)`)).toBe(true);
     const cancelAudit = await ctx.db.select().from(auditEvents).where(and(eq(auditEvents.action, 'class_session.cancelled'), inArray(auditEvents.entityId, res.cancelled.map((c) => c.id as string))));
     expect(cancelAudit).toHaveLength(3);
-    const notes = await ctx.db.select().from(notifications).where(and(eq(notifications.userId, u.teacher2.id), eq(notifications.kind, 'class_session.cancelled')));
-    expect(notes.length).toBeGreaterThanOrEqual(3);
+    // One notice for the whole change, not one per class (FLB-003).
+    const notes = await ctx.db.select().from(notifications).where(and(eq(notifications.userId, u.teacher2.id), eq(notifications.entityId, res.pattern.id)));
+    expect(notes.map((n) => [n.link, n.body])).toEqual([['/academic/timetable', 'New room timings (fictional)']]);
+    expect(notes[0]!.title).toContain(`from ${fmtDay('2099-03-13')}`);
+    expect(await ctx.db.select().from(notifications).where(and(eq(notifications.userId, u.teacher2.id), inArray(notifications.entityId, res.cancelled.map((c) => c.id as string))))).toEqual([]);
     expect(res.created.map((c) => [c.date, c.startTime])).toEqual([['2099-03-16', '13:30'], ['2099-03-23', '13:30'], ['2099-03-30', '13:30']]);
     const kept = await ctx.db.select().from(academicClassSessions).where(and(eq(academicClassSessions.patternId, created.id)));
     expect(kept.find((k) => k.date === '2099-03-02')).toMatchObject({ status: 'held', startTime: '12:00' });

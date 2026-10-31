@@ -74,7 +74,7 @@ async function Inbox({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
   if (sources.length === 0)
     return (
       <EmptyState
-        title="You have no approval rights in Business Ops"
+        title="You have no approval rights in Business Operations"
         description="Approvals appear here when your role lets you decide fee agreements."
       />
     );
@@ -127,6 +127,7 @@ async function Inbox({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
                 rows={s.items}
                 rowKey={(i) => i.id}
                 rowHref={(i) => listHref(BASE, sp, { open: i.id })}
+                sampleOf={(i) => Boolean(i.isSample)}
                 empty="Nothing waiting."
                 columns={[
                   { key: 'title', header: 'Request' },

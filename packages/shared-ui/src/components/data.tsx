@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import type { Metric } from '@elevate/shared-contracts';
-import type { FeatureStatus } from '@elevate/shared-types';
+import { fmtDay, fmtDaysIn, type FeatureStatus } from '@elevate/shared-types';
 import { EmptyState } from './states';
 
 export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
@@ -31,9 +31,20 @@ export interface Column<T> {
   numeric?: boolean;
 }
 
+export { fmtDay, fmtDaysIn };
+
+/** D-036: on a fictional record. Tables add it themselves when given `sampleOf`. */
+export const SampleBadge = () => <span className="el-badge el-badge-sample">SAMPLE DATA</span>;
+
+/** A column of row actions has no visible heading, but a screen reader still needs one. */
+export const ActionsHeader = () => <span className="el-visually-hidden">Actions</span>;
+
 export interface DataTableProps<T> {
   columns: readonly Column<T>[];
-  /** Tighter rows for dense lists; on phones each row becomes a labelled block. */
+  /**
+   * Tighter rows; on phones each row becomes a labelled block. Default: on from four columns,
+   * since four rarely fit a phone and a sideways scroll hides the last ones.
+   */
   compact?: boolean;
   rows: readonly T[];
   rowKey: (row: T) => string;
@@ -46,7 +57,13 @@ export interface DataTableProps<T> {
   label?: string;
   /** Shown instead of the table when `rows` is empty. */
   empty?: ReactNode;
+  /** Which rows are fictional: they get the SAMPLE DATA badge in the first column (D-036). */
+  sampleOf?: (row: T) => boolean;
 }
+
+/** Lists page at 25 rows; only longer lists scroll inside their own well. */
+export const tableWrapClass = (rows: number) =>
+  rows > 25 ? 'el-table-wrap el-table-well' : 'el-table-wrap';
 
 export function DataTable<T>({
   columns,
@@ -55,19 +72,22 @@ export function DataTable<T>({
   caption,
   label,
   empty,
-  compact,
+  compact = columns.length > 3,
+  sampleOf,
 }: DataTableProps<T>) {
   if (rows.length === 0) {
     return <>{empty ?? <EmptyState title="Nothing here yet" />}</>;
   }
+  // One element per value, so a phone card's grid stays label | value.
+  const Value = compact ? 'div' : Fragment;
   const name =
     label ??
     columns
       .map((c) => c.header)
-      .filter((h) => typeof h === 'string')
+      .filter((h) => h && typeof h === 'string')
       .join(', ');
   return (
-    <div className="el-table-wrap">
+    <div className={tableWrapClass(rows.length)}>
       <table className={compact ? 'el-table el-table-compact' : 'el-table'}>
         {caption ? (
           <caption>{caption}</caption>
@@ -78,7 +98,7 @@ export function DataTable<T>({
           <tr>
             {columns.map((c) => (
               <th key={c.key} scope="col" className={c.numeric ? 'el-num' : undefined}>
-                {c.header}
+                {c.header || <ActionsHeader />}
               </th>
             ))}
           </tr>
@@ -92,7 +112,15 @@ export function DataTable<T>({
                   className={c.numeric ? 'el-num' : undefined}
                   data-label={typeof c.header === 'string' ? c.header : undefined}
                 >
-                  {c.render ? c.render(row) : String((row as Record<string, unknown>)[c.key] ?? '')}
+                  <Value>
+                    {c.render ? c.render(row) : String((row as Record<string, unknown>)[c.key] ?? '')}
+                    {c === columns[0] && sampleOf?.(row) ? (
+                      <>
+                        {' '}
+                        <SampleBadge />
+                      </>
+                    ) : null}
+                  </Value>
                 </td>
               ))}
             </tr>
@@ -137,7 +165,7 @@ export function StatTile({
   /** Word shown instead of a value when the metric is missing (never 0). */
   missingLabel?: string;
 }) {
-  const description = `${metric.definition} (${metric.window.label ?? `${metric.window.from} to ${metric.window.to}`})`;
+  const description = `${metric.definition} (${metric.window.label ?? `${fmtDay(metric.window.from)} to ${fmtDay(metric.window.to)}`})`;
   if (metric.status === 'missing') {
     return (
       <div className="el-stat el-stat-missing" data-status="missing">

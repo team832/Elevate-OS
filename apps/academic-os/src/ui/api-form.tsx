@@ -6,10 +6,22 @@
  * loading / error / success states and refreshes the server-rendered page.
  */
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
-import { Alert, Button, Checkbox, Field, Select, TextArea, TextInput } from '@elevate/shared-ui';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Field,
+  fieldDescribedBy,
+  Select,
+  TextArea,
+  TextInput,
+} from '@elevate/shared-ui';
+import { words } from './badges';
 
 export type FieldType =
+  /** One section's answer key: answers in question order, "-" for a dropped question. Name: `answers.<section>`. */
+  | 'answer-list'
   | 'text'
   | 'number'
   | 'date'
@@ -59,6 +71,12 @@ export interface ApiFormProps {
 export interface ErrorView {
   message: string;
   details: string[];
+  /** Issues that name a field, shown beside it (the last path segment is the field name). */
+  issues?: { field: string; message: string }[];
+  /** Server failures only: what to quote to an administrator. */
+  reference?: string;
+  /** Sign-in page, when the session has ended: a new tab, so what was typed here stays. */
+  signIn?: string;
 }
 
 /** Readable lines from an error envelope's details: only entries with a message (validation issues, clashes, file problems), never raw ids or debug fields. */
@@ -74,6 +92,27 @@ export function describeDetails(details: unknown): string[] {
   visit(details);
   return lines.slice(0, 50);
 }
+
+const named = (d: unknown): d is { path: unknown[]; message: string } =>
+  typeof d === 'object' &&
+  d !== null &&
+  Array.isArray((d as { path?: unknown }).path) &&
+  (d as { path: unknown[] }).path.length > 0 &&
+  typeof (d as { message?: unknown }).message === 'string';
+
+/** Required fields left blank, in words, before anything is sent (the server remains the check). */
+export function missingRequired(fields: readonly FormField[], data: FormData): string[] {
+  return fields
+    .filter((f) => f.required && f.type !== 'checkbox')
+    .filter((f) => !data.getAll(f.name).some((v) => String(v).trim()))
+    .map(
+      (f) =>
+        `${f.type === 'select' || f.type === 'multi-select' ? 'Choose' : 'Enter'} ${f.label.charAt(0).toLowerCase()}${f.label.slice(1)}.`,
+    );
+}
+
+/** One section of an answer key as typed: "A C - D" gives ["A", "C", null, "D"]. */
+export const answerList = (raw: string) => raw.split(/[\s,]+/).map((a) => (a === '-' ? null : a));
 
 function collect(form: HTMLFormElement, fields: readonly FormField[]): Record<string, unknown> {
   const data = new FormData(form);
@@ -108,6 +147,11 @@ function collect(form: HTMLFormElement, fields: readonly FormField[]): Record<st
           .map((s) => s.trim())
           .filter(Boolean);
         break;
+      case 'answer-list': {
+        const [key, section] = [f.name.slice(0, f.name.indexOf('.')), f.name.slice(f.name.indexOf('.') + 1)];
+        ((body[key] ??= {}) as Record<string, unknown>)[section] = answerList(raw);
+        break;
+      }
       case 'number-list':
         body[f.name] = raw
           .split(',')
@@ -143,24 +187,49 @@ export async function send(
     };
   }
   if (!response.ok || json.error) {
-    const ref = json.error?.requestId ? ` (reference ${json.error.requestId})` : '';
+    const raw = json.error?.details;
+    const list = Array.isArray(raw) ? raw : [];
     return {
       ok: false,
       error: {
-        message: `${json.error?.message ?? `HTTP ${response.status}`}${ref}`,
-        details: describeDetails(json.error?.details),
+        message: json.error?.message ?? `HTTP ${response.status}`,
+        details: describeDetails(Array.isArray(raw) ? list.filter((d) => !named(d)) : raw),
+        issues: list
+          .filter(named)
+          .map((d) => ({ field: String(d.path.at(-1)), message: d.message })),
+        reference: response.status >= 500 ? json.error?.requestId : undefined,
+        signIn: response.status === 401 ? `${action.split('/api/')[0]}/login` : undefined,
       },
     };
   }
   return { ok: true, data: json.data };
 }
 
-export function ErrorAlert({ error }: { error: ErrorView }) {
+export function ErrorAlert({
+  error,
+  labelOf = (field) => field,
+}: {
+  error: ErrorView;
+  labelOf?: (field: string) => string;
+}) {
+  const lines = [
+    ...(error.issues ?? []).filter((i) => !error.message.includes(i.message)).map((i) => `${labelOf(i.field)}: ${i.message}`),
+    ...error.details.filter((d) => !error.message.includes(d)),
+  ];
   return (
     <Alert tone="danger" title={error.message}>
-      {error.details.length > 0 ? (
+      {error.reference ? <p>Reference for the administrator: {error.reference}</p> : null}
+      {error.signIn ? (
+        <p>
+          <a href={error.signIn} target="_blank" rel="noopener">
+            Sign in again in a new tab
+          </a>
+          , then come back and press the button again. What you typed stays here.
+        </p>
+      ) : null}
+      {lines.length > 0 ? (
         <ul>
-          {error.details.map((d, i) => (
+          {lines.map((d, i) => (
             <li key={i}>{d}</li>
           ))}
         </ul>
@@ -189,13 +258,26 @@ export function ApiForm({
     | { kind: 'idle' }
     | { kind: 'saving' }
     | { kind: 'error'; error: ErrorView }
-    | { kind: 'done'; message: string }
+    | { kind: 'done'; message: string; nothing?: boolean }
   >({ kind: 'idle' });
+  const alertRef = useRef<HTMLDivElement>(null);
+  // A refusal or a result is read at once, wherever the person had scrolled.
+  useEffect(() => {
+    if (state.kind === 'error' || state.kind === 'done') alertRef.current?.focus();
+  }, [state]);
+  const issues = state.kind === 'error' ? (state.error.issues ?? []) : [];
+  const errorOf = (name: string) => issues.find((i) => i.field === name)?.message;
+  const labelOf = (field: string) => fields.find((f) => f.name === field)?.label ?? field;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     let body: Record<string, unknown>;
+    const blank = missingRequired(fields, new FormData(form));
+    if (blank.length) {
+      setState({ kind: 'error', error: { message: 'There is a problem', details: blank } });
+      return;
+    }
     const asDraft =
       draftLabel !== undefined &&
       (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'draft';
@@ -216,9 +298,15 @@ export function ApiForm({
         setState({ kind: 'error', error: result.error });
         return;
       }
+      const nothing = (result.data as { saved?: number } | null)?.saved === 0;
       setState({
         kind: 'done',
-        message: asDraft ? 'Draft saved. Only you can see it.' : successMessage,
+        nothing,
+        message: nothing
+          ? 'Nothing was changed.'
+          : asDraft
+            ? 'Draft saved. Only you can see it.'
+            : successMessage,
       });
       if (method === 'POST') form.reset(); // a create form starts empty again for the next entry
       if (goTo)
@@ -239,6 +327,12 @@ export function ApiForm({
 
   return (
     <form onSubmit={onSubmit} className="el-stack" noValidate>
+      <div ref={alertRef} tabIndex={-1}>
+        {state.kind === 'error' ? <ErrorAlert error={state.error} labelOf={labelOf} /> : null}
+        {state.kind === 'done' ? (
+          <Alert tone={state.nothing ? 'warning' : 'success'}>{state.message}</Alert>
+        ) : null}
+      </div>
       {fields.map((f) => {
         const id = `${idPrefix}-${f.name}`;
         const type = f.type ?? 'text';
@@ -259,20 +353,23 @@ export function ApiForm({
           required: f.required,
           defaultValue: f.defaultValue === undefined ? undefined : String(f.defaultValue),
           placeholder: f.placeholder,
-          'aria-describedby': f.hint ? `${id}-hint` : undefined,
+          'aria-invalid': errorOf(f.name) ? true : undefined,
+          'aria-describedby': fieldDescribedBy(id, f.hint, errorOf(f.name)),
         };
         return (
-          <Field key={f.name} id={id} label={f.label} hint={f.hint}>
+          <Field key={f.name} id={id} label={f.label} hint={f.hint} error={errorOf(f.name)}>
             {type === 'select' || type === 'multi-select' ? (
               <Select
                 {...common}
                 multiple={type === 'multi-select'}
                 size={type === 'multi-select' ? Math.min(8, f.options?.length ?? 0) : undefined}
               >
-                {!f.required && type === 'select' ? <option value="">—</option> : null}
+                {type === 'select' && (!f.required || !f.defaultValue) ? (
+                  <option value="">{f.required ? 'Choose…' : '—'}</option>
+                ) : null}
                 {(f.options ?? []).map((o) => (
                   <option key={o.value} value={o.value}>
-                    {o.label}
+                    {o.label === o.value ? words(o.value) : o.label}
                   </option>
                 ))}
               </Select>
@@ -301,8 +398,6 @@ export function ApiForm({
           </Field>
         );
       })}
-      {state.kind === 'error' ? <ErrorAlert error={state.error} /> : null}
-      {state.kind === 'done' ? <Alert tone="success">{state.message}</Alert> : null}
       <div className={stickyActions ? 'acd-sticky-actions el-glass' : 'el-form-actions'}>
         <Button type="submit" variant={variant} value="submit" disabled={state.kind === 'saving'}>
           {state.kind === 'saving' ? 'Saving…' : submitLabel}

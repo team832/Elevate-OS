@@ -1,12 +1,12 @@
 /** A work report as plain text for "Copy summary" and downloads. Pure. */
 import type { EodFacts } from './eod';
 
-const hm = (iso: string) =>
-  new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(iso));
+const CLOCK = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+const hm = (iso: string) => CLOCK.format(new Date(iso));
 export const fmtMinutes = (m: number | null) =>
   m === null ? 'Not recorded' : `${Math.floor(m / 60)} h ${m % 60} min`;
 

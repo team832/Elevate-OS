@@ -13,7 +13,7 @@ import {
   type Database,
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
-import { ForbiddenError } from '@elevate/shared-contracts';
+import { ForbiddenError, LINK_LOGIN_HELP } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import { addDays, istToday, type IsoDate } from '../domain/dates';
 import {
@@ -52,8 +52,7 @@ export {
 
 type Row = TaskRow;
 const CLOSED: TaskStatus[] = ['done', 'cancelled'];
-export const NO_STAFF_RECORD =
-  'Your account is not linked to a staff record, so you have no tasks of your own. Staff records are linked in the Staff directory.';
+export const NO_STAFF_RECORD = `Your account is not linked to a staff record, so you have no tasks of your own. ${LINK_LOGIN_HELP}`;
 
 /** The caller's own staff id, or FORBIDDEN with what to do. */
 export async function ownStaffId(db: Database, actor: Actor): Promise<StaffMemberId> {

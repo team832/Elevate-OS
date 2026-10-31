@@ -6,6 +6,7 @@
  * Permission: ops:leads:read (counsellors: own scope = demo or case counsellor, or lead owner).
  */
 import { and, asc, desc, eq, getTableColumns, ilike, inArray, or, type SQL } from 'drizzle-orm';
+import { containsPattern } from '@elevate/server-kit';
 import { alias } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { can } from '@elevate/authorization';
@@ -34,6 +35,7 @@ import {
   demoMockStatus,
   demoProgress,
   demoView,
+  isPending,
   nextSession,
   sessionsInRange,
   setupGaps,
@@ -198,7 +200,12 @@ function summarise(
     ...row,
     sessions,
     days: demoDays(sessions, demo.plannedDayCount),
-    view: demoView({ outcome: demo.outcome, sessions }, now),
+    view: demoView({ outcome: demo.outcome, caseStatus: row.admissionStatus, sessions }, now),
+    /** Classes still scheduled on a demo whose case was closed as lost: nobody cancelled them. */
+    leftOpen:
+      demo.outcome === 'open' && row.admissionStatus === 'lost'
+        ? sessions.filter(isPending).length
+        : 0,
     progress: demoProgress(sessions, demo.plannedDayCount),
     /** All classes recorded ("completed"): the outcome is still open until someone closes it. */
     completed: demo.completedAt !== null,
@@ -254,7 +261,7 @@ export async function listDemos(
   now = new Date(),
 ) {
   const access = await accessScope(db, actor, 'ops:leads:read');
-  const like = query.q ? `%${query.q.replace(/[%_\\]/g, '\\$&')}%` : null;
+  const like = query.q ? containsPattern(query.q) : null;
   const [base, settings] = await Promise.all([
     demoRows(
       db,
@@ -287,6 +294,8 @@ export async function listDemos(
     .map((r) => summarise(r, extras, now, window))
     .filter((r) => sessionsInRange(r.sessions, query.from, query.to));
   const month = istToday(now).slice(0, 7);
+  const decidedIn = (r: (typeof rows)[number], m: string) =>
+    r.demo.outcomeAt !== null && istToday(r.demo.outcomeAt).startsWith(m);
   const all = countByView(rows);
   const kpis = {
     current: all.current,
@@ -294,15 +303,17 @@ export async function listDemos(
     followUpsDue: rows.filter(followUpIs('due')).length,
     /** Where the due follow-ups sit, so the tile can open a tab that shows them. */
     followUpsDueByView: countByView(rows.filter(followUpIs('due'))),
-    conversions: rows.filter(
-      (r) =>
-        r.demo.outcome === 'converted' &&
-        r.demo.outcomeAt &&
-        istToday(r.demo.outcomeAt).startsWith(month),
-    ).length,
+    conversions: rows.filter((r) => r.demo.outcome === 'converted' && decidedIn(r, month)).length,
     pendingDecision: rows.filter((r) => r.admissionStatus === 'admission_pending').length,
+    pendingDecisionByView: countByView(
+      rows.filter((r) => r.admissionStatus === 'admission_pending'),
+    ),
   };
-  const filtered = query.followUp ? rows.filter(followUpIs(query.followUp)) : rows;
+  const filtered = rows.filter(
+    (r) =>
+      (!query.followUp || followUpIs(query.followUp)(r)) &&
+      (!query.outcomeMonth || decidedIn(r, query.outcomeMonth)),
+  );
   const view = query.view ?? 'current';
   const counts = countByView(filtered);
   const inView = filtered
@@ -313,6 +324,10 @@ export async function listDemos(
     view,
     counts,
     kpis,
+    /** Whole filtered set, any view: a person closes these; automatic cancelling is the owner's call. */
+    leftOpen: rows
+      .filter((r) => r.leftOpen > 0)
+      .map((r) => ({ demoId: r.demo.id, studentName: r.studentName, classes: r.leftOpen })),
     month,
     total: inView.length,
     page,

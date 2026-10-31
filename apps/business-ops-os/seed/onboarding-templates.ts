@@ -57,6 +57,19 @@ export const PROPOSED_TEMPLATE = {
   ] satisfies OnboardingTemplateItem[],
 };
 
+/**
+ * A real user for seeds whose rows need one (created_by, updated_by are required): none exists on a
+ * new production database until someone holds this role, so those seeds say they waited.
+ */
+export async function firstOperationsManager(db: Database) {
+  const [manager] = await db
+    .select({ userId: userRoles.userId })
+    .from(userRoles)
+    .where(eq(userRoles.role, 'operations_manager'))
+    .limit(1);
+  return manager?.userId as UserId | undefined;
+}
+
 /** Publish v1 of the proposed template unless the code already has a version. */
 export async function seedOnboardingTemplates(db: Database, actorUserId: UserId) {
   const [existing] = await db
@@ -78,13 +91,10 @@ export const onboardingTemplateSeeds = [
     module: 'ops',
     dependsOn: ['core.users', 'core.programmes'],
     description: 'The proposed onboarding checklist template (owner to confirm)',
-    async run({ db }) {
-      const [manager] = await db
-        .select({ userId: userRoles.userId })
-        .from(userRoles)
-        .where(eq(userRoles.role, 'operations_manager'))
-        .limit(1);
-      if (manager) await seedOnboardingTemplates(db, manager.userId);
+    async run({ db, log }) {
+      const manager = await firstOperationsManager(db);
+      if (manager) await seedOnboardingTemplates(db, manager);
+      else log('ops.onboarding-templates waited: no operations manager yet; run this again later');
     },
   }),
 ];

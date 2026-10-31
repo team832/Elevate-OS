@@ -60,9 +60,8 @@ async function Stages({ user, base }: { user: AuthenticatedUser; base: string })
         rowKey={(s) => s.id}
         empty={<EmptyState title="Lead stages are not set up yet" description={NO_STAGES} />}
         columns={[
-          { key: 'sortOrder', header: 'Order' },
+          { key: 'sortOrder', header: 'Order', numeric: true },
           { key: 'label', header: 'Label' },
-          { key: 'key', header: 'Key (fixed)' },
           { key: 'kind', header: 'Kind', render: (s) => humanise(s.kind) },
           {
             key: 'reason',

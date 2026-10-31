@@ -5,13 +5,15 @@
  * reviews authored, tasks and EOD come from their own sources (server/teacher-ops.ts); there is
  * no HR source and no manager appraisal of teachers.
  */
-import { and, asc, count, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, lt, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { can } from '@elevate/authorization';
 import {
   auditEvents,
   departments,
   opsAppointments as appointments,
+  opsAdmissions,
+  opsDemos,
   opsDemoSessions,
   opsStaffProfiles,
   opsStaffSubjectCapabilities as capabilities,
@@ -20,12 +22,13 @@ import {
   users,
   type Database,
 } from '@elevate/database';
-import { withTransaction } from '@elevate/server-kit';
-import { ConflictError } from '@elevate/shared-contracts';
+import { fetchInternal, withTransaction } from '@elevate/server-kit';
+import { ConflictError, teachingAssignmentsV1Schema } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { addDays, istToday } from '../domain';
 import { BLOCKING_STATUSES } from '../domain/appointments';
+import { academicUrl } from './academic-summary';
 import { listAppointments } from './appointments';
 import type { teacherListQuery, teacherUpdateBody } from './appointments-schemas';
 import { accessScope, assertScope, programmeByCode, type Actor } from './context';
@@ -90,9 +93,12 @@ async function upcomingCounts(db: Database, staffIds: StaffMemberId[], days: num
     db
       .select({ staffId: opsDemoSessions.teacherStaffId, n: count() })
       .from(opsDemoSessions)
+      .innerJoin(opsDemos, eq(opsDemos.id, opsDemoSessions.demoId))
+      .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsDemos.admissionId))
       .where(
         and(
           inArray(opsDemoSessions.teacherStaffId, staffIds),
+          ne(opsAdmissions.status, 'lost'),
           eq(opsDemoSessions.attendance, 'scheduled'),
           gte(opsDemoSessions.startsAt, now),
           lt(opsDemoSessions.startsAt, end),
@@ -106,6 +112,24 @@ async function upcomingCounts(db: Database, staffIds: StaffMemberId[], days: num
 }
 
 /** Directory: staff with at least one subject capability (optionally a matching one). */
+/** Who teaches a programme: their active Academic assignments (no subject capability carries one). */
+async function teachingInProgramme(db: Database, code: string) {
+  const programme = await programmeByCode(db, code);
+  // shortcut: first 100 assignments of the programme; page it when one programme outgrows that.
+  const r = await fetchInternal(
+    academicUrl(
+      `/academic/api/internal/v1/teaching-assignments?programmeCode=${programme.code}&status=active&pageSize=100`,
+    ),
+    teachingAssignmentsV1Schema,
+    { caller: 'ops', timeoutMs: 3000 },
+  );
+  if (r.status !== 'available')
+    throw new ConflictError(
+      'Academic OS could not be reached, so teachers cannot be filtered by programme. Try again in a minute.',
+    );
+  return new Set<string>(r.data.items.map((a) => a.staffId));
+}
+
 export async function listTeachers(
   db: Database,
   actor: Actor,
@@ -114,14 +138,16 @@ export async function listTeachers(
   now = new Date(),
 ) {
   const access = await accessScope(db, actor, 'ops:teachers:read');
-  const programme = filters.programmeCode ? await programmeByCode(db, filters.programmeCode) : null;
+  const taught = filters.programmeCode
+    ? await teachingInProgramme(db, filters.programmeCode)
+    : null;
   const subject = filters.subject?.trim().toLowerCase();
   const caps = await capabilityRows(db);
   const matching = caps.filter(
     (c) =>
       c.staffId &&
       (!subject || c.subject.toLowerCase().includes(subject)) &&
-      (!programme || c.programmeId === programme.id),
+      (!taught || taught.has(c.staffId)),
   );
   let ids = [...new Set(matching.map((c) => c.staffId as StaffMemberId))];
   if (access.scope === 'own') ids = ids.filter((id) => id === access.staffId);

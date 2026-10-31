@@ -7,6 +7,7 @@ export * from './events/define';
 export * from './events/enrolment';
 export * from './events/registry';
 export * from './summaries';
+export * from './phone';
 export * from './modules/marketing';
 export * from './modules/academic';
 export * from './modules/ops';

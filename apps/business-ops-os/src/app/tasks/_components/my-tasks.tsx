@@ -138,7 +138,7 @@ export async function MyDay({
         <li>
           <StatCard
             label="To do"
-            value={todo.length}
+            value={open.total - waiting.total}
             note="Assigned, in progress or changes requested"
           />
         </li>

@@ -4,6 +4,7 @@ import { hrDecisionCounts, staffWorkload } from '../../server/hr-overview';
 import { directoryQuery } from '../../server/hr-schemas';
 import { Frame, gate, load, Section } from '../../ui/frame';
 import { listHref, Pager } from '../../ui/list-controls';
+import { openHref } from '../../ui/open-link';
 import { RecordTable } from '../../ui/record-table';
 import { Segment } from '../../ui/sections';
 
@@ -20,11 +21,13 @@ export default async function HrOverviewPage({ searchParams }: { searchParams: P
     <Frame access={access} active="hr">
       <PageHeader
         title="HR overview"
-        description="What needs a decision today. Every number opens the list it counts."
+        description="What needs a decision today. A number opens the list it counts when your role may read that list."
       />
-      <Section label="Loading decisions…">
-        <Decisions user={access.user} />
-      </Section>
+      <div className="ops-overview-slot">
+        <Section label="Loading decisions…">
+          <Decisions user={access.user} />
+        </Section>
+      </div>
       <Section label="Loading workload…">
         <Workload user={access.user} sp={sp} />
       </Section>
@@ -47,7 +50,7 @@ async function Decisions({ user }: { user: AuthenticatedUser }) {
             <ul className="el-grid ops-kpis">
               {a.counts.map((c) => (
                 <li key={c.key}>
-                  <StatCard label={c.label} value={c.value} href={c.href} />
+                  <StatCard label={c.label} value={c.value} href={openHref(user, c.href)} />
                 </li>
               ))}
             </ul>
@@ -78,7 +81,7 @@ async function Workload({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
         caption={`${w.total} staff member${w.total === 1 ? '' : 's'}`}
         rows={w.rows}
         rowKey={(x) => x.id}
-        rowHref={(x) => listHref('/ops/hr/tasks', { staffId: x.id })}
+        rowHref={(x) => openHref(user, listHref('/ops/hr/tasks', { staffId: x.id }))}
         linkColumn="name"
         columns={[
           { key: 'name', header: 'Name' },

@@ -1,4 +1,5 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { toIsoDate } from '@elevate/shared-types';
 import { eq, inArray } from 'drizzle-orm';
 import {
   authedRequest,
@@ -52,7 +53,7 @@ type Appt = {
 };
 let day = 30;
 /** A fresh IST day per test so slots never collide across tests. */
-const dayOf = (d = day) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10);
+const dayOf = (d = day) => toIsoDate(new Date(Date.now() + d * 86_400_000));
 const at = (hhmm: string, d = day) => new Date(`${dayOf(d)}T${hhmm}:00+05:30`).toISOString();
 const book = (user: StaffUser, over: Record<string, unknown> = {}) =>
   callRoute<Appt>(
@@ -295,5 +296,66 @@ describe('teacher seed (owner-supplied, brief §12)', () => {
       'Sobha',
     ]);
     expect(picker.data?.unassignedSubjects).toEqual([]);
+  });
+
+  it('filters by programme from what links a teacher to one: their Academic assignments (FLA-003)', async () => {
+    const filtered = (code: string) =>
+      callRoute<{ teachers: { fullName: string }[] }>(
+        teachers,
+        authedRequest(counsellor, `/ops/api/v1/teachers?programmeCode=${code}`),
+      );
+    const all = await callRoute<{ teachers: { id: string; fullName: string }[] }>(
+      teachers,
+      authedRequest(counsellor, '/ops/api/v1/teachers'),
+    );
+    const [one] = all.data!.teachers;
+    const asked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        asked.push(String(url));
+        return Response.json({
+          data: {
+            contract: 'academic.teaching_assignments',
+            version: 1,
+            generatedAt: new Date().toISOString(),
+            total: 1,
+            page: 1,
+            pageSize: 100,
+            items: [
+              {
+                assignmentId: crypto.randomUUID(),
+                staffId: one!.id,
+                teacherName: one!.fullName,
+                courseName: 'CLAT',
+                subjectName: 'Quant',
+                classLevel: null,
+                batchCode: 'SAMPLE-A',
+                academicYear: null,
+                branchName: null,
+                startDate: null,
+                endDate: null,
+                role: 'primary',
+                status: 'active',
+              },
+            ],
+          },
+        });
+      }),
+    );
+    const ok = await filtered('CLAT');
+    expect(ok.data!.teachers.map((t) => t.fullName)).toEqual([one!.fullName]);
+    expect(asked[0]).toContain('programmeCode=CLAT');
+    expect((await filtered('NOPE_NOT_REAL')).status).toBe(400);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('fetch failed');
+      }),
+    );
+    const down = await filtered('CLAT');
+    expect(down.status).toBe(409);
+    expect(down.error?.message).toMatch(/could not be reached/);
+    vi.unstubAllGlobals();
   });
 });

@@ -9,6 +9,7 @@ import {
   EmptyState,
   MetricStrip,
   PageHeader,
+  fmtDay,
 } from '@elevate/shared-ui';
 import { addDays, isIsoDate, type IsoDate } from '@elevate/shared-types';
 import { assignmentOptions, listBatches, teacherProfile, todayIst, UNAVAILABILITY_LABEL } from '../../../server';
@@ -55,7 +56,7 @@ export default async function TeacherPage({
   if (!data.ok)
     return (
       <AcademicShell access={access} active="teachers">
-        <LoadError error={data.error} />
+        <LoadError level={1} error={data.error} />
       </AcademicShell>
     );
   const p = data.data;
@@ -91,7 +92,7 @@ export default async function TeacherPage({
     <AcademicShell access={access} active="teachers">
       <PageHeader
         title={p.staff.name}
-        description={`${p.staff.title ?? 'Teacher'} · figures for ${from} to ${p.window.to}. Operational hours, not payroll.`}
+        description={`${p.staff.title ?? 'Teacher'} · figures for ${fmtDay(from)} to ${fmtDay(p.window.to)}. Operational hours, not payroll.`}
       />
       <div className="el-stack">
         <form method="get" className="el-inline-form">
@@ -102,7 +103,7 @@ export default async function TeacherPage({
           </Button>
         </form>
         <MetricStrip
-          label={`Teaching time ${from} to ${p.window.to}`}
+          label={`Teaching time ${fmtDay(from)} to ${fmtDay(p.window.to)}`}
           items={hours.map(([label, minutes, definition]) => ({
             label,
             metric: metric.ok(minutes, { definition, window, unit: 'minutes' }),
@@ -116,7 +117,7 @@ export default async function TeacherPage({
           <AssignmentTable rows={p.assignments} today={today} empty="No assignments" />
           {forms ? forms.ok ? <AssignmentForms staffId={staffId} rows={p.assignments} options={forms.data.options} batches={forms.data.batches} today={today} /> : <LoadError error={forms.error} /> : null}
         </Card>
-        <Card title="Classes" description={`${from} to ${p.window.to}`}>
+        <Card title="Classes" description={`${fmtDay(from)} to ${fmtDay(p.window.to)}`}>
           <DataTable
             compact
             rows={p.sessions}
@@ -129,7 +130,7 @@ export default async function TeacherPage({
                 render: (s) => (
                   <a href={MODULE_PATHS.attendance(s.id)}>
                     <strong>
-                      {s.date} {s.startTime}
+                      {fmtDay(s.date)} {s.startTime}
                     </strong>
                   </a>
                 ),
@@ -154,7 +155,7 @@ export default async function TeacherPage({
             rowKey={(u) => u.id}
             empty={<EmptyState title="No availability records" />}
             columns={[
-              { key: 'dates', header: 'Dates', render: (u) => `${u.fromDate} to ${u.toDate}` },
+              { key: 'dates', header: 'Dates', render: (u) => `${fmtDay(u.fromDate)} to ${fmtDay(u.toDate)}` },
               { key: 'reason', header: 'Reason', render: (u) => u.reason },
               {
                 key: 'state',

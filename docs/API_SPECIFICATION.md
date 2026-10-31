@@ -80,3 +80,9 @@ All JSON; errors are the standard envelope. Nobody may change their own roles or
 | GET | `/academic/api/internal/v1/summary?from=&to=` | `AcademicDeliverySummaryV1` | ops, platform |
 
 Status: **Proposed** until the owning module implements and tests them.
+
+## Added 31 Oct 2026
+- **Workspace gate:** every signed-in route under `/ops`, `/academic` or `/marketing` answers 403 "Your roles do not include this workspace." to a non-member, whatever permission they hold (D-113).
+- **Signed-out browser GET:** a `defineRoute` GET with `Accept: text/html` (a notice, a PDF, an export) answers 303 to `<zone>/login?next=…`; a JSON request still gets 401. Proxies set `x-return-search` so the query survives.
+- **Pagination:** the `?limit&cursor` form in §1 is not universal. Of 180 GET handlers, 2 take limit and cursor, 1 limit only, 25 page and pageSize, the rest none, and 52 lists answer a bare array (CHECK-API).
+- **Known:** an unknown API path answers HTML 404 and a wrong method an empty 405 (API-011, Low, left).

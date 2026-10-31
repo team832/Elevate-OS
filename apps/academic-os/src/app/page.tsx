@@ -1,6 +1,7 @@
 import { can, scopeFor } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, PageHeader } from '@elevate/shared-ui';
+import { LINK_LOGIN_HELP } from '@elevate/shared-contracts';
+import { Alert, fmtDay, PageHeader } from '@elevate/shared-ui';
 import { addDays, type IsoDate } from '@elevate/shared-types';
 import { DueWork, listMyMeetings, myReports, taskDaySummary } from '@elevate/business-ops-os/work';
 import {
@@ -90,7 +91,7 @@ export default async function HomePage() {
     <AcademicShell access={access} active="home">
       <PageHeader
         title={day ? 'My day' : 'Academic overview'}
-        description={`Today is ${today} (IST). Every count names its dates; missing is never zero and planned is never delivered.`}
+        description={`Today is ${fmtDay(today)} (IST).`}
       />
       <div className="el-stack">
         <DueWork user={user} base={MODULE_PATHS.home} />
@@ -101,8 +102,8 @@ export default async function HomePage() {
             <TeacherHome day={day.data} tiles={work} />
           ) : (
             <Alert tone="info" title="No staff record">
-              Your sign-in is not linked to a staff record, so no classes can be shown. Ask an
-              academic coordinator.
+              Your sign-in is not linked to a staff record, so no classes can be shown.{' '}
+              {LINK_LOGIN_HELP}
             </Alert>
           )
         ) : null}

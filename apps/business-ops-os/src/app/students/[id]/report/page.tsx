@@ -2,7 +2,7 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { Alert, ButtonLink, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import { addDays, istToday } from '../../../../domain';
 import { DOCUMENT_STATE_LABELS } from '../../../../domain/admission-form';
-import { formatPaise } from '../../../../domain/fees';
+import { feeStatementLines } from '../../../../domain/fee-statement';
 import {
   REPORT_HEADINGS,
   REPORT_KIND_LABELS,
@@ -27,16 +27,6 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Student report' };
 
 /** Print: only the report body, black on white, every table ruled; tokens stay untouched. */
-const PRINT_CSS = `@media print {
-  .el-sidebar, .el-topbar, .el-skip-link, .ops-no-print, details { display: none !important; }
-  .el-shell-body, .el-main { margin: 0 !important; padding: 0 !important; }
-  body, .el-main, .el-main * { background: #fff !important; color: #000 !important; box-shadow: none !important; border-color: #777 !important; }
-  .el-card, .el-table-wrap, .ops-detail, .el-badge { border: 1px solid #777 !important; }
-  .el-table th, .el-table td, .ops-detail th, .ops-detail td { border: 1px solid #777 !important; }
-  .el-card, tr { break-inside: avoid; }
-  a { text-decoration: none !important; }
-}`;
-
 const SECTION_LABELS: Record<(typeof REPORT_SECTIONS)[number], string> = {
   overview: 'Overview (internal report: with status history)',
   kyc: 'KYC and student details (internal report; needs private-data access)',
@@ -61,14 +51,15 @@ export default async function StudentReportPage({
   const access = await gate('ops:student_reports:generate', `/ops/students/${id}/report`);
   return (
     <Frame access={access} active="students">
-      <Section label="Loading report…">
-        {exportKey ? (
-          <Report user={access.user} id={id} exportKey={exportKey} />
-        ) : (
-          <Generate user={access.user} id={id} />
-        )}
-      </Section>
-      <style>{PRINT_CSS}</style>
+      <div className="ops-report-print">
+        <Section label="Loading report…">
+          {exportKey ? (
+            <Report user={access.user} id={id} exportKey={exportKey} />
+          ) : (
+            <Generate user={access.user} id={id} />
+          )}
+        </Section>
+      </div>
     </Frame>
   );
 }
@@ -95,7 +86,7 @@ async function Generate({ user, id }: { user: AuthenticatedUser; id: string }) {
       required: true,
       defaultValue: kinds[0],
       options: kinds.map((a) => ({ value: a, label: REPORT_KIND_LABELS[a] })),
-      hint: `PTM: as little as possible, in affirmative words, never KYC or guardians. Internal: KYC, student details, every score and review. Kinds offered come from the setting “${r.data.audiences.label}” (${humanise(r.data.audiences.decisionState)}).`,
+      hint: `PTM: as little as possible, in affirmative words, never KYC or guardians. Internal: KYC, student details, every score and review. Kinds offered come from the setting “${r.data.audiences.label}”.`,
       section: 'Kind',
     },
     {
@@ -484,14 +475,7 @@ function Snapshot({ s }: { s: NonNullable<Awaited<ReturnType<typeof getStudentRe
       {s.fees ? (
         <Segment title="Fee statement" description={s.fees.disclaimer} flush>
           <DetailTable
-            rows={[
-              { label: 'Amount due', value: formatPaise(s.fees.duePaise) },
-              { label: 'Received (net)', value: formatPaise(s.fees.netReceivedPaise) },
-              {
-                label: 'Balance',
-                value: `${formatPaise(s.fees.balancePaise)} (${s.fees.balance})`,
-              },
-            ]}
+            rows={feeStatementLines(s.fees).map(([label, value]) => ({ label, value }))}
           />
         </Segment>
       ) : null}

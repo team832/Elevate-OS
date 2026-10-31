@@ -4,7 +4,7 @@
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { scopeFor } from '@elevate/authorization';
-import { EmptyState, Tabs } from '@elevate/shared-ui';
+import { EmptyState, Tabs, ListEmpty } from '@elevate/shared-ui';
 import { isIsoDate } from '../../../domain/dates';
 import { TASK_PRIORITIES, TASK_STATUSES, taskStatusLabel } from '../../../domain/staff-tasks';
 import { listTasks } from '../../../server/staff-tasks';
@@ -160,14 +160,14 @@ export async function AllTasks({
           rowKey={(t) => t.id}
           rowHref={(t) => listHref(BASE, sp, { open: t.id })}
           empty={
-            <EmptyState
-              title={view === 'ack' ? 'Every task is acknowledged' : 'No tasks match'}
-              description={
-                view === 'ack'
-                  ? 'Assigned work shows here until its owner acknowledges it.'
-                  : 'Clear a filter, or log a task on My day.'
-              }
-            />
+            view === 'ack' ? (
+              <EmptyState
+                title="No task is waiting for acknowledgement"
+                description="Assigned work shows here until its owner acknowledges it."
+              />
+            ) : (
+              <ListEmpty noun="tasks" params={sp} first="Log a task on My day." />
+            )
           }
           columns={[
             { key: 'title', header: 'Task' },

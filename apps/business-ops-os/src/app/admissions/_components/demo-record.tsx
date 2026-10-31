@@ -188,11 +188,13 @@ function Overview({ d, user, options, level }: DemoTabProps) {
               value: (
                 <>
                   <Badge value={d.demo.outcome} />{' '}
-                  {open
-                    ? d.completed
-                      ? 'Completed: every class recorded, outcome not decided yet (this does not enrol).'
-                      : `${humanise(d.view)} demo`
-                    : ''}
+                  {d.leftOpen
+                    ? `The case was closed as lost; ${d.leftOpen} of its classes are still scheduled. Close this demo to release them.`
+                    : open
+                      ? d.completed
+                        ? 'Completed: every class recorded, outcome not decided yet (this does not enrol).'
+                        : `${humanise(d.view)} demo`
+                      : ''}
                 </>
               ),
             },

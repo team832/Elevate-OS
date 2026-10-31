@@ -1,6 +1,13 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { ButtonLink, EmptyState, PageHeader, StatusBadge, Tabs } from '@elevate/shared-ui';
+import {
+  ButtonLink,
+  EmptyState,
+  PageHeader,
+  StatusBadge,
+  Tabs,
+  hasFilter,
+} from '@elevate/shared-ui';
 import { listTests, testOptions } from '../../server/assessments';
 import { testListQuery } from '../../server/assessments-schemas';
 import { Unavailable } from '../../ui/cross-module';
@@ -165,7 +172,9 @@ async function TestsList({ user, sp }: { user: AuthenticatedUser; sp: Params }) 
               empty={
                 <EmptyState
                   title="No tests in this list"
-                  description="Clear a filter, or schedule a test to start."
+                  description={
+                    hasFilter(sp) ? 'Change or clear the filters.' : 'Schedule a test to start.'
+                  }
                 />
               }
               columns={[

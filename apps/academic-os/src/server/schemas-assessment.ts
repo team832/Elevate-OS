@@ -17,6 +17,8 @@ export const marksBody = z
             manualScore: z.union([z.string().trim().max(20), z.number()]).transform(String).optional(),
             /** The attempt version the marker opened (0 = no attempt yet); a mismatch is a conflict. */
             version: z.int().min(0),
+            /** A coordinator's reason for changing a verified or final roster mark (RVC-007). */
+            reason: z.string().trim().min(3).max(500).optional(),
           })
           .strict(),
       )

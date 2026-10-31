@@ -18,7 +18,7 @@ import { POST as reviseRoute } from '../../src/app/api/v1/reviews/[id]/revise/ro
 import { POST as withdrawRoute } from '../../src/app/api/v1/reviews/[id]/withdraw/route';
 import { GET as studentReviewsRoute } from '../../src/app/api/v1/students/[id]/reviews/route';
 import { GET as internalRoute } from '../../src/app/api/internal/v1/reviews/route';
-import { createSessions, createStudent, enrolManually } from '../../src/server';
+import { createSessions, createStudent, enrolManually, reviewTarget, rosterReviewLinks } from '../../src/server';
 import { actor, staffFor, users, world, type Users, type World } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -75,6 +75,22 @@ describe('teacher reviews (owner answer 1, brief §13)', () => {
     reviewId = draft.data!.id;
     const audit = await ctx.db.select().from(auditEvents).where(and(eq(auditEvents.entityId, reviewId), eq(auditEvents.action, 'teacher_review.draft_saved')));
     expect(audit).toHaveLength(1);
+  });
+
+  it('a class roster offers "Write review" only where it opens (RVA-003, RVC-012)', async () => {
+    await staffFor(ctx.db, u.coordinator2);
+    const noStaff = await createTestUser(ctx.db, { roles: ['academic_coordinator'] });
+    const { sessions } = await createSessions(ctx.db, actor(u.coordinator), [{ batchId: w.batch.id, teacherStaffId: w.teacherStaff, sessionType: 'teaching', date: '2026-09-21', startTime: '09:00', durationMinutes: 75 }]);
+    const sessionId = sessions[0]!.id;
+    for (const [who, enrolled, demo] of [[u.teacher, true, true], [u.coordinator2, false, true], [noStaff, false, false]] as const) {
+      const links = await rosterReviewLinks(ctx.db, actor(who), sessionId);
+      expect([links.enrolled(student), links.demo]).toEqual([enrolled, demo]);
+      const opens = reviewTarget(ctx.db, actor(who), { studentId: student, sessionId });
+      if (enrolled) await expect(opens).resolves.toMatchObject({ demo: false });
+      else await expect(opens).rejects.toThrow(/staff member|class you taught/);
+    }
+    const left = await createStudent(ctx.db, actor(u.coordinator), { fullName: 'Sample Unplaced Student' });
+    expect((await rosterReviewLinks(ctx.db, actor(u.teacher), sessionId)).enrolled(left.id)).toBe(false);
   });
 
   it('drafts are visible only to their author (test 13)', async () => {

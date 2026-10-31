@@ -8,19 +8,26 @@
  * ever merged automatically — merges are a separate, audited review.
  */
 import { useRouter } from 'next/navigation';
-import { useRef, useState, type FormEvent } from 'react';
-import { groupSections, toBody, type FieldSpec } from './action-form';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  FormAlert,
+  groupSections,
+  missingError,
+  missingRequired,
+  signInHref,
+  toBody,
+  type FieldSpec,
+} from './action-form';
+import { UNREACHABLE } from './pdf-download';
 import { FormSection } from './sections';
 
-interface Match {
-  leadId: string;
-  code: string;
-  level: 'exact' | 'possible';
-  signals: string[];
-  accessible: boolean;
-  studentName: string | null;
-  ownerName: string | null;
-}
+type ApiError = { code: string; message: string; details?: unknown };
+type Issue = { path?: (string | number)[]; message: string };
+
+type Match = { level: 'exact' | 'possible' } & (
+  | { accessible: true; leadId: string; code: string; signals: string[]; studentName: string | null }
+  | { accessible: false }
+);
 
 export function LeadCreateForm({
   fields,
@@ -36,23 +43,41 @@ export function LeadCreateForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [matches, setMatches] = useState<Match[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const alertRef = useRef<HTMLDivElement>(null);
+  // A refusal is read at once: focus moves to it, at the top of the form, whatever was scrolled.
+  useEffect(() => alertRef.current?.focus(), [error, matches]);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function submit(acknowledge: boolean) {
     if (!formRef.current) return;
+    const data = new FormData(formRef.current);
+    const blank = missingRequired(fields, data);
+    if (blank.length) {
+      setMatches(null);
+      setError(missingError(blank));
+      return;
+    }
     setBusy(true);
     setMessage(null);
-    const body = toBody(fields, new FormData(formRef.current));
+    setError(null);
+    const body = toBody(fields, data);
     if (acknowledge) body.acknowledgeDuplicates = { reason };
     const res = await fetch(`${base}/api/v1/leads`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
-    });
+    }).catch(() => null);
+    if (!res) {
+      setBusy(false);
+      setMatches(null);
+      setError({ code: 'NETWORK', message: UNREACHABLE });
+      return;
+    }
     const json = (await res.json().catch(() => ({}))) as {
       data?: { lead: { id: string }; duplicates: Match[] };
-      error?: { code: string; message: string; details?: unknown };
+      error?: ApiError;
     };
     setBusy(false);
     if (res.status === 409 && json.error?.details && typeof json.error.details === 'object') {
@@ -61,10 +86,8 @@ export function LeadCreateForm({
       return;
     }
     if (!res.ok || !json.data) {
-      const details = Array.isArray(json.error?.details)
-        ? (json.error?.details as { message: string }[]).map((d) => d.message).join(' ')
-        : '';
-      setMessage(`${json.error?.message ?? 'Could not save.'} ${details}`.trim());
+      setMatches(null);
+      setError(json.error ?? { code: 'INTERNAL', message: `Could not save (${res.status}).` });
       return;
     }
     // Next adds the basePath itself (D-022).
@@ -76,74 +99,45 @@ export function LeadCreateForm({
     void submit(false);
   }
 
+  const issues: Issue[] = Array.isArray(error?.details) ? error.details : [];
+  const idFor = (name: string) => `lead-${name}`;
+  const fieldFor = (i: Issue) => {
+    const f = fields.find((x) => x.name === i.path?.join('.'));
+    return f && { id: idFor(f.name), label: f.label };
+  };
+
   return (
     <form ref={formRef} onSubmit={onSubmit} className="el-stack" noValidate>
-      {groupSections(fields).map((g) => (
-        <FormSection key={g.title ?? 'lead'} title={g.title ?? 'Lead'}>
-          {g.fields.map((f) => {
-            const id = `lead-${f.name}`;
-            return (
-              <div
-                key={f.name}
-                className={f.type === 'textarea' ? 'el-field el-field-wide' : 'el-field'}
-              >
-                <label htmlFor={id}>
-                  {f.label}
-                  {f.required ? ' *' : ''}
-                </label>
-                {f.type === 'select' ? (
-                  <select
-                    id={id}
-                    name={f.name}
-                    className="el-select"
-                    defaultValue={f.defaultValue ?? ''}
-                  >
-                    {!f.required ? <option value="">—</option> : null}
-                    {f.options?.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : f.type === 'textarea' ? (
-                  <textarea id={id} name={f.name} className="el-textarea" rows={2} />
-                ) : (
-                  <input
-                    id={id}
-                    name={f.name}
-                    className="el-input"
-                    type={f.type ?? 'text'}
-                    defaultValue={f.defaultValue}
-                  />
-                )}
-                {f.hint ? <p className="el-field-hint">{f.hint}</p> : null}
-              </div>
-            );
-          })}
-        </FormSection>
-      ))}
+      {error ? (
+        <FormAlert
+          ref={alertRef}
+          error={error}
+          issues={issues}
+          fieldFor={fieldFor}
+          signIn={signInHref(`${base}/api/v1/leads`)}
+        />
+      ) : null}
       {matches ? (
-        <div className="el-alert el-tone-warning" role="alert">
+        <div className="el-alert el-tone-warning" role="alert" tabIndex={-1} ref={alertRef}>
           <p className="el-alert-title">
             Possible existing contact — nothing has been saved or merged.
           </p>
           <p>{message}</p>
           <ul>
             {matches.map((m) => (
-              <li key={m.leadId}>
+              <li key={m.accessible ? m.leadId : m.level}>
                 <strong>{m.level === 'exact' ? 'Existing contact' : 'Possible duplicate'}</strong>{' '}
                 {m.accessible ? (
-                  <a href={`${base}/leads/${m.leadId}`}>
-                    {m.code}
-                    {m.studentName ? ` — ${m.studentName}` : ''}
-                  </a>
+                  <>
+                    <a href={`${base}/leads/${m.leadId}`}>
+                      {m.code}
+                      {m.studentName ? ` — ${m.studentName}` : ''}
+                    </a>{' '}
+                    · matched on {m.signals.join(', ').replace(/_/g, ' ')}
+                  </>
                 ) : (
-                  <span>
-                    {m.code} (owned by {m.ownerName ?? 'another counsellor'}; ask an operations
-                    manager)
-                  </span>
-                )}{' '}
-                · matched on {m.signals.join(', ').replace(/_/g, ' ')}
+                  <span>on a lead you cannot open. Ask an operations manager.</span>
+                )}
               </li>
             ))}
           </ul>
@@ -169,12 +163,66 @@ export function LeadCreateForm({
             Save anyway (flag for merge review)
           </button>
         </div>
-      ) : message ? (
-        <div className="el-alert el-tone-danger" role="alert">
-          {message}
-        </div>
       ) : null}
-      <div className="ops-form-footer">
+      {groupSections(fields).map((g) => (
+        <FormSection key={g.title ?? 'lead'} title={g.title ?? 'Lead'}>
+          {g.fields.map((f) => {
+            const id = idFor(f.name);
+            const fieldError = issues.find((i) => i.path?.join('.') === f.name)?.message;
+            const a11y = {
+              'aria-invalid': Boolean(fieldError) || undefined,
+              'aria-describedby': fieldError ? `${id}-error` : undefined,
+            };
+            return (
+              <div
+                key={f.name}
+                className={f.type === 'textarea' ? 'el-field el-field-wide' : 'el-field'}
+              >
+                <label htmlFor={id}>
+                  {f.label}
+                  {f.required ? ' *' : ''}
+                </label>
+                {f.type === 'select' ? (
+                  <select
+                    id={id}
+                    name={f.name}
+                    className="el-select"
+                    defaultValue={f.defaultValue ?? ''}
+                    {...a11y}
+                  >
+                    {!f.required || !f.defaultValue ? (
+                      <option value="">{f.required ? 'Choose…' : '—'}</option>
+                    ) : null}
+                    {f.options?.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : f.type === 'textarea' ? (
+                  <textarea id={id} name={f.name} className="el-textarea" rows={2} {...a11y} />
+                ) : (
+                  <input
+                    id={id}
+                    name={f.name}
+                    className="el-input"
+                    type={f.type ?? 'text'}
+                    defaultValue={f.defaultValue}
+                    {...a11y}
+                  />
+                )}
+                {f.hint ? <p className="el-field-hint">{f.hint}</p> : null}
+                {fieldError ? (
+                  <p id={`${id}-error`} className="el-field-error">
+                    {fieldError}
+                  </p>
+                ) : null}
+              </div>
+            );
+          })}
+        </FormSection>
+      ))}
+      <div className="ops-form-footer el-glass">
         {cancelHref ? <a href={cancelHref}>Cancel</a> : null}
         <button type="submit" className="el-button el-button-primary" disabled={busy}>
           {busy ? 'Saving…' : 'Create lead'}

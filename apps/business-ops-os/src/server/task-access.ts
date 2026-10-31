@@ -141,7 +141,7 @@ export function visibleFilter(a: TaskAccess, staffId?: string) {
           sql`exists (select 1 from ${opsTaskCollaborators} where ${opsTaskCollaborators.taskId} = ${tasks.id} and ${opsTaskCollaborators.staffId} = ${me})`,
         ),
       )
-    : undefined;
+    : sql`false`; // and() drops undefined: no staff record must mean nothing, not everything
   return and(owner, or(assigner, and(sql`${tasks.status} <> 'draft'`, reader)));
 }
 

@@ -4,6 +4,7 @@
  * provider is simulated (never "sent"), participant privacy, 401/403/400. Fictional data only.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
+import { toIsoDate } from '@elevate/shared-types';
 import { eq } from 'drizzle-orm';
 import {
   opsAppointmentParticipants,
@@ -58,9 +59,7 @@ type Event = {
 
 let day = 40;
 const at = (d: number, hhmm = '17:00') =>
-  new Date(
-    `${new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10)}T${hhmm}:00+05:30`,
-  ).toISOString();
+  new Date(`${toIsoDate(new Date(Date.now() + d * 86_400_000))}T${hhmm}:00+05:30`).toISOString();
 const req = (user: { token: string }, json: unknown, method = 'POST') =>
   authedRequest(user, '/ops/api/v1/x', { method, json });
 const schedule = (user: { token: string }, over: Record<string, unknown> = {}) => {

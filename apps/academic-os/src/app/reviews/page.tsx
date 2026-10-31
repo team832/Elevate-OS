@@ -1,7 +1,15 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { ButtonLink, Card, DataTable, EmptyState, PageHeader, Subnav } from '@elevate/shared-ui';
+import {
+  ButtonLink,
+  Card,
+  DataTable,
+  EmptyState,
+  PageHeader,
+  Subnav,
+  fmtDay,
+} from '@elevate/shared-ui';
 import { listReviews } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { reviewsQuery } from '../../server/schemas-teaching';
@@ -28,7 +36,7 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Prom
   const parsed = reviewsQuery.safeParse(Object.fromEntries(given));
   const query = parsed.success ? parsed.data : {};
   const data = await load(() => listReviews(getDb(), actorFor(access.user), query));
-  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError level={1} error={data.error} /></AcademicShell>;
   const qs = new URLSearchParams(given).toString();
   const current = `${MODULE_PATHS.reviews}${qs ? `?${qs}` : ''}`;
   const pendingStudent = query.academicStudentId && !data.data.some((r) => r.status === 'submitted');
@@ -36,7 +44,7 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Prom
     <AcademicShell access={access} active="reviews">
       <PageHeader
         title="Student reviews"
-        description="Structured feedback on students from their teachers. Submitted reviews are shared with coordinators and authorised Business Ops staff; drafts stay with their author."
+        description="Structured feedback on students from their teachers. Submitted reviews are shared with coordinators and authorised Business Operations staff; drafts stay with their author."
         actions={can(access.user, 'academic:reviews:write') ? <ButtonLink href={MODULE_PATHS.newReview} variant="primary">Write a review</ButtonLink> : null}
         tabs={<Subnav label="Review lists" items={TABS.map(([q, text]) => [`${MODULE_PATHS.reviews}${q}`, text] as const)} current={current} />}
       />
@@ -45,6 +53,7 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Prom
         <DataTable compact
           rows={data.data}
           rowKey={(r) => r.id}
+          sampleOf={(r) => r.isSample}
           empty={<EmptyState title="No reviews here" description="Write a review from a class roster or with “Write a review”. Reviews of students outside your current classes are not listed." />}
           columns={[
             { key: 'student', header: 'Student', render: (r) => <a href={MODULE_PATHS.review(r.id)}>{r.studentName}</a> },
@@ -52,7 +61,7 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Prom
             { key: 'author', header: 'Teacher', render: (r) => r.authorName },
             { key: 'status', header: 'Status', render: (r) => <><StateBadge state={r.status} /> v{r.version}</> },
             { key: 'when', header: 'Submitted', render: (r) => fmtDateTime(r.submittedAt) },
-            { key: 'follow', header: 'Follow up on', render: (r) => r.followUpOn ?? '—' },
+            { key: 'follow', header: 'Follow up on', render: (r) => fmtDay(r.followUpOn) },
           ]}
         />
       </Card>

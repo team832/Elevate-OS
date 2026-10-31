@@ -1,7 +1,19 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, Button, Card, DataTable, EmptyState, Field, PageHeader, Select, TextInput } from '@elevate/shared-ui';
+import {
+  Alert,
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  Field,
+  PageHeader,
+  Select,
+  TextInput,
+  fmtDay,
+  ListEmpty,
+} from '@elevate/shared-ui';
 import { addDays, type IsoDate } from '@elevate/shared-types';
 import { getLogExceptions, listBatches, listClassRecords, listSessions, listStaff, todayIst } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
@@ -66,7 +78,7 @@ async function Body({ access, params }: { access: PageAccess; params: Params }) 
               rowKey={(s) => s.id}
               empty={<EmptyState title="No classes in the last 14 days" description="Classes you teach appear here once they are on the timetable." />}
               columns={[
-                { key: 'when', header: 'Class', render: (s) => `${s.date} ${s.startTime} · ${s.batchCode}` },
+                { key: 'when', header: 'Class', render: (s) => `${fmtDay(s.date)} ${s.startTime} · ${s.batchCode}` },
                 { key: 'planned', header: 'Planned topic', render: (s) => s.chapterTitle ?? 'None planned' },
                 { key: 'delivered', header: 'Delivery', render: (s) => (s.status === 'held' ? <StateBadge state="held" /> : 'Not marked delivered') },
                 { key: 'log', header: 'Log', render: (s) => (logState(s.id) ? <StateBadge state={logState(s.id)} /> : 'Not written') },
@@ -75,13 +87,13 @@ async function Body({ access, params }: { access: PageAccess; params: Params }) 
             />
           </Card>
         ) : null}
-        <Card title={`Delivered without a submitted log (${exceptions.missingLogs.length})`} description={`${exceptions.window.from} to ${exceptions.window.to}. Drafts do not count as submitted.`}>
+        <Card title={`Delivered without a submitted log (${exceptions.missingLogs.length})`} description={`${fmtDay(exceptions.window.from)} to ${fmtDay(exceptions.window.to)}. Drafts do not count as submitted.`}>
           <DataTable compact
             rows={exceptions.missingLogs}
             rowKey={(s) => s.id}
-            empty={<EmptyState title="Every delivered class has a submitted log" description="Nothing to chase in this period." />}
+            empty={<EmptyState title="No delivered class is waiting for a log" description="A delivered class appears here until its log is submitted." />}
             columns={[
-              { key: 'when', header: 'Class', render: (s) => <a href={MODULE_PATHS.teachingLog(s.id)}>{`${s.date} ${s.startTime} · ${s.batchCode}`}</a> },
+              { key: 'when', header: 'Class', render: (s) => <a href={MODULE_PATHS.teachingLog(s.id)}>{`${fmtDay(s.date)} ${s.startTime} · ${s.batchCode}`}</a> },
               { key: 'teacher', header: 'Teacher', render: (s) => s.teacherName ?? 'No teacher' },
               { key: 'planned', header: 'Planned topic', render: (s) => s.chapterTitle ?? 'None planned' },
             ]}
@@ -91,9 +103,9 @@ async function Body({ access, params }: { access: PageAccess; params: Params }) 
           <DataTable compact
             rows={exceptions.discrepancies}
             rowKey={(s) => s.id}
-            empty={<EmptyState title="No differences between plan and logs" description="Logged chapters match the planned ones in this period." />}
+            empty={<EmptyState title="No differences between plan and logs" description="A delivered class appears here if its submitted log names other chapters than the plan." />}
             columns={[
-              { key: 'when', header: 'Class', render: (s) => `${s.date} ${s.startTime} · ${s.batchCode}` },
+              { key: 'when', header: 'Class', render: (s) => `${fmtDay(s.date)} ${s.startTime} · ${s.batchCode}` },
               { key: 'teacher', header: 'Teacher', render: (s) => s.teacherName ?? 'No teacher' },
               { key: 'planned', header: 'Planned', render: (s) => s.chapterCode },
               { key: 'logged', header: 'Logged', render: (s) => s.loggedChapters.join(', ') },
@@ -130,9 +142,9 @@ async function Body({ access, params }: { access: PageAccess; params: Params }) 
           <DataTable compact
             rows={records}
             rowKey={(r) => r.id}
-            empty={<EmptyState title="No logs match" description="Change the filters, or wait for teachers to submit logs for delivered classes." />}
+            empty={<ListEmpty noun="logs" params={params} first="Teachers submit a log after each delivered class; they appear here." />}
             columns={[
-              { key: 'session', header: 'Class', render: (r) => <a href={MODULE_PATHS.teachingLog(r.sessionId)}>{`${r.sessionDate} ${r.sessionStart} · ${r.batchCode}`}</a> },
+              { key: 'session', header: 'Class', render: (r) => <a href={MODULE_PATHS.teachingLog(r.sessionId)}>{`${fmtDay(r.sessionDate)} ${r.sessionStart} · ${r.batchCode}`}</a> },
               { key: 'chapter', header: 'Topic', render: (r) => `${r.chapterCode} ${r.chapterTitle}` },
               { key: 'teacher', header: 'Teacher', render: (r) => r.teacherName },
               { key: 'type', header: 'Teaching type', render: (r) => `${activityLabel(r.activity)} · ${r.completion}` },

@@ -1,6 +1,15 @@
 /** The teacher's "My day" (brief §16): next class, students, work lists and assessment counts, each linked to its detail. */
 import type { ReactNode } from 'react';
-import { ButtonLink, Card, DataTable, EmptyState, StatCard, StatusBadge } from '@elevate/shared-ui';
+import {
+  ButtonLink,
+  Card,
+  DataTable,
+  EmptyState,
+  fmtDay,
+  StatCard,
+  StatusBadge,
+  StoredLink,
+} from '@elevate/shared-ui';
 import type { SessionListRow, teacherDay } from '../server';
 import { MODULE_PATHS } from '../server/paths';
 import { AssignmentTable } from './assignments';
@@ -32,7 +41,7 @@ function ClassList({
       {rows.map((s) => (
         <li key={s.id}>
           <span className="acd-day-time">
-            {showDate ? `${s.date} ` : ''}
+            {showDate ? `${fmtDay(s.date)} ` : ''}
             {s.startTime}
           </span>
           <span>
@@ -51,7 +60,7 @@ function NextClass({ next, today }: { next: SessionListRow | null; today: string
     return (
       <EmptyState
         title="No more classes today"
-        description="Your later classes are on the timetable."
+        description="Any later classes you have are on the timetable."
         action={<ButtonLink href={MODULE_PATHS.timetable}>Open timetable</ButtonLink>}
       />
     );
@@ -59,7 +68,7 @@ function NextClass({ next, today }: { next: SessionListRow | null; today: string
     <section className="acd-next" aria-labelledby="acd-next-label">
       <div>
         <p id="acd-next-label" className="el-stat-label">
-          Next class, {today}
+          Next class, {fmtDay(today)}
         </p>
         <p className="acd-next-time">{next.startTime}</p>
       </div>
@@ -75,7 +84,7 @@ function NextClass({ next, today }: { next: SessionListRow | null; today: string
         <ButtonLink variant="primary" href={MODULE_PATHS.attendance(next.id)}>
           Open class
         </ButtonLink>
-        {next.onlineLink ? <a href={next.onlineLink}>Class link</a> : null}
+        {next.onlineLink ? <StoredLink href={next.onlineLink}>Class link</StoredLink> : null}
       </div>
     </section>
   );
@@ -159,8 +168,12 @@ function AssessmentList({
             render: (a) =>
               `${a.title} · ${a.batchCode}${a.subjectName ? ` · ${a.subjectName}` : ''}`,
           },
-          { key: 'date', header: 'Date', render: (a) => a.scheduledDate ?? 'Not recorded' },
-          ...(count ? [{ key: 'n', header: 'Scores', render: count }] : []),
+          {
+            key: 'date',
+            header: 'Date',
+            render: (a) => (a.scheduledDate ? fmtDay(a.scheduledDate) : 'Not recorded'),
+          },
+          ...(count ? [{ key: 'n', header: 'Scores', numeric: true, render: count }] : []),
           {
             key: 'go',
             header: '',
@@ -184,7 +197,7 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
   return (
     <div className="el-stack">
       <NextClass next={day.next} today={day.today} />
-      <Card title="Today's other classes" description={day.today}>
+      <Card title="Today's other classes" description={fmtDay(day.today)}>
         <ClassList
           rows={day.todays}
           showDate={false}
@@ -195,7 +208,7 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
       </Card>
       <Card
         title={`Your subjects and batches (${day.assignments.length})`}
-        description={`Assignments open on ${day.today}, and pending ones recorded without a batch. A pending assignment opens no students until a coordinator sets its batch.`}
+        description={`Assignments open on ${fmtDay(day.today)}, and pending ones recorded without a batch. A pending assignment opens no students until a coordinator sets its batch.`}
       >
         <AssignmentTable
           rows={day.assignments}
@@ -233,7 +246,7 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
       >
         <ClassList
           rows={day.attendanceMissing}
-          empty="Every ended class has a mark for each placed student"
+          empty="No ended class is waiting for marks"
           action={(s) => ({ href: MODULE_PATHS.attendance(s.id), label: 'Record attendance' })}
         />
         {day.attendanceMissing.length ? (
@@ -278,7 +291,7 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
             {
               key: 'class',
               header: 'Class',
-              render: (d) => `${d.session.date} ${d.session.startTime} · ${d.session.batchCode}`,
+              render: (d) => `${fmtDay(d.session.date)} ${d.session.startTime} · ${d.session.batchCode}`,
             },
             {
               key: 'go',
@@ -319,7 +332,7 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
       />
       <Card
         title={`Support follow-ups (${day.support.filter((s) => s.due).length} due)`}
-        description={`Open support actions assigned to you; "due" means a due date on or before ${day.today}.`}
+        description={`Open support actions assigned to you; "due" means a due date on or before ${fmtDay(day.today)}.`}
       >
         <DataTable
           compact
@@ -341,7 +354,7 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
               render: (s) =>
                 s.dueDate ? (
                   <>
-                    {s.dueDate} {s.due ? <StatusBadge tone="warning">Due</StatusBadge> : null}
+                    {fmtDay(s.dueDate)} {s.due ? <StatusBadge tone="warning">Due</StatusBadge> : null}
                   </>
                 ) : (
                   'No due date'

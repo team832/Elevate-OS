@@ -7,9 +7,12 @@
  * OA-2 (23 Oct 2026): "Soma" (CLAT Current Affairs, name unverified) and "Soma Tiwari" (Economics)
  * are two different people — never merge them. Satish's subjects per brief 23 Oct 2026 §4.
  * `retired` subjects are removed on re-seed (replaced by the owner's newer answer). Idempotent.
+ * A person's edit wins: a profile is written once, a teacher someone has changed keeps the subjects
+ * they set, and a teacher renamed on screen is not created again under the old name (SCR-002).
  */
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import {
+  auditEvents,
   opsStaffProfiles,
   opsStaffSubjectCapabilities,
   staffMembers,
@@ -88,12 +91,17 @@ export const OWNER_SUPPLIED_STAFF = [
 /** Was a subject with no teacher (brief §12) until Nikunj Bindal took Accounts (D-047). */
 const NOW_ASSIGNED = 'Accountancy / CA';
 
+/** The audit trail is the only record that a person changed a staff record on screen. */
+const auditFinds = async (db: Database, action: string, match: SQL) =>
+  (await db.select({ id: auditEvents.id }).from(auditEvents).where(and(eq(auditEvents.action, action), match)).limit(1)).length > 0;
+
 export async function seedTeachers(db: Database) {
   for (const t of OWNER_SUPPLIED_STAFF) {
     const [existing] = await db
       .select({ id: staffMembers.id })
       .from(staffMembers)
       .where(eq(staffMembers.fullName, t.fullName));
+    if (!existing && (await auditFinds(db, 'staff.updated', sql`${auditEvents.before}->>'fullName' = ${t.fullName}`))) continue;
     const id =
       existing?.id ??
       (
@@ -109,7 +117,8 @@ export async function seedTeachers(db: Database) {
     await db
       .insert(opsStaffProfiles)
       .values({ staffId: id, ...profile })
-      .onConflictDoUpdate({ target: opsStaffProfiles.staffId, set: profile });
+      .onConflictDoNothing({ target: opsStaffProfiles.staffId });
+    if (existing && (await auditFinds(db, 'teacher.updated', eq(auditEvents.entityId, id)))) continue;
     for (const subject of t.subjects) {
       const [cap] = await db
         .select({ id: opsStaffSubjectCapabilities.id })

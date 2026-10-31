@@ -13,7 +13,7 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import { withTransaction } from '@elevate/server-kit';
+import { withTransaction, containsPattern } from '@elevate/server-kit';
 import { ForbiddenError, InvalidStateTransitionError } from '@elevate/shared-contracts';
 import type { DepartmentId, StaffMemberId } from '@elevate/shared-types';
 import { isImportedReport } from '../domain/eod';
@@ -225,7 +225,7 @@ export async function eodInbox(
         : self
           ? eq(reports.submittedToStaffId, self)
           : sql`false`,
-    q.q ? ilike(staffMembers.fullName, `%${q.q.replace(/[%_\\]/g, '\\$&')}%`) : undefined,
+    q.q ? ilike(staffMembers.fullName, containsPattern(q.q)) : undefined,
     q.from ? gte(reports.periodEnd, q.from) : undefined,
     q.to ? lte(reports.periodStart, q.to) : undefined,
     q.kind ? eq(reports.periodKind, q.kind) : undefined,

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { ButtonLink, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { ButtonLink, EmptyState, PageHeader, fmtDaysIn } from '@elevate/shared-ui';
 import { ValidationError } from '@elevate/shared-contracts';
 import { getDb } from '@elevate/database';
 import type { PageAccess } from '@elevate/server-kit/next';
@@ -30,7 +30,7 @@ async function Body({ access, kind, params }: { access: PageAccess; kind: string
   const data = await load(async () => buildReport(getDb(), actorFor(access.user), reportParams.parse({ kind }).kind as ReportKind, reportQuery.parse(Object.fromEntries(query))));
   if (!data.ok && data.error instanceof ValidationError)
     // Opened without its filters (e.g. a bookmarked link): send the user to the filter form, not an error.
-    return <EmptyState title="Choose what to report on" description={data.error.message} action={<ButtonLink href={MODULE_PATHS.reports}>Open the reports page</ButtonLink>} />;
+    return <EmptyState level={1} title="Choose what to report on" description={data.error.message} action={<ButtonLink href={MODULE_PATHS.reports}>Open the reports page</ButtonLink>} />;
   if (!data.ok) return <LoadError error={data.error} />;
   const r = data.data;
   query.set('format', 'csv');
@@ -56,12 +56,12 @@ async function Body({ access, kind, params }: { access: PageAccess; kind: string
         {r.rows.length === 0 ? (
           <p>No rows for these filters. Change the dates or the batch on the reports page.</p>
         ) : (
-          <div className="el-table-wrap">
+          <div className="el-table-wrap" role="region" aria-label={r.title} tabIndex={0}>
             <table className="el-table report-table">
               <thead>
                 <tr>
-                  {r.columns.map((c) => (
-                    <th key={c} scope="col">
+                  {r.columns.map((c, j) => (
+                    <th key={c} scope="col" className={typeof r.rows[0]?.[j] === 'number' ? 'el-num' : undefined}>
                       {c}
                     </th>
                   ))}
@@ -72,7 +72,7 @@ async function Body({ access, kind, params }: { access: PageAccess; kind: string
                   <tr key={i}>
                     {row.map((cell, j) => (
                       <td key={j} className={typeof cell === 'number' ? 'el-num' : undefined}>
-                        {cell === null || cell === undefined ? 'Not recorded' : String(cell).replace(/_/g, ' ')}
+                        {cell === null || cell === undefined ? 'Not recorded' : fmtDaysIn(String(cell).replace(/_/g, ' '))}
                       </td>
                     ))}
                   </tr>

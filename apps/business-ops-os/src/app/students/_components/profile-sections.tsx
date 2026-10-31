@@ -7,6 +7,7 @@
  * in a FormModal opened by `?action=`. Server components.
  */
 import type { ReactNode } from 'react';
+import type { Principal } from '@elevate/authorization';
 import { OPS_EXIT_MATERIAL_STATUSES } from '@elevate/database';
 import {
   Alert,
@@ -23,6 +24,7 @@ import type { getStudent } from '../../../server/students';
 import { ActionForm, type FieldSpec } from '../../../ui/action-form';
 import { fmtDate, fmtDateTime, fmtPaise, humanise, statusTone } from '../../../ui/format';
 import { listHref } from '../../../ui/list-controls';
+import { OpenLink, openHref } from '../../../ui/open-link';
 import { FormModal } from '../../../ui/record-modal';
 import { RecordTable } from '../../../ui/record-table';
 import { DetailTable, Segment, Timeline } from '../../../ui/sections';
@@ -60,7 +62,7 @@ const StatusCell = ({ status, label }: { status: string; label: string }) => (
 );
 
 /** Admission facts (A Overview): number, status, programmes, dates, counsellor, hold/exit. */
-export function AdmissionFacts({ d }: { d: Profile }) {
+export function AdmissionFacts({ d, user }: { d: Profile; user: Principal }) {
   const a = d.admission;
   const exit = d.exitRecords.find((x) => !x.reactivatedAt);
   const converted = d.demos.filter((x) => x.outcome === 'converted');
@@ -88,9 +90,9 @@ export function AdmissionFacts({ d }: { d: Profile }) {
           label: 'Demo',
           value: converted.length
             ? converted.map((x) => (
-                <a key={x.id} href={`/ops/admissions/demos/${x.id}`}>
+                <OpenLink key={x.id} user={user} href={`/ops/admissions/demos/${x.id}`}>
                   Converted demo ({fmtDateTime(x.outcomeAt)})
-                </a>
+                </OpenLink>
               ))
             : d.demos.length
               ? `${d.demos.length} demo(s), none converted`
@@ -118,7 +120,7 @@ export function AdmissionFacts({ d }: { d: Profile }) {
 }
 
 /** B Programmes and batches: one admission case per programme. */
-export function ProgrammesTable({ d }: { d: Profile }) {
+export function ProgrammesTable({ d, user }: { d: Profile; user: Principal }) {
   return (
     <RecordTable
       caption="One admission case per programme"
@@ -129,7 +131,11 @@ export function ProgrammesTable({ d }: { d: Profile }) {
         {
           key: 'case',
           header: 'Admission',
-          render: (c) => <a href={`/ops/admissions/${c.id}`}>{c.admissionNumber ?? c.code}</a>,
+          render: (c) => (
+            <OpenLink user={user} href={`/ops/admissions/${c.id}`}>
+              {c.admissionNumber ?? c.code}
+            </OpenLink>
+          ),
         },
         {
           key: 'status',
@@ -179,6 +185,14 @@ export function HistoryTable({ d }: { d: Profile }) {
   );
 }
 
+const ACADEMIC_CLOSURE = {
+  not_sent: 'Not told: no Academic enrolment is linked to this case',
+  waiting: 'Not told yet: an operations manager sends it from Overview, Background jobs',
+  processed: 'Enrolment ended',
+  failed: 'Could not end the enrolment yet; it retries on the next run',
+  dead: 'Could not end the enrolment: a coordinator ends it by hand under Enrolments',
+};
+
 /** Exit records (newest first): one DetailTable each. */
 export function ExitRecords({ d, level = 2 }: { d: Profile } & Level) {
   if (!d.exitRecords.length) return null;
@@ -208,6 +222,7 @@ export function ExitRecords({ d, level = 2 }: { d: Profile } & Level) {
                   : `${fmtPaise(x.balancePaise)} owed`,
           },
           { label: 'Materials', value: humanise(x.materialStatus) },
+          { label: 'Academic OS', value: ACADEMIC_CLOSURE[x.academicClosure] },
           { label: 'Closing notes', value: x.closingNotes ?? 'None' },
           { label: 'Reactivation allowed', value: x.reactivationAllowed ? 'Yes' : 'No' },
           x.reactivatedAt && { label: 'Reactivated', value: fmtDateTime(x.reactivatedAt) },
@@ -333,11 +348,12 @@ export function StudentJourney({ d }: { d: Profile }) {
 }
 
 /** The one next step for the header, from the server's own flags (nothing when none applies). */
-export function PrimaryAction({ d, base }: { d: Profile; base: string }) {
+export function PrimaryAction({ d, base, user }: { d: Profile; base: string; user: Principal }) {
+  const admission = openHref(user, `/ops/admissions/${d.admission.id}`);
   const [label, href] = d.actions.resume
     ? ['Resume classes', listHref(base, { action: 'resume' })]
-    : d.handoff.retry.allowed
-      ? ['Request enrolment again', `/ops/admissions/${d.admission.id}`]
+    : d.handoff.retry.allowed && admission
+      ? ['Request enrolment again', admission]
       : d.actions.report
         ? ['Student report', `/ops/students/${d.identity?.id}/report`]
         : [];

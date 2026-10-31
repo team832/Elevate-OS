@@ -7,9 +7,10 @@ import type { Database } from '../client';
  * core + module seeds and runs them in dependency order, each in its own
  * transaction.
  *
- * Seeds MUST be idempotent (upsert on natural keys such as `code`/`email`) and
- * MUST use fictional people only (D-016). Planned counts are never seeded as
- * delivered work.
+ * Seeds MUST be idempotent and MUST use fictional people only (D-016). Planned
+ * counts are never seeded as delivered work. A seed inserts a real row once, on its
+ * natural key (`code`), and never changes it afterwards: a person may have edited
+ * it (SCR-002). Only sample rows may be refreshed.
  */
 export interface SeedContext {
   /** A transaction scoped to this seed. */

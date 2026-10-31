@@ -20,6 +20,12 @@ if (!isLocalDatabaseUrl(env.DATABASE_URL) || env.DATABASE_URL.startsWith('pglite
 const SCHEMAS = `('core','marketing','academic','ops')`;
 const live = new pg.Client({ connectionString: env.DATABASE_URL });
 await live.connect();
+const { rows: tracking } = await live.query(`select to_regclass('drizzle.__drizzle_migrations') t`);
+if (!tracking[0].t) {
+  console.error('db:check — no migrations applied on this database. Run: npm run db:migrate');
+  await live.end();
+  process.exit(1);
+}
 await live.query('BEGIN READ ONLY');
 const code = await createTestDb();
 type Rows = Record<string, unknown>[];

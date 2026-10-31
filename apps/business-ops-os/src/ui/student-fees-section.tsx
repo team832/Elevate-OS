@@ -104,17 +104,20 @@ export async function StudentFeesSection({
   return (
     <>
       {view.plans.length ? (
-        view.plans.map((p) => (
-          <Agreement
-            key={p.plan.id}
-            p={p}
-            record={record}
-            approver={approver}
-            requester={requester}
-            level={level}
-            today={today}
-          />
-        ))
+        // A proposed change comes after the agreement whose figures stand.
+        view.plans
+          .toSorted((a, b) => Number(a.proposedChange) - Number(b.proposedChange))
+          .map((p) => (
+            <Agreement
+              key={p.plan.id}
+              p={p}
+              record={record}
+              approver={approver}
+              requester={requester}
+              level={level}
+              today={today}
+            />
+          ))
       ) : (
         <Segment title={`${TITLE}: annual agreement`} level={level} description={view.disclaimer}>
           <EmptyState
@@ -146,14 +149,16 @@ function History({ view, record, level }: { view: View; record: boolean; level: 
       description="Append-only: a wrong entry is reversed by a linked entry, never edited."
     >
       <div className="el-stack">
-        {view.plans.map((p) => (
-          <Ledger
-            key={p.plan.id}
-            caption={`Tuition, ${p.plan.academicYear ?? 'year not recorded'}`}
-            rows={p.ledger}
-            record={record}
-          />
-        ))}
+        {view.plans
+          .filter((p) => !p.proposedChange)
+          .map((p) => (
+            <Ledger
+              key={p.plan.id}
+              caption={`Tuition, ${p.plan.academicYear ?? 'year not recorded'}`}
+              rows={p.ledger}
+              record={record}
+            />
+          ))}
         {view.otherCharges.length ? (
           <Ledger
             caption="Registration, demo and other entries"
@@ -163,7 +168,7 @@ function History({ view, record, level }: { view: View; record: boolean; level: 
           />
         ) : null}
         {view.plans
-          .filter((p) => p.versions.length > 1)
+          .filter((p) => p.versions.length > 1 && !p.proposedChange)
           .map((p) => (
             <RecordTable
               key={p.plan.id}
@@ -216,6 +221,8 @@ function Agreement({
   const { plan, totals, reconciliation, nextDue: next } = p;
   const base = `${API}/fee-plans/${plan.id}`;
   const change = record && (plan.status === 'draft' || (plan.status === 'active' && approver));
+  // Closed only because a newer version was drafted: it stands until that one is activated.
+  const replaced = p.inForce && plan.status !== 'active';
   const pending = p.pendingApproval;
   const decide =
     pending && approver && approver !== plan.createdBy && approver !== pending.requestedBy;
@@ -227,14 +234,31 @@ function Agreement({
       meta={
         <>
           <StatusBadge tone={TONE[p.status]}>{INSTALMENT_STATUS_LABELS[p.status]}</StatusBadge>{' '}
-          <StatusBadge tone={plan.status === 'active' ? 'success' : 'neutral'}>
-            {plan.status === 'draft' ? 'Draft' : plan.status === 'active' ? 'Active' : 'Closed'}
+          <StatusBadge tone={p.inForce ? 'success' : 'neutral'}>
+            {p.proposedChange
+              ? 'Proposed change'
+              : plan.status === 'draft'
+                ? 'Draft'
+                : p.inForce
+                  ? 'Active'
+                  : 'Closed'}
           </StatusBadge>{' '}
           Version {plan.version}
         </>
       }
     >
       <div className="el-stack">
+        {replaced ? (
+          <Alert title="These figures stand">
+            A proposed change to this agreement is not in force until it is approved and activated.
+            Record money here meanwhile.
+          </Alert>
+        ) : null}
+        {p.proposedChange ? (
+          <p className="el-field-hint">
+            Not in force. These are the figures if this change is approved and activated.
+          </p>
+        ) : null}
         <ul className="el-grid ops-kpis" aria-label="Fee figures">
           <li>
             <StatCard label="Annual tuition" value={fmtPaise(totals.totalPaise)} />
@@ -247,13 +271,28 @@ function Agreement({
             />
           </li>
           <li>
-            <StatCard label="Outstanding" value={fmtPaise(totals.outstandingPaise)} />
+            <StatCard
+              label={plan.status === 'draft' ? 'Outstanding if activated' : 'Outstanding'}
+              value={fmtPaise(totals.outstandingPaise)}
+            />
           </li>
           <li>
             <StatCard
               label="Next due"
-              value={next ? fmtPaise(next.remainingPaise) : 'Nothing due'}
-              note={next ? dueText(next.instalment.dueDate, next.remainingPaise, today) : undefined}
+              value={
+                next
+                  ? fmtPaise(next.remainingPaise)
+                  : p.aboveInstalmentsPaise > 0
+                    ? fmtPaise(p.aboveInstalmentsPaise)
+                    : 'Nothing due'
+              }
+              note={
+                next
+                  ? dueText(next.instalment.dueDate, next.remainingPaise, today)
+                  : p.aboveInstalmentsPaise > 0
+                    ? 'Debit adjustments, no due date'
+                    : undefined
+              }
             />
           </li>
           {totals.creditPaise > 0 ? (
@@ -325,6 +364,10 @@ function Agreement({
               label: 'Discounts, waivers and adjustments (apart from tuition)',
               value: fmtPaise(totals.reductionsPaise),
             },
+            p.aboveInstalmentsPaise > 0 && {
+              label: 'Owed above the instalments (debit adjustments)',
+              value: fmtPaise(p.aboveInstalmentsPaise),
+            },
             { label: 'Refunded', value: fmtPaise(totals.refundedPaise) },
             { label: 'Pricing reference', value: plan.pricingReference ?? 'Not given' },
             {
@@ -371,7 +414,7 @@ function Agreement({
             />
           </details>
         ) : null}
-        {record && plan.status === 'active' ? (
+        {record && p.inForce ? (
           <EntryForm
             action={`${base}/entries`}
             p={p}
@@ -591,6 +634,10 @@ function EntryForm({ action, p, reduce }: { action: string; p: PlanView; reduce:
           ? 'Record a payment, discount, waiver or adjustment'
           : 'Record a payment or adjustment'}
       </summary>
+      <p className="el-field-hint">
+        Still owed on this agreement: {fmtPaise(p.totals.outstandingPaise)}. A larger payment is
+        accepted and shows as credit; a larger discount, waiver or credit is refused.
+      </p>
       <ActionForm
         action={action}
         submitLabel="Record entry"

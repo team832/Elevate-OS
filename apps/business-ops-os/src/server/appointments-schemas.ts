@@ -3,7 +3,12 @@
  * Documented in docs/parts/admissions-meetings.md.
  */
 import { z } from 'zod';
-import { isoDateSchema, isoDateTimeSchema, programmeCodeSchema } from '@elevate/shared-contracts';
+import {
+  httpUrlSchema,
+  isoDateSchema,
+  isoDateTimeSchema,
+  programmeCodeSchema,
+} from '@elevate/shared-contracts';
 import { OPS_STUDENT_STAGES } from '@elevate/database';
 import {
   APPOINTMENT_MODES,
@@ -69,7 +74,7 @@ export type EventAudience = z.output<typeof eventAudience>;
 const eventFields = {
   type: z.enum(GROUP_APPOINTMENT_TYPES),
   title: required(200),
-  onlineLink: z.url().max(500).nullish(),
+  onlineLink: httpUrlSchema.max(500).nullish(),
   /** Room or place (offline). */
   location: optText(200),
   capacity: z.int().min(1).max(10_000).nullish(),

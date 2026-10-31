@@ -24,6 +24,7 @@ import {
   ValidationError,
   withTransaction,
 } from '@elevate/server-kit';
+import { httpUrlSchema } from '@elevate/shared-contracts';
 import { toIsoDate } from '@elevate/shared-types';
 import {
   OPTIMISATION_CHECK_KEYS,
@@ -42,7 +43,7 @@ const optText = (max: number) => text(max).nullable().optional();
 const date = z.iso.date().nullable().optional();
 
 const itemFields = {
-  pageUrl: z.url({ protocol: /^https?$/, error: 'Enter a full http(s) page address.' }).max(500),
+  pageUrl: httpUrlSchema.max(500),
   topic: text(200),
   targetQuery: optText(300),
   categoryKey: z.string().regex(/^[a-z][a-z0-9_]{1,30}$/),

@@ -32,7 +32,7 @@ export default async function AdmissionsReportPage({
     <Frame access={access} active="reports">
       <PageHeader
         title="Admissions report"
-        description="Funnel, demo conversion and students, then pipeline figures, from the admissions records in Business Ops. Dates are Asia/Kolkata. A rate with nothing to divide by shows “Not enough data”, never 0 %. No targets are set yet (an owner decision)."
+        description="Funnel, demo conversion and students, then pipeline figures, from the admissions records in Business Operations. Dates are Asia/Kolkata. A rate with nothing to divide by shows “Not enough data”, never 0 %. No targets are set yet (an owner decision)."
       />
       <PeriodFilter base={BASE} at={at} />
       <Section label="Loading the funnel…">
@@ -68,7 +68,7 @@ async function FunnelSections({ user, period }: { user: AuthenticatedUser; perio
           title="Demos by outcome"
           description={`${c.total} demo(s) with a class in the period.${ownNote}`}
         >
-          <OutcomeDonut report={d} />
+          <OutcomeDonut report={d} user={user} />
         </Segment>
         <Segment
           title="Conversion by programme"
@@ -78,6 +78,7 @@ async function FunnelSections({ user, period }: { user: AuthenticatedUser; perio
             title="By programme"
             rows={c.byProgramme}
             window={d.window}
+            user={user}
             filter={(g) => (g.programmeCode ? { programme: g.programmeCode } : null)}
           />
         </Segment>
@@ -89,6 +90,7 @@ async function FunnelSections({ user, period }: { user: AuthenticatedUser; perio
             title="By counsellor"
             rows={c.byCounsellor}
             window={d.window}
+            user={user}
             filter={(g) => (g.counsellorId ? { counsellor: g.counsellorId } : null)}
           />
         </Segment>
@@ -98,6 +100,7 @@ async function FunnelSections({ user, period }: { user: AuthenticatedUser; perio
               title="By first source and campaign"
               rows={c.bySource}
               window={d.window}
+              user={user}
             />
           ) : (
             <p className="el-field-hint">
@@ -112,7 +115,7 @@ async function FunnelSections({ user, period }: { user: AuthenticatedUser; perio
         description="Admitted students with a student record; a student with several admissions counts once. Not limited to the period."
       >
         <div className="ops-panels">
-          <StudentSummary students={d.students} />
+          <StudentSummary students={d.students} user={user} />
         </div>
       </Segment>
     </>
@@ -158,7 +161,7 @@ async function PipelineSections({ user, period }: { user: AuthenticatedUser; per
       <div className="ops-panels">
         <Segment
           title="Lead → admission conversion"
-          description={`Cohort ${fmtDate(d.cohort.from)} – ${fmtDate(d.cohort.to)}, ${d.cohort.windowDays}-day window (setting ${d.cohort.setting.decisionState}). Not tied to the period above.`}
+          description={`Cohort ${fmtDate(d.cohort.from)} – ${fmtDate(d.cohort.to)}, ${d.cohort.windowDays}-day window. Not tied to the period above.`}
         >
           <Tiles tiles={[['Lead → admission conversion', k.conversion]]} />
         </Segment>

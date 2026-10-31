@@ -17,6 +17,7 @@ import { myDay, NO_STAFF_RECORD } from '../../server/staff-tasks';
 import { StatCard } from '../../ui/charts';
 import { fmtDateTime, humanise } from '../../ui/format';
 import { load } from '../../ui/frame';
+import { OpenLink } from '../../ui/open-link';
 import { RecordTable } from '../../ui/record-table';
 import { Segment } from '../../ui/sections';
 import { AttendanceCell, FollowUpDone, linkOf } from '../admissions/_components/demo-bits';
@@ -164,7 +165,11 @@ export async function Today({ user }: { user: AuthenticatedUser }) {
         title="Classes and meetings today"
         description="In time order. Record attendance with one tap once a class has started."
         flush
-        actions={<a href="/ops/meetings?view=week">This week's meetings</a>}
+        actions={
+          <OpenLink user={user} href="/ops/meetings?view=week" fallback={null}>
+            This week's meetings
+          </OpenLink>
+        }
       >
         {demosToday === null && meetings === null ? (
           notForRole
@@ -194,7 +199,11 @@ export async function Today({ user }: { user: AuthenticatedUser }) {
         title="Your follow-ups due"
         description="Follow-ups you own that are overdue or due today, oldest first."
         flush
-        actions={<a href="/ops/leads?flag=overdue">Leads with an overdue follow-up</a>}
+        actions={
+          <OpenLink user={user} href="/ops/leads?flag=overdue" fallback={null}>
+            Leads with an overdue follow-up
+          </OpenLink>
+        }
       >
         <Panel r={followUps}>
           {(rows) => (

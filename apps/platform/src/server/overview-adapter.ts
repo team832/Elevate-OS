@@ -19,6 +19,7 @@ import { can, scopeFor, type Permission } from '@elevate/authorization';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { programmes, type Database } from '@elevate/database';
 import { metric, type Metric } from '@elevate/shared-contracts';
+import { toIsoDate } from '@elevate/shared-types';
 import {
   countAdmissionsByStatus,
   countOpenLeads,
@@ -62,12 +63,7 @@ const noAccess = (what: string): { status: 'unavailable'; reason: string } => ({
 // --- dates (Asia/Kolkata calendar days) ---------------------------------------------------------
 
 export function istDate(now: Date, offsetDays = 0): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(now.getTime() + offsetDays * 86_400_000));
+  return toIsoDate(new Date(now.getTime() + offsetDays * 86_400_000));
 }
 
 const dayWindow = (now: Date) => {

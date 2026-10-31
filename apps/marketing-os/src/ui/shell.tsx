@@ -8,6 +8,7 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { can, type Permission, type Principal } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { countUnread } from '@elevate/notifications';
+import { toAppError } from '@elevate/server-kit';
 import { requirePageAccess, workspaceHrefs } from '@elevate/server-kit/next';
 import { isAppError } from '@elevate/shared-contracts';
 import {
@@ -22,6 +23,7 @@ import {
 import { MODULE, modulePath } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
 import { teamWide } from '../server/scope';
+import { SessionGuard } from './session-guard';
 
 type NavEntry = {
   key: string;
@@ -191,7 +193,7 @@ export interface MarketingPageProps {
   /** Omit for a shared Business Ops body, which renders its own PageHeader. */
   title?: string;
   description?: ReactNode;
-  actions?: ReactNode;
+  actions?: ReactNode | ((user: AuthenticatedUser) => ReactNode);
   searchParams?: Record<string, string | string[] | undefined>;
   children: (user: AuthenticatedUser) => ReactNode;
 }
@@ -240,6 +242,7 @@ export async function MarketingPage(props: MarketingPageProps) {
       }
       unreadNotifications={await unreadFor(user)}
     >
+      <SessionGuard check={MODULE_PATHS.sessionApi} signIn={MODULE_PATHS.login} />
       {access.status === 'forbidden' ? (
         <ErrorState
           level={1}
@@ -252,7 +255,7 @@ export async function MarketingPage(props: MarketingPageProps) {
             <PageHeader
               title={props.title}
               description={props.description}
-              actions={props.actions}
+              actions={typeof props.actions === 'function' ? props.actions(user) : props.actions}
               tabs={
                 tabs.length > 1 ? (
                   <Subnav label={props.title} items={tabs} current={currentTab?.[0]} />
@@ -283,12 +286,24 @@ export async function MarketingPage(props: MarketingPageProps) {
  */
 export async function Section({ load }: { load: () => Promise<ReactNode> }) {
   let node: ReactNode = null;
-  let failure: string | null = null;
+  let failure: { title?: string; description: string } | null = null;
   try {
     node = await load();
   } catch (error) {
-    failure = isAppError(error) ? error.message : 'The data could not be loaded.';
+    const known = toAppError(error);
+    failure =
+      isAppError(error) || known.status < 500
+        ? {
+            title:
+              known.status === 404
+                ? 'Not found'
+                : known.status < 500
+                  ? 'Cannot show this'
+                  : undefined,
+            description: known.message,
+          }
+        : { description: 'The data could not be loaded.' };
   }
-  if (failure !== null) return <ErrorState description={failure} />;
+  if (failure) return <ErrorState {...failure} />;
   return <>{node}</>;
 }

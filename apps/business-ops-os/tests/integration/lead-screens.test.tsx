@@ -66,10 +66,19 @@ describe('lead screens', () => {
     expect(pages[1]).toContain('Next follow-up date');
   });
 
+  it.each([
+    ['/ops', '/ops#my-follow-ups'],
+    ['/marketing', '/marketing/follow-ups'],
+  ])('sales calls at %s: "Next steps" points at %s, a page that exists (RVA-001)', async (at, href) => {
+    const out = await html(<SalesCallsBody user={employee} base={at} searchParams={{}} />);
+    expect(out).toContain(`<a href="${href}">Follow-ups</a>`);
+  });
+
   it('stage settings: managers edit, employees only read; the lead offers Change stage', async () => {
     expect(await html(<LeadStagesBody user={manager} base={base} />)).toContain('Add a stage');
     const asEmployee = await html(<LeadStagesBody user={employee} base={base} />);
     expect(asEmployee).toContain('Do not contact');
+    expect(asEmployee).not.toContain('do_not_contact');
     expect(asEmployee).not.toContain('Add a stage');
     expect(
       await html(<LeadBody user={employee} base={base} id={leadId} searchParams={{}} />),

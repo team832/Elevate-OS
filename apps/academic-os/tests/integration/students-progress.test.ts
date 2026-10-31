@@ -93,6 +93,8 @@ describe('progress, catch-up and interventions', () => {
     expect(list.data!.ranked.map((r) => r.task.reason).sort()).toEqual(['absent', 'late_joiner']);
     expect(list.data!.ranked.every((r) => r.explanation.startsWith(`Score ${r.score}`))).toBe(true);
     expect((await callRoute(catchupRoute, authedRequest(u.teacher, `/academic/api/v1/batches/${other.batch.id}/catch-up`), { id: other.batch.id })).status).toBe(404);
+    const unknownBatch = crypto.randomUUID();
+    expect((await callRoute(catchupRoute, authedRequest(u.coordinator, `/academic/api/v1/batches/${unknownBatch}/catch-up`), { id: unknownBatch })).status).toBe(404); // API-004: was 200
     const taskId = list.data!.ranked[0]!.taskId;
     const done = await callRoute<{ status: string; completedAt: string }>(taskRoute, authedRequest(u.coordinator, `/academic/api/v1/catch-up-tasks/${taskId}`, { method: 'PATCH', json: { status: 'done' } }), { id: taskId });
     expect(done.data!.status).toBe('done');

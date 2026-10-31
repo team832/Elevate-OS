@@ -123,7 +123,7 @@ Approved by the owner: `admissions.demo.day_count` (3, D-038), `admissions.numbe
 ## Integration
 - Produces `ops.admission.enrolment_requested` v1 (with `existingStudentId` when known, `coreStudentId` = the admission's core student and `academicYear` from the application — IR-OPS-STU-2 done); consumes `academic.enrolment.confirmed` / `.rejected` v1 (`ops.enrolment-replies`). The `marketing.lead.handed_off` consumer was retired on 22 Oct 2026 (D-075).
 - Reads `GET /academic/api/internal/v1/summary`, `GET /academic/api/internal/v1/students/{id}/summary` (`AcademicStudentSummaryV1`, IR-OPS-STU-1 done), `/reviews` (D-058), `/teachers/{staffId}/activity` and `/demo-attendance` (D-060), and `GET /marketing/api/internal/v1/summary`. Serves `GET /ops/api/internal/v1/demo-sessions?date=` to Academic only (R5). Each Academic read fails to "source unavailable", never to zero; for a demo class Ops knows is linked, counsellor marking and the move to demo attended wait while Academic is unreachable (D-066).
-- Open: `ops.enrolment.closed` v1 so Academic stops attendance after an exit (IR-OPS-EXIT-1); Academic batch end dates (IR-OPS-EXIT-2).
+- `ops.enrolment.closed` v1 stops Academic attendance after an exit since 31 Oct 2026 (IR-OPS-EXIT-1, D-115). Open: a list of students whose batch has ended (IR-OPS-EXIT-2, partly done).
 - Jobs, run by hand until a scheduler exists (IR-OPS-02, IR-OPS-PLT-2): follow-up reminders, enrolment replies, lead intake, and `demo-academic-marks` (re-reads Academic's marks for open demos).
 - Open requests to other owners: `docs/INTEGRATION_REQUESTS.md`.
 
@@ -165,3 +165,12 @@ Recorded: D-032 (HR/Operations removed; superseded in part by D-052 and D-080), 
 - **Switches:** report comments use `ai.features.reportDraft`; the student summary uses the new `ai.features.studentSummary` (defaults to on, so values stored before it still load). Same daily limit and audit rows as the other AI drafts (D-092, D-110).
 - **Not built:** AI on admission documents (form, acknowledgement, ID card). Every field there is personal data (KYC, guardian, address, contacts, qualification) or the owner's fixed declaration and terms, and the pre-print checks are already exact rules (`src/domain/admission-readiness.ts`, document checklist, confirmation check); an AI check would be less reliable than those rules.
 - **Code and tests:** `src/server/ai-report-drafts.ts`, routes `src/app/api/v1/ai/{student-report,teacher-report,student-summary}`, `src/ui/ai-draft.tsx` (`fields` prop; read-only when it fills nothing); `tests/integration/ai-report-drafts.test.ts`, `tests/unit/ai-assist.test.ts`, `progress-report-pdf.test.ts`, `teacher-report.test.ts`.
+
+## Debug pass, 30–31 Oct 2026 (D-112 … D-122; no new grant, migration `0017` only)
+- **Exit reaches Academic** (D-115): event, Background jobs button, name corrections too. A leaver's manager, operations managers and coordinators are told what they held; nothing moves automatically.
+- **One fee statement** (D-114): `src/domain/fee-statement.ts` behind the case page, report, exit balance and `feeSummary`. New refusals are Proposed. Stored figures were not rewritten: `scripts/development/find-stored-fee-figures.sql`, `HANDOFF.md` 11a.
+- **Jobs panel** (D-117): `src/app/_components/jobs-panel.tsx`, on the Overview for `ops:jobs:run`.
+- **Hindi PDFs** (D-118): fonts in `assets/fonts`, `src/server/pdf/document.ts`.
+- **Duplicate matches** shaped by viewer (D-119): `src/server/lead-duplicates.ts`.
+- **Counts:** lead and call tiles counted in SQL (`leadCounts`, `callOutcomeCounts`), search with literal `%`, `_`, `\\` (`packages/server-kit/src/search.ts`). "Approval blocked" and "Conversions this month" links now filter.
+- **Open:** `HANDOFF.md` rows marked "New 31 Oct"; lead sources and programmes have no route; no POST route for fee structure rows (the page says it awaits the owner).

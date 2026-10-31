@@ -1,6 +1,6 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { getDb } from '@elevate/database';
-import { EmptyState, StatusBadge } from '@elevate/shared-ui';
+import { EmptyState, StatusBadge, ListEmpty } from '@elevate/shared-ui';
 import { EOD_STATUSES } from '../../../domain/staff-tasks';
 import { EOD_STATUS_LABELS } from '../../../server/eod-export';
 import { eodInbox, hasInbox } from '../../../server/eod-review';
@@ -79,9 +79,10 @@ async function Inbox({ user, sp, base }: { user: AuthenticatedUser; sp: Params; 
         rowHref={(x) => listHref(BASE, sp, { open: x.id })}
         linkColumn="staffName"
         empty={
-          <EmptyState
-            title="No reports to review"
-            description="Reports appear here when someone who reports to you submits one. Clear a filter to see more."
+          <ListEmpty
+            noun="reports to review"
+            params={sp}
+            first="Reports appear here when someone who reports to you submits one."
           />
         }
         columns={[

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
-import { Card, DataTable, EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { Card, DataTable, EmptyState, fmtDay, PageHeader, StatusBadge } from '@elevate/shared-ui';
 import type { PageAccess } from '@elevate/server-kit/next';
 import { can } from '@elevate/authorization';
 import { assignmentOptions, listBatches, listStaff, listTeachers, todayIst, unavailableOn } from '../../server';
@@ -32,7 +32,7 @@ async function Body({ access }: { access: PageAccess }) {
     : null;
   return (
     <>
-      <PageHeader title="Teachers" description="Staff with a teaching assignment, current or pending. Names come from the staff record; subjects and batches from assignments. Open a teacher to record or change assignments. No ratings or rankings." />
+      <PageHeader title="Teachers" description={`Staff with a teaching assignment, current or pending. Names come from the staff record; subjects and batches from assignments. ${forms ? 'Open a teacher to record or change assignments.' : 'Open a teacher to read their assignments.'} No ratings or rankings.`} />
       {!data.ok ? (
         <LoadError error={data.error} />
       ) : (
@@ -41,13 +41,14 @@ async function Body({ access }: { access: PageAccess }) {
             compact
             rows={data.data.teachers}
             rowKey={(t) => t.staffId}
+            sampleOf={(t) => t.isSample}
             empty={<EmptyState title="No teachers yet" description="Assign a staff member to a subject from the batch page; they appear here." />}
             columns={[
-              { key: 'name', header: 'Teacher', render: (t) => <><a href={MODULE_PATHS.teacher(t.staffId)}><strong>{t.name}</strong></a> {data.data.away.has(t.staffId) ? <StatusBadge tone="warning">Unavailable today (academic record)</StatusBadge> : null}</> },
+              { key: 'name', header: 'Teacher', render: (t) => <><a href={MODULE_PATHS.teacher(t.staffId)}><strong>{t.name}</strong></a> {t.left ? <StatusBadge tone="danger">Left: assign a substitute to their classes</StatusBadge> : null} {data.data.away.has(t.staffId) ? <StatusBadge tone="warning">Unavailable today (academic record)</StatusBadge> : null}</> },
               { key: 'subjects', header: 'Subjects', render: (t) => <>{t.subjects.join(', ') || 'No current assignment'}{t.pendingSubjects.length ? <><br />Pending, no batch yet: {t.pendingSubjects.join(', ')}</> : null}</> },
               { key: 'batches', header: 'Batches', render: (t) => t.batches.join(', ') || '—' },
-              { key: 'today', header: `Classes today (${today})`, numeric: true, render: (t) => t.todayClasses },
-              { key: 'logs', header: 'Logs not submitted', numeric: true, render: (t) => <span title={`Delivered classes ${t.pendingLogsRange.from} to ${t.pendingLogsRange.to}`}>{t.pendingLogs}</span> },
+              { key: 'today', header: `Classes today (${fmtDay(today)})`, numeric: true, render: (t) => t.todayClasses },
+              { key: 'logs', header: 'Logs not submitted', numeric: true, render: (t) => <span title={`Delivered classes ${fmtDay(t.pendingLogsRange.from)} to ${fmtDay(t.pendingLogsRange.to)}`}>{t.pendingLogs}</span> },
             ]}
           />
           <details className="el-explain">

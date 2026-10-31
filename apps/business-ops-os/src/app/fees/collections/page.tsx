@@ -1,5 +1,5 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { PageHeader, SourceBadge, StatusBadge } from '@elevate/shared-ui';
 import {
   FEE_CHARGE_LABELS,
   FEE_KIND_LABELS,
@@ -12,10 +12,12 @@ import { listCollections } from '../../../server/fee-collections';
 import { rangeOf } from '../../../server/overview';
 import { FeesNav } from '../../../ui/admissions-nav';
 import { StatCard } from '../../../ui/charts';
-import { fmtDate, fmtPaise, statusTone } from '../../../ui/format';
+import { fmtDate, fmtPaise, sampleNote, statusTone } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { Pager } from '../../../ui/list-controls';
+import { openHref } from '../../../ui/open-link';
 import { RecordTable } from '../../../ui/record-table';
+import { paymentNote } from '../_components/owing-dialog';
 import { RangeFilter } from '../../_components/range-filter';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +34,7 @@ export default async function CollectionsPage({ searchParams }: { searchParams: 
     <Frame access={access} active="fees">
       <PageHeader
         title="Collections"
-        description="Payments and refunds with a payment date in the period, for the students you may see. To record or correct a payment, open the student's fees."
+        description={`Payments and refunds with a payment date in the period, for the students you may see. ${paymentNote(access.user)}`}
         tabs={<FeesNav current="collections" user={access.user} />}
       />
       <Section label="Loading collections…">
@@ -93,15 +95,19 @@ async function Collections({ user, sp }: { user: AuthenticatedUser; sp: Params }
             )
           : null}
       </ul>
+      {d.collected?.samplePaise ? (
+        <p className="el-field-hint">
+          <SourceBadge source="sample" /> {sampleNote(d.collected.samplePaise)}
+        </p>
+      ) : null}
       <p className="el-field-hint">{MANUAL_FEE_DISCLAIMER}</p>
       <RecordTable
         caption={`${d.total} entr${d.total === 1 ? 'y' : 'ies'}${status ? ` · ${FEE_STATUS_LABELS[status]}` : ''}`}
         rows={d.rows}
         rowKey={(f) => f.id}
-        rowHref={(f) =>
-          f.studentId ? `/ops/students/${f.studentId}?tab=fees` : `/ops/admissions/${f.admissionId}`
-        }
+        rowHref={(f) => openHref(user, f.href) || `/ops/admissions/${f.admissionId}`}
         linkColumn="student"
+        sampleOf={(f) => f.isSample}
         empty="No payment or refund has a payment date in this period."
         columns={[
           { key: 'student', header: 'Student', render: (f) => f.studentName },
@@ -109,8 +115,7 @@ async function Collections({ user, sp }: { user: AuthenticatedUser; sp: Params }
           {
             key: 'kind',
             header: 'Entry',
-            render: (f) =>
-              `${f.kind === 'received' && f.reverses ? 'Reversal' : FEE_KIND_LABELS[f.kind]} · ${FEE_CHARGE_LABELS[f.chargeCategory]}`,
+            render: (f) => `${FEE_KIND_LABELS[f.kind]} · ${FEE_CHARGE_LABELS[f.chargeCategory]}`,
           },
           {
             key: 'amount',
@@ -127,9 +132,12 @@ async function Collections({ user, sp }: { user: AuthenticatedUser; sp: Params }
           {
             key: 'status',
             header: 'Status',
-            render: (f) => (
-              <StatusBadge tone={statusTone(f.status)}>{FEE_STATUS_LABELS[f.status]}</StatusBadge>
-            ),
+            render: (f) =>
+              f.reversed ? (
+                <StatusBadge tone="neutral">Reversed, not counted</StatusBadge>
+              ) : (
+                <StatusBadge tone={statusTone(f.status)}>{FEE_STATUS_LABELS[f.status]}</StatusBadge>
+              ),
           },
         ]}
       />

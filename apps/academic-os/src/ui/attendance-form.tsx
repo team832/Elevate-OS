@@ -91,6 +91,7 @@ export function AttendanceForm({
   const router = useRouter();
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [dirty, setDirty] = useState(false);
+  const [changesSaved, setChangesSaved] = useState(false);
 
   /** Choices that differ from the saved marks. */
   function pending(form: HTMLFormElement) {
@@ -132,6 +133,7 @@ export function AttendanceForm({
     if (!result.ok)
       return setState({ kind: 'error', message: result.message, details: result.details });
     setDirty(false);
+    setChangesSaved(false);
     setState({ kind: 'done', message: `Saved ${marks.length + demoMarks.length} mark(s).` });
     router.refresh();
   }
@@ -178,6 +180,12 @@ export function AttendanceForm({
       onChange={(e) => {
         const p = pending(e.currentTarget);
         setDirty(p.marks.length + p.demoMarks.length > 0);
+        setChangesSaved(
+          p.marks.some((m) => roster.find((r) => r.studentId === m.studentId)?.status) ||
+            p.demoMarks.some(
+              (m) => demos.find((d) => d.attendeeId === m.attendeeId)?.status !== 'not_recorded',
+            ),
+        );
       }}
       className="el-stack"
     >
@@ -275,15 +283,17 @@ export function AttendanceForm({
       {state.kind === 'done' ? <Alert tone="success">{state.message}</Alert> : null}
       {canRecord ? (
         <div className="acd-sticky-actions el-glass">
-          <label className="el-field">
-            Reason for changing a saved mark
-            <input
-              className="el-input"
-              name="reason"
-              maxLength={500}
-              placeholder="e.g. Medical note received"
-            />
-          </label>
+          {changesSaved ? (
+            <label className="el-field">
+              Reason for changing a saved mark
+              <input
+                className="el-input"
+                name="reason"
+                maxLength={500}
+                placeholder="e.g. Medical note received"
+              />
+            </label>
+          ) : null}
           <Button type="submit" disabled={state.kind === 'saving'}>
             {state.kind === 'saving' ? 'Saving…' : 'Save attendance'}
           </Button>
@@ -296,11 +306,15 @@ export function AttendanceForm({
           >
             Mark all remaining present
           </Button>
-          <span id="bulk-hint" className="el-field-hint">
-            {dirty
-              ? 'Save your changes first; the bulk action only fills blank rows.'
-              : 'Fills only students still not recorded.'}
-          </span>
+          {dirty ? (
+            <span id="bulk-hint" className="el-field-hint">
+              Save your changes first; the bulk action only fills blank rows.
+            </span>
+          ) : (
+            <span id="bulk-hint" className="el-field-hint acd-wide-only">
+              Fills only students still not recorded.
+            </span>
+          )}
         </div>
       ) : null}
     </form>

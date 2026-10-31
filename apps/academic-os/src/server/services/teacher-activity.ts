@@ -72,6 +72,10 @@ export async function listTeachers(db: Database, actor: Actor, now = new Date())
     out.push({
       staffId: s.id,
       name: s.fullName,
+      // shortcut: staff carry is_sample on an Ops table this module does not read, so the D-036 name rule marks them; use a flag if core.staff_members ever gets one.
+      isSample: /^Sample /.test(s.fullName),
+      /** HR ended their employment; assignments and classes stay until someone moves them. */
+      left: s.status === 'inactive',
       subjects: [...new Set(mine.map((a) => a.subjectName))],
       batches: [...new Set(mine.map((a) => a.batchCode!))],
       /** Recorded without a batch yet: opens nothing (R9). */

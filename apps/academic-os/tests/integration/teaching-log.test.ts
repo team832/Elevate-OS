@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { academicClassRecords, academicClassSessions, academicSessionTeachers, auditEvents } from '@elevate/database';
+import { academicClassRecords, academicClassSessions, academicSessionTeachers, auditEvents, notifications } from '@elevate/database';
 import { authedRequest, buildRequest, callRoute, setupTestDatabase } from '@elevate/testing';
 import { GET as listRoute, POST as createRoute } from '../../src/app/api/v1/class-records/route';
 import { PATCH as updateRoute } from '../../src/app/api/v1/class-records/[id]/route';
@@ -86,6 +86,9 @@ describe('teaching log: draft → submitted (R12: delivery is separate)', () => 
     expect((await req(u.teacher, { reason: 'x' })).status).toBe(403);
     expect((await req(u.coordinator, {})).status).toBe(400);
     const res = await req(u.coordinator, { reason: 'Minutes look wrong (fictional)' });
+    // Only the log's teacher is told, with the reason and a link to the log (FLB-005).
+    const told = await ctx.db.select().from(notifications).where(eq(notifications.kind, 'class_record.sent_back'));
+    expect(told.map((n) => [n.userId, n.body, n.link])).toEqual([[u.teacher.id, 'Minutes look wrong (fictional)', `/academic/teaching/log/${s.delivered}`]]);
     expect(res.status).toBe(201);
     expect(res.data!.original.state).toBe('superseded');
     expect(res.data!.draft).toMatchObject({ state: 'draft', correctsRecordId: id });

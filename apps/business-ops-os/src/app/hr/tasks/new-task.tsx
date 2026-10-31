@@ -24,7 +24,8 @@ export function newTaskFields(
   everyone: Option[],
   departments: Option[],
   self: string | null,
-  related: Option[],
+  /** null: this role does not read teaching assignments, so the field is not offered. */
+  related: Option[] | null,
 ): FieldSpec[] {
   const B = 'Brief';
   const P = 'People';
@@ -107,16 +108,20 @@ export function newTaskFields(
       hint: 'One item per line.',
       section: W,
     },
-    {
-      name: 'relatedRef',
-      label: 'Related batch or subject',
-      type: 'select',
-      options: related,
-      hint: related.length
-        ? 'From Academic OS teaching assignments; it must be one the assignee teaches.'
-        : 'No teaching assignments could be loaded (Academic OS unavailable or none recorded).',
-      section: L,
-    },
+    ...(related
+      ? [
+          {
+            name: 'relatedRef',
+            label: 'Related batch or subject',
+            type: 'select' as const,
+            options: related,
+            hint: related.length
+              ? 'From Academic OS teaching assignments; it must be one the assignee teaches.'
+              : 'No teaching assignments could be loaded (Academic OS unavailable or none recorded).',
+            section: L,
+          },
+        ]
+      : []),
     {
       name: 'visibility',
       label: 'Who can see it',

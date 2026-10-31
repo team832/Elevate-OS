@@ -31,6 +31,14 @@ describe('checkTimetable — session teachers, unavailability, shared students (
     expect(codes([s({ id: 'a', teacherStaffId: 'T1', date: '2027-04-07' })], { unavailability })).toEqual([]);
   });
 
+  it('a scheduled class under a teacher who has left is a hard conflict; a held class is history and a replaced teacher is free (PPL-006)', () => {
+    const endedTeachers = ['T1'];
+    expect(codes([s({ id: 'a', teacherStaffId: 'T1' })], { endedTeachers })).toEqual(['TEACHER_LEFT']);
+    expect(codes([s({ id: 'a', teacherStaffId: 'T1', status: 'held' })], { endedTeachers })).toEqual([]);
+    expect(codes([s({ id: 'a', teacherStaffId: 'T1', teacherStaffIds: ['T3'] })], { endedTeachers })).toEqual([]);
+    expect(codes([s({ id: 'a', teacherStaffId: 'T2' })], { endedTeachers })).toEqual([]);
+  });
+
   it('a student placed in two batches cannot have both classes at once (placement dates respected)', () => {
     const pair = [s({ id: 'a' }), s({ id: 'b', batchId: 'B2' })];
     const placements = [

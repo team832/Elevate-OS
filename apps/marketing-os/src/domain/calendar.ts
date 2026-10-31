@@ -203,14 +203,15 @@ export function calendarWindow(
   };
 }
 
+const IST_TIME = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
 /** IST `HH:MM` of an instant (a moved card keeps its time of day). */
-export const istTime = (instant: Date) =>
-  new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Kolkata',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(instant);
+export const istTime = (instant: Date) => IST_TIME.format(instant);
 
 /** Form validation issues as one line for the page notice. */
 export const issuesText = (e: {

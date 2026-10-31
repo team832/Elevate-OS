@@ -21,6 +21,7 @@ const SKIP_DIRS = new Set([
   '.next',
   '.git',
   '.data',
+  'marker_env',
   'coverage',
   '.turbo',
   '__pycache__',

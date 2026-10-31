@@ -3,7 +3,8 @@
  * and what still blocks confirmation, and the application of an admission case. KYC is served
  * only with ops:student_private:read, the fee agreement only with ops:fees:read (acceptance 21).
  */
-import { and, asc, count, desc, eq, ilike, isNull, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
+import { containsPattern } from '@elevate/server-kit';
 import { can } from '@elevate/authorization';
 import {
   opsAdmissionApprovals,
@@ -27,9 +28,10 @@ import {
   confirmationTasks,
   type ApplicationSnapshot,
   type ApplicationStatus,
+  UNSIGNED_APPLICATION_STATUSES,
 } from '../domain/applications';
 import { admissionRow, assertAdmissionAccess, namesOf, ownAdmissionFilter } from './admissions';
-import { confirmationCheck } from './applications';
+import { approvalChecks, confirmationCheck } from './applications';
 import type { applicationListQuery } from './applications-schemas';
 import { accessScope, type Actor } from './context';
 import { rowById } from './ops-common';
@@ -56,11 +58,33 @@ export async function listApplications(
     ownAdmissionFilter(access),
     query.programme ? eq(programmes.code, query.programme) : undefined,
   );
+  const blocked = query.blocked
+    ? (
+        await approvalChecks(
+          db,
+          await db
+            .select({ app: opsApplications, admission: opsAdmissions })
+            .from(opsApplications)
+            .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsApplications.admissionId))
+            .innerJoin(opsLeads, eq(opsLeads.id, opsAdmissions.leadId))
+            .leftJoin(programmes, eq(programmes.id, opsAdmissions.programmeId))
+            .where(scope),
+          await loadSettings(db),
+        )
+      )
+        .filter((c) => c.gaps.length > 0)
+        .map((c) => c.id)
+    : null;
   const where = and(
     scope,
-    query.status ? eq(opsApplications.status, query.status) : undefined,
+    blocked ? inArray(opsApplications.id, blocked) : undefined,
+    query.status === 'unsigned'
+      ? inArray(opsApplications.status, [...UNSIGNED_APPLICATION_STATUSES])
+      : query.status
+        ? eq(opsApplications.status, query.status)
+        : undefined,
     q
-      ? or(ilike(students.fullName, `%${q}%`), ilike(opsApplications.reference, `%${q}%`))
+      ? or(ilike(students.fullName, containsPattern(q)), ilike(opsApplications.reference, containsPattern(q)))
       : undefined,
   );
   const base = () =>

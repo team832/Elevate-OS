@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { z } from 'zod';
 import { createLogger, loadEnvKeys, type Logger } from '@elevate/configuration';
 import { getDb, type Database } from '@elevate/database';
@@ -55,10 +55,11 @@ export function getInternalServiceTokens(
   return tokens;
 }
 
+const digest = (s: string) => createHash('sha256').update(s).digest();
+
+/** Both sides hashed first, so the compare never branches on the token's length. */
 function constantTimeEquals(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ab.length === bb.length && timingSafeEqual(ab, bb);
+  return timingSafeEqual(digest(a), digest(b));
 }
 
 /** Returns the calling module or throws UNAUTHENTICATED / FORBIDDEN. */
@@ -246,6 +247,21 @@ const internalHeaders = (caller: ModuleKey, token?: string) => ({
   accept: 'application/json',
 });
 
+const DEV_TIMEOUT_MS = 30_000;
+const isDev = () => process.env.NODE_ENV === 'development';
+
+/** `next dev` compiles and loads a route on demand, seconds on a busy computer: a busy target is not a missing one. Production keeps the caller's fast fail. */
+const timeoutSignal = (ms: number) =>
+  AbortSignal.timeout(isDev() ? Math.max(ms, DEV_TIMEOUT_MS) : ms);
+
+function failureReason(error: unknown) {
+  if (error instanceof Error && error.name === 'TimeoutError') return 'Timed out';
+  const refused = (error as { cause?: { code?: string } }).cause?.code === 'ECONNREFUSED';
+  return isDev() && refused
+    ? 'That workspace is not running: start it with npm run dev:all'
+    : 'Could not reach the source';
+}
+
 /**
  * Fetch another zone's internal endpoint and validate it against a contract.
  * NEVER throws and never substitutes zeros: any failure (network, timeout,
@@ -261,22 +277,18 @@ export async function fetchInternal<S extends z.ZodType>(
   try {
     const response = await (options.fetchImpl ?? fetch)(url, {
       headers: internalHeaders(options.caller, options.token),
-      signal: AbortSignal.timeout(options.timeoutMs ?? 5000),
+      signal: timeoutSignal(options.timeoutMs ?? 5000),
       cache: 'no-store',
     });
     if (!response.ok)
       return { status: 'unavailable', reason: `HTTP ${response.status}`, fetchedAt };
-    const json = (await response.json()) as { data?: unknown };
-    const parsed = schema.safeParse(json.data);
+    const json = (await response.json().catch(() => null)) as { data?: unknown } | null;
+    const parsed = schema.safeParse(json?.data);
     if (!parsed.success)
       return { status: 'unavailable', reason: 'Response did not match the contract', fetchedAt };
     return { status: 'available', data: parsed.data, fetchedAt };
   } catch (error) {
-    const reason =
-      error instanceof Error && error.name === 'TimeoutError'
-        ? 'Timed out'
-        : 'Could not reach the source';
-    return { status: 'unavailable', reason, fetchedAt };
+    return { status: 'unavailable', reason: failureReason(error), fetchedAt };
   }
 }
 
@@ -318,13 +330,12 @@ export async function sendInternal<S extends z.ZodType>(
         [ACTING_USER_HEADER]: options.actingUserId,
       },
       body: JSON.stringify(options.body),
-      signal: AbortSignal.timeout(options.timeoutMs ?? 15000),
+      signal: timeoutSignal(options.timeoutMs ?? 15000),
       cache: 'no-store',
     });
   } catch (error) {
     // A timed-out write may still have committed: callers re-read before offering a retry.
-    const timedOut = error instanceof Error && error.name === 'TimeoutError';
-    return fail(0, 'UNAVAILABLE', timedOut ? 'Timed out' : 'Could not reach the source');
+    return fail(0, 'UNAVAILABLE', failureReason(error));
   }
   const json = (await response.json().catch(() => null)) as {
     data?: unknown;

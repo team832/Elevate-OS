@@ -7,10 +7,10 @@
 import { and, eq, sql, type SQL } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import { opsStaffTasks as tasks, type Database } from '@elevate/database';
-import { istToday } from '../domain/dates';
 import type { Actor } from './context';
 import { dueFilter, listWhere } from './staff-tasks';
 import type { TaskListQuery } from './staff-tasks-schemas';
+import { reviewableBy } from './task-list';
 import { taskAccess } from './task-store';
 
 const TASKS = '/ops/hr/tasks';
@@ -57,15 +57,10 @@ export async function hrTaskCounts(
   const now = new Date();
   const [c] = await db
     .select({
-      dueToday: counted(
-        and(
-          eq(tasks.dueOn, istToday(now)),
-          sql`${tasks.status} not in ('done', 'cancelled', 'draft')`,
-        ),
-      ),
+      dueToday: counted(dueFilter('today', now)),
       overdue: counted(dueFilter('overdue', now)),
       blocked: counted(listWhere(access, { flag: 'blocked' })),
-      submitted: counted(eq(tasks.status, 'in_review')),
+      submitted: counted(and(eq(tasks.status, 'in_review'), reviewableBy(access))),
       drafts: counted(eq(tasks.status, 'draft')),
     })
     .from(tasks)

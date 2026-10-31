@@ -111,7 +111,7 @@
   border-radius: var(--el-radius);
   box-shadow: var(--el-shadow-inset);
 }
-.acd-week-day h3 {
+.acd-week-day h2 {
   margin: 0 0 var(--el-space-2);
   font-family: var(--el-font-display);
   font-size: var(--el-text-sm);
@@ -182,6 +182,12 @@
   background: var(--el-surface);
   box-shadow: var(--el-highlight), var(--el-edge);
 }
+/* A real mark is the one thing to see at a glance down a long roster: orange, with an edge that reads on the well (3:1). "Not recorded" stays quiet. */
+.acd-marks label:has(:checked:not([value=''])) {
+  color: var(--el-accent-contrast);
+  background: var(--el-accent);
+  box-shadow: inset 0 0 0 1.5px var(--el-accent-text);
+}
 .acd-marks label:has(:focus-visible) {
   outline: 2px solid var(--el-focus);
   outline-offset: 1px;
@@ -212,8 +218,15 @@
   flex: 1 1 14rem;
   margin: 0;
 }
+/* The bar stays small on phones: the roster is what a teacher came to see. */
+.acd-wide-only {
+  display: none;
+}
 
 @media (min-width: 720px) {
+  .acd-wide-only {
+    display: inline;
+  }
   .acd-next {
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;

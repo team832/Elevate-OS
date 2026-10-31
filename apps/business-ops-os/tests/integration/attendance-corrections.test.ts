@@ -6,6 +6,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { notifications, opsAttendancePunches, staffMembers } from '@elevate/database';
+import { fmtDay } from '@elevate/shared-types';
 import { authedRequest, callRoute, setupTestDatabase, type TestUser } from '@elevate/testing';
 import { POST as punchRoute } from '../../src/app/api/v1/attendance/punches/route';
 import { POST as decisionRoute } from '../../src/app/api/v1/attendance/decisions/route';
@@ -84,6 +85,22 @@ describe('corrections', () => {
       authedRequest(w.teacher2, '/academic/api/v1/attendance/corrections'),
     );
     expect(history.data!.items.map((c) => c.status)).toEqual(['approved']);
+  });
+
+  it('only people who can decide it are told, and the notice says who asked (PPL-002, PPL-004)', async () => {
+    const asked = await post(correctionRoute, w.finance, '/corrections', {
+      workDate: D2,
+      requestedStatus: 'present',
+      reason: 'At the bank (test)',
+    });
+    expect(asked.status).toBe(201);
+    const rows = await ctx.db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.kind, 'attendance.correction_requested'));
+    const about = rows.filter((n) => n.title.includes(w.finance.displayName));
+    expect(about.map((n) => n.userId)).toEqual([w.opsMgr.id]); // HR-only managers could only answer 404
+    expect(about[0]!.title).toBe(`${w.finance.displayName} asks to correct attendance for ${fmtDay(D2)}`);
   });
 
   it('an operations manager decides a request HR-only managers cannot see', async () => {

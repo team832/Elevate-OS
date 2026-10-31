@@ -23,6 +23,12 @@ Layout (owner, 22 Oct 2026): a light linen canvas with a floating white sidebar 
 
 `FilterForm` (old inline filter row) is no longer used by any page; delete it when `list-controls.tsx` is next touched.
 
+## Added 30–31 Oct 2026
+- `RecordModal` renders open on the server, so the panel arrives with first paint (D-120; 405 to 118 ms). It keeps `?section=`; a `?section=` reload paints the first tab, then switches on hydration.
+- `RecordTable` takes `sortedBy`; `tableWrapClass` and `ActionsHeader` are exported. `.ops-table-well` is `.el-table-well`. `.ops-detail` uses table-layout fixed (every detail table). Print CSS: `.ops-report-print` in `ops.css`.
+- `sampleOf`, `SampleBadge`, `ListEmpty`, `hasFilter` for lists. `FieldSpec.emptyHint`, `noStaffHint`, `REFERENCE_DATA_HELP` for forms. `phoneInputSchema` for typed phones (`phoneSchema` stays strict for events). Programme select labels are names only. Required selects start on "Choose…".
+- `ActionForm` empties a money form with no default on success and shows "Recorded X, receipt Y". A network drop keeps typing and says so.
+
 ## RecordModal — `?open=<id>`
 
 Native `<dialog>` + `showModal()`: from 641px a centred frosted panel `min(56rem, 100vw − 2rem)`, max 90% of the screen height, with a dimmed and blurred backdrop; at 640px and below a curved bottom sheet (max 92% of the screen height) with a grab handle. Scrolling body, sticky header whose section tabs are the shared pill segmented control. Escape, the close button and a backdrop click close it; closing does `router.replace(closeHref)` (strips `/ops`, D-022) and focuses the row link with `data-drawer-return={returnId}`. Page scroll is locked while open. Never open a modal from inside a modal: multi-step flows get their own route.

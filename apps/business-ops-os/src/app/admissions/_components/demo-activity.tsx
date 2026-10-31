@@ -100,8 +100,8 @@ export function DemoActivity({ d, user, level }: DemoTabProps) {
         description={
           <>
             {CHECKLIST_BASIS} Discussing fees is not a payment record. Required before admission:{' '}
-            {d.checklistRequired.value.requiredBeforeConversion ? 'yes' : 'no'} (
-            {d.checklistRequired.decisionState} setting). {d.checklistHistory.length} entr
+            {d.checklistRequired.value.requiredBeforeConversion ? 'yes' : 'no'}.{' '}
+            {d.checklistHistory.length} entr
             {d.checklistHistory.length === 1 ? 'y' : 'ies'} kept; the latest per item is shown.
           </>
         }

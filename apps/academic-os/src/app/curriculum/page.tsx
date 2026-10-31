@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
+import { REFERENCE_DATA_HELP } from '@elevate/shared-contracts';
 import { Card, DataTable, EmptyState, PageHeader, Subnav } from '@elevate/shared-ui';
 import { listCourses, listPlans, listProgrammes } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
-import { PlanBadge, StateBadge } from '../../ui/badges';
+import { PlanBadge, StateBadge, programmeName } from '../../ui/badges';
 import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, gate, load, CURRICULUM_TABS } from '../../ui/shell';
 
@@ -43,10 +44,10 @@ async function Body({ access }: { access: PageAccess }) {
             <DataTable compact
               rows={data.data.courses}
               rowKey={(c) => c.id}
-              empty={<EmptyState title="No courses yet" description="Seed the legacy curriculum (npm run db:seed) or create a course below." />}
+              empty={<EmptyState title="No courses yet" description={data.data.programmes.length ? (canWrite ? 'Create the first course version below.' : 'An academic coordinator creates courses here.') : `A course belongs to a programme, and no programmes are loaded. ${REFERENCE_DATA_HELP}`} />}
               columns={[
-                { key: 'programme', header: 'Programme', render: (c) => c.programmeCode },
-                { key: 'code', header: 'Course', render: (c) => `${c.code} (v${c.version})` },
+                { key: 'programme', header: 'Programme', render: (c) => programmeName(c.programmeCode) },
+                { key: 'code', header: 'Course', render: (c) => <a href={MODULE_PATHS.course(c.id)}>{`${c.code} (v${c.version})`}</a> },
                 { key: 'name', header: 'Name' },
                 { key: 'mode', header: 'Mode', render: (c) => c.mode ?? '—' },
                 { key: 'len', header: 'Class length', render: (c) => (c.classMinutes ? <>{c.classMinutes} min <PlanBadge status={c.classMinutesStatus} /></> : <PlanBadge status="unknown" prefix="length" />) },
@@ -81,7 +82,7 @@ async function Body({ access }: { access: PageAccess }) {
                   successMessage="Course created."
                   idPrefix="course"
                   fields={[
-                    { name: 'programmeCode', label: 'Programme', type: 'select', required: true, options: data.data.programmes.map((p) => ({ value: p.code, label: `${p.code} — ${p.name} (${p.status})` })) },
+                    { name: 'programmeCode', label: 'Programme', type: 'select', required: true, options: data.data.programmes.map((p) => ({ value: p.code, label: `${p.name} (${p.status.replace(/_/g, ' ')})` })) },
                     { name: 'code', label: 'Course code', required: true, placeholder: 'IPMAT-C12-2028' },
                     { name: 'familyCode', label: 'Family code', required: true, placeholder: 'IPMAT-C12', hint: 'Shared by every version of this course.' },
                     { name: 'version', label: 'Version', type: 'number', defaultValue: 1 },

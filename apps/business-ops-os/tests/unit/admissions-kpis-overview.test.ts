@@ -250,7 +250,11 @@ describe('fees: collections in the window and tuition outstanding', () => {
       0,
     ],
   ])('%s', (_, records, byCategory, net) => {
-    expect(feeCollections(records as never, W)).toEqual({ byCategory, netPaise: net });
+    expect(feeCollections(records as never, W)).toEqual({
+      byCategory,
+      netPaise: net,
+      samplePaise: 0,
+    });
   });
 
   it('no fee records at all → null (missing), not ₹0', () => {
@@ -263,6 +267,7 @@ describe('fees: collections in the window and tuition outstanding', () => {
       agreements: 2,
       outstandingPaise: 50_000_00,
       creditPaise: 2_000_00,
+      samplePaise: 0,
     });
     expect(tuitionOutstanding([])).toBeNull();
   });

@@ -32,17 +32,26 @@ export function istMidnightUtc(date: IsoDate): Date {
   return new Date(`${date}T00:00:00+05:30`);
 }
 
+const WEEK_DAY = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+const IST_INSTANT = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
 /** Label such as "Week of Mon 12 Oct 2026 (IST)". */
 export function weekLabel(start: IsoDate): string {
-  const d = istMidnightUtc(weekStart(start));
-  const label = new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(d);
-  return `Week of ${label} (IST)`;
+  return `Week of ${WEEK_DAY.format(istMidnightUtc(weekStart(start)))} (IST)`;
 }
 
 /** Format an instant in IST for screens, e.g. "17 Oct 2026, 19:00 IST". */
@@ -50,13 +59,5 @@ export function formatIst(instant: Date | string | null | undefined): string {
   if (!instant) return '—';
   const d = typeof instant === 'string' ? new Date(instant) : instant;
   if (Number.isNaN(d.getTime())) return '—';
-  return `${new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(d)} IST`;
+  return `${IST_INSTANT.format(d)} IST`;
 }

@@ -24,11 +24,12 @@ import {
 import { notify } from '@elevate/notifications';
 import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, InvalidStateTransitionError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
-import type { BatchId, StaffMemberId } from '@elevate/shared-types';
+import { fmtDay, type BatchId, type StaffMemberId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { checkTimetable, teachersOf, type ClassLength, type TimetableCheckResult, type TimetableSession } from '../../domain';
 import { assertBatchInScope, assertSessionInScope, audit, resolveScope, type Actor } from '../context';
 import type { checkTimetableBody, rescheduleSessionBody, sessionInput } from '../schemas';
+import { activeStaffOrThrow } from './assignments';
 import { classLengthOf } from './batches';
 import { taughtBy } from './session-guards';
 import { getSetting } from './settings';
@@ -71,6 +72,7 @@ export async function sessionRows(db: Database, filter: SessionFilter & { ownSta
     .select({
       session: academicClassSessions,
       batchCode: academicBatches.code,
+      isSample: academicBatches.isSample,
       subjectCode: academicSubjects.code,
       subjectName: academicSubjects.name,
       chapterCode: academicChapters.code,
@@ -87,7 +89,7 @@ export async function sessionRows(db: Database, filter: SessionFilter & { ownSta
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(asc(academicClassSessions.date), asc(academicClassSessions.startTime))
     .limit(1000);
-  return rows.map((r) => ({ ...r.session, batchCode: r.batchCode, subjectCode: r.subjectCode, subjectName: r.subjectName, chapterCode: r.chapterCode, chapterTitle: r.chapterTitle, teacherName: r.teacherName, roomCode: r.roomCode }));
+  return rows.map((r) => ({ ...r.session, batchCode: r.batchCode, isSample: r.isSample, subjectCode: r.subjectCode, subjectName: r.subjectName, chapterCode: r.chapterCode, chapterTitle: r.chapterTitle, teacherName: r.teacherName, roomCode: r.roomCode }));
 }
 export type SessionListRow = Awaited<ReturnType<typeof listSessions>>[number];
 
@@ -129,6 +131,7 @@ export async function conflictContext(db: Database, from: string, to: string) {
     .select({ staffId: academicTeacherUnavailability.staffId, from: academicTeacherUnavailability.fromDate, to: academicTeacherUnavailability.toDate })
     .from(academicTeacherUnavailability)
     .where(and(isNull(academicTeacherUnavailability.cancelledAt), lte(academicTeacherUnavailability.fromDate, to), gte(academicTeacherUnavailability.toDate, from)));
+  const endedTeachers = (await db.select({ id: staffMembers.id }).from(staffMembers).where(eq(staffMembers.status, 'inactive'))).map((r) => r.id as string);
   const placements = await db
     .select({ studentId: academicEnrolments.studentId, batchId: academicBatchPlacements.batchId, from: academicBatchPlacements.startDate, to: academicBatchPlacements.endDate })
     .from(academicBatchPlacements)
@@ -151,6 +154,7 @@ export async function conflictContext(db: Database, from: string, to: string) {
   return {
     existing: rows.map((r) => toTimetableSession(r, teachers.get(r.id))),
     unavailability,
+    endedTeachers,
     placements,
     exclusions: exclusions.map((x) => ({ date: x.date!, batchId: x.batchId, kind: x.kind, label: x.label, status: x.status })),
     classLengthByBatch,
@@ -168,6 +172,7 @@ export function checkAgainst(ctx: ConflictContext, candidates: readonly Timetabl
     classLengthByBatch: ctx.classLengthByBatch,
     workloadCap: ctx.workloadCap,
     unavailability: ctx.unavailability,
+    endedTeachers: ctx.endedTeachers,
     placements: ctx.placements,
     onlyInvolving: focus,
   });
@@ -221,10 +226,7 @@ async function validateRefs(tx: Database, s: z.output<typeof sessionInput>) {
     const [chapter] = await tx.select().from(academicChapters).where(eq(academicChapters.id, s.plannedChapterId as never));
     if (!chapter || chapter.courseId !== batch.courseId) throw new ValidationError('The chapter is not part of the batch’s course.');
   }
-  if (s.teacherStaffId) {
-    const [staff] = await tx.select().from(staffMembers).where(eq(staffMembers.id, s.teacherStaffId as StaffMemberId));
-    if (!staff) throw new ValidationError('Teacher (staff member) not found.');
-  }
+  if (s.teacherStaffId) await activeStaffOrThrow(tx, s.teacherStaffId);
   if (s.roomId) {
     const [room] = await tx.select().from(academicRooms).where(eq(academicRooms.id, s.roomId as never));
     if (!room || room.status !== 'active') throw new ValidationError('Room not found or inactive.');
@@ -269,11 +271,11 @@ export async function teacherUserId(tx: Database, staffId: string | null) {
 }
 
 /** Audit a cancellation and tell the planned teacher (used by single cancellations and series edits). */
-export async function recordCancellation(tx: Database, actor: Actor, before: SessionRow, after: SessionRow, reason: string) {
+export async function recordCancellation(tx: Database, actor: Actor, before: SessionRow, after: SessionRow, reason: string, options: { quiet?: boolean } = {}) {
   await audit(tx, actor, { action: 'class_session.cancelled', entityType: 'class_session', entityId: before.id, before, after, metadata: { reason } });
-  const teacher = await teacherUserId(tx, before.teacherStaffId);
+  const teacher = options.quiet ? null : await teacherUserId(tx, before.teacherStaffId);
   if (teacher) {
-    await notify(tx, { userIds: [teacher], module: 'academic', kind: 'class_session.cancelled', title: `Class on ${before.date} at ${before.startTime} cancelled`, body: reason, link: '/academic/timetable', entityType: 'class_session', entityId: before.id });
+    await notify(tx, { userIds: [teacher], module: 'academic', kind: 'class_session.cancelled', title: `Class on ${fmtDay(before.date)} at ${before.startTime} cancelled`, body: reason, link: '/academic/timetable', entityType: 'class_session', entityId: before.id });
   }
 }
 
@@ -319,7 +321,7 @@ export async function rescheduleSession(db: Database, actor: Actor, sessionId: s
     await audit(tx, actor, { action: 'class_session.scheduled', entityType: 'class_session', entityId: created!.id, after: created, metadata: { rescheduledFrom: session.id } });
     const teachers = [await teacherUserId(tx, session.teacherStaffId), await teacherUserId(tx, created!.teacherStaffId)].filter((u): u is NonNullable<typeof u> => Boolean(u));
     if (teachers.length > 0) {
-      await notify(tx, { userIds: teachers, module: 'academic', kind: 'class_session.rescheduled', title: `Class moved from ${session.date} ${session.startTime} to ${input.date} ${input.startTime}`, body: input.reason, link: '/academic/timetable', entityType: 'class_session', entityId: created!.id });
+      await notify(tx, { userIds: teachers, module: 'academic', kind: 'class_session.rescheduled', title: `Class moved from ${fmtDay(session.date)} ${session.startTime} to ${fmtDay(input.date)} ${input.startTime}`, body: input.reason, link: '/academic/timetable', entityType: 'class_session', entityId: created!.id });
     }
     return { original: updated!, replacement: created!, warnings: check.preferences };
   });

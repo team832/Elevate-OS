@@ -97,7 +97,8 @@ export type TransitionGuard =
   | 'resume_to_held_status'
   | 'student_lifecycle'
   | 'exit_record'
-  | 'reactivation';
+  | 'reactivation'
+  | 'not_after_enrolment';
 
 export interface TransitionRule {
   from: AdmissionStatus;
@@ -179,7 +180,10 @@ export const TRANSITIONS: readonly TransitionRule[] = [
       guard: 'resume_to_held_status',
     }),
   ),
-  rule('on_hold', 'lost', 'Lost while on hold.', { requiresReason: true }),
+  rule('on_hold', 'lost', 'Lost while on hold.', {
+    requiresReason: true,
+    guard: 'not_after_enrolment',
+  }),
   rule('lost', 'new', 'Reopened (a reason is required).', { requiresReason: true }),
   // Student lifecycle (owner brief §9): only through the student lifecycle service.
   rule('enrolled', 'on_hold', 'Enrolled student paused (reason + review date).', {
@@ -238,6 +242,7 @@ export function allowedUserTargets(
       .filter((t) => !isLifecycleRule(t))
       .filter((t) => t.guard !== 'resume_to_held_status' || t.to === context.heldFromStatus)
       .filter((t) => t.guard !== 'demo_skip_policy' || context.demoSkipAllowed !== false)
+      .filter((t) => t.guard !== 'not_after_enrolment' || context.heldFromStatus !== 'enrolled')
       .map((t) => t.to)
   );
 }
@@ -310,6 +315,10 @@ const GUARD_FAILURES: Record<
       : null;
   },
   reactivation: (ctx) => (ctx.viaStudentLifecycle ? null : LIFECYCLE_ONLY),
+  not_after_enrolment: (ctx) =>
+    ctx.heldFromStatus === 'enrolled'
+      ? 'This student was enrolled: use Record exit, so Academic OS is told and the exit is kept.'
+      : null,
 };
 
 const LIFECYCLE_ONLY =

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { ButtonLink, Card, DataTable, PageHeader } from '@elevate/shared-ui';
+import { ButtonLink, Card, DataTable, PageHeader, fmtDay } from '@elevate/shared-ui';
 import { WEEKDAY_NAMES } from '../../../../domain';
 import { listRooms, listStaff, previewPattern } from '../../../../server';
 import { MODULE_PATHS } from '../../../../server/paths';
@@ -21,7 +21,7 @@ export default async function PatternPage({ params }: { params: Promise<{ id: st
   const canPublish = can(access.user, 'academic:timetable:publish');
   const canWrite = can(access.user, 'academic:timetable:write');
   const data = await load(async () => ({ preview: await previewPattern(getDb(), actorFor(access.user), id), staff: canWrite ? await listStaff(getDb()) : [], rooms: canWrite ? await listRooms(getDb()) : [] }));
-  if (!data.ok) return <AcademicShell access={access} active="timetable"><LoadError error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="timetable"><LoadError level={1} error={data.error} /></AcademicShell>;
   const { pattern, occurrences, toCreate, check } = data.data.preview;
   const staffOptions = data.data.staff.map((s) => ({ value: s.id, label: s.fullName }));
   const roomOptions = data.data.rooms.map((r) => ({ value: r.id, label: `${r.code} ${r.name}` }));
@@ -31,7 +31,7 @@ export default async function PatternPage({ params }: { params: Promise<{ id: st
       <PageHeader
         title={`${WEEKDAY_NAMES[pattern.weekday - 1]} ${pattern.startTime} · ${pattern.durationMinutes} min`}
         meta={<PlanBadge status={pattern.status} />}
-        description={`${pattern.effectiveFrom} to ${pattern.effectiveTo}. ${toCreate.length} class(es) still to be created; ${occurrences.filter((o) => o.skipped).length} date(s) skipped for closures.`}
+        description={`${fmtDay(pattern.effectiveFrom)} to ${fmtDay(pattern.effectiveTo)}. ${toCreate.length} class(es) still to be created; ${occurrences.filter((o) => o.skipped).length} date(s) skipped for closures.`}
         actions={<ButtonLink href={MODULE_PATHS.patterns}>All patterns</ButtonLink>}
       />
       <div className="el-stack">
@@ -104,7 +104,7 @@ export default async function PatternPage({ params }: { params: Promise<{ id: st
             rows={occurrences}
             rowKey={(o) => o.date}
             columns={[
-              { key: 'date', header: 'Date', render: (o) => (o.sessionId ? <a href={MODULE_PATHS.attendance(o.sessionId)}>{o.date}</a> : o.date) },
+              { key: 'date', header: 'Date', render: (o) => (o.sessionId ? <a href={MODULE_PATHS.attendance(o.sessionId)}>{fmtDay(o.date)}</a> : fmtDay(o.date)) },
               { key: 'state', header: 'State', render: (o) => (o.sessionId ? 'Created (open the class for its status)' : o.skipped ? `Skipped: ${o.skipped}` : o.conflicts.length ? <StateBadge state="infeasible" /> : 'To be created') },
               { key: 'conflicts', header: 'Conflicts', render: (o) => o.conflicts.join(' ') || '—' },
             ]}

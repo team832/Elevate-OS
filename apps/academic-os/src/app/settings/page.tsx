@@ -53,7 +53,7 @@ async function Body() {
         {data.data.map((s) => (
           <Card
             key={s.key}
-            title={TITLES[s.key] ?? s.key}
+            title={TITLES[s.key] ?? words(s.key.split('.').at(-1)!.replace(/_/g, ' '))}
             meta={s.status === 'approved' ? <StatusBadge tone="success">Approved by the owner</StatusBadge> : <StatusBadge tone="warning">Not approved by the owner</StatusBadge>}
             description={s.description}
           >
@@ -65,7 +65,7 @@ async function Body() {
               ))}
             </ul>
             <p className="el-field-hint">
-              {s.key} · {s.isDefault ? 'shipped default, never changed' : `last changed ${fmtDateTime(s.updatedAt)}`}
+              {s.isDefault ? 'Default value, never changed' : `Last changed ${fmtDateTime(s.updatedAt)}`}
             </p>
             <details>
               <summary>Change this setting</summary>
@@ -76,7 +76,7 @@ async function Body() {
                 successMessage="Setting saved and audited."
                 idPrefix={`set-${s.key.replace(/\W/g, '-')}`}
                 fields={[
-                  { name: 'value', label: 'Value (JSON)', type: 'json', required: true, defaultValue: JSON.stringify(s.value, null, 2), hint: 'The server checks the value against this setting’s rules and refuses anything else.' },
+                  { name: 'value', label: 'New value', type: 'json', required: true, defaultValue: JSON.stringify(s.value, null, 2), hint: 'Keep the braces and quotes as shown; null means not set. The server checks the value against this setting’s rules and refuses anything else.' },
                   { name: 'status', label: 'Status', type: 'select', required: true, options: STATUS_OPTIONS, defaultValue: s.status },
                   { name: 'decisionRef', label: 'Owner decision reference (needed to approve)', placeholder: 'D-061', hint: 'Only the owner decides. Enter the reference of the owner’s recorded decision (D-0xx / OD-0xx); without it, approval is refused.' },
                 ]}

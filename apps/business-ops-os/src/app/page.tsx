@@ -5,6 +5,8 @@ import type { KpiWindow } from '../domain';
 import { buildOverview, rangeOf } from '../server/overview';
 import { fmtDate } from '../ui/format';
 import { Frame, gate, load, Section } from '../ui/frame';
+import { FirstJobs } from './_components/first-jobs';
+import { JobsPanel } from './_components/jobs-panel';
 import { RangeFilter } from './_components/range-filter';
 import { OverviewBlocks } from './_components/overview-blocks';
 import { Today } from './_components/today';
@@ -34,8 +36,13 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         description="Admissions, money, teaching and team figures for the period, then your work today."
         actions={
           <>
+            {can(user, 'ops:leads:write') ? (
+              <ButtonLink variant="primary" href="/ops/leads?new=1">
+                New lead
+              </ButtonLink>
+            ) : null}
             {can(user, 'ops:tasks:write') ? (
-              <ButtonLink variant="primary" href="/ops/tasks?new=1">
+              <ButtonLink variant="secondary" href="/ops/tasks?new=1">
                 Log a task
               </ButtonLink>
             ) : null}
@@ -49,13 +56,16 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       />
       <div className="el-stack">
         <RangeFilter base="/ops" at={at} />
-        <Section label="Loading the overview…">
-          <Blocks user={user} range={at.range} />
-        </Section>
+        <div className="ops-overview-slot">
+          <Section label="Loading the overview…">
+            <Blocks user={user} range={at.range} />
+          </Section>
+        </div>
         <h2>Your work today</h2>
         <Section label="Loading today…">
           <Today user={user} />
         </Section>
+        <JobsPanel user={user} />
       </div>
     </Frame>
   );
@@ -63,5 +73,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
 async function Blocks({ user, range }: { user: AuthenticatedUser; range: KpiWindow }) {
   const r = await load((db) => buildOverview(db, user, range));
-  return r.ok ? <OverviewBlocks o={r.data} /> : r.view;
+  return r.ok ? (
+    <>
+      <FirstJobs user={user} />
+      <OverviewBlocks o={r.data} user={user} />
+    </>
+  ) : (
+    r.view
+  );
 }

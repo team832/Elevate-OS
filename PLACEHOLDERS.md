@@ -8,6 +8,7 @@ Elevate OS never makes up your business facts. Wherever a fact is missing, the s
 | Who works at Elevate and in which role | Staff screen (today the seven teachers you named plus sample staff); access is given on **Users & roles** (`/admin/users`, also the Settings link) | Name, department, designation and manager for each person. Say which roles each person should have; nobody gets access until a platform administrator ticks their roles on Users & roles and clicks **Save roles** (OD-009) |
 | Department list | Departments (13 provisional departments from the old files) | Confirm, rename or remove them (D-026) |
 | Who may see students' private details (phone, address, identity documents) | Student profile, admission check screen ("Details hidden") | Whether the director should see them; today only the operations manager and counsellors for their own students do (OD-048) |
+| How real staff sign in and confirm admissions | Sign-in, final confirmation. New accounts have no password and no screen sets one | Google sign-in again for confirming, or a set-password screen (D-041). Without one of these no real admission can be confirmed |
 | Who may confirm admissions, verify identity documents and review reports | Final confirmation, KYC, student reports | Names or roles; today director and operations manager confirm, operations manager verifies and reviews (Proposed, D-041) |
 | Logo file | Sidebar, sign-in page and every PDF (today a redrawn copy of the logo) | The original logo file (SVG or a large PNG), so the redrawn copy can be checked against it |
 
@@ -37,6 +38,8 @@ Elevate OS never makes up your business facts. Wherever a fact is missing, the s
 | Database account | Holds all the data; must be in your name | At go-live |
 | Email / SMS / WhatsApp service | So the system can send reminders, event invitations and end-of-day reports (today it records them and sends nothing) | When you want messages sent |
 | Shared look-around account `team@elevateeducation.in` | Exists on this computer only, read-only; its password was typed in chat, so it must be changed (steps in `HANDOFF.md`) | Now |
-| Document storage | So staff can upload documents (today only references are recorded) | When you want uploads |
+| File storage | Test papers and answer keys, score imports and task files. Refused in office mode and online until you choose a provider. Identity documents keep a reference only | Before anyone needs uploads in office mode |
+| Who runs the background jobs | There is no timer. An exit reaches Academic, and reminders go out, only when someone presses the button on the Overview | Now: a name and how often |
+| The address the system will live at | The four addresses are built into the package, so a new address needs a new build (`docs/RELEASE.md`) | At go-live |
 | Attendance device or app | Only if you use a biometric device; today attendance is entered by hand or by spreadsheet upload | Optional |
 | Publishing tool (Metricool or similar) and YouTube key | So Marketing can publish and read numbers | Marketing go-live |

@@ -12,7 +12,7 @@
  *   PREF  SAME_DAY_TIME_UNKNOWN another class/assessment the same day, times not set
  * Verdict: `feasible` (no hard conflicts) or `infeasible`. Never "optimal".
  */
-import { daysBetween, isIsoDate, type IsoDate } from '@elevate/shared-types';
+import { daysBetween, fmtDay, isIsoDate, type IsoDate } from '@elevate/shared-types';
 import { intervalsOverlap, parseClock } from './time';
 
 export interface ScheduledItem {
@@ -108,10 +108,10 @@ export function checkAssessmentSchedule(input: AssessmentScheduleInput): Assessm
         const theirs = span(other);
         if (mine && theirs) {
           if (intervalsOverlap(mine.start, mine.end, theirs.start, theirs.end)) {
-            push({ code, severity: 'hard', candidateId: cand.id, otherId: other.id, date: cand.date, message: `${cand.label} overlaps ${other.label} on ${cand.date}.` });
+            push({ code, severity: 'hard', candidateId: cand.id, otherId: other.id, date: cand.date, message: `${cand.label} overlaps ${other.label} on ${fmtDay(cand.date)}.` });
           }
         } else {
-          push({ code: 'SAME_DAY_TIME_UNKNOWN', severity: 'preference', candidateId: cand.id, otherId: other.id, date: cand.date, message: `${cand.label} and ${other.label} are on ${cand.date}; clock times are not set, so an overlap cannot be ruled out.` });
+          push({ code: 'SAME_DAY_TIME_UNKNOWN', severity: 'preference', candidateId: cand.id, otherId: other.id, date: cand.date, message: `${cand.label} and ${other.label} are on ${fmtDay(cand.date)}; clock times are not set, so an overlap cannot be ruled out.` });
         }
       }
     };
@@ -144,7 +144,7 @@ export function checkAssessmentSchedule(input: AssessmentScheduleInput): Assessm
 
     // Prerequisites must be complete (as planned) before the test day.
     if (cand.prerequisiteCompletion && cand.date <= cand.prerequisiteCompletion) {
-      push({ code: 'BEFORE_PREREQUISITE', severity: 'hard', candidateId: cand.id, otherId: null, date: cand.date, message: `${cand.label} on ${cand.date} is not after its prerequisites' planned completion (${cand.prerequisiteCompletion}).` });
+      push({ code: 'BEFORE_PREREQUISITE', severity: 'hard', candidateId: cand.id, otherId: null, date: cand.date, message: `${cand.label} on ${fmtDay(cand.date)} is not after its prerequisites' planned completion (${fmtDay(cand.prerequisiteCompletion)}).` });
     }
 
     // Minimum gap to other assessments (configurable).

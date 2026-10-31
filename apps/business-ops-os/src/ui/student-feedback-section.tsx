@@ -20,7 +20,7 @@ import { RecordTable } from './record-table';
 import { DetailTable, Segment } from './sections';
 
 const TITLE = 'Teacher reviews';
-const LEGACY = 'Recorded in Business Ops before 21 Oct 2026';
+const LEGACY = 'Recorded in Business Operations before 21 Oct 2026';
 const WHERE_OTHER =
   'Written and submitted by teachers in Academic OS. Internal remarks never reach parents or students. Feedback from students and guardians about teachers is kept on each teacher’s profile.';
 
@@ -157,7 +157,7 @@ function Acknowledgements({ r, user }: { r: Review; user: AuthenticatedUser }) {
     <>
       {r.acknowledgements.length ? (
         <RecordTable
-          caption="Acknowledged in Business Ops"
+          caption="Acknowledged in Business Operations"
           rows={r.acknowledgements}
           rowKey={(a) => a.id}
           columns={[

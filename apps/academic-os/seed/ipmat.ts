@@ -18,7 +18,7 @@ import {
   type Class12Plan,
   type IpmatBaseline,
 } from './legacy';
-import { programmeId, upsertChapter, upsertCourse, upsertItems, upsertPlan, upsertSubject, type SeedItem } from './upsert';
+import { programmeId, ensureChapter, ensureCourse, ensureItems, ensurePlan, ensureSubject, type SeedItem } from './ensure';
 
 const CLASS_MINUTES = 75; // BR-ACD-1: IPMAT teaching/practice classes are 75 minutes (locked).
 
@@ -29,7 +29,7 @@ export const ipmatBaselineSeed = defineSeed({
   description: 'IPMAT locked 253-class teaching baseline (course IPMAT-BASE, plan IPMAT-BASELINE-253)',
   async run({ db }) {
     const base = readLegacy<IpmatBaseline>('ipmat-baseline.json');
-    const courseId = await upsertCourse(db, {
+    const courseId = await ensureCourse(db, {
       programmeId: await programmeId(db, 'IPMAT'),
       code: 'IPMAT-BASE',
       familyCode: 'IPMAT-BASE',
@@ -49,18 +49,18 @@ export const ipmatBaselineSeed = defineSeed({
       ...base.lr_teaching_topics.map((b) => ({ subject: 'LR', title: b.topic, classes: b.teaching_classes, prefix: 'LR' })),
       ...base.di_teaching_topics.map((b) => ({ subject: 'DI', title: b.topic, classes: b.teaching_classes, prefix: 'DI' })),
     ];
-    const subjectIds = new Map<string, Awaited<ReturnType<typeof upsertSubject>>>();
-    for (const [i, s] of IPMAT_SUBJECTS.entries()) subjectIds.set(s.code, await upsertSubject(db, courseId, s.code, s.name, i));
+    const subjectIds = new Map<string, Awaited<ReturnType<typeof ensureSubject>>>();
+    for (const [i, s] of IPMAT_SUBJECTS.entries()) subjectIds.set(s.code, await ensureSubject(db, courseId, s.code, s.name, i));
     const counters = new Map<string, number>();
     const items: SeedItem[] = [];
     for (const [i, b] of blocks.entries()) {
       const n = (counters.get(b.prefix) ?? 0) + 1;
       counters.set(b.prefix, n);
       const code = `${b.prefix}-${pad2(n)}`;
-      const chapterId = await upsertChapter(db, { courseId, subjectId: subjectIds.get(b.subject)!, code, title: b.title, sortOrder: i });
+      const chapterId = await ensureChapter(db, { courseId, subjectId: subjectIds.get(b.subject)!, code, title: b.title, sortOrder: i });
       items.push({ chapterId, lessonCode: `BASE-${code}`, sessionType: 'teaching', plannedClasses: b.classes, plannedMinutes: b.classes * CLASS_MINUTES });
     }
-    const planId = await upsertPlan(db, {
+    const planId = await ensurePlan(db, {
       courseId,
       code: 'IPMAT-BASELINE-253',
       title: 'IPMAT locked teaching baseline — 253 classes',
@@ -74,7 +74,7 @@ export const ipmatBaselineSeed = defineSeed({
       sourceRef: sourceRef('ipmat-baseline.json', 'locked_teaching_baseline + quant/verbal/lr/di blocks'),
       legacyApprovedOn: base.locked_teaching_baseline.approved_on,
     });
-    await upsertItems(db, planId, items);
+    await ensureItems(db, planId, items);
   },
 });
 
@@ -85,7 +85,7 @@ export const ipmatClass12Seed = defineSeed({
   description: 'IPMAT Class 12 course IPMAT-C12-2027: 104 chapters, plan 313 (superseded) → 305 (counts locked, dates provisional)',
   async run({ db }) {
     const plan = readLegacy<Class12Plan>('class12-plan.json');
-    const courseId = await upsertCourse(db, {
+    const courseId = await ensureCourse(db, {
       programmeId: await programmeId(db, 'IPMAT'),
       code: 'IPMAT-C12-2027',
       familyCode: 'IPMAT-C12',
@@ -98,8 +98,8 @@ export const ipmatClass12Seed = defineSeed({
       status: 'draft',
       sourceRef: sourceRef('class12-plan.json'),
     });
-    const subjectIds = new Map<string, Awaited<ReturnType<typeof upsertSubject>>>();
-    for (const [i, s] of IPMAT_SUBJECTS.entries()) subjectIds.set(s.label, await upsertSubject(db, courseId, s.code, s.name, i));
+    const subjectIds = new Map<string, Awaited<ReturnType<typeof ensureSubject>>>();
+    for (const [i, s] of IPMAT_SUBJECTS.entries()) subjectIds.set(s.label, await ensureSubject(db, courseId, s.code, s.name, i));
     // Chapter codes: <prefix>-<nn> in planner order within each subject. Stable: never renumbered.
     const chapterIds = new Map<string, AcademicChapterId>();
     const counters = new Map<string, number>();
@@ -108,10 +108,10 @@ export const ipmatClass12Seed = defineSeed({
       if (!subject) throw new Error(`Unknown Class 12 subject ${ch.subject}`);
       const n = (counters.get(subject.prefix) ?? 0) + 1;
       counters.set(subject.prefix, n);
-      const id = await upsertChapter(db, { courseId, subjectId: subjectIds.get(ch.subject)!, code: `${subject.prefix}-${pad2(n)}`, title: ch.chapter, sortOrder: i });
+      const id = await ensureChapter(db, { courseId, subjectId: subjectIds.get(ch.subject)!, code: `${subject.prefix}-${pad2(n)}`, title: ch.chapter, sortOrder: i });
       chapterIds.set(`${ch.subject}|${ch.chapter}`, id);
     }
-    const superseded = await upsertPlan(db, {
+    const superseded = await ensurePlan(db, {
       courseId,
       code: 'IPMAT-C12-313',
       title: 'IPMAT Class 12 override — 313 classes / 391.25 h (superseded)',
@@ -124,7 +124,7 @@ export const ipmatClass12Seed = defineSeed({
       changeLog: '253 teaching + 60 practice = 313 classes / 391.25 h. Superseded by IPMAT-C12-305 (eight practice classes moved to homework).',
       sourceRef: sourceRef('ipmat-baseline.json', 'class12_override.supersedes'),
     });
-    const planId = await upsertPlan(db, {
+    const planId = await ensurePlan(db, {
       courseId,
       code: 'IPMAT-C12-305',
       title: 'IPMAT Class 12 override — 305 classes / 381.25 h',
@@ -138,7 +138,7 @@ export const ipmatClass12Seed = defineSeed({
       changeLog: 'Eight practice classes (Verbal-P038/P042/P043, Quant-P024/P025/P026, LR-P053/P054) moved to homework instead of shifting classes earlier: 313 → 305.',
       sourceRef: sourceRef('class12-plan.json', 'lessons'),
     });
-    await upsertItems(
+    await ensureItems(
       db,
       planId,
       plan.lessons.map((l) => {

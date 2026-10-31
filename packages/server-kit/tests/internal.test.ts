@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { buildRequest, callRoute, setupTestDatabase } from '@elevate/testing';
@@ -9,6 +10,11 @@ import {
   getInternalServiceTokens,
   sendInternal,
 } from '../src/index';
+
+vi.mock('node:crypto', async (real) => {
+  const crypto = await real<typeof import('node:crypto')>();
+  return { ...crypto, timingSafeEqual: vi.fn(crypto.timingSafeEqual) };
+});
 
 const ctx = setupTestDatabase();
 const TOKEN = process.env.INTERNAL_SERVICE_TOKEN!;
@@ -27,6 +33,18 @@ const call = (token: string, caller: string) =>
   );
 
 describe('internal service auth', () => {
+  it('a token of any length takes the same compare, so timing cannot tell its length (HAT-002)', async () => {
+    const compare = vi.mocked(timingSafeEqual);
+    for (const wrong of ['short', 'x'.repeat(500)]) {
+      compare.mockClear();
+      expect((await call(wrong, 'ops')).status).toBe(401);
+      expect(compare).toHaveBeenCalledOnce();
+      expect(compare.mock.calls[0]![0]).toHaveLength(32);
+      expect(compare.mock.calls[0]![1]).toHaveLength(32);
+    }
+    expect((await call(TOKEN, 'ops')).status).toBe(200);
+  });
+
   it('rejects missing or wrong tokens (401) and disallowed callers (403)', async () => {
     expect(
       (await callRoute(summary, buildRequest('/academic/api/internal/v1/summary'))).status,
@@ -193,6 +211,47 @@ describe('fetchInternal', () => {
     expect(
       await fetchInternal('http://x', schema, { caller: 'ops', fetchImpl: error500 }),
     ).toMatchObject({ status: 'unavailable', reason: 'HTTP 500' });
+  });
+
+  const refused = (async () => {
+    throw new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } });
+  }) as unknown as typeof fetch;
+  const ok = (async () => Response.json({ data: { n: 1 } })) as unknown as typeof fetch;
+
+  it.each([
+    ['production', 3000, 3000],
+    ['test', 3000, 3000],
+    // next dev compiles a route on demand: a busy target is not a missing one (FEE-003).
+    ['development', 3000, 30_000],
+    ['development', 60_000, 60_000],
+  ])('in %s a %i ms read limit becomes %i ms', async (env, asked, used) => {
+    vi.stubEnv('NODE_ENV', env);
+    const spy = vi.spyOn(AbortSignal, 'timeout');
+    await fetchInternal('http://x', schema, { caller: 'ops', timeoutMs: asked, fetchImpl: ok });
+    expect(spy).toHaveBeenCalledWith(used);
+    spy.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    ['production', 'Could not reach the source'],
+    ['development', 'That workspace is not running: start it with npm run dev:all'],
+  ])('a refused connection in %s reads "%s"', async (env, reason) => {
+    vi.stubEnv('NODE_ENV', env);
+    expect(
+      await fetchInternal('http://x', schema, { caller: 'ops', fetchImpl: refused }),
+    ).toMatchObject({ status: 'unavailable', reason });
+    vi.unstubAllEnvs();
+  });
+
+  it('some other server answering HTML is a contract failure, not "could not reach"', async () => {
+    const html = (async () => new Response('<!doctype html>')) as unknown as typeof fetch;
+    expect(
+      await fetchInternal('http://x', schema, { caller: 'ops', fetchImpl: html }),
+    ).toMatchObject({
+      status: 'unavailable',
+      reason: 'Response did not match the contract',
+    });
   });
 });
 

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { followUpDaySummary, listLeads } from '@elevate/business-ops-os/leads';
+import { followUpDaySummary, leadCounts, listLeads } from '@elevate/business-ops-os/leads';
 import { DueWork, listTasks, taskDaySummary, taskListQuery } from '@elevate/business-ops-os/work';
 import {
   Card,
@@ -56,26 +56,27 @@ async function MyDay({ user }: { user: AuthenticatedUser }) {
   const leadsOk = can(user, 'ops:leads:read');
   // The last 30 days (late items) to 7 days ahead; the calendar link opens the same window.
   const window = { from: addDays(toIsoDate(), -30), to: addDays(toIsoDate(), 7) };
-  const [followUps, summary, content, submitted, calendar, leads] = await Promise.all([
-    leadsOk ? followUpDaySummary(db, user).catch(failed) : undefined,
-    tasksOk ? taskDaySummary(db, user).catch(failed) : undefined,
-    myContentByState(db, user),
-    tasks({ status: 'in_review' }),
-    staffId && can(user, 'marketing:calendar:read')
-      ? listCalendarItems(db, {
-          from: istMidnightUtc(window.from),
-          to: istMidnightUtc(addDays(window.to, 1)),
-          ownerStaffId: staffId,
-          due: true,
-        })
-      : null,
-    leadsOk && staffId ? listLeads(db, user) : null,
-  ]);
-  const toContact = leads?.filter(
-    (l) =>
-      l.ownerStaffId === staffId &&
-      (l.flags.awaitingContact || l.flags.overdue || l.flags.dueToday),
-  );
+  const toContactFilter = {
+    ownerStaffId: staffId ?? undefined,
+    anyFlag: ['awaiting_contact', 'overdue', 'due_today'] as const,
+  };
+  const [followUps, summary, content, submitted, calendar, toContact, toContactCount] =
+    await Promise.all([
+      leadsOk ? followUpDaySummary(db, user).catch(failed) : undefined,
+      tasksOk ? taskDaySummary(db, user).catch(failed) : undefined,
+      myContentByState(db, user),
+      tasks({ status: 'in_review' }),
+      staffId && can(user, 'marketing:calendar:read')
+        ? listCalendarItems(db, {
+            from: istMidnightUtc(window.from),
+            to: istMidnightUtc(addDays(window.to, 1)),
+            ownerStaffId: staffId,
+            due: true,
+          })
+        : null,
+      leadsOk && staffId ? listLeads(db, user, { ...toContactFilter, limit: LIST }) : null,
+      leadsOk && staffId ? leadCounts(db, user, toContactFilter) : null,
+    ]);
   const now = new Date();
   const states = CONTENT_STATES.filter((s) => s !== 'archived');
   return (
@@ -146,16 +147,16 @@ async function MyDay({ user }: { user: AuthenticatedUser }) {
           />
         </Card>
       ) : null}
-      {toContact ? (
+      {toContact && toContactCount ? (
         <Card
           title="Leads to contact"
-          meta={toContact.some((l) => l.isSample) ? <SourceBadge source="sample" /> : undefined}
-          description={`Your leads nobody has reached yet, or with a follow-up due today or overdue: ${toContact.length}. Showing up to ${LIST}.`}
+          meta={toContactCount.samples ? <SourceBadge source="sample" /> : undefined}
+          description={`Your leads nobody has reached yet, or with a follow-up due today or overdue: ${toContactCount.total}. Showing up to ${LIST}.`}
           actions={<a href={modulePath('leads?flag=awaiting_contact')}>Awaiting first contact</a>}
         >
           <DataTable
             compact
-            rows={toContact.slice(0, LIST)}
+            rows={toContact}
             rowKey={(l) => l.id}
             empty={
               <EmptyState

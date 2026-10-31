@@ -73,7 +73,7 @@ export function JsonForm({
         : [];
       setErrors([
         res.status === 401
-          ? 'Your session has ended. Sign in again and retry.'
+          ? 'Your session has ended. Sign in again in a new tab, then come back and press the button again.'
           : (json.error?.message ?? `The change was not saved (${res.status}).`),
         ...details,
       ]);
@@ -92,6 +92,13 @@ export function JsonForm({
       {errors.length > 0 ? (
         <div className="el-alert el-tone-danger" role="alert">
           <p className="el-alert-title">{errors[0]}</p>
+          {errors[0]?.startsWith('Your session has ended') ? (
+            <p>
+              <a href="/login" target="_blank" rel="noopener">
+                Sign in again
+              </a>
+            </p>
+          ) : null}
           {errors.length > 1 ? (
             <ul>
               {errors.slice(1).map((e) => (

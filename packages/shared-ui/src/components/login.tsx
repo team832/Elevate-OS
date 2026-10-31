@@ -1,6 +1,7 @@
 import { BrandLogo, INSTITUTE, instituteTelHref } from './brand';
 import { Alert } from './states';
 import { Button, ButtonLink, Field, fieldDescribedBy, TextInput } from './forms';
+import { KeepLoginEmail, NavPending } from './shell-client';
 
 const ERROR_TEXT: Record<string, string> = {
   invalid: 'Email or password is incorrect.',
@@ -43,6 +44,8 @@ export function LoginForm({
   const fieldError = error ? FIELD_ERRORS[error] : undefined;
   return (
     <main className="el-login">
+      <NavPending />
+      <KeepLoginEmail />
       <div className="el-login-brand">
         <BrandLogo size="lg" />
         <p className="el-login-about">

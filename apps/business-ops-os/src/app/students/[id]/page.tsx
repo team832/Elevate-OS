@@ -15,6 +15,7 @@ import { fmtDateTime, humanise } from '../../../ui/format';
 import { AiDraft } from '../../../ui/ai-draft';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref } from '../../../ui/list-controls';
+import { OpenLink, openHref } from '../../../ui/open-link';
 import { RecordTable } from '../../../ui/record-table';
 import { DetailTable, Segment } from '../../../ui/sections';
 import { StudentFeedbackSection } from '../../../ui/student-feedback-section';
@@ -70,7 +71,7 @@ export default async function StudentPage({
   const query = await searchParams;
   const access = await gate('ops:students:read', listHref(`/ops/students/${id}`, query));
   // Loaded before the frame so a former student's record highlights "Past students".
-  const r = await load((db) => getStudent(db, access.user, id));
+  const r = await load((db) => getStudent(db, access.user, id), 1);
   return (
     <Frame access={access} active={r.ok && r.data.population === 'former' ? 'past' : 'students'}>
       {r.ok ? (
@@ -125,7 +126,7 @@ async function StudentProfile({
         ].join(' · ')}
         actions={
           <>
-            <PrimaryAction d={d} base={base} />
+            <PrimaryAction d={d} base={base} user={user} />
             <ReportButtons d={d} />
           </>
         }
@@ -180,7 +181,7 @@ async function panel(
               description={links.length ? undefined : NO_LIFECYCLE}
               actions={links.length ? links : null}
             >
-              <AdmissionFacts d={d} />
+              <AdmissionFacts d={d} user={user} />
             </Segment>
             <Segment title="Coming up" flush description="Follow-ups and meetings from today on.">
               <UpcomingTable d={d} />
@@ -212,9 +213,9 @@ async function panel(
             flush
             description="A class cohort and an entrance programme are separate cases. Batches are assigned in Academic OS."
           >
-            <ProgrammesTable d={d} />
+            <ProgrammesTable d={d} user={user} />
           </Segment>
-          <HandoffSegment d={d} />
+          <HandoffSegment d={d} user={user} />
           <Segment title="Status history" flush>
             <HistoryTable d={d} />
           </Segment>
@@ -284,7 +285,7 @@ async function panel(
                   'Needs permission to generate student reports and a linked student record.'
                 ),
               },
-              {
+              openHref(user, `/ops/admissions/${d.admission.id}`) && {
                 label: 'Admission form and acknowledgement',
                 value: <a href={`/ops/admissions/${d.admission.id}`}>On the admission record</a>,
               },
@@ -332,7 +333,7 @@ function NumberHistory({ d }: { d: Profile }) {
 }
 
 /** Enrolment handoff to Academic OS (requests, replies, attempts). */
-function HandoffSegment({ d }: { d: Profile }) {
+function HandoffSegment({ d, user }: { d: Profile; user: AuthenticatedUser }) {
   const h = d.handoff;
   return (
     <Segment
@@ -341,7 +342,9 @@ function HandoffSegment({ d }: { d: Profile }) {
       description="Requests to Academic OS; enrolled only after Academic confirms."
       actions={
         h.retry.allowed ? (
-          <a href={`/ops/admissions/${d.admission.id}`}>Request enrolment again</a>
+          <OpenLink user={user} href={`/ops/admissions/${d.admission.id}`} fallback={null}>
+            Request enrolment again
+          </OpenLink>
         ) : null
       }
     >

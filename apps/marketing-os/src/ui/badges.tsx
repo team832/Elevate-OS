@@ -9,6 +9,12 @@ import {
   type RuleCheckResult,
 } from '../domain';
 
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Imported rule text as staff read it: no file names, no SOP numbers. The stored text is untouched. */
+export const ruleText = (text: string) =>
+  text.replace(/\bBRAND\.md\b/g, 'the brand guide').replace(/ SOP [A-Z]+-\d+/g, ' SOP');
+
 const CONTENT_TONES: Record<ContentState, Tone> = {
   draft: 'neutral',
   in_review: 'info',
@@ -20,7 +26,7 @@ const CONTENT_TONES: Record<ContentState, Tone> = {
 };
 
 export function ContentStateBadge({ state }: { state: ContentState }) {
-  return <StatusBadge tone={CONTENT_TONES[state]}>{state.replace('_', ' ')}</StatusBadge>;
+  return <StatusBadge tone={CONTENT_TONES[state]}>{cap(state.replace('_', ' '))}</StatusBadge>;
 }
 
 const INTEGRATION_TONES: Record<IntegrationStatus, Tone> = {
@@ -31,10 +37,10 @@ const INTEGRATION_TONES: Record<IntegrationStatus, Tone> = {
 };
 
 export const INTEGRATION_LABELS: Record<IntegrationStatus, string> = {
-  not_configured: 'not configured',
-  sandbox: 'sandbox (mock only)',
-  connected: 'connected',
-  error: 'error',
+  not_configured: 'Not configured',
+  sandbox: 'Test mode only',
+  connected: 'Connected',
+  error: 'Error',
 };
 
 export function IntegrationBadge({ status }: { status: IntegrationStatus }) {
@@ -50,18 +56,20 @@ export function PlacementBadge({
 }) {
   if (status === 'published') {
     if (mode === 'sandbox')
-      return <StatusBadge tone="warning">sandbox — nothing posted</StatusBadge>;
+      return <StatusBadge tone="warning">Test run: nothing posted</StatusBadge>;
     if (mode === 'legacy_reported')
-      return <StatusBadge tone="info">published (legacy tracker, unverified)</StatusBadge>;
-    return <StatusBadge tone="success">published</StatusBadge>;
+      return <StatusBadge tone="info">Published (old tracker, unverified)</StatusBadge>;
+    return <StatusBadge tone="success">Published</StatusBadge>;
   }
+  if (status === 'scheduled' && mode === 'sandbox')
+    return <StatusBadge tone="warning">Scheduled, test run: nothing posted</StatusBadge>;
   const tone: Tone =
     status === 'scheduled' ? 'info' : status === 'cancelled' ? 'neutral' : 'neutral';
-  return <StatusBadge tone={tone}>{status}</StatusBadge>;
+  return <StatusBadge tone={tone}>{cap(status)}</StatusBadge>;
 }
 
 export function ProposedBadge({ status }: { status: string }) {
-  return <StatusBadge tone={status === 'approved' ? 'success' : 'warning'}>{status}</StatusBadge>;
+  return <StatusBadge tone={status === 'approved' ? 'success' : 'warning'}>{cap(status)}</StatusBadge>;
 }
 
 export function RuleCheckSummary({ check }: { check: RuleCheckResult }) {

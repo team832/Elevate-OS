@@ -1,6 +1,60 @@
 import { describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';
+import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match';
+import { prepareDestination } from 'next/dist/shared/lib/router/utils/prepare-destination';
+import nextConfig from '../../next.config';
 import { config, proxy } from '../../src/proxy';
+
+describe('a POST to a page from another site is refused, not a crash (RVA-004)', () => {
+  it.each([
+    ['http://localhost:3003', 200],
+    ['https://evil.example', 403],
+    ['null', 403],
+  ])('Origin %s answers %i', (origin, status) => {
+    const request = new NextRequest('http://localhost:3003/login', { method: 'POST', headers: { origin, host: 'localhost:3003' } });
+    expect(proxy(request).status).toBe(status);
+  });
+});
+
+describe('zone rewrites keep internal routes off the public host (HAT-004)', () => {
+  const firstMatch = <R extends { source: string }>(rules: R[], path: string) =>
+    rules
+      .map((rule) => ({
+        rule,
+        params: getPathMatch(rule.source, { strict: true, removeUnnamedParams: true })(path),
+      }))
+      .find((m) => m.params);
+
+  describe.each(['marketing', 'academic', 'ops'])('/%s', (zone) => {
+    it.each([
+      `/${zone}`,
+      `/${zone}/leads/abc`,
+      `/${zone}/api/v1/leads`,
+      `/${zone}/api/internals`,
+      `/${zone}/_next/static/chunks/a.js`,
+    ])('%s is forwarded whole to the zone', async (path) => {
+      const rules = (await nextConfig.rewrites!()) as { source: string; destination: string }[];
+      const hit = firstMatch(rules, path);
+      expect(hit).toBeDefined();
+      const { parsedDestination } = prepareDestination({
+        appendParamsToQuery: false,
+        destination: hit!.rule.destination,
+        params: hit!.params as Record<string, string>,
+        query: {},
+      });
+      expect(parsedDestination.pathname).toBe(path);
+    });
+
+    it.each([
+      `/${zone}/api/internal`,
+      `/${zone}/api/internal/v1/summary`,
+      `/${zone}/API/Internal/v1/summary`,
+    ])('%s stays on the platform: no rewrite, and its 404 keeps the security headers', async (path) => {
+      expect(firstMatch((await nextConfig.rewrites!()) as { source: string }[], path)).toBeUndefined();
+      expect(firstMatch(await nextConfig.headers!(), path)).toBeDefined();
+    });
+  });
+});
 
 describe('platform proxy', () => {
   it('redirects visitors without a session cookie to /login with next', () => {

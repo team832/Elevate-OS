@@ -13,7 +13,7 @@
  * `not_assessed` when the required count is unknown) — never "optimal". Totals
  * alone do not prove that a dated schedule exists; that caveat is always returned.
  */
-import { isIsoDate } from '@elevate/shared-types';
+import { fmtDay, isIsoDate } from '@elevate/shared-types';
 import { eachDate, isoWeekday, monthKey } from './time';
 
 export interface CalendarRule {
@@ -175,7 +175,7 @@ export function computeCapacity(input: CapacityInput): CapacityResult {
     const lost = slotsOnDay.get(x.date) ?? 0;
     datedInWindow.push({ date: x.date, kind: x.kind });
     if (lost === 0) {
-      notes.push(`"${x.label}" on ${x.date} is not a teaching day; nothing deducted (no double counting).`);
+      notes.push(`"${x.label}" on ${fmtDay(x.date)} is not a teaching day; nothing deducted (no double counting).`);
       continue;
     }
     excludedSlots += lost;

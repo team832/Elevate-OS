@@ -16,6 +16,7 @@ import {
   type TrackerRow,
 } from '../../domain/admission-form';
 import { DELIVERY_MODE_LABELS, type ApplicationSnapshot } from '../../domain/applications';
+import { toIsoDate } from '../../domain/dates';
 import { CLASS_CATEGORY_LABELS } from '../../domain/demos';
 import { formatPaise } from '../../domain/fees';
 import { humanise } from '../../ui/format';
@@ -57,6 +58,10 @@ const day = (d: string | null | undefined) =>
       })
     : null;
 
+/** `recordedAt` is an instant: the paper prints the IST day it was recorded. */
+export const publicityConsentLine = (recordedAt: string) =>
+  `Consent given (recorded ${day(toIsoDate(new Date(recordedAt)))})`;
+
 export interface AdmissionRecord {
   reference: string;
   version: number;
@@ -65,6 +70,8 @@ export interface AdmissionRecord {
   documents: ReturnType<typeof documentChecklist>;
   summary: ReturnType<typeof feeSummary>;
   tracker: TrackerRow[];
+  /** The version now in force, when it is not the one this paper was made from. */
+  laterVersion?: number | null;
   /** Fee verifiers (BR-OPS-7 checks), by name. */
   checkedBy: string[];
   /** Null before final confirmation. */
@@ -98,6 +105,9 @@ function feeTables(pdf: PdfBuilder, r: AdmissionRecord) {
     ['Registration / admission fee', money(r.summary.registrationPaise)],
     ['Course fee (annual tuition)', money(r.summary.coursePaise)],
     ['Discount / scholarship', money(r.summary.discountPaise)],
+    ...(r.summary.debitPaise
+      ? [['Added charge (debit)', money(r.summary.debitPaise)] as [string, string]]
+      : []),
     ['Net fee payable', money(r.summary.netPaise)],
   ]);
   pdf.heading('08  Instalment & payment tracker');
@@ -125,6 +135,10 @@ function feeTables(pdf: PdfBuilder, r: AdmissionRecord) {
     'Amounts are recorded by staff (manual entries, not a payment gateway). A blank means nothing is recorded yet.',
     { muted: true },
   );
+  if (r.laterVersion)
+    pdf.paragraph(
+      `These are the terms of the signed version, with the money recorded to date. Fee agreement version ${r.laterVersion} is now in force, so what is owed today is on the student's Fees tab.`,
+    );
 }
 
 function verification(pdf: PdfBuilder, r: AdmissionRecord) {
@@ -289,7 +303,7 @@ export async function admissionFormPdf(
     [
       'Result publicity consent',
       consent?.given
-        ? `Consent given (recorded ${day(consent.recordedAt.slice(0, 10))})`
+        ? publicityConsentLine(consent.recordedAt)
         : `${box(false)} Consent given    ${box(true)} Not given`,
     ],
   ]);

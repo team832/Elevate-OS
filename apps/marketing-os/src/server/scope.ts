@@ -101,7 +101,6 @@ async function assertVisible(
   found: SQL,
   message: string,
 ) {
-  if (!filter) return;
   const [row] = await db
     .select({ n: sql`1` })
     .from(table)

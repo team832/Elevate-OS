@@ -4,6 +4,8 @@ import { getDb } from '@elevate/database';
 import { Alert, Button, Card, ErrorState, Field, TextInput } from '@elevate/shared-ui';
 import { modulePath } from '../../../domain';
 import { getContentItemDetail, listAccounts } from '../../../server';
+import { memberOptions } from '../../../server/campaign-members';
+import { teamWide } from '../../../server/scope';
 import { archiveAction, submitAction, withdrawAction } from '../../actions/content';
 import { ContentStateBadge } from '../../../ui/badges';
 import {
@@ -44,6 +46,8 @@ export default async function ContentItemPage({
             const accounts = await listAccounts(db);
             const write = can(user, 'marketing:content:write');
             const approve = can(user, 'marketing:content:approve');
+            const canAssign = write && teamWide(user);
+            const people = canAssign ? await memberOptions(db) : [];
             const { item } = d;
             return (
               <div className="el-stack">
@@ -69,7 +73,7 @@ export default async function ContentItemPage({
                     </Alert>
                   ) : null}
                   {item.legacyStatus ? (
-                    <Alert tone="info" title="Imported from the legacy tracker">
+                    <Alert tone="info" title="Imported from the old tracker">
                       Legacy status “{item.legacyStatus}”, format “{item.legacyFormat}”. There is no
                       approval record in Elevate OS for imported states; anything still to be
                       scheduled or published must be approved here first.
@@ -121,7 +125,12 @@ export default async function ContentItemPage({
                   }}
                 />
                 <HistoryPanel d={d} />
-                <PeoplePanel d={d} canWrite={write || approve} />
+                <PeoplePanel
+                  d={d}
+                  canWrite={write || approve}
+                  canAssign={canAssign}
+                  people={people}
+                />
               </div>
             );
           }}

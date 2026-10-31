@@ -74,12 +74,23 @@ describe('fee tracker and summary (sections 07, 08) reuse the Fees tab maths', (
       25_000_00,
       null,
     ]);
-    expect(feeSummary(s, [], inst)).toEqual({
+    expect(feeSummary(s, [])).toEqual({
       registrationPaise: 5_000_00,
       coursePaise: 100_000_00,
       discountPaise: null,
+      debitPaise: 0,
       netPaise: 105_000_00,
     });
+  });
+
+  // RVB-006: a signed paper states the discount at its real value and a debit on its own line.
+  it.each([
+    ['discount and debit', [['discount', null, 10_000_00], ['adjustment', 'debit', 3_000_00]], 10_000_00, 3_000_00, 98_000_00],
+    ['debit only', [['adjustment', 'debit', 3_000_00]], null, 3_000_00, 108_000_00],
+    ['credit and waiver', [['adjustment', 'credit', 1_000_00], ['waiver', null, 2_000_00]], 3_000_00, 0, 102_000_00],
+  ] as const)('%s', (_, rows, discountPaise, debitPaise, netPaise) => {
+    const ledger = rows.map(([kind, direction, amountPaise]) => plan({ kind, direction, amountPaise }));
+    expect(feeSummary(s, ledger)).toMatchObject({ discountPaise, debitPaise, netPaise });
   });
 
   it('an unlinked payment and a credit adjustment give exactly the Fees tab allocation and totals', () => {
@@ -113,22 +124,19 @@ describe('fee tracker and summary (sections 07, 08) reuse the Fees tab maths', (
     expect(rows.slice(1, 4).map((r) => [r.receivedPaise, r.balancePaise])).toEqual(
       canonical.map((a) => [a.paidPaise || null, a.remainingPaise]),
     );
-    expect(rows[1]).toMatchObject({ lastReceiptDate: '2026-10-02', mode: 'upi' });
+    // Instalment 1 took the ₹30,000 naming it and ₹20,000 of the one naming none (HMO-013).
+    expect(rows[1]).toMatchObject({ lastReceiptDate: '2026-10-05', mode: 'upi, cash' });
     expect(rows[0]!.balancePaise).toBe(0);
     expect(rows[4]!.receivedPaise).toBe(700_00);
-    expect(feeSummary(s, ledger, inst).discountPaise).toBe(
-      planTotals(
-        100_000_00,
-        inst,
-        ledger.filter((r) => r.planId === 'p'),
-      ).reductionsPaise,
-    );
+    const totals = planTotals(100_000_00, inst, ledger.filter((r) => r.planId === 'p'));
+    const printed = feeSummary(s, ledger);
+    expect((printed.discountPaise ?? 0) - printed.debitPaise).toBe(totals.reductionsPaise);
   });
 
   it('net is unknown when the registration fee is not set (never treated as 0)', () => {
     const noReg = { ...s, registrationFeePaise: null } as ApplicationSnapshot;
     expect(
-      feeSummary(noReg, [plan({ kind: 'discount', amountPaise: 2_000_00 })], inst),
+      feeSummary(noReg, [plan({ kind: 'discount', amountPaise: 2_000_00 })]),
     ).toMatchObject({ discountPaise: 2_000_00, netPaise: null });
   });
 });

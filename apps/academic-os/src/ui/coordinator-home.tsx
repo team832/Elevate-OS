@@ -11,10 +11,11 @@ import {
   fmtPercent,
   percent,
   type Datum,
+  fmtDay,
 } from '@elevate/shared-ui';
 import type { buildAcademicDeliverySummary, coordinatorOverview } from '../server';
 import { MODULE_PATHS } from '../server/paths';
-import { fmtRange } from './badges';
+import { fmtRange, programmeName } from './badges';
 
 type Overview = Awaited<ReturnType<typeof coordinatorOverview>>;
 type Summary = Awaited<ReturnType<typeof buildAcademicDeliverySummary>>;
@@ -91,21 +92,21 @@ export function CoordinatorTiles({ o }: { o: Overview }) {
     [
       'Enrolments awaiting a batch',
       o.awaitingBatch,
-      `Active enrolments with no current placement, as of ${o.today}.`,
+      `Active enrolments with no current placement, as of ${fmtDay(o.today)}.`,
       `${MODULE_PATHS.enrolments}?view=awaiting`,
       now,
     ],
     [
       'Assessments to mark',
       o.pendingMarking,
-      `Conducted, not finalised, as of ${o.today}.`,
+      `Conducted, not finalised, as of ${fmtDay(o.today)}.`,
       MODULE_PATHS.assessments,
       now,
     ],
     [
       'Open support cases',
       o.openSupport,
-      `Support actions open or in progress, as of ${o.today}.`,
+      `Support actions open or in progress, as of ${fmtDay(o.today)}.`,
       MODULE_PATHS.progress,
       now,
     ],
@@ -134,7 +135,7 @@ export function CoordinatorTiles({ o }: { o: Overview }) {
       </section>
       <Card
         title="Curriculum coverage, active batches"
-        description={`Chapters with a submitted first-teaching log, as a share of the batch's current plan, as of ${o.today}. What the batch was taught, not what students have mastered. A batch without a plan shows "Not recorded".`}
+        description={`Chapters with a submitted first-teaching log, as a share of the batch's current plan, as of ${fmtDay(o.today)}. What the batch was taught, not what students have mastered. A batch without a plan shows "Not recorded".`}
       >
         {coverage.length ? (
           <BarChart
@@ -171,7 +172,7 @@ export function UncoveredClasses({ o }: { o: Overview }) {
             render: (s) => (
               <a href={MODULE_PATHS.attendance(s.id)}>
                 <strong>
-                  {s.date} {s.startTime}
+                  {fmtDay(s.date)} {s.startTime}
                 </strong>
               </a>
             ),
@@ -259,7 +260,7 @@ export function DeliveryFigures({ summary }: { summary: Summary }) {
   const all = figuresOf(summary);
   const missing = all.filter((f) => f.metric.status === 'missing');
   const byProgramme = (key: 'attendanceRate' | 'classesDelivered'): Datum[] =>
-    summary.programmes.map((p) => ({ label: p.programmeCode, value: p.metrics[key].value }));
+    summary.programmes.map((p) => ({ label: programmeName(p.programmeCode), value: p.metrics[key].value }));
   const window = spoken(summary.window);
   return (
     <>

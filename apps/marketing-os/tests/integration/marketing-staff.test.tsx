@@ -187,7 +187,7 @@ describe('scenario 7: HR assigns a creative task to a marketer', () => {
     expect(list).toContain('Sample creative');
     expect(list).toContain('Not published');
     expect(list).toContain(TASK_PUBLISHED_TEXT);
-    expect(list).not.toContain('data-label="Approved">Approved<');
+    expect(list).not.toContain('data-label="Approved"><div>Approved<');
     const other = await render(DeliverablesPage({ searchParams: Promise.resolve({}) }), dev);
     expect(other).not.toContain('Sample: three IPMAT admission creatives');
     expect(other).not.toContain('Sample creative');
@@ -215,7 +215,7 @@ describe('scenario 7: HR assigns a creative task to a marketer', () => {
     expect(await ctx.db.select().from(marketingPublishingRecords)).toEqual([]);
     expect(await ctx.db.select().from(marketingPublishingAttempts)).toEqual([]);
     const list = await render(DeliverablesPage({ searchParams: Promise.resolve({}) }), chitra);
-    expect(list).toContain('data-label="Approved">Approved<');
+    expect(list).toContain('data-label="Approved"><div>Approved<');
     expect(list).toContain(TASK_PUBLISHED_TEXT);
   });
 

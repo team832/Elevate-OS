@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isoDateSchema } from '@elevate/shared-contracts';
 import { OPS_STUDENT_STAGES } from '@elevate/database';
 import { APPLICATION_STATUSES } from '../domain/applications';
+import { istToday } from '../domain/dates';
 
 const optText = (max: number) => z.string().trim().max(max).nullish();
 const version = z.int().min(1);
@@ -10,12 +11,14 @@ const version = z.int().min(1);
 /** GET /applications */
 export const applicationListQuery = z.object({
   q: z.string().trim().max(120).optional(),
-  status: z.enum(APPLICATION_STATUSES).optional(),
+  status: z.enum([...APPLICATION_STATUSES, 'unsigned']).optional(),
   /** Programme code of the application's own case. */
   programme: z
     .string()
     .regex(/^[A-Z][A-Z0-9_]{1,39}$/)
     .optional(),
+  /** Only signed applications an item still blocks (the Overview tile "Approval blocked"). */
+  blocked: z.literal('1').optional(),
   sort: z.enum(['updated', 'oldest', 'name']).default('updated'),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
 });
@@ -47,7 +50,11 @@ export const saveApplicationBody = z
     student: z
       .object({
         preferredName: optText(120),
-        dateOfBirth: isoDateSchema.nullish(),
+        dateOfBirth: isoDateSchema
+          .refine((d) => d <= istToday(new Date()), {
+            error: 'A date of birth cannot be in the future.',
+          })
+          .nullish(),
         currentStage: z.enum(OPS_STUDENT_STAGES).nullish(),
         schoolBoard: optText(120),
         previousSchool: optText(200),

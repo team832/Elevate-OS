@@ -39,6 +39,7 @@ import {
   withTransaction,
   withdrawApproval,
 } from '@elevate/server-kit';
+import { httpUrlSchema } from '@elevate/shared-contracts';
 import type { ContentItemId, UserId } from '@elevate/shared-types';
 import {
   ASSIGNEE_ROLES,
@@ -81,11 +82,7 @@ const assetSchema = z
       .trim()
       .regex(/^[a-z]+\/[a-z0-9.+-]+$/i, 'A MIME type such as image/png'),
     sizeBytes: z.int().min(0).max(5_000_000_000).nullable().optional(),
-    externalUrl: z
-      .url({ protocol: /^https?$/ })
-      .max(2000)
-      .nullable()
-      .optional(),
+    externalUrl: httpUrlSchema.max(2000).nullable().optional(),
     showsStudents: z.boolean().default(false),
     rightsState: z.enum(RIGHTS_STATES).default('own'),
   })
@@ -132,6 +129,13 @@ export const commentBody = z
   .strict();
 
 export const archiveBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+
+/** The rule for a reason, in the service: the REST route and the server action both arrive here. */
+export function checkedReason(reason: string): string {
+  const r = archiveBody.safeParse({ reason });
+  if (!r.success) throw new ValidationError('Give a reason of at least 3 characters.');
+  return r.data.reason;
+}
 
 /** SHA-256 over a canonical JSON of what the approver sees. */
 export function hashVersion(input: {
@@ -608,6 +612,7 @@ export async function archiveContentItem(
   requestId?: string,
 ) {
   assertCan(actor, 'marketing:content:write');
+  checkedReason(reason);
   return withTransaction(db, async (tx) => {
     const item = await lockItem(tx, itemId, actor);
     const to = nextState(item.state, 'archive');

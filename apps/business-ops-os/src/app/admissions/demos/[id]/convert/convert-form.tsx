@@ -94,12 +94,6 @@ export function ConvertForm({
       section: 'Programmes',
     },
     {
-      name: 'intendedBatchId',
-      label: 'Batch (Academic OS batch ID)',
-      hint: 'Leave empty for "to be assigned"; Academic OS assigns the batch on enrolment.',
-      section: 'Batch and start date',
-    },
-    {
       name: 'deliveryMode',
       label: 'Mode',
       type: 'select',
@@ -219,7 +213,7 @@ export function ConvertForm({
         description={`Demo checklist. ${
           d.checklistRequired.value.requiredBeforeConversion
             ? 'Every item must be resolved before conversion (setting on).'
-            : `Completing every item is not required (setting ${humanise(d.checklistRequired.decisionState).toLowerCase()}). A fee discussion is never evidence of payment.`
+            : 'Completing every item is not required. A fee discussion is never evidence of payment.'
         }`}
       >
         <RecordTable

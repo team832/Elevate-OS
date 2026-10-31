@@ -160,6 +160,12 @@ describe('admission state machine (A-03)', () => {
   });
 
   it('cannot mark lost while awaiting Academic OS', () => {
+    // An enrolled student on hold leaves through the exit, so Academic OS is told (IR-OPS-EXIT-1).
+    const held = (heldFromStatus: 'enrolled' | 'admitted') => ({ ...user, reason: 'x', heldFromStatus });
+    expect(checkTransition('on_hold', 'lost', held('enrolled'))).toMatchObject({ code: 'GUARD_FAILED' });
+    expect(checkTransition('on_hold', 'lost', held('admitted')).ok).toBe(true);
+    expect(allowedUserTargets('on_hold', { heldFromStatus: 'enrolled' })).not.toContain('lost');
+    expect(allowedUserTargets('on_hold', { heldFromStatus: 'admitted' })).toContain('lost');
     expect(checkTransition('enrolment_requested', 'lost', { ...user, reason: 'x' })).toMatchObject({
       code: 'ILLEGAL',
     });

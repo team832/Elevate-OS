@@ -118,6 +118,11 @@ export interface FeeRecordLike {
   /** Refund of a payment, or reversal of an entry of the same kind (linked rows, never deletion). */
   reversesRecordId?: string | null;
   chargeCategory?: FeeChargeCategory | string;
+  demoId?: string | null;
+  instalmentId?: string | null;
+  paymentDate?: string | null;
+  receiptReference?: string | null;
+  code?: string;
 }
 
 /** A reversal cancels an entry of its own kind; a `refund` linked to a payment is a refund, not a reversal. */
@@ -201,6 +206,12 @@ export function validateFeeRecord(
   const link = (message: string) => issues.push({ path: 'reversesRecordId', message });
   if (input.reversesRecordId) {
     const counted = effectiveRecords(existing);
+    // Proposed (HMO-008, owner to confirm): the D-057 bound on a demo credit keeps holding afterwards.
+    if (target?.demoId && target.kind === 'received' && 'ok' in amount) {
+      const s = sumKinds(counted.filter((r) => r.demoId === target.demoId));
+      if (s.credit > s.received - s.refund - amount.value)
+        link('This demo fee is credited to tuition. Reverse that credit first.');
+    }
     if (!target) link('That entry is not on this admission.');
     else if (!counted.includes(target))
       link('That entry no longer counts (voided, reversed, or itself a reversal).');
@@ -235,6 +246,16 @@ export function validateFeeRecord(
       issues.push({ path: 'paymentDate', message: 'Give the date the money moved.' });
     else if (input.paymentDate > today)
       issues.push({ path: 'paymentDate', message: 'The payment date cannot be in the future.' });
+    // Proposed (HMO-012, owner to confirm): money cannot go back before it came in.
+    else if (
+      input.kind === 'refund' &&
+      target?.paymentDate &&
+      input.paymentDate < target.paymentDate
+    )
+      issues.push({
+        path: 'paymentDate',
+        message: 'A refund cannot be dated before the payment it returns.',
+      });
     if (config.requireReceiptReference && !input.receiptReference?.trim())
       issues.push({
         path: 'receiptReference',
@@ -263,8 +284,78 @@ export function validateFeeRecord(
   return issues;
 }
 
+/** A discount, a waiver or a credit adjustment: it lowers what is owed without any money moving. */
+export const lowersOwed = (r: { kind: FeeRecordKind; direction?: FeeDirection | null }) =>
+  r.kind === 'discount' ||
+  r.kind === 'waiver' ||
+  (r.kind === 'adjustment' && r.direction === 'credit');
+
+/**
+ * Proposed (HMO-007, owner to confirm): a reduction above what is still owed on its charge is
+ * refused, because it would show as a credit nobody paid. null = no amount due recorded: no bound.
+ */
+export function reductionAboveOwedIssue(
+  input: { kind: FeeRecordKind; direction?: FeeDirection | null; amountPaise: number },
+  owedPaise: number | null,
+): FeeIssue | null {
+  if (!lowersOwed(input) || owedPaise === null || input.amountPaise <= owedPaise) return null;
+  return {
+    path: 'amountPaise',
+    message: `Only ${formatPaise(Math.max(0, owedPaise))} is still owed on this charge.`,
+  };
+}
+
+const receiptKey = (r: { receiptReference?: string | null }) =>
+  r.receiptReference?.trim().toLowerCase() ?? '';
+
+/**
+ * Proposed (HUS-008, API-008, owner to confirm): a payment with the receipt, amount, date, charge
+ * and instalment of one already counted is the same payment again (a reloaded form or a second
+ * press; an Idempotency-Key only covers a retry of one press). One receipt split over two
+ * instalments, or a correction after a reversal, still goes through.
+ */
+export function duplicatePaymentIssue(
+  input: {
+    kind: FeeRecordKind;
+    amountPaise: number;
+    paymentDate?: string | null;
+    receiptReference?: string | null;
+    instalmentId?: string | null;
+    chargeCategory?: string | null;
+  },
+  existing: readonly FeeRecordLike[],
+): FeeIssue | null {
+  if (input.kind !== 'received' || !receiptKey(input)) return null;
+  const same = effectiveRecords(existing).find(
+    (r) =>
+      r.kind === 'received' &&
+      receiptKey(r) === receiptKey(input) &&
+      r.amountPaise === input.amountPaise &&
+      r.paymentDate === input.paymentDate &&
+      (r.instalmentId ?? null) === (input.instalmentId ?? null) &&
+      (r.chargeCategory ?? 'tuition') === (input.chargeCategory ?? 'tuition'),
+  );
+  return same
+    ? {
+        path: 'receiptReference',
+        message: `This payment is already recorded${same.code ? ` (${same.code})` : ''}. A second payment needs its own receipt reference.`,
+      }
+    : null;
+}
+
 export type FeeBalanceState =
   'no_records' | 'no_due_recorded' | 'outstanding' | 'settled' | 'credit_balance';
+
+export const balanceStateOf = (activeCount: number, balance: number | null): FeeBalanceState =>
+  activeCount === 0
+    ? 'no_records'
+    : balance === null
+      ? 'no_due_recorded'
+      : balance > 0
+        ? 'outstanding'
+        : balance === 0
+          ? 'settled'
+          : 'credit_balance';
 
 export interface FeeSummary {
   currency: 'INR';
@@ -298,16 +389,6 @@ export function summariseFees(records: readonly FeeRecordLike[]): FeeSummary {
   const net = s.received - s.refund;
   const hasDue = counted.some((r) => r.kind === 'due');
   const balance = hasDue ? due - credits - net : null;
-  const balanceState: FeeBalanceState =
-    active.length === 0
-      ? 'no_records'
-      : balance === null
-        ? 'no_due_recorded'
-        : balance > 0
-          ? 'outstanding'
-          : balance === 0
-            ? 'settled'
-            : 'credit_balance';
   return {
     currency: 'INR',
     duePaise: due,
@@ -317,7 +398,7 @@ export function summariseFees(records: readonly FeeRecordLike[]): FeeSummary {
     netReceivedPaise: net,
     verifiedNetReceivedPaise: verified.received - verified.refund,
     balancePaise: balance,
-    balanceState,
+    balanceState: balanceStateOf(active.length, balance),
     activeCount: active.length,
     unverifiedCount: active.filter((r) => r.status === 'recorded').length,
     voidedCount: records.length - active.length,

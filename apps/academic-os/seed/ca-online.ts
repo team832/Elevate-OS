@@ -10,9 +10,11 @@
  * COMMERCE_11_12 with mode online and course status `paused`. The core
  * programme's own status is left as the core seed set it.
  */
+import { and, eq } from 'drizzle-orm';
+import { academicCourses } from '@elevate/database';
 import { defineSeed } from '@elevate/database/seed';
 import { pad2, readLegacy, sourceRef, type CaAccountancy, type OnlineAccountancy } from './legacy';
-import { programmeId, upsertChapter, upsertCourse, upsertItems, upsertPlan, upsertSubject, type SeedItem } from './upsert';
+import { programmeId, ensureChapter, ensureCourse, ensureItems, ensurePlan, ensureSubject, type SeedItem } from './ensure';
 
 export const caFoundationSeed = defineSeed({
   name: 'academic.ca-foundation',
@@ -23,7 +25,7 @@ export const caFoundationSeed = defineSeed({
     const ca = readLegacy<CaAccountancy>('ca-foundation-accountancy.json');
     // Class length: 75 minutes was "selected in conversation" but the start date and
     // session length are still open in other sources (OD-019) → proposed, not locked.
-    const courseId = await upsertCourse(db, {
+    const courseId = await ensureCourse(db, {
       programmeId: await programmeId(db, 'CA_FOUNDATION'),
       code: 'CAF-ACC-SEP27',
       familyCode: 'CAF-ACC',
@@ -36,10 +38,15 @@ export const caFoundationSeed = defineSeed({
       status: 'active', // D-037: CA Foundation is running (owner, 21 Oct 2026)
       sourceRef: sourceRef('ca-foundation-accountancy.json'),
     });
-    const subjectId = await upsertSubject(db, courseId, 'ACC', 'Accountancy', 0);
+    // D-037 for a database seeded before 21 Oct: only this one change, and no screen can pause a course.
+    await db
+      .update(academicCourses)
+      .set({ status: 'active' })
+      .where(and(eq(academicCourses.id, courseId), eq(academicCourses.status, 'paused')));
+    const subjectId = await ensureSubject(db, courseId, 'ACC', 'Accountancy', 0);
     const items: SeedItem[] = [];
     for (const r of ca.records) {
-      const chapterId = await upsertChapter(db, { courseId, subjectId, code: `ACC-${pad2(r.chapter_no)}`, title: r.title, sortOrder: r.chapter_no });
+      const chapterId = await ensureChapter(db, { courseId, subjectId, code: `ACC-${pad2(r.chapter_no)}`, title: r.title, sortOrder: r.chapter_no });
       for (const t of r.topics) {
         // Hours are multiples of 0.25 → exact whole minutes. Classes are 75-minute
         // CLASS EQUIVALENTS ("150 h = 120 x 75-minute class equivalents; not an
@@ -48,7 +55,7 @@ export const caFoundationSeed = defineSeed({
         items.push({ chapterId, lessonCode: t.topic_id, sessionType: 'teaching', plannedClasses: Math.max(1, Math.round(minutes / 75)), plannedMinutes: minutes, coverage: t.topic });
       }
     }
-    const planId = await upsertPlan(db, {
+    const planId = await ensurePlan(db, {
       courseId,
       code: 'CAF-ACC-V0.2',
       title: 'CA Foundation Accountancy plan v0.2 — 150 h (provisional)',
@@ -61,7 +68,7 @@ export const caFoundationSeed = defineSeed({
       changeLog: 'v0.2 splits the v0.1 chapter totals (superseded, not imported) into 46 topic blocks.',
       sourceRef: sourceRef('ca-foundation-accountancy.json', 'records'),
     });
-    await upsertItems(db, planId, items);
+    await ensureItems(db, planId, items);
   },
 });
 
@@ -72,7 +79,7 @@ export const onlineAccountancySeed = defineSeed({
   description: 'Online Class 12 Accountancy (provisional): course ONL-C12-ACC, plan ONL-C12-ACC-226 (14 chapters, 118 CBSE h)',
   async run({ db }) {
     const oc = readLegacy<OnlineAccountancy>('online-class12-accountancy.json');
-    const courseId = await upsertCourse(db, {
+    const courseId = await ensureCourse(db, {
       programmeId: await programmeId(db, 'COMMERCE_11_12'),
       code: 'ONL-C12-ACC',
       familyCode: 'ONL-C12-ACC',
@@ -85,14 +92,14 @@ export const onlineAccountancySeed = defineSeed({
       status: 'paused',
       sourceRef: sourceRef('online-class12-accountancy.json'),
     });
-    const subjectId = await upsertSubject(db, courseId, 'ACC', 'Accountancy', 0);
+    const subjectId = await ensureSubject(db, courseId, 'ACC', 'Accountancy', 0);
     const items: SeedItem[] = [];
     for (const r of oc.records) {
       const title = r.chapter_note ? `${r.chapter} (${r.chapter_note})` : r.chapter;
-      const chapterId = await upsertChapter(db, { courseId, subjectId, code: `ACC12-${pad2(r.seq)}`, title, sortOrder: r.seq });
+      const chapterId = await ensureChapter(db, { courseId, subjectId, code: `ACC12-${pad2(r.seq)}`, title, sortOrder: r.seq });
       items.push({ chapterId, lessonCode: `ACC12-${pad2(r.seq)}`, sessionType: 'teaching', plannedClasses: r.classes, plannedMinutes: r.classes * r.class_minutes });
     }
-    const planId = await upsertPlan(db, {
+    const planId = await ensurePlan(db, {
       courseId,
       code: 'ONL-C12-ACC-226',
       title: 'Online Class 12 Accountancy — 226 h build-up (provisional)',
@@ -106,6 +113,6 @@ export const onlineAccountancySeed = defineSeed({
       changeLog: 'Legacy import (single source: the handover notes). The other four online subjects are not started.',
       sourceRef: sourceRef('online-class12-accountancy.json', 'records + build_up'),
     });
-    await upsertItems(db, planId, items);
+    await ensureItems(db, planId, items);
   },
 });
