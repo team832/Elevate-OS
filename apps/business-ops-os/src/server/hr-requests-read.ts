@@ -27,7 +27,9 @@ import {
 } from '../domain/hr-requests';
 import { accessScope, notFound, staffIdForUser, type Actor } from './context';
 import type { HrRequestListQuery } from './hr-requests-schemas';
-import { hrReachWhere, hrScopeFor } from './hr-scope';
+import { hrReachWhere, hrScopeFor, inHrReach } from './hr-scope';
+
+export { inHrReach };
 import { rowById } from './ops-common';
 import { loadSettings } from './settings';
 
@@ -42,17 +44,6 @@ export async function hrCovers(db: Database, actor: Actor, sender: string, self:
   if ((!read && !manage) || sender === self) return { read: false, manage: false };
   const hit = await inHrReach(db, actor, sender);
   return { read: read && hit, manage: manage && hit };
-}
-
-/** The staff member is inside the caller's HR department scope (no scope = everyone). */
-export async function inHrReach(db: Database, actor: Actor, staffId: string) {
-  const scope = await hrScopeFor(db, actor);
-  if (!scope) return true;
-  const [hit] = await db
-    .select({ id: staffMembers.id })
-    .from(staffMembers)
-    .where(and(eq(staffMembers.id, staffId as StaffMemberId), hrReachWhere(actor, scope)));
-  return !!hit;
 }
 
 /** The caller's roles on a request; `hr` = may manage it. Drafts belong to their sender alone. */

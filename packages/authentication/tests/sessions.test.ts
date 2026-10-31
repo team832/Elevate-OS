@@ -185,6 +185,23 @@ describe('login / logout handlers', () => {
     expect(locked.status).toBe(429);
   });
 
+  it('a new X-Forwarded-For per attempt does not escape the per-email limit', async () => {
+    const login = createLoginHandler({
+      ...options,
+      emailThrottle: new LoginThrottle({ maxFailures: 3 }),
+    });
+    const attempt = (i: number, password: string) =>
+      login(
+        new Request('http://localhost/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-forwarded-for': `203.0.113.${i}` },
+          body: JSON.stringify({ email: 'tara.teacher@example.test', password }),
+        }),
+      );
+    for (let i = 0; i < 3; i++) expect((await attempt(i, 'nope-nope')).status).toBe(401);
+    expect((await attempt(9, 'fictional-password-1')).status).toBe(429);
+  });
+
   it('form login redirects (303) to a safe relative next path; open redirects are refused', async () => {
     const login = createLoginHandler(options);
     const form = (fields: Record<string, string>) =>

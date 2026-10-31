@@ -108,7 +108,7 @@ export function EditPanel({ d }: { d: D }) {
         <Field
           id="v-consent"
           label="Consent reference"
-          hint="Evidence reference only (e.g. a form number) — never personal data (OD-008)."
+          hint="Evidence reference only (e.g. a form number) — never personal data."
         >
           <TextInput
             id="v-consent"

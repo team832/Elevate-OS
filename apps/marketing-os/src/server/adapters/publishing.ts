@@ -48,7 +48,7 @@ export class MockPublishingAdapter implements PublishingAdapter {
   async verifyConnection(account: { code: string; platform: Platform }): Promise<ConnectionCheck> {
     return {
       status: 'sandbox',
-      note: `Sandbox adapter only: no ${account.platform} credentials exist and nothing can be posted for ${account.code} (D-014).`,
+      note: `Sandbox adapter only: no ${account.platform} credentials exist and nothing can be posted for ${account.code}.`,
     };
   }
 

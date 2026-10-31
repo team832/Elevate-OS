@@ -1,17 +1,11 @@
 /**
  * Admissions pipeline (OPS-005, OPS-010, OPS-011): board, detail, user
- * transitions, checklist, fee-arrangement approval, and the read helpers the
+ * transitions, checklist, and the read helpers the
  * other admission services share. The enrolment handoff lives in ./enrolment.ts.
  */
 import { eq } from 'drizzle-orm';
 import { opsAdmissionChecks, opsAdmissions, opsLeads, type Database } from '@elevate/database';
-import {
-  decideApproval,
-  findPendingApproval,
-  requestApproval,
-  withdrawApproval,
-  withTransaction,
-} from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
   ForbiddenError,
@@ -20,6 +14,7 @@ import {
 } from '@elevate/shared-contracts';
 import type { z } from 'zod';
 import {
+  ADMISSION_STATUS_LABELS,
   checkReasonCode,
   checkVerifierSeparation,
   isOpenStatus,
@@ -27,11 +22,10 @@ import {
   type AdmissionStatus,
   type CheckState,
 } from '../domain';
-import { assertAdmissionAccess, checksOf, lockAccessible, readinessOf } from './admissions-lookups';
-import { feeArrangementPolicy } from './approval-policies';
-import { accessScope, activeStaff, notFound, programmeByCode, type Actor } from './context';
+import { checksOf, lockAccessible, readinessOf } from './admissions-lookups';
+import { accessScope, activeStaff, programmeByCode, type Actor } from './context';
 import { fieldError, opsAudit } from './ops-common';
-import { applyTransition, lockAdmission, type AdmissionRow } from './pipeline';
+import { applyTransition, type AdmissionRow } from './pipeline';
 import type { checkBody, UpdateAdmissionInput } from './schemas';
 import { loadSettings } from './settings';
 
@@ -141,7 +135,9 @@ export async function updateAdmission(
   return withTransaction(db, async (tx) => {
     const before = await lockAccessible(tx, access, id);
     if (!isOpenStatus(before.status) || before.status === 'enrolment_requested')
-      throw new ConflictError(`An admission that is ${before.status} cannot be edited.`);
+      throw new ConflictError(
+        `An admission that is "${ADMISSION_STATUS_LABELS[before.status]}" cannot be edited.`,
+      );
     if (
       'programmeId' in patch &&
       patch.programmeId !== before.programmeId &&
@@ -176,7 +172,9 @@ export async function recordAdmissionCheck(
   return withTransaction(db, async (tx) => {
     const admission = await lockAccessible(tx, access, id);
     if (['lost', 'enrolled'].includes(admission.status))
-      throw new ConflictError(`The checklist of a ${admission.status} admission cannot change.`);
+      throw new ConflictError(
+        `The checklist of a "${ADMISSION_STATUS_LABELS[admission.status]}" admission cannot change.`,
+      );
     const existing = await checksOf(tx, admission.id);
     if (input.status === 'done') {
       const separation = checkVerifierSeparation(input.itemKey, actor.id, existing as CheckState[]);
@@ -213,70 +211,5 @@ export async function recordAdmissionCheck(
       requestId,
     );
     return after;
-  });
-}
-
-// --- fee arrangement approval (BR-OPS-7) ------------------------------------------------------------
-
-/** A fee arrangement is approved while the admission is pending (before "admitted"). */
-const FEE_APPROVAL_STATUSES = [
-  'counselled',
-  'demo_scheduled',
-  'demo_attended',
-  'admission_pending',
-];
-
-export async function feeApprovalAction(
-  db: Database,
-  actor: Actor,
-  id: string,
-  input: { action: 'request' | 'approve' | 'reject' | 'withdraw'; comment?: string | null },
-  requestId?: string,
-) {
-  const deciding = input.action === 'approve' || input.action === 'reject';
-  const access = await accessScope(
-    db,
-    actor,
-    deciding ? 'ops:admissions:approve' : 'ops:admissions:write',
-  );
-  const policy = feeArrangementPolicy;
-  const comment = input.comment ?? null;
-  return withTransaction(db, async (tx) => {
-    const admission = await lockAdmission(tx, id);
-    if (!admission) notFound('Admission');
-    if (!deciding) await assertAdmissionAccess(tx, access, admission);
-    if (!FEE_APPROVAL_STATUSES.includes(admission.status))
-      throw new InvalidStateTransitionError(
-        'A fee arrangement is approved while the admission is pending (before "admitted").',
-      );
-    if (input.action === 'request') {
-      const done = (await checksOf(tx, admission.id))
-        .filter((c) => c.status === 'done')
-        .map((c) => c.itemKey);
-      if (!done.includes('fee_verification_1') || !done.includes('fee_verification_2'))
-        throw new ValidationError('Record both fee verifications before asking for approval.');
-      return requestApproval(tx, {
-        policy,
-        subjectId: admission.id,
-        requestedBy: actor,
-        comment,
-        requestId,
-      });
-    }
-    const pending = await findPendingApproval(tx, policy, admission.id);
-    if (!pending)
-      throw new InvalidStateTransitionError(
-        'There is no pending fee-arrangement approval request.',
-      );
-    if (input.action === 'withdraw')
-      return withdrawApproval(tx, { policy, approvalId: pending.id, actor, requestId });
-    return decideApproval(tx, {
-      policy,
-      approvalId: pending.id,
-      decider: actor,
-      decision: input.action === 'approve' ? 'approved' : 'rejected',
-      comment,
-      requestId,
-    });
   });
 }

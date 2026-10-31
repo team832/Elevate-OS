@@ -6,13 +6,7 @@
 import { can } from '@elevate/authorization';
 import { EmptyState } from '@elevate/shared-ui';
 import { DEMO_FEE_LABELS } from '../../../domain/demos';
-import {
-  FEE_KIND_LABELS,
-  FEE_METHODS,
-  FEE_STATUS_LABELS,
-  type FeeRecordKind,
-  type FeeRecordStatus,
-} from '../../../domain/fees';
+import { FEE_KIND_LABELS, FEE_METHODS, FEE_STATUS_LABELS } from '../../../domain/fees';
 import { ActionForm, type FieldSpec } from '../../../ui/action-form';
 import { StatCard } from '../../../ui/charts';
 import { fmtDate, fmtPaise, humanise } from '../../../ui/format';
@@ -103,7 +97,7 @@ export function DemoFees({ d, user, level }: DemoTabProps) {
             {
               key: 'kind',
               header: 'Entry',
-              render: (r) => FEE_KIND_LABELS[r.kind as FeeRecordKind],
+              render: (r) => FEE_KIND_LABELS[r.kind],
             },
             {
               key: 'amount',
@@ -126,7 +120,7 @@ export function DemoFees({ d, user, level }: DemoTabProps) {
             {
               key: 'status',
               header: 'Status',
-              render: (r) => FEE_STATUS_LABELS[r.status as FeeRecordStatus],
+              render: (r) => FEE_STATUS_LABELS[r.status],
             },
             { key: 'by', header: 'Recorded by', render: (r) => nameOf(d, r.recordedBy) },
             { key: 'notes', header: 'Reason or note', render: (r) => r.notes ?? '—' },

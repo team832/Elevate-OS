@@ -11,6 +11,8 @@ import { hashPassword, type AuthenticatedUser } from '@elevate/authentication';
 import {
   academicBatches,
   academicStudents,
+  academicSubjects,
+  academicTeacherAssignments,
   marketingOptimisationCategories,
   opsLeadStages,
   opsTaskReminders,
@@ -439,6 +441,31 @@ describe('development sample set (db:seed) reconciles', () => {
       'marketing.targets': 1,
     };
     const legacyIdeas = await db().$count(marketingIdeas, eq(marketingIdeas.isSample, false));
+    // A real batch never gets a sample teacher from db:seed; one left by an older seed is removed.
+    const sampleTeacherOnRealBatch = `SELECT count(*)::int AS n FROM academic.teacher_assignments ta
+      JOIN ops.staff_profiles p ON p.staff_id = ta.staff_member_id AND p.is_sample
+      LEFT JOIN academic.batches b ON b.id = ta.batch_id WHERE b.is_sample IS NOT TRUE`;
+    const countOf = async (q: string) =>
+      Number(((await db().execute(sql.raw(q))) as unknown as { rows: { n: number }[] }).rows[0]!.n);
+    expect(await countOf(sampleTeacherOnRealBatch)).toBe(0);
+    const [olderSeed] = await db()
+      .select({ staffId: staffMembers.id })
+      .from(staffMembers)
+      .innerJoin(users, eq(users.id, staffMembers.userId))
+      .where(eq(users.email, 'teacher@example.test'));
+    const [quant] = await db()
+      .select()
+      .from(academicSubjects)
+      .where(
+        and(eq(academicSubjects.courseId, batch!.courseId), eq(academicSubjects.code, 'QUANT')),
+      );
+    await db().insert(academicTeacherAssignments).values({
+      batchId: batch!.id,
+      subjectId: quant!.id,
+      staffMemberId: olderSeed!.staffId,
+      employmentType: 'full_time',
+      startDate: '2027-04-01',
+    });
 
     const deleted = await clearSamples(db());
     for (const table of [
@@ -474,6 +501,26 @@ describe('development sample set (db:seed) reconciles', () => {
       ),
     );
     expect(left).toEqual(real);
+    // Every table with an is_sample column, found from the live schema, so a new one cannot be missed:
+    // only the sample staff who hold a login stay (other records point at their accounts).
+    const rowsOf = async (q: string) =>
+      ((await db().execute(sql.raw(q))) as unknown as { rows: Record<string, unknown>[] }).rows;
+    const sampleTables = await rowsOf(
+      `SELECT table_schema || '.' || table_name AS t FROM information_schema.columns
+       WHERE column_name = 'is_sample' AND table_schema IN ('core', 'ops', 'academic', 'marketing')`,
+    );
+    expect(sampleTables.length).toBeGreaterThan(30);
+    const sampleLeft: Record<string, number> = {};
+    for (const { t } of sampleTables) {
+      const [r] = await rowsOf(`SELECT count(*)::int AS n FROM ${String(t)} WHERE is_sample`);
+      if (r!.n) sampleLeft[String(t)] = Number(r!.n);
+    }
+    const [loginStaff] = await rowsOf(
+      `SELECT count(*)::int AS n FROM ops.staff_profiles p JOIN core.staff_members m ON m.id = p.staff_id
+       WHERE p.is_sample AND m.user_id IS NOT NULL`,
+    );
+    expect(sampleLeft).toEqual({ 'ops.staff_profiles': loginStaff!.n });
+    expect(await countOf(sampleTeacherOnRealBatch)).toBe(0);
     expect(await db().$count(marketingIdeas)).toBe(legacyIdeas);
     // Reference data is not sample.
     expect(await db().$count(opsLeadStages)).toBe(12);

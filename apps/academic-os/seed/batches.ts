@@ -1,7 +1,8 @@
 /**
- * Planning batches, their calendars and one teaching assignment (D-016). No class
- * records, attendance, attempts or results are seeded: nothing here is delivered work.
- * Sample students and sample teaching are in ./samples.ts (D-036).
+ * Planning batches and their calendars (D-016). No class records, attendance, attempts, results
+ * or teachers are seeded: nothing here is delivered work, and a real batch never gets a sample
+ * teacher (its real Quant teacher is ./owner-assignments.ts). Sample students and sample
+ * teaching are in ./samples.ts (D-036).
  */
 import { and, eq } from 'drizzle-orm';
 import { defineSeed } from '@elevate/database/seed';
@@ -10,10 +11,6 @@ import {
   academicCalendarExclusions,
   academicCalendarRules,
   academicCourses,
-  academicSubjects,
-  academicTeacherAssignments,
-  staffMembers,
-  users,
   type Database,
 } from '@elevate/database';
 import type { BatchId } from '@elevate/shared-types';
@@ -86,9 +83,9 @@ async function ensureExclusion(
 export const batchesSeed = defineSeed({
   name: 'academic.batches',
   module: 'academic',
-  dependsOn: ['academic.ipmat-class12', 'academic.ca-foundation', 'core.staff_members'],
+  dependsOn: ['academic.ipmat-class12', 'academic.ca-foundation'],
   description:
-    'Planning batches IPMAT-C12-APR27 (Class 12 calendar rules + 28-slot allowance) and CAF-SEP27-REG; teacher assignment',
+    'Planning batches IPMAT-C12-APR27 (Class 12 calendar rules + 28-slot allowance) and CAF-SEP27-REG',
   async run({ db }) {
     const plan = readLegacy<Class12Plan>('class12-plan.json');
     const base = readLegacy<IpmatBaseline>('ipmat-baseline.json');
@@ -189,40 +186,5 @@ export const batchesSeed = defineSeed({
         'summary.batch_id (start date unresolved, OD-019)',
       ),
     });
-
-    // The fictional seed teacher teaches Quant in the Class 12 batch.
-    const [teacher] = await db
-      .select({ staffId: staffMembers.id })
-      .from(staffMembers)
-      .innerJoin(users, eq(users.id, staffMembers.userId))
-      .where(eq(users.email, 'teacher@example.test'));
-    const [quant] = await db
-      .select()
-      .from(academicSubjects)
-      .where(and(eq(academicSubjects.courseId, c12.id), eq(academicSubjects.code, 'QUANT')));
-    if (teacher && quant) {
-      const [existing] = await db
-        .select({ id: academicTeacherAssignments.id })
-        .from(academicTeacherAssignments)
-        .where(
-          and(
-            eq(academicTeacherAssignments.batchId, batchId),
-            eq(academicTeacherAssignments.subjectId, quant.id),
-            eq(academicTeacherAssignments.staffMemberId, teacher.staffId),
-            eq(academicTeacherAssignments.status, 'active'),
-          ),
-        );
-      if (!existing) {
-        await db
-          .insert(academicTeacherAssignments)
-          .values({
-            batchId,
-            subjectId: quant.id,
-            staffMemberId: teacher.staffId,
-            employmentType: 'full_time',
-            startDate: '2027-04-01',
-          });
-      }
-    }
   },
 });

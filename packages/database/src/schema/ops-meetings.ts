@@ -177,6 +177,7 @@ export const opsAppointments = ops.table(
   (t) => [
     index('appointments_starts_idx').on(t.startsAt),
     index('appointments_admission_idx').on(t.admissionId),
+    index('appointments_lead_idx').on(t.leadId),
     index('appointments_staff_time_idx').on(t.staffId, t.startsAt),
     index('appointments_student_idx').on(t.studentId),
     check('appointments_type_check', sql`${t.type} IN ${inList(OPS_APPOINTMENT_TYPES)}`),

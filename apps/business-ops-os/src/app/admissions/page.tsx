@@ -55,7 +55,12 @@ export default async function AdmissionsPage({ searchParams }: { searchParams: P
   const params = await searchParams;
   const parsed = demoListQuery.safeParse(params);
   const write = can(access.user, 'ops:leads:write');
-  const close = linkTo(params, { open: undefined, new: undefined, convert: undefined });
+  const close = linkTo(params, {
+    open: undefined,
+    new: undefined,
+    convert: undefined,
+    lead: undefined,
+  });
   return (
     <Frame access={access} active="admissions">
       <PageHeader
@@ -97,7 +102,7 @@ export default async function AdmissionsPage({ searchParams }: { searchParams: P
       ) : params.new && write ? (
         <FormModal id="book-demo" title="Book a demo" closeHref={close}>
           <Section label="Loading form…">
-            <BookDemo user={access.user} cancelHref={close} />
+            <BookDemo user={access.user} cancelHref={close} leadId={params.lead} />
           </Section>
         </FormModal>
       ) : null}

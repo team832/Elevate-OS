@@ -4,6 +4,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { and, count, eq } from 'drizzle-orm';
 import {
+  approvals,
   auditEvents,
   opsAdmissionNumberChanges,
   opsAdmissions,
@@ -20,6 +21,7 @@ import {
   type TestUser,
 } from '@elevate/testing';
 import { GET as preview, POST as convert } from '../../src/app/api/v1/demos/[id]/convert/route';
+import { GET as getAdmission } from '../../src/app/api/v1/admissions/[id]/route';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 import { get, post } from './admissions-fixtures';
 import {
@@ -121,6 +123,17 @@ describe('conversion', () => {
         and(eq(auditEvents.entityId, admissionId), eq(auditEvents.action, 'admission.converted')),
       );
     expect(audits).toHaveLength(1);
+  });
+
+  it('a discount request opens no approval (the agreement approval decides it) and shows on the admission', async () => {
+    const { demoId, admissionId } = await demoCase();
+    const discountRequest = 'test-only: discount asked by the guardian';
+    expect((await run(counsellor, demoId, { ...BODY, discountRequest })).status).toBe(201);
+    expect(await ctx.db.$count(approvals, eq(approvals.subjectId, admissionId))).toBe(0);
+    const detail = await callRoute<{ discountRequest: string | null }>(getAdmission, get(manager), {
+      id: admissionId,
+    });
+    expect(detail.data?.discountRequest).toBe(discountRequest);
   });
 
   it('10 parallel conversions give 10 applications with unique references and no numbers', async () => {

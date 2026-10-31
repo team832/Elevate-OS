@@ -182,14 +182,53 @@ export const enrolmentRejectedV1 = defineEvent({
   payload: enrolmentRejectedV1Payload,
 });
 
+/**
+ * Ops exit statuses that end an Academic enrolment (`OPS_EXIT_STATUSES` without
+ * `cancelled_before_enrolment`, which never had one).
+ */
+export const ENROLMENT_CLOSED_OUTCOMES = [
+  'withdrawn',
+  'completed',
+  'transferred',
+  'other_inactive',
+] as const;
+
+/** IR-OPS-EXIT-1: Ops recorded an exit; Academic stops attendance and new sessions after `exitDate`. */
+export const enrolmentClosedV1Payload = z
+  .object({
+    admissionId: admissionIdSchema,
+    /** The enrolment Academic confirmed for this admission (`ops.admissions.enrolment_id`). */
+    academicEnrolmentId: enrolmentIdSchema,
+    coreStudentId: coreStudentIdSchema.optional(),
+    outcome: z.enum(ENROLMENT_CLOSED_OUTCOMES),
+    /** Last day (IST). */
+    exitDate: isoDateSchema,
+    reason: z.string().trim().min(1).max(2000),
+    closedAt: isoDateTimeSchema,
+    closedByUserId: userIdSchema,
+  })
+  .strict();
+
+export const enrolmentClosedV1 = defineEvent({
+  type: 'ops.enrolment.closed',
+  version: 1,
+  producer: 'ops',
+  consumers: ['academic'],
+  description:
+    'Business Ops recorded that an enrolled student left (withdrawn, completed, transferred, other inactive); Academic ends the enrolment after the exit date.',
+  payload: enrolmentClosedV1Payload,
+});
+
 /** Idempotency keys for the handoff — producers must use these. */
 export const enrolmentKeys = {
   request: (admissionId: string, attempt: number) => `admission:${admissionId}:attempt:${attempt}`,
   reply: (requestEventId: string) => `enrolment-reply:${requestEventId}`,
+  closed: (exitRecordId: string) => `enrolment-closed:${exitRecordId}`,
 } as const;
 
 export const enrolmentEvents = [
   enrolmentRequestedV1,
   enrolmentConfirmedV1,
   enrolmentRejectedV1,
+  enrolmentClosedV1,
 ] as const;

@@ -8,20 +8,19 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can, scopeFor } from '@elevate/authorization';
 import { metric, type AcademicTeacherActivityV1, type Metric } from '@elevate/shared-contracts';
-import { Alert, MetricStrip, StatusBadge } from '@elevate/shared-ui';
+import { MetricStrip, StatusBadge } from '@elevate/shared-ui';
 import { REVIEW_STATE_LABELS } from '../../domain/feedback';
-import { writeReviewHref } from '../../server/academic-reviews';
-import { demoReviewsDue, REVIEWS_DUE_DAYS } from '../../server/feedback';
 import type { getTeacherProfile } from '../../server/teachers';
-import { ActionForm, type ActionFormProps } from '../../ui/action-form';
+import { ActionForm } from '../../ui/action-form';
 import { Unavailable } from '../../ui/cross-module';
-import { load } from '../../ui/frame';
 import { fmtDate, fmtDateTime, humanise } from '../../ui/format';
-import { FormModal, type ModalTab } from '../../ui/record-modal';
+import type { ModalTab } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
 import { DetailTable, Segment } from '../../ui/sections';
-import { AcademicReviewList, isTeacher } from '../../ui/student-feedback-section';
+import { AcademicReviewList } from '../../ui/student-feedback-section';
 import { ApptStatus, SampleBadge, TypeBadge } from '../meetings/appointment-view';
+import { DemoReviewsDue } from './demo-reviews-due';
+import type { TeacherAct } from './teacher-act-modal';
 import { VerificationBadge } from './verification-badge';
 
 export type TeacherProfile = Awaited<ReturnType<typeof getTeacherProfile>>;
@@ -571,201 +570,4 @@ export function teacherTabs(
   ];
 }
 
-export const TEACHER_ACTS = ['edit', 'feedback'] as const;
-export type TeacherAct = (typeof TEACHER_ACTS)[number];
-
-export function TeacherActModal({
-  act,
-  t,
-  user,
-  closeHref,
-}: {
-  act: TeacherAct;
-  t: TeacherProfile;
-  user: AuthenticatedUser;
-  closeHref: string;
-}) {
-  const flows: Record<TeacherAct, { title: string; allowed: boolean; form: ActionFormProps }> = {
-    edit: {
-      title: 'Edit teacher details',
-      allowed: can(user, 'ops:teachers:manage'),
-      form: {
-        action: `/ops/api/v1/teachers/${t.staff.id}`,
-        method: 'PATCH',
-        submitLabel: 'Save teacher details',
-        fields: [
-          {
-            name: 'displayName',
-            label: 'Display name',
-            defaultValue: t.displayName,
-            section: 'Teacher',
-          },
-          {
-            name: 'staffCode',
-            label: 'Staff code',
-            defaultValue: t.profile?.staffCode ?? '',
-            section: 'Teacher',
-          },
-          {
-            name: 'roleNote',
-            label: 'Other role',
-            defaultValue: t.profile?.roleNote ?? '',
-            section: 'Teacher',
-          },
-          {
-            name: 'verificationStatus',
-            label: 'Name verification',
-            type: 'select',
-            defaultValue: t.profile?.verificationStatus ?? 'unverified',
-            options: [
-              { value: 'unverified', label: 'Unverified' },
-              { value: 'confirmed', label: 'Confirmed by the owner' },
-            ],
-            section: 'Teacher',
-          },
-          {
-            name: 'subjects',
-            label: 'Subjects (comma separated)',
-            type: 'list',
-            defaultValue: t.subjects.map((s) => s.subject).join(', '),
-            section: 'Subjects',
-          },
-        ],
-      },
-    },
-    feedback: {
-      title: 'Record feedback',
-      allowed: can(user, 'ops:teacher_feedback:manage'),
-      form: {
-        action: '/ops/api/v1/feedback/about-teachers',
-        submitLabel: 'Record feedback',
-        extra: { teacherStaffId: t.staff.id },
-        fields: [
-          {
-            name: 'submittedByKind',
-            label: 'Given by',
-            type: 'select',
-            required: true,
-            options: [
-              { value: 'student', label: 'Student' },
-              { value: 'guardian', label: 'Guardian' },
-            ],
-            section: 'Who and when',
-          },
-          {
-            name: 'feedbackOn',
-            label: 'Date given',
-            type: 'date',
-            required: true,
-            section: 'Who and when',
-          },
-          { name: 'subjectRef', label: 'Subject or batch', section: 'Feedback' },
-          { name: 'rating', label: 'Rating (1–5, optional)', type: 'number', section: 'Feedback' },
-          {
-            name: 'comment',
-            label: 'Feedback',
-            type: 'textarea',
-            required: true,
-            section: 'Feedback',
-          },
-        ],
-      },
-    },
-  };
-  const flow = flows[act];
-  if (!flow.allowed) return null;
-  return (
-    <FormModal
-      id={`teacher-${act}`}
-      title={`${flow.title}: ${t.displayName}`}
-      closeHref={closeHref}
-    >
-      <ActionForm
-        {...flow.form}
-        // Router path: Next adds the /ops basePath itself (D-022).
-        redirectTo={closeHref.replace(/^\/ops/, '')}
-        secondary={<a href={closeHref}>Cancel</a>}
-      />
-    </FormModal>
-  );
-}
-
-/** Demo classes this teacher took where the student attended and no review is submitted yet. */
-async function DemoReviewsDue({
-  staffId,
-  user,
-  level,
-}: {
-  staffId: string;
-  user: AuthenticatedUser;
-  level: 2 | 3;
-}) {
-  const r = await load((db) => demoReviewsDue(db, user, staffId));
-  const write = isTeacher(user);
-  return (
-    <Segment
-      title="Demo classes waiting for a review"
-      level={level}
-      flush
-      description={`Demo classes in the last ${REVIEWS_DUE_DAYS} days. Pending is not a mark against anyone: it only means no review is submitted yet. Teachers write reviews in Academic OS.`}
-    >
-      {r.ok && !r.data.shared ? (
-        <p className="el-field-hint">Not shared with you.</p>
-      ) : r.ok ? (
-        <>
-          {r.data.unavailable ? (
-            <Alert
-              tone="warning"
-              title="Academic OS unavailable — some of these may already be reviewed"
-            >
-              Checked {fmtDateTime(r.data.unavailable.checkedAt)} ({r.data.unavailable.reason}).
-            </Alert>
-          ) : null}
-          <RecordTable
-            rows={r.data.rows}
-            rowKey={(x) => `${x.id}-${x.teacherStaffId}`}
-            empty="No demo class is waiting for a review."
-            columns={[
-              {
-                key: 'student',
-                header: 'Student',
-                render: (x) => (
-                  <>
-                    {x.studentName} <SampleBadge show={x.isSample} />
-                  </>
-                ),
-              },
-              { key: 'day', header: 'Demo day', numeric: true, render: (x) => x.dayNumber },
-              { key: 'when', header: 'Class', render: (x) => fmtDateTime(x.startsAt) },
-              { key: 'subject', header: 'Subject', render: (x) => x.subject ?? 'Not recorded' },
-              {
-                key: 'state',
-                header: 'Review',
-                render: (x) =>
-                  x.onRoster === null ? (
-                    'Source unavailable'
-                  ) : !x.onRoster ? (
-                    'Not on an Academic class roster — ask the academic coordinator to add the student.'
-                  ) : write ? (
-                    <a
-                      href={writeReviewHref({ coreStudentId: x.studentId, opsDemoSessionId: x.id })}
-                    >
-                      Write review in Academic OS
-                      <span className="el-visually-hidden">
-                        {' '}
-                        for {x.studentName}, day {x.dayNumber}
-                      </span>
-                    </a>
-                  ) : (
-                    REVIEW_STATE_LABELS.pending
-                  ),
-              },
-            ]}
-          />
-        </>
-      ) : (
-        r.view
-      )}
-    </Segment>
-  );
-}
+export { TEACHER_ACTS, TeacherActModal, type TeacherAct } from './teacher-act-modal';

@@ -1,7 +1,7 @@
 /** Brief §4 and §6: teacher My day, coordinator exceptions, teacher directory/profile, `academic.teacher_activity` v1. */
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { academicBatchPlacements, academicInterventions, students as coreStudents } from '@elevate/database';
+import { academicBatchPlacements, academicInterventions, academicTeacherReviews, students as coreStudents } from '@elevate/database';
 import { academicTeacherActivityV1Schema, opsDemoSessionsForDayV1Schema } from '@elevate/shared-contracts';
 import { authedRequest, buildRequest, callRoute, setupTestDatabase } from '@elevate/testing';
 import { GET as teachersRoute } from '../../src/app/api/v1/teachers/route';
@@ -112,6 +112,13 @@ describe('teachers directory and profile', () => {
     // A v1 payload without the new fields still parses (consumer stubs stay valid).
     const { topicsCovered: _t, assessments: _a, ...older } = data;
     expect(academicTeacherActivityV1Schema.safeParse(older).success).toBe(true);
+  });
+
+  it('teacher_activity counts a submitted review on its IST calendar day', async () => {
+    // 30 Sep 19:00 UTC = 1 Oct 00:30 IST: an October review, not a September one.
+    await ctx.db.update(academicTeacherReviews).set({ status: 'submitted', submittedAt: new Date('2026-09-30T19:00:00Z') }).where(eq(academicTeacherReviews.authorStaffId, w.teacherStaff));
+    const submitted = async (from: string, to: string) => (await teacherActivity(ctx.db, w.teacherStaff, { from, to })).reviews.submitted.value;
+    expect([await submitted('2026-09-01', '2026-09-30'), await submitted('2026-10-01', '2026-10-31')]).toEqual([0, 1]);
   });
 
   it('a staff member with no teaching assignment or class in the window gets missing figures, never measured zeros', async () => {

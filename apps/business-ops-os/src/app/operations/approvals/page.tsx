@@ -75,7 +75,7 @@ async function Inbox({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
     return (
       <EmptyState
         title="You have no approval rights in Business Ops"
-        description="Approvals appear here when your role lets you decide fee arrangements."
+        description="Approvals appear here when your role lets you decide fee agreements."
       />
     );
   const close = listHref(BASE, sp, { open: undefined });

@@ -3,7 +3,7 @@
  * reader (all reports for EOD reviewers), and review actions recorded as `eod_review_events`.
  * Acknowledging a report never completes its tasks; a follow-up is a new task (O1's service).
  */
-import { and, count, desc, eq, gte, ilike, lte, ne, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, ilike, lte, ne, or, sql } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
   departments,
@@ -28,7 +28,7 @@ import {
 import { audit, canReviewReport, ownReportPath, periodOfRow, readerOf } from './eod-reports';
 import type { EodInboxQuery, EodReviewInput } from './eod-schemas';
 import { rowById } from './ops-common';
-import { hrScopeFor, hrScopeWhere } from './organisation';
+import { hrReachWhere, hrScopeFor, hrScopeWhere } from './organisation';
 import { notifyHosted } from './task-links';
 import { createTask } from './staff-tasks';
 import { taskBody } from './staff-tasks-schemas';
@@ -205,6 +205,7 @@ export async function eodInbox(
 ) {
   await accessScope(db, actor, hr ? 'ops:work_reports:read' : 'ops:tasks:read');
   const self = await staffIdForUser(db, actor.id);
+  const scope = await hrScopeFor(db, actor);
   // Counts come from the latest submitted version, never the owner's draft.
   const counts = sql<Record<string, number> | null>`${versions.snapshot}->'counts'`;
   const blocked = sql<number>`coalesce((${versions.snapshot}->'counts'->>'blocked')::int, 0)`;
@@ -215,9 +216,12 @@ export async function eodInbox(
   const where = and(
     ne(reports.status, 'draft'),
     hr
-      ? and(hrScopeWhere(await hrScopeFor(db, actor)), self ? ne(reports.staffId, self) : undefined)
+      ? and(hrScopeWhere(scope), self ? ne(reports.staffId, self) : undefined)
       : can(actor, 'ops:eod:review')
-        ? undefined
+        ? // HR reviewers: their scope and reports sent to them.
+          scope
+          ? or(hrReachWhere(actor, scope), self ? eq(reports.submittedToStaffId, self) : undefined)
+          : undefined
         : self
           ? eq(reports.submittedToStaffId, self)
           : sql`false`,

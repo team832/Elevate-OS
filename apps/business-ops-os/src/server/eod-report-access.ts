@@ -17,6 +17,7 @@ import type { IsoDate } from '../domain/dates';
 import { isImportedReport } from '../domain/eod';
 import type { Period } from '../domain/work-report';
 import { accessScope, managedStaffIds, notFound, staffIdForUser, type Actor } from './context';
+import { inHrReach } from './hr-scope';
 import { loadSettings } from './settings';
 
 type Row = typeof reports.$inferSelect;
@@ -117,14 +118,15 @@ export async function resolveRecipient(db: Database, staffId: string) {
 }
 
 /**
- * Who may read a report: its owner; all-scope task readers; whoever a version was submitted
+ * Who may read a report: its owner; all-scope task readers (HR: within its scope, D-089); whoever a version was submitted
  * to; and, when `eod.manager_history` is `current_team_all`, the current manager chain (R3).
  * Drafts are the owner's (and all-scope readers'). Anyone else gets 404.
  */
 export async function readerOf(db: Database, actor: Actor, row: Row) {
   const access = await accessScope(db, actor, 'ops:tasks:read');
   const self = await staffIdForUser(db, actor.id);
-  if (row.staffId === self || access.scope === 'all') return self;
+  if (row.staffId === self) return self;
+  if (access.scope === 'all' && (await inHrReach(db, actor, row.staffId))) return self;
   if (self && row.status !== 'draft') {
     const sent = await db
       .select({ id: versions.id })

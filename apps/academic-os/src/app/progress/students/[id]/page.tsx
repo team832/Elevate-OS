@@ -3,7 +3,7 @@ import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Alert, ButtonLink, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
 import type { PageAccess } from '@elevate/server-kit/next';
-import { getStudentProgress, listStaff } from '../../../../server';
+import { getStudentProgress, listStaff, todayIst } from '../../../../server';
 import { MODULE_PATHS } from '../../../../server/paths';
 import { ApiForm } from '../../../../ui/api-form';
 import { StateBadge } from '../../../../ui/badges';
@@ -204,7 +204,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
           <p>
             {p.observations.submittedReviews} submitted review(s)
             {p.observations.lastSubmittedAt
-              ? `, the latest on ${p.observations.lastSubmittedAt.toISOString().slice(0, 10)}`
+              ? `, the latest on ${todayIst(p.observations.lastSubmittedAt)}`
               : ''}
             . <a href={MODULE_PATHS.reviews}>Teacher reviews</a>
           </p>

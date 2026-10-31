@@ -19,7 +19,7 @@ import {
   StatusBadge,
 } from '@elevate/shared-ui';
 import { MODULE_BLURBS, PLATFORM_PATHS } from '../lib/shell';
-import { platformShell } from '../server/shell';
+import { leadsBase, platformShell } from '../server/shell';
 import {
   enquiryProgrammes,
   istDate,
@@ -125,7 +125,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
               triggerLabel="New enquiry"
               triggerIcon="plus"
             >
-              <NewEnquiryForm programmes={programmes} />
+              <NewEnquiryForm programmes={programmes} base={leadsBase(user)} />
             </Dialog>
           ) : null
         }
@@ -188,6 +188,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
                   q={fq}
                   clearHref={hrefWith(params, 'fq')}
                   canClose={can(user, 'ops:leads:write')}
+                  base={leadsBase(user)}
                 />
               </Suspense>
             </Card>
@@ -292,12 +293,15 @@ async function FollowUps({
   q,
   clearHref,
   canClose,
+  base,
 }: {
   deps: OverviewDeps;
   q?: string;
   clearHref: string;
   /** ops:leads:write; the server re-checks permission and scope. */
   canClose: boolean;
+  /** Workspace whose lead pages and routes this person may open (leadsBase). */
+  base: string;
 }) {
   const w = await loadFollowUps(deps, q);
   if (w.status !== 'ok') return <WidgetState widget={w} />;
@@ -321,7 +325,7 @@ async function FollowUps({
           header: 'Student',
           render: (r) => (
             <div>
-              <a href={`/ops/leads/${r.leadId}`}>{r.student}</a>
+              <a href={`${base}/leads/${r.leadId}`}>{r.student}</a>
               <div className="el-field-hint">
                 {r.programme} · {r.nextStep}
               </div>
@@ -346,7 +350,7 @@ async function FollowUps({
                       Mark done<span className="el-visually-hidden">: {r.student}</span>
                     </summary>
                     <JsonForm
-                      action={`/ops/api/v1/follow-ups/${r.id}`}
+                      action={`${base}/api/v1/follow-ups/${r.id}`}
                       submitLabel="Done"
                       variant="secondary"
                     >
@@ -418,6 +422,7 @@ async function TodayClasses({ deps }: { deps: OverviewDeps }) {
   return (
     <DataTable
       compact
+      label="Today’s classes"
       columns={[
         {
           key: 'time',

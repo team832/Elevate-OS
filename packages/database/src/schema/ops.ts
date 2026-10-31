@@ -478,6 +478,7 @@ export const opsDuplicateFlags = ops.table(
   },
   (t) => [
     uniqueIndex('duplicate_flags_pair_key').on(t.leadId, t.matchedLeadId),
+    index('duplicate_flags_matched_idx').on(t.matchedLeadId),
     index('duplicate_flags_status_idx').on(t.status),
     check('duplicate_flags_not_self', sql`${t.leadId} <> ${t.matchedLeadId}`),
     check('duplicate_flags_level_check', sql`${t.level} IN ('exact', 'possible')`),

@@ -206,22 +206,30 @@ describe('opening a notification (permission-checked redirect)', () => {
     );
   });
 
-  // Inserted directly: notify() refuses control characters, the frozen DB CHECK does not.
-  it.each([
-    '/somewhere/else',
-    '/academic/../ops/settings',
-    '/academic/%2E%2e/ops/settings',
-    '/academic/tasks/\r\nSet-Cookie: x=1',
-    '/\n/evil.example',
-  ])('refuses a malformed or unknown link %j (no 500)', async (link) => {
-    const [n] = await ctx.db
+  const insertLink = (link: string) =>
+    ctx.db
       .insert(notifications)
       .values({ userId: teacher.id, module: 'ops', kind: 'note', title: 'Sample odd link', link })
       .returning();
-    const res = await openAs(teacher, n!.id);
-    expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/academic/notifications?open=missing');
-  });
+
+  // Inserted directly, past notify().
+  it.each(['/somewhere/else', '/academic/../ops/settings', '/academic/%2E%2e/ops/settings'])(
+    'refuses a malformed or unknown link %j (no 500)',
+    async (link) => {
+      const [n] = await insertLink(link);
+      const res = await openAs(teacher, n!.id);
+      expect(res.status).toBe(303);
+      expect(res.headers.get('location')).toBe('/academic/notifications?open=missing');
+    },
+  );
+
+  // The DB CHECK notifications_link_relative refuses control characters (migration 0017).
+  it.each(['/academic/tasks/\r\nSet-Cookie: x=1', '/\n/evil.example'])(
+    'the database refuses a link with a control character %j',
+    async (link) => {
+      await expect(insertLink(link)).rejects.toThrow();
+    },
+  );
 
   it('someone else’s notification is "missing" and stays unread', async () => {
     const [id] = await notify(ctx.db, {

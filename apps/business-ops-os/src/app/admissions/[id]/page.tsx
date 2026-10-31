@@ -14,9 +14,6 @@ import {
   FEE_KIND_LABELS,
   FEE_METHODS,
   FEE_STATUS_LABELS,
-  type FeeRecordKind,
-  type FeeRecordLike,
-  type FeeRecordStatus,
 } from '../../../domain/fees';
 import { getAdmission } from '../../../server/admissions';
 import { listAdmissionFees } from '../../../server/fees';
@@ -200,7 +197,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         {d.canRequestEnrolment && write ? (
           <Segment
             title="Request enrolment in Academic OS"
-            description="Publishes ops.admission.enrolment_requested v1 in the same transaction as the status change. Double clicks cannot create two requests."
+            description="Sends the enrolment request to Academic OS together with the status change. Clicking twice cannot create two requests."
           >
             <ActionForm action={`${api}/enrolment-request`} submitLabel="Request enrolment" />
           </Segment>
@@ -308,6 +305,12 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             )}{' '}
             · <a href="/ops/operations/approvals">Approvals inbox</a>
           </p>
+          {d.discountRequest ? (
+            <p>
+              Discount or exception asked for at conversion: &ldquo;{d.discountRequest}&rdquo;.
+              Include it in the agreement it applies to; that agreement&apos;s approval decides it.
+            </p>
+          ) : null}
         </Segment>
         {a.studentId && !profile ? (
           <StudentFeesSection studentId={a.studentId} user={user} />
@@ -347,7 +350,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                   key: 'kind',
                   header: 'Type',
                   render: (f) =>
-                    `${FEE_KIND_LABELS[f.kind as FeeRecordKind]}${f.direction ? ` (${f.direction})` : ''}`,
+                    `${FEE_KIND_LABELS[f.kind]}${f.direction ? ` (${f.direction})` : ''}`,
                 },
                 { key: 'amount', header: 'Amount', render: (f) => fmtPaise(f.amountPaise) },
                 {
@@ -369,7 +372,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                   render: (f) => (
                     <>
                       <StatusBadge tone={FEE_STATUS_TONE[f.status] ?? 'info'}>
-                        {FEE_STATUS_LABELS[f.status as FeeRecordStatus]}
+                        {FEE_STATUS_LABELS[f.status]}
                       </StatusBadge>
                       <br />
                       <span className="el-field-hint">
@@ -485,10 +488,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                       value: x.id,
                       label: `${x.days.map(fmtDate).join(', ')} (demo fee: ${
                         DEMO_FEE_LABELS[
-                          demoFeeStatus(
-                            (fees?.records.filter((f) => f.demoId === x.id) ??
-                              []) as FeeRecordLike[],
-                          ).state
+                          demoFeeStatus(fees?.records.filter((f) => f.demoId === x.id) ?? []).state
                         ]
                       })`,
                     })),

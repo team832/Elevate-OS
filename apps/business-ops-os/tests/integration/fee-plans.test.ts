@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
-import { auditEvents, opsAdmissions, opsFeePlans, students } from '@elevate/database';
+import { approvals, auditEvents, opsAdmissions, opsFeePlans, students } from '@elevate/database';
 import {
   buildRequest,
   callRoute,
@@ -17,13 +17,13 @@ import { GET as allFees, POST as charge } from '../../src/app/api/v1/fees/route'
 import { POST as feeAction } from '../../src/app/api/v1/fees/[id]/route';
 import { feeAgreementPreview, feeStatusForStudents, recordFee } from '../../src/server/fees';
 import { admissionRow, readinessOf } from '../../src/server/admissions';
-import { feeAgreementSource, feeArrangementSource } from '../../src/server/approvals';
+import { feeAgreementSource } from '../../src/server/approvals';
+import { feeArrangementPolicy } from '../../src/server/approval-policies';
 import { updateSetting } from '../../src/server/settings';
 import { MANUAL_FEE_DISCLAIMER } from '../../src/domain/fees';
 import { setupReference, staffUser, isoDaysFromNow, type StaffUser } from './fixtures';
 import { get, pendingCase, post } from './admissions-fixtures';
 import { POST as check } from '../../src/app/api/v1/admissions/[id]/checks/route';
-import { POST as feeApproval } from '../../src/app/api/v1/admissions/[id]/fee-approval/route';
 
 // Lets one test take ops:fees:read away from an approver (no role has approve without it today).
 const noFeeRead = vi.hoisted(() => ({ on: false }));
@@ -106,16 +106,21 @@ async function verify(id: string) {
 }
 /**
  * An admission of `sid` (a new student by default), verified, with an APPROVED admission-level
- * fee-arrangement approval, which since D-039 activates nothing.
+ * fee-arrangement approval as older data holds it (no route makes one now): it activates nothing.
  */
 async function verifiedCase(sid?: string) {
   const id = await newCase(sid);
   await verify(id);
-  for (const [user, action] of [
-    [counsellor, 'request'],
-    [director, 'approve'],
-  ] as const)
-    expect((await callRoute(feeApproval, post(user, { action }), { id })).status).toBe(200);
+  await ctx.db.insert(approvals).values({
+    subjectModule: 'ops',
+    subjectType: 'admission',
+    subjectId: id,
+    policy: feeArrangementPolicy.key,
+    requestedBy: counsellor.id,
+    status: 'approved',
+    decidedBy: director.id,
+    decidedAt: new Date(),
+  });
   return id;
 }
 const studentOf = async (id: string) => (await admissionRow(ctx.db, id)).studentId as string;
@@ -832,23 +837,6 @@ describe('fee records are inaccessible to unauthorised roles (acceptance 21)', (
       [],
     );
     expect((await view(finance)).data?.disclaimer).toBe(MANUAL_FEE_DISCLAIMER);
-  });
-
-  it('admission-level inbox rows hide the request comment (it may name amounts) without ops:fees:read', async () => {
-    const id = await newCase();
-    await verify(id);
-    const comment = 'Discount of ₹10,000 agreed by phone';
-    expect(
-      (await callRoute(feeApproval, post(counsellor, { action: 'request', comment }), { id }))
-        .status,
-    ).toBe(200);
-    const row = async () =>
-      (await feeArrangementSource.list(ctx.db, director)).find((i) => i.link.endsWith(id));
-    expect(await row()).toMatchObject({ detail: comment });
-    noFeeRead.on = true;
-    const hidden = await row();
-    noFeeRead.on = false;
-    expect(hidden).toMatchObject({ detail: null });
   });
 
   it('feeStatusForStudents: no agreement is not_configured (never paid)', async () => {

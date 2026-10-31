@@ -25,6 +25,7 @@ import { ROLE_KEYS, type StaffMemberId, type UserId } from '@elevate/shared-type
 import {
   decideHrRequest,
   isEditable,
+  recipientKeyLabel,
   type HrRequestAction,
   type HrRequestDecision,
 } from '../domain/hr-requests';
@@ -287,7 +288,7 @@ async function forwardTarget(
   if (!id)
     throw new ConflictError(
       r.recipientKey
-        ? `Recipient not set up: ${r.recipientKey}. Set them in HR settings or choose a person.`
+        ? `Recipient not set up: ${recipientKeyLabel(r.recipientKey)}. Set them in HR settings or choose a person.`
         : 'Choose who to forward it to.',
     );
   const person = await activeStaff(db, id, 'toStaffId');

@@ -9,7 +9,7 @@ import { can } from '@elevate/authorization';
 import { OPS_ACTIVITY_OUTCOMES } from '@elevate/database';
 import { ButtonLink, EmptyState, PageHeader } from '@elevate/shared-ui';
 import { isIsoDate } from '../../domain';
-import { listCalls } from '../../server/lead-calls';
+import { CALL_LIST_LIMIT, listCalls } from '../../server/lead-calls';
 import { listLeads } from '../../server/leads';
 import { formOptions } from '../../server/options';
 import { ActionForm } from '../../ui/action-form';
@@ -89,6 +89,7 @@ async function Calls({
     direction: pick(DIRECTIONS, sp.direction),
     outcome: pick(OPS_ACTIVITY_OUTCOMES, sp.outcome),
     staffId: team && UUID.test(sp.staff ?? '') ? sp.staff : undefined,
+    q: sp.q?.trim().slice(0, 100) || undefined,
   };
   const adding = Boolean(sp.new) && can(user, 'ops:leads:write');
   const r = await load(async (db) => ({
@@ -97,17 +98,14 @@ async function Calls({
     staff: team ? (await formOptions(db)).staff : [],
   }));
   if (!r.ok) return r.view;
-  const q = sp.q?.trim().toLowerCase();
-  const calls = q
-    ? r.data.calls.filter((c) => `${c.leadCode} ${c.studentName}`.toLowerCase().includes(q))
-    : r.data.calls;
-  const { leads, staff } = r.data;
+  const { calls, leads, staff } = r.data;
+  const capped = calls.length >= CALL_LIST_LIMIT;
   const page = Math.max(1, Number(sp.page) || 1);
   return (
     <div className="el-stack">
       <details className="el-explain">
         <summary>How this list is defined</summary>
-        Every call someone logged on a lead you may work, newest first (up to 500). Direction,
+        Every call someone logged on a lead you may work, newest first (up to {CALL_LIST_LIMIT}). Direction,
         duration and outcome are what the caller typed in; a call without a duration was not timed.
         Calls to leads marked Do not contact cannot be logged.
       </details>
@@ -145,7 +143,11 @@ async function Calls({
         ]}
       />
       <RecordTable
-        caption={`${calls.length} call${calls.length === 1 ? '' : 's'}`}
+        caption={
+          capped
+            ? `Newest ${CALL_LIST_LIMIT} calls; older ones are not shown. Narrow the dates to see them.`
+            : `${calls.length} call${calls.length === 1 ? '' : 's'}`
+        }
         rows={calls.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
         rowKey={(c) => c.id}
         rowHref={(c) => `${base}/leads/${c.leadId}`}

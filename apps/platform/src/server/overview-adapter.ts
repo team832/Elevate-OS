@@ -29,6 +29,7 @@ import {
 import { listSessions, listStudents } from '@elevate/academic-os/server';
 import { listContentItems } from '@elevate/marketing-os/server';
 import { inArray } from 'drizzle-orm';
+import { leadsBase } from './shell';
 
 export interface OverviewDeps {
   db: Database;
@@ -148,7 +149,7 @@ export async function loadMetrics(
     { permission: 'ops:leads:read', area: 'Business Operations leads', unreachable: opsDown },
     async () => ({
       metric: metric.ok(await countOpenLeads(db, user), meta('activeEnquiries')),
-      href: '/ops/leads',
+      href: `${leadsBase(user)}/leads`,
       note: scopeFor(user, 'ops:leads:read') === 'own' ? 'Open, assigned to you' : 'Open leads',
     }),
   );
@@ -220,18 +221,18 @@ export interface AttentionItem {
   reason?: string;
 }
 
-/** The fee-arrangement list of the approvals inbox (null count = not available, with a reason). */
+/** The fee-agreement list of the approvals inbox (null count = not available, with a reason). */
 function admissionDecisions(box: Widget<Inbox>): AttentionItem {
   const base = {
     key: 'admissionDecisions' as const,
     label: 'Admission decisions',
-    href: '/ops/operations/approvals#ops.fee_arrangements',
+    href: '/ops/operations/approvals#ops.fee_agreements',
     detail: '',
     count: null,
   };
   if (box.status === 'error') return { ...base, reason: 'Approvals could not be loaded just now.' };
   if (box.status === 'unavailable') return { ...base, reason: box.reason };
-  const source = box.data.sources.find((s) => s.key === 'ops.fee_arrangements');
+  const source = box.data.sources.find((s) => s.key === 'ops.fee_agreements');
   if (!source) return { ...base, reason: 'Not part of your role (admission approvals).' };
   if (source.status === 'unavailable' || source.count === null)
     return { ...base, detail: source.label, reason: 'This list could not be loaded just now.' };

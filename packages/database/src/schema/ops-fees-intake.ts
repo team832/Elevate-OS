@@ -149,6 +149,7 @@ export const opsFeeRecords = ops.table(
     index('fee_records_admission_idx').on(t.admissionId, t.recordedAt),
     index('fee_records_status_idx').on(t.status),
     index('fee_records_plan_idx').on(t.planId),
+    index('fee_records_lead_idx').on(t.leadId),
     index('fee_records_instalment_idx').on(t.instalmentId),
     index('fee_records_reverses_idx').on(t.reversesRecordId),
     check(

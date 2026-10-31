@@ -288,6 +288,12 @@ export async function getLead(db: Database, actor: Actor, id: string) {
   );
   const privateVisible = await canSeeLeadPrivate(db, actor, lead);
   const kycVisible = await canSeeLeadPrivate(db, actor, lead, true);
+  const attribution = can(actor, 'ops:lead_attribution:read');
+  // Keys the audit history must not show this reader (enquiry.created carries campaign refs).
+  const hidden = new Set([
+    ...(kycVisible ? [] : privateVisible ? KYC_KEY_SET : CONTACT_AND_KYC_KEYS),
+    ...(attribution ? [] : ['campaignRef', 'contentRef']),
+  ]);
   return {
     lead: await maskedLead(db, actor, lead),
     privateVisible,
@@ -297,7 +303,7 @@ export async function getLead(db: Database, actor: Actor, id: string) {
     enquiries: enquiries.map((e) => ({
       ...e.enquiry,
       // Campaign internals only for roles allowed to see marketing attribution (brief §10).
-      ...(can(actor, 'ops:lead_attribution:read') ? {} : { campaignRef: null, contentRef: null }),
+      ...(attribution ? {} : { campaignRef: null, contentRef: null }),
       sourceLabel: e.sourceLabel,
       programmeCode: e.programmeCode,
     })),
@@ -328,18 +334,15 @@ export async function getLead(db: Database, actor: Actor, id: string) {
       conversion,
       ...(cases ? { id } : {}),
     })),
-    history: kycVisible
+    history: hidden.size
       ? history
-      : history
-          .filter((h) => h.action !== 'lead.kyc_updated')
-          .map((h) => {
-            const keys = privateVisible ? KYC_KEY_SET : CONTACT_AND_KYC_KEYS;
-            return {
-              ...h,
-              before: stripPrivateKeys(h.before, keys),
-              after: stripPrivateKeys(h.after, keys),
-            };
-          }),
+          .filter((h) => kycVisible || h.action !== 'lead.kyc_updated')
+          .map((h) => ({
+            ...h,
+            before: stripPrivateKeys(h.before, hidden),
+            after: stripPrivateKeys(h.after, hidden),
+          }))
+      : history,
   };
 }
 

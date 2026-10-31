@@ -84,7 +84,7 @@ export const POLICY_DEFINITIONS = {
     status: 'proposed',
     ownerDecision: null,
     description:
-      'Warn when one idea is scheduled on several accounts the same IST day outside a collab (MKT-016).',
+      'Warn when one idea is scheduled on several accounts the same IST day outside a collab.',
     source: 'content-os/.claude/skills/repurpose step 3',
   }),
   publishMaxAttempts: def<number>({

@@ -152,15 +152,15 @@ export async function buildMarketingSummary(
         m('Sum of reach (lifetime at capture) for posts published in the window.'),
       ),
       engagementRate: metric.missing(
-        'Not computed across platforms: the engagement definitions differ (MKT-032); see the weekly report.',
+        'Not computed across platforms: the engagement definitions differ; see the weekly report.',
         m('Engagement rate across accounts.', 'percent'),
       ),
       followerGrowth: metric.missing(
-        'No follower data source is connected (Metricool not connected, OD-006).',
+        'No follower data source is connected (Metricool is not connected).',
         m('Net follower change in the window.'),
       ),
       leadsAttributed: metric.missing(
-        'Lead attribution is owned by Business Ops; the enquiry handoff (MKT-036) is not built yet.',
+        'Not counted here: leads are Business Operations records, and enquiries are not linked to marketing content.',
         m('Leads attributed to marketing content.'),
       ),
     },

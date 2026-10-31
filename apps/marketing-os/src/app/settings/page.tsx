@@ -42,11 +42,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
                       {
                         key: 'status',
                         header: 'Status',
-                        render: (p) => (
-                          <>
-                            <ProposedBadge status={p.status} /> {p.ownerDecision ?? ''}
-                          </>
-                        ),
+                        render: (p) => <ProposedBadge status={p.status} />,
                       },
                       { key: 'desc', header: 'Meaning', render: (p) => p.description },
                     ]}

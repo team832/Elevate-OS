@@ -63,7 +63,7 @@ async function Body({
           {!canWrite ? (
             <Alert tone="info">
               Contact details (phone, email, guardian contact, date of birth) are hidden for your
-              role (PLT-014).
+              role.
             </Alert>
           ) : null}
           <Card>

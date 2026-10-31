@@ -61,6 +61,7 @@ export async function bookableAdmissions(db: Database, actor: Actor) {
   return db
     .select({
       id: opsAdmissions.id,
+      leadId: opsAdmissions.leadId,
       code: opsAdmissions.code,
       studentName: opsLeads.studentName,
       programmeCode: programmes.code,

@@ -9,9 +9,10 @@
  * - link to the record where the decision is taken (the inbox decides nothing).
  * A source that throws is shown as "unavailable" (never as 0 items).
  *
- * Sources: annual fee agreement versions (D-039; decided here through the same decide function
- * as the student's fee section) and the older admission-level fee arrangements. The SOP, task
- * review, policy and HR sources were removed with HR and Operations (D-032).
+ * Source: annual fee agreement versions (D-039; decided here through the same decide function
+ * as the student's fee section). Admission-level fee arrangements activate nothing (D-057) and had
+ * no decision path left, so they are no longer listed. The SOP, task review, policy and HR sources
+ * were removed with HR and Operations (D-032).
  */
 import { and, asc, eq, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -27,7 +28,7 @@ import {
 } from '@elevate/database';
 import type { UserId } from '@elevate/shared-types';
 import { ownAdmissionFilter } from './admissions';
-import { feeAgreementPolicy, feeArrangementPolicy } from './approval-policies';
+import { feeAgreementPolicy } from './approval-policies';
 import { accessScope, type Actor } from './context';
 
 export interface ApprovalInboxItem {
@@ -79,45 +80,6 @@ const inboxItem = (
   ready: i.ready ?? true,
   blockers: i.blockers ?? [],
 });
-
-// --- core sources --------------------------------------------------------------------------------
-
-export const feeArrangementSource: ApprovalSource = {
-  key: 'ops.fee_arrangements',
-  label: 'Fee arrangements awaiting approval',
-  permission: 'ops:admissions:approve',
-  async list(db, actor) {
-    await accessScope(db, actor, 'ops:admissions:approve');
-    const rows = await db
-      .select({
-        a: approvals,
-        code: opsAdmissions.code,
-        admissionId: opsAdmissions.id,
-        student: opsLeads.studentName,
-        requester: users.displayName,
-      })
-      .from(approvals)
-      .innerJoin(opsAdmissions, eq(opsAdmissions.id, approvals.subjectId))
-      .innerJoin(opsLeads, eq(opsLeads.id, opsAdmissions.leadId))
-      .innerJoin(users, eq(users.id, approvals.requestedBy))
-      .where(and(eq(approvals.policy, feeArrangementPolicy.key), eq(approvals.status, 'pending')))
-      .orderBy(asc(approvals.requestedAt));
-    const { named, amounts } = visibility(actor);
-    return rows
-      .filter(({ a }) => a.requestedBy !== actor.id)
-      .map(({ a, code, admissionId, student, requester }) =>
-        inboxItem({
-          id: a.id,
-          title: `${code} — ${named ? student : HIDDEN_NAME}`,
-          detail: amounts ? a.requestComment : null,
-          requestedByUserId: a.requestedBy,
-          requestedByName: requester,
-          requestedAt: a.requestedAt,
-          link: `/ops/admissions/${admissionId}`,
-        }),
-      );
-  },
-};
 
 const previous = alias(opsFeePlans, 'previous_plan');
 
@@ -172,10 +134,7 @@ export const feeAgreementSource: ApprovalSource = {
 };
 
 /** The registry used by the inbox and the dashboards. Each source follows the rules above. */
-export const APPROVAL_SOURCES: readonly ApprovalSource[] = [
-  feeAgreementSource,
-  feeArrangementSource,
-];
+export const APPROVAL_SOURCES: readonly ApprovalSource[] = [feeAgreementSource];
 
 export interface InboxSourceResult {
   key: string;

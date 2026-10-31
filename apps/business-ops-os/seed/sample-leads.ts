@@ -182,7 +182,8 @@ export const SAMPLE_MARKETING_LEADS: readonly SampleLead[] = [
     owner: ROHIT,
     programme: 'CA_FOUNDATION',
     source: 'WALK_IN',
-    stages: ['contacted', 'qualified', 'demo_booked', 'demo_attended'],
+    // Stops at Demo booked: "Demo attended" is shown only where an Ops demo records the attendance.
+    stages: ['contacted', 'qualified', 'demo_booked'],
     calls: [['connected_two_way', 'outbound', 6, 7]],
   },
   {
@@ -243,7 +244,9 @@ const caseTarget = (c: Awaited<ReturnType<typeof demoCaseStages>>[number]) =>
     ? 'admission_in_progress'
     : ['declined', 'not_converted', 'withdrawn'].includes(c.outcome ?? '')
       ? 'lost'
-      : 'demo_booked';
+      : c.admissionStatus === 'demo_attended'
+        ? 'demo_attended'
+        : 'demo_booked';
 
 export async function seedSampleLeads(db: Database, log: (m: string) => void = () => {}) {
   const ops = await seedActor(db, 'operations-manager@example.test');

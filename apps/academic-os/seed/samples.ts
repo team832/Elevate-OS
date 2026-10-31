@@ -3,7 +3,7 @@
  * marked `is_sample` (removed by `npm run db:clear-samples`): "<First> Sample Student" names,
  * @example.test emails, no phone numbers. Real curriculum imports are never touched.
  *
- *   academic.students        3 sample batches + 6 sample students placed in SAMPLE-IPMAT-A
+ *   academic.students        SAMPLE_BATCHES (6) and the sample students placed in each (31)
  *   academic.sample-teaching the sample teachers' assignments, classes around the anchor date
  *                            (delivered, cancelled + make-up, substituted, log pending, scheduled),
  *                            attendance, teaching logs, one demo attendee and teacher reviews

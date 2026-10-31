@@ -27,10 +27,10 @@ async function Body({ access }: { access: PageAccess }) {
   const canRun = can(access.user, 'academic:enrolments:decide');
   return (
     <>
-      <PageHeader title="Enrolment intake" description="Confirmed admissions from Business Operations. Confirm each enrolment, or reject it with a reason." />
+      <PageHeader title="Enrolment intake" description="Confirmed admissions from Business Operations. Each run checks every waiting request and either creates the enrolment or rejects it with a reason that Business Operations sees." />
       <div className="el-stack">
-        <Alert tone="warning" title="No scheduler yet">
-          The intake consumer (academic.enrolment-intake) runs only when someone presses “Process intake now”. A scheduler is a wave-3 integration item. Until a reply is sent, Business Ops shows the admission as awaiting Academic OS.
+        <Alert tone="warning" title="Intake does not run by itself yet">
+          Waiting requests are processed only when someone presses “Process intake now”. Until then, Business Ops shows the admission as awaiting Academic OS.
         </Alert>
         {!data.ok ? (
           <LoadError error={data.error} />
@@ -68,7 +68,7 @@ async function Body({ access }: { access: PageAccess }) {
                   { key: 'programme', header: 'Programme', render: (p) => p.programmeCode },
                   { key: 'attempt', header: 'Attempt', numeric: true, render: (p) => p.attempt },
                   { key: 'outcome', header: 'Outcome', render: (p) => <StateBadge state={p.outcome} /> },
-                  { key: 'reason', header: 'Reason', render: (p) => (p.reasonCode ? `${p.reasonCode}: ${p.reason}` : `${p.existingStudent ? 'Existing student reused' : 'New student'}${p.reason ? `. ${p.reason}` : ''}`) },
+                  { key: 'reason', header: 'Reason', render: (p) => (p.reasonCode ? p.reason : `${p.existingStudent ? 'Existing student reused' : 'New student'}${p.reason ? `. ${p.reason}` : ''}`) },
                 ]}
               />
             </Card>

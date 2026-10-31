@@ -458,7 +458,7 @@ export function OverviewBlocks({ o }: { o: Overview }) {
             id="follow-ups"
             className="ops-panel-wide"
             title="Leads, follow-ups and workload"
-            definition="Defined KPIs (docs/KPI_DEFINITIONS.md); each figure states its own window. Workload is open items per person, a capacity view, not a score."
+            definition="Each figure states its own window. Workload is open items per person, a capacity view, not a score."
             freshness={kpis.ok ? asOf(kpis.data.asOf) : now}
             href="/ops/leads"
             link="Leads"

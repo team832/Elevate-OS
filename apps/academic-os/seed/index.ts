@@ -12,7 +12,7 @@
  *   academic.batches                   IPMAT-C12-APR27 (calendar, 28-slot allowance, mock-phase blackout), CAF-SEP27-REG
  *   academic.owner-assignments         real staff assignments from the owner brief of 23 Oct 2026 (1 active, 4 pending; not sample)
  *                                      (needs the Ops seed ops.teachers) — ./owner-assignments.ts
- *   academic.students                  3 sample batches + 6 sample students (is_sample, no phones) — ./samples.ts
+ *   academic.students                  6 sample batches + 31 sample students (is_sample, no phones) — ./samples.ts
  *   academic.sample-teaching           sample teachers' classes, attendance, logs, demo attendee, reviews
  *                                      (needs the Ops seeds ops.sample-staff and ops.samples)
  *   ./sample-tests.ts                  sample tests, run by the platform seed platform.sample-tests

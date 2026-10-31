@@ -58,7 +58,7 @@ async function Body({ access, batchId }: { access: PageAccess; batchId?: string 
                 { key: 'batch', header: 'Batch', render: (a) => a.batchCode },
                 { key: 'date', header: 'Date', render: (a) => (a.scheduledDate ? `${a.scheduledDate}${a.startTime ? ` ${a.startTime}` : ''}` : 'not scheduled') },
                 { key: 'duration', header: 'Minutes', render: (a) => (a.durationMinutes === null ? 'unknown' : a.durationMinutes) },
-                { key: 'status', header: 'Status', render: (a) => <><StateBadge state={a.status} />{a.publishedAt ? <> <StateBadge state="published" /></> : null}</> },
+                { key: 'status', header: 'Status', render: (a) => <><StateBadge state={a.status} />{a.publishedAt ? <> <StateBadge state={a.provisional ? 'provisional' : 'published'} /></> : null}</> },
               ]}
             />
           </Card>

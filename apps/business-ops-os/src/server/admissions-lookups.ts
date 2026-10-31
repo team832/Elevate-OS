@@ -2,7 +2,7 @@
  * Admission read helpers the admission services share (server/admissions.ts): own-scope access,
  * names and references, the Academic handoff facts, history, and readiness for "admitted".
  */
-import { and, asc, desc, eq, inArray, or, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, type SQL } from 'drizzle-orm';
 import {
   approvals,
   eventDeliveries,
@@ -19,15 +19,14 @@ import {
 } from '@elevate/database';
 import type {
   AdmissionId,
-  ApprovalId,
   IntegrationEventId,
   ProgrammeId,
   StaffMemberId,
   UserId,
 } from '@elevate/shared-types';
-import { evaluateAdmissionReadiness, type CheckState, type FeeApprovalState } from '../domain';
+import { evaluateAdmissionReadiness, type CheckState } from '../domain';
 import type { HandoffInput } from '../domain/students';
-import { feeAgreementPolicy, feeArrangementPolicy } from './approval-policies';
+import { feeAgreementPolicy } from './approval-policies';
 import { assertScope, notFound, type AccessScope } from './context';
 import { rowById } from './ops-common';
 import { lockAdmission, type AdmissionRow } from './pipeline';
@@ -163,24 +162,6 @@ export async function attemptsOf(db: Database, admissionId: AdmissionId) {
   return rows.map((r) => ({ ...r.a, requestedByName: r.requestedByName }));
 }
 
-async function feeApprovalState(
-  db: Database,
-  admissionId: string,
-): Promise<{ state: FeeApprovalState; approvalId: ApprovalId | null }> {
-  const [latest] = await db
-    .select({ id: approvals.id, status: approvals.status })
-    .from(approvals)
-    .where(
-      and(eq(approvals.policy, feeArrangementPolicy.key), eq(approvals.subjectId, admissionId)),
-    )
-    .orderBy(desc(approvals.requestedAt), desc(approvals.id))
-    .limit(1);
-  return {
-    state: (latest?.status as FeeApprovalState | undefined) ?? 'none',
-    approvalId: latest?.id ?? null,
-  };
-}
-
 export async function checksOf(db: Database, admissionId: string) {
   return db
     .select()
@@ -191,7 +172,7 @@ export async function checksOf(db: Database, admissionId: string) {
 /**
  * D-039: the fee approval is met when the admission's bundle (it, or its application's cases) has
  * an ACTIVE agreement activated by that agreement's own approval. Admission-level fee-arrangement
- * approvals (`fee`) stay readable but no longer count.
+ * approvals stay readable in core approvals but no longer count.
  */
 async function agreementApproved(db: Database, admission: AdmissionRow) {
   const [row] = await db
@@ -225,12 +206,11 @@ async function agreementApproved(db: Database, admission: AdmissionRow) {
 export async function readinessOf(db: Database, admission: AdmissionRow) {
   const settings = await loadSettings(db);
   const checks = await checksOf(db, admission.id);
-  const fee = await feeApprovalState(db, admission.id);
   const gaps = evaluateAdmissionReadiness({
     checks: checks as CheckState[],
     feeApproval: (await agreementApproved(db, admission)) ? 'approved' : 'none',
     hasProgramme: Boolean(admission.programmeId),
     config: settings['admission.confirmation'].value,
   });
-  return { gaps, checks, fee, settings };
+  return { gaps, checks, settings };
 }

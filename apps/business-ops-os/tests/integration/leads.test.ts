@@ -201,12 +201,13 @@ describe('own scope, assignment and contact', () => {
   it('campaign references show only to roles allowed to see marketing attribution', async () => {
     const lead = await newLead(counsellor, { campaignRef: 'test-only-campaign' });
     const id = { id: lead.data!.lead.id };
-    type Detail = { enquiries: { campaignRef: string | null }[] };
+    const later = { sourceCode: 'WEBINAR', contentRef: 'test-only-campaign' };
+    expect(await status(enquiry, post(counsellor, '/x', later), id)).toBe(201);
     const as = async (user: StaffUser) =>
-      (await callRoute<Detail>(getLead, authedRequest(user, '/x'), id)).data!.enquiries[0]!
-        .campaignRef;
-    expect(await as(counsellor)).toBeNull();
-    expect(await as(manager)).toBe('test-only-campaign');
+      JSON.stringify((await callRoute(getLead, authedRequest(user, '/x'), id)).data);
+    // Neither the enquiry nor the audit history (enquiry.created) shows it to the counsellor.
+    expect(await as(counsellor)).not.toContain('test-only-campaign');
+    expect(await as(manager)).toContain('test-only-campaign');
   });
 
   it('assignment: counsellor 403; manager assigns → handoff pending → owner accepts', async () => {

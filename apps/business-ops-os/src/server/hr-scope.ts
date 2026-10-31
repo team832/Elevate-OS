@@ -1,7 +1,7 @@
 /** HR's department scope (setting `hr.staff_scope_departments`): who it applies to and its SQL. */
-import { eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { departments, opsStaffDepartments, staffMembers, type Database } from '@elevate/database';
-import type { DepartmentId } from '@elevate/shared-types';
+import type { DepartmentId, StaffMemberId } from '@elevate/shared-types';
 import type { Actor } from './context';
 import { loadSettings } from './settings';
 
@@ -45,3 +45,25 @@ export const hrScopeFor = async (db: Database, actor: Actor) =>
 /** SQL: staff this reader reaches in HR — their scope, and always their own record. */
 export const hrReachWhere = (actor: Actor, scope: DepartmentId[] | null) =>
   scope ? or(eq(staffMembers.userId, actor.id), hrScopeWhere(scope)) : undefined;
+
+/** Ids of the staff in HR's department scope, incl. staff with no department; null = everyone. */
+export async function hrScopeStaff(db: Database): Promise<Set<string> | null> {
+  const scope = await hrScopeDepartments(db);
+  if (!scope) return null;
+  const rows = await db
+    .select({ id: staffMembers.id })
+    .from(staffMembers)
+    .where(hrScopeWhere(scope));
+  return new Set(rows.map((r) => r.id));
+}
+
+/** The staff member is inside the caller's HR department scope (no scope = everyone). */
+export async function inHrReach(db: Database, actor: Actor, staffId: string) {
+  const scope = await hrScopeFor(db, actor);
+  if (!scope) return true;
+  const [hit] = await db
+    .select({ id: staffMembers.id })
+    .from(staffMembers)
+    .where(and(eq(staffMembers.id, staffId as StaffMemberId), hrReachWhere(actor, scope)));
+  return !!hit;
+}

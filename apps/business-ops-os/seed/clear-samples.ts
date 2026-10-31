@@ -335,6 +335,12 @@ const DELETES: readonly [string, string][] = [
     `DELETE FROM academic.enrolments WHERE source_admission_id ${IN('s_admissions')} OR student_id ${IN('s_academic_students')}`,
   ],
   ['academic.students', `DELETE FROM academic.students WHERE id ${IN('s_academic_students')}`],
+  // A sample teacher's assignment on a real batch (older seeds gave teacher@example.test one) is
+  // sample data even though the login stays; assignments of sample batches cascade below.
+  [
+    'academic.teacher_assignments',
+    `DELETE FROM academic.teacher_assignments WHERE staff_member_id IN (SELECT staff_id FROM ops.staff_profiles WHERE is_sample)`,
+  ],
   // Teacher assignments and calendar rules of a batch go with it (ON DELETE CASCADE).
   ['academic.batches', `DELETE FROM academic.batches WHERE id ${IN('s_academic_batches')}`],
   ['ops.admissions', `DELETE FROM ops.admissions WHERE id ${IN('s_admissions')}`],

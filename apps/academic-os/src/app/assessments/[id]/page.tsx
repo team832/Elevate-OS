@@ -48,11 +48,13 @@ export default async function AssessmentPage({ params, searchParams }: { params:
   const canPublish = can(access.user, 'academic:assessments:publish') && a.status === 'finalised' && !a.publishedAt && !a.roster;
   const api = (p: string) => MODULE_PATHS.api(`assessments/${a.id}/${p}`);
   const mine = schedule.hard.filter((c) => c.candidateId === a.id || c.otherId === a.id);
+  // Roster-managed: provisional and withdrawn are not "published".
+  const publication = a.roster?.publicationState ?? (a.publishedAt ? 'published' : 'not_published');
   return (
     <AcademicShell access={access} active="assessments">
       <PageHeader
         title={`${a.code} — ${a.title}`}
-        meta={<><StateBadge state={a.status} /> {a.publishedAt ? <StateBadge state="published" /> : a.status === 'finalised' ? <StateBadge state="not published" /> : null}</>}
+        meta={<><StateBadge state={a.status} /> {publication !== 'not_published' ? <StateBadge state={publication} /> : a.status === 'finalised' ? <StateBadge state="not published" /> : null}</>}
         description={`${a.kind.replace(/_/g, ' ')} · batch ${a.batchCode} · ${a.scheduledDate ?? 'not scheduled'} · ${a.durationMinutes === null ? 'duration unknown' : `${a.durationMinutes} min`}`}
         actions={<>{canMark ? <ButtonLink variant="primary" href={MODULE_PATHS.marks(a.id)}>Enter marks</ButtonLink> : null}<ButtonLink href={MODULE_PATHS.assessments}>All assessments</ButtonLink></>}
       />

@@ -32,6 +32,7 @@ import {
   type OverviewDeps,
   type Widget,
 } from '../../src/server/overview-adapter';
+import { searchFor } from '../../src/server/shell';
 
 const ctx = setupTestDatabase();
 // Tuesday 20 Oct 2026, 10:00 IST
@@ -165,6 +166,12 @@ describe('overview — permissions are respected', () => {
     const pending = byKey(await loadMetrics(manager, loadInbox(manager)), 'pendingApprovals');
     // a measured, empty inbox is a real 0 (sources exist and loaded)
     expect(pending.metric).toMatchObject({ status: 'ok', value: 0 });
+    const decisions = byKey(await loadAttention(manager, loadInbox(manager)), 'admissionDecisions');
+    expect(decisions).toMatchObject({
+      count: 0,
+      href: '/ops/operations/approvals#ops.fee_agreements',
+    });
+    expect(decisions.reason).toBeUndefined();
   });
 
   it('a marketing manager sees the live count of content in review', async () => {
@@ -173,6 +180,18 @@ describe('overview — permissions are respected', () => {
     expect(content.count).toBe(0);
     expect(content.reason).toBeUndefined();
   });
+
+  it.each([
+    [['marketing_manager'], '/marketing/leads'],
+    [['admissions_counsellor'], '/ops/leads'],
+  ] as const)(
+    '%s: active enquiries and lead search open the workspace they belong to',
+    async (roles, path) => {
+      const d = await deps([...roles]);
+      expect(byKey(await loadMetrics(d, loadInbox(d)), 'activeEnquiries').href).toBe(path);
+      expect(searchFor(d.user)?.action).toBe(path);
+    },
+  );
 
   it('an academic coordinator gets live students and classes (measured 0 shows as 0)', async () => {
     const d = await deps(['academic_coordinator']);

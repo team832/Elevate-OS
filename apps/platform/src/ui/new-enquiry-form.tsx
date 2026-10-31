@@ -2,7 +2,7 @@
 
 /**
  * "New enquiry" form for the overview dialog. Posts to the EXISTING Business Ops
- * create-lead API (`POST /ops/api/v1/leads`, body schema `createLeadBody` in
+ * create-lead API (`POST <base>/api/v1/leads`, Marketing mounts it too; body schema `createLeadBody` in
  * apps/business-ops-os/src/server/schemas.ts); the server checks `ops:leads:write`,
  * validates and normalises contacts, and answers 409 with duplicate matches. This
  * form checks only what the server would reject anyway (name, one contact, email
@@ -60,8 +60,11 @@ export function enquiryBody(values: Partial<Record<FieldName, string>>): Record<
 
 export function NewEnquiryForm({
   programmes,
+  base,
 }: {
   programmes: readonly { value: string; label: string }[];
+  /** `/ops` or `/marketing`: the workspace whose lead routes this person may call. */
+  base: string;
 }) {
   const closeDialog = useDialogClose();
   const uid = useId();
@@ -116,7 +119,7 @@ export function NewEnquiryForm({
     setBusy(true);
     let res: Response;
     try {
-      res = await fetch('/ops/api/v1/leads', {
+      res = await fetch(`${base}/api/v1/leads`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -193,7 +196,7 @@ export function NewEnquiryForm({
           >
             Add another enquiry
           </button>
-          <a className="el-button el-button-primary" href={`/ops/leads/${created.id}`}>
+          <a className="el-button el-button-primary" href={`${base}/leads/${created.id}`}>
             Open lead {created.code ?? ''}
           </a>
         </div>
@@ -341,7 +344,7 @@ export function NewEnquiryForm({
               <li key={m.leadId}>
                 <strong>{m.level === 'exact' ? 'Existing contact' : 'Possible duplicate'}:</strong>{' '}
                 {m.accessible ? (
-                  <a href={`/ops/leads/${m.leadId}`}>
+                  <a href={`${base}/leads/${m.leadId}`}>
                     {m.code}
                     {m.studentName ? `, ${m.studentName}` : ''}
                   </a>

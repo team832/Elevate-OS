@@ -183,7 +183,7 @@ export async function createPlacement(
       false,
     );
     if (!scope.valid) {
-      throw new ValidationError('This placement breaks the account rules (BR-MKT-4 / MKT-014).', {
+      throw new ValidationError('This placement breaks the account rules.', {
         details: { errors: scope.errors, warnings: scope.warnings },
       });
     }
@@ -211,7 +211,7 @@ export async function createPlacement(
     } catch (error) {
       if (isUniqueViolation(error, 'placements_code_key')) {
         throw new ConflictError(
-          `${code} already exists: one idea has at most one placement per account (MKT-002).`,
+          `${code} already exists: one idea has at most one placement per account.`,
         );
       }
       throw error;

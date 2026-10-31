@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { can } from '@elevate/authorization';
+import { can, scopeFor } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import {
   Alert,
@@ -30,7 +30,7 @@ import {
   EFFORT_LABELS,
   ITEM_TYPE_LABELS,
 } from '../../../domain/calendar';
-import { calendarOptions, listCalendarItems } from '../../../server/calendar';
+import { calendarOptions, isOwnCalendarItem, listCalendarItems } from '../../../server/calendar';
 import { changeIdeaStatusAction, createContentItemAction } from '../../actions/ideas';
 import { CalendarStatusBadge, Choice, SampleBadge } from '../../calendar/item-ui';
 import { planIdeaAction, updateIdeaAction } from '../actions';
@@ -75,6 +75,11 @@ export default async function IdeaDetailPage({
             const contentWrite = can(user, 'marketing:content:write');
             const options = await calendarOptions(db);
             const [onCalendar] = await listCalendarItems(db, { ideaId: idea.id });
+            // Same rule as planIdea: own scope plans only ideas it owns (or created, while unowned).
+            const canPlan =
+              can(user, 'marketing:calendar:write') &&
+              (scopeFor(user, 'marketing:calendar:write') === 'all' ||
+                (await isOwnCalendarItem(db, user, idea)));
             const mine =
               idea.createdBy === user.id ||
               (idea.ownerStaffId !== null && idea.ownerStaffId === (await myStaffId(db, user.id)));
@@ -91,7 +96,7 @@ export default async function IdeaDetailPage({
                   meta={<SampleBadge sample={idea.isSample} />}
                 >
                   {idea.quarantineState === 'quarantined' ? (
-                    <Alert tone="warning" title="Quarantined (OD-003)">
+                    <Alert tone="warning" title="Quarantined: duplicate legacy ID">
                       {idea.quarantineReason}{' '}
                       {idea.proposedCode
                         ? `Proposed code: ${idea.proposedCode} (${idea.proposedCodeStatus}, not applied).`
@@ -182,7 +187,7 @@ export default async function IdeaDetailPage({
                         <CalendarStatusBadge status={onCalendar.status} />{' '}
                         {formatIst(onCalendar.plannedAt)}
                       </p>
-                    ) : can(user, 'marketing:calendar:write') ? (
+                    ) : canPlan ? (
                       <form action={planIdeaAction} className="el-stack">
                         {hidden}
                         <Field id="plannedAt" label="Planned date and time (IST, optional)">

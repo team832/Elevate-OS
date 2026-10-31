@@ -24,7 +24,6 @@ import { POST as demoSession } from '../../src/app/api/v1/demos/[id]/sessions/[s
 import { GET as getAdmission } from '../../src/app/api/v1/admissions/[id]/route';
 import { POST as transition } from '../../src/app/api/v1/admissions/[id]/transitions/route';
 import { POST as check } from '../../src/app/api/v1/admissions/[id]/checks/route';
-import { POST as feeApproval } from '../../src/app/api/v1/admissions/[id]/fee-approval/route';
 import { POST as requestEnrolment } from '../../src/app/api/v1/admissions/[id]/enrolment-request/route';
 import { POST as runJob } from '../../src/app/api/v1/jobs/[job]/route';
 import { processEnrolmentReplies } from '../../src/server/enrolment';
@@ -259,17 +258,10 @@ describe('admission confirmation gate (BR-OPS-6/7)', () => {
     expect(same.status).toBe(409); // two different people (BR-OPS-7)
   });
 
-  it('fee approval: counsellor cannot approve (403); requester cannot self-approve; director can', async () => {
+  it('a complete checklist never admits: only the password-confirmed final approval does (D-041)', async () => {
     const { admissionId } = await pendingAdmission();
     await completeChecks(admissionId);
-    for (const [user, action, code] of [
-      [manager, 'request', 200],
-      [counsellor, 'approve', 403],
-      [manager, 'approve', 403], // the requester cannot self-approve
-      [director, 'approve', 200],
-    ] as const)
-      expect(await status(feeApproval, user, { action }, { id: admissionId })).toBe(code);
-    // Approvals alone never admit: only the password-confirmed final approval does (D-041).
+    // Fee approvals are per agreement version (fee-plans.test.ts); this path has no other way in.
     const res = await callRoute(transition, post(counsellor, { to: 'admitted' }), {
       id: admissionId,
     });

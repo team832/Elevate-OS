@@ -323,8 +323,8 @@ const queueOf = async (u: TestUser) =>
       authedRequest(u, '/ops/api/v1/staff-tasks?status=in_review&reviewable=1&sort=submitted'),
     )
   ).data!.rows.map((r) => r.id);
-const academics = async (s: StaffUser) => {
-  const [d] = await ctx.db.select().from(departments).where(eq(departments.code, 'ACADEMICS'));
+const placeIn = async (s: StaffUser, code = 'ACADEMICS') => {
+  const [d] = await ctx.db.select().from(departments).where(eq(departments.code, code));
   await ctx.db
     .update(staffMembers)
     .set({ departmentId: d!.id })
@@ -367,7 +367,7 @@ describe('review round 2 (X1): nobody holds admin or manager powers over a task 
     });
     for (const role of ROLES) {
       owners[role] = await staffUser(ctx.db, [role], { name: `Sample Owner ${role}` });
-      await academics(owners[role]);
+      await placeIn(owners[role]);
     }
   });
 
@@ -464,7 +464,7 @@ describe('review round 2: hand-over, multi-person drafts and minors', () => {
 
   it('home figures: "open" leaves out submitted work, as the teacher directory does', async () => {
     const t = await staffUser(ctx.db, ['teacher'], { name: 'Sample Teacher Esha' });
-    await academics(t);
+    await placeIn(t);
     const task = (await create(hr, brief(t.staffId, { title: 'Sample summary' }))).data!;
     await act(t, task.id, 'acknowledge');
     await act(t, task.id, 'start');
@@ -476,6 +476,7 @@ describe('review round 2: hand-over, multi-person drafts and minors', () => {
 
   it('teacher task facts follow HR’s department scope, never hiding HR’s own record', async () => {
     const outsider = await staffUser(ctx.db, ['operations_manager'], { name: 'Sample Outsider' });
+    await placeIn(outsider, 'FINANCE'); // staff with no department stay in HR scope
     const facts = await taskFacts(ctx.db, await tasksReach(ctx.db, hr), [
       outsider.staffId,
       teacher.staffId,

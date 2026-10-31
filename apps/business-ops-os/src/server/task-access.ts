@@ -15,7 +15,9 @@ import {
 import type { StaffMemberId } from '@elevate/shared-types';
 import type { TaskRole } from '../domain/task-lifecycle';
 import { accessScope, managedStaffIds, staffIdForUser, type Actor } from './context';
-import { hrScopeDepartments, inDepartments, isHrScoped } from './organisation';
+import { hrScopeStaff, isHrScoped } from './hr-scope';
+
+export { hrScopeStaff };
 
 type TaskRow = typeof tasks.$inferSelect;
 
@@ -31,17 +33,6 @@ export interface TaskAccess {
   review: 'all' | 'own' | null;
   /** The caller's department (tasks shared with a department). */
   departmentId: string | null;
-}
-
-/** Staff of the departments HR manages (primary or a current additional membership); null = all. */
-export async function hrScopeStaff(db: Database): Promise<Set<string> | null> {
-  const scope = await hrScopeDepartments(db);
-  if (!scope) return null;
-  const rows = await db
-    .select({ id: staffMembers.id })
-    .from(staffMembers)
-    .where(inDepartments(scope));
-  return new Set(rows.map((r) => r.id));
 }
 
 export async function taskAccess(

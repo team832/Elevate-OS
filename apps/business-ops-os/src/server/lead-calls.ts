@@ -3,7 +3,7 @@
  * make from their own phone; nothing is dialled or recorded by the app. Logging goes through
  * logActivity (./leads-actions.ts); this file lists calls and keeps the next follow-up.
  */
-import { and, asc, desc, eq, gte, isNull, lt, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, isNull, lt, or, type SQL } from 'drizzle-orm';
 import {
   opsFollowUps,
   opsLeadActivities,
@@ -77,7 +77,13 @@ export async function scheduleCallFollowUp(
   return after;
 }
 
-/** Calls on the leads the caller may work (own scope: their leads), newest first. */
+/** Most calls one list returns; a list this long may have older calls left out. */
+export const CALL_LIST_LIMIT = 500;
+
+/**
+ * Calls on the leads the caller may work (own scope: their leads), newest first, at most
+ * CALL_LIST_LIMIT. shortcut: no paging; narrow the dates when a list reaches the limit.
+ */
 export async function listCalls(db: Database, actor: Actor, filters: CallFilters = {}) {
   const scope = leadScope(db, await accessScope(db, actor, 'ops:leads:read'));
   if (!scope) return [];
@@ -88,6 +94,10 @@ export async function listCalls(db: Database, actor: Actor, filters: CallFilters
   if (filters.outcome) where.push(eq(opsLeadActivities.outcome, filters.outcome));
   if (filters.staffId) where.push(eq(opsLeadActivities.staffId, filters.staffId as StaffMemberId));
   if (filters.leadId) where.push(eq(opsLeadActivities.leadId, filters.leadId as LeadRow['id']));
+  if (filters.q) {
+    const q = `%${filters.q.replace(/[%_\\]/g, '')}%`;
+    where.push(or(ilike(opsLeads.studentName, q), ilike(opsLeads.code, q))!);
+  }
   const rows = await db
     .select({
       call: opsLeadActivities,
@@ -102,6 +112,6 @@ export async function listCalls(db: Database, actor: Actor, filters: CallFilters
     .leftJoin(staffMembers, eq(staffMembers.id, opsLeadActivities.staffId))
     .where(and(...where))
     .orderBy(desc(opsLeadActivities.occurredAt))
-    .limit(500);
+    .limit(CALL_LIST_LIMIT);
   return rows.map(({ call, ...rest }) => ({ ...call, ...rest }));
 }

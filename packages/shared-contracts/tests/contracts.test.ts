@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   AppError,
   ForbiddenError,
+  ACADEMIC_CONSUMERS,
+  academicStudentSummaryV1Schema,
+  enrolmentClosedV1Payload,
   enrolmentConfirmedV1Payload,
   enrolmentKeys,
   enrolmentRequestedV1Payload,
@@ -37,6 +40,62 @@ const validRequest = {
   counsellorStaffId: ids.staff,
   requestedByUserId: ids.user,
 };
+
+describe('enrolment exit contract (IR-OPS-EXIT-1, -2)', () => {
+  const closed = {
+    admissionId: ids.admission,
+    academicEnrolmentId: ids.enrolment,
+    outcome: 'withdrawn',
+    exitDate: '2026-10-26',
+    reason: 'Family moved city (fictional)',
+    closedAt: '2026-10-26T06:00:00.000Z',
+    closedByUserId: ids.user,
+  };
+
+  it('is registered for Academic with its key and consumer name', () => {
+    const parsed: EventPayload<'ops.enrolment.closed', 1> = enrolmentClosedV1Payload.parse(closed);
+    expect(parsed.outcome).toBe('withdrawn');
+    expect(getEventDefinition('ops.enrolment.closed', 1).consumers).toEqual(['academic']);
+    expect(enrolmentKeys.closed('x1')).toBe('enrolment-closed:x1');
+    expect(ACADEMIC_CONSUMERS.enrolmentExit).toBe('academic.enrolment-exit');
+  });
+
+  it.each([
+    [{ outcome: 'cancelled_before_enrolment' }],
+    [{ outcome: 'lost' }],
+    [{ exitDate: '2026-02-30' }],
+    [{ reason: ' ' }],
+    [{ fee: 1 }],
+  ])('refuses %o (no enrolment to close, bad date, empty reason, unknown field)', (change) => {
+    expect(enrolmentClosedV1Payload.safeParse({ ...closed, ...change }).success).toBe(false);
+  });
+
+  it('student summary enrolments may carry a batch end date (optional, nullable)', () => {
+    const summary = (batchEndDate?: string | null) => ({
+      contract: 'academic.student_summary',
+      version: 1,
+      generatedAt: '2026-10-26T06:00:00.000Z',
+      studentId: ids.student,
+      window: { from: '2026-01-01', to: '2026-10-26' },
+      enrolments: [
+        {
+          enrolmentId: ids.enrolment,
+          programmeCode: 'CLAT',
+          batchId: null,
+          batchName: null,
+          status: 'active',
+          teachers: [],
+          ...(batchEndDate === undefined ? {} : { batchEndDate }),
+        },
+      ],
+      attendance: { held: 0, present: 0, partial: 0, late: 0, absent: 0, excused: 0 },
+      results: [],
+    });
+    for (const v of [undefined, null, '2027-03-31'])
+      expect(academicStudentSummaryV1Schema.safeParse(summary(v)).success).toBe(true);
+    expect(academicStudentSummaryV1Schema.safeParse(summary('31/03/2027')).success).toBe(false);
+  });
+});
 
 describe('enrolment handoff contract', () => {
   it('accepts a minimal valid request', () => {

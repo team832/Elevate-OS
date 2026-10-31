@@ -725,5 +725,7 @@ describe('Build draft timetable (ACD-029)', () => {
     expect(out).toContain('Verbal: 1 class a week not placed because the teacher already has another class then.');
     expect(out).toContain('Summary written by the system; AI note unavailable');
     expect(out).toContain('No room');
+    const two = html(<BuildResultPanel result={{ ...result, unplaced: [{ ...result.unplaced[0]!, missing: 2 }] }} patternsPath="/academic/timetable/patterns" />);
+    expect(two).toContain('Verbal: 2 classes a week not placed');
   });
 });

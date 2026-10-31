@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import { ORGANISATION_EMAIL_DOMAIN, type AuthenticatedUser } from '@elevate/authentication';
+import {
+  ORGANISATION_EMAIL_DOMAIN,
+  googleConfig,
+  type AuthenticatedUser,
+} from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { currentRequestId, requirePageAccess } from '@elevate/server-kit/next';
@@ -26,6 +30,7 @@ import {
   RoleBadges,
   roleLabels,
   RoleChecklist,
+  signInText,
 } from '../../../../ui/users';
 import '../users.css';
 
@@ -151,11 +156,7 @@ async function Account({ viewer, id }: { viewer: AuthenticatedUser; id: Authenti
           <dl className="ur-facts">
             <div>
               <dt>How they sign in</dt>
-              <dd>
-                {user.hasPassword
-                  ? 'Has a password; can also use Google sign-in'
-                  : 'No password: signs in with Google. Setting a password by email comes later.'}
-              </dd>
+              <dd>{signInText(user.hasPassword, googleConfig() !== null)}</dd>
             </div>
             <div>
               <dt>Last sign-in</dt>
@@ -227,6 +228,7 @@ async function Account({ viewer, id }: { viewer: AuthenticatedUser; id: Authenti
         <Card title="History" description="Changes to this account, newest first (last 50).">
           <DataTable
             compact
+            label="Account history"
             rows={history}
             rowKey={(h) => h.id}
             columns={[

@@ -65,7 +65,7 @@ async function OverviewBody({ user, sp }: { user: AuthenticatedUser; sp: Awaited
       {o.dashboard.unreconciledConflicts.length ? (
         <Alert tone="warning" title="Owner decision needed">
           {o.dashboard.unreconciledConflicts
-            .map((c) => `${c.code} (${c.ownerDecision}): ${c.title}.`)
+            .map((c) => `${c.title}.`)
             .join(' ')}{' '}
           <a href={modulePath('accounts')}>See accounts</a>
         </Alert>

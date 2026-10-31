@@ -19,7 +19,7 @@ export type BuildResult = {
   note: { text: string; source: 'ai' | 'system'; label: string };
 };
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 export function BuildTimetableForm({ batches, action, patternsPath }: { batches: BatchOption[]; action: string; patternsPath: string }) {
   const router = useRouter();
@@ -122,7 +122,7 @@ export function BuildResultPanel({ result, patternsPath }: { result: BuildResult
           <ul>
             {result.unplaced.map((u) => (
               <li key={u.subjectId}>
-                {u.subjectName}: {plural(u.missing, 'class')} a week not placed because {u.reasons.map((r) => r.text).join('; ')}.
+                {u.subjectName}: {plural(u.missing, 'class', 'classes')} a week not placed because {u.reasons.map((r) => r.text).join('; ')}.
               </li>
             ))}
           </ul>

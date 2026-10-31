@@ -64,18 +64,21 @@ export async function getAssessmentOrThrow(db: Database, id: string) {
   return row;
 }
 
+const P = academicResultPublications;
+
+/** `provisional`: the current publication is provisional (then `publishedAt` is set but results are not final). */
 export async function listAssessments(db: Database, actor: Actor, filter: { batchId?: string } = {}) {
   const scope = await resolveScope(db, actor, 'academic:assessments:read');
   const conditions = [assessmentInScope(scope)];
   if (filter.batchId) conditions.push(eq(academicAssessments.batchId, filter.batchId as BatchId));
   const rows = await db
-    .select({ a: academicAssessments, batchCode: academicBatches.code })
+    .select({ a: academicAssessments, batchCode: academicBatches.code, provisional: sql<boolean>`exists (select 1 from ${P} where ${P.assessmentId} = ${academicAssessments.id} and ${P.status} = 'current' and ${P.provisional})` })
     .from(academicAssessments)
     .innerJoin(academicBatches, eq(academicBatches.id, academicAssessments.batchId))
     .where(and(...conditions))
     .orderBy(asc(academicAssessments.scheduledDate), asc(academicAssessments.code))
     .limit(1000);
-  return rows.map((r) => ({ ...r.a, batchCode: r.batchCode }));
+  return rows.map((r) => ({ ...r.a, batchCode: r.batchCode, provisional: r.provisional }));
 }
 
 export function sectionValues(assessmentId: AcademicAssessmentId, sections: z.output<typeof sectionBody>[]) {

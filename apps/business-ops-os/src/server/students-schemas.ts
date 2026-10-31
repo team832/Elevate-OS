@@ -33,7 +33,7 @@ export const convertBody = z
     effectiveDate: isoDateSchema,
     /** Fee plan / approved pricing reference (fee plans are built by the fees slice). */
     feePlanReference: optText(120),
-    /** A discount or exception asks the core fee-arrangement approval (no self-approval). */
+    /** A discount or exception, noted for the fee agreement (whose own approval decides it). */
     discountRequest: optText(1000),
     existingStudentIdentityId: z.uuid().nullish(),
     createNewStudent: z.boolean().optional(),

@@ -3,9 +3,9 @@
  *
  * Contracts that Business Ops OS publishes for other modules.
  *
- * Events: Business Ops PRODUCES only `ops.admission.enrolment_requested` v1,
- * which is Foundation-owned in `../events/enrolment.ts` (idempotency key
- * `enrolmentKeys.request(admissionId, attempt)`), and CONSUMES
+ * Events: Business Ops PRODUCES `ops.admission.enrolment_requested` v1 and
+ * `ops.enrolment.closed` v1, both Foundation-owned in `../events/enrolment.ts` (keys
+ * `enrolmentKeys.request(admissionId, attempt)` / `enrolmentKeys.closed(exitRecordId)`), and CONSUMES
  * `academic.enrolment.confirmed` / `academic.enrolment.rejected` v1 with the
  * consumer name below. No other Ops events exist yet; `ops.lead.*` events for
  * Marketing attribution and the `/ops/api/internal/v1/summary` contract are

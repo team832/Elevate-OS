@@ -4,7 +4,7 @@ import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { Button, ButtonLink, Card, DataTable, EmptyState, Subnav } from '@elevate/shared-ui';
 import { redirect } from 'next/navigation';
-import { toAppPath } from '@elevate/server-kit/next';
+import { getCurrentUser, toAppPath } from '@elevate/server-kit/next';
 import { addDays, daysBetween, isIsoDate, toIsoDate, type IsoDate } from '@elevate/shared-types';
 import {
   CALENDAR_STATUSES,
@@ -29,6 +29,7 @@ import {
   weekdayIndex,
 } from '../../domain';
 import { contentFilter, listCalendar } from '../../server';
+import { getMyPreferences } from '../../server/preferences';
 import {
   calendarOptions,
   linkedPlacementIds,
@@ -64,8 +65,17 @@ type Posts = Awaited<ReturnType<typeof listCalendar>>;
 
 export default async function CalendarPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
+  // ?open=<id> (drill-downs from Targets and the dashboard) opens the item's own page.
+  const open = uuidOrUndefined(param(sp, 'open'));
+  if (open) redirect(toAppPath(modulePath(`calendar/${open}`), MODULE.basePath));
   const rawView = param(sp, 'view');
-  const view: CalendarView = isOneOf(CALENDAR_VIEWS, rawView) ? rawView : 'month';
+  // No view in the URL: the person's "Calendar opens in" choice (Personal Settings).
+  const viewer = isOneOf(CALENDAR_VIEWS, rawView) ? null : await getCurrentUser();
+  const view: CalendarView = isOneOf(CALENDAR_VIEWS, rawView)
+    ? rawView
+    : viewer
+      ? (await getMyPreferences(getDb(), viewer)).marketing.calendarView
+      : 'month';
   const rawDate = param(sp, 'date');
   const date = (rawDate && isIsoDate(rawDate) ? rawDate : toIsoDate()) as IsoDate;
   const owner = uuidOrUndefined(param(sp, 'owner'));
@@ -73,9 +83,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
   const course = uuidOrUndefined(param(sp, 'course'));
   const rawStatus = param(sp, 'status');
   const status = isOneOf(CALENDAR_STATUSES, rawStatus) ? rawStatus : undefined;
-  // ?open=<id> (drill-downs from Targets and the dashboard) opens the item's own page.
-  const open = uuidOrUndefined(param(sp, 'open'));
-  if (open) redirect(toAppPath(modulePath(`calendar/${open}`), MODULE.basePath));
   const due = param(sp, 'due') === '1' ? '1' : undefined;
   const [rawFrom, rawTo] = [param(sp, 'from'), param(sp, 'to')];
   // An exact period (dashboard drill-down) wins over the month or week around `date`.

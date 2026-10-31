@@ -105,6 +105,12 @@ export interface AuthHandlerOptions {
   throttle?: LoginThrottle;
   /** Per ip throttle. Default: 50 failures / 15 min → 15 min lock. */
   ipThrottle?: LoginThrottle;
+  /**
+   * Per email, from any ip. Default: 20 failures / 15 min → 15 min lock. X-Forwarded-For is
+   * client-supplied when no proxy sets it, so the two limits above alone can be dodged by
+   * sending a new address with every guess.
+   */
+  emailThrottle?: LoginThrottle;
 }
 
 export function clientIp(request: Request): string {
@@ -271,6 +277,7 @@ export function withQuery(path: string, params: Record<string, string>): string 
 export function createLoginHandler(options: AuthHandlerOptions) {
   const throttle = options.throttle ?? new LoginThrottle();
   const ipThrottle = options.ipThrottle ?? new LoginThrottle({ maxFailures: 50 });
+  const emailThrottle = options.emailThrottle ?? new LoginThrottle({ maxFailures: 20 });
   return async function login(request: Request): Promise<Response> {
     const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
     const crossSite = refuseCrossSite(request, requestId);
@@ -299,8 +306,13 @@ export function createLoginHandler(options: AuthHandlerOptions) {
         });
         assertAllowedEmail(email);
       }
-      const key = `${email.toLowerCase()}|${ip}`;
-      if (throttle.retryAfterMs(key) > 0 || ipThrottle.retryAfterMs(ip) > 0) {
+      const account = email.toLowerCase();
+      const key = `${account}|${ip}`;
+      if (
+        throttle.retryAfterMs(key) > 0 ||
+        ipThrottle.retryAfterMs(ip) > 0 ||
+        emailThrottle.retryAfterMs(account) > 0
+      ) {
         throw new RateLimitedError('Too many failed sign-in attempts. Try again in 15 minutes.');
       }
       const db = (options.getDb ?? getDb)();
@@ -309,6 +321,7 @@ export function createLoginHandler(options: AuthHandlerOptions) {
       if (!user) {
         throttle.recordFailure(key);
         ipThrottle.recordFailure(ip);
+        emailThrottle.recordFailure(account);
         log.warn('login failed', { requestId, module: options.module, ip });
         throw new UnauthenticatedError('Email or password is incorrect.');
       }

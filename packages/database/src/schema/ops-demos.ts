@@ -115,6 +115,7 @@ export const opsDemos = ops.table(
   },
   (t) => [
     index('demos_admission_idx').on(t.admissionId),
+    index('demos_lead_idx').on(t.leadId),
     index('demos_outcome_idx').on(t.outcome),
     index('demos_counsellor_idx').on(t.counsellorStaffId),
     uniqueIndex('demos_one_open_per_admission')

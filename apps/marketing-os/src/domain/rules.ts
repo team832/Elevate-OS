@@ -226,7 +226,7 @@ export function checkContentRules(
     result.blocking.push({
       ruleCode: SYSTEM_RULES.rightsPending,
       kind: 'system',
-      description: 'Third-party material without cleared rights cannot be approved (MKT-022).',
+      description: 'Third-party material without cleared rights cannot be approved.',
       severity: 'block',
       ruleStatus: 'system',
       accounts: accountsChecked,

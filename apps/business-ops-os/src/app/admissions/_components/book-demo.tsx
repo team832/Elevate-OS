@@ -17,9 +17,12 @@ import { kycFields } from './demo-kyc';
 export async function BookDemo({
   user,
   cancelHref,
+  leadId,
 }: {
   user: AuthenticatedUser;
   cancelHref: string;
+  /** Opened from a lead: its case is preselected when it is bookable. */
+  leadId?: string;
 }) {
   const r = await load(async (db) => ({
     cases: await bookableAdmissions(db, user),
@@ -92,6 +95,7 @@ export async function BookDemo({
             label: 'Student',
             type: 'select',
             required: true,
+            defaultValue: cases.find((c) => c.leadId === leadId)?.id,
             options: cases.map((c) => ({
               value: c.id,
               label: `${c.studentName} · ${c.code}${c.programmeCode ? ` · ${programmeName(c.programmeCode, options.programmes)}` : ''}`,

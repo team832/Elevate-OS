@@ -190,6 +190,8 @@ export async function buildMonthlySnapshot(
   });
   const staffId = input.staffId as never;
   const within = (c: PgColumn) => and(gte(c, start), lt(c, end));
+  // Planned dates count over the whole month: a date later than the cut-off was still planned by then.
+  const monthEnd = periodBounds(range.from, range.to).end;
 
   const goals = await db
     .select()
@@ -243,14 +245,19 @@ export async function buildMonthlySnapshot(
           eq(cal.ownerStaffId, staffId),
           campaignIds.length ? inArray(cal.campaignId, campaignIds) : undefined,
         ),
-        or(within(cal.plannedAt), within(cal.approvedAt), within(cal.publishedAt)),
+        or(
+          and(gte(cal.plannedAt, start), lt(cal.plannedAt, monthEnd)),
+          within(cal.approvedAt),
+          within(cal.publishedAt),
+        ),
       ),
     );
-  const at = (d: Date | null) => d !== null && d >= start && d < end;
+  const at = (d: Date | null, until = end) => d !== null && d >= start && d < until;
   const counts = (rows: typeof items) => ({
     planned: metric.ok(
-      rows.filter((r) => at(r.plannedAt) && r.createdAt <= cutoff && r.status !== 'cancelled')
-        .length,
+      rows.filter(
+        (r) => at(r.plannedAt, monthEnd) && r.createdAt <= cutoff && r.status !== 'cancelled',
+      ).length,
       meta('Calendar items planned for a date in the month (not cancelled).'),
     ),
     approved: metric.ok(

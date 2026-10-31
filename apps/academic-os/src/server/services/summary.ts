@@ -112,7 +112,7 @@ async function metricsFor(db: Database, window: Window, programmeId: string | nu
       Number(anyAssessments) === 0 ? metric.missing('No assessments have been set up for these batches.', meta('Assessments (not cancelled) scheduled in the window.', 'count')) : metric.ok(assessments.filter((a) => a.status !== 'cancelled').length, meta('Assessments (not cancelled) scheduled in the window.', 'count')),
     assessmentsConducted:
       Number(anyAssessments) === 0 ? metric.missing('No assessments have been set up for these batches.', meta('Assessments whose results were first finalised in the window.', 'count')) : metric.ok(Number(finalised[0]?.n ?? 0), meta('Assessments whose results were first finalised in the window.', 'count')),
-    studentsAtRisk: metric.missing('Automated risk rules are not implemented (ACD-022 Proposed); see open interventions in Academic OS.', meta('Students flagged at risk by rule.', 'count')),
+    studentsAtRisk: metric.missing('Automated risk rules are not built yet; see open support actions in Academic OS.', meta('Students flagged at risk by rule.', 'count')),
     syllabusCompletionRate:
       plansFound === 0 || plannedMinutes === 0
         ? metric.missing('No active batch has a locked or provisional curriculum plan.', meta('Verified first-teaching minutes ÷ planned minutes of the active batches’ current plans (all time); revision and practice never count.', 'percent'))

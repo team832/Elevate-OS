@@ -6,8 +6,8 @@
  * link the canonical student (contact matches → review, never an automatic merge); set the
  * programmes (an allowed combination — extra programmes open their own admission case in the
  * same bundle); advance the case to `admission_pending`; mark the demo `converted` (its history
- * stays); create the application DRAFT with version 1; optionally ask the fee-arrangement
- * approval; audit. NO admission number and NO admission: both come only from the
+ * stays); create the application DRAFT with version 1; audit (with any discount request, which
+ * the fee agreement's own approval decides). NO admission number and NO admission: both come only from the
  * password-confirmed final approval (server/applications-confirm.ts).
  */
 import { and, asc, eq, inArray, isNotNull, ne, or, type SQL } from 'drizzle-orm';
@@ -21,7 +21,7 @@ import {
   students,
   type Database,
 } from '@elevate/database';
-import { findPendingApproval, requestApproval, withTransaction } from '@elevate/server-kit';
+import { withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
   InvalidStateTransitionError,
@@ -32,7 +32,6 @@ import type { AdmissionStatus } from '../domain';
 import { ALLOWED_PROGRAMME_COMBINATIONS, isAllowedCombination } from '../domain/catalog';
 import { demoWithChecklist, marksForDemo } from './demos';
 import { decideIdentity, maskPhone } from '../domain/student-lifecycle';
-import { feeArrangementPolicy } from './approval-policies';
 import { admissionRow, assertAdmissionAccess, lockAccessible } from './admissions';
 import { createApplication } from './applications';
 import { accessScope, type Actor } from './context';
@@ -313,23 +312,7 @@ export async function convertDemo(
       extraAdmissionIds.push(extra.id);
     }
 
-    // 4. Discount / exception → core approval (no self-approval).
-    let approvalRequested = false;
-    if (
-      input.discountRequest &&
-      !(await findPendingApproval(tx, feeArrangementPolicy, admission.id))
-    ) {
-      await requestApproval(tx, {
-        policy: feeArrangementPolicy,
-        subjectId: admission.id,
-        requestedBy: actor,
-        comment: `Discount / exception requested at conversion: ${input.discountRequest}`,
-        requestId,
-      });
-      approvalRequested = true;
-    }
-
-    // 5. Demo outcome, preserved and linked.
+    // 4. Demo outcome, preserved and linked.
     await tx
       .update(opsDemos)
       .set({
@@ -340,7 +323,7 @@ export async function convertDemo(
       })
       .where(and(eq(opsDemos.id, demo.id), eq(opsDemos.outcome, 'open')));
 
-    // 6. The application draft, version 1 (the bundle's extra cases point at it).
+    // 5. The application draft, version 1 (the bundle's extra cases point at it).
     const application = await createApplication(tx, actor, {
       admission,
       studentId,
@@ -366,7 +349,8 @@ export async function convertDemo(
           feePlanReference: input.feePlanReference ?? null,
           guardianConfirmation: input.guardianConfirmation,
           checklist: checklist.label,
-          approvalRequested,
+          // Noted for the fee agreement, whose own approval decides it (D-057); no approval here.
+          discountRequest: input.discountRequest ?? null,
         },
       },
       requestId,
@@ -379,7 +363,6 @@ export async function convertDemo(
       studentId,
       demoId: demo.id,
       extraAdmissionIds,
-      approvalRequested,
     };
   });
 }

@@ -360,6 +360,11 @@ describe('several assignees, drafts, blocked flag and scope', () => {
     );
   });
 
+  it('staff with no department yet stay in HR scope for tasks, as for staff records', async () => {
+    const newcomer = await staffUser(ctx.db, ['teacher'], { name: 'Sample Unplaced Teacher' });
+    expect((await create(hr, brief(newcomer.staffId))).status).toBe(201);
+  });
+
   it('the HR Overview counts link to the filtered lists', async () => {
     const counts = await hrTaskCounts(ctx.db, hr);
     expect(counts.map((c) => c.key)).toEqual([

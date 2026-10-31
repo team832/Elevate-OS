@@ -38,6 +38,7 @@ export {
   hrReachWhere,
   hrScopeDepartments,
   hrScopeFor,
+  hrScopeStaff,
   hrScopeWhere,
   inDepartments,
   isHrScoped,

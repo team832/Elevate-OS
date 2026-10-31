@@ -2,6 +2,7 @@
 import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
+  auditEvents,
   integrationEvents,
   opsAdmissions,
   opsAppointments,
@@ -14,7 +15,6 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import { listApprovalHistory } from '@elevate/server-kit';
 import {
   ADMISSION_CHECK_LABELS,
   allowedUserTargets,
@@ -101,7 +101,7 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
     })
     .from(opsLeads)
     .where(eq(opsLeads.id, admission.leadId));
-  const { gaps, checks, fee, settings } = await readinessOf(db, admission);
+  const { gaps, checks, settings } = await readinessOf(db, admission);
   const recorderName = await namesOf(
     db,
     checks.map((c) => c.recordedBy),
@@ -161,7 +161,21 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
     : null;
   const status = admission.status;
   const handoffInput = handoffInputOf(admission, handoff?.academicDelivery ?? null);
-  const feeRecords = can(actor, 'ops:fees:read')
+  const feesVisible = can(actor, 'ops:fees:read');
+  const [converted] = feesVisible
+    ? await db
+        .select({ metadata: auditEvents.metadata })
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.entityId, admission.id),
+            eq(auditEvents.action, 'admission.converted'),
+          ),
+        )
+        .orderBy(desc(auditEvents.at))
+        .limit(1)
+    : [];
+  const feeRecords = feesVisible
     ? await db
         .select({
           kind: opsFeeRecords.kind,
@@ -187,14 +201,10 @@ export async function getAdmission(db: Database, actor: Actor, id: string) {
       ready: gaps.length === 0,
       gaps: gaps.map((g) => ({ key: g, label: READINESS_GAP_LABELS[g] })),
     },
-    feeApproval: {
-      ...fee,
-      history: await listApprovalHistory(db, {
-        module: 'ops',
-        subjectType: 'admission',
-        subjectId: admission.id,
-      }),
-    },
+    /** Discount or exception asked for at conversion; it may name amounts, so fee readers only. */
+    discountRequest:
+      (converted?.metadata as { discountRequest?: string } | null | undefined)?.discountRequest ??
+      null,
     transitions: await transitionsOf(db, admission.id),
     counselling: sessions.map((s) => ({ ...s.s, counsellorName: s.counsellorName })),
     demos: demos.map((d) => {

@@ -49,16 +49,19 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
             const db = getDb();
             const everyone = scopeFor(user, 'marketing:reports:read') === 'all';
             const people = everyone ? await memberOptions(db) : [];
+            const me = await myStaffId(db, user.id);
             const r = await monthlySnapshotFor(db, user, {
               month,
-              staffId:
-                everyone && staffParam && people.some((p) => p.id === staffParam)
-                  ? staffParam
-                  : undefined,
+              // A reader of everyone's reports without a staff record of their own starts on the first person.
+              staffId: people.some((p) => p.id === staffParam)
+                ? staffParam
+                : me
+                  ? undefined
+                  : people[0]?.id,
             });
             const s = r.snapshot;
             const [name] = await memberOptions(db, r.staffId);
-            const own = r.staffId === (await myStaffId(db, user.id));
+            const own = r.staffId === me;
             const range = monthRange(r.month)!;
             const label = s.content.planned.window.label ?? r.month;
             return (
@@ -85,7 +88,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
                 </form>
                 <Card
                   title={`${name?.name ?? 'Staff member'}, ${label}`}
-                  description={`Facts counted from records as of ${formatIst(s.cutoffAt)}. Lifecycle: Draft, Submitted for review (goes to your reporting manager), then Reviewed or Changes requested.`}
+                  description={`Facts counted from records as of ${formatIst(s.cutoffAt)}. Lifecycle: Draft, Submitted for review (goes to the reporting manager), then Reviewed or Changes requested.`}
                   meta={
                     s.isSample ? (
                       <span className="el-badge el-badge-sample">Sample data</span>
@@ -177,7 +180,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
                 </Card>
                 <Card title="SEO / AIO / GEO work with evidence">
                   <DataTable
-                    caption="Work items owned, due or worked on this month"
+                    caption="Work items with new evidence or a review step this month"
                     rows={s.optimisation}
                     rowKey={(o) => o.itemId}
                     empty={<p>No SEO, AIO or GEO work this month.</p>}

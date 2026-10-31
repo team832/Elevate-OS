@@ -71,3 +71,11 @@ export function RoleChecklist({
     </fieldset>
   );
 }
+
+/** Only what is set up: Google sign-in is claimed only when it is configured (D-014). */
+export function signInText(hasPassword: boolean, google: boolean): string {
+  if (hasPassword) return google ? 'Password or Google sign-in' : 'Password';
+  return google
+    ? 'Google sign-in only (no password)'
+    : 'Cannot sign in yet: no password, and Google sign-in is not set up';
+}

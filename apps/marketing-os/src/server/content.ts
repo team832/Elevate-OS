@@ -67,7 +67,7 @@ export const contentApprovalPolicy = defineApprovalPolicy({
   allowSelfApproval: false,
   requireCommentOnReject: true,
   description:
-    'Nothing is scheduled or published without an explicit approval of the exact version (AP-001; approver roles per OD-002).',
+    'Nothing is scheduled or published without an explicit approval of the exact version; who approves is still a proposal for the owner.',
 });
 
 export type ContentItemRow = typeof marketingContentItems.$inferSelect;
@@ -302,7 +302,7 @@ export async function createContentItem(
     const idea = await rowById(tx, marketingIdeas, ideaId, 'Idea not found.');
     if (idea.quarantineState === 'quarantined' || !idea.code) {
       throw new InvalidStateTransitionError(
-        'This idea is quarantined (duplicate legacy ID, OD-003); it has no code yet, so no content can be produced under it.',
+        'This idea is quarantined (its legacy ID was used twice); it has no code yet, so no content can be produced under it.',
       );
     }
     if (idea.status === 'archived' || idea.status === 'rejected') {
@@ -494,7 +494,7 @@ export async function decideContent(
     const policy = await loadPolicy(tx);
     if (!actor.roles.some((r) => policy.approverRoles.includes(r))) {
       throw new ForbiddenError(
-        `Only ${policy.approverRoles.join(' or ')} may decide content approvals (OD-002, ${'proposed'}).`,
+        `Only ${policy.approverRoles.map((r) => r.replaceAll('_', ' ')).join(' or ')} may decide content approvals (proposed; the owner has not confirmed this).`,
       );
     }
     const item = await lockItem(tx, itemId, actor);

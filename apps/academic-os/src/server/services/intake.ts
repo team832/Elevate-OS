@@ -225,6 +225,6 @@ export async function getIntakeQueue(db: Database) {
       const payload = p.payload as { admissionId?: string; programmeCode?: string; student?: { fullName?: string } };
       return { eventId: p.eventId, occurredAt: p.occurredAt, status: p.status, attempts: p.attempts, lastError: p.lastError, admissionId: payload.admissionId ?? null, programmeCode: payload.programmeCode ?? null, studentName: payload.student?.fullName ?? null };
     }),
-    scheduler: 'none — run manually (wave-3 integration adds a scheduler)',
+    scheduler: 'none — run manually',
   };
 }

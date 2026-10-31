@@ -27,6 +27,7 @@ import {
   EXAM_PREFIXES,
   IDEA_SCOPES,
   IDEA_STATUSES,
+  IDEA_STATUS_LABELS,
   detectDuplicateIdeas,
   normalizeTitle,
   type CoursePrefix,
@@ -460,7 +461,7 @@ export async function changeIdeaStatus(
     await assertIdeaChangeable(tx, actor, before);
     if (!canChangeIdeaStatus(before.status, input.status)) {
       throw new InvalidStateTransitionError(
-        `An idea cannot go from ${before.status} to ${input.status}.`,
+        `An idea cannot go from ${IDEA_STATUS_LABELS[before.status]} to ${IDEA_STATUS_LABELS[input.status]}.`,
       );
     }
     if (input.status === 'approved' || input.status === 'changes_requested') {

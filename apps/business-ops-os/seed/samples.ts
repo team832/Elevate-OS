@@ -784,13 +784,18 @@ async function admitSample(
       row.a,
       settings['admissions.number.format'].value,
     );
+    // A legacy record entered today: admitted the day before its intended start (the day the first
+    // instalment falls due), so Ops "Admitted on" matches Academic's placement and the fee ledger.
+    const admissionDate = row.a.intendedStartDate
+      ? addDays(row.a.intendedStartDate as IsoDate, -1)
+      : null;
     const admitted = await applyTransition(tx, {
-      admission: { ...row.a, admissionNumber: number },
+      admission: { ...row.a, admissionNumber: number, admissionDate },
       to: 'admitted',
       actorUserId: actor.id,
       reason: 'Sample admission seeded without final confirmation (legacy marker).',
       context: { readinessMissing: [] },
-      patch: { legacyVerification: 'required' },
+      patch: { legacyVerification: 'required', admissionDate },
       settings,
     });
     if (requestEnrolment) await publishEnrolmentRequest(tx, actor, admitted, { settings });

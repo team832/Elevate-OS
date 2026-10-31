@@ -176,6 +176,8 @@ export const academicStudentSummaryV1Schema = z.object({
        * reviews and demo-attendance contracts send display names. Consumers resolve ids.
        */
       teachers: z.array(z.object({ staffId: staffMemberIdSchema, subject: z.string().min(1) })),
+      /** Optional, additive (IR-OPS-EXIT-2): the batch's planned last day (IST); null = not set. */
+      batchEndDate: isoDateSchema.nullable().optional(),
     }),
   ),
   /** Held class sessions in the window and the student's recorded marks; unrecorded = held − sum. */
@@ -347,7 +349,14 @@ export const academicTeacherActivityV1Schema = z.object({
    * records of this teacher whose class date is in the window (verified delivery, not mastery).
    */
   topicsCovered: z
-    .array(z.object({ batchCode: z.string().min(1), subjectName: z.string().min(1), chapterTitle: z.string().min(1), classes: z.int().min(1) }))
+    .array(
+      z.object({
+        batchCode: z.string().min(1),
+        subjectName: z.string().min(1),
+        chapterTitle: z.string().min(1),
+        classes: z.int().min(1),
+      }),
+    )
     .optional(),
   /** Added 23 Oct 2026 (optional): assessments created, and assessments with marks entered or roster scores verified, by this teacher's sign-in in the window. */
   assessments: z

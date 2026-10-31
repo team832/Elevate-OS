@@ -20,6 +20,11 @@ import {
   createPlacement,
 } from '../../src/server';
 import { seedRegistry, uniqueTitle } from '../helpers';
+import {
+  getMyPreferences,
+  notificationPreferencesSchema,
+  saveMyPreferences,
+} from '../../src/server/preferences';
 import { marketingStaff, type Staff } from './marketing-people';
 
 const ctx = setupTestDatabase();
@@ -27,6 +32,10 @@ const state = vi.hoisted(() => ({ user: null as unknown }));
 vi.mock('@elevate/database', async (real) => ({
   ...(await real<typeof import('@elevate/database')>()),
   getDb: () => ctx.db,
+}));
+vi.mock('@elevate/server-kit/next', async (real) => ({
+  ...(await real<typeof import('@elevate/server-kit/next')>()),
+  getCurrentUser: async () => state.user,
 }));
 vi.mock('../../src/ui/shell', async (real) => ({
   ...(await real<typeof import('../../src/ui/shell')>()),
@@ -63,6 +72,18 @@ describe('Marketing calendar screens', () => {
       expect(html).toContain('Add a calendar item');
     },
   );
+
+  it('without ?view the calendar opens in the view chosen in Personal Settings', async () => {
+    const isList = (html: string) => /aria-current="page">List</.test(html);
+    expect(isList(await render(CalendarPage(sp({})), anika))).toBe(false);
+    const { marketing } = await getMyPreferences(ctx.db, anika);
+    await saveMyPreferences(ctx.db, anika, {
+      marketing: { ...marketing, calendarView: 'list' },
+      notifications: notificationPreferencesSchema.parse({}),
+    });
+    expect(isList(await render(CalendarPage(sp({})), anika))).toBe(true);
+    expect(isList(await render(CalendarPage(sp({ view: 'month' })), anika))).toBe(false);
+  });
 
   it('shows an item on its day with today marked, the sample badge, and drag only for schedulers', async () => {
     const [row] = await ctx.db
@@ -248,5 +269,13 @@ describe('Idea screen', () => {
     );
     expect(html).toContain('Plan it');
     expect(html).toContain('Calendar item type');
+    // Another employee may not plan someone else's idea (planIdea refuses it), so no button.
+    const other = await marketingStaff(ctx.db, 'marketing_contributor', 'Sample Marketer Bela');
+    const theirs = await render(
+      IdeaDetailPage({ params: Promise.resolve({ id: idea.id }), ...sp({}) }),
+      other,
+    );
+    expect(theirs).not.toContain('Plan it');
+    expect(theirs).toContain('Not planned yet.');
   });
 });

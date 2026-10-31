@@ -249,6 +249,7 @@ export const academicAttempts = academic.table(
   },
   (t) => [
     uniqueIndex('attempts_assessment_student_key').on(t.assessmentId, t.studentId),
+    index('attempts_student_idx').on(t.studentId),
     check('attempts_status_check', sql`${t.status} IN (${inList(ACADEMIC_ATTEMPT_STATUSES)})`),
     check(
       'attempts_shape',
@@ -338,6 +339,7 @@ export const academicResults = academic.table(
       sql`(${t.state} = 'scored') = (${t.totalScore} IS NOT NULL) AND ${t.absent} = (${t.state} <> 'scored')`,
     ),
     index('results_student_idx').on(t.studentId),
+    index('results_assessment_idx').on(t.assessmentId),
     check(
       'results_percentile_range',
       sql`${t.percentile} IS NULL OR ${t.percentile} BETWEEN 0 AND 100`,

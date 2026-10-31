@@ -47,5 +47,7 @@ export const callListQuery = z.object({
   outcome: z.enum(OPS_ACTIVITY_OUTCOMES).optional(),
   staffId: z.uuid().optional(),
   leadId: z.uuid().optional(),
+  /** Student name or lead code. */
+  q: z.string().trim().max(100).optional(),
 });
 export type CallFilters = z.output<typeof callListQuery>;

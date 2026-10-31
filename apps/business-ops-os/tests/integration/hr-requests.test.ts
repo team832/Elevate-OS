@@ -310,7 +310,7 @@ describe('Schar: a configured recipient that is not set up stays with HR', () =>
     });
     const refused = await act(hr, id, 'forward', { body: 'For Schar' });
     expect(refused.status).toBe(409);
-    expect(refused.error!.message).toMatch(/Recipient not set up/);
+    expect(refused.error!.message).toMatch('Recipient not set up: Schar. Set them');
     expect((await row()).id).toBe(id);
     await updateHrSetting(ctx.db, hr, {
       key: 'hr.request_recipients',

@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ROLE_KEYS, ROLES } from '@elevate/authorization';
-import { AccountStatus, fmtWhen, RoleBadges, roleLabels, RoleChecklist } from '../../src/ui/users';
+import {
+  AccountStatus,
+  fmtWhen,
+  RoleBadges,
+  roleLabels,
+  RoleChecklist,
+  signInText,
+} from '../../src/ui/users';
 import { JsonForm } from '../../src/ui/json-form';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push() {}, refresh() {} }) }));
@@ -9,6 +16,15 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push() {}, refresh() {} 
 const html = (node: React.ReactNode) => renderToStaticMarkup(<>{node}</>);
 
 describe('Users & roles screen pieces', () => {
+  it.each([
+    [true, true, 'Password or Google sign-in'],
+    [true, false, 'Password'],
+    [false, true, 'Google sign-in only (no password)'],
+    [false, false, 'Cannot sign in yet: no password, and Google sign-in is not set up'],
+  ])('sign-in method: password %s, Google configured %s → "%s"', (password, google, text) => {
+    expect(signInText(password, google)).toBe(text);
+  });
+
   it.each([
     ['active', 'el-tone-success', 'Active'],
     ['disabled', 'el-tone-danger', 'Disabled'],

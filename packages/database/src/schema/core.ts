@@ -390,8 +390,11 @@ export const notifications = core.table(
   (t) => [
     index('notifications_user_unread_idx').on(t.userId, t.readAt, t.createdAt),
     check('notifications_module_check', sql`${t.module} ${MODULE_CHECK}`),
-    // A leading `//` or `/\` is an off-site URL to a browser.
-    check('notifications_link_relative', sql`${t.link} IS NULL OR ${t.link} ~ '^/([^/\\\\]|$)'`),
+    // A leading `//` or `/\` is an off-site URL to a browser; a control character breaks a Location header.
+    check(
+      'notifications_link_relative',
+      sql`${t.link} IS NULL OR (${t.link} ~ '^/([^/\\\\]|$)' AND ${t.link} !~ '[[:cntrl:]]')`,
+    ),
   ],
 );
 

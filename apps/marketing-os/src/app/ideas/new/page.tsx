@@ -51,7 +51,7 @@ export default async function NewIdeaPage({ searchParams }: { searchParams: Sear
                 <Field
                   id="pillar"
                   label="Pillar"
-                  hint="Free text until the pillar list is decided (OD-004)."
+                  hint="Free text until the owner decides the pillar list."
                 >
                   <TextInput id="pillar" name="pillar" maxLength={80} />
                 </Field>

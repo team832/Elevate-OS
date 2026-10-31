@@ -15,7 +15,6 @@ import { createPlacementAction } from '../app/actions/content';
 import {
   cancelPlacementAction,
   manualPublicationAction,
-  publishAction,
   scheduleAction,
   unscheduleAction,
 } from '../app/actions/placements';
@@ -46,11 +45,11 @@ export function PlacementPanel({
   return (
     <Card
       title={`Placements (${d.placements.length})`}
-      description="One placement per account (code <IDEA>-<ACCOUNT>). Only approved, scheduled placements can publish; the mock adapter posts nothing."
+      description="One placement per account (code <IDEA>-<ACCOUNT>). Only approved, scheduled placements can be recorded as published."
     >
       <Alert tone="info">
-        Publishing uses the mock adapter: a “sandbox” result means nothing was posted and there is
-        no URL. Record a real post with its live link instead.
+        No publishing tool is connected, so nothing is posted from here. Post it on the platform,
+        then record the real publication with its time and live link.
       </Alert>
       <DataTable
         rows={d.placements}
@@ -126,31 +125,25 @@ export function PlacementPanel({
                   </form>
                 ) : null}
                 {can.publish && p.status === 'scheduled' ? (
-                  <>
-                    <form action={publishAction}>
-                      {hidden(p.id)}
-                      <Button type="submit">Publish (sandbox)</Button>
-                    </form>
-                    <form action={manualPublicationAction}>
-                      {hidden(p.id)}
-                      <TextInput
-                        type="datetime-local"
-                        name="publishedAt"
-                        aria-label="Actual publish time (IST)"
-                        required
-                      />
-                      <TextInput
-                        type="url"
-                        name="url"
-                        placeholder="Live link"
-                        aria-label="Live link"
-                        required
-                      />
-                      <Button type="submit" variant="secondary">
-                        Record real publication
-                      </Button>
-                    </form>
-                  </>
+                  <form action={manualPublicationAction}>
+                    {hidden(p.id)}
+                    <TextInput
+                      type="datetime-local"
+                      name="publishedAt"
+                      aria-label="Actual publish time (IST)"
+                      required
+                    />
+                    <TextInput
+                      type="url"
+                      name="url"
+                      placeholder="Live link"
+                      aria-label="Live link"
+                      required
+                    />
+                    <Button type="submit" variant="secondary">
+                      Record real publication
+                    </Button>
+                  </form>
                 ) : null}
                 {(p.status === 'planned' && can.write) ||
                 (p.status === 'scheduled' && can.schedule) ? (

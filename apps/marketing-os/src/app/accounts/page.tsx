@@ -41,7 +41,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
                   <Alert
                     key={c.id}
                     tone="warning"
-                    title={`${c.code} — ${c.title} (${c.ownerDecision}, ${c.status})`}
+                    title={`${c.title} (owner decision needed)`}
                   >
                     {c.description} Other model lists:{' '}
                     {(
@@ -100,7 +100,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Sea
                       key: 'owner',
                       header: 'Owner',
                       render: (a) =>
-                        a.ownerName ?? <span className="el-field-hint">not assigned (OD-009)</span>,
+                        a.ownerName ?? <span className="el-field-hint">not assigned yet (owner decision)</span>,
                     },
                     {
                       key: 'cadence',

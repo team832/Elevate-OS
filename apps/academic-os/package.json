@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Academic OS (port 3002, basePath /academic). Skeleton from the Foundation wave; owned by the Academic team.",
+  "description": "Academic OS (port 3001, basePath /academic).",
   "exports": {
     "./domain": "./src/domain/index.ts",
     "./server": "./src/server/index.ts",

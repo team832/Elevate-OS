@@ -29,8 +29,7 @@ export const SEED_DEPARTMENTS = [
 
 /**
  * Programme catalogue (business planning data, not personal data — D-016).
- * Status reflects the legacy record as of 2026-10-17: CA Foundation planning is
- * paused with a confirmed 1 March 2027 start, so it is `planned`.
+ * All `active`: CA Foundation is running now (owner, 21 Oct 2026, D-037), no longer `planned`.
  */
 export const SEED_PROGRAMMES = [
   ['CLAT', 'CLAT UG preparation', 'Common Law Admission Test (UG) preparation.', 'active'],

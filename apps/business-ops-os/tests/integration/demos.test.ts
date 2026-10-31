@@ -234,7 +234,7 @@ describe('attendance (POST /demos/[id]/sessions/[sessionId])', () => {
 });
 
 describe('teacher booking lock (shared with appointments)', () => {
-  it('a demo class cannot overlap the teacher’s appointment: book, reschedule and assign → 409', async () => {
+  it('a demo class and the teacher’s appointment never overlap: book, reschedule, assign and appointment → 409', async () => {
     const t = await staffUser(ctx.db, ['teacher']);
     const admissionId = await counselledCase(counsellor);
     const startsAt = hoursFromNow(300);
@@ -246,6 +246,13 @@ describe('teacher booking lock (shared with appointments)', () => {
     const demo = await book(counsellor, [324, 348, 372]);
     const assign = { action: 'assign', teacherStaffId: t.staffId, subject: 'English' };
     expect((await act(counsellor, demo, 1, assign)).status).toBe(200);
+    // OPS-102: and the other way round, an appointment over the teacher's demo class.
+    const overClass = await callRoute(
+      schedule,
+      post(manager, { ...meeting, startsAt: hoursFromNow(324) }),
+    );
+    expect(overClass.status).toBe(409);
+    expect(overClass.error?.message).toMatch(/demo class/);
     const move = { action: 'reschedule', startsAt, reason: 'Teacher asked' };
     expect((await act(counsellor, demo, 1, move)).status).toBe(409);
     const other = await book(counsellor, [300.5, 380, 404]);

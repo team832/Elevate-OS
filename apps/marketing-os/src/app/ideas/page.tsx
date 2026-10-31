@@ -152,7 +152,7 @@ export default async function IdeasPage({ searchParams }: { searchParams: Search
                 />
                 <Card
                   title={`Quarantine — duplicate legacy IDs (${quarantine.length} groups)`}
-                  description="Each legacy ID below was used for two different ideas. Neither row has a live code; the proposed renumbering is shown but NOT applied (OD-003)."
+                  description="Each legacy ID below was used for two different ideas. Neither row has a live code; the proposed renumbering is shown but not applied until the owner decides."
                 >
                   {quarantine.length === 0 ? (
                     <EmptyState title="No quarantined ideas" />

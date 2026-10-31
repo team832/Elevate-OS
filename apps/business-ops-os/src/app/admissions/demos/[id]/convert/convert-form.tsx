@@ -142,7 +142,7 @@ export function ConvertForm({
       name: 'discountRequest',
       label: 'Discount or exception requested',
       type: 'textarea',
-      hint: 'Sends a fee-arrangement approval request to an authorised approver. You cannot approve your own request.',
+      hint: 'Saved with the conversion and shown on the admission to fee staff. The discount itself is decided when the fee agreement is approved, by someone other than the person who asks.',
       section: 'Discount or exception',
     },
     {

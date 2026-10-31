@@ -13,6 +13,7 @@ import {
 } from '@elevate/testing';
 import {
   auditEvents,
+  departments,
   notifications,
   opsEodReports,
   opsEodReportVersions,
@@ -276,6 +277,30 @@ describe('EOD draft: facts from events, narrative, concurrency', () => {
     expect((await read(b, id)).status).toBe(404);
     expect((await read(director, id)).status).toBe(200);
     expect((await read(lead, id)).data!.canReview).toBe(true);
+  });
+
+  it('an HR manager reads, lists and reviews only reports of staff in HR scope (D-089)', async () => {
+    const hr = await staffUser(ctx.db, ['hr_manager'], { name: 'Sample HR' });
+    const inbox = async () =>
+      (
+        await callRoute<{ rows: { id: string }[] }>(
+          inboxRoute,
+          authedRequest(hr, '/ops/api/v1/eod-reports'),
+        )
+      ).data!.rows.map((r) => r.id);
+    expect((await read(hr, id)).status).toBe(200); // no department yet: in scope
+    expect(await inbox()).toContain(id);
+    const [finance] = await ctx.db
+      .select()
+      .from(departments)
+      .where(eq(departments.code, 'FINANCE'));
+    const place = (departmentId: (typeof departments.$inferSelect)['id'] | null) =>
+      ctx.db.update(staffMembers).set({ departmentId }).where(eq(staffMembers.id, a.staffId));
+    await place(finance!.id);
+    expect((await read(hr, id)).status).toBe(404);
+    expect((await post(reviewRoute, hr, id, { kind: 'viewed' })).status).toBe(404);
+    expect(await inbox()).not.toContain(id);
+    await place(null);
   });
 
   it('test 11: review actions — viewed once, revision needs text, acknowledgement is separate from tasks', async () => {

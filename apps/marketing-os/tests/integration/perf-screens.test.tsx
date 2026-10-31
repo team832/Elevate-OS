@@ -174,10 +174,17 @@ describe('Monthly report screen', () => {
     expect(html).toContain('Not available');
     expect(html).toContain('Write and submit your monthly report');
     // Ops sends period reports to the reporting manager (eod-reports.ts), not to HR.
-    expect(html).toContain('Submitted for review (goes to your reporting manager)');
+    expect(html).toContain('Submitted for review (goes to the reporting manager)');
     expect(html).not.toMatch(/to HR/);
     expect(html).toContain('/marketing/my-reports?kind=month&amp;date=2026-10-01');
     expect(html).toContain('Print these facts');
+  });
+
+  it('a manager without a staff record starts on the first person, not an error', async () => {
+    const director = await createTestUser(ctx.db, { roles: ['marketing_manager'] });
+    const html = await render(director, MonthlyReportPage as Page, '', { month: '2026-10' });
+    expect(html).toContain('Sample Marketing Manager, October 2026');
+    expect(html).toContain('Open the report inbox');
   });
 
   it('an employee without a staff record gets a plain explanation', async () => {

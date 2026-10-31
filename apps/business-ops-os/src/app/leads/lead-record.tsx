@@ -83,7 +83,7 @@ export function LeadMeta({ d }: { d: LeadDetail }) {
   );
 }
 
-/** "Book a demo" opens the existing booking pop-up (it lists the cases ready for a demo; Ops only). */
+/** "Book a demo" opens the booking pop-up with this lead's case chosen when it is ready for a demo (Ops only). */
 export const BookDemoLink = ({
   d,
   user,
@@ -94,7 +94,7 @@ export const BookDemoLink = ({
   base: string;
 }) =>
   base === '/ops' && can(user, 'ops:leads:write') && !d.lead.mergedIntoLeadId ? (
-    <ButtonLink variant="primary" href={`${base}/admissions?new=1`}>
+    <ButtonLink variant="primary" href={`${base}/admissions?new=1&lead=${d.lead.id}`}>
       Book a demo
     </ButtonLink>
   ) : null;

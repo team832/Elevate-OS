@@ -669,6 +669,7 @@ export const marketingPlacements = marketing.table(
     index('placements_account_schedule_idx').on(t.accountId, t.scheduledAt),
     index('placements_status_schedule_idx').on(t.status, t.scheduledAt),
     index('placements_content_item_idx').on(t.contentItemId),
+    index('placements_campaign_idx').on(t.campaignId),
     index('placements_published_url_idx').on(t.publishedUrl),
     check('placements_status_check', sql`${t.status} IN ${inList(MARKETING_PLACEMENT_STATUSES)}`),
     check(

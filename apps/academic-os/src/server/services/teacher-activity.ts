@@ -113,7 +113,7 @@ export async function teacherActivity(db: Database, staffId: string, window: { f
   const activeBatchIds = [...new Set(assignments.filter((a) => isCurrent(a, today)).map((a) => a.batchId!))];
   const marking = activeBatchIds.length ? (await db.select({ id: academicAssessments.id }).from(academicAssessments).where(and(inArray(academicAssessments.batchId, activeBatchIds), eq(academicAssessments.status, 'conducted')))).length : 0;
   const reviews = await db.select({ status: academicTeacherReviews.status, submittedAt: academicTeacherReviews.submittedAt }).from(academicTeacherReviews).where(eq(academicTeacherReviews.authorStaffId, staffId as StaffMemberId));
-  const inWindow = (d: Date | null) => d !== null && d.toISOString().slice(0, 10) >= window.from && d.toISOString().slice(0, 10) <= window.to;
+  const inWindow = (d: Date | null) => d !== null && todayIst(d) >= window.from && todayIst(d) <= window.to;
   // Non-teaching staff (an Ops EOD reader): nothing was there to measure, so the figures are missing, never 0.
   const teaching = sessions.length > 0 || assignments.some((a) => (a.startDate ?? '') <= window.to && (a.endDate ?? '9999') >= window.from);
   const meta = (definition: string) => ({ definition, window, unit: 'count' as const });

@@ -3,7 +3,8 @@
  * routes. The fee plan row and the declaration setting are fixture data (test-only text, never a
  * real declaration); everything else goes through the application services. Fictional data only.
  */
-import { and, desc, eq } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { desc, eq } from 'drizzle-orm';
 import { expect } from 'vitest';
 import {
   approvals,
@@ -22,8 +23,7 @@ import { POST as form } from '../../src/app/api/v1/applications/[id]/form/route'
 import { POST as signatures } from '../../src/app/api/v1/applications/[id]/signatures/route';
 import { POST as confirm } from '../../src/app/api/v1/applications/[id]/confirm/route';
 import { POST as check } from '../../src/app/api/v1/admissions/[id]/checks/route';
-import { POST as feeApproval } from '../../src/app/api/v1/admissions/[id]/fee-approval/route';
-import { feeArrangementPolicy } from '../../src/server/approval-policies';
+import { feeAgreementPolicy } from '../../src/server/approval-policies';
 import { istToday } from '../../src/domain';
 import { pendingCase, post, type Caller } from './admissions-fixtures';
 import { isoDaysFromNow } from './fixtures';
@@ -31,7 +31,7 @@ import { isoDaysFromNow } from './fixtures';
 export type People = {
   counsellor: Caller;
   manager: Caller;
-  director: Caller & { password: string };
+  director: Caller & { id: string; password: string };
 };
 export const patch = (user: Caller, json: unknown) =>
   authedRequest(user, '/ops/api/v1/x', { method: 'PATCH', json });
@@ -50,8 +50,8 @@ export async function setTestDeclaration(db: Database) {
     .onConflictDoUpdate({ target: opsSettings.key, set: row });
 }
 
-/** BR-OPS-7: two different verifiers, then the director approves the fee arrangement. */
-export async function approveFees(people: People, admissionId: string) {
+/** BR-OPS-6/7: documents verified, and two fee verifications by different people. */
+export async function verifyFees(people: People, admissionId: string) {
   const id = { id: admissionId };
   for (const [user, itemKey] of [
     [people.counsellor, 'documents_verified'],
@@ -59,31 +59,37 @@ export async function approveFees(people: People, admissionId: string) {
     [people.manager, 'fee_verification_2'],
   ] as const)
     expect((await callRoute(check, post(user, { itemKey, status: 'done' }), id)).status).toBe(200);
-  expect(
-    (await callRoute(feeApproval, post(people.counsellor, { action: 'request' }), id)).status,
-  ).toBe(200);
-  expect(
-    (await callRoute(feeApproval, post(people.director, { action: 'approve' }), id)).status,
-  ).toBe(200);
 }
 
-/** An active ₹1,00,000 plan (50/25/25) on the case, as the fees slice would leave it. */
+/**
+ * An active ₹1,00,000 plan (50/25/25) on the case, as the fees slice would leave it: activated by
+ * its own agreement approval (D-057), requested by the maker and decided by the director.
+ */
 export async function activePlan(
   db: Database,
+  director: { id: string },
   admissionId: string,
   studentId: string,
   createdBy: string,
 ) {
+  const planId = randomUUID();
   const [approval] = await db
-    .select()
-    .from(approvals)
-    .where(
-      and(eq(approvals.policy, feeArrangementPolicy.key), eq(approvals.subjectId, admissionId)),
-    )
-    .orderBy(desc(approvals.requestedAt));
+    .insert(approvals)
+    .values({
+      subjectModule: 'ops',
+      subjectType: 'fee_plan',
+      subjectId: planId,
+      policy: feeAgreementPolicy.key,
+      requestedBy: createdBy as never,
+      status: 'approved',
+      decidedBy: director.id as never,
+      decidedAt: new Date(),
+    })
+    .returning();
   const [plan] = await db
     .insert(opsFeePlans)
     .values({
+      id: planId as never,
       admissionId: admissionId as never,
       studentId: studentId as never,
       label: 'test-only annual plan',
@@ -149,8 +155,8 @@ export async function signedApplication(
     .select()
     .from(opsApplications)
     .where(eq(opsApplications.id, applicationId as never));
-  await approveFees(people, app!.admissionId);
-  await activePlan(db, app!.admissionId, app!.studentId, app!.createdBy);
+  await verifyFees(people, app!.admissionId);
+  await activePlan(db, people.director, app!.admissionId, app!.studentId, app!.createdBy);
   const saved = await callRoute<{ version: number }>(
     save,
     patch(people.counsellor, {

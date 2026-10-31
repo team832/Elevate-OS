@@ -28,6 +28,8 @@ import {
 export const ACADEMIC_CONSUMERS = {
   /** Consumes `ops.admission.enrolment_requested` v1 and replies confirmed/rejected. */
   enrolmentIntake: 'academic.enrolment-intake',
+  /** Consumes `ops.enrolment.closed` v1 and ends the enrolment (IR-OPS-EXIT-1). */
+  enrolmentExit: 'academic.enrolment-exit',
 } as const;
 
 /**

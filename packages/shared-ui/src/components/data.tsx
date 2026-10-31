@@ -39,6 +39,11 @@ export interface DataTableProps<T> {
   rowKey: (row: T) => string;
   /** Accessible table caption (visible). */
   caption?: ReactNode;
+  /**
+   * Name for screen readers when there is no visible caption, e.g. the heading above the table.
+   * Without either, the string column headers name the table.
+   */
+  label?: string;
   /** Shown instead of the table when `rows` is empty. */
   empty?: ReactNode;
 }
@@ -48,16 +53,27 @@ export function DataTable<T>({
   rows,
   rowKey,
   caption,
+  label,
   empty,
   compact,
 }: DataTableProps<T>) {
   if (rows.length === 0) {
     return <>{empty ?? <EmptyState title="Nothing here yet" />}</>;
   }
+  const name =
+    label ??
+    columns
+      .map((c) => c.header)
+      .filter((h) => typeof h === 'string')
+      .join(', ');
   return (
     <div className="el-table-wrap">
       <table className={compact ? 'el-table el-table-compact' : 'el-table'}>
-        {caption ? <caption>{caption}</caption> : null}
+        {caption ? (
+          <caption>{caption}</caption>
+        ) : name ? (
+          <caption className="el-visually-hidden">{name}</caption>
+        ) : null}
         <thead>
           <tr>
             {columns.map((c) => (

@@ -80,7 +80,11 @@ export async function pendingCase(
   return { leadId, admissionId };
 }
 
-type People = { counsellor: Caller; manager: Caller; director: Caller & { password: string } };
+type People = {
+  counsellor: Caller;
+  manager: Caller;
+  director: Caller & { id: string; password: string };
+};
 
 /**
  * `pendingCase` → the real admission flow (application, fee approval, active plan, form,

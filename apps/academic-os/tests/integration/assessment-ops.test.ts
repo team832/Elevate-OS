@@ -425,6 +425,7 @@ describe('IPMAT-style mock: selected batches, snapshot, scores, ranking, publica
     const pub = await at(publishRoute, 'publications', { version: 1, provisional: true });
     expect(pub.status).toBe(200);
     expect(pub.data!.publication).toMatchObject({ state: 'provisional', rankVisible: false });
+    expect((await listAssessments(ctx.db, actor(u.coordinator))).find((x) => x.id === mockId)).toMatchObject({ provisional: true }); // listed as provisional, not published
     expect(pub.data!.roster.every((r) => r.rank === null)).toBe(true);
     await updateSetting(ctx.db, actor(u.director), 'progress.show_rank_percentile', {
       value: { show: true },
@@ -464,6 +465,7 @@ describe('IPMAT-style mock: selected batches, snapshot, scores, ranking, publica
       [1, 'superseded', true, 1],
     ]);
     expect(d.publication.state).toBe('published');
+    expect((await listAssessments(ctx.db, actor(u.coordinator))).find((x) => x.id === mockId)).toMatchObject({ provisional: false });
     expect(Object.fromEntries(['a', 'f', 'b', 'c', 'g'].map((k) => [k, rowOf(d, k).rank]))).toEqual(
       { a: 1, f: 2, b: 3, c: 3, g: 5 },
     );

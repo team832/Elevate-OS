@@ -6,7 +6,6 @@ import {
   createCampaignBody,
   importMetricsBody,
   importMetricsCsv,
-  publishPlacement,
   recordManualPublication,
   schedulePlacement,
   setPlacementCampaign,
@@ -46,14 +45,6 @@ export async function cancelPlacementAction(form: FormData): Promise<void> {
   );
   if (!res.ok) go(back(form), { error: res.error });
   go(back(form), { notice: `Cancelled ${res.value.code}.` });
-}
-
-export async function publishAction(form: FormData): Promise<void> {
-  const res = await run((db, user) => publishPlacement(db, user, str(form, 'placementId') ?? ''));
-  if (!res.ok) go(back(form), { error: res.error });
-  if (res.value.outcome === 'failed')
-    go(back(form), { error: `Publish attempt failed: ${res.value.message}` });
-  go(back(form), { notice: res.value.message });
 }
 
 export async function manualPublicationAction(form: FormData): Promise<void> {

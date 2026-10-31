@@ -498,6 +498,8 @@ describe('monthly report facts', () => {
     });
     expect(marketingMonthlySnapshotV1Schema.parse(first)).toEqual(first);
     expect(first.content.approved).toMatchObject({ status: 'ok', value: 1 }); // 5 Oct only by 20 Oct
+    // Planned counts every October date already planned by the cut-off (31 Oct too), not only past dates.
+    expect(first.content.planned).toMatchObject({ status: 'ok', value: 2 });
     const counts = (rows: { key: string; count: { value: number | null } }[]) =>
       Object.fromEntries(rows.map((r) => [r.key, r.count.value]));
     expect(counts(first.funnel)).toEqual({ new: 0, qualified: 3, demo_booked: 1 });

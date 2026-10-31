@@ -22,9 +22,6 @@ import {
   FEE_CHARGE_LABELS,
   FEE_KIND_LABELS,
   FEE_METHODS,
-  type FeeChargeCategory,
-  type FeeRecordKind,
-  type FeeRecordLike,
   type FeeSummary,
 } from '../domain/fees';
 import { studentFeePlans } from '../server/fees';
@@ -473,15 +470,13 @@ function Ledger({
   record: boolean;
   category?: boolean;
 }) {
-  const live = new Set(
-    effectiveRecords(rows as unknown as (FeeRecordLike & { id: string })[]).map((r) => r.id),
-  );
+  const live = new Set(effectiveRecords(rows).map((r) => r.id));
   const code = new Map(rows.map((r) => [r.id as string, r.code]));
   const reversedBy = new Map(
     rows.flatMap((r) => (r.reversesRecordId ? [[r.reversesRecordId as string, r.code]] : [])),
   );
   const what = (r: Entry) => {
-    const kind = FEE_KIND_LABELS[r.kind as FeeRecordKind] ?? r.kind;
+    const kind = FEE_KIND_LABELS[r.kind];
     const label = `${kind}${r.direction ? ` (${r.direction})` : ''}`;
     if (!r.reversesRecordId) return label;
     return `${r.kind === 'refund' ? 'Refund' : 'Reversal'} of ${code.get(r.reversesRecordId) ?? 'an entry'}`;
@@ -510,7 +505,7 @@ function Ledger({
                 render: (r: Entry) =>
                   r.chargeCategory === 'tuition'
                     ? 'Tuition (not part of an annual agreement)'
-                    : FEE_CHARGE_LABELS[r.chargeCategory as FeeChargeCategory],
+                    : FEE_CHARGE_LABELS[r.chargeCategory],
               },
             ]
           : []),

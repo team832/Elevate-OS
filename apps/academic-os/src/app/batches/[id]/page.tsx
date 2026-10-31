@@ -123,7 +123,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
               { key: 'label', header: 'Label' },
               { key: 'kind', header: 'Kind' },
               { key: 'when', header: 'When', render: (x) => x.date ?? `${x.periodStart} to ${x.periodEnd}` },
-              { key: 'slots', header: 'Allowance', render: (x) => (x.days !== null ? `${x.days} day(s) × ${x.slotsPerDay ?? 0} slots` : '—') },
+              { key: 'slots', header: 'Allowance', render: (x) => (x.days !== null ? `${x.days} day(s) × ${x.slotsPerDay ?? 'not recorded'} slots` : '—') },
               { key: 'scope', header: 'Scope', render: (x) => (x.batchId ? 'This batch' : 'Centre-wide') },
               { key: 'status', header: 'Status', render: (x) => <PlanBadge status={x.status} /> },
             ]}

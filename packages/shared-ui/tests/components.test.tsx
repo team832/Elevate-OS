@@ -420,6 +420,16 @@ describe('DataTable', () => {
     expect(html.match(/<th scope="col"/g)).toHaveLength(2);
   });
 
+  it.each([
+    [{ label: 'Fees by student' }, 'Fees by student'],
+    [{}, 'Name, Fee'],
+  ])('without a visible caption it still has a name: %o → "%s"', (props, name) => {
+    const html = render(
+      <DataTable {...props} columns={cols} rows={[{ name: 'A', fee: 1 }]} rowKey={(r) => r.name} />,
+    );
+    expect(html).toContain(`<caption class="el-visually-hidden">${name}</caption>`);
+  });
+
   it('with no rows shows a message (default or given) instead of an empty table', () => {
     const none = render(<DataTable columns={cols} rows={[]} rowKey={() => ''} />);
     expect(none).not.toContain('<table');

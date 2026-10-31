@@ -4,7 +4,7 @@ import { getDb } from '@elevate/database';
 import { Button, Card, Field, Select, TextInput } from '@elevate/shared-ui';
 import { CAMPAIGN_STATUSES, modulePath } from '../../domain';
 import { campaignFilter, campaignResults, listCampaigns } from '../../server';
-import { CampaignResultsTable } from '../../ui/campaigns';
+import { CAMPAIGN_STATUS_LABELS, CampaignResultsTable } from '../../ui/campaigns';
 import { createCampaignAction } from '../actions/placements';
 import { MarketingPage, Section, type SearchParams } from '../../ui/shell';
 
@@ -61,7 +61,7 @@ export default async function CampaignsPage({ searchParams }: { searchParams: Se
                         <Select id="status" name="status">
                           {CAMPAIGN_STATUSES.map((s) => (
                             <option key={s} value={s}>
-                              {s}
+                              {CAMPAIGN_STATUS_LABELS[s]}
                             </option>
                           ))}
                         </Select>

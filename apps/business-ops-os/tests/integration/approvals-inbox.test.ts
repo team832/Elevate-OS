@@ -13,7 +13,7 @@ describe('approvals inbox (OPS-068, fee agreements and arrangements since D-032)
     expect((await listApprovalInbox(ctx.db, counsellor)).sources).toEqual([]);
     const director = await createTestUser(ctx.db, { roles: ['director'] });
     const r = await listApprovalInbox(ctx.db, director);
-    expect(r.sources.map((s) => s.key)).toEqual(['ops.fee_agreements', 'ops.fee_arrangements']);
+    expect(r.sources.map((s) => s.key)).toEqual(['ops.fee_agreements']);
     expect(r).toMatchObject({ total: 0, unavailable: 0 });
   });
 

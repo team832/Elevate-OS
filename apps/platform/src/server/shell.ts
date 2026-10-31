@@ -16,9 +16,18 @@ type Extras = Pick<
   'nav' | 'search' | 'settings' | 'unreadNotifications' | 'moduleHrefs'
 >;
 
+/**
+ * Where a lead reader works on leads: Business Operations, else Marketing, which mounts the same
+ * lead routes (D-073). A marketing role holds lead permissions but not `ops:module:access`, and
+ * every `/ops` page and route refuses it.
+ */
+export const leadsBase = (user: AuthenticatedUser) =>
+  can(user, 'ops:module:access') ? '/ops' : '/marketing';
+
 /** Top-bar search: the first searchable list the user may open. */
 export function searchFor(user: AuthenticatedUser): AppShellProps['search'] {
-  if (can(user, 'ops:leads:read')) return { action: '/ops/leads', label: 'Search leads' };
+  if (can(user, 'ops:leads:read'))
+    return { action: `${leadsBase(user)}/leads`, label: 'Search leads' };
   if (can(user, 'academic:students:read'))
     return { action: '/academic/students', label: 'Search students' };
   if (can(user, 'marketing:ideas:read'))
