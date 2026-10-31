@@ -37,6 +37,7 @@ import StudentProgressPage from '../../src/app/progress/students/[id]/page';
 import ReportPage from '../../src/app/reports/[kind]/page';
 import ReviewPage from '../../src/app/reviews/[id]/page';
 import ReviewsPage from '../../src/app/reviews/page';
+import AttendancePage from '../../src/app/attendance/page';
 import SettingsPage from '../../src/app/settings/page';
 import StudentPage from '../../src/app/students/[id]/page';
 import StudentsPage from '../../src/app/students/page';
@@ -162,8 +163,8 @@ describe('every record page says what went wrong and offers a way back', () => {
       for (const id of [MISSING, 'not-an-id']) {
         const html = await render(page(id));
         const shared = _path.includes('/tasks/'); // the Ops task body keeps its own words
-        expect(h1(html), `${user.roles[0]} ${id}`).toMatch(shared ? /not found|cannot show/i : /not found/i);
-        expect(text(html)).toMatch(shared ? /not found|not valid/i : /out of date/i);
+        expect(h1(html), `${user.roles[0]} ${id}`).toMatch(/not found/i);
+        expect(text(html)).toMatch(shared ? /not found/i : /out of date/i);
         expect(html).toContain(`href="${back}"`);
       }
     }
@@ -209,6 +210,16 @@ describe('the sample teacher follows the links their lists show', () => {
     ['Curriculum', () => CurriculumPage(search())],
     ['All courses', () => CurriculumPage(search({ view: 'all' }))],
   ] as const;
+
+  it.each([
+    ['Teaching logs', () => TeachingPage(search())],
+    ['Attendance', () => AttendancePage(search())],
+  ])('%s: class times read in 12-hour words, hidden labels too (RL2-018)', async (_name, page) => {
+    as.user = teacher;
+    const shown = text(await render(page()));
+    expect(shown).toMatch(/\d:\d{2} [ap]m/);
+    expect(shown).not.toMatch(/\b\d{1,2}:\d{2}\b(?! [ap]m)/);
+  });
 
   it.each(LISTS)('%s: every record link opens the record', async (_name, list) => {
     as.user = teacher;

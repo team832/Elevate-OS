@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { OnboardingTemplates } from '../../src/app/settings/_components/onboarding-templates';
-import { decisionWords, valueRows } from '../../src/app/settings/_components/setting-value';
+import { decisionWords, valueLine, valueRows } from '../../src/app/settings/_components/setting-value';
 import { SETTING_DEFINITIONS } from '../../src/domain/policies';
 
 vi.mock('next/navigation', () => ({
@@ -43,8 +43,19 @@ describe('setting values as readable rows (never raw JSON)', () => {
       { codes: [{ code: 'other', label: 'Other reason' }] },
       [['Codes', '<ul><li>Other reason</li></ul>']],
     ],
+    [{ who: ['hr_manager', 'operations_manager'] }, [['Who', 'HR manager, Operations manager']]],
   ])('%j', (value, expected) => {
     expect(rows(value)).toEqual(expected);
+  });
+
+  it('no description shows a setting key or a stored code (RL2-023)', () => {
+    for (const def of Object.values(SETTING_DEFINITIONS))
+      expect(def.description).not.toMatch(/\b[a-z]+_[a-z_]+\b|\b[a-z]+\.[a-z_]+\b/);
+  });
+
+  it('the list line spells HR too', () => {
+    const value = { who: ['hr_manager', 'operations_manager'] };
+    expect(valueLine({ key: 'hr.leave_approver', value })).toBe('HR manager, Operations manager');
   });
 
   it('a nested object becomes nested label/value rows, not JSON', () => {

@@ -144,7 +144,7 @@ async function Body({ access, params }: { access: PageAccess; params: Params }) 
             rowKey={(r) => r.id}
             empty={<ListEmpty noun="logs" params={params} first="Teachers submit a log after each delivered class; they appear here." />}
             columns={[
-              { key: 'session', header: 'Class', render: (r) => <a href={MODULE_PATHS.teachingLog(r.sessionId)}>{`${fmtDay(r.sessionDate)} ${r.sessionStart} · ${r.batchCode}`}</a> },
+              { key: 'session', header: 'Class', render: (r) => <a href={MODULE_PATHS.teachingLog(r.sessionId)}>{`${fmtSlot(r.sessionDate, r.sessionStart)} · ${r.batchCode}`}</a> },
               { key: 'chapter', header: 'Topic', render: (r) => `${r.chapterCode} ${r.chapterTitle}` },
               { key: 'teacher', header: 'Teacher', render: (r) => r.teacherName },
               { key: 'type', header: 'Teaching type', render: (r) => `${activityLabel(r.activity)} · ${r.completion}` },

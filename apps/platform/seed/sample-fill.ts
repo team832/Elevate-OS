@@ -84,7 +84,7 @@ const STEPS: readonly [
 ][] = [
   [
     'people',
-    'Sample Schar and the setting, staff details, work schedules, holidays',
+    'The made-up Schar and the setting, staff details, work schedules, holidays',
     (db) => seedFillPeople(db),
   ],
   [

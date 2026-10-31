@@ -97,6 +97,10 @@
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
+.acd-day-code {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 
 /* Week grid: one column on phones, seven from 720px; every block links to its class page. */
 .acd-week {
@@ -234,6 +238,9 @@
   }
   .acd-day > li {
     grid-template-columns: 6rem minmax(0, 1fr) auto;
+  }
+  .acd-day > li:has(> .acd-day-code) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
   .acd-week {
     grid-template-columns: repeat(7, minmax(0, 1fr));

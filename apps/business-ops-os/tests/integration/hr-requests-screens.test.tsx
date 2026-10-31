@@ -6,8 +6,9 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { prerender } from 'react-dom/static';
+import { eq } from 'drizzle-orm';
 import { can, type Permission } from '@elevate/authorization';
-import type { Database } from '@elevate/database';
+import { opsHrRequests, type Database } from '@elevate/database';
 import { setupTestDatabase, type TestUser } from '@elevate/testing';
 import HrQueuePage from '../../src/app/hr/requests/page';
 import HrRequestsPage from '../../src/app/hr-requests/page';
@@ -117,5 +118,13 @@ describe('staff page', () => {
     expect(page).toContain('Reply to HR');
     expect(page).not.toContain('Sample private subject');
     expect(page).not.toContain('Sample words');
+  });
+
+  it('a sample forward shows the SAMPLE DATA mark from its own flag (RL2-017)', async () => {
+    const page = () => html(recipient, <HrRequestsPage {...sp({ tab: 'forwarded' })} />);
+    expect(await page()).not.toContain('SAMPLE DATA');
+    await db().update(opsHrRequests).set({ isSample: true }).where(eq(opsHrRequests.id, forwarded as never));
+    expect(await page()).toContain('SAMPLE DATA');
+    await db().update(opsHrRequests).set({ isSample: false }).where(eq(opsHrRequests.id, forwarded as never));
   });
 });

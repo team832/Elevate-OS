@@ -4,8 +4,8 @@
  * progress, blocked, submitted, changes requested, approved, overdue) plus one parent task with a
  * child per employee, and requests sent through HR (submitted, forwarded, resolved, one for Schar
  * waiting in HR's queue). Everything goes through the task and HR-request services, so the
- * lifecycle rules hold: HR (the assignment centre, brief §6) records the tasks with the Sample
- * Marketing Manager as assigning manager and reviewer (never the owner), so seeding does not depend
+ * lifecycle rules hold: HR (the assignment centre, brief §6) records the tasks with the sample
+ * marketing manager as assigning manager and reviewer (never the owner), so seeding does not depend
  * on who the employees report to (db:seed-demo-accounts moves them to the demo marketing manager). Rows are then marked `is_sample` (no route may set the flag).
  * In-app notifications only. Skipped once sample HR requests exist.
  */
@@ -47,14 +47,14 @@ export const SAMPLE_TEAM_TASKS: readonly {
     shows: 'assigned, not acknowledged',
   },
   {
-    title: 'Collect CLAT quiz questions from the sample teacher',
+    title: 'Collect CLAT quiz questions from the CLAT teacher',
     owner: ROHIT,
     due: 1,
     steps: ['acknowledge'],
     shows: 'acknowledged',
   },
   {
-    title: 'Tidy the sample lead follow-up list',
+    title: 'Tidy the lead follow-up list',
     owner: POOJA,
     due: 3,
     steps: ['acknowledge', 'start'],
@@ -176,7 +176,7 @@ export async function seedSampleTeamWork(db: Database, log: (m: string) => void 
   for (const t of SAMPLE_TEAM_TASKS) {
     const owner = people.get(t.owner)!;
     const row = await createTask(db, hr.actor, {
-      title: `${t.title} (sample)`,
+      title: t.title,
       details: `Sample task: ${t.shows}.`,
       staffId: owner.staffId,
       assignedByStaffId: manager.staffId,
@@ -196,7 +196,7 @@ export async function seedSampleTeamWork(db: Database, log: (m: string) => void 
     if (t.decision) await act(db, manager, row.id, t.decision);
   }
   const parent = (await createTask(db, hr.actor, {
-    title: 'Share the CA Foundation open-house post on your channels (sample)',
+    title: 'Share the CA Foundation open-house post on your channels',
     details: 'Sample parent task: one child per employee, each tracked on its own.',
     assignees: [...people.values()].map((p) => p.staffId!),
     assignedByStaffId: manager.staffId,
@@ -220,7 +220,7 @@ export async function seedSampleTeamWork(db: Database, log: (m: string) => void 
     const sender = people.get(r.from)!;
     const row = await createHrRequest(db, sender.actor, {
       category: r.category,
-      subject: `${r.subject} (sample)`,
+      subject: r.subject,
       message: why('Sample message written for local testing'),
       recipient: r.to === 'manager' ? `staff:${manager.staffId}` : r.to,
       relatedKind: 'none',

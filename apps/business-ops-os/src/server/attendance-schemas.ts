@@ -6,6 +6,7 @@ import {
   ATTENDANCE_STATUSES,
   MAX_PUNCH_CSV_CHARS,
   REQUESTABLE_STATUSES,
+  SHOWN_STATUSES,
 } from '../domain/attendance';
 import { LEAVE_STATUSES } from '../domain/leave';
 
@@ -27,7 +28,7 @@ export const attendanceListQuery = z.object({
   staffId: z.uuid().optional(),
   /** Staff name or code. */
   q: text(100).optional(),
-  status: z.enum(ATTENDANCE_STATUSES).optional(),
+  status: z.enum(SHOWN_STATUSES).optional(),
   department: z.uuid().optional(),
   branch: z.uuid().optional(),
   /** Teachers (a subject in the Teachers directory) or everyone else; absent = everyone. */

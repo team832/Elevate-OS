@@ -12,7 +12,7 @@ export const ASSESSMENT_SETTING_DEFINITIONS: DefinitionsFor<typeof assessmentSet
   'assessments.paper_release': {
     label: 'Releasing question papers and answer keys',
     description:
-      'Until a manager releases them, a test’s question paper and answer key open only for people who manage tests. test_day: they can be released from the test date (IST); any_time: also before it.',
+      'Until a manager releases them, a test’s question paper and answer key open only for people who manage tests. Test day: they can be released from the test date (IST). Any time: also before it.',
     defaultValue: { releaseFrom: 'test_day' },
     defaultState: 'proposed',
     source:

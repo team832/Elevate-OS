@@ -1,6 +1,6 @@
 /**
- * Marketing's sample leads (brief 23 Oct 2026 §11, §25; D-036): 19 more fictional leads, so the
- * set holds about 40. Most belong to the two fictional marketing employees (their own scope is
+ * Marketing's sample leads (brief 23 Oct 2026 §11, §25; D-036): 19 more made-up leads, so the
+ * set holds about 40. Most belong to the two made-up marketing employees (their own scope is
  * never empty), a few wait unassigned. Each goes through the real services: capture (createLead),
  * calls typed in by staff (logActivity; nothing is dialled or recorded), follow-ups due today and
  * overdue, stage changes with history, one duplicate pair waiting for the merge review and one
@@ -20,6 +20,7 @@ import {
 } from '@elevate/database';
 import {
   ensureDemoStaff,
+  knownPerson,
   MARKETING_EMPLOYEES,
   defineSeed,
   POOJA_EMAIL,
@@ -56,7 +57,7 @@ interface SampleLead {
   overdue?: number;
   /** A follow-up done and closed with its outcome. */
   done?: true;
-  /** Same parent email as this lead (duplicate pair). */
+  /** Same parents as this lead (duplicate pair; the shared family is in seed/sample-people.ts). */
   parentOf?: string;
 }
 
@@ -67,7 +68,7 @@ export const SAMPLE_MARKETING_LEADS: readonly SampleLead[] = [
     owner: POOJA,
     programme: 'IPMAT',
     source: 'WEBINAR',
-    campaign: 'SAMPLE-IPMAT-WEBINAR',
+    campaign: 'IPMAT-WEBINAR',
     stages: [],
   },
   {
@@ -75,7 +76,7 @@ export const SAMPLE_MARKETING_LEADS: readonly SampleLead[] = [
     owner: POOJA,
     programme: 'IPMAT',
     source: 'INSTAGRAM_ORGANIC',
-    campaign: 'SAMPLE-IPMAT-WEBINAR',
+    campaign: 'IPMAT-WEBINAR',
     stages: ['contacted'],
     calls: [['connected_two_way', 'outbound', 6, 1]],
     next: 0,
@@ -97,7 +98,7 @@ export const SAMPLE_MARKETING_LEADS: readonly SampleLead[] = [
     owner: POOJA,
     programme: 'IPMAT',
     source: 'REFERRAL',
-    campaign: 'SAMPLE-IPMAT-WEBINAR',
+    campaign: 'IPMAT-WEBINAR',
     stages: ['contacted', 'qualified', 'demo_booked'],
     calls: [['connected_two_way', 'inbound', 12, 2]],
     done: true,
@@ -145,7 +146,7 @@ export const SAMPLE_MARKETING_LEADS: readonly SampleLead[] = [
     owner: ROHIT,
     programme: 'CLAT',
     source: 'INSTAGRAM_ORGANIC',
-    campaign: 'SAMPLE-CLAT-CA',
+    campaign: 'CLAT-CA-SERIES',
     stages: [],
   },
   {
@@ -153,7 +154,7 @@ export const SAMPLE_MARKETING_LEADS: readonly SampleLead[] = [
     owner: ROHIT,
     programme: 'CLAT',
     source: 'WEBINAR',
-    campaign: 'SAMPLE-CLAT-CA',
+    campaign: 'CLAT-CA-SERIES',
     stages: ['contacted'],
     calls: [['connected_two_way', 'outbound', 8, 4]],
     overdue: 1,
@@ -172,7 +173,7 @@ export const SAMPLE_MARKETING_LEADS: readonly SampleLead[] = [
     owner: ROHIT,
     programme: 'CLAT',
     source: 'REFERRAL',
-    campaign: 'SAMPLE-CLAT-CA',
+    campaign: 'CLAT-CA-SERIES',
     stages: ['contacted', 'qualified', 'demo_booked'],
     calls: [['connected_two_way', 'outbound', 11, 2]],
     done: true,
@@ -216,7 +217,6 @@ export const SAMPLE_MARKETING_LEADS: readonly SampleLead[] = [
   { first: 'Siya', owner: null, programme: 'CA_FOUNDATION', source: 'OTHER', stages: [] },
 ];
 
-const emailOf = (first: string) => `${first.toLowerCase()}.sample@example.test`;
 const REASONED = new Set(['nurture', 'lost', 'do_not_contact', 'duplicate']);
 const STAGE_REASON: Record<string, string> = {
   nurture: why('Wants to start next year'),
@@ -266,15 +266,17 @@ export async function seedSampleLeads(db: Database, log: (m: string) => void = (
   const today = istToday(new Date());
   let added = 0;
   for (const [i, l] of SAMPLE_MARKETING_LEADS.entries()) {
-    if (await db.$count(opsLeads, eq(opsLeads.studentEmail, emailOf(l.first)))) continue;
+    const person = knownPerson(l.first);
+    if (await db.$count(opsLeads, eq(opsLeads.studentEmail, person.email))) continue;
     const who = l.owner ? owners.get(l.owner)! : ops;
-    const parent = l.parentOf ?? l.first;
     const { lead } = await createLead(db, who.actor, {
-      studentName: `${l.first} Sample Student`,
-      studentEmail: emailOf(l.first),
-      guardianName: `${parent} Sample Parent`,
+      studentName: person.fullName,
+      studentEmail: person.email,
+      studentPhone: person.phone,
+      guardianName: person.mother.fullName,
       guardianRelationship: 'mother',
-      guardianEmail: `${parent.toLowerCase()}.parent@example.test`,
+      guardianEmail: person.mother.email,
+      guardianPhone: person.mother.phone,
       currentStage: 'class_12',
       programmeCode: l.programme,
       interestMode: 'offline',
@@ -296,7 +298,7 @@ export async function seedSampleLeads(db: Database, log: (m: string) => void = (
         durationMinutes: minutes,
         occurredAt: new Date(`${addDays(today, -daysAgo)}T${11 + n}:00:00+05:30`).toISOString(),
         note: why('Call details typed in by staff'),
-        nextAction: last && l.next !== undefined ? why('Call back about the demo class') : null,
+        nextAction: last && l.next !== undefined ? 'Call back about the demo class' : null,
         nextFollowUpOn: last && l.next !== undefined ? addDays(today, l.next) : null,
       } as never);
     }
@@ -309,7 +311,7 @@ export async function seedSampleLeads(db: Database, log: (m: string) => void = (
       await createFollowUp(db, who.actor, {
         leadId: lead.id,
         kind: 'general',
-        title: why('Send the batch timetable'),
+        title: 'Send the batch timetable',
         dueDate: addDays(today, -l.overdue),
         ownerStaffId: who.staffId,
       });
@@ -317,7 +319,7 @@ export async function seedSampleLeads(db: Database, log: (m: string) => void = (
       const f = await createFollowUp(db, who.actor, {
         leadId: lead.id,
         kind: 'demo_followup',
-        title: why('Confirm the demo slot'),
+        title: 'Confirm the demo slot',
         dueDate: addDays(today, -1),
         ownerStaffId: who.staffId,
       });

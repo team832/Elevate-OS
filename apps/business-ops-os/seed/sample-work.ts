@@ -78,7 +78,7 @@ export const to = (status: TaskStatus, day: number, time: string, reason?: strin
 
 export const SAMPLE_TASKS: readonly SampleTask[] = [
   {
-    owner: 'DEMO-T01',
+    owner: 'EMP-T01',
     title: 'Prepare the CA Foundation chapter 3 revision sheet',
     shows: 'assigned, not acknowledged',
     source: 'manager',
@@ -89,7 +89,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     steps: [],
   },
   {
-    owner: 'DEMO-T02',
+    owner: 'EMP-T02',
     title: 'Collect the Business Laws test answer sheets',
     shows: 'verbal request, acknowledged, not started',
     source: 'verbal',
@@ -99,7 +99,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     steps: [ack(-1, '10:05')],
   },
   {
-    owner: 'DEMO-T03',
+    owner: 'EMP-T03',
     title: 'Set the Quant practice paper for Friday',
     shows: 'in progress; updates on two days, one across midnight',
     source: 'manager',
@@ -127,7 +127,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     ],
   },
   {
-    owner: 'DEMO-T04',
+    owner: 'EMP-T04',
     title: 'Plan the Legal Reasoning doubt session',
     shows: 'blocked with a reason',
     source: 'manager',
@@ -155,7 +155,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     ],
   },
   {
-    owner: 'DEMO-T05',
+    owner: 'EMP-T05',
     title: 'Check the Verbal Ability homework',
     shows: 'submitted for review (review required)',
     source: 'manager',
@@ -172,7 +172,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     updates: [{ on: -1, work: 'Checked 32 homework notebooks', at: [-1, '15:30'], minutes: 90 }],
   },
   {
-    owner: 'DEMO-T03',
+    owner: 'EMP-T03',
     title: 'Prepare the integration practice sheet with an answer key',
     shows: 'submitted, changes requested, resubmitted as version 2 (review required)',
     source: 'manager',
@@ -196,7 +196,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     ],
   },
   {
-    owner: 'DEMO-T06',
+    owner: 'EMP-T06',
     title: 'Upload the Logical Reasoning mock answer key',
     shows: 'done',
     source: 'manager',
@@ -215,7 +215,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     ],
   },
   {
-    owner: 'DEMO-T07',
+    owner: 'EMP-T07',
     title: 'Compile the weekly current-affairs notes',
     shows: 'overdue: due two days ago, still in progress',
     source: 'manager',
@@ -227,7 +227,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     updates: [{ on: -4, work: 'Collected the week’s news items', at: [-4, '13:00'], minutes: 120 }],
   },
   {
-    owner: 'DEMO-T08',
+    owner: 'EMP-T08',
     title: 'Re-mark the Quant unit test after the key correction',
     shows: 'done, then reopened',
     source: 'manager',
@@ -247,7 +247,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     ],
   },
   {
-    owner: 'DEMO-T09',
+    owner: 'EMP-T09',
     title: 'Arrange the Economics guest lecture',
     shows: 'cancelled with a reason',
     source: 'manager',
@@ -260,8 +260,8 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     ],
   },
   {
-    owner: 'DEMO-T10',
-    firstOwner: 'DEMO-T09',
+    owner: 'EMP-T10',
+    firstOwner: 'EMP-T09',
     title: 'Build the Business Studies case-study pack',
     shows: 'reassigned from Mehul Desai to Tara Kapoor',
     source: 'manager',
@@ -274,7 +274,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
       {
         kind: 'reassigned',
         at: [-2, '09:00'],
-        to: 'DEMO-T10',
+        to: 'EMP-T10',
         reason: 'Mehul is on exam duty this week (sample).',
       },
       ack(-2, '09:30'),
@@ -283,7 +283,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     updates: [{ on: -2, work: 'Picked four case studies', at: [-2, '12:00'], minutes: 40 }],
   },
   {
-    owner: 'DEMO-T11',
+    owner: 'EMP-T11',
     title: 'Prepare the Class 12 Accountancy worksheet',
     shows: 'self-logged; a late entry keeps its work day',
     source: 'self',
@@ -303,7 +303,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     ],
   },
   {
-    owner: 'DEMO-T12',
+    owner: 'EMP-T12',
     title: 'Draft a CUET General Test practice set',
     shows: 'self-logged by the teacher with no manager',
     source: 'self',
@@ -329,10 +329,10 @@ export interface SampleReport {
   notes?: string;
 }
 export const SAMPLE_EODS: readonly SampleReport[] = [
-  { owner: 'DEMO-T03', day: 0 },
-  { owner: 'DEMO-T06', day: -1, submit: [-1, '18:30'] },
+  { owner: 'EMP-T03', day: 0 },
+  { owner: 'EMP-T06', day: -1, submit: [-1, '18:30'] },
   {
-    owner: 'DEMO-T05',
+    owner: 'EMP-T05',
     day: -1,
     submit: [-1, '18:40'],
     review: {
@@ -342,7 +342,7 @@ export const SAMPLE_EODS: readonly SampleReport[] = [
     },
   },
   {
-    owner: 'DEMO-T08',
+    owner: 'EMP-T08',
     day: -1,
     submit: [-1, '18:50'],
     review: { kind: 'acknowledged', at: [0, '09:00'] },
@@ -363,7 +363,7 @@ type WorkTask = typeof opsStaffTasks.$inferSelect;
 type WorkEvent = typeof opsTaskEvents.$inferSelect;
 type WorkUpdate = typeof opsTaskUpdates.$inferSelect;
 
-/** The people of the sample work: code → record, 'manager' = the Sample Academic Manager. */
+/** The people of the sample work: code → record, 'manager' = the sample academic manager. */
 
 export async function samplePeople(db: Database) {
   const rows = await db
@@ -380,7 +380,7 @@ export async function samplePeople(db: Database) {
         eq(opsStaffProfiles.isSample, true),
         inArray(staffMembers.fullName, [
           SAMPLE_MANAGER.name,
-          ...SAMPLE_TEACHER_STAFF.map(([, n]) => `Sample ${n}`),
+          ...SAMPLE_TEACHER_STAFF.map(([, n]) => n),
         ]),
       ),
     );
@@ -499,7 +499,7 @@ export async function writeSampleTask(db: Database, t: SampleTask, c: WorkContex
     .insert(opsStaffTasks)
     .values({
       staffId: owner.staffId,
-      title: `${t.title} (sample)`,
+      title: t.title,
       details: `Sample task: ${t.shows}.`,
       assignedByStaffId: t.source === 'manager' ? manager.staffId : null,
       source: t.source,

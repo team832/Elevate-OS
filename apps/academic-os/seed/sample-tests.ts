@@ -4,15 +4,15 @@
  * the caller, like the Ops → Academic internal route. Every step goes through the Academic
  * internal assessment services (create, roster snapshot, record scores, finalise, publish), so
  * bounds, the one-writer rule and competition ranking are the real ones. Responsible teachers are
- * SAMPLE teachers only (never the eight owner-supplied teacher records of ops seed/teachers.ts, "Soma" included). Tests and roster rows carry `is_sample`.
+ * SAMPLE teachers only (never a record of ops seed/teachers.ts). Tests and roster rows carry `is_sample`.
  *
- *   SAMPLE-IPMAT-MOCK-01  previous, two batches, +4/−1 negative marking, verified scores with a tie
+ *   IPMAT-MOCK-01  previous, two batches, +4/−1 negative marking, verified scores with a tie
  *                         (ranks 1, 2, 2, 4), a present student with 0, a negative total, absences;
  *                         finalised and PUBLISHED
- *   SAMPLE-CLAT-CA-01     previous, in progress: some verified, one absent, one present with no
+ *   CLAT-CA-01     previous, in progress: some verified, one absent, one present with no
  *                         score, the rest unmarked (the platform seed stages a pending import here)
- *   SAMPLE-C11-MATH-01    previous, finalised, results awaiting publication
- *   SAMPLE-CAF-ACC-01, SAMPLE-C12-MATH-01  upcoming, no roster yet
+ *   C11-MATH-01    previous, finalised, results awaiting publication
+ *   CAF-ACC-01, C12-MATH-01  upcoming, no roster yet
  */
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { AuthenticatedUser } from '@elevate/authentication';
@@ -20,6 +20,7 @@ import {
   academicAssessmentRoster,
   academicAssessments,
   academicBatches,
+  academicBatchPlacements,
   academicEnrolments,
   academicStudents,
   academicSubjects,
@@ -27,6 +28,7 @@ import {
   users,
   type Database,
 } from '@elevate/database';
+import { PEOPLE } from '@elevate/database/seed';
 import type { SessionId } from '@elevate/shared-types';
 import { addDays } from '@elevate/shared-types';
 import {
@@ -68,10 +70,10 @@ interface SampleTest {
 
 export const SAMPLE_TESTS: readonly SampleTest[] = [
   {
-    code: 'SAMPLE-IPMAT-MOCK-01',
-    title: 'IPMAT mock 1 (sample)',
+    code: 'IPMAT-MOCK-01',
+    title: 'IPMAT mock 1',
     kind: 'full_mock',
-    batches: ['SAMPLE-IPMAT-A', 'SAMPLE-IPMAT-B'],
+    batches: ['IPMAT-A', 'IPMAT-B'],
     subject: 'QUANT',
     teacher: 'arjun.menon@example.test',
     day: -7,
@@ -85,10 +87,10 @@ export const SAMPLE_TESTS: readonly SampleTest[] = [
     publish: true,
   },
   {
-    code: 'SAMPLE-CLAT-CA-01',
-    title: 'CLAT current affairs sectional 1 (sample)',
+    code: 'CLAT-CA-01',
+    title: 'CLAT current affairs sectional 1',
     kind: 'sectional',
-    batches: ['SAMPLE-CLAT-A'],
+    batches: ['CLAT-A'],
     subject: 'CA',
     teacher: 'kavya.joshi@example.test',
     day: -2,
@@ -100,10 +102,10 @@ export const SAMPLE_TESTS: readonly SampleTest[] = [
     marks: ['21.5', 'A', '18', '-', null, null, null, null],
   },
   {
-    code: 'SAMPLE-C11-MATH-01',
-    title: 'Class 11 Mathematics chapter test: Sets (sample)',
+    code: 'C11-MATH-01',
+    title: 'Class 11 Mathematics chapter test: Sets',
     kind: 'chapter_test',
-    batches: ['SAMPLE-C11-MATH'],
+    batches: ['COM-C11-A'],
     subject: 'MATH',
     teacher: 'nisha.rao@example.test',
     day: -10,
@@ -112,35 +114,35 @@ export const SAMPLE_TESTS: readonly SampleTest[] = [
     finalise: true,
   },
   {
-    code: 'SAMPLE-CAF-ACC-01',
-    title: 'CA Foundation Accounting test 1 (sample)',
+    code: 'CAF-ACC-01',
+    title: 'CA Foundation Accounting test 1',
     kind: 'chapter_test',
-    batches: ['SAMPLE-CAF'],
+    batches: ['CAF-A'],
     subject: 'ACC',
     teacher: 'aditi.mehra@example.test',
     day: 5,
     rule: { maxMarks: '100' },
   },
   {
-    code: 'SAMPLE-C12-MATH-01',
-    title: 'Class 12 Mathematics chapter test: Matrices (sample)',
+    code: 'C12-MATH-01',
+    title: 'Class 12 Mathematics chapter test: Matrices',
     kind: 'chapter_test',
-    batches: ['SAMPLE-C12-MATH'],
+    batches: ['COM-C12-A'],
     subject: 'MATH',
     teacher: 'nisha.rao@example.test',
     day: 9,
     rule: { maxMarks: '40' },
   },
 ];
-export const PENDING_IMPORT_TEST = 'SAMPLE-CLAT-CA-01';
+export const PENDING_IMPORT_TEST = 'CLAT-CA-01';
 
-/** The demo teacher's Quant tests on SAMPLE-IPMAT-B: marks half entered, none entered, final, upcoming. */
+/** The demo teacher's Quant tests on IPMAT-B: marks half entered, none entered, final, upcoming. */
 export const DEMO_TEACHER_TESTS: readonly SampleTest[] = [
   {
-    code: 'SAMPLE-IPMAT-B-QUANT-01',
-    title: 'IPMAT batch B Quant test: Percentages (sample)',
+    code: 'IPMAT-B-QUANT-01',
+    title: 'IPMAT batch B Quant test: Percentages',
     kind: 'chapter_test',
-    batches: ['SAMPLE-IPMAT-B'],
+    batches: ['IPMAT-B'],
     subject: 'QUANT',
     teacher: 'teacher@elevateeducation.in',
     day: -3,
@@ -148,10 +150,10 @@ export const DEMO_TEACHER_TESTS: readonly SampleTest[] = [
     marks: ['41', '36', 'A', null, null, null],
   },
   {
-    code: 'SAMPLE-IPMAT-B-QUANT-02',
-    title: 'IPMAT batch B Quant test: Ratio and Proportion (sample)',
+    code: 'IPMAT-B-QUANT-02',
+    title: 'IPMAT batch B Quant test: Ratio and Proportion',
     kind: 'chapter_test',
-    batches: ['SAMPLE-IPMAT-B'],
+    batches: ['IPMAT-B'],
     subject: 'QUANT',
     teacher: 'teacher@elevateeducation.in',
     day: -1,
@@ -159,10 +161,10 @@ export const DEMO_TEACHER_TESTS: readonly SampleTest[] = [
     marks: [],
   },
   {
-    code: 'SAMPLE-IPMAT-B-QUANT-03',
-    title: 'IPMAT batch B Quant test: Number Systems (sample)',
+    code: 'IPMAT-B-QUANT-03',
+    title: 'IPMAT batch B Quant test: Number Systems',
     kind: 'chapter_test',
-    batches: ['SAMPLE-IPMAT-B'],
+    batches: ['IPMAT-B'],
     subject: 'QUANT',
     teacher: 'teacher@elevateeducation.in',
     day: -12,
@@ -171,10 +173,10 @@ export const DEMO_TEACHER_TESTS: readonly SampleTest[] = [
     finalise: true,
   },
   {
-    code: 'SAMPLE-IPMAT-B-QUANT-04',
-    title: 'IPMAT batch B Quant test: Averages (sample)',
+    code: 'IPMAT-B-QUANT-04',
+    title: 'IPMAT batch B Quant test: Averages',
     kind: 'chapter_test',
-    batches: ['SAMPLE-IPMAT-B'],
+    batches: ['IPMAT-B'],
     subject: 'QUANT',
     teacher: 'teacher@elevateeducation.in',
     day: 6,
@@ -203,7 +205,7 @@ export async function placeSampleEnrolments(
     user: {
       id,
       email: coordinatorEmail,
-      displayName: 'Sample Academic Coordinator',
+      displayName: PEOPLE.academicCoordinator,
       roles: ['academic_coordinator'],
       sessionId: '' as SessionId,
     } as unknown as AuthenticatedUser,
@@ -239,6 +241,11 @@ export async function placeSampleEnrolments(
       startDate: e.startDate ?? undefined,
       reason: 'Sample student placed by the development seed.',
     });
+    // No route may set the sample flag.
+    await db
+      .update(academicBatchPlacements)
+      .set({ isSample: true })
+      .where(eq(academicBatchPlacements.enrolmentId, e.id));
     placed += 1;
   }
   return placed;

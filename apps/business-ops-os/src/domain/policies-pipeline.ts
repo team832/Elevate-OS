@@ -72,7 +72,7 @@ export const PIPELINE_SETTING_DEFINITIONS: DefinitionsFor<typeof pipelineSetting
   'demo.terms': {
     label: 'Demo terms',
     description:
-      'Demo handling: separate demo classes (never the main batch), non-refundable if the student does not join, adjusted against fees on joining (applied as a ledger credit through fees.demo_credit).',
+      'Demo handling: separate demo classes (never the main batch), non-refundable if the student does not join, adjusted against fees on joining (applied as a ledger credit under the setting "Demo fee credit on admission").',
     defaultValue: {
       separateFromMainBatch: true,
       refundableIfNotJoining: false,

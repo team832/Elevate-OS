@@ -161,7 +161,7 @@ describe('fields come from the value and its schema', () => {
       kind: 'choices',
       options: [
         { value: 'reviewer', label: 'Reviewer' },
-        { value: 'hr_manager', label: 'Hr manager' },
+        { value: 'hr_manager', label: 'HR manager' },
         { value: 'operations_manager' },
         { value: 'line_manager' },
       ],

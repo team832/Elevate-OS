@@ -3,8 +3,8 @@
  * members, the six sample idea proposals named in §13, calendar items in every workflow state, one
  * SEO, one AIO and one GEO work item with manual observations, and targets by employee, team and
  * campaign. Everything goes through the Marketing services (audit, review rules, no self-approval)
- * and is then marked `is_sample`; titles say "(sample)". Owners are the two fictional marketing
- * employees (`MARKETING_EMPLOYEES`, @example.test), reviewer the Sample Marketing Manager. No
+ * and is then marked `is_sample`. Owners are the two made-up marketing
+ * employees (`MARKETING_EMPLOYEES`, @example.test), reviewer the sample marketing manager. No
  * figure is invented: observations are labelled typed by hand, nothing is published anywhere and
  * the only "publication" carries evidence text, not a link. Skipped once sample campaigns exist;
  * `npm run db:clear-samples` removes it all.
@@ -52,22 +52,22 @@ const [POOJA, ROHIT] = [POOJA_EMAIL, ROHIT_EMAIL];
 
 export const SAMPLE_CAMPAIGNS = [
   {
-    code: 'SAMPLE-IPMAT-WEBINAR',
-    name: 'IPMAT webinar invitations (sample)',
+    code: 'IPMAT-WEBINAR',
+    name: 'IPMAT webinar invitations',
     status: 'active',
     owner: POOJA,
     member: ROHIT,
   },
   {
-    code: 'SAMPLE-CLAT-CA',
-    name: 'CLAT current-affairs series (sample)',
+    code: 'CLAT-CA-SERIES',
+    name: 'CLAT current-affairs series',
     status: 'active',
     owner: ROHIT,
     member: null,
   },
   {
-    code: 'SAMPLE-CAF-OPEN-HOUSE',
-    name: 'CA Foundation open house (sample)',
+    code: 'CAF-OPEN-HOUSE',
+    name: 'CA Foundation open house',
     status: 'draft',
     owner: POOJA,
     member: null,
@@ -98,7 +98,7 @@ export const SAMPLE_IDEAS: readonly {
     format: 'short_video',
     channel: 'instagram',
     effort: 's',
-    campaign: 'SAMPLE-IPMAT-WEBINAR',
+    campaign: 'IPMAT-WEBINAR',
     problemNeed: 'Class 12 students ask how to practise quant daily.',
     review: 'approved',
     plan: 5,
@@ -111,7 +111,7 @@ export const SAMPLE_IDEAS: readonly {
     format: 'social_post',
     channel: 'instagram',
     effort: 's',
-    campaign: 'SAMPLE-CLAT-CA',
+    campaign: 'CLAT-CA-SERIES',
     problemNeed: 'Aspirants lose track of the week’s news.',
     review: 'submitted',
   },
@@ -144,7 +144,7 @@ export const SAMPLE_IDEAS: readonly {
     format: 'webinar',
     channel: 'online_event',
     effort: 'l',
-    campaign: 'SAMPLE-IPMAT-WEBINAR',
+    campaign: 'IPMAT-WEBINAR',
     problemNeed: 'Parents want one place to ask about admissions.',
     review: 'approved',
   },
@@ -156,7 +156,7 @@ export const SAMPLE_IDEAS: readonly {
     format: 'seminar',
     channel: 'in_person',
     effort: 'm',
-    problemNeed: 'Students want a sample teacher to answer doubts live.',
+    problemNeed: 'Students want a teacher to answer doubts live.',
     review: 'submitted',
   },
 ];
@@ -194,7 +194,7 @@ export const SAMPLE_CALENDAR: readonly {
     type: 'short_video',
     owner: ROHIT,
     day: 3,
-    campaign: 'SAMPLE-CLAT-CA',
+    campaign: 'CLAT-CA-SERIES',
     state: 'in_production',
   },
   {
@@ -209,7 +209,7 @@ export const SAMPLE_CALENDAR: readonly {
     type: 'social_post',
     owner: POOJA,
     day: 6,
-    campaign: 'SAMPLE-CAF-OPEN-HOUSE',
+    campaign: 'CAF-OPEN-HOUSE',
     state: 'approved',
   },
   {
@@ -217,7 +217,7 @@ export const SAMPLE_CALENDAR: readonly {
     type: 'email_draft',
     owner: POOJA,
     day: 1,
-    campaign: 'SAMPLE-IPMAT-WEBINAR',
+    campaign: 'IPMAT-WEBINAR',
     state: 'scheduled',
   },
   {
@@ -225,7 +225,7 @@ export const SAMPLE_CALENDAR: readonly {
     type: 'social_post',
     owner: ROHIT,
     day: -3,
-    campaign: 'SAMPLE-CLAT-CA',
+    campaign: 'CLAT-CA-SERIES',
     state: 'published',
   },
   {
@@ -233,7 +233,7 @@ export const SAMPLE_CALENDAR: readonly {
     type: 'landing_page_update',
     owner: POOJA,
     day: 4,
-    campaign: 'SAMPLE-IPMAT-WEBINAR',
+    campaign: 'IPMAT-WEBINAR',
     state: 'changes_requested',
   },
   {
@@ -269,7 +269,7 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
         .where(eq(staffMembers.userId, manager.id))
     : [];
   if (!manager || !managerStaff)
-    return log('marketing.samples skipped: the Sample Marketing Manager is missing (core seed)');
+    return log('marketing.samples skipped: the sample marketing manager is missing (core seed)');
   const people = await ensureDemoStaff(db, MARKETING_EMPLOYEES, managerStaff.id);
   if (people.size < MARKETING_EMPLOYEES.length)
     return log('marketing.samples skipped: a marketing employee email belongs to another account');
@@ -313,7 +313,7 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
   for (const i of SAMPLE_IDEAS) {
     const owner = as.get(i.owner)!;
     const { idea } = await createIdea(db, owner, {
-      title: `${i.title} (sample proposal)`,
+      title: i.title,
       coursePrefix: i.prefix,
       problemNeed: i.problemNeed,
       audience: 'Sample audience',
@@ -343,7 +343,7 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
   for (const c of SAMPLE_CALENDAR) {
     const owner = as.get(c.owner)!;
     const item = await createCalendarItem(db, owner, {
-      title: `${c.title} (sample)`,
+      title: c.title,
       itemType: c.type,
       ownerStaffId: staffOf(c.owner),
       campaignId: c.campaign ? campaigns.get(c.campaign)! : null,
@@ -410,8 +410,8 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
   for (const w of work) {
     const owner = as.get(w.owner)!;
     const item = await createOptimisationItem(db, owner, {
-      pageUrl: `https://www.example.test/sample/${w.category}`,
-      topic: `${w.topic} (sample)`,
+      pageUrl: `https://www.example.test/courses/${w.category}`,
+      topic: w.topic,
       targetQuery: w.query,
       categoryKey: w.category,
       baselineObservation: 'Sample baseline typed by hand.',
@@ -462,7 +462,7 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
     { scope: 'team', metricKey: 'published_content', targetValue: 4 },
     {
       scope: 'campaign',
-      campaignId: campaigns.get('SAMPLE-IPMAT-WEBINAR')!,
+      campaignId: campaigns.get('IPMAT-WEBINAR')!,
       metricKey: 'campaign_deliverables',
       targetValue: 4,
     },

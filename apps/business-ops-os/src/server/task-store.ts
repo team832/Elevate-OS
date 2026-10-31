@@ -8,6 +8,7 @@
  * `version` and appends `ops.task_events` plus an audit row in the caller's transaction.
  */
 import { eq, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import {
   opsStaffTasks as tasks,
   opsTaskDependencies,
@@ -52,6 +53,7 @@ export const taskAudit = opsAudit('staff_task');
 /** The task (locked when `write`), the caller's access and roles; 404 outside read scope. */
 export async function loadTaskFor(db: Database, actor: Actor, id: string, write: boolean) {
   const access = await taskAccess(db, actor, write ? 'ops:tasks:write' : 'ops:tasks:read');
+  if (!z.uuid().safeParse(id).success) notFound('Task');
   const row = await rowById(db, tasks, id, 'Task', write);
   const collaborator = await isCollaborator(db, access, row);
   if (!canSee(access, row, collaborator)) notFound('Task');

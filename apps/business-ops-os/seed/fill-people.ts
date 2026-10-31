@@ -1,13 +1,13 @@
 /**
  * Owner, 31 Oct 2026: "Fill everything, every detail, with mock data." People and attendance of the
- * sample staff: the fictional Schar and the setting that names them, staff details, work schedules,
+ * sample staff: the made-up Schar and the setting that names them, staff details, work schedules,
  * holidays, recent weeks of punches, HR's marked days, corrections in each state and leave. All
  * sample (D-036): real staff never get a row here, so their days stay as they are. Tables without an
- * `is_sample` column carry the marker in their name ("Sample schedule…", "Sample holiday…");
- * db:clear-samples removes them and puts the setting back. Safe to run again on any day.
+ * `is_sample` column are recorded with markSampleRows; db:clear-samples removes those rows and puts
+ * the setting back. Safe to run again on any day.
  */
 import { createHash } from 'node:crypto';
-import { and, eq, inArray, like, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   branches,
   opsAttendanceCorrections,
@@ -29,7 +29,10 @@ import {
 import {
   DEMO_ACCOUNTS,
   ensureDemoStaff,
+  markSampleRows,
   SAMPLE_SCHAR,
+  sampleRowIds,
+  sampleStaffDetails,
   sampleText as why,
 } from '@elevate/database/seed';
 import type { StaffMemberId } from '@elevate/shared-types';
@@ -47,9 +50,7 @@ import { sampleAnchorDate } from './sample-staff';
 import { seedActor } from './samples';
 
 export const DEMO_TEACHER_EMAIL = 'teacher@elevateeducation.in';
-const SAMPLE_SCHEDULE_PREFIX = 'Sample schedule';
-const SAMPLE_HOLIDAY_PREFIX = 'Sample holiday';
-const SAMPLE_SCHAR_SOURCE = 'Sample set: a fictional Schar (D-096); replace with the real person';
+const SAMPLE_SCHAR_SOURCE = 'Sample set: a made-up Schar (D-096); replace with the real person';
 
 const hours = (start: string, end: string, off: (keyof OpsWeeklyPattern)[]) =>
   Object.fromEntries(
@@ -61,21 +62,17 @@ const hours = (start: string, end: string, off: (keyof OpsWeeklyPattern)[]) =>
 
 /** [name, pattern, grace minutes]. No schedule is the default: real staff must not pick one up. */
 const SCHEDULES = [
-  [`${SAMPLE_SCHEDULE_PREFIX}: teaching days (fictional)`, hours('09:00', '17:00', ['sun']), 10],
-  [`${SAMPLE_SCHEDULE_PREFIX}: office days (fictional)`, hours('10:00', '18:00', ['sun']), 15],
-  [
-    `${SAMPLE_SCHEDULE_PREFIX}: weekend classes (fictional)`,
-    hours('11:00', '19:00', ['mon', 'tue']),
-    5,
-  ],
+  ['Teaching days, 9 to 5', hours('09:00', '17:00', ['sun']), 10],
+  ['Office days, 10 to 6', hours('10:00', '18:00', ['sun']), 15],
+  ['Weekend classes, 11 to 7', hours('11:00', '19:00', ['mon', 'tue']), 5],
 ] as const;
 
-const SAMPLE_BRANCH_CODE = 'SAMPLE_BRANCH';
+export const SAMPLE_BRANCH_CODE = 'FATEHPUR_ROAD';
 /** [name, day offset, decision state]: on the sample branch only, so no real person's day changes. */
 const HOLIDAYS = [
-  [`${SAMPLE_HOLIDAY_PREFIX}: centre foundation day (fictional)`, -12, 'approved'],
-  [`${SAMPLE_HOLIDAY_PREFIX}: staff training day (fictional)`, -5, 'approved'],
-  [`${SAMPLE_HOLIDAY_PREFIX}: local festival, to be confirmed (fictional)`, 6, 'proposed'],
+  ['Centre foundation day', -12, 'approved'],
+  ['Staff training day', -5, 'approved'],
+  ['Local festival, to be confirmed', 6, 'proposed'],
 ] as const;
 
 /** Sample staff who hold a login and are in work: the people these rows belong to. */
@@ -99,7 +96,7 @@ export async function sampleRoster(db: Database) {
 
 const auditSetting = opsAudit('setting');
 
-/** Name the fictional Schar unless someone has already chosen. Never overwrites a stored choice. */
+/** Name the made-up Schar unless someone has already chosen. Never overwrites a stored choice. */
 async function nameSchar(db: Database, staffId: StaffMemberId) {
   const hr = await seedActor(db, 'hr-manager@example.test');
   const [after] = await db
@@ -134,15 +131,17 @@ export async function seedFillPeople(db: Database) {
     .insert(branches)
     .values({
       code: SAMPLE_BRANCH_CODE,
-      name: 'Sample branch (fictional)',
+      name: 'Fatehpur Road centre',
       status: 'provisional',
     })
-    .onConflictDoNothing({ target: branches.code });
+    .onConflictDoNothing({ target: branches.code })
+    .returning({ id: branches.id })
+    .then((rows) => markSampleRows(db, 'core.branches', rows.map((r) => r.id)));
   const [branch] = await db
     .select({ id: branches.id })
     .from(branches)
     .where(eq(branches.code, SAMPLE_BRANCH_CODE));
-  await db
+  const newSchedules = await db
     .insert(opsWorkSchedules)
     .values(
       SCHEDULES.map(([name, weeklyPattern, graceMinutes]) => ({
@@ -152,14 +151,16 @@ export async function seedFillPeople(db: Database) {
         createdBy: hr.id,
       })),
     )
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ id: opsWorkSchedules.id });
+  await markSampleRows(db, 'ops.work_schedules', newSchedules.map((s) => s.id));
   const named = await db
     .select({ name: opsHolidays.name })
     .from(opsHolidays)
-    .where(like(opsHolidays.name, `${SAMPLE_HOLIDAY_PREFIX}%`));
+    .where(inArray(opsHolidays.id, await sampleRowIds(db, 'ops.holidays')));
   const missing = HOLIDAYS.filter(([name]) => !named.some((h) => h.name === name));
-  if (missing.length)
-    await db
+  if (missing.length) {
+    const added = await db
       .insert(opsHolidays)
       .values(
         missing.map(([name, day, decisionState]) => ({
@@ -170,43 +171,45 @@ export async function seedFillPeople(db: Database) {
           createdBy: hr.id,
         })),
       )
-      .onConflictDoNothing();
-  // Refreshed, so a database seeded before the sample branch existed moves off the real branch too.
-  await db
-    .update(opsHolidays)
-    .set({ branchId: branch!.id })
-    .where(like(opsHolidays.name, `${SAMPLE_HOLIDAY_PREFIX}%`));
+      .onConflictDoNothing()
+      .returning({ id: opsHolidays.id });
+    await markSampleRows(db, 'ops.holidays', added.map((h) => h.id));
+  }
   const schedules = await db
     .select({ id: opsWorkSchedules.id, name: opsWorkSchedules.name })
     .from(opsWorkSchedules)
-    .where(like(opsWorkSchedules.name, `${SAMPLE_SCHEDULE_PREFIX}%`));
-  const scheduleId = (word: string) => schedules.find((s) => s.name.includes(word))!.id;
+    .where(inArray(opsWorkSchedules.id, await sampleRowIds(db, 'ops.work_schedules')));
+  const scheduleId = (word: string) => schedules.find((s) => s.name.startsWith(word))!.id;
   // Only what is still empty: an edit on the screen stays (a sample row may refresh, it need not).
   await db.execute(sql`
     UPDATE ops.staff_profiles p SET
-      staff_code = coalesce(p.staff_code, 'SAMPLE-' || upper(left(p.staff_id::text, 6))),
+      staff_code = coalesce(p.staff_code, 'EMP-' || upper(left(p.staff_id::text, 6))),
+      employment_status = CASE WHEN p.employment_status = 'not_recorded' THEN 'active' ELSE p.employment_status END,
+      display_name = coalesce(p.display_name, (SELECT full_name FROM core.staff_members m WHERE m.id = p.staff_id)),
       joined_on = coalesce(p.joined_on, ${anchor}::date - (120 + abs(hashtext(p.staff_id::text)) % 700)),
       branch_id = ${branch!.id},
       work_schedule_id = coalesce(p.work_schedule_id, CASE
-        WHEN p.staff_code IN ('DEMO-T10', 'DEMO-T11') THEN ${scheduleId('weekend')}::uuid
+        WHEN p.staff_code IN ('EMP-T10', 'EMP-T11') THEN ${scheduleId('Weekend')}::uuid
         WHEN EXISTS (SELECT 1 FROM ops.staff_subject_capabilities c WHERE c.staff_id = p.staff_id)
           OR p.staff_id IN (SELECT id FROM core.staff_members WHERE department_id =
             (SELECT id FROM core.departments WHERE code = 'ACADEMICS'))
-          THEN ${scheduleId('teaching')}::uuid
-        ELSE ${scheduleId('office')}::uuid END),
+          THEN ${scheduleId('Teaching')}::uuid
+        ELSE ${scheduleId('Office')}::uuid END),
       notes = coalesce(p.notes, 'Fictional staff record for trying the screens (sample).')
     WHERE p.is_sample`);
-  const roster = await sampleRoster(db);
+  // Every sample person, login or not; a sample record renamed on screen keeps what it has.
+  const everyone = await db
+    .select({ staffId: staffMembers.id, name: staffMembers.fullName })
+    .from(staffMembers)
+    .innerJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id))
+    .where(eq(opsStaffProfiles.isSample, true));
   await db
     .insert(opsStaffPrivateDetails)
     .values(
-      roster.map((r) => ({
-        staffId: r.staffId,
-        personalEmail: `${r.email.split('@')[0]}.personal@example.test`,
-        address: 'Sample address (fictional), Sikar, Rajasthan',
-        emergencyContactName: `${r.name.replace(/\s*\(.*\)$/, '')} family contact (fictional)`,
-        updatedBy: hr.id,
-      })),
+      everyone.flatMap((r) => {
+        const details = sampleStaffDetails(r.name);
+        return details ? [{ staffId: r.staffId, ...details, updatedBy: hr.id }] : [];
+      }),
     )
     .onConflictDoNothing();
 }
@@ -232,7 +235,7 @@ function dayShape(staffId: string, date: string) {
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 const IMPORT_FROM = -20;
 const IMPORT_TO = -8;
-const FILE = 'Sample punch export (fictional).csv';
+const FILE = 'Punch export, last three weeks.csv';
 
 /**
  * Leave first (days on leave have no punches), corrections last (they refer to the days). Every
@@ -242,7 +245,7 @@ const FILE = 'Sample punch export (fictional).csv';
  */
 const LEAVE: readonly [string, number, number, string, string, string?, string?][] = [
   [
-    'DEMO-T02',
+    'EMP-T02',
     -9,
     -8,
     'Casual',
@@ -251,7 +254,7 @@ const LEAVE: readonly [string, number, number, string, string, string?, string?]
     'Cover arranged (sample).',
   ],
   [
-    'DEMO-T05',
+    'EMP-T05',
     -3,
     -3,
     'Sick',
@@ -261,7 +264,7 @@ const LEAVE: readonly [string, number, number, string, string, string?, string?]
   ],
   ['demo', -6, -6, 'Casual', 'Personal work in Jaipur (sample).', 'approve'],
   [
-    'DEMO-T08',
+    'EMP-T08',
     -2,
     -2,
     'Casual',
@@ -279,9 +282,9 @@ const LEAVE: readonly [string, number, number, string, string, string?, string?]
     'Pooja covers the calendar (sample).',
   ],
   ['demo', 5, 6, 'Earned', 'A family wedding in Jaipur (sample).'],
-  ['DEMO-T07', 3, 5, 'Earned', 'Going home for a family wedding (sample).'],
+  ['EMP-T07', 3, 5, 'Earned', 'Going home for a family wedding (sample).'],
   [
-    'DEMO-T09',
+    'EMP-T09',
     9,
     9,
     'Casual',
@@ -290,7 +293,7 @@ const LEAVE: readonly [string, number, number, string, string, string?, string?]
     'He is on exam duty that day; please choose another date (sample).',
   ],
   [
-    'DEMO-T04',
+    'EMP-T04',
     12,
     12,
     'Unpaid',
@@ -316,21 +319,21 @@ const CORRECTIONS: readonly [
     null,
   ],
   [
-    'DEMO-T04',
+    'EMP-T04',
     -2,
     { requestedIn: '09:02' },
     'The check-in did not record at the gate (sample).',
     null,
   ],
   [
-    'DEMO-T03',
+    'EMP-T03',
     -4,
     { requestedOut: '17:10' },
     'Left at the usual time, no check-out shown (sample).',
     { decision: 'approved', note: 'Matches the class register (sample).' },
   ],
   [
-    'DEMO-T06',
+    'EMP-T06',
     -7,
     { requestedStatus: 'present' },
     'I was at the Jaipur test centre that day (sample).',
@@ -350,10 +353,10 @@ const CORRECTIONS: readonly [
 
 /** [person, day, status, note]: HR's decisions on days the punches leave open. */
 const DECISIONS: readonly [string, number, 'absent' | 'half_day' | 'present', string][] = [
-  ['DEMO-T01', -4, 'absent', 'No check-in and no leave recorded; spoke to the teacher (sample).'],
-  ['DEMO-T09', -3, 'half_day', 'Left at 13:30 with the manager’s permission (sample).'],
+  ['EMP-T01', -4, 'absent', 'No check-in and no leave recorded; spoke to the teacher (sample).'],
+  ['EMP-T09', -3, 'half_day', 'Left at 13:30 with the manager’s permission (sample).'],
   [
-    'DEMO-T11',
+    'EMP-T11',
     -2,
     'present',
     'Worked at the Sikar centre annexe; no punch machine there (sample).',
@@ -401,7 +404,7 @@ export async function seedFillAttendance(db: Database, log: (m: string) => void 
       }
     }
     await recordLeave(db, hr.actor, {
-      staffId: person('DEMO-T11').staffId,
+      staffId: person('EMP-T11').staffId,
       fromDate: addDays(anchor, -15),
       toDate: addDays(anchor, -14),
       kind: 'Casual',
@@ -421,7 +424,7 @@ export async function seedFillAttendance(db: Database, log: (m: string) => void 
     .from(opsHolidays)
     .where(
       and(
-        like(opsHolidays.name, `${SAMPLE_HOLIDAY_PREFIX}%`),
+        inArray(opsHolidays.id, await sampleRowIds(db, 'ops.holidays')),
         eq(opsHolidays.decisionState, 'approved'),
       ),
     );
@@ -500,8 +503,8 @@ export async function seedFillAttendance(db: Database, log: (m: string) => void 
     .where(eq(opsAttendanceImports.id, importId));
 
   // A file HR has not committed: one good row, one bad, one already stored.
-  const t1 = person('DEMO-T01');
-  const previewFile = 'Sample punch export, next batch (fictional).csv';
+  const t1 = person('EMP-T01');
+  const previewFile = 'Punch export, this week.csv';
   await db
     .insert(opsAttendanceImports)
     .values({
@@ -520,7 +523,7 @@ export async function seedFillAttendance(db: Database, log: (m: string) => void 
         },
         {
           line: 3,
-          staffCode: 'DEMO-T99',
+          staffCode: 'EMP-T99',
           at: null,
           direction: 'in',
           errors: ['No staff member has this code', 'The date-time cannot be read'],

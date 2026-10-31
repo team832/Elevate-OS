@@ -5,9 +5,10 @@
  * never touched); the rest goes through the real services.
  * Left as they are, by the sample rule "never fake an approval, a signed form, a declaration or a
  * payment": verified documents, signature confirmations, final confirmations, admission approvals.
- * No phone numbers (db:check enforces it). Safe to run again.
+ * Phones are the fake block only (db:check enforces it). Safe to run again.
  */
-import { and, eq, inArray, isNotNull, like, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, like, sql } from 'drizzle-orm';
+import { markSampleRows, samplePerson, sampleRowIds } from '@elevate/database/seed';
 import {
   opsAdmissions,
   opsAppointmentParticipants,
@@ -34,12 +35,13 @@ import {
 } from '../src/server/events';
 import { changeChecklist, recordItemStatus, recordMaterial } from '../src/server/onboarding';
 import { changeStudentLifecycle } from '../src/server/student-lifecycle';
+import { addGuardian } from '../src/server/students';
 import { DEMO_TEACHER_EMAIL } from './fill-people';
 import { sampleAnchorDate } from './sample-staff';
 import { seedActor } from './samples';
 
-const SAMPLE_EVENT_PREFIX = 'Sample ';
-const ADDRESS = 'Sample address (fictional), Sikar, Rajasthan';
+type Actor = NonNullable<Awaited<ReturnType<typeof seedActor>>>['actor'];
+
 const pick = (list: string[], key: string) =>
   sql.raw(
     `(ARRAY[${list.map((x) => `'${x}'`).join(', ')}])[1 + abs(hashtext(${key})) % ${list.length}]`,
@@ -48,13 +50,6 @@ const pick = (list: string[], key: string) =>
 /** Fill what is still empty; every statement is limited to sample rows. */
 const FILLS = [
   sql`UPDATE ops.leads SET
-      preferred_name = coalesce(preferred_name, split_part(student_name, ' ', 1)),
-      city = coalesce(city, ${pick(['Sikar', 'Sikar', 'Fatehpur', 'Laxmangarh'], 'code')}),
-      school_board = coalesce(school_board, ${pick(['CBSE', 'RBSE', 'ICSE'], 'code')}),
-      previous_school = coalesce(previous_school, ${pick(['Sample Senior Secondary School (fictional)', 'Sample Public School (fictional)', 'Sample Convent School (fictional)'], 'code')}),
-      date_of_birth = coalesce(date_of_birth, DATE '2008-04-01' + abs(hashtext(code)) % 700),
-      address = coalesce(address, ${ADDRESS}),
-      emergency_contact_name = coalesce(emergency_contact_name, guardian_name),
       notes = coalesce(notes, ${pick(['Prefers morning classes; travels from outside Sikar (sample).', 'Parent wants to compare two programmes before deciding (sample).', 'Heard about us from a friend already in a batch (sample).', 'Asked about hostel options near the centre (sample).'], 'code')})
     WHERE is_sample`,
   sql`UPDATE ops.enquiries e SET
@@ -63,8 +58,7 @@ const FILLS = [
       notes = coalesce(e.notes, 'Asked about batch timings, fee instalments and demo classes (sample).')
     FROM ops.leads l WHERE l.id = e.lead_id AND l.is_sample`,
   sql`UPDATE ops.guardians g SET
-      notes = coalesce(g.notes, 'Prefers email; evenings suit best (sample).'),
-      address = coalesce(g.address, ${ADDRESS})
+      notes = coalesce(g.notes, 'Evenings suit best (sample).')
     FROM core.students s WHERE s.id = g.student_id AND s.is_sample`,
   sql`UPDATE ops.exit_records x SET
       exit_feedback = coalesce(x.exit_feedback, CASE x.exit_status
@@ -92,9 +86,9 @@ const FILLS = [
     FROM ops.leads l WHERE l.id = ap.lead_id AND l.is_sample`,
   sql`INSERT INTO ops.contact_preferences (lead_id, consent_status, consent_by, allowed_channels, preferred_contact, note, recorded_by)
     SELECT l.id, CASE WHEN l.do_not_contact THEN 'refused' ELSE 'given' END, 'guardian',
-      CASE WHEN l.do_not_contact THEN ARRAY[]::text[] ELSE ARRAY['email'] END,
+      CASE WHEN l.do_not_contact THEN ARRAY[]::text[] ELSE ARRAY['call', 'email'] END,
       CASE WHEN l.do_not_contact THEN NULL ELSE 'guardian' END,
-      CASE WHEN l.do_not_contact THEN 'Parent asked not to be contacted again (sample).' ELSE 'Email only: sample records have no phone number (sample).' END,
+      CASE WHEN l.do_not_contact THEN 'Parent asked not to be contacted again (sample).' ELSE 'A call after 6 pm suits best; email for documents (sample).' END,
       l.created_by
     FROM ops.leads l WHERE l.is_sample AND NOT EXISTS (SELECT 1 FROM ops.contact_preferences c WHERE c.lead_id = l.id)`,
 ];
@@ -180,7 +174,7 @@ const TEACHER_MEETINGS: readonly {
   },
 ];
 
-/** Events and webinars: titles carry the sample marker (the table has no flag of its own). */
+/** Events and webinars (the table has no flag of its own: markSampleRows records them). */
 const EVENTS: readonly {
   type: 'event' | 'webinar';
   title: string;
@@ -196,7 +190,7 @@ const EVENTS: readonly {
 }[] = [
   {
     type: 'webinar',
-    title: 'Sample IPMAT parents’ webinar (fictional)',
+    title: 'IPMAT parents’ webinar',
     day: 6,
     hour: 18,
     mode: 'online',
@@ -207,7 +201,7 @@ const EVENTS: readonly {
   },
   {
     type: 'event',
-    title: 'Sample CLAT open house (fictional)',
+    title: 'CLAT open house',
     day: -5,
     hour: 11,
     mode: 'offline',
@@ -239,11 +233,73 @@ async function studentByFirst(db: Database) {
   return (first: string) => rows.find((r) => r.name.startsWith(`${first} `));
 }
 
+/**
+ * What a person would see on a lead or student: their own details and numbers, and both parents
+ * (a lead with no student record holds the other parent as its emergency contact).
+ */
+async function fillPeopleDetails(db: Database, actor: Actor) {
+  const leads = await db
+    .select({ lead: opsLeads, studentId: opsAdmissions.studentId })
+    .from(opsLeads)
+    .leftJoin(opsAdmissions, eq(opsAdmissions.leadId, opsLeads.id))
+    .where(eq(opsLeads.isSample, true));
+  const done = new Set<string>();
+  for (const { lead, studentId } of leads) {
+    const first = lead.studentName.split(' ')[0]!;
+    const p = samplePerson(first);
+    if (!p) continue;
+    const [parent, other] =
+      lead.guardianRelationship === 'father' ? [p.father, p.mother] : [p.mother, p.father];
+    const wanted = {
+      preferredName: first,
+      studentPhone: p.phone,
+      guardianPhone: parent.phone,
+      city: p.city,
+      schoolBoard: p.board,
+      previousSchool: p.school,
+      dateOfBirth: p.dateOfBirth,
+      address: p.address,
+      emergencyContactName: other.fullName,
+      emergencyContactPhone: other.phone,
+    };
+    const empty = Object.entries(wanted).filter(([k]) => lead[k as keyof typeof wanted] === null);
+    if (empty.length)
+      await db
+        .update(opsLeads)
+        .set(Object.fromEntries(empty))
+        .where(eq(opsLeads.id, lead.id));
+    if (!studentId || done.has(studentId)) continue;
+    done.add(studentId);
+    const live = await db
+      .select({ email: opsGuardians.email })
+      .from(opsGuardians)
+      .where(eq(opsGuardians.studentId, studentId));
+    for (const g of [parent, other]) {
+      if (live.some((x) => x.email === g.email)) continue;
+      await addGuardian(db, actor, studentId, {
+        fullName: g.fullName,
+        relationship: g.relationship,
+        email: g.email,
+        phone: g.phone,
+        address: p.address,
+        isEmergency: g === other,
+        preferredContact: 'call',
+        consentStatus: 'not_recorded',
+      } as never);
+    }
+    await db
+      .update(opsGuardians)
+      .set({ address: p.address })
+      .where(and(eq(opsGuardians.studentId, studentId), isNull(opsGuardians.address)));
+  }
+}
+
 export async function seedFillAdmissions(db: Database, log: (m: string) => void = () => {}) {
   const manager = await seedActor(db, 'operations-manager@example.test');
   const counsellor = await seedActor(db, 'admissions-counsellor@example.test');
   if (!manager?.staffId || !counsellor?.staffId)
     return log('ops.fill-admissions skipped: no sample staff');
+  await fillPeopleDetails(db, manager.actor);
   for (const statement of FILLS) await db.execute(statement);
   const anchor = anchorDay();
   const student = await studentByFirst(db);
@@ -324,7 +380,7 @@ export async function seedFillAdmissions(db: Database, log: (m: string) => void 
         [
           'kyc_verification',
           'blocked',
-          'A sample student has no phone number, so documents cannot be finished (sample).',
+          'The address proof could not be read; waiting for a clearer copy (sample).',
         ],
         ['id_card', 'in_progress', 'Photo taken; card not printed yet (sample).'],
       ];
@@ -344,7 +400,7 @@ export async function seedFillAdmissions(db: Database, log: (m: string) => void 
           itemId: set.id,
           kind: 'issue',
           quantity: 1,
-          edition: '2026-27 (sample)',
+          edition: '2026-27',
           issuedOn: addDays(anchor, -3),
           note: 'First part of the set issued (sample).',
         } as never);
@@ -373,7 +429,7 @@ export async function seedFillAdmissions(db: Database, log: (m: string) => void 
         staffId: teacher.staffId,
         startsAt: iso(m.day, m.hour),
         mode: 'offline',
-        location: 'Sikar centre, staff room (sample)',
+        location: 'Sikar centre, staff room',
         studentId: s.id,
         subject: 'Quantitative Aptitude',
         purpose: m.purpose,
@@ -402,18 +458,13 @@ export async function seedFillAdmissions(db: Database, log: (m: string) => void 
   const known = await db
     .select({ title: opsAppointments.title })
     .from(opsAppointments)
-    .where(
-      and(
-        like(opsAppointments.title, `${SAMPLE_EVENT_PREFIX}%`),
-        inArray(opsAppointments.type, ['event', 'webinar']),
-      ),
-    );
+    .where(inArray(opsAppointments.id, await sampleRowIds(db, 'ops.appointments')));
   for (const e of EVENTS) {
     if (known.some((k) => k.title === e.title)) continue;
     const row = await scheduleEvent(db, manager.actor, {
       type: e.type,
       title: e.title,
-      location: e.mode === 'offline' ? 'Sikar centre, seminar hall (sample)' : null,
+      location: e.mode === 'offline' ? 'Sikar centre, seminar hall' : null,
       capacity: e.capacity,
       purpose: e.purpose,
       audience: { populations: [], programmeCodes: [e.programme], stages: [], batchIds: [] },
@@ -423,6 +474,7 @@ export async function seedFillAdmissions(db: Database, log: (m: string) => void 
       mode: e.mode,
       participantStudentIds: ['Zoya', 'Arjun', 'Kavya'].flatMap((f) => student(f)?.id ?? []),
     } as never);
+    await markSampleRows(db, 'ops.appointments', [row.id]);
     const draft = await draftEventMessage(db, manager.actor, row.id, {
       channel: 'in_app',
       body: e.message,

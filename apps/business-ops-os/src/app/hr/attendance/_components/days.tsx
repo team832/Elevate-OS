@@ -1,9 +1,9 @@
 /** HR attendance: the "Days" and "Needs review" tabs (filters, chart, day table, punch entry). */
 import { BarChart, EmptyState } from '@elevate/shared-ui';
 import {
-  ATTENDANCE_STATUS_LABELS,
   REVIEW_REASON_LABELS,
-  type AttendanceStatus,
+  SHOWN_STATUS_LABELS,
+  type ShownStatus,
 } from '../../../../domain/attendance';
 import type { listAttendance } from '../../../../server/attendance';
 import type { AttendanceSetup } from '../../../../server/attendance-lists';
@@ -11,7 +11,7 @@ import { ActionForm } from '../../../../ui/action-form';
 import { fmtDate, plural } from '../../../../ui/format';
 import { listHref, Pager, SearchPanel } from '../../../../ui/list-controls';
 import { Segment } from '../../../../ui/sections';
-import { DayTable, statusOptions } from './shared';
+import { DayTable, statusFilterOptions } from './shared';
 
 type Params = Record<string, string | undefined>;
 export const BASE = '/ops/hr/attendance';
@@ -67,7 +67,7 @@ export function DaysTab({
                 name: 'status',
                 label: 'Status',
                 type: 'select',
-                options: statusOptions,
+                options: statusFilterOptions,
                 value: params.status,
               },
           {
@@ -105,7 +105,7 @@ export function DaysTab({
               value: list.staffCount ? (d.counts.present ?? 0) : null,
               note: Object.entries(d.counts)
                 .filter(([s]) => s !== 'present')
-                .map(([s, n]) => `${ATTENDANCE_STATUS_LABELS[s as AttendanceStatus]} ${n}`)
+                .map(([s, n]) => `${SHOWN_STATUS_LABELS[s as ShownStatus]} ${n}`)
                 .join(', '),
             }))}
             emptyText="No staff records match these filters."

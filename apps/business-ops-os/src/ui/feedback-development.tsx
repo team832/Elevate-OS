@@ -4,7 +4,7 @@
  * "what the teacher will see" preview. Built only from `teacherFacing` summaries: no raw rows,
  * no student names, no figures or comments below the minimum group size.
  */
-import { PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { PageHeader, SampleBadge, StatusBadge } from '@elevate/shared-ui';
 import type { TeacherFacingSummary } from '../domain/feedback';
 import { istToday } from '../domain/dates';
 import { meanLabel } from '../domain/feedback';
@@ -45,6 +45,7 @@ export function SummaryView({
       title={`Feedback for ${period(s)}`}
       level={level}
       flush={s.enough}
+      meta={s.isSample ? <SampleBadge /> : undefined}
       description={
         s.approvedAt ? `Approved by HR on ${fmtDate(istToday(s.approvedAt))}.` : undefined
       }
@@ -84,6 +85,7 @@ export function ActionsTable({ rows }: { rows: Mine['actions'] }) {
     <RecordTable
       rows={rows}
       rowKey={(a) => a.id}
+      sampleOf={(a) => a.isSample}
       caption="Development actions"
       empty="No development actions recorded."
       columns={[

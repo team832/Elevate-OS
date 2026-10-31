@@ -64,7 +64,7 @@ async function Body({ access }: { access: PageAccess }) {
                 { key: 'subject', header: 'Subject', render: (p) => p.subjectName },
                 { key: 'teacher', header: 'Teacher', render: (p) => p.teacherName },
                 { key: 'room', header: 'Room', render: (p) => p.roomCode ?? (p.onlineLink ? 'Online' : '—') },
-                { key: 'range', header: 'Dates', render: (p) => fmtSpan(p.effectiveFrom, p.effectiveTo) },
+                { key: 'range', header: 'Dates', render: (p) => fmtSpan(p.effectiveFrom, p.effectiveTo, 'no last date') },
                 { key: 'status', header: 'Status', render: (p) => <PlanBadge status={p.status} /> },
               ]}
             />

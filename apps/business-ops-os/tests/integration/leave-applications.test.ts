@@ -514,7 +514,7 @@ describe('notices', () => {
 });
 
 describe("a teacher's classes (flag only)", () => {
-  const activity = (planned: number | null) =>
+  const activity = (planned: number | null, reason = 'No teaching assignments') =>
     vi.fn(async (url: string) =>
       Response.json({
         data: {
@@ -528,7 +528,7 @@ describe("a teacher's classes (flag only)", () => {
             ['planned', 'delivered', 'cancelled', 'substituted'].map((k) => [
               k,
               planned === null
-                ? { status: 'missing', value: null, reason: 'No teaching assignments', definition: 'Sample', window: { from: today, to: today }, unit: 'count' }
+                ? { status: 'missing', value: null, reason, definition: 'Sample', window: { from: today, to: today }, unit: 'count' }
                 : { status: 'ok', value: k === 'planned' ? planned : 0, definition: 'Sample', window: { from: today, to: today }, unit: 'count' },
             ]),
           ),
@@ -572,15 +572,18 @@ describe("a teacher's classes (flag only)", () => {
   });
 
   it('Academic answers with no count: missing is not zero, so the coordinator is asked to check', async () => {
-    vi.stubGlobal('fetch', activity(null));
+    vi.stubGlobal('fetch', activity(null, 'Sample source not ready'));
     const a = await approved(w.teacher, w.hr);
     const [n] = await flags(a.id);
     expect(n!.title).toContain('check their classes');
     expect(n!.body).toMatch(/did not give a count/);
   });
 
-  it('no classes planned: no notice', async () => {
-    vi.stubGlobal('fetch', activity(0));
+  it.each([
+    ['a count of 0', 0],
+    ['Academic saying no teaching assignments', null],
+  ])('no classes planned (%s): no notice', async (_, planned) => {
+    vi.stubGlobal('fetch', activity(planned));
     const a = await approved(w.teacher, w.hr);
     expect(await flags(a.id)).toEqual([]);
   });

@@ -4,6 +4,8 @@
  * publications), lead stage history, task reminders and the Marketing samples (campaigns and
  * members, ideas, calendar items, SEO/AIO/GEO items and observations, targets). Reference data
  * (lead stages, SEO/AIO/GEO categories) is not sample and stays.
+ * Tables with no is_sample column (schedules, holidays, rooms, branches, events, metric imports) are
+ * known by the record the seed left (markSampleRows, seed/sample-people.ts), never by a name.
  * Sample = `ops.leads.is_sample`, `core.students.is_sample`, `ops.fee_structures.is_sample`,
  * `is_sample` tasks, EOD reports and import batches, Academic `is_sample` batches (with their
  * sessions, logs and teachers), students, placements, demo attendees and reviews, `is_sample`
@@ -24,6 +26,7 @@
  */
 import { sql } from 'drizzle-orm';
 import type { Database } from '@elevate/database';
+import { sampleRowsSql } from '@elevate/database/seed';
 import { withTransaction } from '@elevate/server-kit';
 import { RELATED_SET, refuseRequiredLinks, unlinkRealRows } from './clear-samples-guards';
 
@@ -49,7 +52,7 @@ const SETS: readonly [string, string][] = [
     `SELECT id FROM ops.appointments WHERE lead_id IN (SELECT id FROM s_leads)
        OR admission_id IN (SELECT id FROM s_admissions) OR student_id IN (SELECT id FROM s_students)
        OR demo_id IN (SELECT id FROM s_demos)
-       OR (type IN ('event', 'webinar') AND title LIKE 'Sample %')`,
+       OR id IN (${sampleRowsSql('ops.appointments')})`,
   ],
   [
     's_plans',
@@ -83,10 +86,11 @@ const SETS: readonly [string, string][] = [
      WHERE p.is_sample AND m.user_id IS NULL`,
   ],
   ['s_hr_requests', `SELECT id FROM ops.hr_requests WHERE is_sample`],
-  // No is_sample column on these two: the sample set marks them by name.
-  ['s_schedules', `SELECT id FROM ops.work_schedules WHERE name LIKE 'Sample schedule%'`],
-  ['s_rooms', `SELECT id FROM academic.rooms WHERE code LIKE 'SAMPLE-%' AND name LIKE 'Sample %'`],
-  ['s_branches', `SELECT id FROM core.branches WHERE code = 'SAMPLE_BRANCH'`],
+  ['s_schedules', sampleRowsSql('ops.work_schedules')],
+  ['s_holidays', sampleRowsSql('ops.holidays')],
+  ['s_rooms', sampleRowsSql('academic.rooms')],
+  ['s_branches', sampleRowsSql('core.branches')],
+  ['s_metric_imports', sampleRowsSql('marketing.metric_imports')],
   ['s_campaigns', `SELECT id FROM marketing.campaigns WHERE is_sample`],
   ['s_ideas', `SELECT id FROM marketing.ideas WHERE is_sample`],
   ['s_opt_items', `SELECT id FROM marketing.optimisation_items WHERE is_sample`],
@@ -135,7 +139,7 @@ const DELETES: readonly [string, string][] = [
   ['marketing.calendar_items', `DELETE FROM marketing.calendar_items WHERE is_sample`],
   [
     'marketing.metric_imports',
-    `DELETE FROM marketing.metric_imports WHERE file_name = 'Sample metrics export (fictional).csv'`,
+    `DELETE FROM marketing.metric_imports WHERE id ${IN('s_metric_imports')}`,
   ],
   ['marketing.ideas', `DELETE FROM marketing.ideas WHERE id ${IN('s_ideas')}`],
   [
@@ -169,12 +173,12 @@ const DELETES: readonly [string, string][] = [
     `DELETE FROM ops.teacher_feedback_summaries WHERE is_sample OR teacher_staff_id ${IN('s_staff')}`,
   ],
   ['ops.task_collaborators', `DELETE FROM ops.task_collaborators WHERE staff_id ${IN('s_staff')}`],
-  ['ops.holidays', `DELETE FROM ops.holidays WHERE name LIKE 'Sample holiday%'`],
+  ['ops.holidays', `DELETE FROM ops.holidays WHERE id ${IN('s_holidays')}`],
   [
     'ops.staff_private_details',
     `DELETE FROM ops.staff_private_details WHERE staff_id IN (SELECT staff_id FROM ops.staff_profiles WHERE is_sample)`,
   ],
-  // The fictional Schar leaves the setting (only they: another person chosen on screen stays).
+  // The made-up Schar leaves the setting (only they: another person chosen on screen stays).
   [
     'ops.settings (Schar)',
     `DELETE FROM ops.settings WHERE key = 'hr.request_recipients'

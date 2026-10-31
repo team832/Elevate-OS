@@ -1,8 +1,9 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { RoleKey, StaffMemberId, UserId } from '@elevate/shared-types';
 import type { Database } from '../client';
 import { departments, staffMembers, userRoles, users } from '../schema/core';
 import { opsStaffProfiles } from '../schema/ops';
+import { COVER_TEACHERS, PEOPLE } from './sample-people';
 import { syncStaffHistory } from './staff-history';
 
 /**
@@ -16,11 +17,11 @@ import { syncStaffHistory } from './staff-history';
 interface DemoAccount {
   email: string;
   displayName: string;
-  /** Names this seed used before for the same account (still ours, not a real person's). */
+  /** Names this seed used before for the same account (still ours, so never refused as foreign). */
   formerNames?: readonly string[];
   role: RoleKey;
   department: string;
-  title?: string;
+  title: string;
   /** Demo account this one reports to (set by db:seed-demo-accounts, so that manager's views show the team). */
   managerEmail?: string;
 }
@@ -34,18 +35,20 @@ interface DemoAccount {
 export const MARKETING_EMPLOYEES = [
   {
     email: 'pooja.verma@example.test',
-    displayName: 'Sample Pooja Verma',
+    displayName: PEOPLE.pooja,
+    formerNames: ['Sample Pooja Verma'],
     role: 'marketing_contributor',
     department: 'MARKETING_GROWTH',
-    title: 'Marketing executive (demo account)',
+    title: 'Marketing executive',
     managerEmail: 'marketing@elevateeducation.in',
   },
   {
     email: 'rohit.saini@example.test',
-    displayName: 'Sample Rohit Saini',
+    displayName: PEOPLE.rohit,
+    formerNames: ['Sample Rohit Saini'],
     role: 'marketing_contributor',
     department: 'MARKETING_GROWTH',
-    title: 'Marketing executive (demo account)',
+    title: 'Marketing executive',
     managerEmail: 'marketing@elevateeducation.in',
   },
 ] as const satisfies readonly DemoAccount[];
@@ -66,37 +69,45 @@ export const sampleText = (s: string) => `${s} (sample).`;
  */
 export const SAMPLE_SCHAR = {
   email: 'schar.sample@example.test',
-  displayName: 'Sample Schar (fictional)',
+  displayName: PEOPLE.schar,
+  formerNames: ['Sample Schar (fictional)'],
   role: 'admissions_counsellor',
   department: 'LEADERSHIP_OPERATIONS',
-  title: 'Recipient of requests for Schar (sample)',
+  title: 'Executive assistant',
 } as const satisfies DemoAccount;
 
 export const DEMO_ACCOUNTS = [
   {
     email: 'business@elevateeducation.in',
-    displayName: 'Business administrator (demo)',
-    formerNames: ['Sample Business Demo'],
+    displayName: PEOPLE.businessLogin,
+    formerNames: ['Sample Business Demo', 'Business administrator (demo)'],
     role: 'operations_manager',
     department: 'LEADERSHIP_OPERATIONS',
+    title: 'Business administrator',
   },
   {
     email: 'hr@elevateeducation.in',
-    displayName: 'HR manager (demo)',
+    displayName: PEOPLE.hrLogin,
+    formerNames: ['HR manager (demo)'],
     role: 'hr_manager',
     department: 'HUMAN_RESOURCES',
+    title: 'HR manager',
   },
   {
     email: 'teacher@elevateeducation.in',
-    displayName: 'Sample Teacher Demo',
+    displayName: PEOPLE.teacherLogin,
+    formerNames: ['Sample Teacher Demo'],
     role: 'teacher',
     department: 'ACADEMICS',
+    title: 'Quant teacher',
   },
   {
     email: 'marketing@elevateeducation.in',
-    displayName: 'Sample Marketing Demo',
+    displayName: PEOPLE.marketingLogin,
+    formerNames: ['Sample Marketing Demo'],
     role: 'marketing_manager',
     department: 'MARKETING_GROWTH',
+    title: 'Marketing manager',
   },
   ...MARKETING_EMPLOYEES,
   SAMPLE_SCHAR,
@@ -105,44 +116,44 @@ export const DEMO_ACCOUNTS = [
 export const DEMO_EMAILS: readonly string[] = DEMO_ACCOUNTS.map((a) => a.email);
 
 /**
- * Development assumptions (brief 23 Oct 2026 §4, rulings R10 and PLAN): the teacher logins are
- * ASSUMED for local testing only, each linked to the owner-supplied staff record of that name
- * (seeded by `npm run db:seed`), with the teacher role and the same guards as the demo accounts.
- * soma@ is "Soma" (CLAT Current Affairs), NEVER "Soma Tiwari": owner to confirm. Teaching
- * assignments come from Academic's owner-assignments seed, never from the email. `db:clear-samples`
- * disables these logins and unlinks them; the staff records stay: they are real people.
+ * Development assumptions (brief 23 Oct 2026 §4, rulings R10 and PLAN): four teacher logins for
+ * local testing only, each linked to a made-up teacher (COVER_TEACHERS, owner 31 Oct 2026: "made up
+ * everything"), with the teacher role and the same guards as the demo accounts. The addresses stay
+ * because other scripts sign in with them; no real person is linked. Teaching assignments come from
+ * Academic's sample seed, never from the email. `db:clear-samples` disables these logins.
  */
+const devAccount = (email: string, staffFullName: string, formerName: string) => ({
+  email,
+  displayName: staffFullName,
+  formerNames: [formerName],
+  role: 'teacher' as const,
+  staffFullName,
+});
+const coverName = (subject: string) =>
+  COVER_TEACHERS.find((t) => (t.subjects as readonly string[]).includes(subject))!.fullName;
+
 export const DEV_ASSUMPTION_ACCOUNTS = [
-  {
-    email: 'satish@elevateeducation.in',
-    displayName: 'Satish Raghuvanshi (development assumption)',
-    role: 'teacher',
-    staffFullName: 'Satish Raghuvanshi',
-  },
-  {
-    email: 'soma@elevateeducation.in',
-    displayName: 'Soma (development assumption, owner to confirm)',
-    role: 'teacher',
-    staffFullName: 'Soma',
-  },
-  {
-    email: 'nikunjbindal@elevateeducation.in',
-    displayName: 'Nikunj Bindal (development assumption)',
-    role: 'teacher',
-    staffFullName: 'Nikunj Bindal',
-  },
-  {
-    email: 'tushar@elevateeducation.in',
-    displayName: 'Tushar Bhakte (development assumption)',
-    role: 'teacher',
-    staffFullName: 'Tushar Bhakte',
-  },
-] as const satisfies readonly {
-  email: string;
-  displayName: string;
-  role: RoleKey;
-  staffFullName: string;
-}[];
+  devAccount(
+    'satish@elevateeducation.in',
+    coverName('Class 11 Mathematics'),
+    'Satish Raghuvanshi (development assumption)',
+  ),
+  devAccount(
+    'soma@elevateeducation.in',
+    coverName('CLAT Current Affairs'),
+    'Soma (development assumption, owner to confirm)',
+  ),
+  devAccount(
+    'nikunjbindal@elevateeducation.in',
+    coverName('CUET Accountancy'),
+    'Nikunj Bindal (development assumption)',
+  ),
+  devAccount(
+    'tushar@elevateeducation.in',
+    coverName('IPM / IIM Bangalore-oriented programmes'),
+    'Tushar Bhakte (development assumption)',
+  ),
+];
 
 const DEV_EMAILS: readonly string[] = DEV_ASSUMPTION_ACCOUNTS.map((a) => a.email);
 
@@ -224,7 +235,7 @@ async function upsertDemo(db: Database, a: DemoAccount, passwordHash?: string) {
   const staff = {
     fullName: a.displayName,
     departmentId: dept?.id ?? null,
-    title: a.title ?? 'Demo account',
+    title: a.title,
     status: 'active' as const,
   };
   const [existing] = await db
@@ -340,6 +351,8 @@ export async function seedDevAssumptionAccounts(db: Database, passwordHash: stri
   }
   for (const a of DEV_ASSUMPTION_ACCOUNTS) {
     const userId = await upsertAccount(db, a, passwordHash);
+    // An older database linked this login to a real person: that record stays, without the login.
+    await db.update(staffMembers).set({ userId: null }).where(eq(staffMembers.userId, userId));
     await db
       .update(staffMembers)
       .set({ userId })
@@ -355,33 +368,16 @@ export async function disableDemoAccounts(db: Database): Promise<number> {
   const rows = await db
     .update(users)
     .set({ status: 'disabled', passwordHash: null })
-    .where(inArray(users.email, [...DEMO_EMAILS]))
+    .where(inArray(users.email, [...DEMO_EMAILS, ...DEV_EMAILS]))
     .returning({ id: users.id });
-  if (rows.length)
-    await db
-      .update(staffMembers)
-      .set({ status: 'inactive' })
-      .where(
-        inArray(
-          staffMembers.userId,
-          rows.map((r) => r.id),
-        ),
-      );
-  // Development-assumption logins: off and unlinked; the real staff record stays as it is.
-  const dev = await db
-    .update(users)
-    .set({ status: 'disabled', passwordHash: null })
-    .where(inArray(users.email, [...DEV_EMAILS]))
-    .returning({ id: users.id });
-  if (dev.length)
-    await db
-      .update(staffMembers)
-      .set({ userId: null })
-      .where(
-        inArray(
-          staffMembers.userId,
-          dev.map((r) => r.id),
-        ),
-      );
-  return rows.length + dev.length;
+  const ids = rows.map((r) => r.id);
+  if (!ids.length) return 0;
+  // A real person still linked by an older database loses the login and stays as they are.
+  const real = sql`${staffMembers.id} NOT IN (SELECT ${opsStaffProfiles.staffId} FROM ${opsStaffProfiles} WHERE ${opsStaffProfiles.isSample})`;
+  await db
+    .update(staffMembers)
+    .set({ userId: null })
+    .where(and(inArray(staffMembers.userId, ids), real));
+  await db.update(staffMembers).set({ status: 'inactive' }).where(inArray(staffMembers.userId, ids));
+  return rows.length;
 }

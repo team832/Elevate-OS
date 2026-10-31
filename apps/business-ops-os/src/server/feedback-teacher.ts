@@ -40,6 +40,7 @@ const agreedActions = (db: Database, staffId: string, summaryId?: string) =>
       dueOn: actions.dueOn,
       status: actions.status,
       agreedAt: actions.agreedAt,
+      isSample: actions.isSample,
       ownerName: staffMembers.fullName,
     })
     .from(actions)

@@ -273,12 +273,14 @@ export function teacherFacing<
     areasToImprove: string | null;
     summaryText: string | null;
     approvedAt: Date | null;
+    isSample?: boolean;
   },
 >(s: S, policy: { minGroupSize: number; showComments: boolean }) {
   const enough = s.responseCount >= policy.minGroupSize;
   const shown = readMeans(s.categoryMeans).filter((m) => m.n >= policy.minGroupSize);
   return {
     id: s.id,
+    isSample: s.isSample,
     periodStart: s.periodStart,
     periodEnd: s.periodEnd,
     approvedAt: s.approvedAt,

@@ -25,7 +25,7 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import { POOJA_EMAIL, ROHIT_EMAIL } from '@elevate/database/seed';
+import { knownPerson, POOJA_EMAIL, ROHIT_EMAIL, SAMPLE_SCHAR } from '@elevate/database/seed';
 import { addDays, type IsoDate } from '../src/domain/dates';
 import { periodOf } from '../src/domain/work-report';
 import { createTask } from '../src/server/task-create';
@@ -67,7 +67,7 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
     [DEMO]: person(DEMO_TEACHER_EMAIL),
     counsellor: person('admissions-counsellor@example.test'),
     coordinator: person('academic-coordinator@example.test'),
-    schar: person('schar.sample@example.test'),
+    schar: person(SAMPLE_SCHAR.email),
     contributor: person('marketing-contributor@example.test'),
     pooja: person(POOJA_EMAIL),
     rohit: person(ROHIT_EMAIL),
@@ -87,7 +87,7 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
   );
   const add = async (list: readonly SampleTask[], ctx: typeof c) => {
     for (const t of list)
-      if (people.has(t.owner) && !existing.has(`${t.title} (sample)`))
+      if (people.has(t.owner) && !existing.has(t.title))
         await writeSampleTask(db, t, ctx);
   };
   await add(FILL_TEACHER_TASKS, c);
@@ -95,7 +95,7 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
 
   // One draft: HR has written it and not assigned it yet (createTask keeps it a draft).
   const hr = (await seedActor(db, 'hr-manager@example.test'))!;
-  const DRAFT = 'Plan the November staff meeting (sample)';
+  const DRAFT = 'Plan the November staff meeting';
   if (named[DEMO] && !existing.has(DRAFT)) {
     const draft = await createTask(db, hr.actor, {
       title: DRAFT,
@@ -132,10 +132,10 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
   const [batch] = await db
     .select({ id: academicBatches.id, code: academicBatches.code })
     .from(academicBatches)
-    .where(eq(academicBatches.code, 'SAMPLE-IPMAT-B'));
+    .where(eq(academicBatches.code, 'IPMAT-B'));
   const tasks = await db.select().from(opsStaffTasks).where(eq(opsStaffTasks.isSample, true));
   for (const t of tasks) {
-    const text = TASK_TEXT[t.title.replace(/ \(sample\)$/, '')];
+    const text = TASK_TEXT[t.title];
     if (!text) continue;
     await db
       .update(opsStaffTasks)
@@ -175,27 +175,27 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
   const links: [string, Partial<typeof opsStaffTasks.$inferInsert>][] = [
     ['Send the weekly enquiry summary', { recurrence: 'weekly' }],
     ['Compile the weekly current-affairs notes', { recurrence: 'weekly' }],
-    ['Set the Quant practice paper for Friday', { backupStaffId: people.get('DEMO-T08')?.staffId }],
+    ['Set the Quant practice paper for Friday', { backupStaffId: people.get('EMP-T08')?.staffId }],
     [
       'Set 30 Time and Work questions for the Friday practice',
-      { backupStaffId: people.get('DEMO-T03')?.staffId },
+      { backupStaffId: people.get('EMP-T03')?.staffId },
     ],
   ];
   const [tanisha] = await db
     .select({ id: opsLeads.id })
     .from(opsLeads)
-    .where(eq(opsLeads.studentEmail, 'tanisha.sample@example.test'));
+    .where(eq(opsLeads.studentEmail, knownPerson('Tanisha').email));
   if (tanisha)
     links.push(['Call back the parents waiting for the fee structure', { leadId: tanisha.id }]);
   for (const [title, set] of links)
     await db
       .update(opsStaffTasks)
       .set(set)
-      .where(and(eq(opsStaffTasks.title, `${title} (sample)`), eq(opsStaffTasks.isSample, true)));
+      .where(and(eq(opsStaffTasks.title, title), eq(opsStaffTasks.isSample, true)));
   // Submitted before an expected deliverable was recorded: the service would have asked for evidence.
   await db.execute(sql`UPDATE ops.task_submissions s SET evidence = 'Sample shared folder; no real file (sample).'
     FROM ops.staff_tasks t WHERE t.id = s.task_id AND t.is_sample AND t.expected_deliverable IS NOT NULL AND s.evidence IS NULL`);
-  const taskOf = (title: string) => tasks.find((t) => t.title === `${title} (sample)`);
+  const taskOf = (title: string) => tasks.find((t) => t.title === title);
 
   const sampleIds = tasks.map((t) => t.id);
   for (const [work, n] of Object.entries(NOTES))
@@ -316,7 +316,7 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
       })),
     );
   }
-  const peer = named[DEMO] && people.get('DEMO-T08');
+  const peer = named[DEMO] && people.get('EMP-T08');
   const shared = taskOf('Set 30 Time and Work questions for the Friday practice');
   if (peer && shared)
     await db
@@ -356,7 +356,7 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
       .set({ relatedKind: 'task', relatedId: asked.id })
       .where(
         and(
-          eq(opsHrRequests.subject, 'Deadline of the open-house post (sample)'),
+          eq(opsHrRequests.subject, 'Deadline of the open-house post'),
           eq(opsHrRequests.isSample, true),
         ),
       );

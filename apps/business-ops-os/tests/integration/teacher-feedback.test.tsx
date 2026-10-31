@@ -8,7 +8,12 @@ import type { ReactNode } from 'react';
 import { prerender } from 'react-dom/static';
 import { eq } from 'drizzle-orm';
 import { setupTestDatabase } from '@elevate/testing';
-import { opsStudentTeacherFeedback } from '@elevate/database';
+import {
+  notifications,
+  opsStudentTeacherFeedback,
+  opsTeacherDevelopmentActions,
+  opsTeacherFeedbackSummaries,
+} from '@elevate/database';
 import * as aboutTeachers from '../../src/app/api/v1/feedback/about-teachers/route';
 import * as importsRoute from '../../src/app/api/v1/feedback/imports/route';
 import * as summariesRoute from '../../src/app/api/v1/feedback/summaries/route';
@@ -215,6 +220,29 @@ describe('scenario 13: teacher-facing feedback never carries student identities 
     expect(out).toContain('Not enough responses to show');
     expect(out).toContain('Sample: slow down for worked examples');
     expect(leaks(out)).toEqual([]);
+  });
+
+  it('sample rows show the SAMPLE DATA mark from their own flag (RL2-017)', async () => {
+    const page = () =>
+      html(<FeedbackDevelopmentBody user={f.u.teacher} base="/academic" searchParams={{}} />);
+    const mark = (isSample: boolean) =>
+      Promise.all(
+        [opsTeacherFeedbackSummaries, opsTeacherDevelopmentActions].map((t) =>
+          ctx.db.update(t).set({ isSample }).where(eq(t.teacherStaffId, f.u.teacher.staffId)),
+        ),
+      );
+    expect(await page()).not.toContain('SAMPLE DATA');
+    await mark(true);
+    expect((await page()).match(/SAMPLE DATA/g)!.length).toBeGreaterThanOrEqual(2);
+    await mark(false);
+  });
+
+  it('the notice names the period in words (RL2-012)', async () => {
+    const [n] = await ctx.db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.kind, 'feedback_summary.approved'));
+    expect(n!.body).toMatch(/^Student feedback for \d{1,2} \w+ \d{4} to \d{1,2} \w+ \d{4},/);
   });
 
   it('HR screens render every tab and record pop-up without an error state', async () => {

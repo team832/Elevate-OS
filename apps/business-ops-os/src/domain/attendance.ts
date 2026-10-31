@@ -176,6 +176,16 @@ export interface AttendanceSummary {
 export const isNoScheduleDay = (d: Pick<DerivedDay, 'status' | 'scheduled' | 'basis'>) =>
   d.status === 'unmarked' && d.scheduled === null && d.basis !== 'hr_decision';
 
+/** What a day's row says and the status filter offers: a stored status, or "No schedule", which is never stored. */
+export const SHOWN_STATUSES = [...ATTENDANCE_STATUSES, 'no_schedule'] as const;
+export type ShownStatus = (typeof SHOWN_STATUSES)[number];
+export const SHOWN_STATUS_LABELS: Record<ShownStatus, string> = {
+  ...ATTENDANCE_STATUS_LABELS,
+  no_schedule: 'No schedule',
+};
+export const shownStatus = (d: Pick<DerivedDay, 'status' | 'scheduled' | 'basis'>): ShownStatus =>
+  isNoScheduleDay(d) ? 'no_schedule' : d.status;
+
 /** Brief §14 attendance figures. Counts only; never a score or a ranking (R13). */
 export function summariseDays(days: readonly DerivedDay[]): AttendanceSummary {
   const n = (f: (d: DerivedDay) => boolean) => days.filter(f).length;

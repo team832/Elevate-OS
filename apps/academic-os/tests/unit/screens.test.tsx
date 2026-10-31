@@ -388,7 +388,7 @@ describe('Batch, support and teacher views', () => {
     expect(out).toContain('Not recorded'); // academic year / branch unknown, never blank
     // Brief §16: students as name + code only, the four assessment counts, and imported scores to review.
     expect(out).toContain(
-      '<span class="acd-day-time">STU-0001</span><a href="/academic/students/st1">Sample Riya Student</a>',
+      '<span class="acd-day-code">STU-0001</span><a href="/academic/students/st1">Sample Riya Student</a>',
     );
     for (const label of [
       'Assessments assigned',

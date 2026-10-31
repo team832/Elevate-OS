@@ -7,7 +7,6 @@ import {
   PageHeader,
   StatusBadge,
   Subnav,
-  fmtDay,
 } from '@elevate/shared-ui';
 import { attendanceWorklist } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
@@ -62,7 +61,7 @@ export default async function StudentAttendancePage({ searchParams }: { searchPa
                 : s.unmarked > 0 ? <StatusBadge tone="warning">{`${s.unmarked} not marked`}</StatusBadge>
                 : <StatusBadge tone="success">Every placed student marked</StatusBadge>,
             },
-            { key: 'go', header: '', render: (s) => <a href={MODULE_PATHS.attendance(s.id)}>{s.ended && s.unmarked > 0 ? 'Record attendance' : 'Open class'}<span className="el-visually-hidden">{` for ${s.batchCode} ${fmtDay(s.date)} ${s.startTime}`}</span></a> },
+            { key: 'go', header: '', render: (s) => <a href={MODULE_PATHS.attendance(s.id)}>{s.ended && s.unmarked > 0 ? 'Record attendance' : 'Open class'}<span className="el-visually-hidden">{` for ${s.batchCode} ${fmtSlot(s.date, s.startTime)}`}</span></a> },
           ]}
         />
       </Card>

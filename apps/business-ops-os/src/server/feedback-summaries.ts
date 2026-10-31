@@ -35,6 +35,7 @@ import type {
 import { feedbackPolicy } from './feedback-refs';
 import { defined, fieldError, opsAudit, rowById } from './ops-common';
 import { notifyHosted } from './task-links';
+import { fmtDate } from '../ui/format';
 
 const auditSummary = opsAudit('teacher_feedback_summary');
 const auditAction = opsAudit('teacher_development_action');
@@ -188,7 +189,7 @@ export async function updateSummary(
       await notifyHosted(tx, actor, await userIdsForStaff(tx, [before.teacherStaffId]), 'feedback', '/my-feedback', {
         kind: 'feedback_summary.approved',
         title: 'Your feedback summary is ready',
-        body: `Student feedback for ${before.periodStart} to ${before.periodEnd}, with agreed follow-ups.`,
+        body: `Student feedback for ${fmtDate(before.periodStart)} to ${fmtDate(before.periodEnd)}, with agreed follow-ups.`,
         entityType: 'teacher_feedback_summary',
         entityId: before.id,
       });

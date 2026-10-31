@@ -7,7 +7,7 @@ import { ack, to, type SampleReport, type SampleTask } from './sample-work';
 
 export const DEMO = 'demo-teacher';
 
-/** The demo teacher's work in every state (co-teaches Quant on SAMPLE-IPMAT-B). */
+/** The demo teacher's work in every state (co-teaches Quant on IPMAT-B). */
 export const FILL_TEACHER_TASKS: readonly SampleTask[] = [
   {
     owner: DEMO,
@@ -219,7 +219,7 @@ export const FILL_TEACHER_TASKS: readonly SampleTask[] = [
   },
 ];
 
-/** Office staff (assigned by the Sample Operations Manager). */
+/** Office staff (assigned by the sample operations manager). */
 export const FILL_OFFICE_TASKS: readonly SampleTask[] = [
   {
     owner: 'counsellor',
@@ -235,7 +235,7 @@ export const FILL_OFFICE_TASKS: readonly SampleTask[] = [
   },
   {
     owner: 'coordinator',
-    title: 'Publish next week’s timetable for the sample batches',
+    title: 'Publish next week’s timetable for the batches',
     shows: 'assigned, not acknowledged',
     source: 'manager',
     received: [0, '09:00'],
@@ -293,7 +293,7 @@ const CAT = {
   calls: 'Calls and follow-up',
 } as const;
 
-/** Every sample task's brief, by title without " (sample)". */
+/** Every sample task's brief, by title. */
 export const TASK_TEXT: Readonly<Record<string, TaskText>> = {
   'Plan the November staff meeting': {
     details: 'Agenda, room and who presents. Not assigned yet: HR is still writing it.',
@@ -417,14 +417,14 @@ export const TASK_TEXT: Readonly<Record<string, TaskText>> = {
     category: CAT.content,
     requested: 'marketing',
   },
-  'Collect CLAT quiz questions from the sample teacher': {
-    details: 'Ask the sample CLAT teacher for ten quiz questions with answers for the weekly reel.',
+  'Collect CLAT quiz questions from the CLAT teacher': {
+    details: 'Ask the CLAT teacher for ten quiz questions with answers for the weekly reel.',
     deliverable: 'Ten questions with answers',
     done: 'Ten questions, each checked by the teacher.',
     category: CAT.content,
     requested: 'marketing',
   },
-  'Tidy the sample lead follow-up list': {
+  'Tidy the lead follow-up list': {
     details:
       'Remove duplicates from the follow-up list and mark leads that have asked not to be called.',
     deliverable: 'A clean follow-up list',
@@ -552,13 +552,13 @@ export const TASK_TEXT: Readonly<Record<string, TaskText>> = {
   },
   'Call back the parents waiting for the fee structure': {
     details:
-      'Six families asked for the sample fee structure after their demo. Call and note what each decides.',
+      'Six families asked for the fee structure after their demo. Call and note what each decides.',
     deliverable: 'A note on each family',
     done: 'Every family has been reached, or the attempts are logged.',
     category: CAT.calls,
   },
-  'Publish next week’s timetable for the sample batches': {
-    details: 'Check clashes and publish next week’s timetable for the sample batches.',
+  'Publish next week’s timetable for the batches': {
+    details: 'Check clashes and publish next week’s timetable for the batches.',
     deliverable: 'Published timetable',
     done: 'No teacher or room clash remains.',
     category: CAT.admin,
@@ -788,7 +788,7 @@ export const NOTES: Readonly<
   },
 };
 
-/** The marketing employees report to the Sample Marketing Manager; no figure is claimed. */
+/** The marketing employees report to the sample marketing manager; no figure is claimed. */
 export const FILL_MARKETING_REPORTS: readonly SampleReport[] = [
   {
     owner: 'pooja',
@@ -905,7 +905,7 @@ export const FILL_REPORTS: readonly SampleReport[] = [
     plan: 'Start Algebra and the first mock.',
   },
   {
-    owner: 'DEMO-T03',
+    owner: 'EMP-T03',
     day: -2,
     submit: [-2, '18:30'],
     review: { kind: 'acknowledged', at: [-1, '09:30'] },
@@ -913,7 +913,7 @@ export const FILL_REPORTS: readonly SampleReport[] = [
     plan: 'Thirty more questions.',
   },
   {
-    owner: 'DEMO-T03',
+    owner: 'EMP-T03',
     day: -7,
     kind: 'week',
     submit: [-3, '18:00'],
@@ -921,14 +921,14 @@ export const FILL_REPORTS: readonly SampleReport[] = [
     plan: 'Friday’s paper.',
   },
   {
-    owner: 'DEMO-T01',
+    owner: 'EMP-T01',
     day: -2,
     submit: [-2, '18:00'],
     summary: 'CA Foundation classes as planned.',
     plan: 'Revision sheet for chapter 3.',
   },
   {
-    owner: 'DEMO-T01',
+    owner: 'EMP-T01',
     day: -31,
     kind: 'month',
     submit: [-27, '12:00'],
@@ -936,7 +936,7 @@ export const FILL_REPORTS: readonly SampleReport[] = [
     plan: 'Chapter 3 and its revision sheet.',
   },
   {
-    owner: 'DEMO-T07',
+    owner: 'EMP-T07',
     day: -7,
     kind: 'week',
     submit: [-2, '19:00'],

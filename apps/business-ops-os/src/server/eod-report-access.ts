@@ -8,10 +8,11 @@ import { can, grantsForRole, ROLE_KEYS } from '@elevate/authorization';
 import {
   opsEodReportVersions as versions,
   staffMembers,
+  opsEodReports as reports,
   userRoles,
   type Database,
-  type opsEodReports as reports,
 } from '@elevate/database';
+import { NotFoundError } from '@elevate/shared-contracts';
 import type { StaffMemberId, UserId } from '@elevate/shared-types';
 import type { IsoDate } from '../domain/dates';
 import { isImportedReport } from '../domain/eod';
@@ -139,6 +140,22 @@ export async function readerOf(db: Database, actor: Actor, row: Row) {
       return self;
   }
   notFound('Report');
+}
+
+/** Of these reports, the ones the reader may open: one sent to another manager stays listed on a period report, unlinked. */
+export async function openableReportIds(db: Database, actor: Actor, ids: readonly string[]) {
+  const rows = ids.length
+    ? await db.select().from(reports).where(inArray(reports.id, [...ids] as never[]))
+    : [];
+  const open = new Set<string>();
+  for (const row of rows)
+    await readerOf(db, actor, row).then(
+      () => open.add(row.id),
+      (e) => {
+        if (!(e instanceof NotFoundError)) throw e;
+      },
+    );
+  return open;
 }
 
 /**

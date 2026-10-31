@@ -33,8 +33,10 @@ import { checkAgainst, conflictContext, lockTimetable, recordCancellation, refus
 
 type Pattern = typeof academicTimetablePatterns.$inferSelect;
 const MAX_DAYS = 400;
+const NO_LAST_DATE = 'This pattern has no last date. Fill in the last date first.';
 
-async function validatePatternRefs(tx: Database, p: { batchId: string; subjectId: string; staffId: string; roomId?: string | null; effectiveFrom: string; effectiveTo: string }) {
+async function validatePatternRefs(tx: Database, p: { batchId: string; subjectId: string; staffId: string; roomId?: string | null; effectiveFrom: string; effectiveTo: string | null }) {
+  if (!p.effectiveTo) throw new ValidationError(NO_LAST_DATE);
   const [batch] = await tx.select().from(academicBatches).where(eq(academicBatches.id, p.batchId as BatchId));
   if (!batch) throw new ValidationError('Batch not found.');
   if (batch.status === 'completed' || batch.status === 'cancelled') throw new ValidationError(`Batch ${batch.code} is ${batch.status}.`);
@@ -89,13 +91,14 @@ async function loadPattern(db: Database, id: string, lock = false) {
 
 /** Occurrences of a pattern: existing session per date, closure skips, and the conflicts of each date still to be generated. */
 async function planOccurrences(db: Database, p: Pattern) {
-  const to = p.effectiveTo!;
+  const existing = new Map((await db.select({ id: academicClassSessions.id, date: academicClassSessions.date }).from(academicClassSessions).where(eq(academicClassSessions.patternId, p.id))).map((s) => [s.date, s.id as string]));
+  // No last date: the column allows it, no route writes it. Classes are never guessed, so only the ones that exist are listed.
+  const to = p.effectiveTo ?? [...existing.keys()].sort().at(-1) ?? p.effectiveFrom;
   const exclusions = await db
     .select()
     .from(academicCalendarExclusions)
     .where(and(gte(academicCalendarExclusions.date, p.effectiveFrom), lte(academicCalendarExclusions.date, to), or(isNull(academicCalendarExclusions.batchId), eq(academicCalendarExclusions.batchId, p.batchId))));
-  const existing = new Map((await db.select({ id: academicClassSessions.id, date: academicClassSessions.date }).from(academicClassSessions).where(eq(academicClassSessions.patternId, p.id))).map((s) => [s.date, s.id as string]));
-  const dates = patternDates({ weekday: p.weekday, from: p.effectiveFrom, to, batchId: p.batchId }, exclusions.map((x) => ({ date: x.date!, batchId: x.batchId, kind: x.kind, label: x.label, status: x.status })));
+  const dates = patternDates({ weekday: p.weekday, from: p.effectiveFrom, to, batchId: p.batchId }, exclusions.map((x) => ({ date: x.date!, batchId: x.batchId, kind: x.kind, label: x.label, status: x.status }))).filter((d) => p.effectiveTo || existing.has(d.date));
   const range = weekRange({ from: p.effectiveFrom, to });
   const ctx = await conflictContext(db, range.from, range.to);
   const pending = dates.filter((d) => !d.skipped && !existing.has(d.date));
@@ -155,7 +158,7 @@ export async function updateDraftPattern(db: Database, actor: Actor, id: string,
     const before = await lockDraft(tx, id, version);
     const next = { ...before, ...changes };
     if (next.effectiveFrom > next.effectiveTo!) throw new ValidationError('effectiveFrom must not be after effectiveTo.');
-    await validatePatternRefs(tx, { ...next, effectiveTo: next.effectiveTo! });
+    await validatePatternRefs(tx, next);
     const [row] = await tx
       .update(academicTimetablePatterns)
       .set({ ...(changes as Partial<Pattern>), version: before.version + 1 })
@@ -185,6 +188,7 @@ export async function publishPattern(db: Database, actor: Actor, id: string, ver
     const pattern = await loadPattern(tx, id, true);
     if (pattern.version !== version) throw new ConflictError('The pattern changed since you previewed it. Preview it again before publishing.');
     if (pattern.status === 'retired') throw new InvalidStateTransitionError('A retired pattern cannot be published.');
+    if (!pattern.effectiveTo) throw new ValidationError(NO_LAST_DATE);
     const created = await generate(tx, actor, pattern);
     if (created.length) await tellTeacher(tx, pattern, pattern.staffId, `${created.length} classes assigned to you`, `Series from ${fmtDay(pattern.effectiveFrom)} to ${fmtDay(pattern.effectiveTo)}.`);
     const [row] = await tx
@@ -210,7 +214,7 @@ export async function editSeries(db: Database, actor: Actor, id: string, input: 
     if (old.version !== input.version) throw new ConflictError('The series changed since you opened it. Reload and try again.');
     if (input.effectiveDate <= todayIst(now)) throw new ValidationError('Series changes start tomorrow at the earliest; change today’s class on its own.');
     if (input.effectiveDate < old.effectiveFrom || input.effectiveDate > old.effectiveTo!) throw new ValidationError(`The effective date must fall between ${fmtDay(old.effectiveFrom)} and ${fmtDay(old.effectiveTo)}.`);
-    const next = { batchId: old.batchId, subjectId: old.subjectId, onlineLink: old.onlineLink, staffId: (input.staffId as StaffMemberId | undefined) ?? old.staffId, roomId: input.roomId === undefined ? old.roomId : (input.roomId as never), weekday: input.weekday ?? old.weekday, startTime: input.startTime ?? old.startTime, durationMinutes: input.durationMinutes ?? old.durationMinutes, effectiveFrom: input.effectiveDate, effectiveTo: old.effectiveTo! };
+    const next = { batchId: old.batchId, subjectId: old.subjectId, onlineLink: old.onlineLink, staffId: (input.staffId as StaffMemberId | undefined) ?? old.staffId, roomId: input.roomId === undefined ? old.roomId : (input.roomId as never), weekday: input.weekday ?? old.weekday, startTime: input.startTime ?? old.startTime, durationMinutes: input.durationMinutes ?? old.durationMinutes, effectiveFrom: input.effectiveDate, effectiveTo: old.effectiveTo };
     await validatePatternRefs(tx, next);
     const later = await tx.select().from(academicClassSessions).where(and(eq(academicClassSessions.patternId, old.id), gte(academicClassSessions.date, input.effectiveDate)));
     const statusReason = `Series changed from ${fmtDay(input.effectiveDate)}: ${input.reason}`;

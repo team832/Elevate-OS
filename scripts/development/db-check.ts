@@ -2,12 +2,13 @@
  * `npm run db:check` — READ-ONLY health check of the local database: the live schema must equal
  * the code's schema (tables, columns, defaults, constraints, indexes, enums, as built by
  * createTestDb), every journal migration is applied, indexes and constraints are valid, and
- * sample rows follow D-036 (@example.test emails, no phone numbers). Refuses non-local URLs.
+ * sample rows follow D-036 (@example.test emails, phones only from the fake block). Refuses non-local URLs.
  */
 import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import { isLocalDatabaseUrl, loadEnv } from '@elevate/configuration';
 import { loadRootEnv } from '@elevate/configuration/node';
+import { FAKE_PHONE_PATTERN } from '@elevate/database/seed';
 import { createTestDb } from '@elevate/database/testing';
 
 loadRootEnv();
@@ -100,10 +101,22 @@ for (const { s, t, cols } of columns)
       );
     if (/phone|mobile|whatsapp/.test(c) && !/verified|consent|_at$/.test(c))
       await none(
-        `${s}.${t}.${c}: sample rows have no phone`,
-        `select 1 ${where} "${c}"::text <> ''`,
+        `${s}.${t}.${c}: sample phones are from the fake block`,
+        `select 1 ${where} "${c}"::text !~ '${FAKE_PHONE_PATTERN}'`,
       );
   }
+// These two have no is_sample column: they follow their owner.
+for (const [name, sql] of [
+  ['ops.guardians.phone', `select g.phone p from ops.guardians g join core.students s on s.id = g.student_id where s.is_sample`],
+  ...['personal_phone', 'emergency_contact_phone'].map((c) => [
+    `ops.staff_private_details.${c}`,
+    `select d.${c} p from ops.staff_private_details d join ops.staff_profiles f on f.staff_id = d.staff_id where f.is_sample`,
+  ]),
+] as const)
+  await none(
+    `${name}: sample phones are from the fake block`,
+    `select 1 from (${sql}) x where p is not null and p !~ '${FAKE_PHONE_PATTERN}'`,
+  );
 
 await live.query('ROLLBACK');
 await live.end();

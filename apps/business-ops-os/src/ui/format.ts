@@ -57,8 +57,9 @@ const monthYear = new Intl.DateTimeFormat('en-IN', {
 /** A `YYYY-MM` month, e.g. "October 2026". */
 export const fmtMonth = (value: string) => monthYear.format(new Date(`${value}-01T00:00:00Z`));
 
-/** Words with their own spelling (channel and payment codes). */
+/** Words with their own spelling (channel, payment and role codes). */
 const WORDS: Record<string, string> = {
+  hr: 'HR',
   upi: 'UPI',
   whatsapp: 'WhatsApp',
   sms: 'SMS',

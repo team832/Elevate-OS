@@ -8,6 +8,7 @@
  * platform seed with the test as Academic shows it.
  */
 import { opsScoreImportRows, opsScoreImports, type Database } from '@elevate/database';
+import { UNMATCHED_STUDENT } from '@elevate/database/seed';
 import { readScoreCsv, stageScoreRows, suggestScoreMapping } from '../src/domain/score-import';
 import { reviewScoreImport } from '../src/domain/score-import-validate';
 import type { TestDetail } from '../src/server/assessments';
@@ -44,7 +45,7 @@ export async function seedSampleScoreImport(db: Database, d: TestDetail, actorEm
       'present',
     ],
     [null, null, c.displayName, '22', 'present'],
-    [null, null, 'Name not on the roster', '17', 'present'],
+    [null, null, UNMATCHED_STUDENT, '17', 'present'],
   ];
   const csv = readScoreCsv(lines.map((l) => l.map(csvCell).join(',')).join('\n'));
   if (!csv.ok) throw new Error(csv.error);

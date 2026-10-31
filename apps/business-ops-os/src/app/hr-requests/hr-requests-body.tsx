@@ -106,6 +106,7 @@ async function Lists({ user, base, searchParams: sp }: BodyProps) {
             rowKey={(x) => x.id}
             rowHref={(x) => open(x.id)}
             linkColumn="subject"
+            sampleOf={(x) => x.isSample}
             empty={
               <EmptyState
                 title="You have not sent any requests"
@@ -144,6 +145,7 @@ async function Lists({ user, base, searchParams: sp }: BodyProps) {
           rowKey={(x) => x.requestId}
           rowHref={(x) => open(x.requestId)}
           linkColumn="summary"
+          sampleOf={(x) => x.isSample}
           empty={
             <EmptyState
               title="Nothing has been forwarded to you"

@@ -3,11 +3,12 @@ import type { RoleKey, StaffMemberId, UserId } from '@elevate/shared-types';
 import { departments, staffMembers, userRoles, users } from '../schema/core';
 import { coreReferenceSeeds, type SEED_DEPARTMENTS } from './core-reference';
 import { defineSeed, type SeedDefinition } from './registry';
+import { PEOPLE } from './sample-people';
 import { syncStaffHistory } from './staff-history';
 
 /**
- * One SAMPLE user per role (D-036): named "Sample <role>" so nobody mistakes them for
- * real staff; the teacher is the sample Maths teacher (Academic seeds give them Quant).
+ * One SAMPLE user per role (D-036), made-up people (./sample-people.ts); the teacher is the
+ * sample Maths teacher (Academic seeds give them Quant).
  * Email domain `example.test` is reserved, can never receive mail and is refused at
  * sign-in in production (D-030).
  */
@@ -22,7 +23,7 @@ export const SEED_USERS: readonly {
   {
     role: 'platform_admin',
     email: 'platform-admin@example.test',
-    displayName: 'Sample Platform Admin',
+    displayName: PEOPLE.platformAdmin,
     department: 'TECHNOLOGY_DATA',
     title: 'Platform administrator',
     managerRole: 'director',
@@ -30,7 +31,7 @@ export const SEED_USERS: readonly {
   {
     role: 'director',
     email: 'director@example.test',
-    displayName: 'Sample Director',
+    displayName: PEOPLE.director,
     department: 'LEADERSHIP_OPERATIONS',
     title: 'Director',
     managerRole: null,
@@ -38,7 +39,7 @@ export const SEED_USERS: readonly {
   {
     role: 'marketing_manager',
     email: 'marketing-manager@example.test',
-    displayName: 'Sample Marketing Manager',
+    displayName: PEOPLE.marketingManager,
     department: 'MARKETING_GROWTH',
     title: 'Marketing manager',
     managerRole: 'director',
@@ -46,7 +47,7 @@ export const SEED_USERS: readonly {
   {
     role: 'marketing_contributor',
     email: 'marketing-contributor@example.test',
-    displayName: 'Sample Content Contributor',
+    displayName: PEOPLE.marketingContributor,
     department: 'MARKETING_GROWTH',
     title: 'Content contributor',
     managerRole: 'marketing_manager',
@@ -54,7 +55,7 @@ export const SEED_USERS: readonly {
   {
     role: 'academic_coordinator',
     email: 'academic-coordinator@example.test',
-    displayName: 'Sample Academic Coordinator',
+    displayName: PEOPLE.academicCoordinator,
     department: 'ACADEMICS',
     title: 'Academic coordinator',
     managerRole: 'director',
@@ -62,7 +63,7 @@ export const SEED_USERS: readonly {
   {
     role: 'teacher',
     email: 'teacher@example.test',
-    displayName: 'Sample Maths Teacher',
+    displayName: PEOPLE.mathsTeacher,
     department: 'ACADEMICS',
     title: 'Maths teacher',
     managerRole: 'academic_coordinator',
@@ -70,7 +71,7 @@ export const SEED_USERS: readonly {
   {
     role: 'admissions_counsellor',
     email: 'admissions-counsellor@example.test',
-    displayName: 'Sample Counsellor',
+    displayName: PEOPLE.counsellor,
     department: 'ADMISSIONS_COUNSELLING',
     title: 'Admissions counsellor',
     managerRole: 'operations_manager',
@@ -78,7 +79,7 @@ export const SEED_USERS: readonly {
   {
     role: 'operations_manager',
     email: 'operations-manager@example.test',
-    displayName: 'Sample Operations Manager',
+    displayName: PEOPLE.operationsManager,
     department: 'LEADERSHIP_OPERATIONS',
     title: 'Operations manager',
     managerRole: 'director',
@@ -87,7 +88,7 @@ export const SEED_USERS: readonly {
     // Brief 23 Oct 2026 §5 (role Proposed): HR for teachers and marketing staff.
     role: 'hr_manager',
     email: 'hr-manager@example.test',
-    displayName: 'Sample HR Manager',
+    displayName: PEOPLE.hrManager,
     department: 'HUMAN_RESOURCES',
     title: 'HR manager',
     managerRole: 'director',
@@ -95,7 +96,7 @@ export const SEED_USERS: readonly {
   {
     role: 'auditor',
     email: 'auditor@example.test',
-    displayName: 'Sample Auditor',
+    displayName: PEOPLE.auditor,
     department: null,
     title: null,
     managerRole: null,
@@ -105,7 +106,7 @@ export const SEED_USERS: readonly {
 const usersSeed = defineSeed({
   name: 'core.users',
   module: 'platform',
-  description: 'One sample user per role ("Sample <role>", @example.test) with SEED_USER_PASSWORD',
+  description: 'One sample user per role (made-up people, @example.test) with SEED_USER_PASSWORD',
   async run({ db, seedUserPassword, hashPassword }) {
     const passwordHash = await hashPassword(seedUserPassword);
     for (const u of SEED_USERS) {

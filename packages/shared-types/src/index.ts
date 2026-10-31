@@ -13,6 +13,7 @@ export function settingFieldName(key: string) {
     .replace(/([A-Z])/g, ' $1')
     .replace(/_/g, ' ')
     .toLowerCase()
+    .replace(/\bhr\b/g, 'HR')
     .trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }

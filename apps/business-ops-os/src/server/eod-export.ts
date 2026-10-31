@@ -6,6 +6,7 @@
  */
 import { toCsv } from '@elevate/server-kit';
 import type { Database } from '@elevate/database';
+import { fmtDaysIn } from '@elevate/shared-types';
 import type { AttendanceSummary } from '../domain/attendance';
 import { eodPlainText, fmtMinutes, isEodFacts, type EodFacts } from '../domain/eod';
 import { marketingRows } from '../domain/eod-marketing';
@@ -129,7 +130,7 @@ export function factSections(f: EodFacts): { title: string; rows: FactRow[] }[] 
           {
             title: 'Deadline changes',
             rows: t.revisions.map((x) =>
-              row(x.taskId, x.title, `${x.from} → ${x.to}`, x.reason ?? 'No reason recorded'),
+              row(x.taskId, x.title, fmtDaysIn(`${x.from} → ${x.to}`), x.reason ?? 'No reason recorded'),
             ),
           },
         ]

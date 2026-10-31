@@ -1,9 +1,9 @@
 /**
  * Twelve SAMPLE teachers and the SAMPLE Academic Manager they report to (owner answer 4,
- * brief 2 §14, D-036). Display names "Sample <name>", sign-in `<first>.<last>@example.test` with
- * SEED_USER_PASSWORD (the core seed users' local mechanism; production refuses @example.test,
- * D-030). No phone or ID numbers. Subjects are fixture associations, not qualifications.
- * DEMO-T12 has no manager on purpose (the "missing manager mapping" case). The eight owner-supplied real
+ * brief 2 §14, D-036). Made-up people (seed/sample-people.ts), sign-in `<first>.<last>@example.test`
+ * with SEED_USER_PASSWORD (the core seed users' local mechanism; production refuses @example.test,
+ * D-030). Subjects are fixture associations, not qualifications.
+ * EMP-T12 has no manager on purpose (the "missing manager mapping" case). The eight owner-supplied real
  * teachers (./teachers.ts) are never used. The manager holds `academic_coordinator`: it can
  * review the EODs submitted to it (manager chain, R3) and coordinates the sample batches.
  */
@@ -17,7 +17,13 @@ import {
   users,
   type Database,
 } from '@elevate/database';
-import { defineSeed, syncStaffHistory, type SeedContext } from '@elevate/database/seed';
+import {
+  defineSeed,
+  PEOPLE,
+  syncStaffHistory,
+  TEACHER_STAFF,
+  type SeedContext,
+} from '@elevate/database/seed';
 import type { DepartmentId, RoleKey, StaffMemberId } from '@elevate/shared-types';
 import { isIsoDate, istToday } from '../src/domain/dates';
 
@@ -33,26 +39,12 @@ export function sampleAnchorDate(): string {
 
 export const SAMPLE_STAFF_LABEL = 'SAMPLE DATA — fictional staff';
 
-/** [staff code, name, subject] (owner answer 4 / brief 2 §14). */
-export const SAMPLE_TEACHER_STAFF = [
-  ['DEMO-T01', 'Aditi Mehra', 'CA Foundation Accountancy'],
-  ['DEMO-T02', 'Karan Bedi', 'Business Laws'],
-  ['DEMO-T03', 'Nisha Rao', 'Quantitative Aptitude'],
-  ['DEMO-T04', 'Dev Malhotra', 'CLAT Legal Reasoning'],
-  ['DEMO-T05', 'Isha Nair', 'English / Verbal Ability'],
-  ['DEMO-T06', 'Raghav Sethi', 'Logical Reasoning'],
-  ['DEMO-T07', 'Kavya Joshi', 'General Knowledge / Current Affairs'],
-  ['DEMO-T08', 'Arjun Menon', 'IPMAT Quantitative Aptitude'],
-  ['DEMO-T09', 'Mehul Desai', 'Economics'],
-  ['DEMO-T10', 'Tara Kapoor', 'Business Studies'],
-  ['DEMO-T11', 'Neel Shah', 'Class 11/12 Accountancy'],
-  ['DEMO-T12', 'Sanya Kulkarni', 'CUET General Test'],
-] as const;
+export const SAMPLE_TEACHER_STAFF = TEACHER_STAFF;
 export type SampleTeacherCode = (typeof SAMPLE_TEACHER_STAFF)[number][0];
-export const NO_MANAGER_CODE: SampleTeacherCode = 'DEMO-T12';
+export const NO_MANAGER_CODE: SampleTeacherCode = 'EMP-T12';
 export const SAMPLE_MANAGER = {
   email: 'academic-manager@example.test',
-  name: 'Sample Academic Manager',
+  name: PEOPLE.academicManager,
   role: 'academic_coordinator',
 } as const;
 
@@ -133,7 +125,7 @@ export async function seedSampleStaff({ db, seedUserPassword, hashPassword, log 
   for (const [code, name, subject] of SAMPLE_TEACHER_STAFF) {
     const staffId = await upsertLoginStaff(db, passwordHash, {
       email: sampleTeacherEmail(name),
-      name: `Sample ${name}`,
+      name,
       role: 'teacher',
       title: `${subject} teacher`,
       departmentId,
@@ -155,7 +147,7 @@ export const sampleStaffSeeds = [
     name: 'ops.sample-staff',
     module: 'ops',
     dependsOn: ['core.users', 'core.staff_members', 'ops.staff'],
-    description: `${SAMPLE_TEACHER_STAFF.length} sample teachers DEMO-T01…T12 with local sign-in + ${SAMPLE_MANAGER.name}`,
+    description: `${SAMPLE_TEACHER_STAFF.length} sample teachers EMP-T01…T12 with local sign-in + ${SAMPLE_MANAGER.name}`,
     run: seedSampleStaff,
   }),
 ];

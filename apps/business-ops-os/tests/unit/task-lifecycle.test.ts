@@ -440,7 +440,7 @@ describe('end-to-end report wording', () => {
           toDueTime: '17:30:00',
         },
       }),
-    ).toBe('2026-10-20 to 2026-10-22 17:30 IST');
+    ).toBe('20 Oct 2026 to 22 Oct 2026 17:30 IST');
     expect(
       eventDetail({
         ...base,

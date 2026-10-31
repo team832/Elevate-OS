@@ -31,7 +31,7 @@ export default async function PatternPage({ params }: { params: Promise<{ id: st
       <PageHeader
         title={`${WEEKDAY_NAMES[pattern.weekday - 1]} ${fmtClock(pattern.startTime)} · ${pattern.durationMinutes} min`}
         meta={<PlanBadge status={pattern.status} />}
-        description={`${fmtSpan(pattern.effectiveFrom, pattern.effectiveTo)}. ${toCreate.length} class(es) still to be created; ${occurrences.filter((o) => o.skipped).length} date(s) skipped for closures.`}
+        description={`${fmtSpan(pattern.effectiveFrom, pattern.effectiveTo, 'no last date')}. ${toCreate.length} class(es) still to be created; ${occurrences.filter((o) => o.skipped).length} date(s) skipped for closures.`}
         actions={<ButtonLink href={MODULE_PATHS.patterns}>All patterns</ButtonLink>}
       />
       <div className="el-stack">
@@ -78,7 +78,7 @@ export default async function PatternPage({ params }: { params: Promise<{ id: st
             </details>
           </Card>
         ) : null}
-        {canPublish && pattern.status === 'published' ? (
+        {canPublish && pattern.status === 'published' && pattern.effectiveTo ? (
           <Card title="Change the series from a date" description="Classes from the effective date onward move to the new time, teacher or room; earlier and delivered classes stay exactly as they were. To change one class, reschedule it from the timetable instead.">
             <ApiForm
               action={MODULE_PATHS.api(`patterns/${pattern.id}/series`)}

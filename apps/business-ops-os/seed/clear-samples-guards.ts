@@ -25,7 +25,7 @@ export class ClearSamplesRefused extends Error {
 const PRECHECKS: readonly string[] = [
   // A holiday with no branch means every branch: emptying the link would widen it.
   `SELECT 'Holiday "' || name || '" on ' || holiday_on || ' is on the sample branch; move it to a real branch first.' AS problem
-   FROM ops.holidays WHERE branch_id ${IN('s_branches')} AND name NOT LIKE 'Sample holiday%'`,
+   FROM ops.holidays WHERE branch_id ${IN('s_branches')} AND id NOT ${IN('s_holidays')}`,
   `SELECT 'Target "' || t.metric_key || '" (' || t.period_start || ' to ' || t.period_end || ') is set on sample campaign '
      || c.code || '; delete it or set it on a real campaign first.' AS problem
    FROM marketing.targets t JOIN marketing.campaigns c ON c.id = t.campaign_id

@@ -197,8 +197,15 @@ async function flagClasses(db: Database, actor: Actor, a: typeof opsLeaveApplica
     (await attendanceStaff(db, { ids: [a.staffId], who: 'teachers' })).length > 0;
   if (!teaches) return;
   const activity = await fetchTeacherActivity(a.staffId, { from, to: a.toDate });
-  const planned = activity.status === 'available' ? activity.data.sessions.planned.value : null;
-  if (planned === 0) return; // no count at all is not zero: the coordinator is asked to check
+  const count = activity.status === 'available' ? activity.data.sessions.planned : null;
+  // Academic gives this reason only when it found no class in these dates; no other missing count is zero.
+  // shortcut: reads the contract's reason text; if Academic rewords it the notice falls back to "check their classes".
+  if (
+    count?.value === 0 ||
+    (count?.status === 'missing' && count.reason === 'No teaching assignments')
+  )
+    return;
+  const planned = count?.value;
   const { fullName } = await rowById(db, staffMembers, a.staffId, 'Staff member');
   const range = leaveRange(a.fromDate, a.toDate);
   const coordinators = (await userIdsWithRole(db, 'academic_coordinator')).filter(

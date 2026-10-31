@@ -1,8 +1,8 @@
 /**
  * The ONE sample set for Business Ops development (D-036). Every record is sample data:
- * leads and students carry `is_sample` (SAMPLE DATA badge), names read "<First> Sample
- * Student" (Tanisha keeps the brief's "Tanisha Demo Student"), emails are @example.test,
- * no phone numbers exist. Sample staff come from the core seed and ./reference.ts; the
+ * leads and students carry `is_sample` (SAMPLE DATA badge); people are made up, with parents,
+ * @example.test emails and numbers no real line uses (seed/sample-people.ts). Sample staff come
+ * from the core seed and ./reference.ts; the
  * owner-supplied real teachers (./teachers.ts) are never given a class, meeting or feedback.
  * Teacher reviews of students are Academic's (owner answer 1): sample ones are seeded there.
  * Each case is walked through the real services, so history, audit and admission numbers
@@ -21,12 +21,13 @@ import {
   opsFollowUps,
   opsGuardians,
   opsLeads,
+  opsStaffProfiles,
   staffMembers,
   userRoles,
   users,
   type Database,
 } from '@elevate/database';
-import { defineSeed } from '@elevate/database/seed';
+import { defineSeed, knownPerson } from '@elevate/database/seed';
 import { withTransaction } from '@elevate/server-kit';
 import type { IsoDateTime, RoleKey, StaffMemberId, UserId } from '@elevate/shared-types';
 import { addDays, istToday, type ExitStatus, type IsoDate } from '../src/domain';
@@ -58,7 +59,6 @@ import { addGuardian, changeStudentLifecycle } from '../src/server/students';
 import { SAMPLE_LOGIN_TEACHER, SAMPLE_TEACHERS } from './reference';
 import { PROGRAMME_NAMES, sampleFee } from './sample-placeholders';
 
-export const TANISHA_EMAIL = 'tanisha.sample@example.test';
 const SAMPLE_FIGURE = 'Sample figure (development data; not a payment).';
 const thisYear = Number(istToday(new Date()).slice(0, 4));
 const SAMPLE_YEAR = `${thisYear}-${String((thisYear + 1) % 100).padStart(2, '0')}`;
@@ -100,7 +100,6 @@ interface SampleMeeting {
 
 interface SampleStudent {
   first: string;
-  name?: string;
   stage: 'class_11' | 'class_12' | 'gap_year';
   programme: keyof typeof DEMO_SUBJECTS;
   /** The case this record shows. */
@@ -133,7 +132,6 @@ const enrol = (programmes: string[]) => ({ programmes, admit: true, requestEnrol
 export const SAMPLE_STUDENTS: readonly SampleStudent[] = [
   {
     first: 'Tanisha',
-    name: 'Tanisha Demo Student',
     stage: 'class_12',
     programme: 'CLAT',
     shows:
@@ -461,7 +459,7 @@ export const SAMPLE_STUDENTS: readonly SampleStudent[] = [
   },
 ];
 
-const emailOf = (s: SampleStudent) => `${s.first.toLowerCase()}.sample@example.test`;
+const emailOf = (s: SampleStudent) => knownPerson(s.first).email;
 
 export const SAMPLE_LEAD_COUNT = SAMPLE_STUDENTS.length;
 
@@ -484,15 +482,19 @@ export async function seedActor(db: Database, email: string) {
 type Seeded = NonNullable<Awaited<ReturnType<typeof seedActor>>>;
 type Actor = Seeded['actor'];
 
-/** Sample teacher per subject (never an owner-supplied teacher). */
+/** Sample teacher per subject (never a real person who happens to share the name). */
 async function sampleTeachers(db: Database, loginTeacher: StaffMemberId) {
   const rows = await db
     .select({ id: staffMembers.id, fullName: staffMembers.fullName })
     .from(staffMembers)
+    .innerJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id))
     .where(
-      inArray(
-        staffMembers.fullName,
-        SAMPLE_TEACHERS.map(([n]) => n),
+      and(
+        eq(opsStaffProfiles.isSample, true),
+        inArray(
+          staffMembers.fullName,
+          SAMPLE_TEACHERS.map(([n]) => n),
+        ),
       ),
     );
   const byName = new Map(rows.map((r) => [r.fullName, r.id]));
@@ -525,14 +527,17 @@ export async function seedSamples(db: Database, log: (m: string) => void = () =>
 
   for (const [i, s] of SAMPLE_STUDENTS.entries()) {
     if (await leadExists(db, emailOf(s))) continue;
-    const slug = s.first.toLowerCase();
+    const person = knownPerson(s.first);
+    const parent = i % 2 ? person.father : person.mother;
     const counsellingDay = Math.min(s.days[0], 0) - 3;
     const { lead, admission } = await createLead(db, manager.actor, {
-      studentName: s.name ?? `${s.first} Sample Student`,
-      studentEmail: emailOf(s),
-      guardianName: `${s.first} Sample Parent`,
-      guardianRelationship: i % 2 ? 'father' : 'mother',
-      guardianEmail: `${slug}.parent@example.test`,
+      studentName: person.fullName,
+      studentEmail: person.email,
+      studentPhone: person.phone,
+      guardianName: parent.fullName,
+      guardianRelationship: parent.relationship,
+      guardianEmail: parent.email,
+      guardianPhone: parent.phone,
       currentStage: s.stage,
       programmeCode: s.programme,
       interestMode: 'offline',
@@ -601,9 +606,10 @@ export async function seedSamples(db: Database, log: (m: string) => void = () =>
       : null;
     if (studentId)
       await addGuardian(db, manager.actor, studentId, {
-        fullName: `${s.first} Sample Parent`,
-        relationship: i % 2 ? 'father' : 'mother',
-        email: `${slug}.parent@example.test`,
+        fullName: parent.fullName,
+        relationship: parent.relationship,
+        email: parent.email,
+        phone: parent.phone,
         preferredContact: 'email',
         consentStatus: 'given',
       } as never);
@@ -696,7 +702,7 @@ async function seedMeetingsAndFollowUps(
         );
     }
     if (!s.followUp) continue;
-    const title = `${s.followUp.title} (sample)`;
+    const { title } = s.followUp;
     if (
       await db.$count(
         opsFollowUps,
@@ -817,7 +823,7 @@ async function seedFeePlan(
   today: IsoDate,
 ) {
   const totalPaise = sampleFee(programmes);
-  const label = `${combinationLabel(programmes, PROGRAMME_NAMES)} (sample)`;
+  const label = combinationLabel(programmes, PROGRAMME_NAMES);
   const plan = await createFeePlan(db, manager.actor, {
     admissionId,
     studentId,

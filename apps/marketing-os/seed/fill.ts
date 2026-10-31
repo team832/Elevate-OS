@@ -3,7 +3,8 @@
  * and targets get real words instead of "Sample brief", and the week gets more planned work. Nothing
  * here claims a publication, a connection or a figure: published items keep their "nothing was
  * posted" evidence, observations say they were typed by hand, and the one metrics import is a file
- * whose rows were all rejected, so it adds no metric. Sample rows only; safe to run again.
+ * whose rows were all rejected, so it adds no metric (markSampleRows records it: the table has no
+ * is_sample column). Sample rows only; safe to run again.
  */
 import { createHash } from 'node:crypto';
 import { eq, inArray, sql } from 'drizzle-orm';
@@ -19,14 +20,19 @@ import {
   userRoles,
   type Database,
 } from '@elevate/database';
-import { POOJA_EMAIL, ROHIT_EMAIL, SAMPLE_MARKETING_MANAGER_EMAIL } from '@elevate/database/seed';
+import {
+  markSampleRows,
+  POOJA_EMAIL,
+  ROHIT_EMAIL,
+  SAMPLE_MARKETING_MANAGER_EMAIL,
+} from '@elevate/database/seed';
 import { addDays, toIsoDate, type IsoDate, type RoleKey, type UserId } from '@elevate/shared-types';
 import type { CalendarAction } from '../src/domain/calendar';
 import type { Actor } from '../src/server/access';
 import { actOnCalendarItem, createCalendarItem } from '../src/server/calendar';
 import { addObservation, createOptimisationItem } from '../src/server/optimisation';
 
-const SAMPLE_METRICS_FILE = 'Sample metrics export (fictional).csv';
+const METRICS_FILE = 'Instagram export, October.csv';
 const CHANNELS = {
   social_post: 'instagram',
   short_video: 'instagram',
@@ -36,7 +42,7 @@ const CHANNELS = {
   seminar: 'in_person',
 } as const;
 
-/** Calendar words by title without " (sample)": [brief, audience, programme]. */
+/** Calendar words by title: [brief, audience, programme]. */
 const CALENDAR_TEXT: Readonly<Record<string, [string, string, string]>> = {
   'CUET general test tips carousel': [
     'Five slides on how to split time across the general test. Keep each slide to one idea.',
@@ -88,8 +94,8 @@ const CALENDAR_TEXT: Readonly<Record<string, [string, string, string]>> = {
     'Class 11 commerce students and parents',
     'CLASS_11',
   ],
-  'Monday motivation from a sample teacher': [
-    'A teacher’s one-minute tip on keeping a study routine. Sample teacher only.',
+  'Monday motivation from a teacher': [
+    'A teacher’s one-minute tip on keeping a study routine.',
     'All students',
     'CLAT',
   ],
@@ -109,7 +115,7 @@ const CALENDAR_TEXT: Readonly<Record<string, [string, string, string]>> = {
 const MORE_CALENDAR: readonly [string, keyof typeof CHANNELS, string, number, CalendarAction[]][] =
   [
     ['Class 11 commerce: which stream after school', 'article', POOJA_EMAIL, 1, ['start']],
-    ['Monday motivation from a sample teacher', 'short_video', ROHIT_EMAIL, 2, ['start', 'submit']],
+    ['Monday motivation from a teacher', 'short_video', ROHIT_EMAIL, 2, ['start', 'submit']],
     ['CA Foundation fee instalment explainer', 'social_post', POOJA_EMAIL, 3, []],
     [
       'CLAT reading practice reel',
@@ -141,21 +147,21 @@ const MORE_SEO: readonly [string, string, string, string, string][] = [
 const FILLS = (programmeOf: (c: string) => string | null) => [
   sql`UPDATE marketing.campaigns SET
       audience = coalesce(audience, CASE code
-        WHEN 'SAMPLE-IPMAT-WEBINAR' THEN 'Class 12 students and parents asking about IPMAT'
-        WHEN 'SAMPLE-CLAT-CA' THEN 'CLAT aspirants in Class 11 and 12'
+        WHEN 'IPMAT-WEBINAR' THEN 'Class 12 students and parents asking about IPMAT'
+        WHEN 'CLAT-CA-SERIES' THEN 'CLAT aspirants in Class 11 and 12'
         ELSE 'Class 12 commerce students and parents' END),
       objective = CASE code
-        WHEN 'SAMPLE-IPMAT-WEBINAR' THEN 'Fill the parents’ webinar and follow up each family who registers (sample).'
-        WHEN 'SAMPLE-CLAT-CA' THEN 'Keep CLAT aspirants reading the week’s news with one post and one quiz a week (sample).'
+        WHEN 'IPMAT-WEBINAR' THEN 'Fill the parents’ webinar and follow up each family who registers (sample).'
+        WHEN 'CLAT-CA-SERIES' THEN 'Keep CLAT aspirants reading the week’s news with one post and one quiz a week (sample).'
         ELSE 'Bring families to the CA Foundation open house (sample).' END,
       channels = CASE WHEN cardinality(channels) = 0 THEN ARRAY['instagram', 'email'] ELSE channels END,
       programme_id = coalesce(programme_id, CASE code
-        WHEN 'SAMPLE-IPMAT-WEBINAR' THEN ${programmeOf('IPMAT')}::uuid
-        WHEN 'SAMPLE-CLAT-CA' THEN ${programmeOf('CLAT')}::uuid
+        WHEN 'IPMAT-WEBINAR' THEN ${programmeOf('IPMAT')}::uuid
+        WHEN 'CLAT-CA-SERIES' THEN ${programmeOf('CLAT')}::uuid
         ELSE ${programmeOf('CA_FOUNDATION')}::uuid END)
     WHERE is_sample`,
   sql`UPDATE marketing.ideas SET
-      series = coalesce(series, 'Sample series: ' || course_prefix || ' basics'),
+      series = coalesce(series, course_prefix || ' basics'),
       objective = coalesce(objective, 'Answer one question families ask often, in their words (sample).'),
       brief = coalesce(brief, coalesce(problem_need, title) || ' One clear idea, no result claims (sample).'),
       audience = CASE WHEN audience = 'Sample audience' THEN CASE course_prefix
@@ -211,7 +217,6 @@ export async function seedFillMarketing(db: Database, log: (m: string) => void =
   if (!manager) return log('marketing.fill skipped: sample manager missing');
   const codes = await db.select({ id: programmes.id, code: programmes.code }).from(programmes);
   const programmeOf = (c: string) => codes.find((p) => p.code === c)?.id ?? null;
-  for (const s of FILLS(programmeOf)) await db.execute(s);
 
   const known = await db
     .select({ title: marketingCalendarItems.title })
@@ -219,10 +224,10 @@ export async function seedFillMarketing(db: Database, log: (m: string) => void =
     .where(eq(marketingCalendarItems.isSample, true));
   const added: string[] = [];
   for (const [title, itemType, email, day, steps] of MORE_CALENDAR) {
-    if (known.some((k) => k.title === `${title} (sample)`)) continue;
+    if (known.some((k) => k.title === title)) continue;
     const owner = (await actorOf(db, email))!;
     const item = await createCalendarItem(db, owner, {
-      title: `${title} (sample)`,
+      title,
       itemType,
       ownerStaffId: owner.staffId as never,
       brief: 'To be filled below.',
@@ -253,7 +258,7 @@ export async function seedFillMarketing(db: Database, log: (m: string) => void =
     .from(marketingCalendarItems)
     .where(eq(marketingCalendarItems.isSample, true));
   for (const i of items) {
-    const text = CALENDAR_TEXT[i.title.replace(/ \((sample|sample proposal)\)$/, '')];
+    const text = CALENDAR_TEXT[i.title];
     if (!text) continue;
     await db
       .update(marketingCalendarItems)
@@ -272,11 +277,11 @@ export async function seedFillMarketing(db: Database, log: (m: string) => void =
     .where(eq(marketingOptimisationItems.isSample, true));
   const newItems: string[] = [];
   for (const [categoryKey, topic, targetQuery, platform, seen] of MORE_SEO) {
-    if (topics.some((t) => t.topic === `${topic} (sample)`)) continue;
+    if (topics.some((t) => t.topic === topic)) continue;
     const owner = (await actorOf(db, POOJA_EMAIL))!;
     const item = await createOptimisationItem(db, owner, {
-      pageUrl: `https://www.example.test/sample/${categoryKey}-${newItems.length + 2}`,
-      topic: `${topic} (sample)`,
+      pageUrl: `https://www.example.test/courses/${categoryKey}-${newItems.length + 2}`,
+      topic,
       targetQuery,
       categoryKey,
       baselineObservation: 'The page answers no common question yet. Typed by hand (sample).',
@@ -300,30 +305,36 @@ export async function seedFillMarketing(db: Database, log: (m: string) => void =
       .set({ isSample: true })
       .where(inArray(marketingOptimisationItems.id, newItems as never[]));
 
+  for (const s of FILLS(programmeOf)) await db.execute(s);
+
   // A file whose rows were all rejected: the import history has a row and no metric is invented.
   const [account] = await db
     .select({ id: marketingSocialAccounts.id })
     .from(marketingSocialAccounts)
     .limit(1);
-  if (account)
-    await db
+  if (account) {
+    const imported = await db
       .insert(marketingMetricImports)
       .values({
         accountId: account.id,
-        fileName: SAMPLE_METRICS_FILE,
-        fileSha256: createHash('sha256').update(SAMPLE_METRICS_FILE).digest('hex'),
+        fileName: METRICS_FILE,
+        fileSha256: createHash('sha256').update(METRICS_FILE).digest('hex'),
         format: 'csv',
         dateFormat: 'YYYY-MM-DD',
         capturedAt: at(-3),
         rowsTotal: 2,
         rowsAccepted: 0,
         rowsRejected: 2,
-        rejected: [
-          { row: 1, reason: 'Sample row: no real post, nothing stored.' },
-          { row: 2, reason: 'Sample row: no real post, nothing stored.' },
-        ],
+        // The shape a real import stores (src/domain/metrics-csv.ts), which the import page reads.
+        rejected: [1, 2].map((rowNumber) => ({
+          rowNumber,
+          reasons: ['Sample row: no real post, nothing stored.'],
+        })),
         importedBy: manager.id,
       } as never)
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: marketingMetricImports.id });
+    await markSampleRows(db, 'marketing.metric_imports', imported.map((r) => r.id));
+  }
   log(`marketing.fill: ${added.length} calendar item(s), ${newItems.length} SEO item(s) added`);
 }

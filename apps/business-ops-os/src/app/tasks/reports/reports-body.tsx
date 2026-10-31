@@ -1,5 +1,7 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { addDays, istToday } from '../../../domain/dates';
+import { openableReportIds } from '../../../server/eod-report-access';
+import { hasInbox } from '../../../server/eod-review';
 import { periodReportQuery } from '../../../server/eod-schemas';
 import {
   MAX_PERIOD_DAYS,
@@ -82,12 +84,19 @@ async function Report({ user, sp, base }: { user: AuthenticatedUser; sp: Params;
     departmentId: sp.departmentId || undefined,
   };
   const parsed = periodReportQuery.safeParse(params);
-  const r = await load(async (db) => ({
-    options: await reportFilterOptions(db, user),
-    report: parsed.success ? await periodReport(db, user, parsed.data) : null,
-  }));
+  const r = await load(async (db) => {
+    const report = parsed.success ? await periodReport(db, user, parsed.data) : null;
+    return {
+      options: await reportFilterOptions(db, user),
+      report,
+      // The link opens the inbox, so it needs both: the inbox itself and the right to read that report.
+      openable: (await hasInbox(db, user))
+        ? await openableReportIds(db, user, report?.revisions.map((x) => x.reportId) ?? [])
+        : new Set<string>(),
+    };
+  });
   if (!r.ok) return r.view;
-  const { options, report } = r.data;
+  const { options, report, openable } = r.data;
   const filters = <Filters q={params} options={options} action={`${tasks}/reports`} />;
   if (!report)
     return (
@@ -218,7 +227,9 @@ async function Report({ user, sp, base }: { user: AuthenticatedUser; sp: Params;
         <RecordTable
           rows={report.revisions}
           rowKey={(x) => x.reportId}
-          rowHref={(x) => `${tasks}/inbox?open=${x.reportId}`}
+          rowHref={(x) =>
+            openable.has(x.reportId) ? `${tasks}/inbox?open=${x.reportId}` : undefined
+          }
           empty="No report is waiting for a revision."
           columns={[
             { key: 'name', header: 'Person' },

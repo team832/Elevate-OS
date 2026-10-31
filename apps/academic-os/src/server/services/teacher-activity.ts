@@ -18,6 +18,7 @@ import {
   academicSubjects,
   academicTeacherReviews,
   academicTeacherUnavailability,
+  opsStaffProfiles,
   staffMembers,
   type Database,
 } from '@elevate/database';
@@ -62,7 +63,8 @@ export async function listTeachers(db: Database, actor: Actor, now = new Date())
   const recent = { from: addDays(today as IsoDate, -LOOKBACK_DAYS) as string, to: today };
   const assignments = await assignmentsOf(db, scope.kind === 'own' ? [scope.staffId!] : undefined);
   const staffIds = [...new Set(assignments.map((a) => a.staffMemberId as string))];
-  const staff = staffIds.length ? await db.select().from(staffMembers).where(inArray(staffMembers.id, staffIds as StaffMemberId[])).orderBy(asc(staffMembers.fullName)) : [];
+  // The one flag on a staff member lives on Ops's profile row (core.staff_members has none): read-only, no write crosses.
+  const staff = staffIds.length ? await db.select({ id: staffMembers.id, fullName: staffMembers.fullName, status: staffMembers.status, isSample: opsStaffProfiles.isSample }).from(staffMembers).leftJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id)).where(inArray(staffMembers.id, staffIds as StaffMemberId[])).orderBy(asc(staffMembers.fullName)) : [];
   const out = [];
   for (const s of staff) {
     const own = assignments.filter((a) => a.staffMemberId === s.id);
@@ -72,8 +74,7 @@ export async function listTeachers(db: Database, actor: Actor, now = new Date())
     out.push({
       staffId: s.id,
       name: s.fullName,
-      // shortcut: staff carry is_sample on an Ops table this module does not read, so the D-036 name rule marks them; use a flag if core.staff_members ever gets one.
-      isSample: /^Sample /.test(s.fullName),
+      isSample: s.isSample ?? false,
       /** HR ended their employment; assignments and classes stay until someone moves them. */
       left: s.status === 'inactive',
       subjects: [...new Set(mine.map((a) => a.subjectName))],

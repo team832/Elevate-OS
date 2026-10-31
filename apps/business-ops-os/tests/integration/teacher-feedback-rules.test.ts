@@ -77,6 +77,7 @@ describe('summaries', () => {
     const [shown] = (await mine(f.u.teacher)).data!.summaries;
     expect(shown).toEqual({
       id: s.id,
+      isSample: false,
       periodStart: '2026-05-01',
       periodEnd: '2026-05-28',
       approvedAt: expect.any(String),

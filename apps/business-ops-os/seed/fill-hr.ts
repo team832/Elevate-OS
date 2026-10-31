@@ -20,7 +20,13 @@ import {
   students,
   type Database,
 } from '@elevate/database';
-import { POOJA_EMAIL, ROHIT_EMAIL, SAMPLE_SCHAR } from '@elevate/database/seed';
+import {
+  PEOPLE,
+  POOJA_EMAIL,
+  ROHIT_EMAIL,
+  SAMPLE_SCHAR,
+  UNMATCHED_TEACHER,
+} from '@elevate/database/seed';
 import { addDays, istInstant, type IsoDate } from '../src/domain/dates';
 import type { HrRequestAction } from '../src/domain/hr-requests';
 import { periodOf } from '../src/domain/work-report';
@@ -43,6 +49,7 @@ const ISHA = 'isha.nair@example.test';
 const NISHA = 'nisha.rao@example.test';
 const ARJUN = 'arjun.menon@example.test';
 const RAGHAV = 'raghav.sethi@example.test';
+const ARJUN_NAME = 'Arjun Menon';
 
 type Step = [HrRequestAction | 'answer', string | null, string | null];
 interface RequestCase {
@@ -104,7 +111,7 @@ export const FILL_REQUESTS: readonly RequestCase[] = [
       [
         'forward',
         'The marketing team would like two simple percentage examples for a post. Can you share two by Friday?',
-        'Forwarded to the demo teacher.',
+        'Forwarded to the Quant teacher.',
       ],
     ],
   },
@@ -184,14 +191,15 @@ export const FILL_REQUESTS: readonly RequestCase[] = [
   },
 ];
 
+const PROJECTOR_TASK = 'Show Isha how the projector booking sheet works';
 const ORIGINAL_MESSAGES: Readonly<Record<string, string>> = {
-  'Leave on Friday afternoon (sample)':
+  'Leave on Friday afternoon':
     'I need Friday afternoon for a family function. Please tell me how to record it.',
-  'Need the CLAT batch timetable for posts (sample)':
+  'Need the CLAT batch timetable for posts':
     'To plan posts around classes I need the CLAT batch timetable for this month.',
-  'Deadline of the open-house post (sample)':
+  'Deadline of the open-house post':
     'The post is due Wednesday but the design arrives Thursday. Can the deadline move?',
-  'Question for Schar about the campus visit (sample)':
+  'Question for Schar about the campus visit':
     'Can the campus visit fall on a Saturday so that students are free to attend?',
 };
 
@@ -215,7 +223,7 @@ export async function seedFillRequests(db: Database, log: (m: string) => void = 
   const scharReady = Boolean(schar?.staffId && named.schar === schar.staffId);
   let added = 0;
   for (const r of FILL_REQUESTS) {
-    const subject = `${r.subject} (sample)`;
+    const { subject } = r;
     if (known.has(subject) || (r.to === 'schar' && !scharReady)) continue;
     const sender = (await seedActor(db, r.from))!;
     const target =
@@ -259,13 +267,18 @@ export async function seedFillRequests(db: Database, log: (m: string) => void = 
   const [fromRequest] = await db
     .select()
     .from(opsHrRequests)
-    .where(eq(opsHrRequests.subject, 'Help with the projector booking sheet (sample)'));
+    .where(
+      and(
+        eq(opsHrRequests.subject, 'Help with the projector booking sheet'),
+        eq(opsHrRequests.isSample, true),
+      ),
+    );
   const coordinator = await seedActor(db, 'academic-coordinator@example.test');
   if (fromRequest && !fromRequest.linkedTaskId && coordinator?.staffId) {
     await hrRequestAction(db, hr.actor, fromRequest.id, 'create_task', {
       hrNote: 'Coordinator to show how the sheet works.',
       task: {
-        title: 'Show Isha how the projector booking sheet works (sample)',
+        title: PROJECTOR_TASK,
         details: 'Ten minutes at the front desk; note anything on the sheet that should change.',
         staffId: coordinator.staffId,
         reviewRequired: false,
@@ -281,7 +294,7 @@ export async function seedFillRequests(db: Database, log: (m: string) => void = 
     await db
       .update(opsStaffTasks)
       .set({ isSample: true })
-      .where(eq(opsStaffTasks.title, 'Show Isha how the projector booking sheet works (sample)'));
+      .where(eq(opsStaffTasks.title, PROJECTOR_TASK));
   }
   log(`ops.fill-requests: ${added} request(s) through HR added`);
 }
@@ -318,7 +331,7 @@ const FEEDBACK_SETS: readonly {
     teacher: TEACHER,
     back: 1,
     n: 8,
-    batch: 'SAMPLE-IPMAT-B',
+    batch: 'IPMAT-B',
     summary: 'approved',
     words: {
       strengths: 'Clear explanations and good practice sheets.',
@@ -331,7 +344,7 @@ const FEEDBACK_SETS: readonly {
     teacher: TEACHER,
     back: 2,
     n: 3,
-    batch: 'SAMPLE-IPMAT-B',
+    batch: 'IPMAT-B',
     summary: 'approved',
     words: {
       strengths: 'Too few responses to say.',
@@ -343,7 +356,7 @@ const FEEDBACK_SETS: readonly {
     teacher: ARJUN,
     back: 1,
     n: 12,
-    batch: 'SAMPLE-IPMAT-A',
+    batch: 'IPMAT-A',
     summary: 'approved',
     words: {
       strengths: 'Well prepared; explains shortcuts clearly.',
@@ -355,7 +368,7 @@ const FEEDBACK_SETS: readonly {
     teacher: ISHA,
     back: 1,
     n: 6,
-    batch: 'SAMPLE-IPMAT-A',
+    batch: 'IPMAT-A',
     summary: 'draft',
     words: {
       strengths: 'Engaging reading sessions.',
@@ -367,7 +380,7 @@ const FEEDBACK_SETS: readonly {
     teacher: RAGHAV,
     back: 1,
     n: 5,
-    batch: 'SAMPLE-IPMAT-A',
+    batch: 'IPMAT-A',
     summary: 'withdrawn',
     words: {
       strengths: 'Patient with doubts.',
@@ -375,7 +388,7 @@ const FEEDBACK_SETS: readonly {
       text: 'Withdrawn: two responses belonged to the wrong batch and were corrected.',
     },
   },
-  { teacher: ADITI, back: 1, n: 2, batch: 'SAMPLE-CAF', summary: null },
+  { teacher: ADITI, back: 1, n: 2, batch: 'CAF-A', summary: null },
 ];
 
 /** [teacher, words, due in days, state, agreed]. */
@@ -425,8 +438,8 @@ export async function seedFillFeedback(db: Database, log: (m: string) => void = 
   const [committed] = await db
     .insert(opsTeacherFeedbackImports)
     .values({
-      sha256: sha('Sample feedback form export, September (fictional).csv'),
-      originalName: 'Sample feedback form export, September (fictional).csv',
+      sha256: sha('Feedback form export, September.csv'),
+      originalName: 'Feedback form export, September.csv',
       status: 'committed',
       rowsTotal: 8,
       rowsValid: 8,
@@ -451,7 +464,7 @@ export async function seedFillFeedback(db: Database, log: (m: string) => void = 
           teacherStaffId: teacher.staffId,
           studentId: student?.id ?? null,
           submittedByKind: i % 5 === 4 ? 'guardian' : 'student',
-          subjectRef: set.batch ? `${set.batch} (sample)` : null,
+          subjectRef: set.batch,
           feedbackOn: addDays(p.start, 3 + i),
           rating: score(set.n, i),
           ratingScaleMax: 5,
@@ -481,7 +494,7 @@ export async function seedFillFeedback(db: Database, log: (m: string) => void = 
           importId: committed!.id,
           rowNumber: importRow,
           raw: {
-            Teacher: 'Sample Teacher Demo',
+            Teacher: PEOPLE.teacherLogin,
             Rating: String(row!.rating),
             Comment: row!.comment,
           },
@@ -553,8 +566,8 @@ export async function seedFillFeedback(db: Database, log: (m: string) => void = 
   const [preview] = await db
     .insert(opsTeacherFeedbackImports)
     .values({
-      sha256: sha('Sample feedback form export, October (fictional).csv'),
-      originalName: 'Sample feedback form export, October (fictional).csv',
+      sha256: sha('Feedback form export, October.csv'),
+      originalName: 'Feedback form export, October.csv',
       status: 'preview',
       rowsTotal: 4,
       rowsValid: 1,
@@ -568,24 +581,24 @@ export async function seedFillFeedback(db: Database, log: (m: string) => void = 
   await db.insert(opsTeacherFeedbackImportRows).values(
     (
       [
-        ['valid', 'Sample Arjun Menon', '4', 'Clear about shortcuts (sample).', []],
+        ['valid', ARJUN_NAME, '4', 'Clear about shortcuts (sample).', []],
         [
           'invalid',
-          'Sample Arjun Menon',
+          ARJUN_NAME,
           '9',
           'Rating out of range (sample).',
           ['Ratings go from 1 to 5.'],
         ],
         [
           'duplicate',
-          'Sample Arjun Menon',
+          ARJUN_NAME,
           '4',
           'Clear about shortcuts (sample).',
           ['The same answer is on row 1.'],
         ],
         [
           'unresolved',
-          'Mr Sharma (fictional)',
+          UNMATCHED_TEACHER,
           '3',
           'Teacher name not found (sample).',
           ['No teacher matches this name.'],

@@ -1,13 +1,14 @@
 /**
  * Owner, 31 Oct 2026: Academic must look fully worked for every sample teacher and for the demo
- * login (teacher@elevateeducation.in, co-teaches Quant on SAMPLE-IPMAT-B): rooms, a published weekly
+ * login (teacher@elevateeducation.in, co-teaches Quant on IPMAT-B): rooms, a published weekly
  * pattern, recent classes with attendance and logs, logs at every stage, classes still to mark,
  * reviews (draft, submitted, withdrawn), catch-up work, support cases and availability. All on sample
  * batches and sample teachers; real teachers never appear (D-036). A class is one row per batch,
- * subject, day and hour, so running again adds nothing. Rooms carry the marker in their code.
+ * subject, day and hour, so running again adds nothing. Rooms have no is_sample column:
+ * markSampleRows records them.
  */
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   academicAttendance,
   academicBatches,
@@ -29,10 +30,10 @@ import {
   users,
   type Database,
 } from '@elevate/database';
+import { markSampleRows, samplePerson, sampleRowIds } from '@elevate/database/seed';
 import { addDays, type IsoDate } from '@elevate/shared-types';
 import { sampleAnchorDate } from './samples';
 
-const SAMPLE_ROOM_PREFIX = 'SAMPLE-';
 const DEMO = 'teacher@elevateeducation.in';
 const MANAGER = 'academic-manager@example.test';
 const mail = (who: string) => (who.includes('@') ? who : `${who}@example.test`);
@@ -42,12 +43,12 @@ const instant = (date: string, time: string, plus = 0) =>
 
 /** Regular weekly classes of the last two weeks: [batch, subject, teacher, time, days back]. */
 const STREAMS: readonly [string, string, string, string, number[]][] = [
-  ['SAMPLE-IPMAT-A', 'QUANT', 'arjun.menon', '12:30', [-13, -11, -9, -6, -4, -2]],
-  ['SAMPLE-IPMAT-A', 'VERBAL', 'isha.nair', '10:30', [-12, -10, -8, -5, -3]],
-  ['SAMPLE-IPMAT-A', 'LR', 'raghav.sethi', '15:30', [-13, -10, -6, -3]],
-  ['SAMPLE-IPMAT-A', 'DI', 'nisha.rao', '08:00', [-12, -9, -5, -2]],
-  ['SAMPLE-IPMAT-B', 'QUANT', 'arjun.menon', '14:00', [-12, -9, -5, -2]],
-  ['SAMPLE-CAF', 'ACC', 'aditi.mehra', '16:30', [-13, -11, -8, -6, -4, -1]],
+  ['IPMAT-A', 'QUANT', 'arjun.menon', '12:30', [-13, -11, -9, -6, -4, -2]],
+  ['IPMAT-A', 'VERBAL', 'isha.nair', '10:30', [-12, -10, -8, -5, -3]],
+  ['IPMAT-A', 'LR', 'raghav.sethi', '15:30', [-13, -10, -6, -3]],
+  ['IPMAT-A', 'DI', 'nisha.rao', '08:00', [-12, -9, -5, -2]],
+  ['IPMAT-B', 'QUANT', 'arjun.menon', '14:00', [-12, -9, -5, -2]],
+  ['CAF-A', 'ACC', 'aditi.mehra', '16:30', [-13, -11, -8, -6, -4, -1]],
 ];
 
 /** What a teaching log says, in turn, so logs differ from each other. */
@@ -165,24 +166,20 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
   const manager = who(MANAGER);
   if (!manager) return log('academic.fill-teaching skipped: sample manager missing');
 
-  await db
+  const newRooms = await db
     .insert(academicRooms)
-    .values(
-      [
-        ['R1', 'Sample Room 1 (fictional)', 30],
-        ['R2', 'Sample Room 2 (fictional)', 40],
-        ['HALL', 'Sample seminar hall (fictional)', 80],
-      ].map(([code, name, capacity]) => ({
-        code: `${SAMPLE_ROOM_PREFIX}${code}`,
-        name: name as string,
-        capacity: capacity as number,
-      })),
-    )
-    .onConflictDoNothing();
+    .values([
+      { code: 'R-101', name: 'Room 101', capacity: 30 },
+      { code: 'R-102', name: 'Room 102', capacity: 40 },
+      { code: 'HALL-1', name: 'Seminar hall', capacity: 80 },
+    ])
+    .onConflictDoNothing()
+    .returning({ id: academicRooms.id });
+  await markSampleRows(db, 'academic.rooms', newRooms.map((r) => r.id));
   const rooms = await db
     .select()
     .from(academicRooms)
-    .where(like(academicRooms.code, `${SAMPLE_ROOM_PREFIX}%`));
+    .where(inArray(academicRooms.id, (await sampleRowIds(db, 'academic.rooms')) as never[]));
   const roomFor = (code: string) => rooms[code.length % rooms.length]!.id;
   const batch = (code: string) => batches.find((b) => b.code === code);
   const subjects = await db
@@ -378,7 +375,7 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
     if (!b || !s || !t) continue;
     const chapters = await chaptersOf(s.id);
     const students = await rosterOf(b.id);
-    const minutes = code === 'SAMPLE-CAF' ? 60 : 75;
+    const minutes = code === 'CAF-A' ? 60 : 75;
     for (const [i, d] of days.entries()) {
       const date = day(d);
       if (isSunday(date) || known.has(`${b.id}:${s.id}:${date}:${time}`)) continue;
@@ -395,7 +392,7 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
         note: 'Taught as planned (sample).',
       });
       await mark(id, students, t.userId, instant(date, time, minutes));
-      if (!chapter || (i === days.length - 1 && code === 'SAMPLE-IPMAT-A' && subject === 'LR'))
+      if (!chapter || (i === days.length - 1 && code === 'IPMAT-A' && subject === 'LR'))
         continue; // one log still owed
       await writeLog({
         sessionId: id,
@@ -414,8 +411,8 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
 
   // The demo teacher's classes, one per stage, and its published weekly pattern.
   const demo = who(DEMO);
-  const bB = batch('SAMPLE-IPMAT-B');
-  const quant = subjectOf('SAMPLE-IPMAT-B', 'QUANT');
+  const bB = batch('IPMAT-B');
+  const quant = subjectOf('IPMAT-B', 'QUANT');
   if (demo && bB && quant) {
     const chapters = await chaptersOf(quant.id);
     const students = await rosterOf(bB.id);
@@ -443,6 +440,7 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
             startTime: '19:30',
             durationMinutes: 75,
             effectiveFrom: day(-21),
+            effectiveTo: bB.endDate ?? day(150),
             status: 'published',
             publishedAt: instant(day(-22), '12:00'),
             publishedByUserId: manager.userId,
@@ -548,11 +546,7 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
 
   // Sample rows that existed before: fill what the screens show as blank.
   const FILLS = [
-    sql`UPDATE academic.batches SET capacity = coalesce(capacity, 30), campus = coalesce(campus, 'Sikar centre (sample)') WHERE is_sample`,
-    sql`UPDATE academic.students SET
-        preferred_name = coalesce(preferred_name, split_part(full_name, ' ', 1)),
-        date_of_birth = coalesce(date_of_birth, DATE '2008-04-01' + abs(hashtext(code)) % 700)
-      WHERE is_sample`,
+    sql`UPDATE academic.batches SET capacity = coalesce(capacity, 30), campus = coalesce(campus, 'Sikar centre') WHERE is_sample`,
     sql`UPDATE academic.class_sessions s SET
         room_id = coalesce(s.room_id, ${rooms[0]!.id}::uuid),
         delivery_note = CASE WHEN s.status = 'held' THEN coalesce(s.delivery_note, 'Taught as planned (sample).') END
@@ -574,6 +568,30 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
       FROM academic.students st WHERE st.id = a.student_id AND st.is_sample AND a.status = 'absent' AND a.note IS NULL`,
   ];
   for (const s of FILLS) await db.execute(s);
+  // Students Ops handed over come with their name and contacts: the rest of the record, once.
+  for (const s of await db.select().from(academicStudents).where(eq(academicStudents.isSample, true))) {
+    const first = s.fullName.split(' ')[0]!;
+    const p = samplePerson(first);
+    if (!p) continue;
+    const parent = s.guardianRelationship === 'mother' ? p.mother : p.father;
+    const wanted = {
+      preferredName: first,
+      dateOfBirth: p.dateOfBirth,
+      schoolBoard: p.board,
+      city: p.city,
+      phone: p.phone,
+      guardianName: parent.fullName,
+      guardianRelationship: parent.relationship,
+      guardianEmail: parent.email,
+      guardianPhone: parent.phone,
+    };
+    const empty = Object.entries(wanted).filter(([k]) => s[k as keyof typeof wanted] === null);
+    if (empty.length)
+      await db
+        .update(academicStudents)
+        .set(Object.fromEntries(empty))
+        .where(eq(academicStudents.id, s.id));
+  }
 
   // Catch-up work for absences, support cases and availability, once.
   if (!(await db.$count(academicCatchupTasks))) {
@@ -637,7 +655,7 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
       'open' | 'in_progress' | 'resolved',
     ][] = [
       [
-        'SAMPLE-IPMAT-B',
+        'IPMAT-B',
         2,
         DEMO,
         'repeated_absence',
@@ -646,7 +664,7 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
         'open',
       ],
       [
-        'SAMPLE-IPMAT-B',
+        'IPMAT-B',
         3,
         DEMO,
         'declining_scores',
@@ -655,7 +673,7 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
         'in_progress',
       ],
       [
-        'SAMPLE-IPMAT-A',
+        'IPMAT-A',
         1,
         'arjun.menon',
         'low_scores',
@@ -664,7 +682,7 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
         'in_progress',
       ],
       [
-        'SAMPLE-CAF',
+        'CAF-A',
         0,
         'aditi.mehra',
         'missed_assessments',

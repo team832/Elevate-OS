@@ -8,6 +8,8 @@ import {
   ATTENDANCE_STATUSES,
   isNoScheduleDay,
   REVIEW_REASON_LABELS,
+  SHOWN_STATUS_LABELS,
+  SHOWN_STATUSES,
   type AttendanceStatus,
 } from '../../../../domain/attendance';
 import type { AttendanceRow } from '../../../../server/attendance';
@@ -40,11 +42,15 @@ const MEANING: Record<AttendanceStatus, string> = {
   weekly_off: 'Not a working day in the work schedule.',
 };
 
-const NO_SCHEDULE = 'No schedule';
-
+/** What HR may decide a day is. */
 export const statusOptions = ATTENDANCE_STATUSES.map((s) => ({
   value: s,
   label: ATTENDANCE_STATUS_LABELS[s],
+}));
+/** What the list can show: the words on its rows. */
+export const statusFilterOptions = SHOWN_STATUSES.map((s) => ({
+  value: s,
+  label: SHOWN_STATUS_LABELS[s],
 }));
 
 export function AttendanceBadge({
@@ -58,7 +64,7 @@ export function AttendanceBadge({
   scheduled?: boolean | null;
 }) {
   if (scheduled !== undefined && isNoScheduleDay({ status, scheduled, basis: basis as never }))
-    return <StatusBadge>{NO_SCHEDULE}</StatusBadge>;
+    return <StatusBadge>{SHOWN_STATUS_LABELS.no_schedule}</StatusBadge>;
   return (
     <>
       <StatusBadge tone={TONE[status]}>{ATTENDANCE_STATUS_LABELS[status]}</StatusBadge>
@@ -95,7 +101,7 @@ export function Legend() {
           </dt>
           <dd>
             No work schedule is set for this person, so the system cannot say whether this was a
-            working day. Nothing is wrong with the day. The Unmarked filter includes these days.
+            working day. Nothing is wrong with the day. The Status filter lists them under No schedule.
           </dd>
         </div>
       </dl>

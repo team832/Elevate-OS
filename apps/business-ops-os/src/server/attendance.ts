@@ -40,10 +40,11 @@ import {
   deriveDay,
   punchesByDay,
   reviewReasons,
+  shownStatus,
   summariseDays,
-  type AttendanceStatus,
   type DerivedDay,
   type ReviewReason,
+  type ShownStatus,
 } from '../domain/attendance';
 import { addDays, istInstant, istToday, type IsoDate } from '../domain/dates';
 import type { AttendanceListQuery } from './attendance-schemas';
@@ -277,13 +278,14 @@ export async function listAttendance(db: Database, actor: Actor, query: Attendan
   );
   const rows = all.filter(
     (r) =>
-      (!query.status || r.status === query.status) &&
+      (!query.status || shownStatus(r) === query.status) &&
       (!query.review || r.reasons.some((x) => query.review === '1' || x === query.review)),
   );
   rows.sort((a, b) => b.date.localeCompare(a.date) || a.staff.name.localeCompare(b.staff.name));
   const byDate = datesBetween(from, to).map((date) => {
-    const counts = {} as Record<AttendanceStatus, number>;
-    for (const r of all) if (r.date === date) counts[r.status] = (counts[r.status] ?? 0) + 1;
+    const counts = {} as Record<ShownStatus, number>;
+    for (const r of all)
+      if (r.date === date) counts[shownStatus(r)] = (counts[shownStatus(r)] ?? 0) + 1;
     return { date, counts };
   });
   const page = Number(query.page ?? 1);

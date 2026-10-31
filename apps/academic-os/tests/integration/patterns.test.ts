@@ -126,6 +126,32 @@ describe('a teacher given a series is told (FLB-003)', () => {
   });
 });
 
+describe('no last date: the column allows it, no route writes it (RL1-005)', () => {
+  const noEnd = async (startTime: string, over: Record<string, unknown> = {}) => (await ctx.db.insert(academicTimetablePatterns).values({ ...pattern({ effectiveFrom: '2099-05-01', effectiveTo: null, startTime, ...over }), createdByUserId: u.coordinator.id } as never).returning())[0]!;
+
+  it('a draft opens, plans no classes and cannot be published until it has a last date', async () => {
+    const { id } = await noEnd('15:00');
+    const patch = (json: Record<string, unknown>) => callRoute(patternRoute.PATCH, authedRequest(u.coordinator, `/academic/api/v1/patterns/${id}`, { method: 'PATCH', json }), { id });
+    const seen = await preview(id);
+    expect(seen.status).toBe(200);
+    expect(seen.data).toMatchObject({ toCreate: [], occurrences: [], check: { hard: [] } });
+    expect((await publish(u.coordinator, id, 1)).status).toBe(400);
+    expect((await patch({ startTime: '15:30', version: 1 })).status).toBe(400);
+    expect((await patch({ effectiveTo: '2099-05-31', version: 1 })).status).toBe(200);
+    expect((await preview(id)).data!.toCreate).toEqual(['2099-05-04', '2099-05-11', '2099-05-18', '2099-05-25']);
+  });
+
+  it('a published one lists only the classes it has; a series change is refused and moves nothing', async () => {
+    const { id } = await noEnd('17:00', { status: 'published', publishedAt: new Date(), publishedByUserId: u.coordinator.id });
+    const { sessions } = await createSessions(ctx.db, actor(u.coordinator), [{ batchId: w.batch.id, subjectId: w.quant.id, teacherStaffId: w.teacherStaff, sessionType: 'teaching', date: '2099-05-04', startTime: '17:00', durationMinutes: 75 }]);
+    await ctx.db.update(academicClassSessions).set({ patternId: id as never }).where(eq(academicClassSessions.id, sessions[0]!.id));
+    expect((await preview(id)).data).toMatchObject({ toCreate: [], occurrences: [{ date: '2099-05-04', sessionId: sessions[0]!.id }] });
+    await expect(editSeries(ctx.db, actor(u.coordinator), id, { effectiveDate: '2099-05-11', reason: 'Sample change', version: 1 }, new Date('2099-05-02T06:00:00Z'))).rejects.toMatchObject({ status: 400 });
+    const [kept] = await ctx.db.select().from(academicClassSessions).where(eq(academicClassSessions.id, sessions[0]!.id));
+    expect(kept!.status).toBe('scheduled');
+  });
+});
+
 describe('editing a published series from a date (test 5)', () => {
   it('delivered and earlier classes stay; later undelivered ones move to the new series', async () => {
     const coord = actor(u.coordinator);

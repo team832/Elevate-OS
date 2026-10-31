@@ -1,4 +1,6 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { createElement } from 'react';
+import { prerender } from 'react-dom/static';
 import { eq } from 'drizzle-orm';
 import { PDFDocument } from 'pdf-lib';
 import {
@@ -12,16 +14,24 @@ import {
 import {
   auditEvents,
   opsEodReports,
+  opsEodReportVersions,
   opsEodReviewEvents,
   opsStaffTasks,
   opsTaskEvents,
   opsWorkSchedules,
 } from '@elevate/database';
+import { GET as eodReportRoute } from '../../src/app/api/v1/eod-reports/[id]/route';
 import { GET as reportRoute } from '../../src/app/api/v1/task-reports/route';
+import { TaskReportsBody } from '../../src/app/tasks/reports/reports-body';
 import type { PeriodReport } from '../../src/server/task-period-report';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace() {}, push() {}, refresh() {} }),
+}));
+
 const ctx = setupTestDatabase();
+let revisedId: string;
 const ist = (day: string, time: string) => new Date(`${day}T${time}:00+05:30`);
 let manager: StaffUser;
 let lead: StaffUser;
@@ -156,6 +166,7 @@ beforeAll(async () => {
       createdBy: a.id,
     })
     .returning();
+  revisedId = revised!.id;
   await ctx.db.insert(opsEodReviewEvents).values({
     reportId: revised!.id,
     kind: 'revision_requested',
@@ -206,6 +217,46 @@ describe('team / period report', () => {
     expect((await get(manager)).data!.people.map((p) => p.staffId)).toEqual(
       expect.arrayContaining([a.staffId, b.staffId]),
     );
+  });
+
+  it('a revision row links only for who may read that report; access is not widened (RL1-006)', async () => {
+    const page = async (u: StaffUser) =>
+      new Response(
+        (
+          await prerender(
+            createElement(TaskReportsBody, {
+              user: u,
+              base: '/ops',
+              searchParams: { from: '2026-09-14', to: '2026-09-16' },
+            }),
+          )
+        ).prelude,
+      ).text();
+    const link = `/ops/tasks/inbox?open=${revisedId}`;
+    const read = (u: TestUser) =>
+      callRoute(eodReportRoute, authedRequest(u, `/ops/api/v1/eod-reports/${revisedId}`), {
+        id: revisedId,
+      });
+    // Lead manages A, but the report was not sent to Lead: listed by name, plain text, still refused.
+    expect(await page(lead)).toContain('Sample A');
+    expect(await page(lead)).not.toContain(link);
+    expect((await read(lead)).status).toBe(404);
+    // A's own report, but A has no inbox for the link to open.
+    expect(await page(a)).not.toContain(link);
+    expect(await page(manager)).toContain(link);
+
+    await ctx.db.insert(opsEodReportVersions).values({
+      reportId: revisedId as never,
+      version: 1,
+      snapshot: {},
+      narrative: { summary: null, nextDayPlan: null, notes: null },
+      sourceCutoffAt: ist('2026-09-16', '19:00'),
+      submittedByUserId: a.id,
+      submittedToStaffId: lead.staffId,
+    });
+    expect(await page(lead)).toContain(link);
+    expect((await read(lead)).status).toBe(200);
+    expect((await read(b)).status).toBe(404);
   });
 
   it('test 17: CSV and PDF downloads keep the scope and are audited', async () => {

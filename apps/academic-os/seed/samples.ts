@@ -1,7 +1,7 @@
 /**
- * Academic SAMPLE data (D-036, owner answer 4, brief 2 §14). Everything here is fictional and
- * marked `is_sample` (removed by `npm run db:clear-samples`): "<First> Sample Student" names,
- * @example.test emails, no phone numbers. Real curriculum imports are never touched.
+ * Academic SAMPLE data (D-036, owner answer 4, brief 2 §14). Everything here is made up and marked
+ * `is_sample` (removed by `npm run db:clear-samples`): names, @example.test emails and numbers no
+ * real line uses come from seed/sample-people.ts. Real curriculum imports are never touched.
  *
  *   academic.students        SAMPLE_BATCHES (6) and the sample students placed in each (31)
  *   academic.sample-teaching the sample teachers' assignments, classes around the anchor date
@@ -9,12 +9,17 @@
  *                            attendance, teaching logs, one demo attendee and teacher reviews
  *
  * Sample teachers come from the Ops seed `ops.sample-staff` (looked up by email in core.users).
- * Only courses that are not draft syllabus courses get teachers (D-051), so the six sample
- * teachers whose subjects exist only in draft syllabus courses have no assignment here.
+ * The made-up teachers of the real seven's subjects (COVER_TEACHERS) teach sample batches only.
  */
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
-import { defineSeed, DEMO_ACCOUNTS, ensureDemoStaff } from '@elevate/database/seed';
+import {
+  COVER_TEACHERS,
+  defineSeed,
+  DEMO_ACCOUNTS,
+  ensureDemoStaff,
+  knownPerson,
+} from '@elevate/database/seed';
 import {
   academicAttendance,
   academicBatches,
@@ -34,6 +39,7 @@ import {
   opsDemos,
   opsDemoSessions,
   opsLeads,
+  opsStaffProfiles,
   staffMembers,
   students as coreStudents,
   users,
@@ -51,53 +57,52 @@ export function sampleAnchorDate(): IsoDate {
 const SOURCE = 'Sample data (D-036) — fictional';
 /**
  * Sample batches and the sample students placed in each (brief 23 Oct 2026 §25: IPMAT, CLAT, CA and
- * school maths). CLAT and the Class 11/12 batches follow draft syllabus courses, so no teacher is
- * assigned to them (D-051). Students are numbered STU-DEMO0001… in this order (never reordered).
+ * school maths). Students are numbered STU-00000001… in this order (never reordered).
  */
 export const SAMPLE_BATCHES = [
   {
-    code: 'SAMPLE-IPMAT-A',
-    name: 'Sample IPMAT batch A',
+    code: 'IPMAT-A',
+    name: 'IPMAT batch A',
     course: 'IPMAT-BASE',
     minutes: 75,
     stage: 'class_12',
     students: ['Nitya', 'Advik', 'Pihu', 'Reva', 'Tejas', 'Yuvan'],
   },
   {
-    code: 'SAMPLE-IPMAT-B',
-    name: 'Sample IPMAT batch B',
+    code: 'IPMAT-B',
+    name: 'IPMAT batch B',
     course: 'IPMAT-BASE',
     minutes: 75,
     stage: 'class_12',
     students: ['Arnav', 'Kiara', 'Vivaan', 'Navya', 'Shaurya', 'Anvi'],
   },
   {
-    code: 'SAMPLE-CAF',
-    name: 'Sample CA Foundation batch',
+    code: 'CAF-A',
+    name: 'CA Foundation batch A',
     course: 'CAF-ACC-SEP27',
     minutes: 60,
     stage: 'gap_year',
     students: ['Aadhya', 'Yash', 'Ritika', 'Om', 'Samaira'],
   },
   {
-    code: 'SAMPLE-CLAT-A',
-    name: 'Sample CLAT batch A',
+    code: 'CLAT-A',
+    name: 'CLAT batch A',
     course: 'CLAT-SYL-2027',
     minutes: 60,
     stage: 'class_12',
     students: ['Prisha', 'Ayaan', 'Sara', 'Rudra', 'Inaya', 'Krish'],
   },
   {
-    code: 'SAMPLE-C11-MATH',
-    name: 'Sample Class 11 Mathematics batch',
+    code: 'COM-C11-A',
+    name: 'Class 11 Commerce batch A',
     course: 'COM-C11-2627',
     minutes: 60,
     stage: 'class_11',
     students: ['Laksh', 'Mahi', 'Veer', 'Riddhi'],
   },
   {
-    code: 'SAMPLE-C12-MATH',
-    name: 'Sample Class 12 Mathematics batch',
+    code: 'COM-C12-A',
+    name: 'Class 12 Commerce batch A',
     course: 'COM-C12-2627',
     minutes: 60,
     stage: 'class_12',
@@ -121,7 +126,7 @@ export const studentsSeed = defineSeed({
     'academic.syllabus-drafts',
     'core.users',
   ],
-  description: `${SAMPLE_BATCHES.length} sample batches + ${SAMPLE_ROSTER.length} sample students placed in them (no phones)`,
+  description: `${SAMPLE_BATCHES.length} sample batches + ${SAMPLE_ROSTER.length} sample students placed in them`,
   async run({ db }) {
     const anchor = sampleAnchorDate();
     const placedBy = await userByEmail(db, 'academic-coordinator@example.test');
@@ -156,18 +161,21 @@ export const studentsSeed = defineSeed({
       .where(eq(academicBatches.isSample, true));
     for (const [i, { first, batch: b }] of SAMPLE_ROSTER.entries()) {
       const batch = batches.find((x) => x.code === b.code);
+      const p = knownPerson(first);
       const values = {
-        code: `STU-DEMO${String(i + 1).padStart(4, '0')}`,
-        fullName: `${first} Sample Student`,
+        code: `STU-${String(i + 1).padStart(8, '0')}`,
+        fullName: p.fullName,
+        preferredName: first,
+        dateOfBirth: p.dateOfBirth,
         currentStage: b.stage,
-        schoolBoard: 'CBSE',
-        email: `${first.toLowerCase()}.sample@example.test`,
-        phone: null,
-        city: 'Sikar',
-        guardianName: `${first} Sample Parent`,
-        guardianRelationship: 'guardian',
-        guardianEmail: `${first.toLowerCase()}.parent@example.test`,
-        guardianPhone: null,
+        schoolBoard: p.board,
+        email: p.email,
+        phone: p.phone,
+        city: p.city,
+        guardianName: p.father.fullName,
+        guardianRelationship: p.father.relationship,
+        guardianEmail: p.father.email,
+        guardianPhone: p.father.phone,
         isSample: true,
       };
       const { code: _c, ...set } = values;
@@ -239,13 +247,13 @@ const MANAGER_EMAIL = 'academic-manager@example.test';
 const emailOf = (who: string) => `${who}@example.test`;
 /** [teacher, batch, subject code, role]: fixture associations, not qualifications. */
 const ASSIGNMENTS: readonly [string, BatchCode, string, 'primary' | 'co_teacher'][] = [
-  ['arjun.menon', 'SAMPLE-IPMAT-A', 'QUANT', 'primary'],
-  ['arjun.menon', 'SAMPLE-IPMAT-B', 'QUANT', 'primary'],
-  ['isha.nair', 'SAMPLE-IPMAT-A', 'VERBAL', 'primary'],
-  ['raghav.sethi', 'SAMPLE-IPMAT-A', 'LR', 'primary'],
-  ['nisha.rao', 'SAMPLE-IPMAT-A', 'DI', 'primary'],
-  ['aditi.mehra', 'SAMPLE-CAF', 'ACC', 'primary'],
-  ['neel.shah', 'SAMPLE-CAF', 'ACC', 'co_teacher'],
+  ['arjun.menon', 'IPMAT-A', 'QUANT', 'primary'],
+  ['arjun.menon', 'IPMAT-B', 'QUANT', 'primary'],
+  ['isha.nair', 'IPMAT-A', 'VERBAL', 'primary'],
+  ['raghav.sethi', 'IPMAT-A', 'LR', 'primary'],
+  ['nisha.rao', 'IPMAT-A', 'DI', 'primary'],
+  ['aditi.mehra', 'CAF-A', 'ACC', 'primary'],
+  ['neel.shah', 'CAF-A', 'ACC', 'co_teacher'],
 ];
 export const SAMPLE_TEACHING_EMAILS = [
   ...new Set([...ASSIGNMENTS.map(([t]) => emailOf(t)), MANAGER_EMAIL]),
@@ -272,7 +280,7 @@ interface SampleSession {
 export const SAMPLE_SESSIONS: readonly SampleSession[] = [
   {
     key: 'q1',
-    batch: 'SAMPLE-IPMAT-A',
+    batch: 'IPMAT-A',
     subject: 'QUANT',
     teacher: 'arjun.menon',
     day: -1,
@@ -283,7 +291,7 @@ export const SAMPLE_SESSIONS: readonly SampleSession[] = [
   },
   {
     key: 'v1',
-    batch: 'SAMPLE-IPMAT-A',
+    batch: 'IPMAT-A',
     subject: 'VERBAL',
     teacher: 'isha.nair',
     day: -1,
@@ -295,7 +303,7 @@ export const SAMPLE_SESSIONS: readonly SampleSession[] = [
   },
   {
     key: 'lr1',
-    batch: 'SAMPLE-IPMAT-A',
+    batch: 'IPMAT-A',
     subject: 'LR',
     teacher: 'raghav.sethi',
     day: 0,
@@ -305,7 +313,7 @@ export const SAMPLE_SESSIONS: readonly SampleSession[] = [
   },
   {
     key: 'qb1',
-    batch: 'SAMPLE-IPMAT-B',
+    batch: 'IPMAT-B',
     subject: 'QUANT',
     teacher: 'arjun.menon',
     day: 0,
@@ -314,7 +322,7 @@ export const SAMPLE_SESSIONS: readonly SampleSession[] = [
   },
   {
     key: 'q2',
-    batch: 'SAMPLE-IPMAT-A',
+    batch: 'IPMAT-A',
     subject: 'QUANT',
     teacher: 'arjun.menon',
     day: 0,
@@ -323,7 +331,7 @@ export const SAMPLE_SESSIONS: readonly SampleSession[] = [
   },
   {
     key: 'acc1',
-    batch: 'SAMPLE-CAF',
+    batch: 'CAF-A',
     subject: 'ACC',
     teacher: 'aditi.mehra',
     coTeacher: 'neel.shah',
@@ -333,7 +341,7 @@ export const SAMPLE_SESSIONS: readonly SampleSession[] = [
   },
   {
     key: 'di1',
-    batch: 'SAMPLE-IPMAT-A',
+    batch: 'IPMAT-A',
     subject: 'DI',
     teacher: 'nisha.rao',
     day: 1,
@@ -342,7 +350,7 @@ export const SAMPLE_SESSIONS: readonly SampleSession[] = [
   },
   {
     key: 'qb2',
-    batch: 'SAMPLE-IPMAT-B',
+    batch: 'IPMAT-B',
     subject: 'QUANT',
     teacher: 'arjun.menon',
     day: 2,
@@ -370,7 +378,7 @@ async function sampleDemoClass(db: Database) {
     .innerJoin(coreStudents, eq(coreStudents.id, opsAdmissions.studentId))
     .where(
       and(
-        eq(opsLeads.studentEmail, 'diya.sample@example.test'),
+        eq(opsLeads.studentEmail, knownPerson('Diya').email),
         eq(opsDemoSessions.sessionNumber, 3),
         eq(opsLeads.isSample, true),
       ),
@@ -433,10 +441,28 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
     DEMO_ACCOUNTS.filter((a) => a.role === 'teacher'),
     manager.staffId,
   );
+  const cover = await db
+    .select({ id: staffMembers.id, name: staffMembers.fullName })
+    .from(staffMembers)
+    .innerJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id))
+    .where(
+      and(
+        eq(opsStaffProfiles.isSample, true),
+        inArray(
+          staffMembers.fullName,
+          COVER_TEACHERS.map((t) => t.fullName),
+        ),
+      ),
+    );
   const teaching = [
     ...ASSIGNMENTS.map(([t, b, s, role]) => [who(t).staffId, b, s, role] as const),
     ...[...demoTeacher.values()].map(
-      (d) => [d.staffId, 'SAMPLE-IPMAT-B', 'QUANT', 'co_teacher'] as const,
+      (d) => [d.staffId, 'IPMAT-B', 'QUANT', 'co_teacher'] as const,
+    ),
+    ...cover.flatMap((c) =>
+      COVER_TEACHERS.find((t) => t.fullName === c.name)!.assignments.map(
+        ([b, s, role]) => [c.id, b, s, role] as const,
+      ),
     ),
   ];
   for (const [staffMemberId, b, s, role] of teaching) {
@@ -480,7 +506,7 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
     .innerJoin(academicStudents, eq(academicStudents.id, academicEnrolments.studentId))
     .where(
       and(
-        eq(academicBatchPlacements.batchId, batch('SAMPLE-IPMAT-A').id),
+        eq(academicBatchPlacements.batchId, batch('IPMAT-A').id),
         isNull(academicBatchPlacements.endDate),
       ),
     )
@@ -500,11 +526,11 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
   const sessions: (SampleSession & { date: string })[] = [
     ...SAMPLE_SESSIONS.map((s) => ({ ...s, date: addDays(anchor, s.day) })),
     // Diya's demo day 3 on an Academic roster (owner answer 3); only when it falls in the batch.
-    ...(demo && demoDate! >= batch('SAMPLE-IPMAT-A').startDate!
+    ...(demo && demoDate! >= batch('IPMAT-A').startDate!
       ? [
           {
             key: 'demo',
-            batch: 'SAMPLE-IPMAT-A' as const,
+            batch: 'IPMAT-A' as const,
             subject: 'LR',
             teacher: 'raghav.sethi',
             day: 0,
@@ -639,7 +665,7 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
     review('arjun.menon', {
       academicStudentId: p1!.studentId,
       enrolmentId: p1!.enrolmentId,
-      subjectId: subjectOf('SAMPLE-IPMAT-A', 'QUANT'),
+      subjectId: subjectOf('IPMAT-A', 'QUANT'),
       sessionId: ids.get('q1') as never,
       periodFrom: addDays(anchor, -14),
       periodTo: addDays(anchor, -1),
@@ -653,7 +679,7 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
     review('isha.nair', {
       academicStudentId: p2!.studentId,
       enrolmentId: p2!.enrolmentId,
-      subjectId: subjectOf('SAMPLE-IPMAT-A', 'VERBAL'),
+      subjectId: subjectOf('IPMAT-A', 'VERBAL'),
       strengths: 'Draft — not yet submitted (sample).',
     }),
     ...(demo && ids.has('demo')
@@ -663,7 +689,7 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
             coreStudentId: demo.coreStudentId!,
             opsDemoSessionId: demo.id,
             sessionId: ids.get('demo') as never,
-            subjectId: subjectOf('SAMPLE-IPMAT-A', 'LR'),
+            subjectId: subjectOf('IPMAT-A', 'LR'),
             strengths: 'Followed the arrangement puzzles well in the demo class (sample).',
             status: 'submitted' as const,
             submittedAt: instant(demoDate!, '20:00'),

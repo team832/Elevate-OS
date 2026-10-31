@@ -226,7 +226,7 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
           <ul className="acd-day">
             {day.students.map((s) => (
               <li key={s.id}>
-                <span className="acd-day-time">{s.code}</span>
+                <span className="acd-day-code">{s.code}</span>
                 <a href={MODULE_PATHS.student(s.id)}>{s.fullName}</a>
                 {s.isSample ? <span className="el-badge el-badge-sample">Sample data</span> : null}
               </li>

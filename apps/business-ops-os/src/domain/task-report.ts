@@ -2,6 +2,7 @@
  * End-to-end task report wording (brief 2 §12B): one chronology of dated events and work
  * updates, in words. Pure; shared by the task page, the PDF and the CSV.
  */
+import { fmtDay } from '@elevate/shared-types';
 import type { EventStatus } from './eod';
 import { TASK_STATUS_LABELS, type TaskEventKind } from './staff-tasks';
 import { minutesOf, type WorkEntry } from './task-lifecycle';
@@ -45,7 +46,7 @@ const RETIRED_LABELS: Record<string, string> = { blocked: 'Blocked', on_hold: 'O
 const status = (s: EventStatus | null) =>
   s ? ((TASK_STATUS_LABELS as Record<string, string>)[s] ?? RETIRED_LABELS[s]) : null;
 const dueText = (day: string | undefined, time: string | null | undefined) =>
-  `${day ?? '—'}${time ? ` ${time.slice(0, 5)} IST` : ''}`;
+  `${fmtDay(day)}${time ? ` ${time.slice(0, 5)} IST` : ''}`;
 
 export interface ReportEvent {
   kind: TaskEventKind;

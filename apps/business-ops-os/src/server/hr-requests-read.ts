@@ -330,6 +330,7 @@ export async function listForwardedToMe(db: Database, actor: Actor) {
       status: requests.status,
       urgency: requests.urgency,
       category: requests.category,
+      isSample: requests.isSample,
     })
     .from(events)
     .innerJoin(requests, eq(requests.id, events.requestId))

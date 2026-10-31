@@ -16,6 +16,7 @@ import {
   opsWorkSchedules,
 } from '@elevate/database';
 import { setupTestDatabase } from '@elevate/testing';
+import { isNoScheduleDay } from '../../src/domain/attendance';
 import { addDays, istInstant, istToday } from '../../src/domain/dates';
 import { listAttendance } from '../../src/server/attendance';
 import { decideCorrection, requestCorrection } from '../../src/server/attendance-corrections';
@@ -120,6 +121,26 @@ describe('HR attendance tabs', () => {
 
   it('staff without everyone-access cannot load the HR tabs', async () => {
     await expect(attendanceSetup(ctx.db, teacher)).rejects.toThrow(/every staff member/);
+  });
+});
+
+describe('the status filter', () => {
+  it('matches the words on the rows: Unmarked and No schedule are apart, and so are the chart counts (RL2-016)', async () => {
+    const day = (status: 'unmarked' | 'no_schedule') =>
+      listAttendance(ctx.db, hr, { from: D, to: D, status });
+    await ctx.db.update(opsWorkSchedules).set({ isDefault: false });
+    try {
+      const none = await day('no_schedule');
+      expect(none.total).toBeGreaterThan(0);
+      expect(none.items.every(isNoScheduleDay)).toBe(true);
+      expect(none.byDate[0]!.counts.no_schedule).toBe(none.total);
+      expect((await day('unmarked')).items.filter(isNoScheduleDay)).toEqual([]);
+    } finally {
+      await ctx.db.update(opsWorkSchedules).set({ isDefault: true });
+    }
+    const scheduled = await day('unmarked');
+    expect(scheduled.total).toBeGreaterThan(0);
+    expect((await day('no_schedule')).total).toBe(0);
   });
 });
 

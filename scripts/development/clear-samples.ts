@@ -37,6 +37,10 @@ try {
   console.log(
     `db:clear-samples — ${await disableDemoAccounts(handle.db)} demo account(s) switched off.`,
   );
+  // The test database holds made-up teachers only; a real database needs the real ones back.
+  console.log(
+    'db:clear-samples — next, for real use: node db/seed-reference.mjs --confirm-database <name> --include owner-staff (from source: npx tsx scripts/release/seed-reference.ts with the same options) brings back the real teachers with no sample history.',
+  );
 } catch (error) {
   console.error(
     error instanceof ClearSamplesRefused
