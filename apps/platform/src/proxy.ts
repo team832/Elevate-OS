@@ -47,5 +47,10 @@ export const config = {
   matcher: [
     // Everything except API routes, Next internals, static files (favicon, icon) and the module zones.
     '/((?!api/|_next/|favicon\\.ico|icon\\.svg|robots\\.txt|marketing(?:/|$)|academic(?:/|$)|ops(?:/|$)).*)',
+    // A form posted to a skipped path is a server action to Next: without this, a 500 or 409 and a logged stack.
+    {
+      source: '/((?:_next/|favicon\\.ico|icon\\.svg|robots\\.txt).*)',
+      has: [{ type: 'header', key: 'content-type', value: 'multipart/form-data.*' }],
+    },
   ],
 };

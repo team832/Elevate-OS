@@ -12,6 +12,7 @@ import { getPunchImport, listPunchImports } from '../../../server/attendance-imp
 import { aiBlocked } from '../../../server/ai-drafts';
 import { attendanceSetup } from '../../../server/attendance-lists';
 import { ActionForm } from '../../../ui/action-form';
+import { fmtDate } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref, Pager } from '../../../ui/list-controls';
 import { API, BASE, DaysTab } from './_components/days';
@@ -142,7 +143,7 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
                           extra={{ decision: 'approved' }}
                           submitLabel="Approve"
                           successText="Approved."
-                          labelSuffix={` — ${c.staffName}, ${c.workDate}`}
+                          labelSuffix={` — ${c.staffName}, ${fmtDate(c.workDate)}`}
                           compact
                         />
                         <details>
@@ -152,7 +153,7 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
                             extra={{ decision: 'rejected' }}
                             submitLabel="Reject request"
                             variant="danger"
-                            labelSuffix={` — ${c.staffName}, ${c.workDate}`}
+                            labelSuffix={` — ${c.staffName}, ${fmtDate(c.workDate)}`}
                             fields={[
                               {
                                 name: 'note',

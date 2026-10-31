@@ -7,6 +7,7 @@ Without a valid session, `/` shows the public Elevate Education front page (`src
 
 ## Release and rewrites (31 Oct 2026)
 - Rewrites exclude `/*/api/internal/**`, which answer 404 here (HAT-004). The rewrites are not a go-live gateway (F-05, `docs/RELEASE.md`).
+- Unknown paths under `/api/` answer a JSON 404, or 403 cross-site (`src/app/api/[...unknown]/route.ts`, D-124).
 - `apps/platform/tests/integration/` holds the package and seed checks: `release-package.test.ts`, `reference-seed.test.ts`, `reseed-keeps-edits.test.ts`, `student-exit-loop.test.ts`.
 
 ## Users & roles additions (23 Oct 2026, D-080, D-090)

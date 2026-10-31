@@ -136,7 +136,7 @@ export async function taskDaySummary(db: Database, actor: Actor, now = new Date(
       )
       .limit(1),
   ]);
-  return { day, asOf: now, ...c!, eod: eod?.status ?? ('not_started' as const) };
+  return { day, asOf: now, staffId, ...c!, eod: eod?.status ?? ('not_started' as const) };
 }
 
 /** Staff fields that must name an active staff member when given. */

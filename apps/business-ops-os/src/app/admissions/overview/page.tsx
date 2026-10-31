@@ -7,7 +7,6 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import type { Metric } from '@elevate/shared-contracts';
 import { EmptyState, JourneyRail, PageHeader, type JourneyStage } from '@elevate/shared-ui';
-import { DEMO_VIEWS } from '../../../domain/demos';
 import { FEE_CHARGE_CATEGORIES, FEE_CHARGE_LABELS } from '../../../domain/fees';
 import { ONBOARDING_STATUS_LABELS } from '../../../domain/onboarding';
 import { buildAdmissionsOverview } from '../../../server/admissions-overview';
@@ -141,10 +140,7 @@ async function Overview({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
               label="Follow-ups due"
               value={list.followUpsDue}
               note="Due today or overdue"
-              href={demoList({
-                followUp: 'due',
-                view: DEMO_VIEWS.find((v) => list.followUpsDueByView[v] > 0) ?? 'current',
-              })}
+              href={demoList({ followUp: 'due', view: 'all' })}
             />
           </li>
         ) : null}

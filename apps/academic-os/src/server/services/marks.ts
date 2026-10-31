@@ -132,7 +132,8 @@ export async function enterMarks(db: Database, actor: Actor, assessmentId: strin
     const scope = await assertCanMark(tx, actor, a);
     if (a.status === 'cancelled') throw new InvalidStateTransitionError('The assessment is cancelled.');
     if (a.rosterSnapshotAt) {
-      const reason = canCorrect(actor) ? input.marks.find((m) => m.reason)?.reason : undefined;
+      const rowReasons = canCorrect(actor) ? Object.fromEntries(input.marks.flatMap((m) => (m.reason ? [[m.studentId, m.reason]] : []))) : {};
+      const reason = [...new Set(Object.values(rowReasons))].join('; ') || undefined;
       if (a.status === 'finalised' && !reason) throw new InvalidStateTransitionError(canCorrect(actor) ? 'Results are final: say why the mark changes under Reason for the change; nothing was saved.' : 'Results are final: ask the academic coordinator to change this mark; nothing was saved.');
       const rows = input.marks.map(({ studentId, version, state, manualScore }) => {
         if (state === 'withheld') throw new ValidationError('This test’s roster is managed in Tests and Mock Tests: a result cannot be withheld here.');
@@ -140,7 +141,7 @@ export async function enterMarks(db: Database, actor: Actor, assessmentId: strin
       });
       const visible = await markStudentIds(tx, scope, a);
       if (visible && rows.some((r) => !visible.includes(r.studentId))) throw new NotFoundError('Student not found.');
-      const result = await recordScoresLocked(tx, actor, a, { source: 'manual', overwriteVerified: Boolean(reason), reason, rows }).catch((error) => {
+      const result = await recordScoresLocked(tx, actor, a, { source: 'manual', overwriteVerified: Boolean(reason), reason, rowReasons, rows }).catch((error) => {
         if (error instanceof ConflictError && (error.details as { overwriteRequired?: unknown })?.overwriteRequired)
           throw new ConflictError(canCorrect(actor) ? 'This mark is verified. Say why it changes under Reason for the change; nothing was saved.' : 'This mark is verified. Ask the academic coordinator to change it; nothing was saved.', { details: error.details });
         throw error;

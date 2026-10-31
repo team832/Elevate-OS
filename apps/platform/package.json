@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Elevate OS integrated shell (port 3000): sign-in, home, consolidated views, and rewrites to the three module zones.",
+  "description": "Elevate OS integrated shell (port 3003): sign-in, home, consolidated views, and rewrites to the three module zones.",
   "exports": {
     "./seed": "./seed/index.ts"
   },

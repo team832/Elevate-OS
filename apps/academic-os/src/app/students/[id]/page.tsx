@@ -15,7 +15,7 @@ import { getStudentProgress, getStudentRecord, listStaff } from '../../../server
 import { modulePath } from '../../../domain';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
-import { StateBadge, programmeName } from '../../../ui/badges';
+import { StateBadge, programmeName, words } from '../../../ui/badges';
 import { placementNote } from '../../../ui/batch-tabs';
 import { InterventionsTable } from '../../../ui/interventions';
 import { AcademicShell, LoadError, actorFor, gate, load, workspaceLink } from '../../../ui/shell';
@@ -48,7 +48,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
       <PageHeader
         title={s.fullName}
         meta={<><StateBadge state={s.status} /> <SourceBadge source={s.isSample ? 'sample' : 'live'} /> <span className="el-field-hint">{s.code}</span></>}
-        description={`${s.currentStage ?? 'Stage not recorded'}${s.contactsHidden ? ' · contact details hidden for your role' : ''}`}
+        description={`${s.currentStage ? words(s.currentStage) : 'Stage not recorded'}${s.contactsHidden ? ' · contact details hidden for your role' : ''}`}
         actions={<>{opsHref ? <a href={opsHref}>Admission, KYC and fees in Business Operations</a> : null} <a href={`${modulePath('reviews')}?academicStudentId=${s.id}`}>Teacher reviews</a> <ButtonLink href={MODULE_PATHS.students}>All students</ButtonLink></>}
       />
       <div className="el-stack">

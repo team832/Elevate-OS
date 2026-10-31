@@ -10,7 +10,7 @@ import { can } from '@elevate/authorization';
 import { Alert, ButtonLink, EmptyState, PageHeader, Tabs, type Column } from '@elevate/shared-ui';
 import { z } from 'zod';
 import { istToday } from '../../domain';
-import { DEMO_OUTCOMES, DEMO_VIEWS, type DemoView } from '../../domain/demos';
+import { DEMO_LIST_VIEWS, DEMO_OUTCOMES, type DemoListView } from '../../domain/demos';
 import { listDemos, type DemoSummary } from '../../server/demos';
 import { DEMO_SORTS, demoListQuery, type DemoListQuery } from '../../server/demos-schemas';
 import { formOptions } from '../../server/options';
@@ -185,10 +185,11 @@ const SORT_LABELS: Record<(typeof DEMO_SORTS)[number], string> = {
   recent: 'Recently booked',
 };
 
-const EMPTY: Record<DemoView, [title: string, description: string]> = {
+const EMPTY: Record<DemoListView, [title: string, description: string]> = {
   current: ['No demo is running', 'An upcoming demo moves here on the day of its first class.'],
   upcoming: ['No upcoming demos', 'Book one for a student who has finished counselling.'],
   previous: ['No finished demos yet', 'A demo moves here when its outcome is recorded.'],
+  all: ['No demo students yet', 'Book a demo for a student who has finished counselling.'],
 };
 
 const hint = (text: string) => (
@@ -303,10 +304,11 @@ const COLUMNS = {
 } satisfies Record<string, Column<DemoSummary>>;
 
 /** Six columns per tab so every one fits; the rest is in the pop-up. */
-const VIEW_COLUMNS: Record<DemoView, (keyof typeof COLUMNS | 'followUp' | 'student')[]> = {
+const VIEW_COLUMNS: Record<DemoListView, (keyof typeof COLUMNS | 'followUp' | 'student')[]> = {
   current: ['student', 'programme', 'classes', 'teachers', 'checklist', 'followUp'],
   upcoming: ['student', 'firstSession', 'programme', 'teachers', 'setup', 'followUp'],
   previous: ['student', 'outcome', 'attended', 'checklist', 'conversion', 'reason'],
+  all: ['student', 'firstSession', 'programme', 'teachers', 'checklist', 'followUp'],
 };
 /** The column each offered sort orders by; "Recently booked" has none on screen. */
 const SORTED_COLUMN: Partial<Record<(typeof DEMO_SORTS)[number], string>> = {
@@ -330,7 +332,6 @@ async function DemoList({
   if (!r.ok) return r.view;
   const [list, opts] = r.data;
   const { view, kpis } = list;
-  const dueView = DEMO_VIEWS.find((v) => kpis.followUpsDueByView[v] > 0) ?? view;
   const tiles: [string, number, string, Params][] = [
     ['Current demos', kpis.current, 'First class on or before today', { view: 'current' }],
     ['Upcoming demos', kpis.upcoming, 'No class has started yet', { view: 'upcoming' }],
@@ -338,7 +339,7 @@ async function DemoList({
       'Follow-ups due',
       kpis.followUpsDue,
       'Due today or overdue; opens the list of them',
-      { followUp: 'due', view: dueView },
+      { followUp: 'due', view: 'all' },
     ],
     [
       'Conversions this month',
@@ -350,10 +351,7 @@ async function DemoList({
       'Admissions pending decision',
       kpis.pendingDecision,
       'Demo students whose case awaits the admission decision',
-      {
-        stage: 'admission_pending',
-        view: DEMO_VIEWS.find((v) => kpis.pendingDecisionByView[v] > 0) ?? view,
-      },
+      { stage: 'admission_pending', view: 'all' },
     ],
   ];
   const filtered = FILTER_KEYS.some((k) => params[k]);
@@ -444,7 +442,7 @@ async function DemoList({
         idBase="demos"
         label="Demo students"
         selected={view}
-        items={DEMO_VIEWS.map((v) => ({
+        items={DEMO_LIST_VIEWS.map((v) => ({
           key: v,
           label: humanise(v),
           href: linkTo(params, { view: v, page: undefined, open: undefined }),

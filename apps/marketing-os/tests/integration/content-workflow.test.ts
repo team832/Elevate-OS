@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { auditEvents, marketingContentVersions } from '@elevate/database';
+import { auditEvents, marketingContentVersions, staffMembers } from '@elevate/database';
 import { setupTestDatabase } from '@elevate/testing';
 import { POST as createIdeaRoute } from '../../src/app/api/v1/ideas/route';
 import { POST as createItemRoute } from '../../src/app/api/v1/ideas/[id]/content-items/route';
@@ -21,13 +21,17 @@ import {
   uniqueTitle,
   type Team,
 } from '../helpers';
+import { marketingStaff, type Staff } from './marketing-people';
 
 const ctx = setupTestDatabase();
 let team: Team;
+let marketer: Staff;
 
 beforeAll(async () => {
   await seedRegistry(ctx.db);
   team = await makeTeam(ctx.db);
+  marketer = await marketingStaff(ctx.db, 'marketing_contributor', 'Sample Marketer');
+  team.contributor = marketer; // only Marketing & Growth staff can be assigned to content
 });
 
 async function newItem(body: string, author = team.contributor, course = 'CLAT') {
@@ -299,6 +303,26 @@ describe('content production and approval', () => {
     const d = await detail(itemId);
     expect(d.comments).toHaveLength(1);
     expect(d.assignments[0]).toMatchObject({ role: 'writer', userId: team.contributor.id });
+    // RVB-008: the route refuses what the picker would not offer.
+    const [outsider] = await ctx.db
+      .insert(staffMembers)
+      .values({ userId: team.teacher.id, fullName: 'Sample Teacher' })
+      .returning({ id: staffMembers.id });
+    for (const [body, status] of [
+      [{ staffMemberId: marketer.staffId }, 200],
+      [{ staffMemberId: outsider!.id }, 400],
+      [{ userId: team.teacher.id }, 400],
+      [{ userId: team.manager.id }, 400], // a login with no staff record
+      [{ userId: team.teacher.id, staffMemberId: marketer.staffId }, 400],
+      [{}, 200], // nobody clears the role
+    ] as const) {
+      const res = await call(assignRoute, team.manager, '/x', {
+        method: 'PUT',
+        params: { id: itemId },
+        json: { role: 'designer', ...body },
+      });
+      expect([body, res.status]).toEqual([body, status]);
+    }
     const bad = await call(assignRoute, team.manager, '/x', {
       method: 'PUT',
       params: { id: itemId },

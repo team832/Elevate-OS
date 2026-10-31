@@ -1,12 +1,13 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { Alert, EmptyState, StatusBadge } from '@elevate/shared-ui';
-import { factsMissingReasons } from '../../../../domain/eod';
+import { factsMissingReasons, isEodFacts } from '../../../../domain/eod';
 import { aiBlocked } from '../../../../server/ai-drafts';
 import { NARRATIVE_FIELDS, type Period } from '../../../../domain/work-report';
-import { eodSummaryText } from '../../../../server/eod-export';
+import { eodSummaryText, factSections } from '../../../../server/eod-export';
 import { getReport, reportContext, type EodReportView } from '../../../../server/eod-reports';
 import { NO_STAFF_RECORD } from '../../../../server/staff-tasks';
+import { openableTaskIds } from '../../../../server/task-access';
 import { ActionForm } from '../../../../ui/action-form';
 import { AiDraft } from '../../../../ui/ai-draft';
 import { fmtDateTime } from '../../../../ui/format';
@@ -21,6 +22,14 @@ import { WorkReportFacts } from './report-facts';
 
 const deadlineText = (r: Pick<EodReportView, 'deadline'>) =>
   r.deadline ? `Due ${fmtDateTime(r.deadline)}` : 'No deadline set';
+
+/** Every task these facts and this review trail would link to. */
+const linkedTasks = (facts: unknown[], trail: EodReportView['trail'] = []) => [
+  ...facts.flatMap((f) =>
+    isEodFacts(f) ? factSections(f).flatMap((s) => s.rows.map((row) => row.taskId)) : [],
+  ),
+  ...trail.flatMap((t) => t.taskId ?? []),
+];
 
 /** What the employee wrote, labelled per report kind and as their own words. */
 function Narrative({ r, level }: { r: EodReportView; level: 2 | 3 }) {
@@ -53,11 +62,21 @@ export async function ReportEditor({
   const API = taskPaths(base).eodApi;
   const r = await load(async (db) => {
     const c = await reportContext(db, user, period);
-    return c && { ...c, ai: await aiBlocked(db, user, 'reportDraft') };
+    return (
+      c && {
+        ...c,
+        ai: await aiBlocked(db, user, 'reportDraft'),
+        openable: await openableTaskIds(
+          db,
+          user,
+          linkedTasks([c.facts, c.report?.facts], c.report?.trail),
+        ),
+      }
+    );
   });
   if (!r.ok) return r.view;
   if (!r.data) return <EmptyState title="No report to show" description={NO_STAFF_RECORD} />;
-  const { report, recipient, facts, ai } = r.data;
+  const { report, recipient, facts, ai, openable } = r.data;
   const editable =
     can(user, 'ops:tasks:write') &&
     (!report || ['draft', 'revision_requested'].includes(report.status));
@@ -102,7 +121,7 @@ export async function ReportEditor({
           ? `Facts as of ${fmtDateTime(facts.asOf)}, rebuilt from your records each time you save. To correct a fact, update the task, the Academic record or your attendance.`
           : 'Showing the submitted version, as sent.'}
       </p>
-      <WorkReportFacts f={editable ? facts : report!.facts} base={base} />
+      <WorkReportFacts f={editable ? facts : report!.facts} base={base} openable={openable} />
       {editable ? (
         <Segment title="Your words" description="Only these parts are yours to write.">
           <AiDraft
@@ -201,7 +220,7 @@ export async function ReportEditor({
           <CopySummary text={summary} />
         </Segment>
       ) : null}
-      {report ? <EodHistory r={report} base={base} /> : null}
+      {report ? <EodHistory r={report} base={base} openable={openable} /> : null}
     </div>
   );
 }
@@ -230,9 +249,12 @@ export async function ReportPane({
   base: string;
 }) {
   const API = taskPaths(base).eodApi;
-  const r = await load((db) => getReport(db, user, id, { checkSource: true }));
+  const r = await load(async (db) => {
+    const rep = await getReport(db, user, id, { checkSource: true });
+    return { rep, openable: await openableTaskIds(db, user, linkedTasks([rep.facts], rep.trail)) };
+  });
   if (!r.ok) return r.view;
-  const rep = r.data;
+  const { rep, openable } = r.data;
   const open = rep.status === 'submitted';
   return (
     <RecordModal
@@ -269,7 +291,7 @@ export async function ReportPane({
                 <EodDownloads id={rep.id} base={base} />
               </p>
               <Narrative r={rep} level={3} />
-              <WorkReportFacts f={rep.facts} base={base} level={3} />
+              <WorkReportFacts f={rep.facts} base={base} openable={openable} level={3} />
             </div>
           ),
         },
@@ -277,7 +299,7 @@ export async function ReportPane({
           key: 'history',
           label: 'Versions and comments',
           count: rep.trail.length,
-          content: <EodHistory r={rep} base={base} level={3} />,
+          content: <EodHistory r={rep} base={base} openable={openable} level={3} />,
         },
         {
           key: 'respond',

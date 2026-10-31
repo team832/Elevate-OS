@@ -297,6 +297,7 @@ describe('overview links open the records', () => {
     for (const href of [
       `/ops/reports/admissions?${q}`,
       '/ops/admissions/applications?status=signatures_confirmed',
+      '/ops/admissions/applications?status=signatures_confirmed&blocked=1',
       `/ops/fees/collections?${q}`,
       '/ops/fees/outstanding?status=overdue',
       '/ops/admissions/overview#overdue-onboarding',

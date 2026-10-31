@@ -49,6 +49,7 @@ export { hasInbox } from './server/eod-review';
 export { taskDaySummary } from './server/staff-tasks';
 export { listTasks } from './server/staff-tasks'; // MKT: Deliverables + My Day lists
 export { taskListQuery } from './server/staff-tasks-schemas'; // MKT
+export { allTaskFilters } from './app/tasks/_components/task-views'; // ACD: tiles prove their list
 export { myReports } from './server/work-reports'; // MKT-PERF: monthly report status for a period
 export { STANDING_LABELS } from './domain/work-report';
 export { taskStatusLabel } from './domain/staff-tasks'; // MKT (TASKS: do not add a second copy)

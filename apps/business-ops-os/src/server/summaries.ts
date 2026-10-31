@@ -20,7 +20,7 @@ export interface CrossModuleSummaries {
 }
 
 export interface SummaryFetchOptions {
-  /** Origin that serves /academic and /marketing (default: ACADEMIC_OS_URL / MARKETING_OS_URL, else PLATFORM_URL). */
+  /** Origin that serves /academic and /marketing (default: ACADEMIC_OS_URL / MARKETING_OS_URL, else that app's local port). */
   academicBaseUrl?: string;
   marketingBaseUrl?: string;
   fetchImpl?: typeof fetch;

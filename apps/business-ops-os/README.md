@@ -173,4 +173,8 @@ Recorded: D-032 (HR/Operations removed; superseded in part by D-052 and D-080), 
 - **Hindi PDFs** (D-118): fonts in `assets/fonts`, `src/server/pdf/document.ts`.
 - **Duplicate matches** shaped by viewer (D-119): `src/server/lead-duplicates.ts`.
 - **Counts:** lead and call tiles counted in SQL (`leadCounts`, `callOutcomeCounts`), search with literal `%`, `_`, `\\` (`packages/server-kit/src/search.ts`). "Approval blocked" and "Conversions this month" links now filter.
-- **Open:** `HANDOFF.md` rows marked "New 31 Oct"; lead sources and programmes have no route; no POST route for fee structure rows (the page says it awaits the owner).
+- **Lists and panels (later rounds):** All tab on Demo students (`view=all`); `/ops` tile links `blocked=1`; `listHref` drops `section`; Close on a panel is a plain link until the page is ready (D-125); a task since moved away stays on a report as plain text (`openableTaskIds`). The tracker's open-work filter is `work=open`: `open` is the task panel's id (A-TSK-10). `taskDaySummary` gains `staffId`.
+- **PDFs:** a heading is drawn with the next block and never ends a page alone (A-PDF-1). The signed form prints a debit on its own line, "Added charge (debit)" (Proposed).
+- **Unknown API paths:** JSON 404, or 403 cross-site (D-124). Left: wrong method empty 405 (API-011), badly encoded path plain 500 (RL1-002), POST with no `Origin` (RL1-003).
+- **Teacher directory:** lists only staff with a subject capability, so someone assigned with no capability is on neither the full list nor the programme filter.
+- **Open:** `HANDOFF.md` rows under "New 31 Oct" and "Known limits"; lead sources and programmes have no route; no POST route for fee structure rows (the page says it awaits the owner).

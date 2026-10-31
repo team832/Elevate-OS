@@ -107,7 +107,7 @@ describe('onboarding templates section', () => {
         sp={{ group: 'admissions', act: 'template', template: 'a' }}
       />,
     );
-    expect(out).toContain('Publish clat_kit v3');
+    expect(out).toContain('Publish Clat kit v3');
     expect(out).toContain('Publish version 3');
     expect(out).toContain('&quot;requiredQuantity&quot;: 2');
   });

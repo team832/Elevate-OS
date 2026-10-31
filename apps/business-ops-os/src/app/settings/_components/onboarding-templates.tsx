@@ -4,6 +4,7 @@
  * ops:settings:manage). Publishing retires the earlier version; built checklists never change.
  */
 import { StatusBadge } from '@elevate/shared-ui';
+import { programmeName } from '@elevate/shared-types';
 import { CLASS_CATEGORY_LABELS, CLASS_CATEGORY_OPTIONS } from '../../../domain/demos';
 import type { OnboardingTemplateItem } from '../../../domain/onboarding';
 import { ActionForm } from '../../../ui/action-form';
@@ -33,7 +34,7 @@ function itemText(i: OnboardingTemplateItem) {
   if (i.dueDays !== undefined) parts.push(`due ${i.dueDays} day(s) after admission`);
   if (i.kind === 'material')
     parts.push(
-      `${i.requiredQuantity ?? 1} cop${(i.requiredQuantity ?? 1) === 1 ? 'y' : 'ies'}${i.programmeCode ? ` for ${i.programmeCode}` : ''}${i.edition ? `, ${i.edition}` : ''}`,
+      `${i.requiredQuantity ?? 1} cop${(i.requiredQuantity ?? 1) === 1 ? 'y' : 'ies'}${i.programmeCode ? ` for ${programmeName(i.programmeCode)}` : ''}${i.edition ? `, ${i.edition}` : ''}`,
     );
   return `${i.label} (${parts.join(', ')})`;
 }
@@ -73,7 +74,7 @@ export function OnboardingTemplates({
         linkColumn="code"
         empty="No onboarding template yet."
         columns={[
-          { key: 'code', header: 'Template', render: (t) => `${t.code} v${t.version}` },
+          { key: 'code', header: 'Template', render: (t) => `${humanise(t.code)} v${t.version}` },
           {
             key: 'status',
             header: 'Status',
@@ -83,7 +84,7 @@ export function OnboardingTemplates({
               </StatusBadge>
             ),
           },
-          { key: 'programmes', header: 'Programmes', render: (t) => t.programmeCodes.join(', ') },
+          { key: 'programmes', header: 'Programmes', render: (t) => t.programmeCodes.map((c) => programmeName(c)).join(', ') },
           { key: 'class', header: 'Class', render: (t) => classLabel(t.classCategory) },
           {
             key: 'items',
@@ -101,7 +102,7 @@ export function OnboardingTemplates({
       {manage && sp.act === 'template' ? (
         <FormModal
           id="template-publish"
-          title={source ? `Publish ${source.code} v${next}` : 'New onboarding template'}
+          title={source ? `Publish ${humanise(source.code)} v${next}` : 'New onboarding template'}
           meta={source ? `Copied from v${source.version}; change what you need.` : undefined}
           closeHref={close}
         >

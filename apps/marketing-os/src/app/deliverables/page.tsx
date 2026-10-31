@@ -5,7 +5,7 @@ import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { listTasks, taskListQuery } from '@elevate/business-ops-os/work';
 import { Card } from '@elevate/shared-ui';
-import { modulePath } from '../../domain';
+import { CONTENT_STATES, modulePath, type ContentState } from '../../domain';
 import { myContentItems, myStaffId, teamWide } from '../../server';
 import { ContentDeliverables, PageLinks, TaskDeliverables } from '../../ui/my-work';
 import { MarketingPage, Section, param, type SearchParams } from '../../ui/shell';
@@ -20,6 +20,7 @@ const pageOf = (v: string | undefined) => Math.max(1, Number.parseInt(v ?? '1', 
 export default async function DeliverablesPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
   const pages = { tp: String(pageOf(param(sp, 'tp'))), cp: String(pageOf(param(sp, 'cp'))) };
+  const state = CONTENT_STATES.find((s) => s === param(sp, 'content'));
   return (
     <MarketingPage
       permission="marketing:module:access"
@@ -43,7 +44,7 @@ export default async function DeliverablesPage({ searchParams }: { searchParams:
               )}
             />
           ) : null}
-          <Section load={async () => <Deliverables user={user} pages={pages} />} />
+          <Section load={async () => <Deliverables user={user} pages={pages} state={state} />} />
         </>
       )}
     </MarketingPage>
@@ -53,9 +54,12 @@ export default async function DeliverablesPage({ searchParams }: { searchParams:
 async function Deliverables({
   user,
   pages,
+  state,
 }: {
   user: AuthenticatedUser;
   pages: { tp: string; cp: string };
+  /** Only content in this state (the My day tile). */
+  state: ContentState | undefined;
 }) {
   const db = getDb();
   const staffId = await myStaffId(db, user.id);
@@ -63,7 +67,7 @@ async function Deliverables({
     staffId && can(user, 'ops:tasks:read')
       ? await listTasks(db, user, taskListQuery.parse({ staffId, page: pages.tp }))
       : null;
-  const content = await myContentItems(db, user, Number(pages.cp));
+  const content = await myContentItems(db, user, Number(pages.cp), state);
   return (
     <div className="el-stack">
       <details className="el-explain">
@@ -77,7 +81,12 @@ async function Deliverables({
         {tasks ? (
           <>
             <TaskDeliverables rows={tasks.rows} />
-            <PageLinks path={PATH} name="tp" params={pages} {...tasks} />
+            <PageLinks
+              path={PATH}
+              name="tp"
+              params={state ? { ...pages, content: state } : pages}
+              {...tasks}
+            />
           </>
         ) : (
           <p>
@@ -86,9 +95,18 @@ async function Deliverables({
           </p>
         )}
       </Card>
-      <Card title="Content I work on">
+      <Card
+        id="my-content"
+        title={state ? `Content I work on: ${state.replace(/_/g, ' ')}` : 'Content I work on'}
+        actions={state ? <a href={`${PATH}#my-content`}>Show all my content</a> : undefined}
+      >
         <ContentDeliverables rows={content.rows} />
-        <PageLinks path={PATH} name="cp" params={pages} {...content} />
+        <PageLinks
+          path={PATH}
+          name="cp"
+          params={state ? { ...pages, content: state } : pages}
+          {...content}
+        />
       </Card>
     </div>
   );

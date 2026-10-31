@@ -249,7 +249,10 @@ export function ApplicationDetail({
           <DetailTable
             rows={[
               { label: 'Student', value: s.student.fullName },
-              { label: 'Date of birth', value: missing(s.student.dateOfBirth) },
+              {
+                label: 'Date of birth',
+                value: missing(s.student.dateOfBirth && fmtDate(s.student.dateOfBirth)),
+              },
               {
                 label: 'Class / category',
                 value: missing(

@@ -33,6 +33,8 @@ export const MOCK_STATUSES = [
 ] as const;
 export const CHECKLIST_STATUSES = ['complete', 'pending', 'waived', 'not_applicable'] as const;
 export const DEMO_VIEWS = ['current', 'upcoming', 'previous'] as const;
+/** The list's tabs: each view, and all of them for a figure that spans the views. */
+export const DEMO_LIST_VIEWS = [...DEMO_VIEWS, 'all'] as const;
 /** Outcomes staff set by hand; `converted` comes only from Convert to admission. */
 export const MANUAL_OUTCOMES = [
   'not_converted',
@@ -62,6 +64,7 @@ export type Attendance = (typeof DEMO_ATTENDANCE)[number];
 export type MockStatus = (typeof MOCK_STATUSES)[number];
 export type ChecklistStatus = (typeof CHECKLIST_STATUSES)[number];
 export type DemoView = (typeof DEMO_VIEWS)[number];
+export type DemoListView = (typeof DEMO_LIST_VIEWS)[number];
 
 export const ATTENDANCE_LABELS: Record<Attendance, string> = {
   scheduled: 'Scheduled',

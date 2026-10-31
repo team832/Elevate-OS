@@ -293,7 +293,7 @@ export async function OnboardingTab({
             {
               key: 'source',
               header: 'Source',
-              render: (i) => i.template ?? 'Added by hand',
+              render: (i) => (i.template ? humanise(i.template) : 'Added by hand'),
             },
             ...(canEdit
               ? [

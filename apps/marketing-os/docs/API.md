@@ -34,7 +34,7 @@ Screens use server actions (`src/app/actions/*.ts`) that call the same services;
 | POST | `/content-items/:id/withdraw` | `marketing:content:write` | — | item; 403 not the requester; 409 |
 | POST | `/content-items/:id/decision` | `marketing:content:approve` + approver role (OD-002) | `{decision: approve|request_changes, comment?, acknowledgedRuleCodes[]}` | `{item, approval, ruleCheck}`; 403 requester/author/role; 409 `BRAND_RULE_BLOCK`; 400 `CHECKLIST_NOT_ACKNOWLEDGED` or missing comment |
 | POST | `/content-items/:id/archive` | `marketing:content:write` | `{reason}` | item (open placements cancelled) |
-| PUT | `/content-items/:id/assignments` | `marketing:content:write` | `{role: writer|designer|editor|presenter, userId?, staffMemberId?}` (none = clear) | assignment or null |
+| PUT | `/content-items/:id/assignments` | `marketing:content:write` | `{role: writer|designer|editor|presenter, userId?, staffMemberId?}` (none = clear; not both) | assignment or null; 400 anyone but active Marketing & Growth staff |
 | POST | `/content-items/:id/comments` | `marketing:content:write` or `marketing:content:approve` | `{body, versionId?}` | 201 comment |
 | POST | `/content-items/:id/placements` | `marketing:content:write` | `{accountCode, variant?: short|long}` | 201 `{placement, warnings}`; 409 code exists; 400 scope rule / variant off YouTube; 409 account `later` |
 
@@ -93,7 +93,7 @@ Permissions, requests, responses and errors are those in `apps/business-ops-os/d
 | GET | `/campaigns/:id/members` | `marketing:campaigns:read` | — | Current and past members; 404 out of scope |
 | POST | `/campaigns/:id/members` | `marketing:campaigns:write` | `{ staffId, role?: owner or member (default member), fromDate? (default today IST) }` | Adds a membership (marketing manager); a date in the future (IST) → 400 |
 | PATCH | `/campaigns/:id/members/:memberId` | `marketing:campaigns:write` | `{ toDate? (default today IST, never in the future) }` | Ends a membership; rows are never deleted |
-| PUT | `/content-items/:id/assignments` | `marketing:content:write` | `assignmentBody` | Only a marketing manager assigns people to content (others → 403) |
+| PUT | `/content-items/:id/assignments` | `marketing:content:write` | `assignmentBody` | Only a marketing manager assigns people to content (others → 403); only active Marketing & Growth staff can be assigned (others → 400, RVB-008) |
 
 Out-of-scope campaigns and content read as 404, never 403. Mounted from Business Operations (same handlers): `/marketing/api/v1/attendance`, `…/attendance/corrections`, `…/ai/report-draft`, `…/attachments`, `…/notifications`, `…/staff-tasks/{id}/checklist`. Pages: `/marketing/my-campaigns`, `/marketing/deliverables`, `/marketing/my-attendance`, `/marketing/my-reports`, `/marketing/notifications`.
 
@@ -156,3 +156,5 @@ Pages: `/marketing/calendar` (+ `/new`, `/:id`), `/marketing/optimisation` (+ `/
 - A cross-site POST to a server action is refused by the proxy (`isAllowedActionOrigin`, RVA-004).
 - Stored links accept only `http` and `https` (`httpUrlSchema`, HAT-006). A title is capped at 300 characters.
 - A contributor no longer sees the Assign form; Assign is a staff picker, not a typed user id.
+- `/marketing/deliverables?content=<state>#my-content`: the My Day tile opens only your content in that state (RVB-010). Any other value shows all your content.
+- Unknown paths under `/marketing/api/` answer a JSON 404, or 403 cross-site (`src/app/api/[...unknown]/route.ts`, D-124). A form posted to a path the proxy skips is refused too (RVA-008).

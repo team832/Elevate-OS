@@ -301,13 +301,8 @@ export async function listDemos(
     current: all.current,
     upcoming: all.upcoming,
     followUpsDue: rows.filter(followUpIs('due')).length,
-    /** Where the due follow-ups sit, so the tile can open a tab that shows them. */
-    followUpsDueByView: countByView(rows.filter(followUpIs('due'))),
     conversions: rows.filter((r) => r.demo.outcome === 'converted' && decidedIn(r, month)).length,
     pendingDecision: rows.filter((r) => r.admissionStatus === 'admission_pending').length,
-    pendingDecisionByView: countByView(
-      rows.filter((r) => r.admissionStatus === 'admission_pending'),
-    ),
   };
   const filtered = rows.filter(
     (r) =>
@@ -315,10 +310,10 @@ export async function listDemos(
       (!query.outcomeMonth || decidedIn(r, query.outcomeMonth)),
   );
   const view = query.view ?? 'current';
-  const counts = countByView(filtered);
+  const counts = { ...countByView(filtered), all: filtered.length };
   const inView = filtered
-    .filter((r) => r.view === view)
-    .sort(query.sort ? SORTS[query.sort] : VIEW_SORT[view]);
+    .filter((r) => view === 'all' || r.view === view)
+    .sort(query.sort ? SORTS[query.sort] : view === 'all' ? SORTS.follow_up : VIEW_SORT[view]);
   const page = query.page ?? 1;
   return {
     view,

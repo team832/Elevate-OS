@@ -30,7 +30,7 @@ export const POLICY_DEFINITIONS = {
     status: 'proposed',
     ownerDecision: 'OD-002',
     description:
-      'Roles that may approve content (they must also hold marketing:content:approve). Legacy rule: only the Co-Founder approves; the handover SOP adds the Marketing Lead. Proposed: marketing_manager and director.',
+      'Roles that may approve content (they must also hold the permission to approve). Earlier rule: only the Co-Founder approves; the handover SOP adds the Marketing Lead. Proposed: Marketing manager and Director.',
     source: 'content-os/CLAUDE.md L68; handover Marketing-Easy SOP Register!G8',
   }),
   consentRequiredForStudents: def<boolean>({

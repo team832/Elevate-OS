@@ -32,6 +32,7 @@ import { POST as followUpRoute } from '../../src/app/api/v1/eod-reports/[id]/fol
 import { GET as pdfRoute } from '../../src/app/api/v1/eod-reports/[id]/pdf/route';
 import { GET as csvRoute } from '../../src/app/api/v1/eod-reports/[id]/csv/route';
 import type { EodFacts } from '../../src/domain/eod';
+import { openableTaskIds } from '../../src/server/task-access';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -591,6 +592,15 @@ describe('EOD recipient when no manager resolves (test 10) and external delivery
     expect(view.data).toMatchObject({ canReview: false, sourceChanged: null });
     expect((await post(reviewRoute, manager, rep!.id, { kind: 'acknowledged' })).status).toBe(409);
     expect((await download(pdfRoute, manager, rep!.id)).status).toBe(200);
+  });
+
+  it('RVC-028: a task moved away stays on the report but is no longer offered as a link', async () => {
+    const kept = await task(a, 'Still with A');
+    const moved = await task(b, 'Moved from A to B');
+    const ids = [kept.id, moved.id, moved.id];
+    expect(await openableTaskIds(ctx.db, a, ids)).toEqual(new Set([kept.id]));
+    expect(await openableTaskIds(ctx.db, manager, ids)).toEqual(new Set([kept.id, moved.id]));
+    expect(await openableTaskIds(ctx.db, a, [])).toEqual(new Set());
   });
 
   it('there is no simulated share route; nothing claims to be sent', () => {

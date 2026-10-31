@@ -22,6 +22,7 @@ import {
   marketingContentVersions,
   marketingIdeas,
   marketingPlacements,
+  staffMembers,
   userRoles,
   type Database,
   type MarketingContentVersionId,
@@ -54,6 +55,7 @@ import {
   type RuleCheckResult,
 } from '../domain';
 import { actorCan, assertCan, type Actor } from './access';
+import { memberOptions } from './campaign-members';
 import { auditMarketing, rowById } from './common';
 import { loadPolicy } from './policy';
 import { runRuleCheck } from './rules';
@@ -122,7 +124,8 @@ export const assignmentBody = z
     userId: z.uuid().nullable().optional(),
     staffMemberId: z.uuid().nullable().optional(),
   })
-  .strict();
+  .strict()
+  .refine((v) => !(v.userId && v.staffMemberId), { error: 'Name one person: a user or a staff member.' });
 
 export const commentBody = z
   .object({ body: z.string().trim().min(1).max(4000), versionId: z.uuid().optional() })
@@ -642,6 +645,23 @@ export async function archiveContentItem(
   });
 }
 
+/** Assigning grants access to the content: only who the picker offers, active Marketing & Growth staff. */
+async function assertAssignable(
+  db: Database,
+  { userId, staffMemberId }: z.output<typeof assignmentBody>,
+) {
+  if (!userId && !staffMemberId) return;
+  const [byUser] = userId
+    ? await db
+        .select({ id: staffMembers.id })
+        .from(staffMembers)
+        .where(eq(staffMembers.userId, userId as UserId))
+    : [];
+  const staffId = staffMemberId ?? byUser?.id;
+  if (!staffId || !(await memberOptions(db, staffId)).length)
+    throw new ValidationError('Only active Marketing & Growth staff can be assigned to content.');
+}
+
 export async function setAssignment(
   db: Database,
   actor: Actor,
@@ -655,6 +675,7 @@ export async function setAssignment(
     throw new ForbiddenError('Only a marketing manager assigns people to content.');
   return withTransaction(db, async (tx) => {
     const item = await getContentItem(tx, itemId, false, actor);
+    await assertAssignable(tx, input);
     const [before] = await tx
       .select()
       .from(marketingContentAssignments)

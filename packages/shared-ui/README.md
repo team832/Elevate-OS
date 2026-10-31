@@ -27,7 +27,7 @@ The brand chevron (the "a" of the wordmark) is the signature element: the curren
 | `Icon` | Inline-SVG line icons: 24-unit grid, 1.5 px stroke, `currentColor`; decorative unless `label` is given. |
 | `PageHeader` (+ `meta`, `tabs`), `Subnav` | The masthead: display title, small labels, one line of context, actions, and area tabs as a pill segmented control (`aria-current="page"`). |
 | `Card` (+ `actions`, `meta`, `id`, `footer`) | A rounded panel. |
-| `StatTile`, `MetricStrip` | Figures as tiles. **Missing is "Missing" / "Not available" + reason, never 0**; estimated shows "≈" and the basis. |
+| `StatTile`, `MetricStrip` | Figures as tiles. **Missing is "Missing" / "Not available" + reason, never 0**; estimated shows "≈" and the basis. A long figure (`.el-stat-value-long`) keeps one line at a title size; Ops widens that row of tiles so it never reads smallest (RVC-031). |
 | `JourneyRail` | The admission journey as rounded stages joined by a line: counts (dashboards) or `state` per stage (one record); `null` = Not recorded. |
 | `DataTable` (+ `compact`, default from 4 columns) | `columns`, `rows`, `rowKey`, `caption`, `empty`; a rounded well; `compact` rows become labelled blocks on phones. Table styles live in `src/css/tables.css` (30 Oct 2026; `css/components.css` is 880 lines). |
 | `NavPending` (client) | Mounted by `ShellFrame` and `LoginForm`: a 3 px bar through the Navigation API from the click until the next page (D-120; no `loading.tsx`, D-022). |

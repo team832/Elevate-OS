@@ -68,9 +68,7 @@ type List = {
     current: number;
     upcoming: number;
     followUpsDue: number;
-    followUpsDueByView: Record<string, number>;
     pendingDecision: number;
-    pendingDecisionByView: Record<string, number>;
   };
   leftOpen: { demoId: string; studentName: string; classes: number }[];
   rows: { demo: { id: string } }[];
@@ -299,10 +297,16 @@ describe('list views (GET /demos)', () => {
     expect(ids(prev)).toEqual([closed.id]);
     expect(prev.counts.previous).toBe(prev.total);
     expect(cur.counts.current).toBe(cur.kpis.current);
-    const due = Object.values(cur.kpis.followUpsDueByView);
-    expect(due.reduce((a, b) => a + b, 0)).toBe(cur.kpis.followUpsDue);
-    const pending = Object.values(cur.kpis.pendingDecisionByView);
-    expect(pending.reduce((a, b) => a + b, 0)).toBe(cur.kpis.pendingDecision);
+    // A tile that spans the tabs opens all of them (RVB-009): the same figure, in one list.
+    for (const [filter, tile] of [
+      ['followUp=due', cur.kpis.followUpsDue],
+      ['stage=admission_pending', cur.kpis.pendingDecision],
+      ['', cur.counts.current! + cur.counts.upcoming! + cur.counts.previous!],
+    ] as const) {
+      const opened = (await list(counsellor, `view=all&${filter}`)).data!;
+      expect([filter, opened.total, opened.counts.all]).toEqual([filter, tile, tile]);
+      expect(opened.rows.length).toBe(Math.min(tile, 25));
+    }
     const all = (await list(manager, 'view=current')).data!;
     expect(ids(all)).toEqual(expect.arrayContaining([current.id, theirs.id]));
     const search = (await list(manager, 'view=upcoming&q=nobody-has-this-name')).data!;

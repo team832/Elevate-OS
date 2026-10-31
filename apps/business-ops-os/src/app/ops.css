@@ -40,6 +40,16 @@
     grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
   }
 }
+/* A long rupee figure keeps one line: its row's tiles widen and share one size, so the largest
+ * amount never reads smallest. */
+@media (min-width: 720px) {
+  .el-grid.ops-kpis:has(.el-stat-value-long) {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  }
+  .ops-kpis:has(.el-stat-value-long) .el-stat-value {
+    font-size: var(--el-text-title);
+  }
+}
 /* Figures inside a panel sit in wells, so a card never holds raised cards. */
 .el-card :is(.ops-kpis .el-stat:not([aria-current='true']), .el-metric) {
   background: var(--el-well);
@@ -192,7 +202,7 @@
 }
 .ops-detail th {
   width: clamp(7rem, 36%, 14rem);
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
   border-right: 1px solid var(--el-border);
@@ -213,12 +223,24 @@
   .el-table-compact td:has(.ops-detail) > * {
     justify-self: stretch;
   }
+  /* The phone card rules reach a nested table's own rows too: it stays a table. */
+  .el-table-compact .ops-detail :is(tbody, tr) {
+    display: revert;
+    padding: 0;
+  }
+  .el-table-compact .ops-detail tbody tr td {
+    display: table-cell;
+    padding: 0.5625rem var(--el-space-3);
+  }
+  .el-table-compact .ops-detail td::before {
+    content: none;
+  }
 }
 
 /* Printing a student report: the paper, without the screens around it. */
 @media print {
   body:has(.ops-report-print)
-    :is(.el-sidebar, .el-topbar, .el-skip-link, .ops-no-print, details) {
+    :is(.el-sidebar, .el-topbar, .el-skip-link, .el-page-actions, .ops-no-print, details) {
     display: none !important;
   }
   body:has(.ops-report-print) :is(.el-shell-body, .el-main) {

@@ -10,7 +10,7 @@ import {
   createTestUser,
   setupTestDatabase,
 } from '@elevate/testing';
-import { ConflictError, created, defineRoute, NotFoundError } from '../src/index';
+import { ConflictError, created, defineRoute, NotFoundError, unknownApiRoute } from '../src/index';
 
 const ctx = setupTestDatabase();
 
@@ -33,6 +33,24 @@ const echo = defineRoute(
 const echoGet = defineRoute({ permission: 'ops:leads:read' }, async () => ({ ok: true }));
 
 const ID = '0b6f8f2e-3c1a-4f7e-9b2d-1a2b3c4d5e6f';
+
+describe('an unknown API path (RVA-008)', () => {
+  it.each([
+    ['same site', {}, 404],
+    ['another site', { origin: 'https://evil.example' }, 403],
+  ] as const)('%s, %j: %i in JSON', async (_, headers, status) => {
+    const res = await unknownApiRoute(
+      new Request('http://localhost:3002/marketing/api/nope', {
+        method: 'POST',
+        headers: { host: 'localhost:3002', 'content-type': 'multipart/form-data; boundary=x', ...headers },
+        body: '--x--',
+      }),
+      { params: Promise.resolve({}) },
+    );
+    expect(res.status).toBe(status);
+    expect((await res.json()).error.message).toBeTruthy();
+  });
+});
 
 describe('defineRoute', () => {
   it('401 UNAUTHENTICATED without a session', async () => {

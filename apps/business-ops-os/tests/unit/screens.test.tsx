@@ -330,11 +330,23 @@ describe('tasks and end-of-day reports', () => {
   });
 
   it('EOD facts (REP WorkReportFacts): Academic down is said, never shown as 0 or absence', () => {
-    const out = html(<EodFactsView f={facts()} base="/ops" />);
+    const out = html(<EodFactsView f={facts()} base="/ops" openable={new Set()} />);
     expect(out).toContain('No task activity recorded');
     expect(out).toContain('Source unavailable: Academic OS');
     expect(out).not.toContain('confirmed absences');
     expect(out).toContain('None recorded in this period.');
+  });
+
+  it('EOD facts: a task the reader cannot open is listed as text, not a dead link (RVC-028)', () => {
+    const at = new Date(NOW).toISOString();
+    const received = [
+      { taskId: 'mine', title: 'Still mine', at, detail: null },
+      { taskId: 'moved', title: 'Moved away', at, detail: null },
+    ];
+    const out = html(<EodFactsView f={facts({ received })} base="/ops" openable={new Set(['mine'])} />);
+    expect(out).toContain('href="/ops/tasks/mine"');
+    expect(out).not.toContain('/ops/tasks/moved');
+    expect(out).toContain('Moved away');
   });
 
   it('EOD facts: missing Academic counts read "Not recorded"', () => {
@@ -349,18 +361,20 @@ describe('tasks and end-of-day reports', () => {
       markingPending: null,
       reviewsSubmitted: 0,
     } as const;
-    const out = html(<EodFactsView f={facts({ academic })} base="/ops" />);
+    const out = html(<EodFactsView f={facts({ academic })} base="/ops" openable={new Set()} />);
     expect(out).toContain('2 of 3 scheduled classes delivered');
     expect(out).toContain('marking pending Not recorded');
   });
 
   it('EOD history: nothing yet says so; a request shows who asked', () => {
-    expect(html(<EodHistory r={{ versions: [], trail: [] } as never} base="/ops" />)).toContain(
-      'Not submitted yet.',
-    );
+    const openable = new Set<string>();
+    expect(
+      html(<EodHistory r={{ versions: [], trail: [] } as never} base="/ops" openable={openable} />),
+    ).toContain('Not submitted yet.');
     const out = html(
       <EodHistory
         base="/ops"
+        openable={openable}
         r={
           {
             versions: [],

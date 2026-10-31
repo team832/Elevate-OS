@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { NextActionButton } from '../../src/app/tasks/_components/task-common';
+import { allTaskFilters } from '../../src/app/tasks/_components/task-views';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace() {}, push() {}, refresh() {} }),
@@ -15,6 +16,17 @@ const row = (id: string, title: string, more = {}) => ({
   acknowledgedAt: null,
   blockedAt: null,
   ...more,
+});
+
+describe('tracker filters from the address (RL1-001)', () => {
+  it.each([
+    [{ work: 'open', groups: 'exclude' }, { open: '1', groups: 'exclude' }],
+    [{ work: 'done', groups: 'x' }, { open: undefined, groups: undefined }],
+    // A panel id is not a filter: opening a task must not narrow the list behind it.
+    [{ open: 'a1b2' }, { open: undefined, groups: undefined }],
+  ])('%j', (sp, want) => {
+    expect(allTaskFilters(sp)).toMatchObject(want);
+  });
 });
 
 describe('My Tasks next action (brief §18, review M2)', () => {

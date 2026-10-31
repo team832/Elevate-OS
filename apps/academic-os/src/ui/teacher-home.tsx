@@ -104,14 +104,16 @@ function AssessmentCounts({ day }: { day: TeacherDay }) {
       'Assessments assigned',
       c?.assigned ?? null,
       'Not cancelled, in your batches and subjects, with you responsible, evaluator, or neither named.',
+      'assigned',
     ],
-    ['Completed', c?.completed ?? null, 'Of those, conducted or finalised.'],
+    ['Completed', c?.completed ?? null, 'Of those, conducted or finalised.', 'completed'],
     [
       'Awaiting marking',
       c?.awaitingMarking ?? null,
       'Held, with a student unmarked or a score not verified.',
+      'awaitingMarking',
     ],
-    ['Results published', c?.published ?? null, 'Final or provisional results released.'],
+    ['Results published', c?.published ?? null, 'Final or provisional results released.', 'published'],
   ] as const;
   return (
     <section aria-labelledby="acd-assessments">
@@ -119,14 +121,14 @@ function AssessmentCounts({ day }: { day: TeacherDay }) {
         Your assessments, all dates
       </h2>
       <div className="el-grid">
-        {tiles.map(([label, value, note]) => (
+        {tiles.map(([label, value, note, list]) => (
           <StatCard
             key={label}
             label={label}
             value={value}
             missingLabel="Not available"
             note={c ? note : 'No subject and batch assigned to you today, so nothing is counted.'}
-            href={MODULE_PATHS.assessments}
+            href={`${MODULE_PATHS.assessments}?mine=${list}`}
           />
         ))}
       </div>

@@ -145,6 +145,18 @@ export function visibleFilter(a: TaskAccess, staffId?: string) {
   return and(owner, or(assigner, and(sql`${tasks.status} <> 'draft'`, reader)));
 }
 
+/** Of these tasks, the ones the reader may open: one since moved away stays on a report, unlinked. */
+export async function openableTaskIds(db: Database, actor: Actor, ids: readonly string[]) {
+  const access = await taskAccess(db, actor, 'ops:tasks:read');
+  const rows = ids.length
+    ? await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(inArray(tasks.id, [...new Set(ids)] as never[]), visibleFilter(access)))
+    : [];
+  return new Set<string>(rows.map((r) => r.id));
+}
+
 export async function isCollaborator(db: Database, a: TaskAccess, t: TaskRow) {
   if (!a.self || t.visibility !== 'collaborators') return false;
   const [c] = await db

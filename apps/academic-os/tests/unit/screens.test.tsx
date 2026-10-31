@@ -526,6 +526,7 @@ describe('Academic dashboards (22 Oct 2026 redesign)', () => {
           {
             day: '2026-10-22',
             asOf: '2026-10-22T04:30:00Z',
+            staffId: 's1',
             open: 3,
             overdue: 1,
             dueToday: 2,
@@ -557,7 +558,8 @@ describe('Academic dashboards (22 Oct 2026 redesign)', () => {
     expect(ok).toContain('<span class="el-stat-value">Not started</span>');
     expect(ok).toContain('September 2026: Reviewed');
     expect(ok).toContain('href="/academic/my-reports?kind=month"');
-    expect(ok).toContain('href="/academic/tasks?due=today"');
+    expect(ok).toContain('href="/academic/tasks?tab=all&amp;staffId=s1&amp;groups=exclude&amp;work=open&amp;due=today"');
+    expect(ok).not.toContain('open=1'); // `open` is the task panel's id on the tracker (RL1-001)
     expect(ok).toContain('<span class="el-stat-value">2</span>');
     expect(ok).toContain('<span class="el-stat-value">1</span>');
     expect(ok).toContain('<span class="el-stat-value">Draft</span>');
@@ -858,10 +860,11 @@ describe('typed in plain form', () => {
     expect(programmeName(code)).toBe(name);
   });
 
-  it('report tables break words only on paper, where they cannot scroll (RVC-023)', () => {
+  it('report tables keep whole words, on screen and on paper (RVC-023, RVC-025)', () => {
     const [screen, paper] = readFileSync(new URL('../../src/app/reports/print.css', import.meta.url), 'utf8').split('@media print');
     expect(screen).not.toContain('overflow-wrap');
-    expect(paper).toContain('overflow-wrap: anywhere');
+    expect(paper).toContain('overflow-wrap: break-word');
+    expect(paper).not.toContain('overflow-wrap: anywhere');
   });
 
   it('a stored value reads as words (HUS-042)', () => {

@@ -13,6 +13,7 @@ import { getDb, type Database } from '@elevate/database';
 import {
   ForbiddenError,
   HEADERS,
+  NotFoundError,
   UnauthenticatedError,
   ValidationError,
   errorResponse,
@@ -404,3 +405,12 @@ export function defineRoute<
     return response;
   };
 }
+
+/**
+ * The catch-all under each app's /api: an unknown path answers like the API (cross-site 403, else a
+ * JSON 404). With no route, Next takes a posted form for a server action on the not-found page:
+ * a 500 or 409 and a logged stack (RVA-008).
+ */
+export const unknownApiRoute = defineRoute({ permission: 'public', module: 'platform' }, () => {
+  throw new NotFoundError('There is no API route at this address.');
+});

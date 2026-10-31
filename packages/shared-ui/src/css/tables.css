@@ -43,8 +43,10 @@
 .el-table th.el-num {
   min-width: 3.5rem;
 }
-/* A long status wraps inside its column or phone card instead of running past the edge. */
-.el-table .el-badge {
+/* A long status wraps inside its column or phone card instead of running past the edge, or being
+ * cut off by the fixed columns of Ops' detail table. */
+.el-table .el-badge,
+.ops-detail .el-badge {
   padding-block: 0.1875rem;
   border-radius: var(--el-radius-sm); /* a pill on one line, a rounded box on two */
   line-height: 1.25;

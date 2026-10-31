@@ -13,6 +13,7 @@ import {
   type FollowUpKind,
 } from '../../domain';
 import type { getLead } from '../../server/leads';
+import { programmeName } from '@elevate/shared-types';
 import { CLASS_CATEGORY_LABELS, CLASS_CATEGORY_OPTIONS } from '../../domain/demos';
 import { ActionForm, type FieldSpec } from '../../ui/action-form';
 import { fmtDate, fmtDateTime, humanise, statusTone } from '../../ui/format';
@@ -251,7 +252,7 @@ export function leadTabs(
           <Segment title="Source and attribution" level={level} flush>
             <DetailTable
               rows={[
-                { label: 'Programme interest', value: d.programme?.code ?? 'Undecided' },
+                { label: 'Programme interest', value: d.programme ? programmeName(d.programme.code) : 'Undecided' },
                 { label: 'Mode', value: humanise(lead.interestMode) },
                 { label: 'Received', value: fmtDateTime(lead.firstReceivedAt) },
                 { label: 'First source', value: firstEnquiry?.sourceLabel ?? 'Not recorded' },
@@ -282,7 +283,7 @@ export function leadTabs(
                 {
                   key: 'programmeCode',
                   header: 'Programme',
-                  render: (e) => e.programmeCode ?? 'Undecided',
+                  render: (e) => (e.programmeCode ? programmeName(e.programmeCode) : 'Undecided'),
                 },
                 {
                   key: 'merged',
@@ -320,7 +321,7 @@ export function leadTabs(
               {
                 key: 'programmeCode',
                 header: 'Programme',
-                render: (a) => a.programmeCode ?? 'Undecided',
+                render: (a) => (a.programmeCode ? programmeName(a.programmeCode) : 'Undecided'),
               },
               {
                 key: 'status',

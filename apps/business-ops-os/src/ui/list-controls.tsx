@@ -166,10 +166,13 @@ export function SearchPanel({
 
 type Params = Record<string, string | undefined>;
 
-/** A list URL keeping the current params; `patch` values of undefined remove a key. */
+/**
+ * A list URL keeping the current params; `patch` values of undefined remove a key. A panel's open
+ * `section` belongs to that one record, so it never carries over to the list or the next record.
+ */
 export function listHref(basePath: string, params: Params, patch: Params = {}) {
   const q = new URLSearchParams();
-  for (const [k, v] of Object.entries({ ...params, ...patch })) if (v) q.set(k, v);
+  for (const [k, v] of Object.entries({ ...params, section: undefined, ...patch })) if (v) q.set(k, v);
   return q.size ? `${basePath}?${q}` : basePath;
 }
 

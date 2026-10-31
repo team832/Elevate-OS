@@ -410,7 +410,7 @@
   overflow-wrap: normal;
 }
 .el-stat-value-long {
-  font-size: var(--el-text-md);
+  font-size: var(--el-text-title);
   line-height: 2.15rem;
 }
 .el-stat-note,

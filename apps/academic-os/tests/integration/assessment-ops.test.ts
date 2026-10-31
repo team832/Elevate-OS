@@ -723,6 +723,58 @@ describe('list views and teacher visibility', () => {
     const [audited] = await ctx.db.select().from(auditEvents).where(eq(auditEvents.entityId, id)).orderBy(desc(auditEvents.at)).limit(1);
     expect(audited!.metadata).toMatchObject({ overwriteVerified: true, reason: 'Typing slip: 17 for 18' });
   });
+
+  it('RVA-007: every changed verified row needs its own reason, also on final results', async () => {
+    const id = (
+      await call(createRoute, '', {
+        code: uniq('T-'),
+        kind: 'chapter_test',
+        title: 'Per-row reason test (fictional)',
+        academicYear: '2026-27',
+        batchIds: [w.batch.id],
+        scheduledDate: '2026-09-25',
+        maxMarks: '20',
+      })
+    ).data!.assessment.id;
+    await call(snapshotRoute, `/${id}/roster`, {}, { id });
+    const coordinator = actor(u.coordinator);
+    const sheet = () => getMarksSheet(ctx.db, coordinator, id);
+    const row = async (studentId: string, manualScore: string, reason?: string) => ({
+      studentId,
+      state: 'scored' as const,
+      manualScore,
+      version: (await sheet()).rows.find((r) => r.studentId === studentId)!.version,
+      ...(reason ? { reason } : {}),
+    });
+    const save = async (...spec: Parameters<typeof row>[]) =>
+      enterMarks(ctx.db, coordinator, id, { marks: await Promise.all(spec.map((x) => row(...x))) });
+    const score = async (studentId: string) =>
+      (await sheet()).rows.find((r) => r.studentId === studentId)!.manualScore;
+    const [a, b, c] = [s.a!, s.b!, s.c!];
+    await save([a, '10'], [b, '10']);
+
+    for (const [spec, missing] of [
+      [[[a, '11', 'Slip on a'], [b, '11']], [b]],
+      [[[c, '11', 'A reason on a new mark'], [a, '11']], [a]],
+    ] as [Parameters<typeof row>[], string[]][]) {
+      await expect(save(...spec)).rejects.toMatchObject({ status: 409, details: { overwriteRequired: missing } });
+      expect([await score(a), await score(b), await score(c)]).toEqual(['10', '10', null]);
+    }
+
+    // Only some rows verified: the new mark needs no reason.
+    await save([a, '11', 'Slip on a'], [c, '12']);
+    await save([a, '12', 'Second slip on a'], [b, '12', 'Slip on b']);
+    expect([await score(a), await score(b), await score(c)]).toEqual(['12', '12', '12']);
+    const [audited] = await ctx.db.select().from(auditEvents).where(and(eq(auditEvents.entityId, id), eq(auditEvents.action, 'roster.scores_recorded'))).orderBy(desc(auditEvents.at)).limit(1);
+    expect(audited!.metadata).toMatchObject({ overwritten: expect.arrayContaining([a, b]), reasons: { [a]: 'Second slip on a', [b]: 'Slip on b' } });
+
+    const rest = (await sheet()).rows.filter((r) => r.state === 'pending').map((r) => r.studentId);
+    if (rest.length) await save(...rest.map((x): Parameters<typeof row> => [x, '5']));
+    expect((await call(finaliseRoute, `/${id}/finalise`, {}, { id })).status).toBe(200);
+    await expect(save([a, '13', 'Final slip on a'], [b, '13'])).rejects.toMatchObject({ status: 409, details: { overwriteRequired: [b] } });
+    await save([a, '13', 'Final slip on a'], [b, '13', 'Final slip on b']);
+    expect([await score(a), await score(b)]).toEqual(['13', '13']);
+  });
 });
 
 describe('fix round 1: teacher scope on multi-batch rosters, attempts after final, scoring rule, duplicates, acting user', () => {

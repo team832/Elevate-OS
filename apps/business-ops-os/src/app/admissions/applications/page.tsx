@@ -86,6 +86,7 @@ async function List({ user, params }: { user: AuthenticatedUser; params: Params 
               value={statusCounts[w.status] ?? 0}
               href={listHref(BASE, params, {
                 status: params.status === w.status ? undefined : w.status,
+                blocked: undefined,
                 page: undefined,
               })}
               current={params.status === w.status}

@@ -119,10 +119,18 @@ export function RecordModal({
         </div>
         <div className="ops-modal-actions">
           {fullHref ? <a href={fullHref}>Open full record</a> : null}
-          <button type="button" className="el-icon-button" onClick={() => ref.current?.close()}>
+          {/* A plain link until hydrated, so Close never waits on JavaScript; after that it closes in place. */}
+          <a
+            href={closeHref}
+            className="el-icon-button"
+            onClick={(e) => {
+              e.preventDefault();
+              ref.current?.close();
+            }}
+          >
             <Icon name="close" />
             <span className="el-visually-hidden">Close</span>
-          </button>
+          </a>
         </div>
         {tabs?.length ? (
           <div

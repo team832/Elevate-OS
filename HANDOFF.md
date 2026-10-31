@@ -1,6 +1,6 @@
 # Elevate OS — handoff
 
-_Last updated 31 Oct 2026 (debug pass, structure, release package). Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
+_Last updated 31 Oct 2026 (debug pass, structure, release package, later fix rounds). Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
 
 ## For the owner (plain language)
 
@@ -26,27 +26,73 @@ What I did:
   (one gap for your decision is below), notices open in the right workspace, and someone whose
   login has no staff record is told why instead of failing quietly.
 - Fee figures agree. Tuition pages show tuition, the case page and exit record show everything
-  owed, and each adds up on every screen and paper: 160 figures worked out by hand first, 0
-  mismatches. Forms, cards and reports now print Hindi names correctly.
-- Clicks show a thin bar at once, the Overview opens in about 0.3 seconds (was 1.2 to 1.8), and
+  owed, and each adds up on every screen and paper: 171 figures worked out by hand first, 0
+  wrong. Forms, cards and reports now print Hindi names correctly.
+- Clicks show a thin bar at once, the Overview opens in 0.2 to 0.5 seconds (was 1.2 to 1.8), and
   everything now builds into one package with a check on every file. On the first package, 266 use
-  cases: 260 passed, 3 failed and were fixed afterwards, 3 could not be run here.
-What I need from you: step 10 below, in order, on your own computer. Then the first three rows
-  marked "New 31 Oct" in "Decisions waiting for you": real staff cannot use this without them.
+  cases: 260 passed, 3 failed and were fixed afterwards, 3 could not be run here. On the last package
+  tested: 262 passed, 1 failed and was fixed afterwards, the same 3 could not be run here.
+What I need from you: step 10 below, in order, on your own computer. Then the first group,
+  "Stops real use", in "Decisions waiting for you": real staff cannot use this without those three.
 What's next:
 - The final re-test on the rebuilt package: [coordinator fills final numbers]
 - Your own look at the screens, above all the arrows under tables you mentioned. I fixed four
-  arrow-like things and cannot tell which you meant.
+  arrow-like things and cannot tell which you meant. Pictures of each are under "Pictures you can
+  look at" below: please tell me if the arrows you saw are still there.
 - Choosing where to host it, once the three decisions are made.
 Placeholders still to replace: 26 (the placeholders list says what each one is).
 ```
 
 **What this does not mean.** I cannot tell you there are no errors anywhere. These are still true:
 - **Not checked by anyone yet:** a real Google sign-in, a real phone on your Wi-Fi, restoring a backup, any server other than this PC, and your own database, which I do not touch.
-- **Speed figures** come from sample data on a busy PC. Forty people opening the Overview at the same instant still wait about 9 seconds (it was about a minute).
+- **Speed figures** come from sample data on a busy PC. Forty people opening the Overview at the same instant still wait: about 9 seconds at the first measure and about 16.5 seconds on a later run while other checks kept the PC 34 to 54% busy (it was about a minute). That later figure is not shown to be a slowdown in the system, and not shown not to be.
 - **Open by design until you choose a host:** until a secure front door (a proxy) is in place, someone can fake the network address recorded for their session.
 - **In the office mode of step 10, file uploads are refused,** the same as online: test papers and keys, score imports and task files. Choosing file storage fixes this. Marks by hand and publishing still work.
 - **How I read your brief:** "this one" means Elevate OS, and "different teacher, different workspace" means each teacher has their own view inside one Academic workspace. Tell me if you meant something else.
+
+### Known limits (31 Oct 2026)
+
+We know about these and have left them for now. The first one needs your help.
+
+**Please try this.** On a simulated slow phone, opening the phone menu took 0.36 to 0.74 seconds against a target of 0.2 seconds, and closing a panel, changing a tab and opening filters were also slower than the target. The older code measured the same in the same minute, so this work did not cause it, and the test PC was on battery. A simulation is not a phone. Please try the system on a real staff phone and tell us how it feels: which screen, which button, and whether you find yourself waiting.
+
+**Requests nobody makes from a screen.** No data is shown and nothing is saved in the first two.
+- A hand-made web address with broken letter coding gets a bare error page instead of a worded answer. No screen can make such an address.
+- A hand-made request from a command-line tool (curl), with no sign of which site it came from, can answer an error and leave a line in the server log. A web page cannot send this.
+- Asking a real data address with the wrong kind of request gets an empty "not allowed" with no sentence. An address that does not exist now answers properly.
+- Until a secure front door (a proxy) is in place, someone can fake the network address recorded for their session and get round the limits counted per address. This goes with choosing a host.
+
+**Not proven yet.**
+- The automatic checks on GitHub build with a different build tool (Turbopack) from this PC, and those builds pass. Nobody has run one of those builds to watch the check that keeps each person in their own workspace. If that check failed there, every signed-in data request would answer an error. It would not let anyone in.
+- Linux has not been run. Everything so far ran on this Windows PC, so a Linux host needs its own build and test.
+
+**How some screens look.**
+- Two or three wide tables need sideways scrolling inside the table on a desktop screen: Marketing's weekly report, Today's classes and a test's Roster and marks. The page itself does not scroll sideways. More tables do this on a tablet, and Academic's reports do on a phone.
+- Academic settings and a test's scoring sections are still typed into a box of technical text (JSON). A proper form was not built.
+
+**Small things left as they are.** No figure is wrong in any of these.
+- Printing a student's report page before a report exists prints the "Make a report" form on page 2 after a nearly blank page 1. There is no Print button on that page; only Ctrl+P reaches it.
+- On a phone, the last date under the Leads chart sits 1 to 3 pixels over the edge of its card.
+- On a phone, the date-and-time box on a Marketing content record runs past the card, so the calendar icon is out of sight until the table is pushed sideways.
+- On a phone, one word breaks in the middle in a narrow settings table ("Unacknowledg-ed hours").
+- A test's Roster and marks gets a small scrollbar for a few pixels at desktop width.
+- A panel opened by mouse shows a square outline round "Open full record".
+
+### Pictures you can look at (31 Oct 2026)
+
+Open the folder `C:\OPENBOT\elevate-os\docs\screens-31-oct`. They come from the last package tested, with made-up sample records, so the figures are test data and not your business. Two pictures of a teacher's record were left out because they show a real teacher's name. A made-up phone number on the two admission pictures is covered.
+
+**The arrows.** I still do not know which arrows you meant. Please compare these with your own screen and tell me if the arrows you saw are still there, and which picture comes closest.
+
+| You may have meant | Picture | What it shows now |
+|---|---|---|
+| The arrow in an empty table | [empty-table.png](docs/screens-31-oct/empty-table.png) | Headings stay, and an orange up-arrow sits before the words "No demos match this search". It used to run into the text |
+| The arrows at the ends of a scrollbar under a wide table | [wide-table-with-scrollbar.png](docs/screens-31-oct/wide-table-with-scrollbar.png), [phone](docs/screens-31-oct/wide-table-with-scrollbar-phone.png), [desktop](docs/screens-31-oct/wide-table-with-scrollbar-desktop.png) | A slim scrollbar under the table, with no arrows. Some columns stay out of sight until you push the table |
+| The arrows in the row of tabs on a record with many tabs | Left out (a real name). To see it, open any teacher under Teachers | Ten tabs wrap to three rows on a desktop, and sit in one sideways strip on a phone |
+| The arrow on the admission stage strip | [admission-stage-strip.png](docs/screens-31-oct/admission-stage-strip.png), [phone](docs/screens-31-oct/admission-stage-strip-phone.png) | Demo, Application, Signed, Confirmed, Active, with an orange arrow on the current stage |
+| Broken date labels under a chart | [chart-with-date-labels.png](docs/screens-31-oct/chart-with-date-labels.png), [phone](docs/screens-31-oct/chart-with-date-labels-phone.png) | Dates on one line, every 4 days. They used to break letter by letter |
+
+**Also there.** The Overview, first screen: [desktop](docs/screens-31-oct/overview-1440.png), [phone](docs/screens-31-oct/overview-390.png). The whole page: [desktop](docs/screens-31-oct/overview-1440-whole-page.png), [phone, cut at 6,000 pixels](docs/screens-31-oct/overview-390-whole-page.png). A form refusing a bad phone number, with the reason beside the field and the typing kept: [desktop](docs/screens-31-oct/form-with-refusal.png), [phone](docs/screens-31-oct/form-with-refusal-phone.png).
 
 ### Status report — 23–24 Oct 2026 (tests, requests through HR, marketing, fees)
 
@@ -363,83 +409,145 @@ If any step shows an error, stop and send the developer the last lines; nothing 
 
 ### Decisions waiting for you
 
-Until you answer, the system uses the safe choice shown and marks it "Proposed".
+Until you answer, the system uses the safe choice shown and marks it "Proposed". The newest questions come first, most important at the top of the list.
+
+#### New 31 Oct: 1. Stops real use (answer these first)
 
 | Question | Safe choice used today |
 |---|---|
-| **New 31 Oct (go-live).** How do real staff sign in, and how do they confirm an admission? New accounts have no password, no screen sets or resets one, and confirming an admission asks for a password. Either signing in with Google again counts for confirming (D-041), or a set-password screen gets built | Sign-in needs Google. Confirming refuses anyone with no password, so no real admission can be confirmed yet |
-| **New 31 Oct (go-live).** Where should uploaded files be kept? This covers test papers and answer keys, score imports and task files | Refused with a plain message in office mode and online. Marks by hand and publishing still work |
-| **New 31 Oct (go-live).** Who runs the background jobs, and how often? An exit or a corrected name reaches Academic only when someone presses the button. The same goes for reminders, Academic replies and demo attendance | Buttons on the Business Operations Overview, operations manager only. Pressing one twice is safe |
-| **New 31 Oct (fees).** A finance officer cannot open a student's Fees tab, so no screen lets finance record a payment on an admitted student's yearly agreement. Give finance read access to students, make a fee-only page, or show the fee section on the admitted case? | Finance sees Collections and Outstanding; the operations manager records the payment |
-| **New 31 Oct (fees).** Money above the whole agreement, such as ₹2,00,000 recorded on a ₹1,00,000 agreement: refuse, warn or allow? | Accepted, and shown as a credit |
-| **New 31 Oct (fees).** May one receipt number be recorded twice, for example one receipt across two instalments? Refuse, warn or allow? | The same receipt, amount, date, charge and instalment is refused; a different amount is accepted. This changes the earlier "a second identical payment is deliberate" rule |
-| **New 31 Oct (fees).** A discount, waiver or credit above what is owed: refuse it? | Refused (Proposed). Demo credits are exempt |
-| **New 31 Oct (fees).** A demo fee credited to tuition: must the credit be undone before it can be refunded? | Yes (Proposed). Credits already refunded stay ₹1,000 short until reversed |
-| **New 31 Oct (fees).** A refund dated before the payment it returns: refuse it? | Refused (Proposed) |
-| **New 31 Oct (fees).** An added charge (a debit): which instalment does it belong to, if any? | None: no due date, never overdue, still counted as owed (Proposed) |
-| **New 31 Oct (fees).** Should an added charge have its own line on the signed form? | Printed as "Added charge (debit)" (Proposed) |
-| **New 31 Oct (fees).** An agreement closed on purpose with money unpaid: is that money still owed? | Counted on the Fees tab, fee year, statement and exit record; left out of Outstanding, Overview and fee status (Proposed) |
-| **New 31 Oct (fees).** The case page and exit record show everything the student owes across all cases, including registration and demo fees; the Fees tab, Outstanding, Overview and fee year show tuition. Is that the right split? | As stated (Proposed) |
-| **New 31 Oct (fees).** Two leads merged: should the ₹1,000 demo fee on the lost lead's case move across? | It stays on the lost case |
-| **New 31 Oct (fees).** A signed paper turns out to hold a wrong fee figure (step 11a): print and sign it again, or keep it with a note? | Nothing is rewritten; the case page shows the right figure |
-| **New 31 Oct (fees).** Fee structure rows: entered on the fee screen, or imported? | No screen adds them; the page says it waits for you |
-| **New 31 Oct (fees).** Count tiles on the HR page and task reports are not marked when they include sample records (money figures are). Mark them too? | Not marked |
-| **New 31 Oct (admissions).** After a student's name is corrected: reprint the acknowledgement and ID card, or leave them as issued? | Left as issued (Proposed); the case page says so |
-| **New 31 Oct (admissions).** When a case is lost or merged, should its demo classes be cancelled automatically? | A person closes them and the page warns; the slot stays held until then |
-| **New 31 Oct (admissions).** "Active" students means admitted, awaiting enrolment or enrolled. Is that right? | As stated (Proposed) |
-| **New 31 Oct (admissions).** After a real merge, the old lead still shows the new lead's id and code. Is that acceptable? | Left as is: it records the merge |
-| **New 31 Oct (leads).** A duplicate check matches a lead the person may not see: how much to show? Should the checks have a daily limit? | Only "exact" or "possible", with no name, code, owner or count. A name-and-school match with no shared contact is left out for them and still flagged for merge review. Checks are logged, with no limit (Proposed) |
-| **New 31 Oct (exits).** A transferred or "other inactive" exit ends as "withdrawn" in Academic. Separate statuses need another database update. Is "withdrawn" enough? | Withdrawn in Academic; the true outcome stays in Business Operations and the audit history |
-| **New 31 Oct (exits).** An exit dated in the future: close the case today and let attendance run to that date? | As stated |
-| **New 31 Oct (exits).** A student leaves before their first day: delete the unstarted batch place? | Deleted; the audit history keeps it |
-| **New 31 Oct (exits).** On exit: cancel open catch-up tasks and remove untouched later test rows, and keep rows that hold marks? | As stated |
-| **New 31 Oct (exits).** A coordinator ending an enrolment in Academic does not tell Business Operations. Should it? | Not told |
-| **New 31 Oct (exits).** "On hold" in Business Operations does not pause Academic, and HR leave does not flag anything there. Should they? | No link |
-| **New 31 Oct (exits).** May Academic end an enrolment before it starts? | Refused until the start date, with an explanation |
-| **New 31 Oct (exits).** When a teacher leaves, should assignments end and tasks move automatically? | No. Their manager, operations managers and coordinators are told what they held |
-| **New 31 Oct (teachers).** A student moves to another batch: should the old teacher's read access end on the transfer date? | It ends with the teacher's assignment to that batch |
-| **New 31 Oct (teachers).** Should a replaced teacher be told about a substitute? | No |
-| **New 31 Oct (teachers).** A teacher named on a batch but on no class sees its students and marks and no classes. Is that right? | As built |
-| **New 31 Oct (academic).** Coordinators see student and guardian phone and email in Academic; directors, auditors and teachers do not. Is that intended? | As built |
-| **New 31 Oct (academic).** Ranks say "Hidden" on a fresh system until the Academic setting is turned on, although the walkthrough shows 1, 2, 2, 4. Turn it on? | Hidden (D-103, Proposed) |
-| **New 31 Oct (academic).** A coordinator corrects a verified or final mark, with a required reason. Is the permission for finalising the right one for this? | As built (Proposed), recorded in the audit history |
-| **New 31 Oct (academic).** Subjects and chapters cannot be added on a screen. Is the loaded curriculum enough? | Loaded curriculum only |
-| **New 31 Oct (academic).** Paused programmes still accept new courses. Should they? | Accepted |
-| **New 31 Oct (academic).** A class length set on one batch counts as approved, and scheduled classes of another length then show as hard conflicts. Is that right? | As built |
-| **New 31 Oct (HR).** Requests from counsellors, finance, directors and operations managers go to the operations managers, not the HR manager, because of the Proposed HR scope. With only one operations manager, their own request reaches nobody. What should happen? | As stated |
-| **New 31 Oct (HR).** HR cannot add a staff record, and the HR manager cannot send a request. Should they? | No (grants Proposed) |
-| **New 31 Oct (HR).** A request forwarded to someone with no permission to send requests is refused. Should they be able to reply anyway? | Refused; HR chooses someone else or answers it |
-| **New 31 Oct (HR).** When HR makes a task from a request, should the sender be told? | Not told |
-| **New 31 Oct (HR).** May HR move someone to a department outside HR's scope? Today it works, then HR can no longer open that record | Allowed; only an operations manager can undo it |
-| **New 31 Oct (HR).** Should a screen offer unlinking a login from a staff record? | No screen |
-| **New 31 Oct (HR).** An address in the first-administrator setting gets its roles back at every sign-in, so it cannot be permanently demoted. Is that acceptable? | As built, recorded in the audit history |
-| **New 31 Oct (tasks).** Who should hear a comment or a blocker on a task? | Nobody: it shows on the task only |
-| **New 31 Oct (settings).** Should teachers and counsellors also get Personal Settings (pop-ups off, reminder spacing)? | Marketing only |
-| **New 31 Oct (events).** Should an event's capacity also limit invitations? | Limits registrations only |
-| **New 31 Oct (marketing).** Old records marked published with nothing posted (step 11b): change them? | Not changed; the dashboard over-counts them |
-| **New 31 Oct (marketing).** A monthly report for a month still to come answers "not found". Is that right? | As built |
-| **New 31 Oct (first install).** On a first install, load the 8 real staff and their assignments? Their names ship inside the package either way, so keep it private | Not loaded |
-| **New 31 Oct (first install).** Load the old marketing history (59 ideas, 36 placements)? | Not loaded |
-| **New 31 Oct (first install).** Load the two planning batches, the draft syllabus courses and the website-stated prices? | Loaded, labelled |
-| **New 31 Oct (first install).** Must any reference name stay under the seed's control, so a re-seed resets it? | None |
-| **New 31 Oct (first install).** Who may add lead sources and programmes on a screen? | No screen |
-| **New 31 Oct (first install).** Going live: one address with one port per app is the only shape that works today. Any other shape needs more work (see the release notes) | One address, four ports |
-| **New 31 Oct (tidying).** Clearing expired sign-ins keeps ended sessions for 30 days. Is that long enough? | 30 days |
-| **New 31 Oct (tidying).** `npm run office` runs your database from a beta build of the database tool. Acceptable until you have a host? | As built |
-| **New 31 Oct (tidying).** 17 data connections no screen uses, and 60 that repeat what a screen does directly: keep them? | Kept |
-| **New 31 Oct (tidying).** Two permissions nobody holds, and an empty leftover folder: remove them? | Left as they are |
-| **New 31 Oct (tidying).** A script that prepares old data holds real staff names and roles (no phones or emails). Acceptable in a private repository? | Left as is |
-| **New 31 Oct (names).** Which name for each pair: Requests through HR or HR Requests; My reports or My Work Updates; My tasks or My Tasks; Tests and Mock Tests or Assessments? | As they are today |
-| **New 31 Oct (look).** After the rebuild, are the arrows under tables gone on your screen? Four arrow-like things were fixed, and I cannot tell which you meant | The four fixes stand |
-| **New 31 Oct (look).** Slim scrollbars with no arrows, and table headers on several lines: do they suit the look you chose? | As built |
+| How do real staff sign in, and how do they confirm an admission? New accounts have no password, no screen sets or resets one, and confirming an admission asks for a password. Either signing in with Google again counts for confirming (D-041), or a set-password screen gets built | Sign-in needs Google. Confirming refuses anyone with no password, so no real admission can be confirmed yet |
+| Where should uploaded files be kept? This covers test papers and answer keys, score imports and task files | Refused with a plain message in office mode and online. Marks by hand and publishing still work |
+| Who runs the background jobs, and how often? An exit or a corrected name reaches Academic only when someone presses the button. The same goes for reminders, Academic replies and demo attendance | Buttons on the Business Operations Overview, operations manager only. Pressing one twice is safe |
+
+#### New 31 Oct: 2. Going live and the first install
+
+| Question | Safe choice used today |
+|---|---|
+| Going live: one address with one port per app is the only shape that works today. Any other shape needs more work (see the release notes). Is that shape acceptable? | One address, four ports |
+| Wrong-password limits are counted separately in each app and forgotten at restart, and 20 wrong tries on someone's email lock that person out of one app for 15 minutes. Acceptable until you have a host? | As built |
+| On a first install, load the 8 real staff and their assignments? Their names ship inside the package either way, so keep it private | Not loaded |
+| Load the old marketing history (59 ideas, 36 placements)? | Not loaded |
+| Load the two planning batches, the draft syllabus courses and the website-stated prices? | Loaded, labelled |
+| Starting names (departments, programmes, lead sources) are loaded once and staff can then edit them. Must any of them go back to the loaded wording each time the starting data is loaded again? | None: staff edits are kept |
+| Who may add lead sources and programmes on a screen? | No screen: they come from the starting data |
+| Office mode runs your database from a beta build of the database tool. Acceptable until you have a host? | As built |
+
+#### New 31 Oct: 3. Money
+
+| Question | Safe choice used today |
+|---|---|
+| Money above the whole agreement, such as ₹2,00,000 recorded on a ₹1,00,000 agreement: refuse, warn or allow? A typing slip saves silently today; an advance may be real | Accepted, and shown as a credit |
+| A finance officer cannot open a student's Fees tab, so no screen lets finance record a payment on an admitted student's yearly agreement. Give finance read access to students, make a fee-only page, or show the fee section on the admitted case? | Finance sees Collections and Outstanding; the operations manager records the payment |
+| A signed paper turns out to hold a wrong fee figure (step 11a): print and sign it again, or keep it with a note? | Nothing is rewritten; the case page shows the right figure |
+| May one receipt number be recorded twice, for example one receipt across two instalments? Refuse, warn or allow? | The same receipt, amount, date, charge and instalment is refused; a different amount is accepted. This changes the earlier "a second identical payment is deliberate" rule |
+| A discount, waiver or credit above what is owed: refuse it? | Refused (Proposed). Demo credits are exempt |
+| A demo fee credited to tuition: must the credit be undone before it can be refunded? | Yes (Proposed). Credits already refunded stay ₹1,000 short until reversed |
+| A refund dated before the payment it returns: refuse it? | Refused (Proposed) |
+| An added charge (a debit): which instalment does it belong to, if any? | None: no due date, never overdue, still counted as owed (Proposed) |
+| Should an added charge have its own line on the signed form? | Yes: printed on its own line as "Added charge (debit)" (Proposed) |
+| An agreement closed on purpose with money unpaid: is that money still owed? | Counted on the Fees tab, fee year, statement and exit record; left out of Outstanding, Overview and fee status (Proposed) |
+| The case page and exit record show everything the student owes across all cases, including registration and demo fees; the Fees tab, Outstanding, Overview and fee year show tuition. Is that the right split? | As stated (Proposed) |
+| Two leads merged: should the ₹1,000 demo fee on the lost lead's case move across? | It stays on the lost case |
+| Fee structure rows: entered on the fee screen, or imported? | No screen adds them; the page says it waits for you |
+| Count tiles on the HR page and task reports are not marked when they include sample records (money figures are). Mark them too? | Not marked |
+
+#### New 31 Oct: 4. Marks and tests
+
+| Question | Safe choice used today |
+|---|---|
+| Who may correct a mark that is already checked or final? | Only the academic coordinator, with a reason typed for each mark that changes. Old and new marks go in the audit history (Proposed). Teachers, directors, auditors and operations managers cannot |
+| A correction on a test whose results are already final publishes a new version of the results at once, with no second person and no press of Publish. Should it wait for someone to publish it? | Published at once as a new version marked "Re-scored"; the earlier version stays on record as Replaced (Proposed) |
+| A teacher's typed mark counts as checked the moment it is saved, and after that the teacher cannot change it: they see "Ask the academic coordinator". Should it stay checked at once, or wait until someone else checks it? | Checked at once (as built) |
+| Ranks say "Hidden" on a fresh system until the Academic setting is turned on, although the walkthrough shows 1, 2, 2, 4. Turn it on? | Hidden (D-103, Proposed) |
+
+#### New 31 Oct: 5. Students leaving, corrected names, merged leads
+
+| Question | Safe choice used today |
+|---|---|
+| Who may end an enrolment before it starts? Academic is refused until the start date | Refused in Academic, with an explanation: record an exit on the student's record in Business Operations instead |
+| A student leaves before their first day: delete the unstarted batch place? | Deleted; the audit history keeps it |
+| An exit dated in the future: close the case today and let attendance run to that date? | As stated |
+| On exit: cancel open catch-up tasks and remove untouched later test rows, and keep rows that hold marks? | As stated |
+| A transferred or "other inactive" exit ends as "withdrawn" in Academic. Separate statuses need another database update. Is "withdrawn" enough? | Withdrawn in Academic; the true outcome stays in Business Operations and the audit history |
+| A coordinator ending an enrolment in Academic does not tell Business Operations. Should it? | Not told |
+| "On hold" in Business Operations does not pause Academic, and HR leave does not flag anything there. Should they? | No link |
+| When a teacher leaves, should assignments end and tasks move automatically? | No. Their manager, operations managers and coordinators are told what they held |
+| After a student's name is corrected: reprint the acknowledgement and ID card, or leave them as issued? | Left as issued (Proposed); the case page says so. An application form already generated or signed must be redone |
+| When a case is lost or merged, should its demo classes be cancelled automatically? | A person closes them and the page warns; the slot stays held until then |
+| "Active" students means admitted, awaiting enrolment or enrolled. Is that right? | As stated (Proposed) |
+| After a real merge, the old lead still shows the new lead's id and code. Is that acceptable? | Left as is: it records the merge |
+
+#### New 31 Oct: 6. Duplicate checks
+
+| Question | Safe choice used today |
+|---|---|
+| A duplicate check matches a lead the person may not see: how much should they be told? | Only "exact" or "possible", with no name, code, owner or count. A name-and-school match with no shared contact is left out for them and still flagged for merge review (Proposed) |
+| Someone could try phone numbers one after another to learn which are on file. Should duplicate checks have a limit per person per day? There is no shared counter today; one needs a small database update | Every check is logged, with no limit (Proposed) |
+
+#### New 31 Oct: 7. Teachers, HR and tasks
+
+| Question | Safe choice used today |
+|---|---|
+| A student moves to another batch: should the old teacher's read access end on the transfer date? | It ends with the teacher's assignment to that batch |
+| Should a replaced teacher be told about a substitute? | No |
+| A teacher named on a batch but on no class sees its students and marks and no classes. Is that right? | As built |
+| The Teachers list shows only staff with a subject on their record, so someone assigned to a batch with no subject recorded is missing from it (on the test data, IPMAT: 9 assigned, 5 listed). Should it list everyone assigned? | As built |
+| Requests from counsellors, finance, directors and operations managers go to the operations managers, not the HR manager, because of the Proposed HR scope. With only one operations manager, their own request reaches nobody. What should happen? | As stated |
+| HR cannot add a staff record, and the HR manager cannot send a request. Should they? | No (grants Proposed) |
+| A request forwarded to someone with no permission to send requests is refused. Should they be able to reply anyway? | Refused; HR chooses someone else or answers it |
+| When HR makes a task from a request, should the sender be told? | Not told |
+| May HR move someone to a department outside HR's scope? Today it works, then HR can no longer open that record | Allowed; only an operations manager can undo it |
+| Should a screen offer unlinking a login from a staff record? | No screen |
+| An address in the first-administrator setting gets its roles back at every sign-in, so it cannot be permanently demoted. Is that acceptable? | As built, recorded in the audit history |
+| Who should hear a comment or a blocker on a task? | Nobody: it shows on the task only |
+| Should teachers and counsellors also get Personal Settings (pop-ups off, reminder spacing)? | Marketing only |
+
+#### New 31 Oct: 8. Academic set-up
+
+| Question | Safe choice used today |
+|---|---|
+| Coordinators see student and guardian phone and email in Academic; directors, auditors and teachers do not. Is that intended? | As built |
+| Subjects and chapters cannot be added on a screen. Is the loaded curriculum enough? | Loaded curriculum only |
+| Paused programmes still accept new courses. Should they? | Accepted |
+| A class length set on one batch counts as approved, and scheduled classes of another length then show as hard conflicts. Is that right? | As built |
+
+#### New 31 Oct: 9. Marketing and events
+
+| Question | Safe choice used today |
+|---|---|
+| Old records marked published with nothing posted (step 11b): change them? | Not changed; the dashboard over-counts them |
+| A monthly report for a month still to come answers "not found". Is that right? | As built |
+| Should an event's capacity also limit invitations? | Limits registrations only |
+
+#### New 31 Oct: 10. Names and look
+
+| Question | Safe choice used today |
+|---|---|
+| After the rebuild, are the arrows you saw still there on your screen? Four arrow-like things were fixed, and I cannot tell which you meant. Pictures are under "Pictures you can look at" above | The four fixes stand |
+| Which name for each pair: Requests through HR or HR Requests; My reports or My Work Updates; My tasks or My Tasks; Tests and Mock Tests or Assessments? | As they are today |
+| Slim scrollbars with no arrows, and table headers on several lines: do they suit the look you chose? | As built |
+
+#### New 31 Oct: 11. Tidying
+
+| Question | Safe choice used today |
+|---|---|
+| Clearing expired sign-ins keeps ended sessions for 30 days. Is that long enough? | 30 days |
+| 17 data connections no screen uses, and 60 that repeat what a screen does directly: keep them? | Kept |
+| Two permissions nobody holds, and an empty leftover folder: remove them? | Left as they are |
+| A script that prepares old data holds real staff names and roles (no phones or emails). Acceptable in a private repository? | Left as is |
+
+#### Earlier questions, still open
+
+| Question | Safe choice used today |
+|---|---|
 | **New 24 Oct (staff).** Is `soma@elevateeducation.in` the "Soma" who teaches CLAT Current Affairs (not Soma Tiwari)? I assumed so for the demo sign-in | Linked to "Soma" (CLAT Current Affairs), marked as an assumption |
 | **New 24 Oct (requests).** Which staff record is Schar? (D-096) | Not set: requests for Schar wait in HR's queue |
 | **New 24 Oct (leads).** Does an admission that was later withdrawn, transferred or completed still count as a conversion? (D-105) | Yes, with a flag (Proposed). Cancelled before enrolment and lost never count |
 | **New 24 Oct (reminders).** Task reminders: once 24 hours before the due time, every 24 hours while overdue, every 4 hours until a new task is acknowledged? (D-108) | As stated (Proposed) |
-| **New 24 Oct (reminders).** There is no automatic timer yet, so task reminders and follow-up reminders go out only when someone starts them, and only the operations manager may start them. Who should run them, and how often? | Run by hand by the operations manager |
+| **New 24 Oct (reminders).** There is no automatic timer yet, so task reminders and follow-up reminders go out only when someone starts them, and only the operations manager may start them. Who should run them, and how often? | Run by hand by the operations manager. Answered together with "Who runs the background jobs" above |
 | **New 24 Oct (requests).** May HR pass a request to staff outside the departments it looks after? | No, except to the person the request was meant for; the operations manager may pass it to anyone |
 | **New 24 Oct (marketing).** Should monthly marketing reports go to HR (as the brief says) or to the employee's reporting manager? (D-109) | Reporting manager |
-| **New 24 Oct (tests).** When a teacher types scores, are they verified at once, or "imported" until someone else checks them? | Verified at once (as built) |
+| **New 24 Oct (tests).** When a teacher types scores, are they verified at once, or "imported" until someone else checks them? | Verified at once (as built). The same question as in "Marks and tests" above |
 | **New 24 Oct (tests).** Show ranks the competition way (1, 2, 2, 4), counting only students who were present with checked marks? (D-103) | Built that way; display Proposed |
 | **New 24 Oct (tests).** When may a question paper and answer key be released: from the test day, or any time? (D-094) | From the test day (Proposed) |
 | **New 24 Oct (tests).** A score arrives for a student recorded absent: refuse it, or let a person overwrite after confirming? | The whole import is refused until the attendance is corrected |
@@ -448,7 +556,7 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | **New 24 Oct (teachers).** May teachers see published reviews that have no subject? | As built (Proposed) |
 | **New 24 Oct (tasks).** May a task's backup person comment on it? | No (HR and reviewer only, D-098) |
 | **New 24 Oct (requests).** Request categories: Tasks and deadlines, Classes and batches, Students, Something else? | As stated (Proposed) |
-| **New 24 Oct (fees).** A closed fee agreement with money unpaid: does it stay "outstanding" until someone waives it? Is "due now" today only, or should it include the next few days? May the finance officer open a student's record from the fee list? (D-101) | Stays outstanding; today only; no |
+| **New 24 Oct (fees).** A closed fee agreement with money unpaid: does it stay "outstanding" until someone waives it? Is "due now" today only, or should it include the next few days? May the finance officer open a student's record from the fee list? (D-101) | Since 31 Oct: still owed on the Fees tab, fee year, statement and exit record, left out of Outstanding, Overview and fee status (see Money above); today only; no |
 | **New 24 Oct (requests).** May the operations manager read every request through HR, including complaints about administrators? | Yes |
 | **New 24 Oct (samples).** May a sample admission be confirmed, so a sample lead can reach Converted in the demo? | No: sample leads stop at "Admission in progress" |
 | **New 24 Oct (marketing).** Every marketing employee can read every calendar item and every SEO / AI-search work item, even outside the campaigns they belong to (they can change only their own). Keep that, or limit reading to their campaigns like content (D-093, D-107)? | Everyone in Marketing reads all (Proposed) |
@@ -462,7 +570,7 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | **New 23 Oct (Marketing).** Marketing employees cannot assign people to content (only the marketing manager can), and they still see the weekly figures of every social account | As stated (Proposed) |
 | **New 23 Oct (staff).** Nikunj Bindal: is CA Foundation Accounting (course `CAF-ACC-SEP27`) right as "waiting for a batch"? This was my pick; on 21 Oct no assignment was made (D-082) | Recorded as waiting, opens nothing |
 | **New 23 Oct (staff).** The sign-in `soma@…`: which Soma is it — "Soma" (CLAT Current Affairs) or "Soma Tiwari" (Economics)? The other session made a ruling; please confirm it | As ruled in the other session |
-| **New 23 Oct (files).** Where should uploaded files be kept once the system is on the internet? Until you choose, uploads work only on this computer (D-085) | Uploads refused online |
+| **New 23 Oct (files).** Where should uploaded files be kept once the system is on the internet? Until you choose, uploads work only on this computer (D-085) | Uploads refused online. Answered together with "Where should uploaded files be kept" above |
 | **New 23 Oct (samples).** The fictional sample teacher is also the main Quant teacher on the real IPMAT April 2027 batch, beside Satish. Run `npm run db:clear-samples` before real use (step 4.5) | Sample stays until you clear samples |
 | **New 23 Oct.** Is the new light look right? Open each workspace on your own screen and phone (D-074) | As built; the dark look is kept as a backup |
 | **New 23 Oct.** Users & roles still has an "Overview" page for signed-in people, left from before the workspaces. Keep it, or delete it and keep only Users & roles? | Kept |
@@ -479,7 +587,7 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | **New 22 Oct.** Keep a student's guardian name and relationship hidden from teachers, directors and auditors in Academic (phone and email were already hidden)? | Hidden |
 | **New 22 Oct.** Menu names and defaults: Business Operations groups "Teaching and work" and "Insight"; the Overview opens on this month to date; in Marketing, Ideas is a tab under Content Calendar and Accounts a tab under Campaigns | As built |
 | **New 22 Oct.** Google sign-in now returns to `http://localhost:3003/api/v1/auth/google/callback` (step 5 above), so the admin app must run for Google sign-in | As built |
-| May staff who sign in with Google confirm admissions by signing in with Google again? Today every real staff account is Google-only, so **nobody real can confirm an admission yet** (D-041) | Only an account password is accepted |
+| May staff who sign in with Google confirm admissions by signing in with Google again? Today every real staff account is Google-only, so **nobody real can confirm an admission yet** (D-041) | Only an account password is accepted. Answered together with "How do real staff sign in" above |
 | Who may confirm admissions? | Director and operations manager (Proposed) |
 | Is the ₹5,000 registration fee charged again each academic year? (D-044) | Once per student |
 | Should the director see students' private details (phone, address, documents)? The director can confirm admissions but sees "Details hidden" | Hidden |
@@ -505,7 +613,7 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | Who should see the Reports item in the tasks menu? | Everyone who can open Tasks (they see only tasks they may see) |
 | Six sample teachers have no Academic classes because their subjects exist only in draft syllabus courses. Add sample batches on those draft courses? | No |
 | Academic attendance: does "late" count as attended, and are "excused" classes left out of the percentage? | Late counts; excused left out (Proposed) |
-| Show rank and percentile on Academic progress? | Hidden |
+| Show rank and percentile on Academic progress? | Hidden. Answered together with the ranks question in "Marks and tests" above |
 | Academic trends: which results may be compared? | Same kind of test, same subject and same maximum marks (Proposed) |
 | Do tasks imported from the old Task Tracker count when measuring how often end-of-day reports were sent? | No; shown as "Imported — not sent" |
 | Who may close a task that has no reviewer? | The task owner (Proposed) |
@@ -582,10 +690,10 @@ These email addresses are sign-in names only; no mailbox receives anything.
 - The database rule on notification links now refuses control characters too, once `0017` is applied (step 10). `0017` also adds seven indexes (`placements_campaign_idx`, `attempts_student_idx`, `results_assessment_idx`, `duplicate_flags_matched_idx`, `demos_lead_idx`, `appointments_lead_idx`, `fee_records_lead_idx`).
 - Sample leads never reach Converted (sample admissions still need legacy verification).
 - The prototype `Elevate.html` does not show this milestone.
-- Browser pass: run on 31 Oct 2026 on the first package, on production builds; results in §6. The development mode was not walked for Academic, Marketing or Platform.
+- Browser pass: run on 31 Oct 2026 on the first, second and third packages, on production builds; results in §6. The development mode was not walked for Academic, Marketing or Platform.
 
 ### Decisions waiting for you
-The 21 questions from this milestone are the rows marked **New 24 Oct** at the top of "Decisions waiting for you" above.
+The 21 questions from this milestone are the rows marked **New 24 Oct** under "Earlier questions, still open" in "Decisions waiting for you" above.
 
 ### Walkthrough of the main flows
 1. **HR task to a teacher.** Sign in as `hr@` on :3000 → HR → Tasks → new task, owner a teacher, reviewer HR → Assign. Sign in as `teacher@` on :3001 → Tasks: the task is there (with a notice) → Start → Submit. Back as `hr@` → HR → Submission Review → Approve or Request changes. Collaborators can read but not comment (D-098). Reminders appear only after `business@` runs the task-reminders job.
@@ -596,7 +704,7 @@ The 21 questions from this milestone are the rows marked **New 24 Oct** at the t
 6. **Fee donut drill-down.** As `business@` on :3000 → Fees → choose the academic year and course → the chart shows paid and outstanding tuition with due-now, overdue and future tiles → click "outstanding": the list of students and its header total match the chart exactly.
 
 ### Checks
-Checks (31 Oct 2026): `npm run validate`, four webpack builds and the final re-test: `[coordinator fills final numbers]`. First re-test, on the first package: 266 use cases, 260 pass, 3 fail, 3 held; details in §6.
+Checks (31 Oct 2026): `npm run validate`, four webpack builds and the final re-test: `[coordinator fills final numbers]`. First re-test, on the first package: 266 use cases, 260 pass, 3 fail, 3 held. Last re-test so far, on the third package: 262 pass, 1 fail (ACH-01, fixed in source after), 3 held. Details in §6.
 
 Checks (24 Oct 2026, run by the coordinator): typecheck PASS; lint PASS (0 warnings); tests 4,074 of 4,075 passed in the full run — the 1 failure was a 30 s timeout under load in `applications.test.ts`, which passes 30/30 on its own; secret scan OK (1,775 files); webpack builds exit 0 for all four apps (platform, marketing-os, academic-os, business-ops-os). **Browser pass: not done** that day (skipped at the owner's request to save time). The browser pass of 31 Oct is in §6.
 
@@ -624,7 +732,7 @@ Checks (24 Oct 2026, run by the coordinator): typecheck PASS; lint PASS (0 warni
 | Password reset / change screen, shared login rate limit, outbox scheduler, Google re-authentication for confirmation | **Not built** | `infrastructure/deployment/README.md`; `C:\OPENBOT\Elevate-Not-Working` |
 | Migrations `0015_hr_staff_workspaces`, `0016_milestone_hr_marketing_tests` | **Applied on the owner's computer** 23 Oct (`db:check` 19/19; frozen) | `packages/database/migrations/` |
 | Milestone 23–24 Oct (D-094 … D-109): Tests and Mock Tests, score import, ranks and publication, requests through HR, lead stages and calls, Marketing calendar / ideas plan / SEO-AIO-GEO / targets / monthly report, reminders and pop-ups, annual fee chart, sample data | Implemented, Tested (rules and API); grants **Proposed**; browser pass pending | "Milestone 23–24 Oct 2026" above; `IMPLEMENTATION_STATUS.md` |
-| Debug pass 26 Oct and 30–31 Oct (D-112 … D-122): exit reaches Academic, workspace membership enforced on data connections, one fee statement, insert-only seeds, jobs panel, Hindi PDFs, release package | Implemented; tested on the first package; final re-test `[coordinator fills final numbers]` | `IMPLEMENTATION_STATUS.md` "Debug pass", `docs/RELEASE.md`, `docs/CASELETS.md` |
+| Debug pass 26 Oct and 30–31 Oct (D-112 … D-125): exit reaches Academic, workspace membership enforced on data connections, one fee statement, insert-only seeds, jobs panel, Hindi PDFs, release package | Implemented; tested on the first, second and third packages; final re-test `[coordinator fills final numbers]` | `IMPLEMENTATION_STATUS.md` "Debug pass", `docs/RELEASE.md`, `docs/CASELETS.md` |
 | Migration `0017` (seven indexes, link rule) | Written and tested; **status on the owner's computer unknown** (step 10) | `docs/DATABASE_MIGRATION_PLAN.md` |
 | Business facts (fees per programme, staff, holidays, targets) | **Missing — owner** | `PLACEHOLDERS.md`; OD-001…OD-048 in `docs/EXISTING_PROJECT_AUDIT.md` §9 |
 
@@ -747,7 +855,25 @@ First re-test, on the **first package** (database `elevate_v2`, ports 3000 to 30
 | Browser | 6,160 production page loads: 14 console errors (8 dead link, 6 blocked print stylesheet), 0 warnings, 0 hydration messages. All 147 pages visited. Finance, counsellor and director list runs were **not** done. Dev mode **not** walked |
 | Speed on `/ops` | Alone 264 to 298 ms (was 1,220 to 1,802). Forty at once: median 9.47 s (was 61.9 s). First visible change after a click 28 ms (was 517). Layout shift 0 (was 0.429) |
 
-Not run: axe and Lighthouse; a keyboard pass of every template (the browser pass drove 92 Escape closes and 73 keyboard opens on lists); a real Google sign-in; a real phone. `npm audit`: see §12.
+Later re-tests, each on a newer package. Their failures were fixed in the source afterwards, so these numbers describe that package only:
+
+| Check | Second package (`elevate_v3`) | Third package (`elevate_v4`) |
+|---|---|---|
+| Automated checks before the package | Lint 0, typecheck 0, 285 test files, 4,952 tests, 0 failed, secret scan OK | 4,972 tests |
+| Package | 11,016 files, 310.7 MB, archive 92.7 MB, 425 s | 11,032 files |
+| Use-case register | 266 rows: 262 pass, 1 fail (APP-18, RVB-009), 3 held | 266 rows: 262 pass, 1 fail (ACH-01, RL1-001), 3 held. Held in both: AUTH-13, STU-03, WIFI-01 |
+| Workspace membership | 22 of 22 refused, 42 of 42 own workspace 200. 6,281 requests: 3,567 non-member refused, 0 server errors, 0 false refusals on 1,343 member reads | The same numbers |
+| Interface per login | 19 logins: 0 of 671 denied pages opened, 418 of 418 allowed, 0 links to a page the login cannot open, 0 dead links; 11 roles, 11 menu sets | The same numbers |
+| Attacks and bad input | All held with controls: self-approval 43, nested ids and XSS 45, private server 31. 8,335 bad requests, 0 server errors. 252 private values, 0 in the logs | All held: 0 failed across every attack script. Sweep 7,839, fuzz 3,891, crawl 192: 0 server errors, 0 leaks |
+| Races | 18 of 18, decided by the database | 21 of 21 |
+| Fee figures | 171 hand-worked values over 15 tables: 0 wrong | 171 of 171 |
+| PDFs | 7 kinds with a Hindi name, looked at | Form, card and report looked at; no page of any kind ends on a heading |
+| Browser | 11 logins, 3,480 page loads: 0 console errors, 0 warnings, 0 hydration messages, 0 failed requests; page overflow 0 on 1,740 shapes. 241 lists, 438 row opens, 272 Escapes on 5 logins, including finance, counsellor and director | 3 logins, 1,152 page loads: the same zeros. 237 Ops shapes not reached in the time allowed |
+| 50 sessions for 2 minutes | 6,763 requests, 0 server errors, median 51 ms, 95th percentile 554 ms, slowest 2,971 ms; PostgreSQL peak 41 of 100 | Not run |
+| Speed on `/ops` | Alone 163 to 530 ms. Forty at once: median 16.53 s, 877 MB, with the PC 34 to 54% busy (first package 9.47 s, 685 MB): to be measured again on a quiet PC. First visible change after a click 27 ms | Not measured |
+| New defects found | RVC-025 to 033, RVA-007, RVA-008, RVB-008 to 010 | RL1-001 (Medium, made by the last fix), RL1-002, RL1-003, RL2-001 to 009, all Low |
+
+Not run: axe and Lighthouse; a keyboard pass of every template (the browser passes drove keyboard opens on lists); a real Google sign-in; a real phone. `npm audit`: see §12.
 
 ## 7. Where secrets live and how to rotate them
 
@@ -804,7 +930,7 @@ Limitations:
 - Workspaces (22 Oct): a panel that shows another workspace's figures says "source unavailable" while that workspace is not running; Google sign-in needs the admin app (:3003) running; on this computer the sign-in cookie is shared by every local port, so other local programs could see its name (use a separate browser profile if you run unknown local apps). Not built: staff attendance ("My Attendance"), teaching resources, Events and Webinars in Marketing, results by campaign.
 
 - Milestone 23–24 Oct: see "Limitations" in the milestone section above (no scheduler for reminders, request links to campaigns/tests refused, no paper visible between upload and release, list caps of the newest 500 calls and 200 pending imports).
-- Debug pass 31 Oct: see "What this does not mean" at the top, and `IMPLEMENTATION_STATUS.md` "Debug pass" for what stayed partial.
+- Debug pass 31 Oct: see "What this does not mean" and "Known limits" at the top, and `IMPLEMENTATION_STATUS.md` "Debug pass" for what stayed partial.
 - The prototype `Elevate.html` does not show the 26 Oct or 30–31 Oct work (register `OPS-P-DEBUG-31OCT`).
 
 Next three improvements, in priority order:

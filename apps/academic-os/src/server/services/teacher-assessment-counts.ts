@@ -25,7 +25,7 @@ import {
   academicSubjects,
   type Database,
 } from '@elevate/database';
-import { assessmentInScope, todayIst, type OwnScope } from '../context';
+import { assessmentInScope, resolveScope, todayIst, type Actor, type OwnScope } from '../context';
 import { batchCodes } from './assessments';
 
 const a = academicAssessments;
@@ -102,6 +102,20 @@ export async function teacherAssessments(
       };
     },
   );
+}
+
+/** The home tiles that open a list; same rows as the figures. null = not a teacher's own scope. */
+export const TEACHER_ASSESSMENT_LISTS = ['assigned', 'completed', 'awaitingMarking', 'published'] as const;
+export async function myAssessmentIds(
+  db: Database,
+  actor: Actor,
+  list: (typeof TEACHER_ASSESSMENT_LISTS)[number],
+  now = new Date(),
+) {
+  const scope = await resolveScope(db, actor, 'academic:assessments:read');
+  if (scope.kind !== 'own') return null;
+  const rows = (await teacherAssessments(db, scope, { today: todayIst(now) })) ?? [];
+  return new Set<string>(rows.filter((x) => list === 'assigned' || x[list]).map((x) => x.id));
 }
 
 export type TeacherAssessmentRow = NonNullable<

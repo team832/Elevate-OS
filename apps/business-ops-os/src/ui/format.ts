@@ -41,10 +41,11 @@ export function fmtDateTime(value: Date | string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? '—' : `${dateTime.format(d)} IST`;
 }
 
-/** A `YYYY-MM-DD` calendar date. */
+/** A `YYYY-MM-DD` calendar date. Anything else comes back as it is: a stray value must not take the page down. */
 export function fmtDate(value: string | null | undefined): string {
   if (!value) return '—';
-  return dateOnly.format(new Date(`${value}T00:00:00Z`));
+  const day = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(day.getTime()) ? value : dateOnly.format(day);
 }
 
 const monthYear = new Intl.DateTimeFormat('en-IN', {

@@ -1,8 +1,8 @@
 # Release package
 
-The release package is one folder (and one archive) holding the four built apps, the database steps and the scripts that start and check them. Decision: D-112. Status per D-013: **Implemented; checked on the first package on the developer's PC. Never Deployed.** No host is chosen and nothing is on the internet.
+The release package is one folder (and one archive) holding the four built apps, the database steps and the scripts that start and check them. Decision: D-112. Status per D-013: **Implemented; checked on three packages on the developer's PC, with a final one to come. Never Deployed.** No host is chosen and nothing is on the internet.
 
-The first package was built on 31 Oct 2026 from a working tree with uncommitted changes (`manifest.json` says `dirty: true`). Figures below come from that package unless marked. The final package was rebuilt the same day with all fixes: 11,016 files, 310.7 MB, archive 92.7 MB, secret scan OK on all 11,016 files, also from an uncommitted tree. Re-test results on it: `[coordinator fills final numbers]`.
+The first package was built on 31 Oct 2026 from a working tree with uncommitted changes (`manifest.json` says `dirty: true`). Figures below come from that package unless marked. Two more followed the same day after a fix round each, also from an uncommitted tree: the second with 11,016 files, 310.7 MB, archive 92.7 MB, 425 s, secret scan OK on all 11,016 files; the third with 11,032 files. Results on all three are under "Checks on the package". Final package and its re-test: `[coordinator fills final numbers]`.
 
 ## Build it
 
@@ -138,6 +138,8 @@ The apps trust `x-forwarded-for`, because a proxy is expected to set it. With no
 
 On one process, 40 requests for the Overview at the same instant take a median of **9.47 s** on `/ops` (61.9 s before the fix; memory 685 MB, was 3,343 MB). Academic 4.73 s, Marketing 3.36 s. One request alone on `/ops` takes 264 to 298 ms (was 1,220 to 1,802). The next load risk named by the agent who fixed it: `confirmationCheck`, about 18 queries per application, capped at 50.
 
+On the second package the same spike took a median of **16.53 s** on `/ops` (877 MB), Academic 5.70 s, Marketing 3.28 s, with the PC at 34 to 54% load from other agents; the same build alone took 163 to 530 ms a view. This is not shown to be a code regression, and not shown not to be. It needs measuring again on a quiet PC. With 50 sessions for 2 minutes on the same package: 6,763 requests, 0 server errors, median 51 ms, 95th percentile 554 ms, slowest 2,971 ms; PostgreSQL peak 41 of 100.
+
 ## Linux, sharp and Turbopack
 
 - **Windows only so far.** The package was built and run on Windows x64 with Node 24.19.0. `node_modules` holds `@img/sharp-win32-x64`, a Windows binary, so build on the target system. Linux has **not** been tested.
@@ -161,7 +163,20 @@ No restore has been tried. Try one on a spare database before relying on it. On 
 
 ## Checks on the package
 
-First package, 31 Oct 2026, database `elevate_v2`, ports 3000 to 3003. Evidence: coordinator folder `rv-a`, `rv-b`, `rv-c`.
+All on 31 Oct 2026, ports 3000 to 3003. Evidence: coordinator folder `rv-a`, `rv-b`, `rv-c`, `rv-last-1`, `rv-last-2`. Each column counts only for its own package.
+
+| Pass | Second package, `elevate_v3` | Third package, `elevate_v4` |
+|---|---|---|
+| Use cases | 262 pass, 1 fail (APP-18, RVB-009), 3 held | 262 pass, 1 fail (ACH-01, RL1-001, a regression from the last fix), 3 held |
+| Who can get in | 6,281 requests: 3,567 non-members refused, 0 server errors, 0 false refusals on 1,343 member reads | The same numbers |
+| Interface per login | 19 logins: 0 of 671 denied opened, 418 of 418 allowed, 0 no-access links, 0 dead links | The same numbers |
+| Earlier defects | RV-A 31 pass, 3 open (API-010, API-011, HAT-007). RV-C 62 pass, 1 fail (HUS-039), 4 partial, 4 not run, 3 open as recorded | Last fixes: 10 pass, 1 partial (RVC-030), 1 fail (RVB-010, RL1-001) |
+| Browser | 3,480 page loads on 11 logins: 0 errors, 0 warnings, 0 hydration messages, 0 failed requests | 1,152 page loads on 3 logins: the same zeros; 237 Ops shapes not reached |
+| Attacks and bad input | All held with controls; 8,335 bad requests, 0 server errors | All held; 7,839 sweep and 3,891 fuzz probes, 0 server errors; 224 of 224 cross-site variants refused with no stack lines |
+| Money | 171 hand values, 0 wrong | 171 of 171 |
+| Races | 18 of 18 | 21 of 21 |
+
+First package, database `elevate_v2`:
 
 | Pass | Result |
 |---|---|
@@ -171,6 +186,6 @@ First package, 31 Oct 2026, database `elevate_v2`, ports 3000 to 3003. Evidence:
 | Earlier defects | RV-A 22 pass, 2 fail (API-010, API-011, both left). RV-B 58 pass, 1 fail. RV-C 57 pass, 3 fail, 5 partial, 6 not run, 3 open as recorded |
 | Browser | 6,160 page loads: 14 console errors, all from defects fixed after this pass |
 
-The failures found here were fixed in the source afterwards. Re-test on the final package: `[coordinator fills final numbers]`.
+The failures found on these three were fixed in the source afterwards, except what `HANDOFF.md` "Known limits" lists. Re-test on the final package: `[coordinator fills final numbers]`.
 
 Not checked anywhere yet: a real Google sign-in, a real phone on the Wi-Fi, a restore, Linux, a host.

@@ -86,7 +86,7 @@ async function MyDay({ user }: { user: AuthenticatedUser }) {
         <StatCard
           label="My content awaiting review"
           value={content.in_review}
-          href={modulePath('deliverables')}
+          href={modulePath('deliverables?content=in_review#my-content')}
           note={`${content.changes_requested} with changes requested`}
         />
       </section>

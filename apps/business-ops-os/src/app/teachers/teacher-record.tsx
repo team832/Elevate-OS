@@ -33,9 +33,8 @@ const MODERATION_TONE = {
   hidden: 'neutral',
 } as const;
 
-const needs = (permission: string) => (
-  <p className="el-field-hint">Needs permission {permission}.</p>
-);
+const hidden = (why: string) => <p className="el-field-hint">{why}</p>;
+const OWN_TASKS = 'You can see this only for yourself and the people who report to you.';
 
 /** A metric as a short cell value: missing stays "Not recorded", never 0. */
 export const metricText = (m: Metric) =>
@@ -292,7 +291,7 @@ export function teacherTabs(
               ]}
             />
           ) : (
-            needs('ops:tasks:read for this teacher (yourself or your reports)')
+            hidden(OWN_TASKS)
           )}
         </Segment>
       ),
@@ -304,7 +303,7 @@ export function teacherTabs(
       content: (
         <Segment title="Upcoming appointments" level={level} flush>
           {t.upcoming === null ? (
-            needs('ops:appointments:read')
+            hidden('Your role does not include meetings.')
           ) : (
             <RecordTable
               rows={t.upcoming}
@@ -415,7 +414,7 @@ export function teacherTabs(
           }
         >
           {about === null ? (
-            needs('ops:teacher_feedback:read')
+            hidden('Your role does not include teacher feedback.')
           ) : (
             <>
               <DetailTable
@@ -507,7 +506,7 @@ export function teacherTabs(
           actions={t.eods ? <a href={`/ops/tasks/inbox`}>Open in the manager inbox</a> : undefined}
         >
           {t.eods === null ? (
-            needs('ops:tasks:read for this teacher (yourself or your reports)')
+            hidden(OWN_TASKS)
           ) : (
             <RecordTable
               rows={t.eods}

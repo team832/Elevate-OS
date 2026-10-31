@@ -5,6 +5,7 @@ import { Card, DataTable, EmptyState, PageHeader, fmtDay } from '@elevate/shared
 import { getCourse, listAssessments, listBatches } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { assessmentsQuery } from '../../server/schemas';
+import { myAssessmentIds, TEACHER_ASSESSMENT_LISTS } from '../../server/services/teacher-assessment-counts';
 import { ApiForm } from '../../ui/api-form';
 import { StateBadge } from '../../ui/badges';
 import type { PageAccess } from '@elevate/server-kit/next';
@@ -20,12 +21,25 @@ export default async function AssessmentsPage({ searchParams }: { searchParams: 
   const access = await gate('academic:assessments:read', MODULE_PATHS.assessments);
   return (
     <AcademicShell access={access} active="assessments" loading="Loading assessments…">
-      {access.status === 'allowed' ? <Body access={access} batchId={assessmentsQuery.safeParse(await searchParams).data?.batchId} /> : null}
+      {access.status === 'allowed' ? <Body access={access} {...(await filters(searchParams))} /> : null}
     </AcademicShell>
   );
 }
 
-async function Body({ access, batchId }: { access: PageAccess; batchId?: string }) {
+/** The teacher home's tiles open these (RVB-010). */
+const MINE_LABELS: Record<(typeof TEACHER_ASSESSMENT_LISTS)[number], string> = {
+  assigned: 'Assigned to you',
+  completed: 'Completed',
+  awaitingMarking: 'Awaiting marking',
+  published: 'Results published',
+};
+
+const filters = async (searchParams: Promise<Record<string, string | string[] | undefined>>) => {
+  const sp = await searchParams;
+  return { batchId: assessmentsQuery.safeParse(sp).data?.batchId, mine: TEACHER_ASSESSMENT_LISTS.find((l) => l === sp.mine) };
+};
+
+async function Body({ access, batchId, mine }: { access: PageAccess; batchId?: string | undefined; mine?: (typeof TEACHER_ASSESSMENT_LISTS)[number] | undefined }) {
   const db = getDb();
   const actor = actorFor(access.user);
   const canWrite = can(access.user, 'academic:assessments:write');
@@ -33,14 +47,16 @@ async function Body({ access, batchId }: { access: PageAccess; batchId?: string 
     const batches = canWrite ? await listBatches(db, actor) : [];
     const courses = [];
     for (const id of new Set(batches.map((b) => b.courseId))) courses.push(await getCourse(db, id));
-    return { assessments: await listAssessments(db, actor, { batchId }), batches, courses };
+    const rows = await listAssessments(db, actor, batchId ? { batchId } : {});
+    const ids = mine ? await myAssessmentIds(db, actor, mine) : null;
+    return { assessments: ids ? rows.filter((a) => ids.has(a.id)) : rows, filtered: Boolean(ids), batches, courses };
   });
   return (
     <>
       <PageHeader
         title="Assessments"
-        description="Tests and mocks, each scored by its own rules. Unknown values stay unknown until entered."
-        actions={batchId ? <a href={MODULE_PATHS.assessments}>Show all batches</a> : undefined}
+        description={mine && data.ok && data.data.filtered ? `${MINE_LABELS[mine]}: the assessments your home page counts.` : 'Tests and mocks, each scored by its own rules. Unknown values stay unknown until entered.'}
+        actions={batchId ? <a href={MODULE_PATHS.assessments}>Show all batches</a> : mine ? <a href={MODULE_PATHS.assessments}>Show all assessments</a> : undefined}
       />
       {!data.ok ? (
         <LoadError error={data.error} />
@@ -51,7 +67,7 @@ async function Body({ access, batchId }: { access: PageAccess; batchId?: string 
               rows={data.data.assessments}
               rowKey={(a) => a.id}
               sampleOf={(a) => a.isSample}
-              empty={<EmptyState title="No assessments" description={canWrite ? "Create one below." : "Assessments of your batches appear here once a coordinator creates them."} />}
+              empty={<EmptyState title="No assessments" description={data.data.filtered ? 'None in this list right now.' : canWrite ? 'Create one below.' : 'Assessments of your batches appear here once a coordinator creates them.'} />}
               columns={[
                 { key: 'code', header: 'Code', render: (a) => <a href={MODULE_PATHS.assessment(a.id)}>{a.code}</a> },
                 { key: 'title', header: 'Title' },

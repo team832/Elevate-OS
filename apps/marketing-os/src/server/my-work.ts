@@ -29,8 +29,11 @@ export async function myContentByState(db: Database, actor: Actor) {
 }
 
 /** My content items (created by me or assigned to me), most recently changed first. */
-export async function myContentItems(db: Database, actor: Actor, page = 1) {
-  const where = await myContentFilter(db, actor);
+export async function myContentItems(db: Database, actor: Actor, page = 1, state?: ContentState) {
+  const where = and(
+    await myContentFilter(db, actor),
+    state ? eq(marketingContentItems.state, state) : undefined,
+  );
   const [rows, [total]] = await Promise.all([
     db
       .select({

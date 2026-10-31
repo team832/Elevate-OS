@@ -33,16 +33,18 @@ const standing = (v: NonNullable<Reports>['recent'][number] | undefined) =>
 export function TasksDay({ summary, week, month }: { summary: TaskDay; week: Reports; month: Reports }) {
   const [eod, eodNote] = summary ? EOD[summary.eod] : [null, LINK_STAFF];
   const asOf = summary ? `As of ${fmtDateTime(summary.asOf)}; ${summary.open} open in all.` : LINK_STAFF;
+  // The tracker filtered to exactly what these tiles count: the person's own open work.
+  const mine = (filter: string) => (summary ? `${MODULE_PATHS.tasks}?tab=all&staffId=${summary.staffId}&groups=exclude&work=open&${filter}` : MODULE_PATHS.tasks);
   return (
     <>
-      <StatCard label="Tasks due today" value={summary?.dueToday ?? null} missingLabel={NO_STAFF} note={asOf} href={`${MODULE_PATHS.tasks}?due=today`} />
-      <StatCard label="Overdue tasks" value={summary?.overdue ?? null} missingLabel={NO_STAFF} note="Open tasks past their deadline. Submitted work is not overdue." href={`${MODULE_PATHS.tasks}?due=overdue`} />
+      <StatCard label="Tasks due today" value={summary?.dueToday ?? null} missingLabel={NO_STAFF} note={asOf} href={mine('due=today')} />
+      <StatCard label="Overdue tasks" value={summary?.overdue ?? null} missingLabel={NO_STAFF} note="Open tasks past their deadline. Submitted work is not overdue." href={mine('due=overdue')} />
       <StatCard
         label="Work awaiting HR review"
         value={summary?.submitted ?? null}
         missingLabel={NO_STAFF}
         note={summary ? 'Your tasks you submitted that a reviewer has not decided yet.' : LINK_STAFF}
-        href={`${MODULE_PATHS.tasks}?status=in_review`}
+        href={mine('status=in_review')}
       />
       <StatCard label={`EOD report, ${summary ? fmtDay(summary.day) : 'today'}`} value={eod} missingLabel={NO_STAFF} note={eodNote} href={`${MODULE_PATHS.tasks}?tab=eod`} />
       {REPORT_TILES.map(([kind, label]) => {

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Business Ops OS (port 3003, basePath /ops). Skeleton from the Foundation wave; owned by the Business Ops team.",
+  "description": "Business Ops OS (port 3000, basePath /ops).",
   "exports": {
     "./domain": "./src/domain/index.ts",
     "./server": "./src/server/index.ts",

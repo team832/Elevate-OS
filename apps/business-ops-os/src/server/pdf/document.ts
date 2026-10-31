@@ -121,13 +121,35 @@ export class PdfBuilder extends PdfCanvas {
     this.y -= 2;
   }
 
+  private readonly headings: string[] = [];
+
+  /** Drawn with the next block (`ensure`), so it never ends a page alone, however tall that block. */
   heading(value: string) {
+    this.headings.push(value);
+  }
+
+  protected override ensure(height: number) {
+    const pending = this.headings.splice(0);
+    if (!pending.length) return super.ensure(height);
     const size = this.p.body * 1.25;
-    this.ensure(size * LEAD + 10 + this.p.body * LEAD * 3); // keep a heading with its first lines
+    const room = pending.length * (size * LEAD + 10);
+    super.ensure(room + Math.max(height, this.p.body * LEAD * 3)); // and at least its first lines
     const [above, below] = 'tight' in this.p ? [5, 4] : [8, 6];
-    this.y -= above + size;
-    this.text(this.clean(value), this.p.margin, this.y, this.bold, size);
-    this.y -= below;
+    for (const value of pending) {
+      this.y -= above + size;
+      this.text(this.clean(value), this.p.margin, this.y, this.bold, size);
+      this.y -= below;
+    }
+  }
+
+  protected override row(...args: Parameters<PdfCanvas['row']>) {
+    if (this.headings.length) this.ensure(0);
+    super.row(...args);
+  }
+
+  override finish() {
+    if (this.headings.length) this.ensure(0);
+    return super.finish();
   }
 
   paragraph(value: Cell, { muted = false } = {}) {

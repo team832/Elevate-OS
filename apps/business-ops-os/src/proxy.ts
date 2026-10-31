@@ -19,5 +19,13 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Paths are under the basePath (Next adds it). Skips API routes, Next internals and static files.
-  matcher: ['/', '/((?!api/|_next/|brand/|favicon\\.ico|robots\\.txt).*)'],
+  matcher: [
+    '/',
+    '/((?!api/|_next/|brand/|favicon\\.ico|robots\\.txt).*)',
+    // A form posted to a skipped path is a server action to Next: without this, a 500 or 409 and a logged stack.
+    {
+      source: '/((?:_next/|brand/|favicon\\.ico|robots\\.txt).*)',
+      has: [{ type: 'header', key: 'content-type', value: 'multipart/form-data.*' }],
+    },
+  ],
 };

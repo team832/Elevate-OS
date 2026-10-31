@@ -5,7 +5,7 @@ import { Card, DataTable, EmptyState, PageHeader, Subnav, fmtDay } from '@elevat
 import { getBatch, getBatchCoverage, getBatchFeasibility, getCourse, listBatchPlacements, listStaff, todayIst } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
-import { PlanBadge, StateBadge, programmeName } from '../../../ui/badges';
+import { PlanBadge, StateBadge, programmeName, words } from '../../../ui/badges';
 import { CoverageSection, FeasibilitySection } from '../../../ui/batch-sections';
 import { BatchDetails, BatchStudents, BatchTeachers } from '../../../ui/batch-tabs';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
@@ -121,7 +121,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
             empty={<EmptyState title="No exclusions" />}
             columns={[
               { key: 'label', header: 'Label' },
-              { key: 'kind', header: 'Kind' },
+              { key: 'kind', header: 'Kind', render: (r) => words(r.kind) },
               { key: 'when', header: 'When', render: (x) => (x.date ? fmtDay(x.date) : `${fmtDay(x.periodStart)} to ${fmtDay(x.periodEnd)}`) },
               { key: 'slots', header: 'Allowance', render: (x) => (x.days !== null ? `${x.days} day(s) × ${x.slotsPerDay ?? 'not recorded'} slots` : '—') },
               { key: 'scope', header: 'Scope', render: (x) => (x.batchId ? 'This batch' : 'Centre-wide') },

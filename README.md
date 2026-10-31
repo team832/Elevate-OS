@@ -8,7 +8,7 @@ Elevate OS is the internal operating system for **Elevate Education**, a coachin
 >
 > 23 Oct 2026 (D-080 … D-093): an **HR area** in Business Operations (new role HR manager; staff records and HR-only details, teaching assignments, staff attendance, task assignment and submission review, day/week/month work reports, student feedback about teachers, HR settings), file attachments, a notifications inbox in every workspace, AI draft helpers (OpenAI, drafts only), a charcoal sidebar and campaign membership for marketing employees. All new grants are **Proposed**. Migration `0015_hr_staff_workspaces` is written and tested but **not applied**; the next is `0016`. Startup commands are unchanged. Details: `IMPLEMENTATION_STATUS.md`, section "HR area".
 
-> 31 Oct 2026 (D-112 … D-122): a debug pass. An exit reaches Academic, workspace membership holds on API routes, one fee statement, insert-only seeds, a jobs panel, Hindi PDFs, and an installable package (`docs/RELEASE.md`). Nothing is deployed. Owner steps and questions: `HANDOFF.md`.
+> 31 Oct 2026 (D-112 … D-125): a debug pass. An exit reaches Academic, workspace membership holds on API routes, one fee statement, insert-only seeds, a jobs panel, Hindi PDFs, and an installable package (`docs/RELEASE.md`). Nothing is deployed. Owner steps and questions: `HANDOFF.md`.
 
 > 23–24 Oct 2026 (D-094 … D-109): **Tests and Mock Tests** in Business Operations on one Academic test record (roster, score import from CSV or AI-read PDF, ranks, publication versions, paper and answer-key release), **requests through HR** in every workspace, **lead stages** and sales calls with conversion linked to confirmed admissions, the Marketing **calendar, ideas plan, SEO/AIO/GEO work, targets and monthly report**, task **reminders** and notification pop-ups, the **annual fee chart** with a reconciled drill-down, and a larger sample data set with ten demo sign-ins. Migrations `0015` and `0016` are **applied** on the owner's computer (`db:check` 19/19); the next is `0017`. All new grants are **Proposed** (`PROPOSED-GRANTS-2026-10-23b`). Details: `IMPLEMENTATION_STATUS.md`, section "Milestone 23–24 Oct 2026"; walkthrough and accounts: `HANDOFF.md`.
 
@@ -200,7 +200,7 @@ Not in `.env`: `ELEVATE_BASE_PATH` is declared by each `next.config.ts` and inli
 | `INTEGRATION_CONTRACT.md` | Identities, IDs, ownership, permissions, API, events, summaries, versioning, failure behaviour |
 | `DATABASE_DESIGN.md` | Schemas, conventions, core tables |
 | `IMPLEMENTATION_STATUS.md` | What is built and the evidence |
-| `docs/DECISIONS.md` | Decision log (D-001 … D-122) |
+| `docs/DECISIONS.md` | Decision log (D-001 … D-125) |
 | `docs/RELEASE.md` | The release package: build, contents, install, what it does not do, go-live blockers |
 | `docs/CASELETS.md` | The master register of use cases and their first-package results |
 | `docs/WORKSPACES.md` | The three role workspaces: URLs, dev commands, demo sign-ins, sign-in and access rules, role × workspace matrix |

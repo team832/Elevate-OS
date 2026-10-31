@@ -306,7 +306,10 @@ export async function correctRoster(
 type ScoresInput = Pick<
   z.output<typeof recordScoresBody>,
   'rows' | 'source' | 'importRef' | 'overwriteVerified' | 'reason'
->;
+> & {
+  /** Marks entry, by student: each changed verified or final row must have its own reason. */
+  rowReasons?: Record<string, string>;
+};
 
 /**
  * Write attendance / marks state / score rows, all or none. Omitted attendance = unchanged; a row
@@ -381,10 +384,22 @@ export async function writeRosterScores(
   const overwritten = changes
     .filter((c) => c.old.marksState === 'verified')
     .map((c) => c.old.studentId);
-  if (overwritten.length && !input.overwriteVerified)
+  const { rowReasons } = input;
+  const unexplained = rowReasons
+    ? changes
+        .filter(
+          (c) =>
+            (c.old.marksState === 'verified' || a.status === 'finalised') &&
+            !rowReasons[c.old.studentId],
+        )
+        .map((c) => c.old.studentId)
+    : input.overwriteVerified
+      ? []
+      : overwritten;
+  if (unexplained.length)
     throw new ConflictError(
       'Verified marks would change. Review the overwrite and confirm it with a reason; nothing was saved.',
-      { details: { overwriteRequired: overwritten } },
+      { details: { overwriteRequired: unexplained } },
     );
   const now = new Date();
   for (const c of changes) {
@@ -429,6 +444,7 @@ export async function writeRosterScores(
         overwriteVerified: input.overwriteVerified,
         overwritten,
         reason: input.reason ?? null,
+        reasons: rowReasons,
         unchanged: input.rows.length - changes.length,
       },
     });

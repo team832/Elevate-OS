@@ -43,19 +43,13 @@ const VIEWS = [
   { key: 'overdue', label: 'Overdue' },
 ] as const;
 
-export async function AllTasks({
-  user,
-  sp,
-  base,
-}: {
-  user: AuthenticatedUser;
-  sp: Params;
-  base: string;
-}) {
-  const BASE = taskPaths(base).tasks;
+/** The tracker's filters from the address. `open` stays the id of the task panel, so "open work only" is `work=open`. */
+export function allTaskFilters(sp: Params) {
   const view = VIEWS.find((v) => v.key === sp.view)?.key ?? 'all';
-  const filters = {
+  return {
     q: sp.q?.trim() || undefined,
+    open: sp.work === 'open' ? ('1' as const) : undefined,
+    groups: sp.groups === 'exclude' ? ('exclude' as const) : undefined,
     status: TASK_STATUSES.find((s) => s === sp.status),
     priority: TASK_PRIORITIES.find((p) => p === sp.priority),
     staffId: sp.staffId || undefined,
@@ -67,6 +61,20 @@ export async function AllTasks({
     to: isIsoDate(sp.to) ? sp.to : undefined,
     page: Math.max(1, Number(sp.page) || 1),
   };
+}
+
+export async function AllTasks({
+  user,
+  sp,
+  base,
+}: {
+  user: AuthenticatedUser;
+  sp: Params;
+  base: string;
+}) {
+  const BASE = taskPaths(base).tasks;
+  const view = VIEWS.find((v) => v.key === sp.view)?.key ?? 'all';
+  const filters = allTaskFilters(sp);
   const r = await load(async (db) => {
     const [list, people] = await Promise.all([
       listTasks(db, user, filters),
@@ -82,7 +90,12 @@ export async function AllTasks({
     <div className="el-stack">
       <SearchPanel
         action={BASE}
-        hidden={view === 'all' ? { tab: 'all' } : { tab: 'all', view }}
+        hidden={{
+          tab: 'all',
+          ...(view === 'all' ? {} : { view }),
+          ...(sp.work ? { work: sp.work } : {}),
+          ...(sp.groups ? { groups: sp.groups } : {}),
+        }}
         search={{ name: 'q', label: 'Task title', value: sp.q }}
         filters={[
           ...(showOwner

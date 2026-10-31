@@ -135,5 +135,8 @@ Format per `docs/BUILD_PLAN.md`: 1 Purpose · 2 Inputs · 3 Output · 4 Precondi
 10. **Limitations:** MKT-037’s per-week “on time to original” and “overdue” are not in the v1 contract.
 
 
+## §11b Who can be assigned to content, and the My Day tile (31 Oct 2026)
+`setAssignment` calls `assertAssignable`: only active Marketing & Growth staff, the same people the picker offers, by user or staff id but not both (RVB-008; before this the route took any staff id on a crafted request). The tile "My content awaiting review" opens `deliverables?content=in_review#my-content`: `myContentItems` filters to that state, and the card offers "Show all my content" (RVB-010). Tests: `tests/integration/content-workflow.test.ts`, `tests/integration/marketing-staff.test.tsx`.
+
 ## §12 Lead stage funnel, targets and conversion credit (owner brief 23 Oct 2026 §11, §15) — pointer
 The rules live in Business Operations, which owns leads: `apps/business-ops-os/docs/ALGORITHMS.md` → **A-LST-1** (stages, Converted only with a confirmed admission, first entry per lead and stage, credit to the owner at that moment from the ownership trail, fallback to the current owner with a note, own-view redaction). Marketing only counts the records Business Operations returns (`leadStageFunnel`, `leadMetricRecords`), so every funnel bar and target actual equals its drill-down. Attribution of verified admissions: policy `marketing.targets.admission_attribution` = `lead_owner_at_confirmation` (**Proposed**, `src/server/policy.ts`). Tests: `tests/integration/targets.test.ts`, `shell-overview.test.tsx`.

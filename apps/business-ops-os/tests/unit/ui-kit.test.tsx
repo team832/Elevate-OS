@@ -22,10 +22,11 @@ import {
   Sparkline,
   StatCard,
 } from '../../src/ui/charts';
-import { humanise, plainNote } from '../../src/ui/format';
+import { fmtDaysIn } from '@elevate/shared-types';
+import { fmtDate, humanise, plainNote } from '../../src/ui/format';
 import { RecordTable } from '../../src/ui/record-table';
 import { DetailTable, FormSection, noStaffHint, Segment } from '../../src/ui/sections';
-import { Pager, SearchPanel } from '../../src/ui/list-controls';
+import { Pager, SearchPanel, listHref } from '../../src/ui/list-controls';
 import { rowLinkFor } from '../../src/ui/row-links';
 import { FormModal, RecordModal } from '../../src/ui/record-modal';
 import {
@@ -237,6 +238,25 @@ describe('charts render honestly', () => {
   });
 });
 
+describe('dates that carry a time', () => {
+  it('a deadline with a time reads in words and never throws', () => {
+    expect(fmtDaysIn('2026-10-23 17:00')).toBe('23 Oct 2026 17:00');
+    expect(fmtDate('2026-10-23 17:00')).toBe('2026-10-23 17:00');
+    expect(fmtDate('2026-10-23')).toBe('23 Oct 2026');
+  });
+});
+
+describe('listHref (RL2-001)', () => {
+  it.each([
+    ['closing a panel drops its section', { open: 'a', section: 'fees', q: 'x' }, { open: undefined }, '/l?q=x'],
+    ['the next record starts on its first tab', { section: 'fees' }, { open: 'b' }, '/l?open=b'],
+    ['a section asked for by name stays', {}, { open: 'b', section: 'fees' }, '/l?section=fees&open=b'],
+    ['nothing left means no query', { section: 'fees' }, {}, '/l'],
+  ])('%s', (_name, params, patch, want) => {
+    expect(listHref('/l', params, patch)).toBe(want);
+  });
+});
+
 describe('humanise', () => {
   it.each([
     ['upi', 'UPI'],
@@ -404,6 +424,8 @@ describe('record modal and forms', () => {
     );
     expect(out).toContain('<dialog id="student-modal" class="el-dialog ops-modal"');
     expect(out).toMatch(/<dialog [^>]*\bopen=""/); // paints with the page, not after hydration
+    // Close works before hydration: a plain link to the list.
+    expect(out).toMatch(/<a href="\/ops\/students" class="el-icon-button">.*?>Close<\/span><\/a>/);
     expect(out).toContain('Open full record');
     expect(out).toContain('role="tablist"');
     expect(out).toContain('aria-selected="true"');

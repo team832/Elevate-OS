@@ -14,10 +14,13 @@ const ONLY_WHEN_ANY = ['Left out of the on-time rate', 'Deadline changes'];
 export function WorkReportFacts({
   f,
   base,
+  openable,
   level = 2,
 }: {
   f: EodFacts;
   base: string;
+  /** Tasks this reader may open; the others stay listed, as text (`openableTaskIds`). */
+  openable: ReadonlySet<string>;
   level?: 2 | 3;
 }) {
   if (isImportedReport(f))
@@ -67,7 +70,7 @@ export function WorkReportFacts({
             <RecordTable
               rows={s.rows}
               rowKey={(r) => `${r.taskId}-${r.cells.join('|')}`}
-              rowHref={(r) => `${base}/tasks/${r.taskId}`}
+              rowHref={(r) => (openable.has(r.taskId) ? `${base}/tasks/${r.taskId}` : undefined)}
               linkColumn="task"
               empty="None recorded in this period."
               columns={[

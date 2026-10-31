@@ -1,4 +1,5 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
+import { fmtDaysIn } from '@elevate/shared-types';
 import { ListEmpty } from '@elevate/shared-ui';
 import { addDays, istToday } from '../../../domain/dates';
 import {
@@ -281,7 +282,7 @@ export async function Summary({ user, sp }: { user: AuthenticatedUser; sp: Param
             empty="No deadline was changed."
             columns={[
               { key: 'title', header: 'Task' },
-              { key: 'change', header: 'Deadline', render: (x) => `${x.from} → ${x.to}` },
+              { key: 'change', header: 'Deadline', render: (x) => `${fmtDaysIn(x.from)} → ${fmtDaysIn(x.to)}` },
               { key: 'reason', header: 'Reason', render: (x) => x.reason ?? 'Not recorded' },
             ]}
           />

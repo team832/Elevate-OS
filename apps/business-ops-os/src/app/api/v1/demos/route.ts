@@ -4,7 +4,7 @@ import { createDemoBody, demoListQuery } from '../../../../server/demos-schemas'
 
 export const dynamic = 'force-dynamic';
 
-/** GET /ops/api/v1/demos — Demo students by view (current | upcoming | previous) with filters and counts. */
+/** GET /ops/api/v1/demos — Demo students by view (current | upcoming | previous | all) with filters and counts. */
 export const GET = defineRoute(
   { permission: 'ops:leads:read', query: demoListQuery },
   async ({ user, db, query }) => listDemos(db, user, query),

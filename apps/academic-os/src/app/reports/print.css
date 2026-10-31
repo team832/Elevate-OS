@@ -1,5 +1,5 @@
 /* Academic report print views (R7): A4, ink on paper via system colours, shell hidden. On screen the
- * table keeps whole words and scrolls inside its well; only paper, which cannot scroll, breaks them. */
+ * table keeps whole words and scrolls inside its well; on paper it fits the page, still in whole words. */
 @media print {
   @page {
     size: A4;
@@ -28,14 +28,16 @@
   }
   .report-table {
     width: 100%;
-    font-size: 9pt;
+    font-size: 8.5pt;
     border-collapse: collapse;
   }
   .report-table th,
   .report-table td {
     border: 0.5pt solid CanvasText;
     padding: 2pt 4pt;
-    overflow-wrap: anywhere;
+    /* The screen's column minimums would squeeze words on paper; whole words fit an A4 without them. */
+    min-width: 0 !important;
+    overflow-wrap: break-word;
   }
   .report-table thead {
     display: table-header-group;

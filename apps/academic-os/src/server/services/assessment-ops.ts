@@ -311,7 +311,7 @@ export async function recordScoresLocked(
   tx: Database,
   actor: Actor,
   a: AssessmentRow,
-  body: z.output<typeof recordScoresBody>,
+  body: z.output<typeof recordScoresBody> & { rowReasons?: Record<string, string> },
 ) {
   const result = await writeRosterScores(tx, actor, a, body);
   await afterChange(tx, actor, a, result.changed > 0, body.reason);

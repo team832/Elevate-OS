@@ -260,7 +260,7 @@ export function OverviewBlocks({ o, user }: { o: Overview; user: Principal }) {
                   note: pipeline.ok
                     ? `Of the ${pipeline.data.applications.approvalChecked} oldest checked`
                     : undefined,
-                  href: to('/ops/admissions/applications?status=signatures_confirmed'),
+                  href: to('/ops/admissions/applications?status=signatures_confirmed&blocked=1'),
                 },
                 {
                   label: 'Confirmed in the period',

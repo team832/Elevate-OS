@@ -5,7 +5,7 @@ import { ADMISSION_STATUSES } from '../domain';
 import {
   CHECKLIST_STATUSES,
   DEMO_OUTCOMES,
-  DEMO_VIEWS,
+  DEMO_LIST_VIEWS,
   MANUAL_OUTCOMES,
   MOCK_STATUSES,
 } from '../domain/demos';
@@ -80,7 +80,7 @@ export const createDemoBody = z.object({
 export const DEMO_SORTS = ['name', 'first_class', 'follow_up', 'recent'] as const;
 
 export const demoListQuery = z.object({
-  view: opt(z.enum(DEMO_VIEWS)),
+  view: opt(z.enum(DEMO_LIST_VIEWS)),
   q: opt(z.string().trim().max(100)),
   programme: opt(programmeCodeSchema),
   counsellor: opt(z.uuid()),

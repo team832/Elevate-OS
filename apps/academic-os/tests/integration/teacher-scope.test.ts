@@ -29,6 +29,7 @@ import {
   setupTestDatabase,
 } from '@elevate/testing';
 import { GET as listRoute } from '../../src/app/api/v1/students/route';
+import { myAssessmentIds, TEACHER_ASSESSMENT_LISTS } from '../../src/server/services/teacher-assessment-counts';
 import { GET as studentRoute } from '../../src/app/api/v1/students/[id]/route';
 import { GET as reportRoute } from '../../src/app/api/v1/reports/[kind]/route';
 import { GET as reviewsRoute, POST as createReviewRoute } from '../../src/app/api/v1/reviews/route';
@@ -494,6 +495,11 @@ describe('assigned assessments (brief §16, §21)', () => {
     });
     expect(day.assessmentsToMark.map((a) => a.id)).toEqual([ids.marking]);
     expect(day.resultsToReview.map((a) => a.id)).toEqual([ids.marking]);
+    // RVB-010: each tile's list holds the assessments that tile counts.
+    for (const list of TEACHER_ASSESSMENT_LISTS)
+      expect([list, (await myAssessmentIds(ctx.db, actor(u.teacher), list, now))!.size]).toEqual([list, day.assessmentCounts![list]]);
+    expect([...(await myAssessmentIds(ctx.db, actor(u.teacher), 'awaitingMarking', now))!]).toEqual([ids.marking]);
+    expect(await myAssessmentIds(ctx.db, actor(u.coordinator), 'completed', now)).toBeNull();
 
     const activity = await teacherActivity(
       ctx.db,

@@ -9,7 +9,7 @@ import {
 } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { formatPaise } from '../../src/domain/fees';
-import { createPdf, pdfResponse } from '../../src/server/pdf/document';
+import { createPdf, pdfResponse, type PdfBuilder } from '../../src/server/pdf/document';
 
 const LONG_NAME = 'Sample Student '.repeat(9).slice(0, 120);
 const LONG_REF = 'X'.repeat(300);
@@ -91,6 +91,41 @@ async function sampleDocument() {
   ]);
   return pdf;
 }
+
+describe('a heading stays with what follows it', () => {
+  const NOTE = 'A definition long enough to wrap over several lines of the page. '.repeat(6);
+  it.each([
+    ['signatures', (pdf: PdfBuilder) => pdf.signatures([{ label: 'Reviewed by' }])],
+    ['a chart with a long note', (pdf: PdfBuilder) => pdf.bars([{ label: 'Rate', value: 80, note: NOTE }], { max: 100 })],
+    ['a paragraph', (pdf: PdfBuilder) => pdf.paragraph('First line.')],
+    ['a table', (pdf: PdfBuilder) => pdf.table([{ header: 'Name', width: 1 }], [['Sample']])],
+    ['two headings, then signatures', (pdf: PdfBuilder) => (pdf.heading('Second'), pdf.signatures([{ label: 'Reviewed by' }]))],
+  ] as const)('%s', async (_, next) => {
+    const pdf = await createPdf({ title: 'Sample', reference: 'R', templateVersion: 'v1' });
+    const pageOf = new Map<string, number>();
+    const text = (pdf as never as { text(...a: unknown[]): void }).text.bind(pdf);
+    (pdf as never as { text(...a: unknown[]): void }).text = (...a: unknown[]) => {
+      pageOf.set(String(a[0]), (pdf as never as { doc: PDFDocument }).doc.getPageCount());
+      text(...a);
+    };
+    // 75 pt left on the page: room for a heading and three lines, not for what comes next.
+    pdf.space(759.89 - 137); // the page's content starts at 759.89 and ends at 62
+    pdf.heading('Review');
+    next(pdf);
+    await pdf.finish();
+    expect(pageOf.get('Review')).toBeDefined();
+    const after = [...pageOf].filter(([line]) => /Reviewed by|Rate|First line|Sample$|Name/.test(line));
+    expect(after.length).toBeGreaterThan(0);
+    for (const [line, page] of after) expect([line, page]).toEqual([line, pageOf.get('Review')]);
+  });
+
+  it('a last heading with nothing after it still prints', async () => {
+    const pdf = await createPdf({ title: 'Sample', reference: 'R', templateVersion: 'v1' });
+    pdf.heading('Last');
+    await pdf.finish();
+    expect(pdf.lines).toContain('Last');
+  });
+});
 
 describe('PDF toolkit', () => {
   it('builds a multi-page A4 document with page numbers, ₹ amounts and missing values', async () => {

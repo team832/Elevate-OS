@@ -26,7 +26,7 @@ import DashboardPage from '../../src/app/page';
 import DeliverablesPage from '../../src/app/deliverables/page';
 import MyDayPage from '../../src/app/my-day/page';
 import { TASK_PUBLISHED_TEXT } from '../../src/domain';
-import { createContentItem, createIdea, setAssignment } from '../../src/server';
+import { createContentItem, createIdea, myContentByState, myContentItems, setAssignment } from '../../src/server';
 import { call, seedRegistry, uniqueTitle } from '../helpers';
 
 const ctx = setupTestDatabase();
@@ -191,6 +191,24 @@ describe('scenario 7: HR assigns a creative task to a marketer', () => {
     const other = await render(DeliverablesPage({ searchParams: Promise.resolve({}) }), dev);
     expect(other).not.toContain('Sample: three IPMAT admission creatives');
     expect(other).not.toContain('Sample creative');
+  });
+
+  it('My content awaiting review opens only those items (RVB-010)', async () => {
+    const manager = await createTestUser(ctx.db, { roles: ['marketing_manager'] });
+    const { idea } = await createIdea(ctx.db, manager, { coursePrefix: 'IPMAT', title: uniqueTitle() });
+    const item = await createContentItem(ctx.db, manager, idea.id, { title: 'Sample in review', format: 'image' });
+    await setAssignment(ctx.db, manager, item.id, { role: 'writer', userId: chitra.id });
+    await ctx.db.update(marketingContentItems).set({ state: 'in_review' }).where(eq(marketingContentItems.id, item.id));
+    const day = await render(MyDayPage({ searchParams: Promise.resolve({}) }), chitra);
+    expect(day.replaceAll('&amp;', '&')).toContain('href="/marketing/deliverables?content=in_review#my-content"');
+    const opened = await render(DeliverablesPage({ searchParams: Promise.resolve({ content: 'in_review' }) }), chitra);
+    expect(opened).toContain('Sample in review');
+    expect(opened).not.toContain('Sample creative');
+    expect(opened).toContain('Show all my content');
+    expect((await myContentItems(ctx.db, chitra, 1, 'in_review')).total).toBe((await myContentByState(ctx.db, chitra)).in_review);
+    const all = await render(DeliverablesPage({ searchParams: Promise.resolve({}) }), chitra);
+    expect(all).toContain('Sample creative');
+    expect(await render(DeliverablesPage({ searchParams: Promise.resolve({ content: 'nonsense' }) }), chitra)).toContain('Sample creative');
   });
 
   it('task approval never publishes or sends anything', async () => {

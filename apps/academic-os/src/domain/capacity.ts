@@ -78,7 +78,7 @@ export interface CapacityResult {
 }
 
 export const CAPACITY_CAVEAT =
-  'Capacity totals alone do not prove that a feasible dated schedule exists (BR-ACD-7). This is a feasibility check, not an optimal schedule.';
+  'Capacity totals alone do not prove that a feasible dated schedule exists. This is a feasibility check, not an optimal schedule.';
 
 function validDate(v: string | null | undefined): v is string {
   return typeof v === 'string' && isIsoDate(v);

@@ -23,7 +23,7 @@ const week = (over: Partial<Parameters<typeof buildEodFacts>[0]> = {}) =>
 
 describe('WorkReportFacts', () => {
   it('every figure carries its definition; nothing due is not 0%; sources say unavailable', () => {
-    const out = renderToStaticMarkup(<WorkReportFacts f={week()} base="/academic" />);
+    const out = renderToStaticMarkup(<WorkReportFacts f={week()} base="/academic" openable={new Set()} />);
     expect(out.match(/How this is counted/g)).toHaveLength(6);
     expect(out).toContain('On-time submission rate');
     expect(out).toContain('Nothing was due');
@@ -60,6 +60,7 @@ describe('WorkReportFacts', () => {
       <WorkReportFacts
         f={week({ academic: { status: 'available', fetchedAt: '2026-10-28T04:30:00.000Z', data } })}
         base="/academic"
+        openable={new Set()}
       />,
     );
     expect(plain).toContain('4 of 5 scheduled classes delivered');
@@ -86,6 +87,7 @@ describe('WorkReportFacts', () => {
           },
         })}
         base="/academic"
+        openable={new Set()}
       />,
     );
     expect(more).toContain('assessments prepared 1 · assessments marked 2');

@@ -10,10 +10,12 @@ export { WorkReportFacts as EodFactsView } from '../reports/_components/report-f
 export function EodHistory({
   r,
   base,
+  openable,
   level = 2,
 }: {
   r: EodReportView;
   base: string;
+  openable: ReadonlySet<string>;
   level?: 2 | 3;
 }) {
   const items = [
@@ -31,7 +33,9 @@ export function EodHistory({
       title: `${REVIEW_LABELS[t.kind]}${t.actorName ? ` by ${t.actorName}` : ''}`,
       detail:
         t.text ??
-        (t.taskId ? <a href={`${base}/tasks/${t.taskId}`}>Open the follow-up task</a> : undefined),
+        (t.taskId && openable.has(t.taskId) ? (
+          <a href={`${base}/tasks/${t.taskId}`}>Open the follow-up task</a>
+        ) : undefined),
     })),
   ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   return (
