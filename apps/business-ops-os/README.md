@@ -178,3 +178,13 @@ Recorded: D-032 (HR/Operations removed; superseded in part by D-052 and D-080), 
 - **Unknown API paths:** JSON 404, or 403 cross-site (D-124). Left: wrong method empty 405 (API-011), badly encoded path plain 500 (RL1-002), POST with no `Origin` (RL1-003).
 - **Teacher directory:** lists only staff with a subject capability, so someone assigned with no capability is on neither the full list nor the programme filter.
 - **Open:** `HANDOFF.md` rows under "New 31 Oct" and "Known limits"; lead sources and programmes have no route; no POST route for fee structure rows (the page says it awaits the owner).
+
+
+## After the debug pass, 31 Oct 2026 (D-126 … D-131; commit `d741b5b`; on no package yet)
+- **Leave applications** (D-126, D-128): `src/domain/leave.ts`, `src/server/leave-applications.ts`, tab `/ops/hr/attendance?tab=leave`, My attendance `?view=leave`, the staff record's Leave tab. Migration `0018`.
+- **Mock data everywhere** (D-127): `seed/fill-*.ts`, run from the platform seed. Remove with `db:clear-samples`.
+- **Academic down** (D-129): `classesWithMarks` is the one count of demo classes.
+- **Settings as real fields** (D-130): `SettingFields`; a stored `hr.request_categories` row hides the nine-category default.
+- **Fee positions** (D-131): `agreementPositions`.
+- **HR screens:** Who filter (`?who=`), totals equal rows, "No schedule" apart, reminder preview, derived requester and department labelled, "Notice read" apart from Acknowledged.
+- **Open:** leave rows in `HANDOFF.md` "Decisions waiting for you"; forward picker search; onboarding templates stay JSON.

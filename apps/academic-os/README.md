@@ -239,7 +239,7 @@ Exposed as labels, approval states or configuration — never silently decided.
 | OD-022 | Attendance rules (online ≥ 45/60) | Not automated; statuses entered manually |
 | OD-023 | Parent/progress report cadence | Not built (ACD-028) |
 | OD-024 | Quant / Higher Maths question mapping | Concept-book counts left null for Books 2 and 3 |
-| OD-026 | Staff leave in scope? | No HR source: screens show "HR attendance unavailable"; coordinators can enter an academic unavailability record (not HR leave), which is a hard timetable conflict |
+| OD-026 | Staff leave in scope? | **Answered, D-126:** staff apply in Business Ops, mounted at `/academic/my-attendance?view=leave`. Academic has no HR source: screens show "HR attendance unavailable"; coordinators can enter an academic unavailability record (not HR leave), which is a hard timetable conflict; approved leave only tells them a class count |
 | D-058 | Teacher reviews live in Academic (owner, 21 Oct 2026; supersedes D-043) | `teacher_reviews`, `/academic/reviews`, internal feed to Ops |
 | D-059 | Theme stays dark — superseded by D-074 (22 Oct 2026) | Screens use the shared light system from `@elevate/shared-ui` (`workspace.css`, 287 lines on `--el-*` tokens, imported once in the layout); print views stay black on white via `Canvas` / `CanvasText` |
 | D-060 | Demo attendance for linked demo students is marked by the teacher in Academic | `session_demo_attendees`, class page DEMO badge, internal demo-attendance feed |
@@ -289,3 +289,10 @@ Exposed as labels, approval states or configuration — never silently decided.
 - **Screens:** course record page `/academic/curriculum/courses/[id]`; marks correction by a coordinator with a reason on each changed row (RVC-007, RVA-007, D-123, Proposed; the path to final results publishes a new version at once and passed on the second and third packages); home tiles open what they count (`?mine=` on assessments, `work=open` on tasks); unknown API paths answer JSON (D-124); each "Save draft" on the teaching log now says "Draft saved", and the heading reads "First saved"; "First 500" on `/academic/students` was listed as a small to-do. Settings JSON and scoring sections stay JSON boxes (marked shortcut).
 - **Reports:** `/academic/reports/*` tables keep sideways scroll on phones (print pages).
 - **Coordinator contacts:** a coordinator sees student and guardian contacts here; owner question.
+
+
+## 17. After the debug pass, 31 Oct 2026 (commit `d741b5b`; on no package yet)
+- **Screens:** "My batches" table; Curriculum opens on a teacher's assigned courses with filters; every record page explains not-found with a back link; "Partial conflict check" on the timetable; 12-hour times, notices too; student names clickable; settings as real fields (D-130). API changes: `docs/API.md` last section.
+- **Leave:** mounted from Business Ops (D-126). Nothing moves a class.
+- **Sample data:** the demo teacher has classes, logs, tests and reviews (D-127).
+- **Open:** `HANDOFF.md`, Academic set-up; a test's scoring sections stay JSON (`ACD-SETTINGS-FORM`).

@@ -310,7 +310,7 @@ Finalisation (service `results.ts`): validation → `aggregateResults` → inser
 2. **Inputs** — `ops.enrolment.closed` v1 and `ops.student.renamed` v1 from the outbox.
 3. **Output** — enrolment ended on the exit date (`completed` or `withdrawn`), placement ended, audit row keeping the true outcome.
 4. **Preconditions** — run by `POST /academic/api/internal/v1/enrolment-exits/run`, from the Ops job `enrolment-exits`. Nothing runs by itself.
-5. **Rules** — transferred and other_inactive end as `withdrawn` (Proposed; separate statuses need `0018`). A future exit date closes now and attendance runs to that date. Leaving before day one deletes the unstarted placement. Open catch-up tasks are cancelled, untouched later-test rows removed, rows with marks kept.
+5. **Rules** — transferred and other_inactive end as `withdrawn` (Proposed; separate statuses need a new migration). A future exit date closes now and attendance runs to that date. Leaving before day one deletes the unstarted placement. Open catch-up tasks are cancelled, untouched later-test rows removed, rows with marks kept.
 6. **Steps** — one delivery per (event, consumer) through `processEvents`.
 7. **Errors and edge cases** — an enrolment already ended in Academic: audited as ignored. Never placed: nothing to end. Replay: processed 0, no audit row. An exit does not reach Academic until the button is pressed; the Ops profile says it is waiting.
 8. **Permissions** — service token, caller `ops`; the button needs `ops:jobs:run`.
@@ -319,3 +319,11 @@ Finalisation (service `results.ts`): validation → `aggregateResults` → inser
 
 ## Home tiles open what they count (31 Oct 2026, RVB-010)
 The teacher home's assessment tiles open `/academic/assessments?mine=assigned|completed|awaitingMarking|published` (`myAssessmentIds`, `teacher-assessment-counts.ts`): the same rows as the figure, for a teacher's own scope only; for any other scope the parameter is ignored. The task tiles use the tracker's `work=open` filter: Business Operations `ALGORITHMS.md` A-TSK-10.
+
+
+## Added after commit `a1f6ec7`, 31 Oct 2026 (on no package yet)
+- **Partial conflict check (`checkTimetable`, `src/domain/timetable.ts`).** The result gains `checked` (in words) beside `notes` (what was not checked and why). With notes the alert reads "Partial conflict check". `TEACHER_LEFT` stays Infeasible.
+- **Curriculum for a teacher (`curriculumCatalogue`, `src/server/services/catalogue.ts`).** Own scope opens on the courses assigned to them; `view=all` needs all-scope `academic:courses:read`. Filters `q`, `subject`, `batchId`, `status`. An unknown value is ignored.
+- **Plan in use for teaching.** An active course with a locked or provisional plan (`TEACHING_PLAN_STATUSES`). The wording is an agent's; owner question in `HANDOFF.md`.
+- **Times.** Clock times show on a 12-hour clock on screens and in notices (`fmtClock`); stored values stay `HH:MM`.
+- **Leave.** Approved leave does not write `teacher_unavailability` and does not move a class. Coordinators get a count (Business Ops A-LVE-1).

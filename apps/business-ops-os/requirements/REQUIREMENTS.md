@@ -78,7 +78,7 @@ Scope: D-028 (owner request, 19 Oct 2026) narrowed D-015. Payroll runs, payslips
 |  OPS-055 | Attendance provider adapter: interface + mock reporting `not_configured` (D-014); UI says "No attendance device or provider is connected; manual and CSV only." | **Removed (owner, 2026-10-20)** | HR/Operations removed (D-032); recoverable from commit 63da4e4. |
 |  OPS-056 | Shift templates (local start/end, crosses midnight, unpaid break, working weekdays, location, department; proposed → approved → retired; changed approved timings revert to proposed), assignments with from/to and conflict detection (split shifts only by policy and only without time overlap), holiday calendar per location with decision state | **Removed (owner, 2026-10-20)** | HR/Operations removed (D-032); recoverable from commit 63da4e4. |
 |  OPS-056a | Shift change requests with approval | **Removed (owner, 2026-10-20)** | HR/Operations removed (D-032); recoverable from commit 63da4e4. |
-|  OPS-057 | Leave types (proposed, OD-026), requests LVR-###### with half-day parts, overlap detection (half-day aware, own pending/approved), working-day counting (shift weekdays else proposed default week; holidays by location), approval within scope and never self, cancellation rules (requester before start; approver with reason after start) | **Removed (owner, 2026-10-20)** | HR/Operations removed (D-032); recoverable from commit 63da4e4. |
+|  OPS-057 | Leave types (proposed, OD-026), requests LVR-###### with half-day parts, overlap detection (half-day aware, own pending/approved), working-day counting (shift weekdays else proposed default week; holidays by location), approval within scope and never self, cancellation rules (requester before start; approver with reason after start) | **Removed (owner, 2026-10-20)** | HR/Operations removed (D-032); recoverable from commit 63da4e4. A smaller leave application came back on 31 Oct: OPS-188. |
 |  OPS-058 | Leave balance ledger (allocation, adjustment, usage on approval, reversal on cancellation; "not configured" without allocation; no self-allocation); team availability report (chain/department, ≤ 31 days) | **Removed (owner, 2026-10-20)** | HR/Operations removed (D-032); recoverable from commit 63da4e4. |
 |  OPS-059 | Timesheets per employee / department (scheduled vs worked, late/early, missing clock-outs, unresolved exceptions, approved leave days, "unapproved difference"), employee-level CSV export with `ops:hr_reports:export` (audited), HR dashboard metrics (values or missing) | **Removed (owner, 2026-10-20)** | HR/Operations removed (D-032); recoverable from commit 63da4e4. |
 |  OPS-059a | Approved overtime records | **Removed (owner, 2026-10-20)** | HR/Operations removed (D-032); recoverable from commit 63da4e4. |
@@ -295,3 +295,22 @@ Status per D-013. Not browser-checked.
 | OPS-185 | Monthly marketing report: the AI work-report draft also sends the month's marketing facts (aggregates; missing as "Not available") | Should | Tested (adapter faked) | `tests/integration/ai-report-drafts.test.ts` |
 | OPS-186 | AI on admission documents (form, acknowledgement, ID card) | Could | Not built: every field is personal data or the owner's fixed legal text, and the pre-print checks are exact rules already (D-111) | — |
 | OPS-187 | "AI summary of a student" on the student page from linked records the reader may see (status, fee instalments, Academic attendance and results, shareable reviews); "source unavailable" when Academic is down; never saved; switch `ai.features.studentSummary` (defaults on; older stored values still load) | Should | Tested (adapter faked) · the new switch inherits the Approved `ai.features` value (D-110) | `tests/integration/ai-report-drafts.test.ts`, `tests/unit/ai-assist.test.ts` |
+
+
+## After commit `a1f6ec7`, 31 Oct 2026 (D-126 … D-131; one new grant Proposed; migration `0018`, not applied on the owner's computer)
+Status per D-013. Tests pass in the fixers' runs; no package holds this yet. Whole-suite result: `[coordinator fills final numbers]`.
+
+| ID | Requirement | P | Status (D-013) | Evidence |
+|---|---|---|---|---|
+| OPS-188 | Staff apply for leave in any workspace; overlap with their own pending or approved refused | Must | Approved (OD-026, D-126) · Implemented | `tests/integration/leave-applications.test.ts`, `tests/unit/leave.test.ts` |
+| OPS-189 | HR approves or rejects; approval writes the leave record attendance reads; never your own | Must | Approved · Implemented · `hr.leave_approver`, `hr.leave_types` Proposed | same, `leave-screens.test.tsx` |
+| OPS-190 | Cancel: applicant while pending, HR with a reason once approved | Must | Implemented · rule Proposed | same |
+| OPS-191 | The reason reaches only the applicant and attendance managers; never in audit | Must | Implemented · rule Proposed | same |
+| OPS-192 | Coordinators told a class count when a teacher's leave is approved; nothing reassigned | Should | Implemented · Proposed | same |
+| OPS-193 | Balances, entitlements, accrual, half days | Could | Not built: the owner was told none are counted (D-126) | — |
+| OPS-194 | With Academic down, screens and jobs say so and state nothing false | Must | Implemented (D-129) | `tests/integration/source-down.test.tsx` |
+| OPS-195 | Settings as real fields on Ops and HR settings | Must | Implemented (D-130); `hr.request_recipients` keeps JSON | `tests/unit/setting-fields.test.tsx` |
+| OPS-196 | Who filter, attendance totals that equal their rows, My attendance tabs | Must | Implemented | `tests/unit/attendance.test.ts`, `leave-screens.test.tsx` |
+| OPS-197 | Nine request categories and a labelled, searchable recipient picker | Must | Implemented; categories Proposed; forward picker not searchable | `tests/integration/hr-request-picker.test.tsx` |
+| OPS-198 | Fee pages scale with the list, same figures | Must | Implemented (D-131); not re-measured on a package | `tests/unit/fee-scale.test.ts` |
+| OPS-199 | Sample records on every screen, removable in one step | Must | Approved (D-127) · Implemented | `apps/platform/tests/integration/sample-fill.test.ts` |

@@ -85,7 +85,7 @@ Technical decisions below were made by the lead engineering agent on 2026-10-17 
 ## D-014 — External integrations are adapters, default mock
 - Metricool, Instagram, YouTube, LinkedIn, the CRM and Vacademy are reached only through adapter interfaces. The default adapter is a **sandbox/mock** that never claims a real connection. Connection status is stored and shown honestly (`not_configured` / `sandbox` / `connected` / `error`). No adapter is marked `connected` without real credentials and a successful verification call.
 
-## D-015 — Scope limits (not built unless authorized)
+## D-015 — Scope limits (not built unless authorized; leave applications built, D-126)
 Payroll, biometric device integration, legal employment records, a full HRIS, parent/student portals, the public website, and AI content generation are **out of scope**. Staff leave/attendance is out of scope pending owner decision.
 
 Narrowed by D-028 (19 Oct 2026).
@@ -166,7 +166,7 @@ Core seeds: one **fictional** user per role (`<role>@example.test`, alliterative
 ## D-031 — Security headers and Content-Security-Policy (Approved, technical, 20 Oct 2026)
 All four apps send a per-request nonce CSP (`script-src 'self' 'nonce-…' 'strict-dynamic'`, `style-src 'self' 'nonce-…'`, `style-src-attr 'unsafe-inline'` because React `style={}` props render as attributes that nonces cannot cover, `default-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`), plus `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, a deny-all `Permissions-Policy`, `Cross-Origin-Opener-Policy: same-origin` and `X-Robots-Tag: noindex, nofollow` (internal app), with no `X-Powered-By`. The CSP is set in each app's `src/proxy.ts`; the static headers come from `@elevate/configuration/security-headers` via `next.config.ts` (the platform skips `/ops`, `/academic` and `/marketing` so the modules' own headers pass through the rewrites). HSTS and `upgrade-insecure-requests` are added only for production builds served over https; `includeSubDomains` waits until the owner confirms no subdomain is http-only. Development relaxes the CSP for hot reload only. Google sign-in uses plain links and a server redirect, so `form-action 'self'` does not affect it.
 
-## D-032 — Owner removed HR and Operations from Business Ops (Approved, owner decision 20 Oct 2026) — superseded in part by D-052 and D-080
+## D-032 — Owner removed HR and Operations from Business Ops (Approved, owner decision 20 Oct 2026) — superseded in part by D-052, D-080 and D-126
 - **Decision:** the owner chose to delete the existing HR features (employee records, private HR fields, documents, compensation, assets, recruitment, onboarding/offboarding, staff attendance, shifts, leave, timesheets, HR reports) and the Operations features (tasks, task dependencies, escalations, SOPs and acknowledgements, the policies & compliance register, incidents, decisions, risks, projects, milestones, responsibilities, the work inventory, staff onboarding items, the operations report) from Business Ops, to concentrate the module on admissions. Supersedes D-028's HR scope; D-029 (split `ops` schema files) is moot.
 - **Kept, because admissions depends on it:** leads, counselling, demos, admissions, students, fee records, follow-ups, enrolment handoff, schedule, settings (HR/task/incident keys removed), core approvals with the approvals inbox limited to fee arrangements, the staff directory and departments (Ops stays steward of `core.staff_members` / `core.departments`; teachers are staff), `ops.staff_profiles`, the dashboard (task and blocker KPIs removed) and the admissions report. Role `finance_officer` stays for fee records (the owner may remove it later); `teacher` stays (Academic) without its Ops task grant.
 - **Removed with it:** roles `hr_manager`, `hr_contributor`, `recruiter`, `department_manager`, `employee`; 43 Ops permission keys (61 → 18); event `ops.employee.separated` v1 and the platform access-revocation consumer and job; 56 `ops` tables, dropped by migration `0002_remove_hr_operations.sql` (which also deletes `core.user_roles` rows for the removed roles, removed setting keys, pending SOP/policy approvals and undelivered `ops.employee.separated` events); the legacy decision/SOP/work-inventory/responsibility seeds and the HR seeds.
@@ -616,7 +616,7 @@ All four apps send a per-request nonce CSP (`script-src 'self' 'nonce-…' 'stri
 ## D-115 — An exit reaches Academic; a corrected name too (Implemented, technical, 31 Oct 2026; outcomes Proposed)
 - **Why:** F-04, CHK-017, the owner's "if a student is entering, there is no point of exiting for him". The contract existed since 26 Oct with nothing publishing or consuming it.
 - **Decision:** Ops publishes `ops.enrolment.closed` v1 in the exit transaction (key `enrolment-closed:<exitRecordId>`). Academic's consumer `academic.enrolment-exit` ends the enrolment and the placement after the exit date, and is run from Ops through `POST /academic/api/internal/v1/enrolment-exits/run`. A name correction in Ops writes `core.students` and the student's other leads and publishes `ops.student.renamed` v1 (key `student-renamed:<id>:<at>`), taken by the same consumer. Replay adds nothing. Both reach Academic only when someone presses "Send exits to Academic" (D-117).
-- **Behaviour, Proposed:** transferred and other_inactive end as Academic `withdrawn` (separate statuses need `0018`). A future-dated exit closes the case now and attendance runs to the exit date. Leaving before day one deletes the unstarted placement, and the audit keeps it. Open catch-up tasks are cancelled, untouched later-test rows removed, rows with marks kept. A coordinator ending an enrolment in Academic does not tell Ops. Ops "on hold" does not pause Academic.
+- **Behaviour, Proposed:** transferred and other_inactive end as Academic `withdrawn` (separate statuses need a new migration). A future-dated exit closes the case now and attendance runs to the exit date. Leaving before day one deletes the unstarted placement, and the audit keeps it. Open catch-up tasks are cancelled, untouched later-test rows removed, rows with marks kept. A coordinator ending an enrolment in Academic does not tell Ops. Ops "on hold" does not pause Academic.
 - **Leaver (PPL-006, Proposed):** assignments and tasks stay; the manager, ops managers and coordinators are told; nothing moves automatically.
 - **Partly done:** `batchEndDate` is in the contract (IR-OPS-EXIT-2); the completion list stays limited (see `apps/business-ops-os/docs/INTEGRATION_REQUESTS.md`).
 - **Evidence:** `apps/academic-os/tests/integration/enrolment-exit.test.ts`, `apps/business-ops-os/tests/integration/exit-handoff.test.ts`, `apps/platform/tests/integration/student-exit-loop.test.ts`; on the first package 44 of 44 per outcome, leaver 37 of 37.
@@ -641,7 +641,7 @@ All four apps send a per-request nonce CSP (`script-src 'self' 'nonce-…' 'stri
 ## D-119 — Duplicate matches are shaped by what the viewer may see (Implemented, technical, 31 Oct 2026; choice Proposed)
 - **Why:** HAT-005, Medium. `POST /leads/check-duplicates`, `getLead` flags and lead history told someone about a lead they may not open.
 - **Decision, Proposed:** a hidden match shows only its level, with no id, code, owner, signals, score or count. A name-and-school match with no shared contact is omitted for hidden leads and still flagged for merge review. The merge and dismiss forms show only when the other lead can be opened. Each check writes the audit action `lead.duplicate_check`.
-- **Remaining oracle:** any phone or email answers "on file" (the warning itself); a guardian contact plus a guessed name on `POST /leads` gives 409 against 201 (a wrong guess saves a real flagged lead). Sweeps are audited, not throttled: there is no shared limiter, and one needs `0018` or a per-process counter (owner question).
+- **Remaining oracle:** any phone or email answers "on file" (the warning itself); a guardian contact plus a guessed name on `POST /leads` gives 409 against 201 (a wrong guess saves a real flagged lead). Sweeps are audited, not throttled: there is no shared limiter, and one needs a new migration or a per-process counter (owner question).
 - **Evidence:** `apps/business-ops-os/tests/integration/leads.test.ts`; on the first package live proof 14 of 14; the saved duplicate as a counsellor held nothing of the hidden lead, with an ops-manager control.
 
 ## D-120 — Plain links stay; NavPending shows the click (Implemented, technical, 31 Oct 2026)
@@ -684,3 +684,62 @@ A pass on 26 Oct 2026 changed 115 tracked files with no decision, status row or 
 - **Decision:** Close in `RecordModal` is a plain `<a href={closeHref}>`. Once React runs, its click closes the panel in place.
 - **Evidence:** third package, scripts blocked so React never starts, 13 kinds at 1440 and 390: 26 of 26 close by the link; with the link removed the panel stays open (control). 4x phone: the first tap closes. With React running: open, Close, Escape, backdrop, Back, Forward and deep link 26 of 26; `?section=` 10 of 10; forms 4 of 4.
 - **Follow-up:** `listHref` drops `section` (RL2-001), so a panel's open tab does not carry to the list or the next record. In source and tests; proof waits for the final package.
+
+## D-126 — Leave applications are built (Approved, owner decision OD-026, 31 Oct 2026; settings Proposed; supersedes the leave exclusion in D-015 and D-032 for this feature)
+- **Why:** the owner's inspection list of 31 Oct asked for staff to apply for leave and HR to decide.
+- **Decision:** the owner's answers, verbatim. Build it: "Build it now". Approver: "HR manager". Types: "Casual, Sick, Earned, Unpaid". The owner was told both answers are Proposed settings HR can change (`hr.leave_approver`, `hr.leave_types`) and that no balances or entitlements are counted.
+- **Decided by:** the owner, in chat, answering the coordinator's questions. **OD-026:** D-080 and D-086 answered its attendance half; this answers its leave half.
+- **Built beyond the answer, Proposed:** `hr.leave_approver` defaults to `hr_manager` and `operations_manager`, not the HR manager alone. An HR manager reaches only the staff of `hr.staff_scope_departments`, so an application from outside those departments would otherwise reach nobody. The owner is asked in `HANDOFF.md`.
+- **Supersedes, for this feature only:** "Staff leave/attendance is out of scope pending owner decision" in D-015 (narrowed by D-028) and the removal of leave in D-032 (HR reinstated in part by D-080). The exclusions of payroll and devices stand. Balances, entitlements, accrual and half days are not built.
+- **Consequence:** rules in D-128; `apps/business-ops-os/src/domain/leave.ts`, `src/server/leave-applications.ts`; My attendance `?view=leave` in three workspaces, `/ops/hr/attendance?tab=leave`, a Leave tab on the staff record, the HR tile `attendance_leave_pending`.
+- **Still open:** the leave rows in `HANDOFF.md` "Decisions waiting for you".
+- **Evidence:** `tests/unit/leave.test.ts`, `tests/integration/leave-applications.test.ts`, `leave-screens.test.tsx`. No package holds this yet: `[coordinator fills final numbers]`.
+
+## D-127 — Mock data everywhere (Approved, owner decision 31 Oct 2026; applies D-036)
+- **Decision:** the owner's words: "Fill everything, every detail, with mock data." Every added row follows D-036: marked sample, `@example.test`, no phone numbers, real teachers kept off.
+- **Sample Schar:** `schar.sample@example.test`, "Sample Schar (fictional)", is a fictional recipient in the sample set only. `db:seed` names them in `hr.request_recipients` unless a choice is already stored; `db:clear-samples` unsets it. Who the real Schar is stays open under D-096.
+- **Blank by rule:** every phone number; guardian consent; verified documents; signatures, signed forms and admission approvals (sample applications show only Draft and Withdrawn); attachments; content versions; report exports; invented links. Real staff get no sample row, so their days read Unmarked with no default schedule. Sample teacher leave is approved only for past dates, because approving a future date calls Academic.
+- **Consequence:** the fill runs last in the full `db:seed` (`apps/platform/seed/sample-fill.ts`, `fill-*.ts` in each app); demo logins go from ten to 11.
+- **Evidence:** `apps/platform/tests/integration/sample-fill.test.ts`. On a scratch database: about 4,600 rows to about 6,700, tables with no rows 54 to 22; a second seed changes nothing; `db:check` 19/19; `db:clear-samples` deleted over 3,200 rows, kept real rows and unset Schar; a second clear deleted 0. Runs differ slightly, so these are not exact counts.
+
+## D-128 — Migration 0018 and the leave rules (Implemented, technical, 31 Oct 2026; who reads the reason Proposed)
+- **Migration:** `0018_leave_applications.sql`, sha256 `d455676db34a2db318ad87990f6072143d4349e222bd1912739656cf5c684b12`. Table `ops.leave_applications` with three indexes, and two indexes from the volume run, the only two of its six candidates worth adding: `lead_activities_kind_occurred_idx` on `(kind, occurred_at DESC)`, `fee_records_payment_code_idx` on `(payment_date DESC, code DESC)`. Additive: no stored row changes and no precheck is needed; the two indexes are not built concurrently. `0000`–`0017` are frozen. `0018` is new and the owner's database has not had it. Next is `0019`.
+- **Overlap:** an application takes a per-person advisory lock (`pg_advisory_xact_lock`), then is refused 409 if it overlaps that person's own pending or approved application. Rejected and cancelled dates are free. HR's direct record (`POST attendance/leave`) skips this check (owner question).
+- **Decide:** approving writes `ops.leave_records` in the same transaction through `recordLeave`, so attendance reads it as before. Nobody decides their own. Reject needs a reason. A stale `version` is 409. `cancelLeave` closes any application linked to the record.
+- **Cancel, Proposed:** the applicant cancels while pending. Approved leave is cancelled by HR only, with a reason, never their own.
+- **Reason, Proposed (owner question):** reason, decision note and cancel reason reach only the applicant and holders of `ops:attendance:manage`. Directors and auditors get type, dates and status; the fields are absent, not empty. The audit trail keeps ids, dates, type and status, never the words.
+- **Permissions:** no new keys: `ops:attendance:read`, `:request`, `:manage`. One new grant, Proposed: director own `ops:attendance:request` (code marker `PROPOSED-GRANTS-2026-10-31`). Deciding is Ops only; list, apply and cancel are also mounted in Academic and Marketing.
+- **Evidence:** tests as D-126; REVIEW-A's leave findings were fixed in source. The overlap race is proven on PGlite only; real PostgreSQL: `[coordinator fills final numbers]`.
+
+## D-129 — When a source workspace is down, screens say so (Implemented, technical, 31 Oct 2026; applies D-011)
+- **Why:** RVD-005, 006, 008, 009. With Academic stopped, `/ops/admissions` said "2 of 3 days attended" and "No teacher assigned", a student record said "batch to be assigned" on all ten tabs, and one job answered 500 with a stack in the log.
+- **Decision:** a fact that depends on Academic and cannot be read says so ("Source unavailable", "Not known: Academic OS unavailable"), never a false value or 0. A job or read that cannot reach Academic answers 409 in plain words.
+- **One helper:** `classesWithMarks` (`src/server/academic-summary.ts`) counts demo classes for the demo list, the admissions overview and the funnel, so all three agree. While Academic is down, a class it may hold a mark for is `unknown`.
+- **Contract changes:** `GET /admissions/report` funnel `count` can be `null`, with `academicUnavailable`. `POST /jobs/demo-academic-marks` refuses 409 when Academic is down and otherwise answers `{ synced }`; its `status` field is gone.
+- **Left:** through the platform port, a stopped workspace is a bare 500 (RVD-010, Low). Staff use each workspace's own port.
+- **Evidence:** `tests/integration/source-down.test.tsx` runs each case with Academic refusing connections and again with it up as the control; `demo-figures.test.tsx`. The sweep covered 12 call sites and 47 read paths and found 8 false. On a package: `[coordinator fills final numbers]`.
+
+## D-130 — Settings as real fields (Implemented, technical, 31 Oct 2026)
+- **Why:** the owner's inspection: managers were handed boxes of technical text.
+- **Decision:** `SettingFields` (`packages/shared-ui/src/components/setting-fields.tsx`, `setting-shape.ts`) is the one editor on Ops, HR and Academic settings. The setting's schema gives the fields. It posts a hidden JSON field, so routes and validation are unchanged and an untouched form posts the stored value exactly. Proposed reads "In use, not yet approved" (`IN_USE_NOT_APPROVED`).
+- **Keeps JSON:** only `hr.request_recipients`, because it is an open map of names to staff record ids; the box says how to edit it. A test's scoring sections and onboarding templates are not settings and stay JSON boxes.
+- **A stored row hides a new default:** `hr.request_categories` now defaults to nine categories, and old codes stay valid. A stored row wins and seeds do not overwrite it (D-116), so a database holding that row keeps its old list until HR changes it on Settings (`HANDOFF.md` step 10).
+- **Evidence:** `tests/unit/setting-fields.test.tsx` in Ops and Academic: the round trip is identical on every setting.
+
+## D-131 — Fee positions grouped once (Implemented, technical, 31 Oct 2026; no figure changes)
+- **Why:** RVD-001, High. At about 20,000 cases and 3,000 fee plans, `/ops` took 16 s for one person and froze the workspace meanwhile; fee and student pages took 7 to 8 s; five people 75 s each. A regression of scale from this pass's fee work.
+- **Cause:** `plansWithLedger` passed everyone's plans, instalments and ledger rows to each agreement, so the work grew with the square of the list.
+- **Decision:** `agreementPositions` (`src/domain/fee-plans.ts`) groups once, then works out each agreement. The fee-year bundle, a `groupBy` spread and a 20,000-parameter `IN` were fixed with it. No index helps here (RV-D measured).
+- **Before and after, on code blocks at 20,052 cases, not a built package:**
+
+  | Measure | Before | After |
+  |---|---|---|
+  | Positions for 3,000 plans | 6,526 ms | 30 ms |
+  | `buildOverview`, wall | 16.1 s | about 1.95 s |
+  | `buildOverview`, CPU | 15.5 s | about 2.4 s |
+  | `feeYear` | 9.8 s | 0.2 to 0.6 s |
+  | `confirmationCheck`, 50 applications | 750 statements | 13 |
+  | `buildOverview`, 258 cases | 326 statements | 90 |
+
+- **Figures identical:** 50,000 random worlds, 255,675 positions, 0 differences, with 4 planted oracle faults caught; `prop-money` output identical. `tests/unit/fee-scale.test.ts` counts fields read, not time. REVIEW-A re-read the rewritten `applications-state.ts`: every old condition of the admission gate survives.
+- **Remains:** at 20,000 cases `/ops` still reads about 328,000 rows (87 queries, 31 Academic calls, Academic simulated). On a built package: `[coordinator fills final numbers]`.

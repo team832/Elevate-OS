@@ -10,7 +10,9 @@ Elevate OS is the internal operating system for **Elevate Education**, a coachin
 
 > 31 Oct 2026 (D-112 … D-125): a debug pass. An exit reaches Academic, workspace membership holds on API routes, one fee statement, insert-only seeds, a jobs panel, Hindi PDFs, and an installable package (`docs/RELEASE.md`). Nothing is deployed. Owner steps and questions: `HANDOFF.md`.
 
-> 23–24 Oct 2026 (D-094 … D-109): **Tests and Mock Tests** in Business Operations on one Academic test record (roster, score import from CSV or AI-read PDF, ranks, publication versions, paper and answer-key release), **requests through HR** in every workspace, **lead stages** and sales calls with conversion linked to confirmed admissions, the Marketing **calendar, ideas plan, SEO/AIO/GEO work, targets and monthly report**, task **reminders** and notification pop-ups, the **annual fee chart** with a reconciled drill-down, and a larger sample data set with ten demo sign-ins. Migrations `0015` and `0016` are **applied** on the owner's computer (`db:check` 19/19); the next is `0017`. All new grants are **Proposed** (`PROPOSED-GRANTS-2026-10-23b`). Details: `IMPLEMENTATION_STATUS.md`, section "Milestone 23–24 Oct 2026"; walkthrough and accounts: `HANDOFF.md`.
+> 31 Oct 2026, later (D-126 … D-131): leave applications (migration `0018`), mock data everywhere, plain words when Academic is stopped, settings as real fields, fee pages that scale. In commit `d741b5b`; on no package yet.
+
+> 23–24 Oct 2026 (D-094 … D-109): **Tests and Mock Tests** in Business Operations on one Academic test record (roster, score import from CSV or AI-read PDF, ranks, publication versions, paper and answer-key release), **requests through HR** in every workspace, **lead stages** and sales calls with conversion linked to confirmed admissions, the Marketing **calendar, ideas plan, SEO/AIO/GEO work, targets and monthly report**, task **reminders** and notification pop-ups, the **annual fee chart** with a reconciled drill-down, and a larger sample data set with demo sign-ins (11 since 31 Oct, D-127). Migrations `0015` and `0016` are **applied** on the owner's computer (`db:check` 19/19); the next is `0017`. All new grants are **Proposed** (`PROPOSED-GRANTS-2026-10-23b`). Details: `IMPLEMENTATION_STATUS.md`, section "Milestone 23–24 Oct 2026"; walkthrough and accounts: `HANDOFF.md`.
 
 ## Contents
 1. [The three modules and their boundaries](#1-the-three-modules-and-their-boundaries)
@@ -200,7 +202,7 @@ Not in `.env`: `ELEVATE_BASE_PATH` is declared by each `next.config.ts` and inli
 | `INTEGRATION_CONTRACT.md` | Identities, IDs, ownership, permissions, API, events, summaries, versioning, failure behaviour |
 | `DATABASE_DESIGN.md` | Schemas, conventions, core tables |
 | `IMPLEMENTATION_STATUS.md` | What is built and the evidence |
-| `docs/DECISIONS.md` | Decision log (D-001 … D-125) |
+| `docs/DECISIONS.md` | Decision log (D-001 … D-131) |
 | `docs/RELEASE.md` | The release package: build, contents, install, what it does not do, go-live blockers |
 | `docs/CASELETS.md` | The master register of use cases and their first-package results |
 | `docs/WORKSPACES.md` | The three role workspaces: URLs, dev commands, demo sign-ins, sign-in and access rules, role × workspace matrix |

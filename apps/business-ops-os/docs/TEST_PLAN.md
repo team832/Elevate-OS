@@ -164,3 +164,16 @@ Full browser pass with axe on every redesigned screen (agents checked several at
 | changed: integration `appointments.test.ts`, `eod-reports.test.ts`, `events.test.ts`, `feedback.test.ts`, `staff-tasks.test.ts`, `task-lifecycle.test.ts`, `task-reports.test.ts`; unit `screens.test.tsx`, `task-views.test.tsx` | — | updated for the new grants, the body components and workspace links |
 
 Workspace rules shared by all apps are tested in the packages: `packages/authorization/tests/workspaces.test.ts`, `packages/authentication/tests/workspace-login.test.ts`, `packages/configuration/tests/workspaces.test.ts`, `packages/server-kit/tests/define-route.test.ts`, `packages/database/tests/demo-accounts.test.ts`, `packages/shared-contracts/tests/safe-path.test.ts`.
+
+
+## Added after commit `a1f6ec7`, 31 Oct 2026
+| File | Rules | Covers |
+|---|---|---|
+| unit `leave.test.ts`, integration `leave-applications.test.ts`, `leave-screens.test.tsx` | A-LVE-1 | dates, approver, cancel; apply, overlap, race (PGlite), own and HR scope, decide, cancel, notices, class flag, lists, who reads the reason, mounts, audit; both screens |
+| integration `source-down.test.tsx`, `demo-figures.test.tsx` | D-129, A-DEM-MARKS | every case with Academic refusing connections and again up as the control; the date filter; list, overview and funnel agreeing |
+| unit `setting-fields.test.tsx` | D-130 | the round trip on every setting; the only JSON box left is `hr.request_recipients` |
+| unit `fee-scale.test.ts` | D-131 | twice the rows reads about twice the fields; each agreement's figures stay its own |
+| integration `hr-request-picker.test.tsx`, `task-record-facts.test.tsx` | requests, tasks | who a request can be for, labels and search, old categories still valid; derived requester and department labelled, history, Notice read against Acknowledged |
+| platform `tests/integration/sample-fill.test.ts` | D-127 | the fill, a second run, clear-samples |
+
+Not automated: the overlap race on real PostgreSQL (final round: `[coordinator fills final numbers]`); a settings edit at 390 px with a keyboard; the attendance and leave pages at 1440 and 390 in a browser.

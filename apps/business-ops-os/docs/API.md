@@ -106,7 +106,7 @@ All idempotent; there is no scheduler yet (IR-OPS-02). Each is also exported fro
 | Job | Route | Permission |
 |---|---|---|
 | `follow-up-reminders`, `enrolment-replies`, `enrolment-exits` (runs Academic's `academic.enrolment-exit`), `housekeeping` (sessions ended over 30 days ago, expired idempotency keys). All have buttons on the Overview since 31 Oct 2026 (`JobsPanel`, D-117) | `POST /ops/api/v1/jobs/{job}` | `ops:jobs:run` |
-| `demo-academic-marks` (open, unfinished demos re-read Academic's marks for their started classes in one batched call, so a class the teacher marked in Academic moves the case to demo attended without an Ops edit; nothing moves while Academic cannot be read; D-066) | `POST /ops/api/v1/jobs/demo-academic-marks` | `ops:jobs:run`; the service also needs all-scope `ops:leads:write` |
+| `demo-academic-marks` (open, unfinished demos re-read Academic's marks for their started classes in one batched call, so a class the teacher marked in Academic moves the case to demo attended without an Ops edit; answers `{ synced }`; while Academic cannot be read it refuses 409 and copies nothing, D-129; D-066) | `POST /ops/api/v1/jobs/demo-academic-marks` | `ops:jobs:run`; the service also needs all-scope `ops:leads:write` |
 
 ## Pre-existing routes
 
@@ -410,7 +410,7 @@ Every grant below is **Proposed** (code marker `PROPOSED-GRANTS-2026-10-23`). Ch
 ## Staff attendance (D-086)
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `<base>/api/v1/attendance` | `ops:attendance:read` | Days in a range (default the last 7, at most 62): status, first in, last out, late minutes, missing check-out, why a day needs review. Own scope = your own days. Also mounted under `/academic` and `/marketing` |
+| GET | `<base>/api/v1/attendance` | `ops:attendance:read` | Days in a range (default the last 7, at most 62): status, first in, last out, late minutes, missing check-out, why a day needs review. `who=teachers|other` narrows to the Teachers directory's people or everyone else; the answer gains `staffCount`. Own scope = your own days. Also mounted under `/academic` and `/marketing` |
 | GET, POST | `<base>/api/v1/attendance/corrections` | GET `ops:attendance:read`; POST `ops:attendance:request` | Ask HR to correct one of your days (reason required; one waiting request per day, else 409). Also under `/academic` and `/marketing` |
 | POST | `/ops/api/v1/attendance/corrections/{id}` | `ops:attendance:manage` | Approve (applies the change) or reject (note required); never your own |
 | POST | `/ops/api/v1/attendance/decisions` | `ops:attendance:manage` | HR sets a day's status with a note; it survives every recomputation; never your own day |
@@ -418,7 +418,11 @@ Every grant below is **Proposed** (code marker `PROPOSED-GRANTS-2026-10-23`). Ch
 | POST | `/ops/api/v1/attendance/imports` | `ops:attendance:manage` | Preview a punch CSV (Staff code, Date-time, Direction) row by row; a file already imported → 409 |
 | POST | `/ops/api/v1/attendance/imports/{id}` | `ops:attendance:manage` | Commit a previewed import; stored punches are skipped |
 | POST | `/ops/api/v1/attendance/leave` | `ops:attendance:manage` | Record approved leave (dates inclusive) |
-| POST | `/ops/api/v1/attendance/leave/{id}` | `ops:attendance:manage` | Cancel approved leave with a reason (audited; never your own) |
+| POST | `/ops/api/v1/attendance/leave/{id}` | `ops:attendance:manage` | Cancel approved leave with a reason (audited; never your own). If it came from an application, closes that too, tells the applicant, and needs `hr.leave_approver` (D-126) |
+| GET | `<base>/api/v1/attendance/leave-applications` | `ops:attendance:read` | `status`, `staffId`, `page`. `{ items, total, counts per status, page, pageSize 25 }`, newest first. Own scope = your own (another id 404); HR readers = HR's scope. `reason`, `decisionNote`, `cancelReason` are absent unless the row is yours or you hold `ops:attendance:manage` (Proposed, D-128). All three workspaces |
+| POST | `<base>/api/v1/attendance/leave-applications` | `ops:attendance:request` (`Idempotency-Key` optional) | Apply for yourself, strict `{ kind, fromDate, toDate, reason }`. `kind` from `hr.leave_types`. Reason 3 to 1,000 characters. Dates within a year each way. 201. Overlap with your own pending or approved 409; no staff record 400. All three workspaces |
+| POST | `/ops/api/v1/attendance/leave-applications/{id}` | `ops:attendance:manage` and setting `hr.leave_approver` | `{ decision: approved\|rejected, note?, version }`; reject needs a note of 3 or more. Approve writes the leave record. Your own 403; outside HR's scope 404; stale version or already decided 409. Ops only |
+| POST | `<base>/api/v1/attendance/leave-applications/{id}/cancel` | `ops:attendance:request` | `{ reason?, version }`. Applicant while pending; HR with a reason once approved (Proposed), which also needs `ops:attendance:manage` and `hr.leave_approver`. Someone else's without manage 404; applicant on approved 403; rejected, cancelled or HR on pending 409. All three workspaces |
 | POST | `/ops/api/v1/attendance/holidays` | `ops:attendance:manage` | Add a staff holiday (one branch or all); Proposed until approved |
 | POST | `/ops/api/v1/attendance/holidays/{id}` | `ops:hr_settings:manage` | `{ action: 'approve' or 'remove' }`; only an approved holiday changes staff days |
 | POST | `/ops/api/v1/attendance/schedules` | `ops:attendance:manage` | Weekly schedule (hours per weekday, null = weekly off) |
@@ -546,3 +550,14 @@ No new API route. The annual tuition figures and drill-down (owner brief §22) a
 - **Reports:** a task since moved to someone else stays on the report as plain text with no link (`openableTaskIds`, RVC-028). Typing its address still says not found.
 - **Teachers:** the directory lists only staff with a subject capability, so someone with an active assignment and no capability is on neither the full list nor the programme filter.
 - **Unchanged limits:** a POST with no `Origin` header reaches Next (RL1-003, curl only).
+
+## Changed after commit `a1f6ec7`, 31 Oct 2026 (commit `d741b5b`; on no package yet)
+- **Leave applications:** routes under "Staff attendance" above. Notices: `leave.applied`, `leave.approved`, `leave.rejected`, `leave.cancelled`, `leave.classes_flagged`. Audit entity `leave_application`, actions `leave.applied|approved|rejected|cancelled`; these and `attendance.leave_recorded`, `attendance.leave_cancelled` never keep the words of a reason. HR Overview tile `attendance_leave_pending`.
+- **Funnel:** in `GET /admissions/report`, `funnelReport.funnel[].count` and `.of.count` can be `null` while Academic cannot be read and a stage depends on its marks; `ratePct` is then `null`; `funnelReport.academicUnavailable { reason, fetchedAt }` says why (D-129).
+- **Demo marks job:** see Jobs above. The response no longer has `status`.
+- **Academic stopped:** `GET /assessments/{id}` and the `enrolment-exits` job answer 409 in plain words, not 500. The list, overview and funnel count classes through `classesWithMarks`, so they agree with Academic up, and say "Source unavailable" with it down.
+- **Follow-ups on the Overview:** "Your follow-ups due" comes from `countFollowUps`, so it no longer stops at 500 (RVD-003).
+- **Requests through HR:** nine default categories in `hr.request_categories`, old codes still valid. The `staff:` recipient list holds active staff with a working login who can reply, labelled with role and department, and searchable when long. The forward picker is not searchable yet.
+- **Settings:** `PUT settings/{key}` and `PUT hr/settings/{key}` are unchanged; the screens post through `SettingFields` (D-130). `hr.leave_types`, `hr.leave_approver` are new, Proposed, with no seed row.
+- **Pages:** `/ops/hr/attendance?tab=leave` (status tabs, Approve and Reject, per-person history) and `?who=`; `<base>/my-attendance?view=leave|requests`; the staff record's Leave tab.
+- **Grants:** no new key. Director gains own `ops:attendance:request` (`PROPOSED-GRANTS-2026-10-31`).

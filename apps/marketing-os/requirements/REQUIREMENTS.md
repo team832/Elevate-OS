@@ -80,3 +80,7 @@ Platform requirements used: PLT-002 (server-side permissions), PLT-004 (no sole 
 | MKT-MS-7 | Leads, lead stages, sales calls and follow-ups mounted from Business Ops; campaign page counts leads, demos and admissions whose enquiry campaign text equals the campaign code | Tested (Ops handlers; the Marketing mounts are checked by navigation only) | `unit/navigation.test.ts`; `apps/business-ops-os/tests/integration/lead-stages.test.ts`, `sales-calls.test.ts`, `lead-metrics.test.ts` |
 | MKT-MS-8 | Personal settings (notification preferences reduce only non-mandatory notices), HR Requests page, My Day | Tested · not browser-checked | `integration/shell-overview.test.tsx`; `unit/navigation.test.ts`, `screens.test.tsx`; `packages/notifications/tests/preferences.test.ts` |
 | MKT-MS-9 | Sample set: campaigns with members, six ideas, calendar items in every state, SEO/AIO/GEO items, targets; all `is_sample` | Tested | `integration/seeds-samples.test.ts` |
+
+
+## After commit `a1f6ec7`, 31 Oct 2026 (on no package yet)
+Leave applications are mounted from Business Ops (OPS-188 to OPS-192). Status per D-013: Implemented.

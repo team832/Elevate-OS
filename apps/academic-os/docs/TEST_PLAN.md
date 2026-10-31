@@ -79,3 +79,12 @@ for audit rows where the rule matters.
 | `unit/screens.test.tsx` (changed) | Academic navigation: teacher sidebar with Tasks and EOD under `/academic`, never `/ops`; links to another workspace only for its members, as an absolute URL |
 
 Shared tests for the mounted screens live in Business Ops: `apps/business-ops-os/tests/integration/shared-entries.test.tsx`, `meetings-body.test.tsx`.
+
+
+## 5. Added after commit `a1f6ec7`, 31 Oct 2026
+| File | Covers |
+|---|---|
+| `integration/teacher-session.test.tsx` (new) | a teacher's session: every record page's not-found words and back link, list links open, batches and curriculum |
+| `unit/setting-fields.test.tsx` (new) | settings round trip through `SettingFields` (D-130) |
+
+Not automated: real clicks after a fresh start; widths of My batches and Curriculum in a browser; the timetable alert.

@@ -31,7 +31,7 @@ Base path `/academic/api/v1`. Every route is built with `defineRoute` (`src/app/
 ## 2. Batches, staff, calendars
 | Method & path | Permission | Request | Response |
 |---|---|---|---|
-| `GET /batches` | `batches:read` (own: assigned) | — | batches + `courseCode`, `programmeCode`, `classLength {minutes, status, source}`, `activeEnrolments` |
+| `GET /batches` | `batches:read` (own: assigned) | — | batches + `courseCode`, `programmeCode`, `classLength {minutes, status, source}`, `activeEnrolments`; own scope also `mySubjects` |
 | `POST /batches` | `batches:write` | `code`, `name`, `courseId`, `route?`, `mode?`, `startDate?`, `endDate?`, `classMinutesOverride?`, `capacity?`, `targetExam?`, `targetExamDate?` + `targetExamDateStatus` (required with a date), `status`='planning' | 201 batch |
 | `GET /batches/:id` | `batches:read` (own) | — | batch + `classLength`, `activeEnrolments`, `currentPlan`, `assignments[]`, `calendarRules[]`, `exclusions[]` (404 outside scope) |
 | `PATCH /batches/:id` | `batches:write` | `status?`, `capacity?`, `startDate?`, `endDate?`, `mode?`, `campus?`, `coordinatorStaffId?`, `classMinutesOverride?` (each nullable) | batch (audited). A class length set here counts as approved; scheduled classes at another length become hard conflicts (Proposed) |
@@ -57,7 +57,7 @@ Base path `/academic/api/v1`. Every route is built with `defineRoute` (`src/app/
 | `POST /sessions/:id/substitute` | `timetable:publish` + the role in setting `timetable.substitute_authoriser` (proposed: `academic_coordinator`) | `staffId`, `reason` | 201 `session_teachers` row (role `substitute`, `replacesStaffId`, `authorisedByUserId`); the original teacher stays on record; an earlier substitute for the same teacher is marked removed. 403 wrong role; 400 no planned teacher / same teacher / unknown staff; 409 not scheduled, already on the session, or the substitute is busy or unavailable |
 | `POST /sessions/:id/cancel` | `timetable:write` | `reason` | session `cancelled` (409 unless scheduled); teacher notified |
 | `POST /sessions/:id/reschedule` | `timetable:write` | `date`, `startTime`, `durationMinutes?`, `teacherStaffId?`, `roomId?` (null clears), `reason` | 201 `{ original (rescheduled), replacement, warnings }` (409 conflicts / not scheduled) |
-| `POST /timetable/check` | `timetable:read` (own: their sessions) | `batchId?`, `from`, `to`, `candidates[]` (session shape) | `{ verdict feasible\|infeasible, hard[], preferences[], checkedSessions, notes[] }` — read-only |
+| `POST /timetable/check` | `timetable:read` (own: their sessions) | `batchId?`, `from`, `to`, `candidates[]` (session shape) | `{ verdict feasible\|infeasible, hard[], preferences[], checkedSessions, checked[], notes[] }` — read-only; `checked` says what was checked, `notes` what was not |
 
 Conflict objects: `{ code, severity hard|preference, sessionIds[], date, message }`; codes `TEACHER_OVERLAP` (incl. co-teachers and substitutes), `BATCH_OVERLAP`, `ROOM_OVERLAP`, `STUDENT_OVERLAP`, `TEACHER_UNAVAILABLE`, `ON_EXCLUSION`, `CROSSES_MIDNIGHT`, `INVALID_TIME`, `DURATION_MISMATCH`, `CLASS_LENGTH_UNKNOWN`, `TEACHER_WORKLOAD`.
 
@@ -220,6 +220,8 @@ Fifteen route files under `/academic/api/v1/` re-export Business Ops' handlers (
 |---|---|---|---|
 | GET | `/academic/api/v1/attendance` | `ops:attendance:read` (own) | Your own staff attendance days |
 | GET, POST | `/academic/api/v1/attendance/corrections` | `ops:attendance:read` / `ops:attendance:request` (own) | Ask HR to correct one of your days |
+| GET, POST | `/academic/api/v1/attendance/leave-applications` | `ops:attendance:read` / `ops:attendance:request` (own) | Your leave applications; apply (D-126) |
+| POST | `/academic/api/v1/attendance/leave-applications/{id}/cancel` | `ops:attendance:request` (own) | Cancel your own while it waits |
 | GET | `/academic/api/v1/feedback/mine`, `…/mine/{id}` | `ops:teacher_feedback_summaries:read` (own) | Your approved feedback summaries and agreed actions, never raw rows |
 | POST | `/academic/api/v1/ai/report-draft` | `ops:tasks:write` | AI draft of your own report's narrative (nothing saved) |
 | POST, GET, DELETE | `/academic/api/v1/attachments`, `…/{id}` | the owning record's rule | Files on your tasks and submissions |
@@ -272,3 +274,10 @@ Pages: `/academic/hr-requests`.
 - `/academic/tasks`: the home tiles open `?tab=all&staffId=<own>&groups=exclude&work=open&…`. `work=open` is the filter; `open` is the task panel's id (RL1-001).
 - Unknown paths under `/academic/api/` answer a JSON 404, or 403 cross-site (`src/app/api/[...unknown]/route.ts`, D-124).
 - Each "Save draft" on the teaching log says "Draft saved"; the heading reads "First saved" (RVC-013).
+
+
+## Added after commit `a1f6ec7`, 31 Oct 2026 (on no package yet)
+- `/academic/curriculum` takes `view`, `q`, `subject`, `batchId`, `status` (page parameters, no JSON route). `/academic/batches` shows a teacher "My batches" as a table.
+- `/academic/enrolments`: tab counts and the total cover every enrolment, rows stop at 2,000 with words on the page (RVD-002). `/academic/reviews/new`: the student picker says when it stops at 1,000 (RVD-007).
+- Every record page reached with a stale or wrong id has a heading, a reason and a back link, not a bare "Not found".
+- `/academic/settings` edits through `SettingFields` (D-130). `PUT settings/{key}` is unchanged.

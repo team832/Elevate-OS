@@ -69,7 +69,7 @@ Under real use, with 50 sessions for 2 minutes on the first package: 6,473 reque
 `README-RUN.md` inside the package holds the steps. In short, from the package folder:
 
 1. Copy `.env.production.example` to `.env.production` and fill it in.
-2. `node bin/preflight.mjs`: checks every file against the manifest, the Node version, settings, the four URLs, the database, waiting migrations, the 0017 precheck, sample rows, demo sign-ins. It ends with the list of things still stopping real use here.
+2. `node bin/preflight.mjs`: checks every file against the manifest, the Node version, settings, the four URLs, the database, waiting migrations, the 0017 precheck (`0018` only adds, so it has none), sample rows, demo sign-ins. It ends with the list of things still stopping real use here.
 3. `node db/migrate.mjs`
 4. `node db/seed-reference.mjs --confirm-database <name>`. The onboarding template and the website prices wait until someone holds the operations manager role; run it again then. It is safe to run again.
 5. `node bin/start.mjs`, then `node bin/smoke.mjs` (set `SMOKE_EMAIL` and `SMOKE_PASSWORD` to include a real sign-in and a PDF).
@@ -108,6 +108,8 @@ No package can fix these. Preflight lists the ones that apply.
 | External channels | Email, publishing and metrics are stand-ins |
 | Owner approvals | Grants marked Proposed, the open questions in `HANDOFF.md`, DPDP guardian consent |
 | 0017 on the owner's computer | Status unknown. It freezes once applied. See `HANDOFF.md` steps |
+| 0018 on the owner's computer | Not applied. New on 31 Oct; a package built from `d741b5b` or later carries 19 migrations. See `HANDOFF.md` step 10 |
+| A workspace stopped, through the Platform port | A bare 500 (RVD-010, Low). Matters only if staff use the Platform's rewrite instead of the workspace's own port |
 
 Done since the spec of 30 Oct: reference data on a new database (`db/seed-reference.mjs`); an exit reaching Academic (the `enrolment-exits` button, D-115).
 

@@ -105,3 +105,5 @@ Requirement-level status: `requirements/REQUIREMENTS.md`. Not built (Proposed): 
 - **Workspace gate:** Marketing routes now refuse non-members (D-113). Server-action replay by other roles was run and held on the first package.
 - **Marketing server actions are a second door to the same services** (F-09): each reaches a literal permission check. Kept.
 - **Later rounds:** only active Marketing & Growth staff can be assigned to content (RVB-008). The My Day tile opens `deliverables?content=in_review#my-content` (RVB-010). Unknown API paths answer JSON, and a cross-site form to a skipped path is refused (D-124). Left: a POST with no `Origin` from curl can answer 500 here and leave stack lines, nothing saved (RL1-003); on a phone the placement's date-and-time box runs past the card (RL2-006).
+
+- **After the debug pass (commit `d741b5b`; on no package yet):** leave applications at `/marketing/my-attendance?view=leave`, mounted from Business Ops (D-126). Settings pages say "In use, not yet approved" for Proposed; the personal page's reminder preview runs the real rule. Sample marketing briefs (D-127).

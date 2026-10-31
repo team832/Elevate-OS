@@ -127,3 +127,9 @@ Statuses per D-013; evidence files are in `tests/`. Screens without automated te
 | A teacher's own score entry is stored as verified at once | Implemented · owner question (`ACD-NW-049`) | `src/server/services/marks.ts` |
 | Requests through HR page and notification open redirect mounted from Business Operations | Tested · not browser-checked | `unit/screens.test.tsx`; `apps/business-ops-os/tests/integration/hr-requests-screens.test.tsx`, `notifications.test.tsx` |
 | Sample tests (published with a tie, in progress with a pending import, awaiting publication, upcoming), sample teachers only | Tested | `apps/platform/tests/integration/seeds-reconciliation.test.ts` |
+
+## After commit `a1f6ec7`, 31 Oct 2026
+| Requirement | Status (D-013) | Evidence |
+|---|---|---|
+| Teacher's Curriculum opens on assigned courses with filters; "My batches" table; record pages explain not-found; "Partial conflict check"; 12-hour times; settings as real fields | Implemented · on no package | `integration/teacher-session.test.tsx`, `unit/setting-fields.test.tsx` |
+| "Plan in use for teaching" wording, Progress and support on the teacher's menu | Implemented as stated · owner questions in `HANDOFF.md` | `src/app/curriculum/page.tsx`, `src/ui/shell.tsx` |
