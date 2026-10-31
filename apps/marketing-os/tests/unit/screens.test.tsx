@@ -57,7 +57,7 @@ describe('Marketing status badges', () => {
   );
 
   it('a proposed setting is flagged until the owner approves it', () => {
-    expect(html(<ProposedBadge status="proposed" />)).toBe(badge('warning', 'Proposed'));
+    expect(html(<ProposedBadge status="proposed" />)).toBe(badge('info', 'In use, not yet approved'));
     expect(html(<ProposedBadge status="approved" />)).toBe(badge('success', 'Approved'));
   });
 
