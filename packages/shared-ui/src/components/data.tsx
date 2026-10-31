@@ -31,6 +31,10 @@ export interface Column<T> {
   numeric?: boolean;
 }
 
+/** A proposed setting IS working today: every settings page uses these words, so nobody reads it as off. */
+export const IN_USE_NOT_APPROVED = 'In use, not yet approved';
+export const SETTINGS_STATE_NOTE = `"${IN_USE_NOT_APPROVED}" means the value is working today and is waiting for the owner's approval.`;
+
 export { fmtDay, fmtDaysIn };
 
 /** D-036: on a fictional record. Tables add it themselves when given `sampleOf`. */

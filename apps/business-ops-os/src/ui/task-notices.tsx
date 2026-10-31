@@ -5,30 +5,73 @@
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { StatusBadge } from '@elevate/shared-ui';
+import { Alert, StatusBadge } from '@elevate/shared-ui';
 import { deadlineText, istWhen } from '../domain/staff-tasks';
-import { noticeStates, type NoticeFacts } from '../domain/task-notices';
+import {
+  noticeStates,
+  reminderPreview,
+  type NoticeFacts,
+  type ReminderSettings,
+} from '../domain/task-notices';
+import { loadSettings } from '../server/settings';
 import { dueWork } from '../server/task-reminders';
 import { load } from './frame';
 import { RecordTable } from './record-table';
 import { Segment } from './sections';
 import '../app/ops.css';
 
-/** "Delivered 23 Oct, 4:10 pm · Read: not yet · …" — each state named apart. */
-export function NoticeStates({ f }: { f: NoticeFacts }) {
+/**
+ * "Delivered 23 Oct, 4:10 pm · Notice read: not yet · …" — each state named apart. Acknowledging
+ * (task action, tasks.acknowledged_at) and reading the notice (notifications.read_at, set by
+ * opening it or by Mark as read) never touch each other, so either can come first.
+ */
+export function NoticeStates({ f, explain }: { f: NoticeFacts; explain?: boolean }) {
   return (
-    <ul className="ops-notice-states" aria-label="Notification states">
-      {noticeStates(f).map((s) => (
-        <li key={s.key}>
-          {s.at ? (
-            <StatusBadge tone="success">{`${s.label} ${istWhen(s.at)}`}</StatusBadge>
-          ) : (
-            <StatusBadge>{`${s.label}: not yet`}</StatusBadge>
-          )}
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="ops-notice-states" aria-label="Notification states">
+        {noticeStates(f).map((s) => (
+          <li key={s.key}>
+            {s.at ? (
+              <StatusBadge tone="success">{`${s.label} ${istWhen(s.at)}`}</StatusBadge>
+            ) : (
+              <StatusBadge>{`${s.label}: not yet`}</StatusBadge>
+            )}
+          </li>
+        ))}
+      </ul>
+      {explain ? (
+        <p className="el-field-hint">
+          Acknowledged: the person pressed Acknowledge on the task. Notice read: they opened the
+          notification or marked it read. These are separate, so either can come first.
+        </p>
+      ) : null}
+    </>
   );
+}
+
+/** What a person really gets from the reminder settings, from their current values. */
+export function ReminderPreview({
+  s,
+  personalHours,
+}: {
+  s: ReminderSettings;
+  personalHours?: number | null;
+}) {
+  const p = reminderPreview(s, personalHours);
+  return (
+    <Alert title="What this means for a person">
+      <p>{p.schedule}</p>
+      <p>{p.personal}</p>
+      <p>{p.running}</p>
+    </Alert>
+  );
+}
+
+/** The same, for a workspace's Personal Settings (the setting lives here in Business Operations). */
+export async function MyReminderPreview({ personalHours }: { personalHours: number | null }) {
+  const r = await load((db) => loadSettings(db));
+  if (!r.ok) return r.view;
+  return <ReminderPreview s={r.data['tasks.reminders'].value} personalHours={personalHours} />;
 }
 
 type Item = NonNullable<Awaited<ReturnType<typeof dueWork>>>['items'][number];

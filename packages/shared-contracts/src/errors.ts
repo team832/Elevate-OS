@@ -4,6 +4,9 @@
  * fixed by the code. `RATE_LIMITED` (429) extends D-012 for login throttling
  * (recorded as D-020).
  */
+import { settingFieldName } from '@elevate/shared-types';
+import type { z } from 'zod';
+
 export const ERROR_STATUS = {
   VALIDATION_FAILED: 400,
   UNAUTHENTICATED: 401,
@@ -94,6 +97,43 @@ export class InternalError extends AppError {
   constructor(message = 'Something went wrong on our side.', options?: AppErrorOptions) {
     super('INTERNAL', message, options);
     this.name = 'InternalError';
+  }
+}
+
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** A setting's validation issue in plain words, naming the field: the refusal behind a form with no JSON on show. */
+export function plainSettingIssue(i: z.core.$ZodIssue): string {
+  if (i.code === 'custom') return i.message;
+  const key = i.path.findLast((p) => typeof p === 'string');
+  if (typeof key !== 'string') return 'This value is not in the accepted form.';
+  const row = i.path.findLast((p) => typeof p === 'number');
+  const name = `${settingFieldName(key)}${typeof row === 'number' ? ` in row ${row + 1}` : ''}`;
+  const amount = (n: number) =>
+    key.endsWith('Paise')
+      ? `₹${(n / 100).toLocaleString('en-IN')}`
+      : key.endsWith('Inr')
+        ? `₹${n.toLocaleString('en-IN')}`
+        : String(n);
+  switch (i.code) {
+    case 'invalid_type':
+      return `${name} needs a value.`;
+    case 'invalid_value':
+      return `Choose one of the options for ${name}.`;
+    case 'too_small':
+      return i.origin === 'string'
+        ? `${name} needs at least ${count(Number(i.minimum), 'character', 'characters')}.`
+        : i.origin === 'array'
+          ? `${name} needs at least ${count(Number(i.minimum), 'entry', 'entries')}.`
+          : `${name} must be at least ${amount(Number(i.minimum))}.`;
+    case 'too_big':
+      return i.origin === 'string'
+        ? `${name} can have at most ${count(Number(i.maximum), 'character', 'characters')}.`
+        : i.origin === 'array'
+          ? `${name} can have at most ${count(Number(i.maximum), 'entry', 'entries')}.`
+          : `${name} can be at most ${amount(Number(i.maximum))}.`;
+    default:
+      return `${name} is not in the accepted form.`;
   }
 }
 

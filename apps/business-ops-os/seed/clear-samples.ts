@@ -8,7 +8,7 @@
  * `is_sample` tasks, EOD reports and import batches, Academic `is_sample` batches (with their
  * sessions, logs and teachers), students, placements, demo attendees and reviews, `is_sample`
  * attachments and those of sample tasks, submissions, updates, corrections and reports (rows only:
- * files on disk stay; shortcut: delete them too once the storage adapter offers it), leave, attendance punches/imports/days/corrections,
+ * files on disk stay; shortcut: delete them too once the storage adapter offers it), leave and leave applications, attendance punches/imports/days/corrections,
  * student feedback about teachers with its imports, summaries and development actions, or a staff
  * member whose `ops.staff_profiles.is_sample` is set and who has no login. Everything
  * that hangs off those rows is deleted with them (including Academic's student and enrolment
@@ -48,7 +48,8 @@ const SETS: readonly [string, string][] = [
     's_appointments',
     `SELECT id FROM ops.appointments WHERE lead_id IN (SELECT id FROM s_leads)
        OR admission_id IN (SELECT id FROM s_admissions) OR student_id IN (SELECT id FROM s_students)
-       OR demo_id IN (SELECT id FROM s_demos)`,
+       OR demo_id IN (SELECT id FROM s_demos)
+       OR (type IN ('event', 'webinar') AND title LIKE 'Sample %')`,
   ],
   [
     's_plans',
@@ -82,6 +83,10 @@ const SETS: readonly [string, string][] = [
      WHERE p.is_sample AND m.user_id IS NULL`,
   ],
   ['s_hr_requests', `SELECT id FROM ops.hr_requests WHERE is_sample`],
+  // No is_sample column on these two: the sample set marks them by name.
+  ['s_schedules', `SELECT id FROM ops.work_schedules WHERE name LIKE 'Sample schedule%'`],
+  ['s_rooms', `SELECT id FROM academic.rooms WHERE code LIKE 'SAMPLE-%' AND name LIKE 'Sample %'`],
+  ['s_branches', `SELECT id FROM core.branches WHERE code = 'SAMPLE_BRANCH'`],
   ['s_campaigns', `SELECT id FROM marketing.campaigns WHERE is_sample`],
   ['s_ideas', `SELECT id FROM marketing.ideas WHERE is_sample`],
   ['s_opt_items', `SELECT id FROM marketing.optimisation_items WHERE is_sample`],
@@ -128,6 +133,10 @@ const DELETES: readonly [string, string][] = [
   ],
   ['marketing.targets', `DELETE FROM marketing.targets WHERE is_sample`],
   ['marketing.calendar_items', `DELETE FROM marketing.calendar_items WHERE is_sample`],
+  [
+    'marketing.metric_imports',
+    `DELETE FROM marketing.metric_imports WHERE file_name = 'Sample metrics export (fictional).csv'`,
+  ],
   ['marketing.ideas', `DELETE FROM marketing.ideas WHERE id ${IN('s_ideas')}`],
   [
     'marketing.campaign_members',
@@ -135,7 +144,13 @@ const DELETES: readonly [string, string][] = [
   ],
   ['marketing.campaigns', `DELETE FROM marketing.campaigns WHERE id ${IN('s_campaigns')}`],
   ...(
-    ['attendance_corrections', 'daily_attendance', 'attendance_punches', 'leave_records'] as const
+    [
+      'attendance_corrections',
+      'daily_attendance',
+      'attendance_punches',
+      'leave_applications', // before leave_records: an approved one points at its record
+      'leave_records',
+    ] as const
   ).map((t): [string, string] => [
     `ops.${t}`,
     `DELETE FROM ops.${t} WHERE is_sample OR staff_id ${IN('s_staff')}`,
@@ -154,6 +169,23 @@ const DELETES: readonly [string, string][] = [
     `DELETE FROM ops.teacher_feedback_summaries WHERE is_sample OR teacher_staff_id ${IN('s_staff')}`,
   ],
   ['ops.task_collaborators', `DELETE FROM ops.task_collaborators WHERE staff_id ${IN('s_staff')}`],
+  ['ops.holidays', `DELETE FROM ops.holidays WHERE name LIKE 'Sample holiday%'`],
+  [
+    'ops.staff_private_details',
+    `DELETE FROM ops.staff_private_details WHERE staff_id IN (SELECT staff_id FROM ops.staff_profiles WHERE is_sample)`,
+  ],
+  // The fictional Schar leaves the setting (only they: another person chosen on screen stays).
+  [
+    'ops.settings (Schar)',
+    `DELETE FROM ops.settings WHERE key = 'hr.request_recipients'
+       AND (SELECT count(*) FROM jsonb_object_keys(value)) = 1
+       AND value->>'schar' IN (SELECT staff_id::text FROM ops.staff_profiles WHERE is_sample)`,
+  ],
+  [
+    'ops.settings (Schar unset)',
+    `UPDATE ops.settings SET value = jsonb_set(value, '{schar}', 'null')
+     WHERE key = 'hr.request_recipients' AND value->>'schar' IN (SELECT staff_id::text FROM ops.staff_profiles WHERE is_sample)`,
+  ],
   // Sample task-tracker work (seed/sample-work.ts) and fixture imports.
   [
     'ops.task_import_rows',
@@ -295,8 +327,16 @@ const DELETES: readonly [string, string][] = [
     `academic.${t}`,
     `DELETE FROM academic.${t} WHERE ${col} ${IN('s_assessments')}`,
   ]),
-  // Academic sample teaching (apps/academic-os/seed/samples.ts). A real student's row in a
-  // sample session or batch is not deleted: its foreign key rolls the whole command back.
+  // Academic sample teaching (apps/academic-os/seed/samples.ts, fill-teaching.ts). A real student's
+  // row in a sample session or batch is not deleted: its foreign key rolls the whole command back.
+  ...(['catchup_tasks', 'interventions'] as const).map((t): [string, string] => [
+    `academic.${t}`,
+    `DELETE FROM academic.${t} WHERE student_id ${IN('s_academic_students')}`,
+  ]),
+  [
+    'academic.teacher_unavailability',
+    `DELETE FROM academic.teacher_unavailability WHERE staff_id IN (SELECT staff_id FROM ops.staff_profiles WHERE is_sample)`,
+  ],
   [
     'academic.teacher_reviews',
     `DELETE FROM academic.teacher_reviews WHERE is_sample OR academic_student_id ${IN('s_academic_students')} OR core_student_id ${IN('s_students')}`,
@@ -335,6 +375,7 @@ const DELETES: readonly [string, string][] = [
     `DELETE FROM academic.enrolments WHERE source_admission_id ${IN('s_admissions')} OR student_id ${IN('s_academic_students')}`,
   ],
   ['academic.students', `DELETE FROM academic.students WHERE id ${IN('s_academic_students')}`],
+  ['academic.rooms', `DELETE FROM academic.rooms WHERE id ${IN('s_rooms')}`],
   // A sample teacher's assignment on a real batch (older seeds gave teacher@example.test one) is
   // sample data even though the login stays; assignments of sample batches cascade below.
   [
@@ -390,6 +431,8 @@ const DELETES: readonly [string, string][] = [
   ],
   ['core.staff_members', `DELETE FROM core.staff_members WHERE id ${IN('s_staff')}`],
   ['ops.fee_structures', `DELETE FROM ops.fee_structures WHERE is_sample`],
+  ['ops.work_schedules', `DELETE FROM ops.work_schedules WHERE id ${IN('s_schedules')}`],
+  ['core.branches', `DELETE FROM core.branches WHERE id ${IN('s_branches')}`],
   // With no numbered admission left, real numbering starts again at 1 (row re-created on use).
   [
     'ops.admission_number_counters',
@@ -399,6 +442,8 @@ const DELETES: readonly [string, string][] = [
 
 /** Self-references that would block a delete inside the same set. */
 const UNLINK = [
+  `UPDATE ops.staff_profiles SET work_schedule_id = NULL WHERE work_schedule_id ${IN('s_schedules')}`,
+  `UPDATE ops.staff_profiles SET branch_id = NULL WHERE branch_id ${IN('s_branches')}`,
   `UPDATE ops.staff_tasks SET recurrence_parent_id = NULL, parent_task_id = NULL WHERE id ${IN('s_tasks')}`,
   `UPDATE ops.task_updates SET corrects_update_id = NULL WHERE task_id ${IN('s_tasks')}`,
   `UPDATE ops.eod_review_events SET version_id = NULL WHERE report_id ${IN('s_eods')}`,

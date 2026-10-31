@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { opsFollowUps } from '@elevate/database';
 import { createTestUser, setupTestDatabase } from '@elevate/testing';
 import { followUpDaySummary } from '../../src/leads';
+import { countFollowUps, listFollowUps } from '../../src/server/follow-ups';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 import { caseOf } from './lifecycle-fixtures';
 
@@ -54,6 +55,13 @@ describe('followUpDaySummary', () => {
       day: now === MIDNIGHT ? '2026-10-23' : '2026-10-22',
       upcomingWindowDays: 2,
     });
+  });
+
+  it('the home tile counts in SQL what the list shows: open, mine, due by the day (RVD-003)', async () => {
+    const due = { view: 'mine', dueBy: '2026-10-22', now: BEFORE_MIDNIGHT } as never;
+    expect(await countFollowUps(ctx.db, mc, due)).toBe(2);
+    expect(await listFollowUps(ctx.db, mc, due)).toHaveLength(2);
+    expect(await countFollowUps(ctx.db, mc, { view: 'mine', now: BEFORE_MIDNIGHT })).toBe(4);
   });
 
   it('null for own scope without a staff record; refused without ops:leads:read', async () => {

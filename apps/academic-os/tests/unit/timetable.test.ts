@@ -36,6 +36,20 @@ describe('checkTimetable', () => {
     expect(r.notes[0]).toMatch(/workload cap is not configured/);
   });
 
+  const WORKLOAD = /workload/i;
+  it.each([
+    ['no cap', { workloadCap: null, classLengthByBatch: len75 }, [WORKLOAD], [/^class length$/]],
+    ['cap set, length known', { workloadCap: { maxMinutesPerDay: 600, maxMinutesPerWeek: null, enforcement: 'warning' as const }, classLengthByBatch: len75 }, [], [WORKLOAD, /^class length$/]],
+    ['cap set, length not decided', { workloadCap: { maxMinutesPerDay: 600, maxMinutesPerWeek: null, enforcement: 'warning' as const }, classLengthByBatch: {} }, [/class length is not decided/i], [WORKLOAD]],
+  ])('%s: the result names what was and was not checked', (_name, over, notChecked, checked) => {
+    const r = checkTimetable({ sessions: [s({ id: 'a' })], exclusions: [], ...over });
+    expect(r.notes).toHaveLength(notChecked.length);
+    notChecked.forEach((re, i) => expect(r.notes[i]).toMatch(re));
+    for (const re of checked) expect(r.checked.some((c) => re.test(c))).toBe(true);
+    expect(r.checked.join()).toContain('overlaps');
+    if (notChecked.length && notChecked[0] === WORKLOAD) expect(r.checked.join()).not.toMatch(WORKLOAD);
+  });
+
   it('back-to-back sessions (touching) are not a conflict', () => {
     const r = checkTimetable({
       sessions: [

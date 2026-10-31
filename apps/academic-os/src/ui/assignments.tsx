@@ -3,12 +3,12 @@
  * the teacher profile) and the coordinator's forms to record, edit, activate, end or withdraw.
  * Server components; the routes check `academic:assignments:write` again.
  */
-import { DataTable, EmptyState, StatusBadge, fmtDay } from '@elevate/shared-ui';
+import { DataTable, EmptyState, StatusBadge } from '@elevate/shared-ui';
 import type { AssignmentRow, assignmentOptions, listBatches } from '../server';
 import { assignmentPhase } from '../domain/placements';
 import { MODULE_PATHS } from '../server/paths';
 import { ApiForm, type FormField } from './api-form';
-import { StateBadge } from './badges';
+import { StateBadge, fmtSpan } from './badges';
 
 export const ROLE_LABEL: Record<string, string> = { primary: 'Primary', co_teacher: 'Co-teacher', substitute: 'Substitute' };
 export const NO_BATCH = 'No batch yet — a coordinator will assign one';
@@ -36,7 +36,7 @@ export function AssignmentTable({ rows, today, placed, empty }: { rows: readonly
         { key: 'role', header: 'Role', render: (a) => ROLE_LABEL[a.role] ?? a.role },
         { key: 'year', header: 'Academic year', render: (a) => a.academicYear ?? 'Not recorded' },
         { key: 'branch', header: 'Branch', render: (a) => a.branchName ?? 'Not recorded' },
-        { key: 'dates', header: 'Dates', render: (a) => `${fmtDay(a.startDate, 'from the start')} to ${fmtDay(a.endDate, 'open')}` },
+        { key: 'dates', header: 'Dates', render: (a) => fmtSpan(a.startDate, a.endDate) },
         {
           key: 'status',
           header: 'Now',

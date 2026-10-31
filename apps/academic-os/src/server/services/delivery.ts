@@ -19,6 +19,7 @@ import { activeStaffOrThrow } from './assignments';
 import { assertLoggable, assertSessionAccess, lockSession } from './session-guards';
 import { getSetting } from './settings';
 import { checkAgainst, conflictContext, lockTimetable, refuseConflicts, teachersBySession, teacherUserId, toTimetableSession } from './timetable';
+import { fmtClock } from '../../domain/time';
 
 const activeRows = (tx: Database, sessionId: string, participation: 'planned' | 'actual') =>
   tx
@@ -116,7 +117,7 @@ export async function assignSubstitute(db: Database, actor: Actor, sessionId: st
     await audit(tx, actor, { action: 'class_session.substitute_assigned', entityType: 'class_session', entityId: session.id, after: row, metadata: { reason: input.reason, replacesStaffId: session.teacherStaffId, substituteStaffId: input.staffId } });
     const substitute = await teacherUserId(tx, input.staffId);
     // The reason can be about the other teacher, so it stays out of the notice.
-    if (substitute) await notify(tx, { userIds: [substitute], module: 'academic', kind: 'class_session.substitute_assigned', title: `You are covering a class on ${fmtDay(session.date)} at ${session.startTime}`, link: MODULE_PATHS.teachingLog(session.id), entityType: 'class_session', entityId: session.id });
+    if (substitute) await notify(tx, { userIds: [substitute], module: 'academic', kind: 'class_session.substitute_assigned', title: `You are covering a class on ${fmtDay(session.date)} at ${fmtClock(session.startTime)}`, link: MODULE_PATHS.teachingLog(session.id), entityType: 'class_session', entityId: session.id });
     return row!;
   });
 }

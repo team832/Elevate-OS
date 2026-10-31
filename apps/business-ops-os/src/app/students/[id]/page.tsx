@@ -107,13 +107,15 @@ async function StudentProfile({
     panel(tab, d, user, query, base, summary),
     summary,
   ]);
-  const placed = new Map(
-    academic?.status === 'available'
-      ? academic.data.enrolments.flatMap((e) =>
-          e.batchName ? [[e.enrolmentId as string, e.batchName] as const] : [],
-        )
-      : [],
-  );
+  // null = Academic could not be read, so a placed student's batch is not known.
+  const placed =
+    academic?.status === 'unavailable'
+      ? null
+      : new Map(
+          academic?.data.enrolments.flatMap((e) =>
+            e.batchName ? [[e.enrolmentId as string, e.batchName] as const] : [],
+          ),
+        );
   return (
     <>
       <PageHeader

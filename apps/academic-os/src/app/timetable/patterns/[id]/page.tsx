@@ -6,7 +6,7 @@ import { WEEKDAY_NAMES } from '../../../../domain';
 import { listRooms, listStaff, previewPattern } from '../../../../server';
 import { MODULE_PATHS } from '../../../../server/paths';
 import { ApiButton, ApiForm } from '../../../../ui/api-form';
-import { PlanBadge, StateBadge } from '../../../../ui/badges';
+import { PlanBadge, StateBadge, fmtSpan, fmtClock } from '../../../../ui/badges';
 import { ConflictList } from '../../../../ui/conflicts';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../../ui/shell';
 
@@ -21,7 +21,7 @@ export default async function PatternPage({ params }: { params: Promise<{ id: st
   const canPublish = can(access.user, 'academic:timetable:publish');
   const canWrite = can(access.user, 'academic:timetable:write');
   const data = await load(async () => ({ preview: await previewPattern(getDb(), actorFor(access.user), id), staff: canWrite ? await listStaff(getDb()) : [], rooms: canWrite ? await listRooms(getDb()) : [] }));
-  if (!data.ok) return <AcademicShell access={access} active="timetable"><LoadError level={1} error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="timetable"><LoadError level={1} back="timetable" error={data.error} /></AcademicShell>;
   const { pattern, occurrences, toCreate, check } = data.data.preview;
   const staffOptions = data.data.staff.map((s) => ({ value: s.id, label: s.fullName }));
   const roomOptions = data.data.rooms.map((r) => ({ value: r.id, label: `${r.code} ${r.name}` }));
@@ -29,14 +29,14 @@ export default async function PatternPage({ params }: { params: Promise<{ id: st
   return (
     <AcademicShell access={access} active="timetable">
       <PageHeader
-        title={`${WEEKDAY_NAMES[pattern.weekday - 1]} ${pattern.startTime} · ${pattern.durationMinutes} min`}
+        title={`${WEEKDAY_NAMES[pattern.weekday - 1]} ${fmtClock(pattern.startTime)} · ${pattern.durationMinutes} min`}
         meta={<PlanBadge status={pattern.status} />}
-        description={`${fmtDay(pattern.effectiveFrom)} to ${fmtDay(pattern.effectiveTo)}. ${toCreate.length} class(es) still to be created; ${occurrences.filter((o) => o.skipped).length} date(s) skipped for closures.`}
+        description={`${fmtSpan(pattern.effectiveFrom, pattern.effectiveTo)}. ${toCreate.length} class(es) still to be created; ${occurrences.filter((o) => o.skipped).length} date(s) skipped for closures.`}
         actions={<ButtonLink href={MODULE_PATHS.patterns}>All patterns</ButtonLink>}
       />
       <div className="el-stack">
-        <Card title="Conflict check" description="Checked on the server against every batch: teacher (incl. co-teachers, substitutes and availability records), room, batch and students placed in two batches. Cancelled classes do not count.">
-          <ConflictList verdict={check.verdict} hard={check.hard} preferences={check.preferences} notes={check.notes} />
+        <Card title="Conflict check" description="Checked on the server against every batch, including co-teachers and substitutes. Cancelled classes do not count.">
+          <ConflictList verdict={check.verdict} hard={check.hard} preferences={check.preferences} checked={check.checked} notes={check.notes} />
         </Card>
         {canPublish && pattern.status !== 'retired' && toCreate.length > 0 ? (
           <Card title={pattern.status === 'draft' ? 'Publish' : 'Create the missing classes'} description={`Creates ${toCreate.length} class(es). Refused while any hard conflict remains; running it again never creates duplicates.`}>

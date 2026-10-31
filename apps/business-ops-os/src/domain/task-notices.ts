@@ -72,10 +72,40 @@ export function remindersDue(
   return out;
 }
 
+const hours = (n: number) => `${n} hour${n === 1 ? '' : 's'}`;
+
+/**
+ * The reminder rules above in plain words, from the current values. `personalHours` undefined =
+ * about people in general (HR's view); a number or null = the signed-in person's own choice.
+ */
+export function reminderPreview(s: ReminderSettings, personalHours?: number | null) {
+  const you = personalHours !== undefined;
+  const every = Math.max(s.unacknowledgedHours, personalHours ?? 0);
+  const who = you ? 'You get' : 'A person gets';
+  const them = you ? 'you acknowledge' : 'they acknowledge';
+  const ack =
+    every === s.unacknowledgedHours
+      ? `every ${hours(every)} until ${them} a new task`
+      : `${hours(s.unacknowledgedHours)} after a new task arrives, then every ${hours(every)} until ${them} it`;
+  const choice = !personalHours
+    ? "You are on HR's schedule."
+    : personalHours > s.unacknowledgedHours
+      ? `You chose every ${hours(personalHours)}, so acknowledge reminders repeat less often than HR's ${hours(s.unacknowledgedHours)}.`
+      : `You chose every ${hours(personalHours)}, but HR's ${hours(s.unacknowledgedHours)} is the shortest gap allowed, so HR's schedule applies.`;
+  return {
+    schedule: `${who} a reminder ${hours(s.dueSoonHours)} before a task is due, then every ${hours(s.overdueRepeatHours)} while it is overdue, and ${ack}.`,
+    personal: you
+      ? `${choice} This choice only spaces out acknowledge reminders. Due-soon and overdue reminders always follow HR's settings. Turning off pop-ups does not stop a reminder: it still shows under the bell.`
+      : 'Personal Settings (in Marketing) can only make acknowledge reminders less frequent and turn off pop-ups. They cannot stop due-soon or overdue reminders or change a deadline.',
+    running:
+      'Nothing goes out on its own, because no scheduler exists yet. Reminders are created only when someone runs "Send task reminders" under Background jobs on the Business Operations overview. They show only inside Elevate OS, and only for tasks still open.',
+  };
+}
+
 /** The five states of an assignment notification, in order; `at` null = not yet. */
 export const NOTICE_STATES = [
   ['delivered', 'Delivered', 'deliveredAt'],
-  ['read', 'Read', 'readAt'],
+  ['read', 'Notice read', 'readAt'],
   ['acknowledged', 'Acknowledged', 'acknowledgedAt'],
   ['submitted', 'Work submitted', 'lastSubmittedAt'],
   ['approved', 'Work approved', 'approvedAt'],

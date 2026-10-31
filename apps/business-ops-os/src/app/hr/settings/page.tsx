@@ -1,13 +1,17 @@
+import { Fragment } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
-import { PageHeader } from '@elevate/shared-ui';
+import { PageHeader, SETTINGS_STATE_NOTE } from '@elevate/shared-ui';
 import { listHrSettings } from '../../../server/hr-settings';
-import { ActionForm } from '../../../ui/action-form';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref } from '../../../ui/list-controls';
 import { FormModal } from '../../../ui/record-modal';
 import { RecordTable } from '../../../ui/record-table';
 import { DetailTable, Segment } from '../../../ui/sections';
-import { StateBadge, valueRows } from '../../settings/_components/setting-value';
+import {
+  remindersPreviewOf,
+  SETTING_COLUMNS,
+  SettingEditForm,
+} from '../../settings/_components/setting-value';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'HR settings' };
@@ -29,7 +33,7 @@ export default async function HrSettingsPage({ searchParams }: { searchParams: P
     <Frame access={access} active="hr-settings">
       <PageHeader
         title="HR settings"
-        description="HR, work-report and feedback rules. A value changed here stays Proposed until the owner approves it."
+        description={`HR, work-report and feedback rules. ${SETTINGS_STATE_NOTE} A value you change here works straight away and shows that way until the owner approves it.`}
       />
       <Section>
         <Settings user={access.user} sp={sp} />
@@ -45,64 +49,34 @@ async function Settings({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
   const open = r.data.find((s) => s.key === sp.open && s.editable);
   return (
     <div className="el-stack">
-      {GROUPS.map(([title, re]) => (
-        <Segment key={title} title={title} flush>
-          <RecordTable
-            caption={title}
-            rows={r.data.filter((s) => re.test(s.key))}
-            rowKey={(s) => s.key}
-            rowHref={(s) => (s.editable ? listHref(BASE, sp, { open: s.key }) : '')}
-            linkColumn="label"
-            columns={[
-              { key: 'label', header: 'Setting' },
-              { key: 'description', header: 'What it controls' },
-              {
-                key: 'value',
-                header: 'Current value',
-                render: (s) => <DetailTable rows={valueRows(s.value)} />,
-              },
-              {
-                key: 'state',
-                header: 'Decision state',
-                render: (s) => (
-                  <>
-                    <StateBadge state={s.decisionState} />
-                    {s.editable ? null : <p className="el-field-hint">Fixed for now</p>}
-                  </>
-                ),
-              },
-            ]}
-          />
-        </Segment>
-      ))}
+      {GROUPS.map(([title, re]) => {
+        const rows = r.data.filter((s) => re.test(s.key));
+        return (
+          <Fragment key={title}>
+            <Segment title={title} flush>
+              <RecordTable
+                caption={title}
+                rows={rows}
+                rowKey={(s) => s.key}
+                rowHref={(s) => (s.editable ? listHref(BASE, sp, { open: s.key }) : '')}
+                linkColumn="label"
+                columns={SETTING_COLUMNS}
+              />
+            </Segment>
+            {remindersPreviewOf(rows)}
+          </Fragment>
+        );
+      })}
       {open ? (
         <FormModal
           id="hr-setting-edit"
           title={`Change: ${open.label}`}
-          meta="The new value is saved as Proposed."
+          meta="It works straight away and shows as not yet approved."
           closeHref={close}
         >
           <DetailTable rows={[{ label: 'What it controls', value: open.description }]} />
-          <ActionForm
-            action={`/ops/api/v1/hr/settings/${open.key}`}
-            method="PUT"
-            submitLabel="Save as proposed"
-            redirectTo={close.replace(/^\/ops/, '')}
-            secondary={<a href={close}>Cancel</a>}
-            fields={[
-              {
-                name: 'value',
-                // shortcut: free-form JSON until each setting has its own typed fields; reported to the coordinator.
-                label: 'New value',
-                hint: 'Change only the values; keep the quotes, brackets and commas as they are. It is checked before saving.',
-                type: 'json',
-                required: true,
-                defaultValue: JSON.stringify(open.value, null, 2),
-                section: 'Value',
-              },
-              { name: 'note', label: 'Why', section: 'Value' },
-            ]}
-          />
+          {remindersPreviewOf([open])}
+          <SettingEditForm s={open} api="/ops/api/v1/hr/settings" close={close} />
         </FormModal>
       ) : null}
     </div>

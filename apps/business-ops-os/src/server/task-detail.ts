@@ -3,7 +3,7 @@
  * dated events (oldest first), work updates, dependencies, time summary and the actions the
  * caller may take. Read scope as the list (task-store.ts); the server re-checks every action.
  */
-import { and, asc, count, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
   departments,
@@ -55,16 +55,19 @@ export async function taskDetail(db: Database, actor: Actor, id: string, now = n
         ...((await isCollaborator(db, access, row)) ? (['collaborator'] as const) : []),
       ]
     : [];
-  const [evs, ups, deps, dept, checklist, history, collaborators, children] = await Promise.all([
+  const [evs, ups, deps, [dept], checklist, history, collaborators, children] = await Promise.all([
     db.select().from(events).where(eq(events.taskId, row.id)).orderBy(asc(events.occurredAt)),
     db.select().from(updates).where(eq(updates.taskId, row.id)).orderBy(asc(updates.recordedAt)),
     dependenciesOf(db, read, row.id),
-    row.departmentId
-      ? db
-          .select({ name: departments.name })
-          .from(departments)
-          .where(eq(departments.id, row.departmentId))
-      : [],
+    // The task's own department, else its owner's (the task form leaves it optional).
+    db
+      .select({ name: departments.name })
+      .from(staffMembers)
+      .innerJoin(
+        departments,
+        eq(departments.id, sql`coalesce(${row.departmentId}, ${staffMembers.departmentId})`),
+      )
+      .where(eq(staffMembers.id, row.staffId)),
     checklistOf(db, row.id),
     submissionHistory(db, row.id),
     db
@@ -95,18 +98,16 @@ export async function taskDetail(db: Database, actor: Actor, id: string, now = n
     ...evs.flatMap((e) => [e.fromStaffId, e.toStaffId]),
     ...ups.map((u) => u.authorStaffId),
   ].filter((s): s is NonNullable<typeof s> => Boolean(s));
-  const userIds = [...new Set(evs.map((e) => e.actorUserId))];
+  const userIds = [...new Set([row.createdBy, ...evs.map((e) => e.actorUserId)])];
   const [staff, people] = await Promise.all([
     db
       .select({ id: staffMembers.id, name: staffMembers.fullName })
       .from(staffMembers)
       .where(inArray(staffMembers.id, [...new Set(staffIds)])),
-    userIds.length
-      ? db
-          .select({ id: users.id, name: users.displayName })
-          .from(users)
-          .where(inArray(users.id, userIds))
-      : [],
+    db
+      .select({ id: users.id, name: users.displayName })
+      .from(users)
+      .where(inArray(users.id, userIds)),
   ]);
   // Overlap flags against each author's other entries that day, on any task (never corrected).
   const sameDay = ups.length
@@ -137,7 +138,16 @@ export async function taskDetail(db: Database, actor: Actor, id: string, now = n
     requesterName: staffName(row.requesterStaffId),
     backupName: staffName(row.backupStaffId),
     reviewerName: staffName(row.reviewerStaffId),
-    departmentName: dept[0]?.name ?? null,
+    departmentName: dept?.name ?? null,
+    createdByName: userName(row.createdBy),
+    /** What the screens and reports say: stored facts as they are, a derived one says so. */
+    requesterText:
+      staffName(row.requesterStaffId) ??
+      row.requesterNote ??
+      `${userName(row.createdBy)} (created this task)`,
+    departmentText: dept
+      ? `${dept.name}${row.departmentId ? '' : ' (from the owner’s staff record)'}`
+      : null,
     events: evs.map((e) => ({
       ...e,
       actorName: userName(e.actorUserId),

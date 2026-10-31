@@ -42,6 +42,7 @@ export {
   ownAdmissionFilter,
   programmeRef,
   readinessOf,
+  readinessOfMany,
   staffRef,
   transitionsOf,
 } from './admissions-lookups';

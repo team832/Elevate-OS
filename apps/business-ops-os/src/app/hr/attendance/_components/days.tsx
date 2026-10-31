@@ -8,7 +8,7 @@ import {
 import type { listAttendance } from '../../../../server/attendance';
 import type { AttendanceSetup } from '../../../../server/attendance-lists';
 import { ActionForm } from '../../../../ui/action-form';
-import { fmtDate } from '../../../../ui/format';
+import { fmtDate, plural } from '../../../../ui/format';
 import { listHref, Pager, SearchPanel } from '../../../../ui/list-controls';
 import { Segment } from '../../../../ui/sections';
 import { DayTable, statusOptions } from './shared';
@@ -32,7 +32,6 @@ export function DaysTab({
 }) {
   const hidden: Record<string, string> = review ? { tab: 'review' } : {};
   const range = `${fmtDate(list.from)} to ${fmtDate(list.to)}`;
-  const known = setup.staff.length > 0;
   return (
     <>
       <SearchPanel
@@ -40,6 +39,17 @@ export function DaysTab({
         hidden={hidden}
         search={{ name: 'q', label: 'Staff name or code', value: params.q }}
         filters={[
+          {
+            name: 'who',
+            label: 'Who',
+            type: 'select',
+            anyLabel: 'Everyone',
+            options: [
+              { value: 'teachers', label: 'Teachers' },
+              { value: 'other', label: 'Other staff' },
+            ],
+            value: params.who,
+          },
           { name: 'from', label: 'From', type: 'date', value: params.from },
           { name: 'to', label: 'To', type: 'date', value: params.to },
           review
@@ -76,6 +86,12 @@ export function DaysTab({
           },
         ]}
       />
+      {params.who ? (
+        <p className="el-field-hint">
+          Teachers are the staff with a subject in the Teachers directory. Someone who teaches but has
+          no subject listed there counts as other staff.
+        </p>
+      ) : null}
       {review ? null : (
         <Segment
           title="Attendance by date"
@@ -86,7 +102,7 @@ export function DaysTab({
             orientation="vertical"
             data={list.byDate.map((d) => ({
               label: fmtDate(d.date),
-              value: known ? (d.counts.present ?? 0) : null,
+              value: list.staffCount ? (d.counts.present ?? 0) : null,
               note: Object.entries(d.counts)
                 .filter(([s]) => s !== 'present')
                 .map(([s, n]) => `${ATTENDANCE_STATUS_LABELS[s as AttendanceStatus]} ${n}`)
@@ -99,7 +115,7 @@ export function DaysTab({
       <DayTable
         staff
         rows={list.items}
-        caption={`${list.total} ${review ? 'days needing review' : 'staff days'}, ${range}, newest first`}
+        caption={`${list.total} ${review ? 'days needing review' : 'staff days'} for ${plural(list.staffCount, 'staff member')}, ${range}, newest first`}
         rowHref={(r) => `${BASE}/${r.staff.id}?date=${r.date}`}
         empty={
           <EmptyState

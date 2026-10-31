@@ -8,6 +8,7 @@ import { DEMO_OUTCOMES } from '../../../domain/demos';
 import type { ConversionGroup } from '../../../domain/admissions-funnel';
 import type { buildAdmissionsFunnel } from '../../../server/reports/admissions';
 import { BarChart, DonutChart, FunnelChart } from '../../../ui/charts';
+import { Unavailable } from '../../../ui/cross-module';
 import { fmtPercent } from '../../../ui/chart-math';
 import { humanise } from '../../../ui/format';
 import { listHref } from '../../../ui/list-controls';
@@ -20,19 +21,32 @@ type Window = FunnelReport['window'];
 export const demoListHref = (w: Window, patch: Record<string, string | undefined> = {}) =>
   listHref('/ops/admissions', { from: w.from, to: w.to, ...patch });
 
+const SOURCE_GAP = 'Source unavailable';
 const rateText = (pct: number | null) => (pct === null ? 'Not enough data' : `${pct}%`);
 
 export function Funnel({ report }: { report: FunnelReport }) {
+  // "Completed" and "Converted" both divide by "Attended" (FUNNEL_STAGES); skipping
+  // "Completed" keeps every chart "of previous" equal to the domain's denominator.
+  const stages = report.funnel.filter((s) => s.key !== 'completed');
+  const missing = stages.findIndex((s) => s.count === null);
   return (
-    <FunnelChart
-      label="Admissions funnel: leads at each stage"
-      // "Completed" and "Converted" both divide by "Attended" (FUNNEL_STAGES); skipping
-      // "Completed" keeps every chart "of previous" equal to the domain's denominator.
-      data={report.funnel
-        .filter((s) => s.key !== 'completed')
-        .map((s) => ({ label: s.label, value: s.count }))}
-      emptyText="No leads were first received in this period."
-    />
+    <>
+      {missing >= 0 && report.academicUnavailable ? (
+        <Unavailable
+          name="Academic OS"
+          result={report.academicUnavailable}
+          note="The stages that need attendance marked there are not counted."
+        />
+      ) : null}
+      <FunnelChart
+        label="Admissions funnel: leads at each stage"
+        data={(missing >= 0 ? stages.slice(0, missing) : stages).map((s) => ({
+          label: s.label,
+          value: s.count,
+        }))}
+        emptyText="No leads were first received in this period."
+      />
+    </>
   );
 }
 
@@ -46,17 +60,18 @@ export function FunnelTable({ report }: { report: FunnelReport }) {
       rowKey={(s) => s.key}
       columns={[
         { key: 'label', header: 'Stage' },
-        { key: 'count', header: 'Leads', numeric: true },
+        { key: 'count', header: 'Leads', numeric: true, render: (s) => s.count ?? SOURCE_GAP },
         {
           key: 'of',
           header: 'Out of',
-          render: (s) => (s.of ? `${s.of.count} (${label.get(s.of.key)})` : '—'),
+          render: (s) => (s.of ? `${s.of.count ?? SOURCE_GAP} (${label.get(s.of.key)})` : '—'),
         },
         {
           key: 'rate',
           header: 'Rate',
           numeric: true,
-          render: (s) => (s.of ? rateText(s.ratePct) : '—'),
+          render: (s) =>
+            !s.of ? '—' : s.count === null || s.of.count === null ? SOURCE_GAP : rateText(s.ratePct),
         },
       ]}
     />

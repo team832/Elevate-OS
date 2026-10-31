@@ -80,6 +80,9 @@ export const relatable = (user: AuthenticatedUser) =>
 
 type Option = { value: string; label: string };
 const ADVANCED = 'Assign, review and source (optional)';
+/** Policy stays open (owner question): these fields are not required. */
+export const ACTIONABLE_HINT =
+  'Someone can act on a task when it says what is needed, what to hand in and how you will know it is done. If the title alone does not say that, add it below.';
 
 /** The full "Log a task" form: quick fields first, assignment and request details after. */
 export function logTaskFields(
@@ -90,7 +93,7 @@ export function logTaskFields(
   all: boolean,
 ): FieldSpec[] {
   return [
-    { name: 'title', label: 'Task', required: true, section: 'Task' },
+    { name: 'title', label: 'Task', required: true, hint: ACTIONABLE_HINT, section: 'Task' },
     {
       name: 'priority',
       label: 'Priority',

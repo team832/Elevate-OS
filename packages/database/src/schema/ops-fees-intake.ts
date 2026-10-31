@@ -147,6 +147,11 @@ export const opsFeeRecords = ops.table(
   (t) => [
     uniqueIndex('fee_records_code_key').on(t.code),
     index('fee_records_admission_idx').on(t.admissionId, t.recordedAt),
+    // Collections list, one page, newest first: 20.4 to 0.7 ms at 5,108 records (RV-D, 0018).
+    index('fee_records_payment_code_idx').on(
+      t.paymentDate.desc().nullsFirst(),
+      t.code.desc().nullsFirst(),
+    ),
     index('fee_records_status_idx').on(t.status),
     index('fee_records_plan_idx').on(t.planId),
     index('fee_records_lead_idx').on(t.leadId),

@@ -46,9 +46,12 @@ export const sourceGap = (reason: string) =>
 export function Unavailable({
   name,
   result,
+  note = 'No numbers are shown rather than zeros.',
 }: {
   name: string;
   result: { reason: string; fetchedAt: string };
+  /** What this page does instead, where other figures on it stay. */
+  note?: string;
 }) {
   if (result.reason === NOT_LINKED_TO_STAFF)
     return (
@@ -58,8 +61,8 @@ export function Unavailable({
     );
   return (
     <Alert tone="warning" title="Source unavailable">
-      {name} could not be read ({sourceReasonWords(result.reason)}); checked {fmtDateTime(result.fetchedAt)}. No
-      numbers are shown rather than zeros. <ReloadButton />
+      {name} could not be read ({sourceReasonWords(result.reason)}); checked {fmtDateTime(result.fetchedAt)}.{' '}
+      {note} <ReloadButton />
     </Alert>
   );
 }

@@ -24,9 +24,10 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import type { StaffMemberId } from '@elevate/shared-types';
+import type { IsoDate, StaffMemberId } from '@elevate/shared-types';
 import { istToday } from '../domain';
 import {
+  ACADEMIC_NOT_KNOWN,
   DEMO_VIEWS,
   demoAttendanceStatus,
   demoChecklist,
@@ -39,13 +40,21 @@ import {
   nextSession,
   sessionsInRange,
   setupGaps,
+  type ChecklistEntryLike,
   type DemoView,
+  type SessionLike,
 } from '../domain/demos';
 import { lockAccessible, namesOf, ownAdmissionFilter } from './admissions';
 import { accessScope, assertScope, notFound, type AccessScope, type Actor } from './context';
 import type { DemoListQuery, DEMO_SORTS } from './demos-schemas';
 import { demoKyc } from './demos-intake';
-import { academicDemoMarks, withMarks, type AcademicDemoMarks } from './academic-summary';
+import {
+  academicDemoMarks,
+  askable,
+  classesWithMarks,
+  type AcademicDemoMarks,
+  type MarksReader,
+} from './academic-summary';
 import { demoFeedbackByDay } from './feedback';
 import { groupBy, inOrder, rowById } from './ops-common';
 import { demoFees } from './demos-lookups';
@@ -96,28 +105,17 @@ const demoRows = (db: Database, where: SQL | undefined) =>
     .where(where);
 type DemoRow = Awaited<ReturnType<typeof demoRows>>[number];
 
-/** Classes Academic is asked about: started ones only, inside a list's date window if any. */
-const askable = (
-  sessions: readonly { id: string; startsAt: Date }[],
-  now: Date,
-  window: { from?: string; to?: string } = {},
-) =>
-  sessions
-    .filter(
-      (s) =>
-        s.startsAt <= now &&
-        (!window.from || istToday(s.startsAt) >= window.from) &&
-        (!window.to || istToday(s.startsAt) <= window.to),
-    )
-    .map((s) => s.id);
-
 /**
  * Academic's marks for one demo's started classes. Call it BEFORE a transaction opens: no
  * network call happens inside one (pass the result to demoWithChecklist / syncDemo).
  */
 export async function marksForDemo(db: Database, demoId: string, now = new Date()) {
   const sessions = await db
-    .select({ id: opsDemoSessions.id, startsAt: opsDemoSessions.startsAt })
+    .select({
+      id: opsDemoSessions.id,
+      demoId: opsDemoSessions.demoId,
+      startsAt: opsDemoSessions.startsAt,
+    })
     .from(opsDemoSessions)
     .where(eq(opsDemoSessions.demoId, demoId as Demo['id']));
   return academicDemoMarks(db, askable(sessions, now));
@@ -131,7 +129,12 @@ export async function marksForDemo(db: Database, demoId: string, now = new Date(
 async function demoExtras(
   db: Database,
   demos: readonly Demo[],
-  opts: { marks?: AcademicDemoMarks; window?: { from?: string; to?: string }; now?: Date } = {},
+  opts: {
+    marks?: AcademicDemoMarks;
+    window?: { from?: IsoDate; to?: IsoDate };
+    now?: Date;
+    read?: MarksReader;
+  } = {},
 ) {
   const ids = demos.map((d) => d.id);
   const [sessions, entries, followUps] = await inOrder([
@@ -157,12 +160,14 @@ async function demoExtras(
       .where(inArray(opsFollowUps.admissionId, [...new Set(demos.map((d) => d.admissionId))]))
       .orderBy(asc(opsFollowUps.dueDate)),
   ]);
-  const marks =
-    opts.marks ??
-    (await academicDemoMarks(db, askable(sessions, opts.now ?? new Date(), opts.window)));
-  const marked = withMarks(sessions, marks).map((s) => ({
+  const { marks, classes } = await classesWithMarks(db, sessions, {
+    ...opts,
+    now: opts.now ?? new Date(),
+  });
+  const marked = classes.map((s) => ({
     ...s,
-    teacherName: s.academic?.teacherNames.join(', ') || s.teacherName,
+    teacherName:
+      s.academic?.teacherNames.join(', ') || s.teacherName || (s.unknown ? ACADEMIC_NOT_KNOWN : null),
   }));
   return {
     marks,
@@ -170,6 +175,17 @@ async function demoExtras(
     entries: groupBy(entries, (e) => e.subjectId),
     followUps: groupBy(followUps, (f) => f.admissionId),
   };
+}
+
+/** The checklist; while a class is not known (Academic unreadable) its count is only a floor. */
+function checklistOf<E extends ChecklistEntryLike>(
+  entries: readonly E[],
+  sessions: readonly (SessionLike & { unknown: boolean })[],
+) {
+  const c = demoChecklist(entries, sessions);
+  return sessions.some((s) => s.unknown)
+    ? { ...c, label: `At least ${c.label}, Academic OS unavailable` }
+    : c;
 }
 
 /** One demo (optionally locked FOR UPDATE) with its resolved checklist; NOT_FOUND "Demo not found.". */
@@ -184,7 +200,7 @@ export async function demoWithChecklist(
   const { entries, sessions } = await demoExtras(db, [demo], { marks });
   return {
     demo,
-    checklist: demoChecklist(entries.get(demo.id) ?? [], sessions.get(demo.id) ?? []),
+    checklist: checklistOf(entries.get(demo.id) ?? [], sessions.get(demo.id) ?? []),
   };
 }
 
@@ -196,23 +212,37 @@ function summarise(
 ) {
   const { demo } = row;
   const sessions = extras.sessions.get(demo.id) ?? [];
+  const progress = demoProgress(sessions, demo.plannedDayCount);
   return {
     ...row,
     sessions,
-    days: demoDays(sessions, demo.plannedDayCount),
+    days: demoDays(sessions, demo.plannedDayCount).map((d) =>
+      d.state !== 'attended' && d.sessions.some((s) => s.unknown)
+        ? { ...d, state: 'unknown' as const }
+        : d,
+    ),
     view: demoView({ outcome: demo.outcome, caseStatus: row.admissionStatus, sessions }, now),
     /** Classes still scheduled on a demo whose case was closed as lost: nobody cancelled them. */
     leftOpen:
       demo.outcome === 'open' && row.admissionStatus === 'lost'
         ? sessions.filter(isPending).length
         : 0,
-    progress: demoProgress(sessions, demo.plannedDayCount),
+    progress: sessions.some((s) => s.unknown)
+      ? {
+          ...progress,
+          label: 'Attendance not known: Academic OS unavailable',
+          sessionsLabel: 'classes marked there are not counted',
+        }
+      : progress,
     /** All classes recorded ("completed"): the outcome is still open until someone closes it. */
     completed: demo.completedAt !== null,
     attendance: demoAttendanceStatus(demo.outcome, sessions),
-    ...nextSession(sessions, now),
+    ...nextSession(
+      sessions.filter((s) => !s.unknown),
+      now,
+    ),
     mock: demoMockStatus(sessions),
-    checklist: demoChecklist(extras.entries.get(demo.id) ?? [], sessions),
+    checklist: checklistOf(extras.entries.get(demo.id) ?? [], sessions),
     followUp: demoFollowUp(extras.followUps.get(demo.admissionId) ?? [], now, window),
     gaps: setupGaps(demo, sessions),
     /** Whether Academic's marks were readable; when not, linked classes wait (R15). */
@@ -259,6 +289,7 @@ export async function listDemos(
   actor: Actor,
   query: DemoListQuery,
   now = new Date(),
+  read?: MarksReader,
 ) {
   const access = await accessScope(db, actor, 'ops:leads:read');
   const like = query.q ? containsPattern(query.q) : null;
@@ -288,7 +319,7 @@ export async function listDemos(
   const extras = await demoExtras(
     db,
     base.map((r) => r.demo),
-    { window: { from: query.from, to: query.to }, now },
+    { window: { from: query.from, to: query.to }, now, read },
   );
   const rows = base
     .map((r) => summarise(r, extras, now, window))
@@ -324,6 +355,11 @@ export async function listDemos(
       .filter((r) => r.leftOpen > 0)
       .map((r) => ({ demoId: r.demo.id, studentName: r.studentName, classes: r.leftOpen })),
     month,
+    /** Academic's marks could not be read: the list says so above its rows. */
+    academicUnavailable:
+      extras.marks.status === 'unavailable'
+        ? { reason: extras.marks.reason, fetchedAt: extras.marks.checkedAt }
+        : null,
     total: inView.length,
     page,
     pageSize: PAGE_SIZE,

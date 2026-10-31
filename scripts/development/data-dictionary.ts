@@ -30,6 +30,7 @@ const FILES = [
   'ops-eod',
   'ops-task-imports',
   'ops-review-acks',
+  'ops-attendance',
 ] as const;
 
 /** Core tables Ops reads or writes (core.ts belongs to the platform; meanings kept here). */

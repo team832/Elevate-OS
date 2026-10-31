@@ -1,11 +1,11 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { EmptyState, PageHeader, StatusBadge } from '@elevate/shared-ui';
-import { DECISION_STATE_LABELS, type ResolvedSetting } from '../../domain';
+import { Fragment } from 'react';
+import { EmptyState, PageHeader, SETTINGS_STATE_NOTE, StatusBadge } from '@elevate/shared-ui';
+import type { ResolvedSetting } from '../../domain';
 import { getCrmAdapter } from '../../server/adapters/crm';
 import { listTemplates } from '../../server/onboarding';
 import { listSettings } from '../../server/settings';
-import { ActionForm } from '../../ui/action-form';
 import { AdmissionsNav } from '../../ui/admissions-nav';
 import { humanise } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
@@ -14,7 +14,16 @@ import { FormModal, RecordModal } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
 import { DetailTable, Segment } from '../../ui/sections';
 import { OnboardingTemplates } from './_components/onboarding-templates';
-import { decisionWords, StateBadge, valueRows } from './_components/setting-value';
+import {
+  decisionWords,
+  INVALID_STORED,
+  remindersPreviewOf,
+  SETTING_COLUMNS,
+  SettingEditForm,
+  settingStateWord,
+  StateBadge,
+  valueRows,
+} from './_components/setting-value';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Settings' };
@@ -36,7 +45,6 @@ const ORIGIN_TEXT: Record<string, string> = {
   default: 'Default',
   stored: 'Changed in Elevate OS',
 };
-const INVALID = 'Stored value invalid: default used';
 
 /** Groups in display order; the first matching pattern wins (demo keys before admission keys). */
 const GROUPS: [string, RegExp][] = [
@@ -49,18 +57,6 @@ const GROUPS: [string, RegExp][] = [
 ];
 const groupOf = (key: string) => GROUPS.find(([, re]) => re.test(key))![0];
 
-/** A one-field value reads inline ("Amount: ₹1,000"); larger values become label/value rows. */
-function Value({ s }: { s: ResolvedSetting }) {
-  const [first, ...rest] = valueRows(s.value);
-  return first && !rest.length ? (
-    <>
-      {first.label}: {first.value}
-    </>
-  ) : (
-    <DetailTable rows={valueRows(s.value)} />
-  );
-}
-
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<Params> }) {
   const access = await gate('ops:settings:read', BASE);
   const sp = await searchParams;
@@ -69,7 +65,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     <Frame access={access} active="settings">
       <PageHeader
         title={admissions ? 'Admissions settings' : 'Configuration and policy states'}
-        description="What each rule is set to now. Proposed means it is in use but the owner has not decided it yet; a change made here stays Proposed until leadership approves it."
+        description={`What each rule is set to now. ${SETTINGS_STATE_NOTE} A value you change here works straight away and shows that way until the owner approves it.`}
         tabs={admissions ? <AdmissionsNav current="settings" user={access.user} /> : undefined}
       />
       <Section>
@@ -115,7 +111,7 @@ async function Settings({
   const close = (patch: Params) => listHref(BASE, sp, patch);
   const changeLink = (s: ResolvedSetting) =>
     manage && s.editable ? (
-      <a href={close({ open: s.key, act: 'edit' })}>Change (stays proposed)</a>
+      <a href={close({ open: s.key, act: 'edit' })}>Change this setting</a>
     ) : undefined;
   return (
     <div className="el-stack">
@@ -139,72 +135,45 @@ async function Settings({
         filters={[
           {
             name: 'state',
-            label: 'Decision state',
+            label: 'Status',
             type: 'select',
             value: sp.state,
-            options: states.map((s) => ({ value: s, label: DECISION_STATE_LABELS[s] })),
+            options: states.map((s) => ({ value: s, label: settingStateWord(s) })),
           },
         ]}
       />
       {groups.length ? (
         groups.map((g) => (
-          <Segment key={g.title} title={g.title} flush>
-            <RecordTable
-              caption={`${g.title}: ${g.items.length} setting${g.items.length === 1 ? '' : 's'}`}
-              rows={g.items}
-              rowKey={(s) => s.key}
-              rowHref={(s) => close({ open: s.key, act: undefined })}
-              linkColumn="label"
-              columns={[
-                { key: 'label', header: 'Setting' },
-                { key: 'value', header: 'Current value', render: (s) => <Value s={s} /> },
-                {
-                  key: 'state',
-                  header: 'State',
-                  render: (s) => (
-                    <>
-                      <StateBadge state={s.decisionState} />
-                      {ORIGIN_TEXT[s.origin] ? null : (
-                        <StatusBadge tone="warning">{INVALID}</StatusBadge>
-                      )}
-                    </>
-                  ),
-                },
-              ]}
-            />
-          </Segment>
+          <Fragment key={g.title}>
+            <Segment title={g.title} flush>
+              <RecordTable
+                caption={`${g.title}: ${g.items.length} setting${g.items.length === 1 ? '' : 's'}`}
+                rows={g.items}
+                rowKey={(s) => s.key}
+                rowHref={(s) => close({ open: s.key, act: undefined })}
+                linkColumn="label"
+                columns={SETTING_COLUMNS}
+              />
+            </Segment>
+            {remindersPreviewOf(g.items)}
+          </Fragment>
         ))
       ) : (
-        <EmptyState title="No settings match" description="Clear the search or the state filter." />
+        <EmptyState
+          title="No settings match"
+          description="Clear the search or the status filter."
+        />
       )}
       {admissions ? <OnboardingTemplates templates={templates} manage={manage} sp={sp} /> : null}
       {open && sp.act === 'edit' && manage && open.editable ? (
         <FormModal
           id="setting-edit"
           title={`Change: ${open.label}`}
-          meta="The new value is saved as Proposed."
+          meta="It works straight away and shows as not yet approved."
           closeHref={close({ act: undefined })}
         >
-          <ActionForm
-            action={`/ops/api/v1/settings/${open.key}`}
-            method="PUT"
-            submitLabel="Save as proposed"
-            redirectTo={close({ act: undefined })}
-            secondary={<a href={close({ act: undefined })}>Cancel</a>}
-            fields={[
-              {
-                name: 'value',
-                // shortcut: free-form JSON until each setting has its own typed fields; reported to the coordinator.
-                label: 'New value',
-                hint: 'Change only the values; keep the quotes, brackets and commas as they are. It is checked before saving.',
-                type: 'json',
-                required: true,
-                defaultValue: JSON.stringify(open.value, null, 2),
-                section: 'Value',
-              },
-              { name: 'note', label: 'Why', section: 'Value' },
-            ]}
-          />
+          {remindersPreviewOf([open])}
+          <SettingEditForm s={open} api="/ops/api/v1/settings" close={close({ act: undefined })} />
         </FormModal>
       ) : open ? (
         <RecordModal
@@ -217,13 +186,17 @@ async function Settings({
           <Segment title="Current value" level={3} flush actions={changeLink(open)}>
             <DetailTable rows={valueRows(open.value)} />
           </Segment>
+          {remindersPreviewOf([open])}
           <Segment title="Setting" level={3} flush>
             <DetailTable
               rows={[
                 { label: 'What it controls', value: open.description },
-                { label: 'Decision state', value: <StateBadge state={open.decisionState} /> },
-                open.ownerDecision && { label: 'Owner decision', value: decisionWords(open.ownerDecision) },
-                { label: 'Value from', value: ORIGIN_TEXT[open.origin] ?? INVALID },
+                { label: 'Status', value: <StateBadge state={open.decisionState} /> },
+                open.ownerDecision && {
+                  label: 'Owner decision',
+                  value: decisionWords(open.ownerDecision),
+                },
+                { label: 'Value from', value: ORIGIN_TEXT[open.origin] ?? INVALID_STORED },
                 { label: 'Editable here', value: open.editable ? 'Yes' : 'No' },
               ]}
             />

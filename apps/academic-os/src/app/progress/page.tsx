@@ -9,7 +9,7 @@ import { StateBadge } from '../../ui/badges';
 import { Filter } from '../../ui/filters';
 import { InterventionsTable } from '../../ui/interventions';
 import type { PageAccess } from '@elevate/server-kit/next';
-import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
+import { AcademicShell, LoadError, actorFor, gate, load, sectionLabel } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Progress' };
@@ -57,7 +57,7 @@ async function Body({
   return (
     <>
       <PageHeader
-        title="Progress, catch-up and support"
+        title={sectionLabel(access.user, 'progress')}
         description="Catch-up tasks from missed classes and support plans. Every priority score is explained; open a student for their four progress dimensions."
       />
       {!data.ok ? (
@@ -97,7 +97,7 @@ async function Body({
             </Button>
           </form>
           {!data.data.selected || !data.data.catchup ? (
-            <EmptyState title="No batch" description="You have no batches to show." />
+            <EmptyState title="No batch to show" description="An academic coordinator assigns batches; catch-up lists appear here once you have one." />
           ) : (
             <Card
               title={`Catch-up list — ${data.data.selected.code}`}
@@ -115,7 +115,7 @@ async function Body({
                 compact
                 rows={data.data.catchup.ranked}
                 rowKey={(r) => r.taskId}
-                empty={<EmptyState title="No open catch-up tasks" />}
+                empty={<EmptyState title="No open catch-up tasks" description={canWrite ? 'Generate them from missed classes with the button above.' : 'A coordinator generates them from missed classes.'} />}
                 columns={[
                   { key: 'rank', header: 'Rank', numeric: true },
                   {

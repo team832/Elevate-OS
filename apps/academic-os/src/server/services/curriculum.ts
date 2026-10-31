@@ -39,6 +39,7 @@ import {
   computeCoverage,
   plannedHours,
   supersessionProblem,
+  TEACHING_PLAN_STATUSES,
   type PlanStatus,
 } from '../../domain';
 import { assertBatchInScope, audit, getBatchOrThrow, resolveScope, type Actor } from '../context';
@@ -426,7 +427,7 @@ export async function currentPlanForBatch(db: Database, batch: { id: string; cou
     .where(
       and(
         eq(academicCurriculumPlans.courseId, batch.courseId as CourseId),
-        inArray(academicCurriculumPlans.status, ['locked', 'provisional']),
+        inArray(academicCurriculumPlans.status, TEACHING_PLAN_STATUSES),
         or(eq(academicCurriculumPlans.batchId, batch.id as BatchId), sql`${academicCurriculumPlans.batchId} IS NULL`),
       ),
     );

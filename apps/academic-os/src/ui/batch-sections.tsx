@@ -1,5 +1,5 @@
 /** Coverage and capacity sections of the batch page (server components). */
-import { Alert, Card, DataTable, EmptyState, fmtDay } from '@elevate/shared-ui';
+import { Alert, Card, DataTable, EmptyState, StatusBadge, fmtDay, type Tone } from '@elevate/shared-ui';
 import type { getBatchCoverage, getBatchFeasibility } from '../server';
 import { PlanBadge, StateBadge, fmtHours } from './badges';
 
@@ -10,6 +10,12 @@ const EVIDENCE_LABEL: Record<string, string> = { practice: 'practised', catch_up
 const TAUGHT_LABEL = { not_taught: 'not taught', partial: 'partly taught', completed: 'taught' } as const;
 const evidence = (e: Record<string, number | undefined>) =>
   Object.entries(e).map(([k, n]) => `${EVIDENCE_LABEL[k] ?? k} ${n}`).join(', ') || 'None';
+/** Enough slots is not a dated schedule, so capacity never says "Feasible" on its own. */
+const CAPACITY: Record<string, [Tone, string]> = {
+  feasible: ['success', 'Enough slots (capacity only)'],
+  infeasible: ['danger', 'Not enough slots'],
+  not_assessed: ['neutral', 'Not assessed'],
+};
 const chapters = (f: { chaptersPlanned: number; chaptersTaught: number; chaptersCompleted: number }) =>
   `${f.chaptersTaught} of ${f.chaptersPlanned} taught (${f.chaptersCompleted} completed)`;
 
@@ -63,13 +69,13 @@ export function CoverageSection({ data }: { data: Coverage }) {
 export function FeasibilitySection({ data }: { data: Feasibility }) {
   const r = data.result;
   return (
-    <Card title="Capacity feasibility" description="Gross slots from the calendar rules, minus exclusions, give net slots, compared with the classes the current plan requires.">
+    <Card title="Capacity check" description="Gross slots from the calendar rules, minus exclusions, give net slots, compared with the classes the current plan requires.">
       {!r ? (
         <EmptyState title="Capacity not assessed" description={'message' in data ? data.message : 'Add calendar rules first.'} />
       ) : (
         <div className="el-stack">
           <p>
-            Verdict: <StateBadge state={r.verdict} /> {'window' in data && data.window ? `· window ${fmtDay(data.window.from)} to ${fmtDay(data.window.to)}` : null}
+            Capacity: <StatusBadge tone={CAPACITY[r.verdict]![0]}>{CAPACITY[r.verdict]![1]}</StatusBadge> {'window' in data && data.window ? `· window ${fmtDay(data.window.from)} to ${fmtDay(data.window.to)}` : null}
           </p>
           {r.errors.length > 0 ? (
             <Alert tone="danger" title="The calendar input has problems">

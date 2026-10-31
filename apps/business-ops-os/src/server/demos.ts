@@ -12,6 +12,7 @@ import { opsChecklistEntries, opsDemos, opsDemoSessions, type Database } from '@
 import { withTransaction } from '@elevate/server-kit';
 import {
   ConflictError,
+  sourceReasonWords,
   ForbiddenError,
   InvalidStateTransitionError,
   ValidationError,
@@ -266,7 +267,7 @@ export async function setDemoChecklistItem(
 /**
  * Job (R15): open, unfinished demos are synced again with Academic's marks, so a class the
  * teacher marked in Academic moves the case on (demo_attended) without an Ops edit. One batched
- * Academic call for all started classes; nothing moves while Academic cannot be read; idempotent.
+ * Academic call for all started classes; refused while Academic cannot be read; idempotent.
  * The actor needs ops:jobs:run and ops:leads:write (all scope — every demo is locked for writing).
  */
 export async function syncDemosFromAcademic(
@@ -293,11 +294,15 @@ export async function syncDemosFromAcademic(
     db,
     classes.map((c) => c.id),
   );
+  if (marks.status === 'unavailable')
+    throw new ConflictError(
+      `Academic OS could not be reached (${sourceReasonWords(marks.reason)}), so nothing was copied. Try again in a minute.`,
+    );
   const demoIds = [...new Set(classes.filter((c) => marks.marks.has(c.id)).map((c) => c.demoId))];
   for (const id of demoIds)
     await withTransaction(db, async (tx) => {
       const { demo, admission } = await lockDemo(tx, actor, id);
       await syncDemo(tx, actor, demo, admission, marks, requestId);
     });
-  return { status: marks.status, synced: demoIds.length };
+  return { synced: demoIds.length };
 }

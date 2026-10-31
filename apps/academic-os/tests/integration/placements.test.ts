@@ -37,6 +37,7 @@ import {
   listAssignments,
   listBatchPlacements,
   listBatches,
+  listPlacementViews,
   listStudents,
   resolveScope,
   runEnrolmentIntake,
@@ -321,6 +322,16 @@ describe('placements: allocate, capacity, clash, transfer, end (acceptance 19, 2
     const ended = await view('ended');
     expect(ended.rows.map((r) => r.enrolmentId)).toEqual([p2Enrolment]);
     expect(ended.counts).toMatchObject({ ended: 1, transfers: 1 });
+  });
+
+  it('a list that stops early still counts everyone and says how many (RVD-002)', async () => {
+    const coord = actor(u.coordinator);
+    const full = await listPlacementViews(ctx.db, coord, 'placed');
+    const cut = await listPlacementViews(ctx.db, coord, 'placed', 0);
+    expect(full.rows.length).toBeGreaterThan(0);
+    expect(cut.rows).toEqual([]);
+    expect(cut.total).toBe(full.rows.length);
+    expect(cut.counts).toEqual(full.counts);
   });
 });
 

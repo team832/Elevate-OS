@@ -31,18 +31,27 @@ export function AckBadge({ at }: { at: Date | null }) {
   return at ? null : <StatusBadge tone="warning">Not acknowledged</StatusBadge>;
 }
 
+/** "24 Oct 2026 to 28 Oct 2026, changed by Asha on 25 Oct, 4:10 pm. Why: exam moved" */
+function dueChangeText(e: TaskDetail['events'][number]) {
+  const v = (e.data ?? {}) as Record<string, string | null | undefined>;
+  const moved = `${dueText({ dueOn: v.fromDueOn, dueTime: v.fromDueTime })} to ${dueText({ dueOn: v.toDueOn, dueTime: v.toDueTime })}`;
+  return `${moved}, changed by ${e.actorName} on ${istWhen(e.occurredAt)}.${e.reason ? ` Why: ${e.reason}` : ''}`;
+}
+
 /** Requirement, people and dates (also the summary in the list's pop-up). */
 /** Related records link only where this workspace shows them (leads: Ops and Marketing; students: Ops). */
 export function TaskFacts({ d, base, level = 2 }: { d: TaskDetail; base: string; level?: 2 | 3 }) {
-  const dueChanges = d.events.filter((e) => e.kind === 'due_changed').length;
+  const dueChanges = d.events.filter((e) => e.kind === 'due_changed');
+  const titleOnly = !d.details && !d.expectedDeliverable && !d.acceptanceCriteria;
   return (
     <Segment title="Requirement and people" level={level} flush>
       <DetailTable
         rows={[
-          { label: 'Details', value: d.details ?? 'None recorded' },
+          titleOnly && { label: 'Brief', value: 'Only the title was given.' },
+          d.details && { label: 'Details', value: d.details },
           d.category && { label: 'Category', value: d.category },
-          { label: 'Expected deliverable', value: d.expectedDeliverable ?? 'Not specified' },
-          { label: 'Done when', value: d.acceptanceCriteria ?? 'No acceptance criteria recorded' },
+          d.expectedDeliverable && { label: 'Expected deliverable', value: d.expectedDeliverable },
+          d.acceptanceCriteria && { label: 'Done when', value: d.acceptanceCriteria },
           { label: 'Accountable owner', value: d.staffName ?? 'Not recorded' },
           {
             label: 'Notification',
@@ -50,7 +59,7 @@ export function TaskFacts({ d, base, level = 2 }: { d: TaskDetail; base: string;
               d.status === 'draft' ? (
                 deliveryText(d)
               ) : (
-                <NoticeStates f={{ ...d, readAt: d.noticeReadAt }} />
+                <NoticeStates f={{ ...d, readAt: d.noticeReadAt }} explain />
               ),
           },
           d.parent && {
@@ -75,21 +84,30 @@ export function TaskFacts({ d, base, level = 2 }: { d: TaskDetail; base: string;
           },
           {
             label: 'Given by',
-            value: d.selfLogged ? 'Self-logged' : (d.assignedByName ?? 'Not recorded'),
+            value: d.selfLogged
+              ? 'Self-logged'
+              : (d.assignedByName ?? d.createdByName),
           },
-          { label: 'Requested by', value: d.requesterName ?? d.requesterNote ?? 'Not recorded' },
+          { label: 'Requested by', value: d.requesterText },
           { label: 'Source', value: humanise(d.source) },
-          { label: 'Department', value: d.departmentName ?? 'Not recorded' },
+          { label: 'Department', value: d.departmentText ?? 'Not recorded' },
           { label: 'Priority', value: TASK_LABEL[d.priority] },
           { label: 'Received', value: fmtDateTime(d.receivedAt) },
           d.plannedStartOn && { label: 'Planned start', value: fmtDate(d.plannedStartOn) },
-          {
-            label: 'Deadline',
-            value: `${dueText(d)}${dueChanges ? ` (changed ${dueChanges}×, see history)` : ''}`,
-          },
-          dueChanges > 0 && {
+          { label: 'Deadline', value: dueText(d) },
+          dueChanges.length > 0 && {
             label: 'Original deadline',
             value: dueText({ dueOn: d.originalDueOn, dueTime: d.originalDueTime }),
+          },
+          dueChanges.length > 0 && {
+            label: 'Deadline changes',
+            value: (
+              <ul>
+                {dueChanges.toReversed().map((e) => (
+                  <li key={e.id}>{dueChangeText(e)}</li>
+                ))}
+              </ul>
+            ),
           },
           d.blockedAt && {
             label: d.blockedKind === 'on_hold' ? 'On hold' : 'Blocked',

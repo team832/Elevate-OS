@@ -59,7 +59,7 @@ async function AdmissionsCards({ user }: { user: AuthenticatedUser }) {
           <StatCard
             label="Admissions funnel"
             value={stage.get('leads') ?? null}
-            note={`Leads received · ${stage.get('converted') ?? 0} converted · ${stage.get('enrolled') ?? 0} enrolled`}
+            note={`Leads received · ${stage.get('converted') === null || stage.get('enrolled') === null ? 'Source unavailable for converted and enrolled' : `${stage.get('converted')} converted · ${stage.get('enrolled')} enrolled`}`}
             trend={trend('leadsPerDay')}
             href={`${report}#funnel`}
           />

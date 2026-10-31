@@ -14,3 +14,5 @@ export * from './components/workspaces';
 export * from './components/charts';
 export * from './components/chart-figure';
 export * from './components/chart-math';
+export * from './components/setting-shape';
+export * from './components/setting-fields';

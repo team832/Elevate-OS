@@ -12,6 +12,8 @@ import * as attachments from './app/api/v1/attachments/route'; // ATTACH
 import * as aiReportDraft from './app/api/v1/ai/report-draft/route'; // AI
 import * as attendance from './app/api/v1/attendance/route'; // ATT
 import * as attendanceCorrections from './app/api/v1/attendance/corrections/route'; // ATT
+import * as leaveApplications from './app/api/v1/attendance/leave-applications/route'; // LEAVE
+import * as leaveApplicationCancel from './app/api/v1/attendance/leave-applications/[id]/cancel/route'; // LEAVE
 import * as eodReport from './app/api/v1/eod-reports/[id]/route';
 import * as eodReportCsv from './app/api/v1/eod-reports/[id]/csv/route';
 import * as eodReportFollowUp from './app/api/v1/eod-reports/[id]/follow-up/route';
@@ -39,7 +41,7 @@ import * as taskReports from './app/api/v1/task-reports/route';
 export { MeetingsBody } from './app/meetings/meetings-body';
 export { MyAttendanceBody } from './app/my-attendance/my-attendance-body'; // ATT
 export { NotificationsBody } from './app/notifications/notifications-body';
-export { DueWork } from './ui/task-notices'; // NOTIFY
+export { DueWork, MyReminderPreview } from './ui/task-notices'; // NOTIFY
 export { TaskBody, TasksBody, type BodyProps } from './app/tasks/_components/bodies';
 export { InboxBody } from './app/tasks/inbox/inbox-body';
 export { TaskReportsBody } from './app/tasks/reports/reports-body';
@@ -87,6 +89,8 @@ export const workRoutes = {
   'feedback/mine/[id]': feedbackMineOne, // FB
   attendance, // ATT
   'attendance/corrections': attendanceCorrections, // ATT
+  'attendance/leave-applications': leaveApplications, // LEAVE
+  'attendance/leave-applications/[id]/cancel': leaveApplicationCancel, // LEAVE
   'ai/report-draft': aiReportDraft, // AI
   'hr-requests': hrRequests, // HR-REQ
   'hr-requests/[id]': hrRequest, // HR-REQ

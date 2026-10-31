@@ -44,7 +44,7 @@ import {
 import type { AdmissionId, StudentIdentityId } from '@elevate/shared-types';
 import { istToday } from '../domain';
 import {
-  agreementPosition,
+  agreementPositions,
   checkAgreementInput,
   splitTuition,
   studentFeeStatus,
@@ -64,7 +64,7 @@ import {
   present,
   recordFee,
 } from './fee-ledger';
-import { inOrder, opsAudit, rowById } from './ops-common';
+import { groupBy, inOrder, opsAudit, rowById } from './ops-common';
 import { loadSettings } from './settings';
 
 export type FeePlanRow = typeof opsFeePlans.$inferSelect;
@@ -601,7 +601,7 @@ export async function recordPlanEntry(
 
 /**
  * Agreements with instalments, ledger, totals, allocation, status and version history, read by
- * agreementPosition (no permission check).
+ * agreementPositions (no permission check).
  */
 export async function plansWithLedger(db: Database, plans: FeePlanRow[], now: Date) {
   if (!plans.length) return [];
@@ -618,8 +618,7 @@ export async function plansWithLedger(db: Database, plans: FeePlanRow[], now: Da
       .where(inArray(opsFeeRecords.planId, ids))
       .orderBy(desc(opsFeeRecords.recordedAt), desc(opsFeeRecords.code)),
   ]);
-  const today = istToday(now);
-  return plans.map((plan) => agreementPosition(plan, family, instalments, ledger, today));
+  return agreementPositions(plans, family, instalments, ledger, istToday(now));
 }
 
 /**
@@ -781,10 +780,8 @@ export async function feeStatusForStudents(
     .from(opsFeePlans)
     .where(inArray(opsFeePlans.studentId, studentIds as StudentIdentityId[]));
   const detailed = await plansWithLedger(db, acceptedVersions(family).inForce, now);
+  const statesOf = groupBy(detailed, (d) => d.plan.studentId);
   return new Map(
-    studentIds.map((id) => [
-      id,
-      studentFeeStatus(detailed.filter((d) => d.plan.studentId === id).map((d) => d.status)),
-    ]),
+    studentIds.map((id) => [id, studentFeeStatus((statesOf.get(id) ?? []).map((d) => d.status))]),
   );
 }

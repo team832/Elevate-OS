@@ -398,7 +398,7 @@ describe('linked demo classes: the teacher marks in Academic (owner answer 3)', 
       academic: expect.objectContaining({ status: 'present' }),
     });
     stubAcademic({});
-    expect(await syncDemosFromAcademic(ctx.db, manager)).toMatchObject({ synced: 0 });
+    await expect(syncDemosFromAcademic(ctx.db, manager)).rejects.toThrow(/could not be reached/);
     const [waiting] = await ctx.db
       .select()
       .from(opsDemos)

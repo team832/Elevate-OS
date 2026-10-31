@@ -127,6 +127,13 @@
       "when": 1793027890973,
       "tag": "0017_notification_links_fk_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793456712169,
+      "tag": "0018_leave_applications",
+      "breakpoints": true
     }
   ]
 }

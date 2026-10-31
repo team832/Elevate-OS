@@ -24,11 +24,11 @@ import type {
   StaffMemberId,
   UserId,
 } from '@elevate/shared-types';
-import { evaluateAdmissionReadiness, type CheckState } from '../domain';
+import { evaluateAdmissionReadiness, type CheckState, type ResolvedSettings } from '../domain';
 import type { HandoffInput } from '../domain/students';
 import { feeAgreementPolicy } from './approval-policies';
 import { assertScope, notFound, type AccessScope } from './context';
-import { rowById } from './ops-common';
+import { groupBy, rowById } from './ops-common';
 import { lockAdmission, type AdmissionRow } from './pipeline';
 import { loadSettings } from './settings';
 
@@ -172,11 +172,12 @@ export async function checksOf(db: Database, admissionId: string) {
 /**
  * D-039: the fee approval is met when the admission's bundle (it, or its application's cases) has
  * an ACTIVE agreement activated by that agreement's own approval. Admission-level fee-arrangement
- * approvals stay readable in core approvals but no longer count.
+ * approvals stay readable in core approvals but no longer count. One statement for all of them.
  */
-async function agreementApproved(db: Database, admission: AdmissionRow) {
-  const [row] = await db
-    .select({ id: opsFeePlans.id })
+async function agreementsApproved(db: Database, admissions: readonly AdmissionRow[]) {
+  const applicationIds = admissions.flatMap((a) => a.applicationId ?? []);
+  const rows = await db
+    .select({ id: opsAdmissions.id, applicationId: opsAdmissions.applicationId })
     .from(opsFeePlans)
     .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsFeePlans.admissionId))
     .innerJoin(
@@ -191,26 +192,53 @@ async function agreementApproved(db: Database, admission: AdmissionRow) {
     .where(
       and(
         eq(opsFeePlans.status, 'active'),
-        admission.applicationId
-          ? or(
-              eq(opsAdmissions.id, admission.id),
-              eq(opsAdmissions.applicationId, admission.applicationId),
-            )
-          : eq(opsAdmissions.id, admission.id),
+        or(
+          inArray(
+            opsAdmissions.id,
+            admissions.map((a) => a.id),
+          ),
+          applicationIds.length ? inArray(opsAdmissions.applicationId, applicationIds) : undefined,
+        ),
       ),
-    )
-    .limit(1);
-  return Boolean(row);
+    );
+  const cases = new Set<string>(rows.map((r) => r.id));
+  const bundles = new Set(rows.map((r) => r.applicationId));
+  return (a: AdmissionRow) =>
+    cases.has(a.id) || Boolean(a.applicationId && bundles.has(a.applicationId));
+}
+
+/** Readiness of many admissions, one statement per table; settings already read. */
+export async function readinessOfMany(
+  db: Database,
+  admissions: readonly AdmissionRow[],
+  settings: ResolvedSettings,
+) {
+  const checks = await db
+    .select()
+    .from(opsAdmissionChecks)
+    .where(
+      inArray(
+        opsAdmissionChecks.admissionId,
+        admissions.map((a) => a.id),
+      ),
+    );
+  const approved = await agreementsApproved(db, admissions);
+  const checksOfCase = groupBy(checks, (c) => c.admissionId);
+  return admissions.map((admission) => {
+    const own = checksOfCase.get(admission.id) ?? [];
+    return {
+      gaps: evaluateAdmissionReadiness({
+        checks: own as CheckState[],
+        feeApproval: approved(admission) ? 'approved' : 'none',
+        hasProgramme: Boolean(admission.programmeId),
+        config: settings['admission.confirmation'].value,
+      }),
+      checks: own,
+      settings,
+    };
+  });
 }
 
 export async function readinessOf(db: Database, admission: AdmissionRow) {
-  const settings = await loadSettings(db);
-  const checks = await checksOf(db, admission.id);
-  const gaps = evaluateAdmissionReadiness({
-    checks: checks as CheckState[],
-    feeApproval: (await agreementApproved(db, admission)) ? 'approved' : 'none',
-    hasProgramme: Boolean(admission.programmeId),
-    config: settings['admission.confirmation'].value,
-  });
-  return { gaps, checks, settings };
+  return (await readinessOfMany(db, [admission], await loadSettings(db)))[0]!;
 }

@@ -21,6 +21,8 @@ import {
   InvalidStateTransitionError,
 } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
+import type { IsoDate } from '../domain/dates';
+import { academicMayHoldMark, sessionsInRange } from '../domain/demos';
 import { markedAttendance, type AcademicMark } from '../domain/feedback';
 import { attendanceFacts, resultFacts, scoreTrends } from '../domain/student-report';
 
@@ -127,6 +129,80 @@ export const withMarks = <S extends { id: string; attendance: string }>(
     const attendance = markedAttendance(s.attendance, academic) as S['attendance'];
     return { ...s, attendance, academic };
   });
+
+/**
+ * Classes Academic is asked about: started ones, of the demos a date window picks. The window picks
+ * demos, not marks: a demo's days and progress cover all of its classes.
+ */
+export const askable = (
+  sessions: readonly { id: string; demoId: string; startsAt: Date }[],
+  now: Date,
+  window: { from?: IsoDate; to?: IsoDate } = {},
+) => {
+  const picked = new Set(
+    sessions.filter((s) => sessionsInRange([s], window.from, window.to)).map((s) => s.demoId),
+  );
+  return sessions.filter((s) => s.startsAt <= now && picked.has(s.demoId)).map((s) => s.id);
+};
+
+/**
+ * Academic's marks for one screen: however many of its blocks count demo classes, each class is
+ * asked about once. Make one per request: a teacher can change a mark at any time.
+ */
+export function marksReader(db: Database) {
+  const asked = new Map<string, Promise<AcademicDemoMarks>>();
+  return async (ids: readonly string[]): Promise<AcademicDemoMarks> => {
+    const fresh = ids.filter((id) => !asked.has(id));
+    if (fresh.length) {
+      const read = academicDemoMarks(db, fresh);
+      for (const id of fresh) asked.set(id, read);
+    }
+    const reads = await Promise.all(new Set(ids.map((id) => asked.get(id)!)));
+    return (
+      reads.find((r) => r.status === 'unavailable') ?? {
+        status: 'available',
+        checkedAt: reads[0]?.checkedAt ?? new Date().toISOString(),
+        marks: new Map(reads.flatMap((r) => [...r.marks])),
+      }
+    );
+  };
+}
+export type MarksReader = ReturnType<typeof marksReader>;
+
+/**
+ * Demo classes as every demo figure counts them (D-060, R15): the demo list, the admissions overview
+ * and the funnel. A class Academic marked carries that mark; while Academic cannot be read, a class
+ * it may hold a mark for is `unknown`, so a figure built on it is missing, never 0.
+ */
+export async function classesWithMarks<
+  S extends {
+    id: string;
+    demoId: string;
+    startsAt: Date;
+    attendance: string;
+    academicSessionRef: string | null;
+  },
+>(
+  db: Database,
+  sessions: readonly S[],
+  opts: {
+    now: Date;
+    window?: { from?: IsoDate; to?: IsoDate };
+    /** Already read (no network call inside a transaction). */
+    marks?: AcademicDemoMarks;
+    read?: MarksReader;
+  },
+) {
+  const marks =
+    opts.marks ?? (await (opts.read ?? marksReader(db))(askable(sessions, opts.now, opts.window)));
+  return {
+    marks,
+    classes: withMarks(sessions, marks).map((s) => ({
+      ...s,
+      unknown: marks.status === 'unavailable' && academicMayHoldMark(s, opts.now),
+    })),
+  };
+}
 
 /**
  * Owner answer 3 and R15 (amended): a demo class linked to an Academic class is marked by its

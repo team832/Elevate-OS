@@ -172,6 +172,24 @@ export function retryDecision(h: HandoffInput): RetryDecision {
 }
 
 /** Browser link to the Academic OS student record (plain <a>, another zone). */
+/**
+ * Where Ops reads no source: batches belong to Academic OS and Ops only knows whether one is
+ * requested or assigned. Academic places an enrolled student later without telling Ops, so an
+ * enrolment with no batch here is not "to be assigned".
+ */
+export const batchLabel = (
+  enrolled: string | null,
+  intended: string | null,
+  enrolmentId?: string | null,
+) =>
+  enrolled
+    ? 'Assigned in Academic OS'
+    : enrolmentId
+      ? 'Kept in Academic OS'
+      : intended
+        ? 'Requested from Academic OS'
+        : 'To be assigned';
+
 export function academicStudentPath(studentId: string | null | undefined): string | null {
   return studentId ? `/academic/students/${studentId}` : null;
 }

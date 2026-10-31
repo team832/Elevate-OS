@@ -23,7 +23,7 @@ import { taskListQuery } from '../../server/staff-tasks-schemas';
 import { ActionForm, type FieldSpec } from '../../ui/action-form';
 import { AttachmentList, AttachmentUpload } from '../../ui/attachments';
 import { load, Section } from '../../ui/frame';
-import { listHref, Pager } from '../../ui/list-controls';
+import { listHref, Pager, SearchPanel } from '../../ui/list-controls';
 import { FormModal, RecordModal } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
 import { Segment } from '../../ui/sections';
@@ -232,48 +232,80 @@ const requestFields = (
   },
 ];
 
+/** A select longer than this gets the search above the form (as linking a task to a lead does). */
+const LONG_LIST = 15;
+
 async function NewRequest({ user, base, searchParams: sp }: BodyProps) {
   const page = `${base}/hr-requests`;
-  const close = listHref(page, sp, { new: undefined });
+  const close = listHref(page, sp, { new: undefined, find: undefined });
+  // Find reloads the page: the list behind the form keeps its tab and page.
+  const keep = Object.fromEntries(
+    Object.entries(sp).filter((e): e is [string, string] => !!e[1] && e[0] !== 'find'),
+  );
   const r = await load(async (db) => {
     const self = await staffIdForUser(db, user.id);
     if (!self) return null;
     const tasks = can(user, 'ops:tasks:read')
       ? (await listTasks(db, user, taskListQuery.parse({ staffId: self, open: '1' }))).rows
       : [];
-    return { form: await requestFormOptions(db, user), tasks };
+    return { form: await requestFormOptions(db, user, sp.find), tasks };
   });
   return (
     <FormModal id="hr-request-new" title="New request through HR" closeHref={close}>
+      {can(user, 'ops:attendance:request') ? (
+        <p className="el-field-hint">
+          For leave, use <a href={`${base}/my-attendance?view=leave#apply`}>Apply for leave</a>{' '}
+          instead.
+        </p>
+      ) : null}
       {r.ok && !r.data ? (
         <p>
           Your login is not linked to a staff record yet, so you cannot send a request.{' '}
           {LINK_LOGIN_HELP}
         </p>
       ) : r.ok && r.data ? (
-        <ActionForm
-          action={`${base}/api/v1/hr-requests`}
-          submitLabel="Send request"
-          successText="Saved."
-          redirectTo={`${page}?open={id}`}
-          secondary={<a href={close}>Cancel</a>}
-          fields={[
-            ...requestFields(r.data.form),
-            {
-              name: 'relatedRef',
-              label: 'About one of your tasks (optional)',
-              type: 'select',
-              options: r.data.tasks.map((t) => ({ value: `task:${t.id}`, label: t.title })),
-              section: 'Request',
-            },
-            {
-              name: 'draft',
-              label: 'Keep it as a draft instead (nobody else sees it until you send it)',
-              type: 'checkbox',
-              section: 'Request',
-            },
-          ]}
-        />
+        <>
+          {r.data.form.people.all > LONG_LIST || sp.find ? (
+            <SearchPanel
+              action={page}
+              hidden={keep}
+              search={{
+                name: 'find',
+                label: 'Find a person by name, role or department',
+                value: sp.find,
+              }}
+              submitLabel="Find"
+            />
+          ) : null}
+          {sp.find && !r.data.form.people.shown ? (
+            <p className="el-field-hint">
+              Nobody matches “{sp.find}”. Send it to HR, or search again.
+            </p>
+          ) : null}
+          <ActionForm
+            action={`${base}/api/v1/hr-requests`}
+            submitLabel="Send request"
+            successText="Saved."
+            redirectTo={`${page}?open={id}`}
+            secondary={<a href={close}>Cancel</a>}
+            fields={[
+              ...requestFields(r.data.form),
+              {
+                name: 'relatedRef',
+                label: 'About one of your tasks (optional)',
+                type: 'select',
+                options: r.data.tasks.map((t) => ({ value: `task:${t.id}`, label: t.title })),
+                section: 'Request',
+              },
+              {
+                name: 'draft',
+                label: 'Keep it as a draft instead (nobody else sees it until you send it)',
+                type: 'checkbox',
+                section: 'Request',
+              },
+            ]}
+          />
+        </>
       ) : (
         !r.ok && r.view
       )}

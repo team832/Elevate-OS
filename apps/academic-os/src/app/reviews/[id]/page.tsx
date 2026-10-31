@@ -17,7 +17,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   const access = await gate('academic:reviews:read', MODULE_PATHS.review(id));
   if (access.status !== 'allowed') return <AcademicShell access={access} active="reviews">{null}</AcademicShell>;
   const data = await load(() => getReview(getDb(), actorFor(access.user), id));
-  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError level={1} error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError level={1} back="reviews" error={data.error} /></AcademicShell>;
   const r = data.data;
   const canWrite = r.isAuthor && can(access.user, 'academic:reviews:write');
   const choices = canWrite && r.status === 'draft' && !r.coreStudentId ? await reviewChoices(getDb(), actorFor(access.user)) : undefined;

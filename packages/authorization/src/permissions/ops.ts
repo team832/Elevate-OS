@@ -247,11 +247,11 @@ export const opsPermissionList = [
   {
     key: 'ops:attendance:manage',
     description:
-      'Enter and import punches, decide daily status, record leave, holidays and schedules, decide correction requests.',
+      'Enter and import punches, decide daily status, record leave, holidays and schedules, decide correction requests and leave applications.',
   },
   {
     key: 'ops:attendance:request',
-    description: 'Ask HR to correct a day’s attendance (own = your own days).',
+    description: 'Ask HR to correct a day’s attendance and apply for leave (own = your own).',
   },
   {
     key: 'ops:work_reports:read',
@@ -405,6 +405,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       'ops:eod:review',
       own('ops:tasks:review'), // PROPOSED-GRANTS-2026-10-23
       ownHrRequests,
+      own('ops:attendance:request'), // PROPOSED-GRANTS-2026-10-31: every staff member applies for leave
     ],
 
     auditor: reads,

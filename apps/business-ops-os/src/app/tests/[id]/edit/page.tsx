@@ -1,7 +1,8 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { PageHeader } from '@elevate/shared-ui';
-import { requireTest, testOptions } from '../../../../server/assessments';
+import { testDetail, testOptions } from '../../../../server/assessments';
 import { ActionForm } from '../../../../ui/action-form';
+import { Unavailable } from '../../../../ui/cross-module';
 import { Frame, gate, load, Section } from '../../../../ui/frame';
 import { BASE } from '../../_components/labels';
 
@@ -27,13 +28,17 @@ export default async function EditTestPage({ params }: Props) {
 }
 
 async function EditForm({ user, id }: { user: AuthenticatedUser; id: string }) {
-  const r = await load(async () => ({
-    d: await requireTest(user, id),
-    options: await testOptions(),
-  }));
+  const r = await load(async () => {
+    const detail = await testDetail(user, id);
+    // A hung Academic must not be waited for twice.
+    return { detail, options: detail.status === 'available' ? await testOptions() : null };
+  });
   if (!r.ok) return r.view;
-  const t = r.data.d.assessment;
-  const people = r.data.options?.teachers ?? [];
+  const { detail, options } = r.data;
+  if (detail.status !== 'available') return <Unavailable name="Academic OS" result={detail} />;
+  const t = detail.data.assessment;
+  const people = options?.teachers ?? [];
+  const hint = options ? undefined : 'Academic OS could not list teachers just now. The saved choice stays.';
   const m = t.marking;
   const text = (v: string | number | null | undefined) =>
     v === null || v === undefined ? undefined : String(v);
@@ -105,6 +110,7 @@ async function EditForm({ user, id }: { user: AuthenticatedUser; id: string }) {
           type: 'select',
           options: people,
           defaultValue: text(t.responsibleTeacher?.staffId),
+          hint,
           section: 'People',
         },
         {
@@ -113,6 +119,7 @@ async function EditForm({ user, id }: { user: AuthenticatedUser; id: string }) {
           type: 'select',
           options: people,
           defaultValue: text(t.evaluator?.staffId),
+          hint,
           section: 'People',
         },
       ]}

@@ -2,7 +2,14 @@
 import { describe, expect, it } from 'vitest';
 import { isRelativeLink } from '@elevate/notifications';
 import { deadlineInstant } from '../../src/domain/staff-tasks';
-import { noticeStates, remindersDue, type ReminderTask } from '../../src/domain/task-notices';
+import { SETTING_DEFINITIONS } from '../../src/domain/policies';
+import {
+  noticeStates,
+  reminderPreview,
+  remindersDue,
+  type ReminderSettings,
+  type ReminderTask,
+} from '../../src/domain/task-notices';
 
 const H = 3_600_000;
 const HR = { dueSoonHours: 24, overdueRepeatHours: 24, unacknowledgedHours: 4 };
@@ -71,6 +78,75 @@ describe('remindersDue: personal preferences only reduce noise', () => {
   );
 });
 
+describe('reminderPreview says what the job really does', () => {
+  /** Runs the real rule every hour for 40 days, sending each window once as the job does. */
+  function observed(s: ReminderSettings, personal: number | null) {
+    const delivered = new Date('2026-10-01T11:30:00Z');
+    const t: ReminderTask = { dueOn: '2026-10-20', dueTime: '17:00:00', deliveredAt: delivered, acknowledgedAt: null };
+    const due = +deadlineInstant(t.dueOn, t.dueTime);
+    const seen = new Set<string>();
+    const sent: Record<string, number[]> = { due_soon: [], overdue: [], unacknowledged: [] };
+    for (let h = 0; h < 24 * 40; h += 1) {
+      const now = new Date(+delivered + h * H);
+      for (const r of remindersDue(t, now, s, personal)) {
+        if (seen.has(r.kind + r.windowKey)) continue;
+        seen.add(r.kind + r.windowKey);
+        sent[r.kind]!.push(+now);
+      }
+    }
+    return {
+      dueSoonSent: sent.due_soon!.length,
+      // The deadline instant ends its minute, so an hourly run lands just inside the window.
+      dueSoonBefore: Math.ceil((due - sent.due_soon![0]!) / H),
+      overdueEvery: (sent.overdue![2]! - sent.overdue![1]!) / H,
+      ackFirst: (sent.unacknowledged![0]! - +delivered) / H,
+      ackEvery: (sent.unacknowledged![2]! - sent.unacknowledged![1]!) / H,
+    };
+  }
+  const n = (text: string, re: RegExp) => Number(re.exec(text)?.[1]);
+
+  it.each<[ReminderSettings, number | null]>([
+    [SETTING_DEFINITIONS['tasks.reminders'].defaultValue, null],
+    [{ dueSoonHours: 48, overdueRepeatHours: 6, unacknowledgedHours: 8 }, null],
+    [{ dueSoonHours: 1, overdueRepeatHours: 2, unacknowledgedHours: 2 }, 8],
+    [HR, 8],
+    [HR, 2], // closer than HR's: HR's interval still applies
+    [{ dueSoonHours: 12, overdueRepeatHours: 12, unacknowledgedHours: 8 }, 24],
+  ])('%j, personal %s', (s, personal) => {
+    const real = observed(s, personal);
+    const { schedule } = reminderPreview(s, personal);
+    expect(real.dueSoonSent).toBe(1);
+    expect(n(schedule, /reminder (\d+) hours? before a task is due/)).toBe(real.dueSoonBefore);
+    expect(n(schedule, /then every (\d+) hours? while it is overdue/)).toBe(real.overdueEvery);
+    const spaced = /and (\d+) hours? after a new task arrives, then every (\d+) hours? until/.exec(schedule);
+    const every = spaced ? Number(spaced[2]) : n(schedule, /and every (\d+) hours? until/);
+    expect(every).toBe(real.ackEvery);
+    expect(spaced ? Number(spaced[1]) : every).toBe(real.ackFirst);
+  });
+
+  it('in the owner\'s words, from the real defaults; it says what personal controls change and that nothing runs alone', () => {
+    const p = reminderPreview(SETTING_DEFINITIONS['tasks.reminders'].defaultValue);
+    expect(p.schedule).toBe(
+      'A person gets a reminder 24 hours before a task is due, then every 24 hours while it is overdue, and every 4 hours until they acknowledge a new task.',
+    );
+    expect(p.personal).toContain('cannot stop due-soon or overdue reminders');
+    expect(p.running).toContain('no scheduler exists');
+    expect(p.running).toContain('Send task reminders');
+  });
+
+  it.each([
+    [null, "You are on HR's schedule."],
+    [8, 'less often than HR\'s 4 hours'],
+    [2, "HR's 4 hours is the shortest gap allowed"],
+    [4, "HR's 4 hours is the shortest gap allowed"],
+  ])('a person who chose %s is told what it does', (personal, words) => {
+    const p = reminderPreview(HR, personal);
+    expect(p.personal).toContain(words);
+    expect(p.schedule).toMatch(/^You get a reminder/);
+    expect(p.schedule).not.toContain('they');
+  });
+});
+
 describe('noticeStates', () => {
   const t = new Date('2026-10-23T05:00:00Z');
   it.each([
@@ -98,7 +174,7 @@ describe('noticeStates', () => {
     });
     expect(states.map((s) => s.label)).toEqual([
       'Delivered',
-      'Read',
+      'Notice read',
       'Acknowledged',
       'Work submitted',
       'Work approved',

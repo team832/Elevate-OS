@@ -9,12 +9,13 @@ import { eq } from 'drizzle-orm';
 import { hashPassword, type AuthenticatedUser } from '@elevate/authentication';
 import { can, workspacesFor } from '@elevate/authorization';
 import { assessmentListQuerySchema } from '@elevate/shared-contracts';
-import { staffMembers, userRoles, users, type Database } from '@elevate/database';
+import { opsHrRequestEvents, staffMembers, userRoles, users, type Database } from '@elevate/database';
 import {
   coreSeeds,
   DEMO_ACCOUNTS,
   DEV_ASSUMPTION_ACCOUNTS,
   runSeeds,
+  SAMPLE_SCHAR,
   seedDemoAccounts,
   seedDevAssumptionAccounts,
 } from '@elevate/database/seed';
@@ -92,7 +93,7 @@ const MAIN_VIEW: [string, string, (l: Login) => Promise<number[]>][] = [
     'ops',
     async (l) => {
       const q = await hrQueue(db(), l.user, hrRequestListQuery.parse({ view: 'queue' }));
-      return [Object.values(q.counts).reduce((a, b) => a + b, 0) === 4 ? 4 : 0, await tasksOf(l)];
+      return [Object.values(q.counts).reduce((a, b) => a + b, 0), await tasksOf(l)];
     },
   ],
   [
@@ -110,6 +111,14 @@ const MAIN_VIEW: [string, string, (l: Login) => Promise<number[]>][] = [
     async (l) => [
       (await listAssignments(db(), l.academic as never)).length,
       (await listAssessments(db(), l.academic as never)).length,
+    ],
+  ],
+  [
+    SAMPLE_SCHAR.email,
+    'ops',
+    async (l) => [
+      await db().$count(opsHrRequestEvents, eq(opsHrRequestEvents.forwardedToStaffId, l.staffId!)),
+      await tasksOf(l),
     ],
   ],
   ...['pooja.verma@example.test', 'rohit.saini@example.test'].map(

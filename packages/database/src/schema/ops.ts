@@ -433,6 +433,8 @@ export const opsLeadActivities = ops.table(
   },
   (t) => [
     index('lead_activities_lead_idx').on(t.leadId, t.occurredAt),
+    // Sales calls list, newest first: 31.6 to 2.0 ms at 20,000 leads (RV-D, 0018); this table grows with every call.
+    index('lead_activities_kind_occurred_idx').on(t.kind, t.occurredAt.desc().nullsFirst()),
     check('lead_activities_kind_check', sql`${t.kind} IN ${inList(OPS_ACTIVITY_KINDS)}`),
     check('lead_activities_outcome_check', sql`${t.outcome} IN ${inList(OPS_ACTIVITY_OUTCOMES)}`),
     check(

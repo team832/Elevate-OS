@@ -752,6 +752,30 @@ a.el-journey-body:focus-visible {
   font-weight: 650;
 }
 
+/* The settings editor (SettingFields): rows wrap under 390 px, the remove button drops below its field. */
+.el-setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--el-space-2);
+}
+.el-setting-row > :first-child {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.el-form-grid > .el-fieldset,
+.el-form-grid > .el-field:has(textarea) {
+  grid-column: 1 / -1;
+}
+.el-setting-group {
+  padding: var(--el-space-3);
+  border: 1px solid var(--el-border);
+  border-radius: var(--el-radius-sm);
+}
+.el-setting-group > legend {
+  padding: 0 var(--el-space-1);
+}
+
 /* "How this list is defined": an explanation behind a text link, not a button. */
 .el-explain > summary {
   width: fit-content;

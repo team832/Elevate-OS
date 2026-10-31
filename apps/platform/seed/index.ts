@@ -13,6 +13,7 @@ import { defineSeed, type SeedDefinition } from '@elevate/database/seed';
 import { runEnrolmentExits, runEnrolmentIntake } from '@elevate/academic-os/server';
 import { processEnrolmentReplies } from '@elevate/business-ops-os/server';
 import { seedSampleLifecycle } from '@elevate/business-ops-os/seed';
+import { sampleFillSeeds } from './sample-fill';
 import { sampleTestSeed } from './sample-tests';
 
 export const seeds: readonly SeedDefinition[] = [
@@ -41,4 +42,5 @@ export const seeds: readonly SeedDefinition[] = [
     },
   }),
   sampleTestSeed,
+  ...sampleFillSeeds,
 ];

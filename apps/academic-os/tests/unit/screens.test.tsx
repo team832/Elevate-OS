@@ -13,7 +13,7 @@ import {
 import { createStudentBody } from '../../src/server/schemas';
 import { AssignmentForms, RecordAssignmentForm } from '../../src/ui/assignments';
 import { AttendanceForm } from '../../src/ui/attendance-form';
-import { fmtDateTime, fmtHours, Maybe, PlanBadge, programmeName, StateBadge } from '../../src/ui/badges';
+import { ClassLength, fmtClock, fmtDateTime, fmtHours, fmtSlot, fmtSpan, Maybe, modeLabel, PlanBadge, programmeName, StateBadge } from '../../src/ui/badges';
 import { CoverageSection, FeasibilitySection } from '../../src/ui/batch-sections';
 import { ConflictList } from '../../src/ui/conflicts';
 import { CourseChapters } from '../../src/ui/course-chapters';
@@ -55,6 +55,39 @@ describe('Academic badges and formatters', () => {
     expect(fmtHours(0)).toBe('0 h');
     expect(fmtDateTime(null)).toBe('—');
     expect(fmtDateTime('2026-10-22T04:30:00Z').replace(/\s/g, ' ')).toBe('22 Oct 2026, 10:00 am');
+  });
+
+  it.each([
+    [fmtSpan('2026-10-01', null), 'From 1 Oct 2026 · ongoing'],
+    [fmtSpan('2026-10-01', null, 'end date not set'), 'From 1 Oct 2026 · end date not set'],
+    [fmtSpan('2026-10-01', '2026-10-07'), '1 Oct 2026 to 7 Oct 2026'],
+    [fmtSpan(null, '2026-10-07'), 'Until 7 Oct 2026'],
+    [fmtSpan(null, null), 'Dates not set'],
+    [fmtClock('00:05'), '12:05 am'],
+    [fmtClock('09:00'), '9:00 am'],
+    [fmtClock('12:30'), '12:30 pm'],
+    [fmtClock('16:30'), '4:30 pm'],
+    [fmtSlot('2026-11-02', '16:30'), '2 Nov 2026, 4:30 pm'],
+    [modeLabel('offline'), 'Offline'],
+    [modeLabel(null), 'Not recorded'],
+  ])('%s reads as %s', (actual, expected) => {
+    expect(actual).toBe(expected);
+  });
+
+  it.each([
+    ['locked', 'Length: locked', 'is refused'],
+    ['approved', 'Length: approved', 'is refused'],
+    ['provisional', 'Length: provisional', 'only gets a warning'],
+    ['proposed', 'Length: proposed', 'only gets a warning'],
+  ])('a %s class length says what the label governs', (status, label, rule) => {
+    const out = html(<ClassLength minutes={75} status={status} note />);
+    expect(out).toContain('75 min');
+    expect(out).toContain(label);
+    expect(out).toContain(rule);
+  });
+
+  it('a class length nobody decided is said, never a number', () => {
+    expect(html(<ClassLength minutes={null} status="unknown" note />)).toBe(badge('neutral', 'Not decided'));
   });
 });
 
@@ -203,6 +236,20 @@ describe('ConflictList', () => {
     expect(out).toContain('teacher clash');
     expect(out).toContain(badge('danger', 'date unverified'));
     expect(out).not.toMatch(/optimal/i);
+  });
+
+  const finding = { code: 'TEACHER_LEFT', severity: 'hard' as const, date: '2026-11-02', message: 'The teacher of this class has left (HR ended their employment).' };
+  const checked = ['teacher, batch, room and student overlaps'];
+  const notes = ['Teacher workload cap is not configured; workload was not checked.'];
+  it.each([
+    ['partial: no cap', 'feasible', [], notes, 'Partial conflict check', ['Checked: teacher, batch', 'Not checked: Teacher workload'], ['Feasible']],
+    ['complete', 'feasible', [], [], 'Feasible', ['Checked: teacher, batch'], ['Partial conflict check', 'Not checked']],
+    ['teacher left, no cap: a real conflict stays infeasible and still says what was not checked', 'infeasible', [finding], notes, 'Infeasible', ['teacher left', 'has left', 'Not checked: Teacher workload'], ['Partial conflict check']],
+  ] as const)('%s', (_name, verdict, hard, why, shows, has, hasNot) => {
+    const out = html(<ConflictList verdict={verdict} hard={hard} preferences={[]} checked={checked} notes={why} />);
+    expect(out).toContain(shows);
+    for (const text of has) expect(out).toContain(text);
+    for (const text of hasNot) expect(out).not.toContain(text);
   });
 });
 
@@ -488,12 +535,12 @@ describe('Academic dashboards (22 Oct 2026 redesign)', () => {
         }
       />,
     );
-    expect(out).toContain('<p class="acd-next-time">11:00</p>');
+    expect(out).toContain('<p class="acd-next-time">11:00 am</p>');
     expect(out).toContain(
       'el-button-primary" href="/academic/teaching/attendance/s1">Open class</a>',
     );
     expect(out).toContain('Room R2');
-    expect(out).toContain('<ul class="acd-day"><li><span class="acd-day-time">14:00</span>');
+    expect(out).toContain('<ul class="acd-day"><li><span class="acd-day-time">2:00 pm</span>');
     expect(out).not.toContain('No more classes today');
     expect(out).toContain('No students placed in your batches today');
     expect(out).toContain('Not available'); // no assignment today: counts are not available, never 0

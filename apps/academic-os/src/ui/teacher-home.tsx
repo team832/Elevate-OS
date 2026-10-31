@@ -13,13 +13,13 @@ import {
 import type { SessionListRow, teacherDay } from '../server';
 import { MODULE_PATHS } from '../server/paths';
 import { AssignmentTable } from './assignments';
-import { StateBadge, fmtRange } from './badges';
+import { StateBadge, fmtClock, fmtRange, fmtSlot, words } from './badges';
 
 type TeacherDay = Extract<Awaited<ReturnType<typeof teacherDay>>, { kind: 'teacher' }>;
 
 const where = (s: SessionListRow) =>
   s.roomCode ? `Room ${s.roomCode}` : s.onlineLink ? 'Online' : 'No room set';
-const subject = (s: SessionListRow) => s.subjectName ?? s.sessionType.replace('_', ' ');
+const subject = (s: SessionListRow) => s.subjectName ?? words(s.sessionType);
 const delivery = (s: SessionListRow) => (
   <StateBadge state={s.status === 'held' ? 'delivered' : s.status} />
 );
@@ -41,8 +41,7 @@ function ClassList({
       {rows.map((s) => (
         <li key={s.id}>
           <span className="acd-day-time">
-            {showDate ? `${fmtDay(s.date)} ` : ''}
-            {s.startTime}
+            {showDate ? fmtSlot(s.date, s.startTime) : fmtClock(s.startTime)}
           </span>
           <span>
             {s.batchCode} · {subject(s)} · {where(s)} {delivery(s)}
@@ -70,7 +69,7 @@ function NextClass({ next, today }: { next: SessionListRow | null; today: string
         <p id="acd-next-label" className="el-stat-label">
           Next class, {fmtDay(today)}
         </p>
-        <p className="acd-next-time">{next.startTime}</p>
+        <p className="acd-next-time">{fmtClock(next.startTime)}</p>
       </div>
       <div>
         <p className="acd-next-title">
@@ -293,7 +292,7 @@ export function TeacherHome({ day, tiles = null }: { day: TeacherDay; tiles?: Re
             {
               key: 'class',
               header: 'Class',
-              render: (d) => `${fmtDay(d.session.date)} ${d.session.startTime} · ${d.session.batchCode}`,
+              render: (d) => `${fmtSlot(d.session.date, d.session.startTime)} · ${d.session.batchCode}`,
             },
             {
               key: 'go',

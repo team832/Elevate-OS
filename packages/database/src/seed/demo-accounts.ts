@@ -7,7 +7,8 @@ import { syncStaffHistory } from './staff-history';
 
 /**
  * Local demo sign-ins (D-072; brief 23 Oct 2026 §4/§25: business administrator = operations
- * manager, HR manager, marketing manager, two fictional marketing employees, one teacher).
+ * manager, HR manager, marketing manager, two fictional marketing employees, one teacher, plus the
+ * fictional Schar).
  * Development only: they share one password (LOCAL_DEMO_PASSWORD), so `assertDemoSeedAllowed` refuses production and any non-local
  * database, and `db:clear-samples` switches them off. The email only identifies the account;
  * what it may open comes from the role stored here.
@@ -58,6 +59,19 @@ export const SAMPLE_MARKETING_MANAGER_EMAIL = 'marketing-manager@example.test';
 /** Free text written by a seed, labelled: `Call back (sample).` */
 export const sampleText = (s: string) => `${s} (sample).`;
 
+/**
+ * The fictional person the sample set names as Schar (setting hr.request_recipients, D-096), so a
+ * forward to Schar can be tried end to end. The owner still names the real person; db:clear-samples
+ * puts the setting back to unset. The role is the narrowest that can answer a forwarded request.
+ */
+export const SAMPLE_SCHAR = {
+  email: 'schar.sample@example.test',
+  displayName: 'Sample Schar (fictional)',
+  role: 'admissions_counsellor',
+  department: 'LEADERSHIP_OPERATIONS',
+  title: 'Recipient of requests for Schar (sample)',
+} as const satisfies DemoAccount;
+
 export const DEMO_ACCOUNTS = [
   {
     email: 'business@elevateeducation.in',
@@ -85,6 +99,7 @@ export const DEMO_ACCOUNTS = [
     department: 'MARKETING_GROWTH',
   },
   ...MARKETING_EMPLOYEES,
+  SAMPLE_SCHAR,
 ] as const satisfies readonly DemoAccount[];
 
 export const DEMO_EMAILS: readonly string[] = DEMO_ACCOUNTS.map((a) => a.email);

@@ -34,6 +34,7 @@ import {
   type BlackoutWindow,
   type FinaliseInput,
   type SectionSpec,
+  fmtClock,
 } from '../../domain';
 import { assertBatchInScope, assessmentInScope, audit, getBatchOrThrow, resolveScope, type Actor } from '../context';
 import type { scheduleCheckBody } from '../schemas';
@@ -342,7 +343,7 @@ export async function checkAssessmentScheduleFor(db: Database, actor: Actor, inp
   const result = checkAssessmentSchedule({
     candidates,
     otherAssessments: others,
-    classes: classes.map((c) => ({ id: c.id, label: `Class ${fmtDay(c.date)} ${c.startTime}`, date: c.date, startTime: c.startTime, durationMinutes: c.durationMinutes })),
+    classes: classes.map((c) => ({ id: c.id, label: `Class ${fmtDay(c.date)} ${fmtClock(c.startTime)}`, date: c.date, startTime: c.startTime, durationMinutes: c.durationMinutes })),
     blackouts,
     minGap: gap.value.minDays > 0 ? gap.value : null,
   });

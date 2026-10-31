@@ -5,6 +5,9 @@ import {
   parsePunchCsv,
   punchesByDay,
   reviewReasons,
+  isNoScheduleDay,
+  monthTotals,
+  monthTotalsText,
   summariseDays,
   type DayInput,
   type Punch,
@@ -301,5 +304,47 @@ describe('parsePunchCsv', () => {
     ['name,when\nA,B', 'The first row must name the columns: Staff code, Date-time, Direction.'],
   ])('refuses a file without the columns: %j', (csv, error) => {
     expect(parsePunchCsv(csv)).toEqual({ ok: false, error });
+  });
+});
+
+/** Every day counts once, under the word its row shows (owner's second list, item A). */
+describe('month totals', () => {
+  const FULL = [p('09:00', 'in'), p('18:00', 'out')];
+  const BUCKETS = ['present', 'halfDays', 'leave', 'holidays', 'confirmedAbsences', 'unmarked', 'weeklyOff', 'unjudged'] as const;
+  it.each<[string, Partial<DayInput>, (typeof BUCKETS)[number]]>([
+    ['no schedule, nothing recorded', { pattern: null }, 'unjudged'],
+    ['no schedule, HR left it unmarked', { pattern: null, decision: { status: 'unmarked', note: 'Sample' } }, 'unmarked'],
+    ['no schedule, checked in and out', { pattern: null, punches: FULL }, 'present'],
+    ['no schedule, holiday', { pattern: null, holiday: true }, 'holidays'],
+    ['no schedule, on leave', { pattern: null, onLeave: true }, 'leave'],
+    ['schedule, nothing recorded', {}, 'unmarked'],
+    ['schedule, full day', { punches: FULL }, 'present'],
+    ['schedule, half day', { punches: [p('09:00', 'in'), p('13:30', 'out')] }, 'halfDays'],
+    ['schedule, holiday', { holiday: true }, 'holidays'],
+    ['schedule, on leave', { onLeave: true }, 'leave'],
+    ['schedule, weekly off', { date: SUN }, 'weeklyOff'],
+    ['schedule, absence confirmed by HR', { decision: { status: 'absent', note: 'Sample' } }, 'confirmedAbsences'],
+  ])('%s', (_, over, bucket) => {
+    const d = deriveDay(day(over), RULES);
+    const t = monthTotals([d]);
+    expect(BUCKETS.filter((b) => t[b] === 1)).toEqual([bucket]);
+    expect(BUCKETS.filter((b) => t[b] !== 0 && b !== bucket)).toEqual([]);
+    expect(isNoScheduleDay(d)).toBe(bucket === 'unjudged');
+  });
+
+  it.each([
+    [
+      'a month with no schedule says what was left out',
+      Array(30).fill({ pattern: null }),
+      'Working days: cannot tell without a work schedule: 0 present, 0 half days, 0 on leave, 0 absences confirmed by HR. 30 days with no schedule are left out of these totals.',
+    ],
+    [
+      'a month with a schedule adds up',
+      [{}, {}, { punches: FULL }, { onLeave: true }, { holiday: true }, { date: SUN }],
+      '4 working days so far: 1 present, 0 half days, 1 on leave, 2 unmarked, 0 absences confirmed by HR. Also 1 holiday and 1 weekly off.',
+    ],
+    ['one day with no schedule', [{ pattern: null }], 'Working days: cannot tell without a work schedule: 0 present, 0 half days, 0 on leave, 0 absences confirmed by HR. 1 day with no schedule is left out of these totals.'],
+  ] as [string, Partial<DayInput>[], string][])('%s', (_, inputs, text) => {
+    expect(monthTotalsText(monthTotals(inputs.map((i) => deriveDay(day(i), RULES))))).toBe(text);
   });
 });

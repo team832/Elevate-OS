@@ -16,7 +16,7 @@ import { assignmentOptions, listBatches, teacherProfile, todayIst, UNAVAILABILIT
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
 import { AssignmentForms, AssignmentTable } from '../../../ui/assignments';
-import { PlanBadge } from '../../../ui/badges';
+import { PlanBadge, fmtSlot } from '../../../ui/badges';
 import { Filter } from '../../../ui/filters';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 
@@ -56,7 +56,7 @@ export default async function TeacherPage({
   if (!data.ok)
     return (
       <AcademicShell access={access} active="teachers">
-        <LoadError level={1} error={data.error} />
+        <LoadError level={1} back="teachers" error={data.error} />
       </AcademicShell>
     );
   const p = data.data;
@@ -122,7 +122,7 @@ export default async function TeacherPage({
             compact
             rows={p.sessions}
             rowKey={(s) => s.id}
-            empty={<EmptyState title="No classes in this range" />}
+            empty={<EmptyState title="No classes in this range" description="Choose another start date above." />}
             columns={[
               {
                 key: 'when',
@@ -130,7 +130,7 @@ export default async function TeacherPage({
                 render: (s) => (
                   <a href={MODULE_PATHS.attendance(s.id)}>
                     <strong>
-                      {fmtDay(s.date)} {s.startTime}
+                      {fmtSlot(s.date, s.startTime)}
                     </strong>
                   </a>
                 ),

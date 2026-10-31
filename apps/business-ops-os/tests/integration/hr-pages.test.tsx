@@ -11,6 +11,7 @@ import { can, type Permission } from '@elevate/authorization';
 import {
   departments,
   opsStaffPrivateDetails,
+  opsStaffSubjectCapabilities,
   opsStaffTasks,
   staffMembers,
   type Database,
@@ -21,6 +22,9 @@ import AssignmentsPage from '../../src/app/hr/assignments/page';
 import HrSettingsPage from '../../src/app/hr/settings/page';
 import HrStaffPage from '../../src/app/hr/staff/page';
 import HrStaffMemberPage from '../../src/app/hr/staff/[id]/page';
+import { applyForLeave } from '../../src/server/leave-applications';
+import HrAttendancePage from '../../src/app/hr/attendance/page';
+import { addDays, istToday } from '../../src/domain/dates';
 import { NAV } from '../../src/ui/frame';
 import { staffWorkload } from '../../src/server/hr-overview';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
@@ -83,6 +87,94 @@ beforeAll(async () => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
+
+describe('HR settings: what a person reads and edits', () => {
+  it('says once what the status means; in-use wording, a short value, no value tables', async () => {
+    const out = (await html(hr, <HrSettingsPage {...sp()} />)).replaceAll('<!-- -->', '');
+    expect(out.match(/&quot;In use, not yet approved&quot; means the value is working today/g)).toHaveLength(1);
+    expect(out).toContain('>In use, not yet approved<');
+    expect(out).toContain('>Approved<');
+    expect(out).not.toMatch(/>Proposed</);
+    expect(out).toContain('10 minutes');
+    expect(out).not.toContain('Decision state');
+  });
+
+  it('shows what the reminder settings mean, from the current values', async () => {
+    const out = await html(hr, <HrSettingsPage {...sp()} />);
+    expect(out).toContain(
+      'A person gets a reminder 24 hours before a task is due, then every 24 hours while it is overdue, and every 4 hours until they acknowledge a new task.',
+    );
+    expect(out).toContain('no scheduler exists');
+  });
+
+  it.each([
+    ['tasks.reminders', 'type="number"', 'Due soon hours'],
+    ['reports.week_start', '<select', 'Monday'],
+    ['feedback.categories', 'Add a row', 'Explanation clarity'],
+    ['reports.weekly_deadline', 'Set deadline', 'Deadline'],
+  ])('%s opens real fields, not a JSON box', async (open, control, text) => {
+    const out = await html(hr, <HrSettingsPage {...sp({ open })} />);
+    expect(out).toContain(control);
+    expect(out).toContain(text);
+    expect(out).toContain('Save new value');
+    expect(out).toMatch(/type="hidden" name="value" value="/);
+    expect(out).not.toContain('keep the quotes');
+  });
+
+  it('a value with no form keeps the text box and says why', async () => {
+    const out = await html(hr, <HrSettingsPage {...sp({ open: 'hr.request_recipients' })} />);
+    expect(out).toContain('no form of its own yet');
+    expect(out).toContain('<textarea');
+  });
+});
+
+describe('HR attendance: the Who filter on the page', () => {
+  /** What a GET form really sends: every field, the blank ones as empty strings. */
+  const form = (v: Record<string, string>) => ({
+    q: '',
+    from: '',
+    to: '',
+    status: '',
+    department: '',
+    branch: '',
+    ...v,
+  });
+  const caption = (out: string) => /<caption[^>]*>([^<]*staff days[^<]*)</.exec(out)?.[1];
+
+  beforeAll(async () => {
+    await db()
+      .insert(opsStaffSubjectCapabilities)
+      .values({ staffId: teacher.staffId, subject: 'Sample Reasoning' });
+  });
+
+  it('a form with blank filters still applies the filters it does hold', async () => {
+    expect(caption(await html(hr, <HrAttendancePage {...sp(form({ q: 'Bina' }))} />))).toContain(
+      '1 staff member',
+    );
+  });
+
+  it.each([
+    ['teachers', 'Teachers', '1 staff member'],
+    ['other', 'Other staff', '2 staff members'],
+  ])('who=%s: a chip, and a caption counting only those people', async (who, chip, people) => {
+    const out = await html(hr, <HrAttendancePage {...sp(form({ who }))} />);
+    expect(out.replaceAll('<!-- -->', '')).toContain(`Who: ${chip}`);
+    expect(caption(out)).toContain(people);
+  });
+
+  it('Everyone is the default: both groups, no chip', async () => {
+    const out = await html(hr, <HrAttendancePage {...sp()} />);
+    expect(out).not.toContain('Who: ');
+    expect(caption(out)).toContain('3 staff members');
+  });
+
+  it('keeps who through the pager and the tab links', async () => {
+    const from = addDays(istToday(new Date()), -60);
+    const out = await html(hr, <HrAttendancePage {...sp(form({ who: 'teachers', from }))} />);
+    expect(out).toMatch(/href="[^"]*who=teachers[^"]*page=2"|href="[^"]*page=2[^"]*who=teachers"/);
+    expect(out).toMatch(/href="[^"]*tab=review[^"]*who=teachers"/);
+  });
+});
 
 describe('HR page gates', () => {
   it.each([
@@ -149,6 +241,20 @@ describe('Staff record page', () => {
   it('Responsibilities says "Source unavailable" when Academic OS cannot be read', async () => {
     vi.stubGlobal('fetch', async () => new Response('down', { status: 503 }));
     expect(await page(hr, 'responsibilities')).toContain('Source unavailable');
+  });
+
+  it('Leave shows this person\'s applications', async () => {
+    const mine = await applyForLeave(db(), teacher, {
+      kind: 'Sick',
+      fromDate: addDays(istToday(new Date()), 30),
+      toDate: addDays(istToday(new Date()), 31),
+      reason: 'Sample medical appointment',
+    });
+    const out = await page(hr, 'leave');
+    expect(out).toContain('Sample medical appointment');
+    expect(out).toContain('Open in attendance');
+    expect(out).toContain(mine.staffId);
+    expect(await page(director, 'leave')).not.toContain('Sample medical appointment');
   });
 
   it('list tabs link to the HR lists narrowed to this person', async () => {

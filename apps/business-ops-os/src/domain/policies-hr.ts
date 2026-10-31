@@ -1,5 +1,6 @@
 /** Policy register: tasks, EOD, HR attendance, work reports, feedback about teachers and AI drafts. */
 import { z } from 'zod';
+import { LEAVE_APPROVERS } from './leave';
 import { codeList, type DefinitionsFor } from './policies-base';
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -51,6 +52,12 @@ export const hrSettingSchemas = {
   'hr.staff_scope_departments': z
     .object({ departmentCodes: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,39}$/)).max(40) })
     .strict(),
+  /** The names staff choose from when they apply for leave. No balances (owner decision 2026-10-31). */
+  'hr.leave_types': z
+    .object({ types: z.array(z.string().trim().min(1).max(40)).min(1).max(20) })
+    .strict(),
+  /** Roles that approve leave, each within its usual reach of staff. */
+  'hr.leave_approver': z.object({ who: z.array(z.enum(LEAVE_APPROVERS)).min(1) }).strict(),
   'hr.attendance.late_grace_minutes': z.object({ minutes: z.int().min(0).max(240) }).strict(),
   'hr.attendance.half_day_hours': z.object({ hours }).strict(),
   'hr.attendance.full_day_hours': z.object({ hours }).strict(),
@@ -163,6 +170,26 @@ export const HR_SETTING_DEFINITIONS: DefinitionsFor<typeof hrSettingSchemas> = {
     defaultState: 'proposed',
     source: 'owner brief 2026-10-23 §2, §6.',
     ownerDecision: 'Owner to confirm which departments HR covers',
+    editable: true,
+  },
+  'hr.leave_types': {
+    label: 'Leave types',
+    description:
+      'What staff choose from when they apply for leave. Renaming one does not change applications already made. There are no leave balances.',
+    defaultValue: { types: ['Casual', 'Sick', 'Earned', 'Unpaid'] },
+    defaultState: 'proposed',
+    source: 'owner decision 2026-10-31 (leave applications; no balances, entitlements or accrual).',
+    ownerDecision: 'Owner to confirm the leave types',
+    editable: true,
+  },
+  'hr.leave_approver': {
+    label: 'Who approves leave',
+    description:
+      'Roles that approve or reject leave applications and are told about new ones. An HR manager reaches the staff HR manages (setting "Staff HR manages"); an operations manager reaches everyone. Nobody decides their own.',
+    defaultValue: { who: ['hr_manager', 'operations_manager'] },
+    defaultState: 'proposed',
+    source: 'owner decision 2026-10-31 (the HR manager approves; operations manager as HR today).',
+    ownerDecision: 'Owner to confirm who approves leave',
     editable: true,
   },
   'hr.attendance.late_grace_minutes': {
@@ -325,13 +352,18 @@ export const HR_SETTING_DEFINITIONS: DefinitionsFor<typeof hrSettingSchemas> = {
     defaultValue: {
       categories: [
         { code: 'tasks', label: 'Tasks and deadlines' },
+        { code: 'attendance', label: 'Attendance' },
+        { code: 'leave', label: 'Leave' },
+        { code: 'timetable', label: 'Timetable changes' },
         { code: 'classes', label: 'Classes and batches' },
         { code: 'students', label: 'Students' },
+        { code: 'resources', label: 'Resources' },
+        { code: 'development', label: 'Development support' },
         { code: 'other', label: 'Something else' },
       ],
     },
     defaultState: 'proposed',
-    source: 'owner brief 2026-10-23 §6.',
+    source: 'owner brief 2026-10-23 §6; list extended at the owner\'s request 2026-10-31.',
     ownerDecision: 'Owner to confirm the categories',
     editable: true,
   },

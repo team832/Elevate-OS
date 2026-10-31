@@ -199,7 +199,7 @@ async function Overview({ user, sp }: { user: AuthenticatedUser; sp: Params }) {
                     : `${days.daysAttended.value} of ${days.plannedDays} planned days`,
               },
               { label: 'Demos with a class in the period', value: days.demos },
-              { label: 'Attended every day', value: days.allDaysAttended },
+              { label: 'Attended every day', value: days.allDaysAttended ?? 'Source unavailable' },
               { label: 'Period', value: days.daysAttended.window.label },
             ]}
           />

@@ -27,7 +27,7 @@ const JOBS: Record<(typeof OPS_JOBS)[number], { label: string; does: string }> =
   },
   'demo-academic-marks': {
     label: 'Read demo attendance from Academic',
-    does: 'Copies the attendance teachers marked in Academic onto demo classes.',
+    does: 'Reads the marks teachers made in Academic for open demos. A demo with every class recorded shows as all classes recorded and, if the student attended, its case moves to Demo attended. Nothing is copied.',
   },
   housekeeping: {
     label: 'Clear expired sign-ins',

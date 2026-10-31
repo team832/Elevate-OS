@@ -5,7 +5,7 @@ import { Card, DataTable, EmptyState, PageHeader, Subnav, fmtDay } from '@elevat
 import { getBatch, getBatchCoverage, getBatchFeasibility, getCourse, listBatchPlacements, listStaff, todayIst } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
-import { PlanBadge, StateBadge, programmeName, words } from '../../../ui/badges';
+import { ClassLength, PlanBadge, StateBadge, programmeName, words, wordOptions } from '../../../ui/badges';
 import { CoverageSection, FeasibilitySection } from '../../../ui/batch-sections';
 import { BatchDetails, BatchStudents, BatchTeachers } from '../../../ui/batch-tabs';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
@@ -25,7 +25,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
   const db = getDb();
   const actor = actorFor(access.user);
   const batch = await load(() => getBatch(db, actor, id));
-  if (!batch.ok) return <AcademicShell access={access} active="batches"><LoadError level={1} error={batch.error} /></AcademicShell>;
+  if (!batch.ok) return <AcademicShell access={access} active="batches"><LoadError level={1} back="batches" error={batch.error} /></AcademicShell>;
   const b = batch.data;
   const canAssign = can(access.user, 'academic:assignments:write');
   const canWrite = can(access.user, 'academic:batches:write');
@@ -46,7 +46,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
     <PageHeader
       title={`${b.code} — ${b.name}`}
       meta={<StateBadge state={b.status} />}
-      description={<>{programmeName(b.programmeCode)} / {b.courseCode} · {b.activeEnrolments} enrolled{b.capacity ? ` of ${b.capacity}` : ''} · class length {b.classLength.minutes ? `${b.classLength.minutes} min` : 'unknown'} <PlanBadge status={b.classLength.status} /></>}
+      description={<>{programmeName(b.programmeCode)} / {b.courseCode} · {b.activeEnrolments} enrolled{b.capacity ? ` of ${b.capacity}` : ''} · class length <ClassLength minutes={b.classLength.minutes} status={b.classLength.status} note /></>}
       tabs={<Subnav label="Batch" items={links} current={links[TABS.indexOf(tab)]![0]} />}
     />
   );
@@ -86,7 +86,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
           <DataTable compact
             rows={b.calendarRules}
             rowKey={(r) => r.id}
-            empty={<EmptyState title="No calendar rules" />}
+            empty={<EmptyState title="No calendar rules" description={canWrite ? 'Add the first rule below; capacity is checked from these.' : 'An academic coordinator adds them; capacity stays unassessed until then.'} />}
             columns={[
               { key: 'label', header: 'Rule' },
               { key: 'period', header: 'Period', render: (r) => `${fmtDay(r.periodStart)} to ${fmtDay(r.periodEnd)}` },
@@ -109,7 +109,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
                 { name: 'weekdays', label: 'Weekdays', type: 'number-list', required: true, hint: 'ISO numbers, comma-separated: 1 = Mon … 7 = Sun' },
                 { name: 'slotsPerDay', label: 'Slots per day', type: 'number', required: true },
                 { name: 'kind', label: 'Kind', type: 'select', options: [{ value: 'regular', label: 'regular (teaching days)' }, { value: 'extra', label: 'extra slots on teaching days' }] },
-                { name: 'status', label: 'Status', type: 'select', options: ['provisional', 'proposed', 'locked'].map((v) => ({ value: v, label: v })) },
+                { name: 'status', label: 'Status', type: 'select', options: wordOptions(['provisional', 'proposed', 'locked']) },
               ]}
             />
           ) : null}
@@ -118,7 +118,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
           <DataTable compact
             rows={b.exclusions}
             rowKey={(x) => x.id}
-            empty={<EmptyState title="No exclusions" />}
+            empty={<EmptyState title="No exclusions" description={canTimetable ? 'Add a holiday or exam closure below when one is decided.' : 'None recorded for this batch or the centre.'} />}
             columns={[
               { key: 'label', header: 'Label' },
               { key: 'kind', header: 'Kind', render: (r) => words(r.kind) },
@@ -136,14 +136,14 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
               successMessage="Exclusion added."
               idPrefix="excl"
               fields={[
-                { name: 'kind', label: 'Kind', type: 'select', required: true, options: ['holiday', 'school_exam', 'exam_blackout', 'other'].map((v) => ({ value: v, label: v })) },
+                { name: 'kind', label: 'Kind', type: 'select', required: true, options: wordOptions(['holiday', 'school_exam', 'exam_blackout', 'other']) },
                 { name: 'label', label: 'Label', required: true },
                 { name: 'date', label: 'Date (dated closure)', type: 'date' },
                 { name: 'periodStart', label: 'Period start (allowance or blackout window)', type: 'date' },
                 { name: 'periodEnd', label: 'Period end', type: 'date' },
                 { name: 'days', label: 'Days (allowance)', type: 'number' },
                 { name: 'slotsPerDay', label: 'Slots per day (allowance)', type: 'number' },
-                { name: 'status', label: 'Status', type: 'select', options: ['provisional', 'confirmed', 'locked', 'unverified'].map((v) => ({ value: v, label: v })) },
+                { name: 'status', label: 'Status', type: 'select', options: wordOptions(['provisional', 'confirmed', 'locked', 'unverified']) },
               ]}
             />
           ) : null}

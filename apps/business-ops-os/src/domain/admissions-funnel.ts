@@ -13,10 +13,10 @@ const rate = (num: number, den: number) => (den > 0 ? Math.round((num / den) * 1
 /** Per lead of the cohort (leads first received in the period, merged duplicates excluded). */
 export interface FunnelLead {
   demoBooked: boolean;
-  /** At least one demo session `present`. */
-  attended: boolean;
-  /** Some demo with `present` sessions ≥ its planned session count. */
-  completed: boolean;
+  /** At least one demo session `present`; null = not known (Academic OS cannot be read). */
+  attended: boolean | null;
+  /** Some demo with every planned day attended; null = not known. */
+  completed: boolean | null;
   /** Some demo with outcome `converted`. */
   converted: boolean;
   /** The converted admission was confirmed enrolled by Academic OS. */
@@ -37,32 +37,35 @@ export type FunnelStageKey = keyof typeof FUNNEL_STAGES;
 export interface FunnelStage {
   key: FunnelStageKey;
   label: string;
-  count: number;
+  /** null = missing: a lead's place at this stage is not known. Never 0 in its stead. */
+  count: number | null;
   /** Denominator stage and its count; null for the first stage. */
-  of: { key: FunnelStageKey; count: number } | null;
+  of: { key: FunnelStageKey; count: number | null } | null;
   /** Percent of the denominator, one decimal; null = not enough data (denominator 0). */
   ratePct: number | null;
 }
 
 /** A-REP-1: nested funnel counts — a lead counts at a stage only if it also counts at the denominator stage. */
 export function admissionsFunnel(leads: readonly FunnelLead[]): FunnelStage[] {
-  const reached = (key: FunnelStageKey, l: FunnelLead): boolean => {
+  const reached = (key: FunnelStageKey, l: FunnelLead): boolean | null => {
     if (key === 'leads') return true;
-    const parent = FUNNEL_STAGES[key][1] as FunnelStageKey;
-    return l[key] && reached(parent, l);
+    const parent = reached(FUNNEL_STAGES[key][1] as FunnelStageKey, l);
+    if (l[key] === false || parent === false) return false;
+    return l[key] === null || parent === null ? null : true;
   };
-  const counts = new Map<FunnelStageKey, number>();
+  const counts = new Map<FunnelStageKey, number | null>();
   return (Object.keys(FUNNEL_STAGES) as FunnelStageKey[]).map((key) => {
-    const count = leads.filter((l) => reached(key, l)).length;
+    const at = leads.map((l) => reached(key, l));
+    const count = at.includes(null) ? null : at.filter(Boolean).length;
     counts.set(key, count);
     const parent = FUNNEL_STAGES[key][1] as FunnelStageKey | null;
-    const of = parent ? { key: parent, count: counts.get(parent) ?? 0 } : null;
+    const of = parent ? { key: parent, count: counts.get(parent)! } : null;
     return {
       key,
       label: FUNNEL_STAGES[key][0],
       count,
       of,
-      ratePct: of ? rate(count, of.count) : null,
+      ratePct: of && count !== null && of.count !== null ? rate(count, of.count) : null,
     };
   });
 }

@@ -172,6 +172,10 @@ export interface AttendanceSummary {
   noSchedule: number;
 }
 
+/** Nothing recorded and no schedule to judge the day by: not Unmarked, in no total (reads "No schedule"). */
+export const isNoScheduleDay = (d: Pick<DerivedDay, 'status' | 'scheduled' | 'basis'>) =>
+  d.status === 'unmarked' && d.scheduled === null && d.basis !== 'hr_decision';
+
 /** Brief §14 attendance figures. Counts only; never a score or a ranking (R13). */
 export function summariseDays(days: readonly DerivedDay[]): AttendanceSummary {
   const n = (f: (d: DerivedDay) => boolean) => days.filter(f).length;
@@ -185,9 +189,42 @@ export function summariseDays(days: readonly DerivedDay[]): AttendanceSummary {
     leave: n((d) => d.status === 'on_leave'),
     holidays: n((d) => d.status === 'holiday'),
     confirmedAbsences: n((d) => d.status === 'absent'),
-    unmarked: n((d) => d.status === 'unmarked' && d.scheduled === true),
+    unmarked: n((d) => d.status === 'unmarked' && !isNoScheduleDay(d)),
     noSchedule: n((d) => d.scheduled === null),
   };
+}
+
+/** Every listed day in exactly one count, under the word its row shows. */
+export const monthTotals = (days: readonly DerivedDay[]) => ({
+  ...summariseDays(days),
+  weeklyOff: days.filter((d) => d.status === 'weekly_off').length,
+  unjudged: days.filter(isNoScheduleDay).length,
+});
+
+/** The month's totals as one short paragraph; days left out are named, never silently dropped. */
+export function monthTotalsText(t: ReturnType<typeof monthTotals>) {
+  const of = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  const known = t.scheduledWorkdays !== null;
+  const counted = [
+    `${t.present} present`,
+    of(t.halfDays, 'half day'),
+    `${t.leave} on leave`,
+    ...(known || t.unmarked ? [`${t.unmarked} unmarked`] : []),
+    `${of(t.confirmedAbsences, 'absence', 'absences')} confirmed by HR`,
+  ];
+  const also = [
+    t.holidays && of(t.holidays, 'holiday'),
+    t.weeklyOff && of(t.weeklyOff, 'weekly off', 'weekly offs'),
+  ].filter(Boolean);
+  return [
+    `${known ? `${of(t.scheduledWorkdays!, 'working day')} so far` : 'Working days: cannot tell without a work schedule'}: ${counted.join(', ')}.`,
+    also.length ? `Also ${also.join(' and ')}.` : '',
+    t.unjudged
+      ? `${of(t.unjudged, 'day')} with no schedule ${t.unjudged === 1 ? 'is' : 'are'} left out of these totals.`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 /** First and last day of a `YYYY-MM` month. */

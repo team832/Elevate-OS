@@ -234,7 +234,7 @@ describe('fetchInternal', () => {
   });
 
   it.each([
-    ['production', 'Could not reach the source'],
+    ['production', 'That workspace is not running'],
     ['development', 'That workspace is not running: start it with npm run dev:all'],
   ])('a refused connection in %s reads "%s"', async (env, reason) => {
     vi.stubEnv('NODE_ENV', env);

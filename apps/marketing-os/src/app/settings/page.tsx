@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
-import { Card, DataTable, StatusBadge } from '@elevate/shared-ui';
+import { Card, DataTable, SETTINGS_STATE_NOTE, StatusBadge } from '@elevate/shared-ui';
 import { modulePath } from '../../domain';
 import { listContentRules, listPolicySettings } from '../../server';
 import { ProposedBadge, ruleText } from '../../ui/badges';
@@ -28,7 +28,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       path={modulePath('settings')}
       active="settings"
       title="Rules and settings"
-      description="What each rule is set to now. Proposed means it is in use but the owner has not decided it yet."
+      description={`What each rule is set to now. ${SETTINGS_STATE_NOTE}`}
       searchParams={await searchParams}
     >
       {() => (
@@ -56,7 +56,19 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
                         header: 'Status',
                         render: (p) => <ProposedBadge status={p.status} />,
                       },
-                      { key: 'desc', header: 'Meaning', render: (p) => p.description },
+                      {
+                        key: 'desc',
+                        header: 'About',
+                        render: (p) => (
+                          <details className="el-explain">
+                            <summary>
+                              What it controls
+                              <span className="el-visually-hidden">: {settingName(p.key)}</span>
+                            </summary>
+                            <p>{p.description}</p>
+                          </details>
+                        ),
+                      },
                     ]}
                   />
                 </Card>
@@ -96,7 +108,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
                         header: 'Accounts',
                         render: (r) => r.appliesTo.join(', '),
                       },
-                      { key: 'status', header: 'Status', render: (r) => r.status },
+                      {
+                        key: 'status',
+                        header: 'Status',
+                        render: (r) => <ProposedBadge status={r.status} />,
+                      },
                     ]}
                   />
                 </Card>

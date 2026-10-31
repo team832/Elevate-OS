@@ -6,13 +6,11 @@ import { assignmentPhase } from '../domain/placements';
 import { todayIst } from '../server/context';
 import { ApiForm } from './api-form';
 import { ROLE_LABEL } from './assignments';
-import { StateBadge } from './badges';
+import { MODE_OPTIONS, StateBadge, fmtSpan, modeLabel, wordOptions } from './badges';
 
 type Batch = Awaited<ReturnType<typeof getBatch>>;
 type Placement = Awaited<ReturnType<typeof listBatchPlacements>>[number];
 type Staff = Awaited<ReturnType<typeof listStaff>>;
-
-const opts = (values: readonly string[]) => values.map((v) => ({ value: v, label: v.replace(/_/g, ' ') }));
 
 /** Placement note: transfer marker plus reasons (reasons arrive only for coordinators; the server strips them for others). */
 export function placementNote(p: { transferFromPlacementId: string | null; reason: string | null; endedReason: string | null }): string {
@@ -45,7 +43,7 @@ export function BatchDetails({ batch, staff, canWrite }: { batch: Batch; staff: 
   return (
     <Card title="Batch details">
       <p>
-        Coordinator: {coordinator ?? 'Not set'} · Campus: {batch.campus ?? 'Not set'} · Mode: {batch.mode ?? 'Not set'} · Dates: {fmtDay(batch.startDate, 'start not set')} to {fmtDay(batch.endDate, 'end not set')}
+        Coordinator: {coordinator ?? 'Not set'} · Campus: {batch.campus ?? 'Not set'} · Mode: {modeLabel(batch.mode)} · Dates: {fmtSpan(batch.startDate, batch.endDate, 'end date not set')}
       </p>
       <p>
         Seats from today: {seats.placed} placed of {seats.capacity ?? 'no limit set'}. Demo students on upcoming classes: {seats.demoAttendeesUpcoming} (setting “demo students take a seat”: {seats.demoRule.counts ? 'yes' : 'no'}, {seats.demoRule.status}; shown for information, not used in placement checks).
@@ -62,12 +60,12 @@ export function BatchDetails({ batch, staff, canWrite }: { batch: Batch; staff: 
             fields={[
               { name: 'coordinatorStaffId', label: 'Coordinator', type: 'select', options: staff.map((s) => ({ value: s.id, label: s.fullName })) },
               { name: 'campus', label: 'Campus', defaultValue: batch.campus ?? undefined },
-              { name: 'mode', label: 'Mode', type: 'select', options: opts(['offline', 'online', 'hybrid']) },
+              { name: 'mode', label: 'Mode', type: 'select', options: MODE_OPTIONS },
               { name: 'capacity', label: 'Seat limit', type: 'number', defaultValue: batch.capacity ?? undefined },
               { name: 'classMinutesOverride', label: 'Class length (minutes)', type: 'number', defaultValue: batch.classMinutesOverride ?? undefined, hint: 'For this batch only; the timetable builder needs a length to place classes.' },
               { name: 'startDate', label: 'Start date', type: 'date', defaultValue: batch.startDate ?? undefined },
               { name: 'endDate', label: 'End date', type: 'date', defaultValue: batch.endDate ?? undefined },
-              { name: 'status', label: 'Status', type: 'select', options: opts(['planning', 'active', 'completed', 'cancelled']), hint: 'Completing a batch does not complete its students. End each placement on the Students tab.' },
+              { name: 'status', label: 'Status', type: 'select', options: wordOptions(['planning', 'active', 'completed', 'cancelled']), hint: 'Completing a batch does not complete its students. End each placement on the Students tab.' },
             ]}
           />
         </details>
@@ -127,7 +125,7 @@ export function BatchTeachers({ batch, subjects, staff, canAssign }: { batch: Ba
             { key: 'staffName', header: 'Teacher' },
             { key: 'role', header: 'Role', render: (a) => ROLE_LABEL[a.role] ?? a.role },
             { key: 'from', header: 'From', render: (a) => fmtDay(a.startDate, 'Not set') },
-            { key: 'to', header: 'To', render: (a) => fmtDay(a.endDate, 'Open') },
+            { key: 'to', header: 'To', render: (a) => fmtDay(a.endDate, 'Ongoing') },
             { key: 'status', header: 'Now', render: (a) => <StateBadge state={assignmentPhase(a.startDate, a.endDate, today)} /> },
           ]}
         />
@@ -156,7 +154,7 @@ export function BatchTeachers({ batch, subjects, staff, canAssign }: { batch: Ba
               { name: 'subjectId', label: 'Subject', type: 'select', required: true, options: subjects.map((s) => ({ value: s.id, label: s.name })) },
               { name: 'staffMemberId', label: 'Teacher', type: 'select', required: true, options: staff.map((s) => ({ value: s.id, label: `${s.fullName}${s.title ? `, ${s.title}` : ''}` })) },
               { name: 'role', label: 'Role', type: 'select', options: Object.entries(ROLE_LABEL).map(([value, label]) => ({ value, label })) },
-              { name: 'employmentType', label: 'Employment', type: 'select', options: opts(['full_time', 'part_time']) },
+              { name: 'employmentType', label: 'Employment', type: 'select', options: wordOptions(['full_time', 'part_time']) },
               { name: 'startDate', label: 'From', type: 'date' },
               { name: 'endDate', label: 'To (leave empty if open)', type: 'date' },
             ]}

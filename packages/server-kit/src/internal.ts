@@ -256,10 +256,9 @@ const timeoutSignal = (ms: number) =>
 
 function failureReason(error: unknown) {
   if (error instanceof Error && error.name === 'TimeoutError') return 'Timed out';
-  const refused = (error as { cause?: { code?: string } }).cause?.code === 'ECONNREFUSED';
-  return isDev() && refused
-    ? 'That workspace is not running: start it with npm run dev:all'
-    : 'Could not reach the source';
+  if ((error as { cause?: { code?: string } }).cause?.code !== 'ECONNREFUSED')
+    return 'Could not reach the source';
+  return `That workspace is not running${isDev() ? ': start it with npm run dev:all' : ''}`;
 }
 
 /**

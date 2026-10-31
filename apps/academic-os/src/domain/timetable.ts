@@ -108,12 +108,16 @@ export interface TimetableCheckResult {
   hard: Conflict[];
   preferences: Conflict[];
   checkedSessions: number;
+  /** What was checked, in words. */
+  checked: string[];
+  /** What was not checked, and why. A result with notes is a partial check. */
   notes: string[];
 }
 
 const ACTIVE = new Set(['scheduled', 'held']);
 const LENGTH_BOUND_TYPES = new Set(['teaching', 'practice']);
-const FIRM_STATUSES = new Set(['locked', 'approved']);
+/** A class length with one of these labels refuses a class of another length; any other label only warns. */
+export const FIRM_STATUSES: ReadonlySet<string> = new Set(['locked', 'approved']);
 
 export const teachersOf = (s: TimetableSession): readonly string[] => s.teacherStaffIds ?? (s.teacherStaffId ? [s.teacherStaffId] : []);
 
@@ -322,11 +326,21 @@ export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult
   const relevant = filter ? conflicts.filter((c) => c.sessionIds.some((id) => filter.has(id))) : conflicts;
   const hard = relevant.filter((c) => c.severity === 'hard');
   const preferences = relevant.filter((c) => c.severity === 'preference');
+  const lengthUnknown = preferences.some((c) => c.code === 'CLASS_LENGTH_UNKNOWN');
+  if (lengthUnknown) notes.push('Class length is not decided for a batch, so its durations were not checked.');
   return {
     verdict: hard.length === 0 ? 'feasible' : 'infeasible',
     hard,
     preferences,
     checkedSessions: sessions.length,
+    checked: [
+      'teacher, batch, room and student overlaps',
+      'teacher availability records',
+      'teachers who have left',
+      'closures',
+      ...(lengthUnknown ? [] : ['class length']),
+      ...(cap && (cap.maxMinutesPerDay !== null || cap.maxMinutesPerWeek !== null) ? ['teacher workload'] : []),
+    ],
     notes,
   };
 }

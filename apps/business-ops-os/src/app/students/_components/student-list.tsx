@@ -253,7 +253,9 @@ export const STUDENT_COLUMNS = {
         <br />
         <span className="el-field-hint">
           Batch{' '}
-          {batchLabel(s.enrolledBatchId, s.intendedBatchId).replace(/^./, (c) => c.toLowerCase())}
+          {batchLabel(s.enrolledBatchId, s.intendedBatchId, s.enrolmentId).replace(/^./, (c) =>
+            c.toLowerCase(),
+          )}
         </span>
       </>
     ),

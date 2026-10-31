@@ -6,7 +6,7 @@ import { checkAssessmentScheduleFor, getAssessment, getAssessmentAnalysis, getRe
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiButton, ApiForm } from '../../../ui/api-form';
 import { AnalysisSection, ResultsSection, ScoringSection, ValidationSection } from '../../../ui/assessment-sections';
-import { StateBadge, fmtDateTime } from '../../../ui/badges';
+import { StateBadge, fmtDateTime, words } from '../../../ui/badges';
 import { ConflictList } from '../../../ui/conflicts';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 
@@ -40,7 +40,7 @@ export default async function AssessmentPage({ params, searchParams }: { params:
       schedule: await checkAssessmentScheduleFor(db, actor, { batchId: a.scheduleBatchId }),
     };
   });
-  if (!data.ok) return <AcademicShell access={access} active="assessments"><LoadError level={1} error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="assessments"><LoadError level={1} back="assessments" error={data.error} /></AcademicShell>;
   const { a, validation, results, analysis, schedule } = data.data;
   const canWrite = can(access.user, 'academic:assessments:write') && a.status !== 'cancelled';
   const canFinalise = can(access.user, 'academic:assessments:finalise');
@@ -55,7 +55,7 @@ export default async function AssessmentPage({ params, searchParams }: { params:
       <PageHeader
         title={`${a.code} — ${a.title}`}
         meta={<><StateBadge state={a.status} /> {publication !== 'not_published' ? <StateBadge state={publication} /> : a.status === 'finalised' ? <StateBadge state="not published" /> : null}</>}
-        description={`${a.kind.replace(/_/g, ' ')} · batch ${a.batchCode} · ${fmtDay(a.scheduledDate, 'not scheduled')} · ${a.durationMinutes === null ? 'duration unknown' : `${a.durationMinutes} min`}`}
+        description={`${words(a.kind)} · batch ${a.batchCode} · ${fmtDay(a.scheduledDate, 'not scheduled')} · ${a.durationMinutes === null ? 'duration unknown' : `${a.durationMinutes} min`}`}
         actions={<>{canMark ? <ButtonLink variant="primary" href={MODULE_PATHS.marks(a.id)}>Enter marks</ButtonLink> : null}<ButtonLink href={MODULE_PATHS.assessments}>All assessments</ButtonLink></>}
       />
       <div className="el-stack">

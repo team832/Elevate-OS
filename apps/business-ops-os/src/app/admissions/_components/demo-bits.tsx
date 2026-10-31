@@ -83,6 +83,7 @@ const MARK: Record<DayState, string> = {
   not_recorded: 'not_recorded',
   cancelled: 'cancelled',
   not_scheduled: 'cancelled',
+  unknown: 'not_recorded',
 };
 
 /** "2 of 3 days attended": one mark per demo day (shape differs by state) plus text, never colour alone. */

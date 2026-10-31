@@ -60,10 +60,11 @@ async function TestsList({ user, sp }: { user: AuthenticatedUser; sp: Params }) 
     Object.fromEntries(Object.entries(sp).filter(([, v]) => v)),
   );
   const q = query.success ? query.data : testListQuery.parse({});
-  const r = await load(async (db) => ({
-    ...(await listTests(db, user, q)),
-    options: await testOptions(),
-  }));
+  const r = await load(async (db) => {
+    const tests = await listTests(db, user, q);
+    // A hung Academic must not be waited for twice.
+    return { ...tests, options: tests.list.status === 'available' ? await testOptions() : null };
+  });
   if (!r.ok) return r.view;
   const { list, imports, counts, options } = r.data;
   const params = Object.fromEntries(FILTERS.map((k) => [k, sp[k]]));

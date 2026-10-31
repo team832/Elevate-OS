@@ -152,6 +152,7 @@ describe('background jobs (CHK-016)', () => {
     const html = renderToStaticMarkup(JobsPanel({ user: manager as never })!);
     for (const label of ['Apply Academic replies', 'Send exits to Academic', 'Send follow-up reminders', 'Send task reminders', 'Read demo attendance from Academic', 'Clear expired sign-ins']) expect(html).toContain(label);
     expect(html).toContain('Nothing here runs by itself');
+    expect(html).not.toContain('Copies the attendance');
   });
 
   it('"Send exits to Academic" calls Academic as the signed-in person and shows its counts', async () => {
@@ -169,7 +170,7 @@ describe('background jobs (CHK-016)', () => {
   it('"Send exits to Academic" with Academic down says so, and changes nothing here', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('connection refused'); }));
     const r = await run(manager, 'enrolment-exits');
-    expect(r.status).toBe(500);
+    expect(r.status).toBe(409);
     expect(r.error?.message).toMatch(/could not be reached/);
   });
 

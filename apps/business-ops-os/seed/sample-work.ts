@@ -24,24 +24,20 @@ import { defineSeed } from '@elevate/database/seed';
 import type { StaffMemberId, UserId } from '@elevate/shared-types';
 import { addDays, istInstant, type IsoDate } from '../src/domain/dates';
 import { buildEodFacts } from '../src/domain/eod';
+import { periodOf } from '../src/domain/work-report';
 import type { TaskPriority, TaskStatus } from '../src/domain/staff-tasks';
-import {
-  sampleAnchorDate,
-  SAMPLE_MANAGER,
-  SAMPLE_TEACHER_STAFF,
-  type SampleTeacherCode,
-} from './sample-staff';
+import { sampleAnchorDate, SAMPLE_MANAGER, SAMPLE_TEACHER_STAFF } from './sample-staff';
 
 /** [day offset from the anchor, IST HH:MM]. */
-type At = [number, string];
-type Step =
+export type At = [number, string];
+export type Step =
   | { kind: 'acknowledged' | 'submitted_for_review'; at: At }
   | { kind: 'status_changed'; at: At; to: TaskStatus; reason?: string }
   | { kind: 'reopened' | 'cancelled' | 'blocked_set'; at: At; reason: string }
   | { kind: 'changes_requested'; at: At; reason: string }
   | { kind: 'review_approved'; at: At }
-  | { kind: 'reassigned'; at: At; to: SampleTeacherCode; reason: string };
-interface Update {
+  | { kind: 'reassigned'; at: At; to: string; reason: string };
+export interface Update {
   on: number;
   work: string;
   at?: At;
@@ -52,10 +48,11 @@ interface Update {
   recorded?: At;
   blocker?: string;
 }
-interface SampleTask {
-  owner: SampleTeacherCode;
+export interface SampleTask {
+  /** A key of the work context's people (a staff code, or a name given by the caller). */
+  owner: string;
   /** Owner before a reassignment. */
-  firstOwner?: SampleTeacherCode;
+  firstOwner?: string;
   title: string;
   shows: string;
   source: 'manager' | 'self' | 'verbal';
@@ -71,8 +68,8 @@ interface SampleTask {
   updates?: Update[];
 }
 
-const ack = (day: number, time: string): Step => ({ kind: 'acknowledged', at: [day, time] });
-const to = (status: TaskStatus, day: number, time: string, reason?: string): Step => ({
+export const ack = (day: number, time: string): Step => ({ kind: 'acknowledged', at: [day, time] });
+export const to = (status: TaskStatus, day: number, time: string, reason?: string): Step => ({
   kind: 'status_changed',
   at: [day, time],
   to: status,
@@ -320,12 +317,18 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
 ];
 
 /** One EOD per state; `submit` = submission time, `review` = the manager's answer. */
-export const SAMPLE_EODS: readonly {
-  owner: SampleTeacherCode;
+export interface SampleReport {
+  owner: string;
   day: number;
+  /** A week or month report; `day` is then any day inside the period. */
+  kind?: 'week' | 'month';
   submit?: At;
   review?: { kind: 'revision_requested' | 'acknowledged'; at: At; text?: string };
-}[] = [
+  summary?: string;
+  plan?: string;
+  notes?: string;
+}
+export const SAMPLE_EODS: readonly SampleReport[] = [
   { owner: 'DEMO-T03', day: 0 },
   { owner: 'DEMO-T06', day: -1, submit: [-1, '18:30'] },
   {
@@ -346,12 +349,23 @@ export const SAMPLE_EODS: readonly {
   },
 ];
 
-interface Person {
+export interface Person {
   staffId: StaffMemberId;
   userId: UserId;
 }
+export interface WorkContext {
+  people: Map<string, Person>;
+  manager: Person;
+  at: (a: At) => Date;
+  day: (d: number) => IsoDate;
+}
+type WorkTask = typeof opsStaffTasks.$inferSelect;
+type WorkEvent = typeof opsTaskEvents.$inferSelect;
+type WorkUpdate = typeof opsTaskUpdates.$inferSelect;
 
-async function samplePeople(db: Database) {
+/** The people of the sample work: code → record, 'manager' = the Sample Academic Manager. */
+
+export async function samplePeople(db: Database) {
   const rows = await db
     .select({
       code: opsStaffProfiles.staffCode,
@@ -371,189 +385,200 @@ async function samplePeople(db: Database) {
       ),
     );
   const by = new Map(
-    rows.filter((r) => r.userId).map((r) => [r.code ?? 'manager', r as Person & { name: string }]),
+    rows
+      .filter((r) => r.userId)
+      .map((r) => [
+        r.name === SAMPLE_MANAGER.name ? 'manager' : r.code!,
+        r as Person & { name: string },
+      ]),
   );
-  return by.size === SAMPLE_TEACHER_STAFF.length + 1 ? by : null;
+  return by.size === SAMPLE_TEACHER_STAFF.length + 1 ? (by as Map<string, Person>) : null;
 }
 
-export async function seedSampleWork(db: Database, log: (m: string) => void = () => {}) {
-  if (await db.$count(opsStaffTasks, eq(opsStaffTasks.isSample, true)))
-    return log('ops.sample-work skipped: sample tasks exist');
-  const people = await samplePeople(db);
-  if (!people) return log('ops.sample-work skipped: sample staff missing');
+/** Dates around the anchor and the people, for the task and report writers. */
+export const workContext = (people: Map<string, Person>): WorkContext => {
   const anchor = sampleAnchorDate() as IsoDate;
-  const at = ([d, t]: At) => istInstant(addDays(anchor, d), t);
-  const day = (d: number) => addDays(anchor, d);
-  const manager = people.get('manager')!;
-  const who = (code: SampleTeacherCode) => people.get(code)!;
+  return {
+    people,
+    manager: people.get('manager')!,
+    at: ([d, t]) => istInstant(addDays(anchor, d), t),
+    day: (d) => addDays(anchor, d),
+  };
+};
 
-  for (const t of SAMPLE_TASKS) {
-    let owner = who(t.firstOwner ?? t.owner);
-    let status: TaskStatus = 'pending';
-    let reason: string | null = null;
-    let completedAt: Date | null = null;
-    let acknowledged: { at: Date; by: UserId } | null = null;
-    let blocked: { at: Date; reason: string } | null = null;
-    let approvedAt: Date | null = null;
-    const submitted: Date[] = [];
-    const reviews: { at: Date; note: string | null; decision: 'approved' | 'changes_requested' }[] =
-      [];
-    const events: Omit<typeof opsTaskEvents.$inferInsert, 'taskId'>[] = [];
-    const creator = t.source === 'manager' ? manager : owner;
-    const event = (e: (typeof events)[number]) => events.push(e);
-    // Same shapes as the task services (O1): `created` names the first owner and status.
-    event({
-      kind: 'created',
-      toStatus: 'pending',
-      toStaffId: owner.staffId,
-      actorUserId: creator.userId,
-      occurredAt: at(t.received),
-    });
-    for (const s of t.steps) {
-      const occurredAt = at(s.at);
-      if (s.kind === 'acknowledged') {
-        acknowledged = { at: occurredAt, by: owner.userId };
-        event({ kind: s.kind, actorUserId: owner.userId, occurredAt });
-      } else if (s.kind === 'reassigned') {
-        const next = who(s.to);
-        event({
-          kind: s.kind,
-          fromStaffId: owner.staffId,
-          toStaffId: next.staffId,
-          actorUserId: manager.userId,
-          occurredAt,
-          reason: s.reason,
+/** One sample task with its dated history, the same shapes as the task services. */
+export async function writeSampleTask(db: Database, t: SampleTask, c: WorkContext) {
+  const { at, day, manager } = c;
+  const who = (code: string) => c.people.get(code)!;
+  let owner = who(t.firstOwner ?? t.owner);
+  let status: TaskStatus = 'pending';
+  let reason: string | null = null;
+  let completedAt: Date | null = null;
+  let acknowledged: { at: Date; by: UserId } | null = null;
+  let blocked: { at: Date; reason: string } | null = null;
+  let approvedAt: Date | null = null;
+  const submitted: Date[] = [];
+  const reviews: { at: Date; note: string | null; decision: 'approved' | 'changes_requested' }[] =
+    [];
+  const events: Omit<typeof opsTaskEvents.$inferInsert, 'taskId'>[] = [];
+  const creator = t.source === 'manager' ? manager : owner;
+  const event = (e: (typeof events)[number]) => events.push(e);
+  // Same shapes as the task services (O1): `created` names the first owner and status.
+  event({
+    kind: 'created',
+    toStatus: 'pending',
+    toStaffId: owner.staffId,
+    actorUserId: creator.userId,
+    occurredAt: at(t.received),
+  });
+  for (const s of t.steps) {
+    const occurredAt = at(s.at);
+    if (s.kind === 'acknowledged') {
+      acknowledged = { at: occurredAt, by: owner.userId };
+      event({ kind: s.kind, actorUserId: owner.userId, occurredAt });
+    } else if (s.kind === 'reassigned') {
+      const next = who(s.to);
+      event({
+        kind: s.kind,
+        fromStaffId: owner.staffId,
+        toStaffId: next.staffId,
+        actorUserId: manager.userId,
+        occurredAt,
+        reason: s.reason,
+      });
+      owner = next;
+      acknowledged = null;
+    } else if (s.kind === 'blocked_set') {
+      // R4: blocked is a flag; the status stays.
+      blocked = { at: occurredAt, reason: s.reason };
+      event({
+        kind: s.kind,
+        actorUserId: owner.userId,
+        occurredAt,
+        reason: s.reason,
+        data: { kind: 'blocked' },
+      });
+    } else {
+      if (s.kind === 'submitted_for_review') submitted.push(occurredAt);
+      if (s.kind === 'changes_requested' || s.kind === 'review_approved')
+        reviews.push({
+          at: occurredAt,
+          note: s.kind === 'changes_requested' ? s.reason : null,
+          decision: s.kind === 'changes_requested' ? 'changes_requested' : 'approved',
         });
-        owner = next;
-        acknowledged = null;
-      } else if (s.kind === 'blocked_set') {
-        // R4: blocked is a flag; the status stays.
-        blocked = { at: occurredAt, reason: s.reason };
-        event({
-          kind: s.kind,
-          actorUserId: owner.userId,
-          occurredAt,
-          reason: s.reason,
-          data: { kind: 'blocked' },
-        });
-      } else {
-        if (s.kind === 'submitted_for_review') submitted.push(occurredAt);
-        if (s.kind === 'changes_requested' || s.kind === 'review_approved')
-          reviews.push({
-            at: occurredAt,
-            note: s.kind === 'changes_requested' ? s.reason : null,
-            decision: s.kind === 'changes_requested' ? 'changes_requested' : 'approved',
-          });
-        if (s.kind === 'review_approved') approvedAt = occurredAt;
-        const toStatus: TaskStatus =
-          s.kind === 'status_changed'
-            ? s.to
-            : s.kind === 'submitted_for_review'
-              ? 'in_review'
-              : s.kind === 'reopened'
-                ? 'in_progress'
-                : s.kind === 'changes_requested'
-                  ? 'changes_requested'
-                  : s.kind === 'review_approved'
-                    ? 'done'
-                    : 'cancelled';
-        const actor = ['cancelled', 'changes_requested', 'review_approved'].includes(s.kind)
-          ? manager
-          : owner;
-        event({
-          kind: s.kind,
-          fromStatus: status,
-          toStatus,
-          actorUserId: actor.userId,
-          occurredAt,
-          reason: 'reason' in s ? (s.reason ?? null) : null,
-        });
-        status = toStatus;
-        reason = 'reason' in s ? (s.reason ?? null) : null;
-        completedAt = status === 'done' ? occurredAt : null;
-      }
+      if (s.kind === 'review_approved') approvedAt = occurredAt;
+      const toStatus: TaskStatus =
+        s.kind === 'status_changed'
+          ? s.to
+          : s.kind === 'submitted_for_review'
+            ? 'in_review'
+            : s.kind === 'reopened'
+              ? 'in_progress'
+              : s.kind === 'changes_requested'
+                ? 'changes_requested'
+                : s.kind === 'review_approved'
+                  ? 'done'
+                  : 'cancelled';
+      const actor = ['cancelled', 'changes_requested', 'review_approved'].includes(s.kind)
+        ? manager
+        : owner;
+      event({
+        kind: s.kind,
+        fromStatus: status,
+        toStatus,
+        actorUserId: actor.userId,
+        occurredAt,
+        reason: 'reason' in s ? (s.reason ?? null) : null,
+      });
+      status = toStatus;
+      reason = 'reason' in s ? (s.reason ?? null) : null;
+      completedAt = status === 'done' ? occurredAt : null;
     }
-    const [task] = await db
-      .insert(opsStaffTasks)
-      .values({
-        staffId: owner.staffId,
-        title: `${t.title} (sample)`,
-        details: `Sample task: ${t.shows}.`,
-        assignedByStaffId: t.source === 'manager' ? manager.staffId : null,
-        source: t.source,
-        requesterStaffId: t.source === 'verbal' ? manager.staffId : null,
-        requesterNote: t.source === 'verbal' ? 'Asked in person in the staff room (sample).' : null,
-        reviewerStaffId: t.review ? manager.staffId : null,
-        reviewRequired: Boolean(t.review),
-        receivedAt: at(t.received),
-        dueOn: day(t.due),
-        dueTime: t.dueTime ?? null,
-        originalDueOn: day(t.due),
-        originalDueTime: t.dueTime ?? null,
-        expectedDeliverable: t.deliverable ?? null,
-        blockedAt: blocked?.at ?? null,
-        blockedKind: blocked ? 'blocked' : null,
-        blockedReason: blocked?.reason ?? null,
-        firstSubmittedAt: submitted[0] ?? null,
-        lastSubmittedAt: submitted.at(-1) ?? null,
-        approvedAt,
-        priority: t.priority,
-        status,
-        progressPercent: status === 'done' ? 100 : (t.progress ?? 0),
-        reason,
-        completedAt,
-        acknowledgedAt: acknowledged?.at ?? null,
-        acknowledgedByUserId: acknowledged?.by ?? null,
-        isSample: true,
-        createdBy: creator.userId,
-      })
-      .returning({ id: opsStaffTasks.id });
-    await db.insert(opsTaskEvents).values(events.map((e) => ({ ...e, taskId: task!.id })));
-    const versions = [];
-    for (const [i, submittedAt] of submitted.entries())
-      versions.push(
-        (
-          await db
-            .insert(opsTaskSubmissions)
-            .values({
-              taskId: task!.id,
-              version: i + 1,
-              completionNote: `Version ${i + 1} handed in (sample).`,
-              // A task with an expected deliverable is submitted with it (as the service requires).
-              evidence: t.deliverable ? `Sample shared folder: version ${i + 1} (sample).` : null,
-              submittedByUserId: owner.userId,
-              submittedAt,
-            })
-            .returning()
-        )[0]!,
-      );
-    for (const r of reviews)
-      await db.insert(opsTaskReviews).values({
-        taskId: task!.id,
-        // The decision is on the latest version handed in before it.
-        submissionId: versions.filter((v) => v.submittedAt <= r.at).at(-1)!.id,
-        decision: r.decision,
-        note: r.note,
-        reviewerUserId: manager.userId,
-        createdAt: r.at,
-      });
-    for (const u of t.updates ?? [])
-      await db.insert(opsTaskUpdates).values({
-        taskId: task!.id,
-        authorUserId: owner.userId,
-        authorStaffId: owner.staffId,
-        occurredOn: day(u.on),
-        occurredAt: u.at ? at(u.at) : null,
-        recordedAt: at(u.recorded ?? u.span?.[1] ?? u.at!),
-        workPerformed: `${u.work} (sample).`,
-        blocker: u.blocker ?? null,
-        durationMinutes: u.minutes ?? null,
-        startedAt: u.span ? at(u.span[0]) : null,
-        endedAt: u.span ? at(u.span[1]) : null,
-        isSample: true,
-      });
   }
+  const [task] = await db
+    .insert(opsStaffTasks)
+    .values({
+      staffId: owner.staffId,
+      title: `${t.title} (sample)`,
+      details: `Sample task: ${t.shows}.`,
+      assignedByStaffId: t.source === 'manager' ? manager.staffId : null,
+      source: t.source,
+      requesterStaffId: t.source === 'verbal' ? manager.staffId : null,
+      requesterNote: t.source === 'verbal' ? 'Asked in person in the staff room (sample).' : null,
+      reviewerStaffId: t.review ? manager.staffId : null,
+      reviewRequired: Boolean(t.review),
+      receivedAt: at(t.received),
+      dueOn: day(t.due),
+      dueTime: t.dueTime ?? null,
+      originalDueOn: day(t.due),
+      originalDueTime: t.dueTime ?? null,
+      expectedDeliverable: t.deliverable ?? null,
+      blockedAt: blocked?.at ?? null,
+      blockedKind: blocked ? 'blocked' : null,
+      blockedReason: blocked?.reason ?? null,
+      firstSubmittedAt: submitted[0] ?? null,
+      lastSubmittedAt: submitted.at(-1) ?? null,
+      approvedAt,
+      priority: t.priority,
+      status,
+      progressPercent: status === 'done' ? 100 : (t.progress ?? 0),
+      reason,
+      completedAt,
+      acknowledgedAt: acknowledged?.at ?? null,
+      acknowledgedByUserId: acknowledged?.by ?? null,
+      isSample: true,
+      createdBy: creator.userId,
+    })
+    .returning({ id: opsStaffTasks.id });
+  await db.insert(opsTaskEvents).values(events.map((e) => ({ ...e, taskId: task!.id })));
+  const versions = [];
+  for (const [i, submittedAt] of submitted.entries())
+    versions.push(
+      (
+        await db
+          .insert(opsTaskSubmissions)
+          .values({
+            taskId: task!.id,
+            version: i + 1,
+            completionNote: `Version ${i + 1} handed in (sample).`,
+            // A task with an expected deliverable is submitted with it (as the service requires).
+            evidence: t.deliverable ? `Sample shared folder: version ${i + 1} (sample).` : null,
+            submittedByUserId: owner.userId,
+            submittedAt,
+          })
+          .returning()
+      )[0]!,
+    );
+  for (const r of reviews)
+    await db.insert(opsTaskReviews).values({
+      taskId: task!.id,
+      // The decision is on the latest version handed in before it.
+      submissionId: versions.filter((v) => v.submittedAt <= r.at).at(-1)!.id,
+      decision: r.decision,
+      note: r.note,
+      reviewerUserId: manager.userId,
+      createdAt: r.at,
+    });
+  for (const u of t.updates ?? [])
+    await db.insert(opsTaskUpdates).values({
+      taskId: task!.id,
+      authorUserId: owner.userId,
+      authorStaffId: owner.staffId,
+      occurredOn: day(u.on),
+      occurredAt: u.at ? at(u.at) : null,
+      recordedAt: at(u.recorded ?? u.span?.[1] ?? u.at!),
+      workPerformed: `${u.work} (sample).`,
+      blocker: u.blocker ?? null,
+      durationMinutes: u.minutes ?? null,
+      startedAt: u.span ? at(u.span[0]) : null,
+      endedAt: u.span ? at(u.span[1]) : null,
+      isSample: true,
+    });
+  return task!.id;
+}
 
+/** The history of every sample task, for the report snapshots. */
+export async function workHistory(db: Database) {
   const allTasks = await db.select().from(opsStaffTasks).where(eq(opsStaffTasks.isSample, true));
   const allEvents = await db
     .select()
@@ -568,79 +593,106 @@ export async function seedSampleWork(db: Database, log: (m: string) => void = ()
     .select()
     .from(opsTaskUpdates)
     .where(eq(opsTaskUpdates.isSample, true));
-  for (const e of SAMPLE_EODS) {
-    const owner = who(e.owner);
-    const cutoff = e.submit ? at(e.submit) : at([e.day, '18:00']);
-    // O2's facts format, from the history above as it stood at the cut-off.
-    const snapshot = buildEodFacts({
+  return { allTasks, allEvents, allUpdates };
+}
+
+/** One work report (day, week or month) in the state `e` names, with its frozen version. */
+export async function writeSampleReport(
+  db: Database,
+  e: SampleReport,
+  c: WorkContext,
+  {
+    allTasks,
+    allEvents,
+    allUpdates,
+  }: { allTasks: WorkTask[]; allEvents: WorkEvent[]; allUpdates: WorkUpdate[] },
+) {
+  const { at, day, manager } = c;
+  const owner = c.people.get(e.owner)!;
+  const period = periodOf(e.kind ?? 'day', day(e.day));
+  const cutoff = e.submit ? at(e.submit) : at([e.day, '18:00']);
+  // O2's facts format, from the history above as it stood at the cut-off.
+  const snapshot = buildEodFacts({
+    staffId: owner.staffId,
+    reportDate: period.start,
+    periodKind: period.kind,
+    periodEnd: period.end,
+    now: cutoff,
+    tasks: allTasks,
+    events: allEvents.filter((x) => x.occurredAt <= cutoff),
+    updates: allUpdates.filter((u) => u.authorStaffId === owner.staffId && u.recordedAt <= cutoff),
+    academic: {
+      status: 'unavailable',
+      reason: 'Sample data: the seed does not ask Academic OS',
+      fetchedAt: cutoff.toISOString(),
+    },
+  });
+  const narrative = {
+    summary: e.summary ?? 'Sample end-of-day summary written by the teacher.',
+    nextDayPlan: e.plan ?? 'Continue the open tasks (sample).',
+    notes: e.notes ?? null,
+  };
+  const status = e.review?.kind ?? (e.submit ? 'submitted' : 'draft');
+  const reviewed =
+    e.review?.kind === 'acknowledged'
+      ? { reviewedBy: manager.userId, reviewedAt: at(e.review.at) }
+      : {};
+  const [report] = await db
+    .insert(opsEodReports)
+    .values({
       staffId: owner.staffId,
-      reportDate: day(e.day),
-      now: cutoff,
-      tasks: allTasks,
-      events: allEvents.filter((x) => x.occurredAt <= cutoff),
-      updates: allUpdates.filter(
-        (u) => u.authorStaffId === owner.staffId && u.recordedAt <= cutoff,
-      ),
-      academic: {
-        status: 'unavailable',
-        reason: 'Sample data: the seed does not ask Academic OS',
-        fetchedAt: cutoff.toISOString(),
-      },
+      reportDate: period.kind === 'day' ? period.start : null,
+      periodKind: period.kind,
+      periodStart: period.start,
+      periodEnd: period.end,
+      status,
+      snapshot,
+      summary: narrative.summary,
+      nextDayPlan: narrative.nextDayPlan,
+      notes: narrative.notes,
+      currentVersion: e.submit ? 1 : 0,
+      submittedAt: e.submit ? cutoff : null,
+      submittedToStaffId: e.submit ? manager.staffId : null,
+      ...reviewed,
+      isSample: true,
+      createdBy: owner.userId,
+    })
+    .returning({ id: opsEodReports.id });
+  if (!e.submit) return;
+  const [version] = await db
+    .insert(opsEodReportVersions)
+    .values({
+      reportId: report!.id,
+      version: 1,
+      snapshot,
+      narrative,
+      sourceCutoffAt: cutoff,
+      submittedAt: cutoff,
+      submittedByUserId: owner.userId,
+      submittedToStaffId: manager.staffId,
+    })
+    .returning({ id: opsEodReportVersions.id });
+  if (e.review)
+    await db.insert(opsEodReviewEvents).values({
+      reportId: report!.id,
+      versionId: version!.id,
+      kind: e.review.kind,
+      actorUserId: manager.userId,
+      text: e.review.text ?? null,
+      createdAt: at(e.review.at),
     });
-    const narrative = {
-      summary: 'Sample end-of-day summary written by the teacher.',
-      nextDayPlan: 'Continue the open tasks (sample).',
-      notes: null,
-    };
-    const status = e.review?.kind ?? (e.submit ? 'submitted' : 'draft');
-    const reviewed =
-      e.review?.kind === 'acknowledged'
-        ? { reviewedBy: manager.userId, reviewedAt: at(e.review.at) }
-        : {};
-    const [report] = await db
-      .insert(opsEodReports)
-      .values({
-        staffId: owner.staffId,
-        reportDate: day(e.day),
-        periodKind: 'day',
-        periodStart: day(e.day),
-        periodEnd: day(e.day),
-        status,
-        snapshot,
-        summary: narrative.summary,
-        nextDayPlan: narrative.nextDayPlan,
-        currentVersion: e.submit ? 1 : 0,
-        submittedAt: e.submit ? cutoff : null,
-        submittedToStaffId: e.submit ? manager.staffId : null,
-        ...reviewed,
-        isSample: true,
-        createdBy: owner.userId,
-      })
-      .returning({ id: opsEodReports.id });
-    if (!e.submit) continue;
-    const [version] = await db
-      .insert(opsEodReportVersions)
-      .values({
-        reportId: report!.id,
-        version: 1,
-        snapshot,
-        narrative,
-        sourceCutoffAt: cutoff,
-        submittedAt: cutoff,
-        submittedByUserId: owner.userId,
-        submittedToStaffId: manager.staffId,
-      })
-      .returning({ id: opsEodReportVersions.id });
-    if (e.review)
-      await db.insert(opsEodReviewEvents).values({
-        reportId: report!.id,
-        versionId: version!.id,
-        kind: e.review.kind,
-        actorUserId: manager.userId,
-        text: e.review.text ?? null,
-        createdAt: at(e.review.at),
-      });
-  }
+}
+
+export async function seedSampleWork(db: Database, log: (m: string) => void = () => {}) {
+  if (await db.$count(opsStaffTasks, eq(opsStaffTasks.isSample, true)))
+    return log('ops.sample-work skipped: sample tasks exist');
+  const people = await samplePeople(db);
+  if (!people) return log('ops.sample-work skipped: sample staff missing');
+  const c = workContext(people);
+  for (const t of SAMPLE_TASKS) await writeSampleTask(db, t, c);
+  const history = await workHistory(db);
+  for (const e of SAMPLE_EODS) await writeSampleReport(db, e, c, history);
+  const anchor = sampleAnchorDate();
   log(
     `ops.sample-work: ${SAMPLE_TASKS.length} sample tasks and ${SAMPLE_EODS.length} end-of-day reports around ${anchor}`,
   );

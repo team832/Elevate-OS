@@ -114,9 +114,15 @@ export const DAY_STATES = [
   'not_recorded',
   'cancelled',
   'not_scheduled',
+  'unknown',
 ] as const;
 export type DayState = (typeof DAY_STATES)[number];
+export const ACADEMIC_NOT_KNOWN = 'Not known: Academic OS unavailable';
+/** Why a figure counted from demo attendance is missing (D-060). */
+export const ATTENDANCE_SOURCE_UNAVAILABLE =
+  'Source unavailable: Academic OS could not be read, so attendance marked there cannot be counted.';
 export const DAY_STATE_LABELS: Record<DayState, string> = {
+  unknown: ACADEMIC_NOT_KNOWN,
   attended: 'Attended',
   absent: 'Absent',
   excused: 'Excused',
@@ -125,6 +131,17 @@ export const DAY_STATE_LABELS: Record<DayState, string> = {
   cancelled: 'Cancelled',
   not_scheduled: 'No class booked',
 };
+
+/**
+ * R15, while Academic cannot be read: a started class it may hold a mark for, known linked or
+ * unrecorded here (a class linked there but not yet seen by Ops looks unrecorded).
+ */
+export const academicMayHoldMark = (
+  s: Pick<SessionLike, 'attendance' | 'startsAt'> & { academicSessionRef: string | null },
+  now: Date,
+) =>
+  s.startsAt <= now &&
+  (Boolean(s.academicSessionRef) || isPending(s) || s.attendance === 'not_recorded');
 
 /**
  * D-1 Day summary from the day's classes (cancelled ones ignored); the first rule that

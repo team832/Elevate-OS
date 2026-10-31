@@ -44,7 +44,11 @@ import {
 import { coreSeeds, MARKETING_EMPLOYEES, runSeeds } from '@elevate/database/seed';
 import type { RoleKey, SessionId, UserId } from '@elevate/shared-types';
 import { setupTestDatabase } from '@elevate/testing';
-import { seeds as academicSeeds, SAMPLE_TESTS } from '@elevate/academic-os/seed';
+import {
+  DEMO_TEACHER_TESTS,
+  seeds as academicSeeds,
+  SAMPLE_TESTS,
+} from '@elevate/academic-os/seed';
 import { clearSamples, seeds as opsSeeds } from '@elevate/business-ops-os/seed';
 import { seeds as marketingSeeds } from '@elevate/marketing-os/seed';
 import { seeds as platformSeeds } from '../../seed';
@@ -83,6 +87,10 @@ import { OverviewBlocks } from '../../../business-ops-os/src/app/_components/ove
 import { POPULATIONS } from '../../../business-ops-os/src/app/reports/_components/admissions-charts';
 import { hrAttendanceCounts } from '../../../business-ops-os/src/server/attendance-hr';
 import { buildAdmissionsFunnel } from '../../../business-ops-os/src/server/reports/admissions-funnel';
+import { buildAdmissionsOverview } from '../../../business-ops-os/src/server/admissions-overview';
+import { listDemos } from '../../../business-ops-os/src/server/demos';
+import { demoListQuery } from '../../../business-ops-os/src/server/demos-schemas';
+import { demoAttendanceFeed } from '../../../academic-os/src/server/services/demo-attendees';
 import { hrTabCounts, hrTaskCounts } from '../../../business-ops-os/src/server/staff-tasks-hr';
 import { periodReport } from '../../../business-ops-os/src/server/task-period-report';
 
@@ -178,7 +186,7 @@ describe('development sample set (db:seed) reconciles', () => {
     await runSeeds(db(), all, context);
     expect(await tally()).toEqual(first);
     expect(first['ops.leads']).toBeGreaterThanOrEqual(38);
-    expect(first['academic.assessments']).toBe(SAMPLE_TESTS.length);
+    expect(first['academic.assessments']).toBe(SAMPLE_TESTS.length + DEMO_TEACHER_TESTS.length);
   }, 600_000);
 
   it('test rosters equal the eligible batches and ranks follow the verified scores', async () => {
@@ -424,6 +432,63 @@ describe('development sample set (db:seed) reconciles', () => {
       const user = await userOf('operations-manager@example.test');
       const { value, href } = await read(user);
       expect({ href, count: listCount(await pageAt(user, href)) }).toEqual({ href, count: value });
+    });
+
+    it('demo days: the overview and the funnel count what the demo list shows, from Academic marks', async () => {
+      const user = await userOf('operations-manager@example.test');
+      const wide = { from: addDays(today, -400), to: addDays(today, 400) };
+      const academic = (feed: (ids: string[]) => Promise<unknown>) =>
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(async (input: RequestInfo | URL) => {
+            const url = new URL(String(input));
+            if (!url.pathname.endsWith('/demo-attendance')) throw new TypeError('fetch failed');
+            return Response.json({ data: await feed(url.searchParams.get('ids')!.split(',')) });
+          }),
+        );
+      academic(async () => ({ items: [] }));
+      const unmarked = await buildAdmissionsOverview(db(), user, wide);
+      // The seeded marks agree with Ops' own records, so every other class is marked present too:
+      // a screen that ignored Academic would now disagree with the list.
+      academic(async (ids) => {
+        const real = await demoAttendanceFeed(db(), ids);
+        const known = new Set<string>(real.items.map((i) => i.opsDemoSessionId));
+        const present = ids
+          .filter((id) => !known.has(id))
+          .map((opsDemoSessionId) => ({
+            opsDemoSessionId,
+            academicSessionId: crypto.randomUUID(),
+            status: 'present',
+            recordedAt: null,
+            teacherStaffIds: [],
+            teacherNames: [],
+          }));
+        return { items: [...real.items, ...present] };
+      });
+      const rows: Awaited<ReturnType<typeof listDemos>>['rows'] = [];
+      for (let page = 1; ; page++) {
+        const list = await listDemos(db(), user, demoListQuery.parse({ view: 'all', ...wide, page }));
+        rows.push(...list.rows);
+        if (rows.length >= list.total) break;
+      }
+      const leadsWhere = (keep: (r: (typeof rows)[number]) => boolean) =>
+        new Set(rows.filter(keep).map((r) => r.demo.leadId)).size;
+      const [overview, funnel] = await Promise.all([
+        buildAdmissionsOverview(db(), user, wide),
+        buildAdmissionsFunnel(db(), user, wide),
+      ]);
+      const stage = (key: string) => funnel.funnel.find((s) => s.key === key)!.count;
+      vi.unstubAllGlobals();
+      expect(overview.demos.days.daysAttended.value!).toBeGreaterThan(
+        unmarked.demos.days.daysAttended.value!,
+      );
+      expect(overview.demos.days).toMatchObject({
+        demos: rows.length,
+        allDaysAttended: rows.filter((r) => r.progress.attended >= r.progress.planned).length,
+        daysAttended: { value: rows.reduce((n, r) => n + r.progress.attended, 0) },
+      });
+      expect(stage('attended')).toBe(leadsWhere((r) => r.progress.sessionsAttended > 0));
+      expect(stage('completed')).toBe(leadsWhere((r) => r.progress.attended >= r.progress.planned));
     });
   });
 

@@ -7,6 +7,7 @@ import {
   MAX_PUNCH_CSV_CHARS,
   REQUESTABLE_STATUSES,
 } from '../domain/attendance';
+import { LEAVE_STATUSES } from '../domain/leave';
 
 const text = (max: number) => z.string().trim().max(max);
 const note = (max = 1000) => text(max).nullish();
@@ -29,6 +30,8 @@ export const attendanceListQuery = z.object({
   status: z.enum(ATTENDANCE_STATUSES).optional(),
   department: z.uuid().optional(),
   branch: z.uuid().optional(),
+  /** Teachers (a subject in the Teachers directory) or everyone else; absent = everyone. */
+  who: z.enum(['teachers', 'other']).optional(),
   /** Only days that need HR's attention (`1` = for any reason). */
   review: z.enum(['1', 'unmarked', 'missing_checkout']).optional(),
   page: z.coerce.number().int().min(1).max(1000).default(1),
@@ -61,6 +64,40 @@ export const leaveBody = z
     path: ['toDate'],
     message: 'The last day cannot be before the first day',
   });
+
+/** No staff id: you only ever apply for yourself. */
+export const leaveApplicationBody = z
+  .object({
+    kind: text(40).min(1, 'Choose a leave type'),
+    fromDate: isoDateSchema,
+    toDate: isoDateSchema,
+    reason: text(1000).min(3, 'Say why you need leave (at least 3 characters)'),
+  })
+  .strict()
+  .refine((b) => b.toDate >= b.fromDate, {
+    path: ['toDate'],
+    message: 'The last day cannot be before the first day',
+  });
+
+const version = z.coerce.number().int().min(1);
+
+export const leaveDecisionBody = z
+  .object({ decision: z.enum(['approved', 'rejected']), note: note(), version })
+  .strict()
+  .refine((b) => b.decision === 'approved' || (b.note?.length ?? 0) >= 3, {
+    path: ['note'],
+    message: 'Say why the application is rejected',
+  });
+
+export const leaveCancelBody = z
+  .object({ reason: text(1000).min(3, 'Say why the leave is cancelled').nullish(), version })
+  .strict();
+
+export const leaveListQuery = z.object({
+  status: z.enum(LEAVE_STATUSES).optional(),
+  staffId: z.uuid().optional(),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+});
 
 export const cancelLeaveBody = z.object({
   reason: text(1000).min(3, 'Say why the leave is cancelled'),

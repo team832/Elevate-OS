@@ -359,6 +359,7 @@ describe('HR Overview figures', () => {
       'attendance_review',
       'attendance_missing_checkout',
       'attendance_corrections',
+      'attendance_leave_pending',
       'attendance_unmarked_yesterday',
     ]);
     expect(counts.find((c) => c.key === 'attendance_corrections')?.value).toBe(1);

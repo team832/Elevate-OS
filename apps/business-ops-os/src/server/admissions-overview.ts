@@ -39,18 +39,13 @@ import type { FeeRecordLike } from '../domain/fees';
 import { itemStatus, netIssued, type OnboardingTemplateItem } from '../domain/onboarding';
 import { studentPopulation } from '../domain/student-lifecycle';
 import { ownAdmissionFilter } from './admissions';
+import { classesWithMarks, marksReader, type MarksReader } from './academic-summary';
 import { approvalChecks } from './applications';
 import { accessScope, type Actor } from './context';
 import { listDemos } from './demos';
 import { inForceOf, plansWithLedger } from './fee-agreements';
+import { groupBy } from './ops-common';
 import { loadSettings } from './settings';
-
-
-const groupBy = <T>(rows: readonly T[], key: (r: T) => string | null) => {
-  const m = new Map<string | null, T[]>();
-  for (const r of rows) m.set(key(r), [...(m.get(key(r)) ?? []), r]);
-  return m;
-};
 
 export interface OverviewOptions {
   from?: string;
@@ -58,6 +53,8 @@ export interface OverviewOptions {
   /** Programme code; demos by the demo's programme, everything else by the case's. */
   programme?: string;
   now?: Date;
+  /** Shared when other blocks of the same screen count demo classes too. */
+  marks?: MarksReader;
 }
 
 export async function buildAdmissionsOverview(
@@ -73,6 +70,7 @@ export async function buildAdmissionsOverview(
     to: (options.to ?? today) as IsoDate,
   };
   const fees = can(actor, 'ops:fees:read');
+  const read = options.marks ?? marksReader(db);
   const own = ownAdmissionFilter(access);
   const scoped = db
     .select({ id: opsAdmissions.id })
@@ -91,10 +89,12 @@ export async function buildAdmissionsOverview(
     await Promise.all([
       loadSettings(db),
       can(actor, 'ops:leads:read')
-        ? listDemos(db, actor, { programme: options.programme }, now)
+        ? listDemos(db, actor, { programme: options.programme }, now, read)
         : null,
       db
         .select({
+          id: opsDemoSessions.id,
+          academicSessionRef: opsDemoSessions.academicSessionRef,
           demoId: opsDemos.id,
           plannedDayCount: opsDemos.plannedDayCount,
           dayNumber: opsDemoSessions.dayNumber,
@@ -180,8 +180,9 @@ export async function buildAdmissionsOverview(
         : null,
     ]);
 
-  // Demo rows: one per demo with its classes.
-  const demoRows = [...groupBy(sessions, (s) => s.demoId).values()].map((rows) => ({
+  // Demo rows: one per demo with its classes, counted as the demo list counts them.
+  const { classes } = await classesWithMarks(db, sessions, { now, window, read });
+  const demoRows = [...groupBy(classes, (s) => s.demoId).values()].map((rows) => ({
     ...rows[0]!,
     sessions: rows,
   }));

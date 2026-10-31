@@ -16,6 +16,7 @@ import { DEMO_SORTS, demoListQuery, type DemoListQuery } from '../../server/demo
 import { formOptions } from '../../server/options';
 import { AdmissionsNav } from '../../ui/admissions-nav';
 import { StatCard } from '../../ui/charts';
+import { Unavailable } from '../../ui/cross-module';
 import { fmtDate, fmtDateTime, fmtMonth, humanise } from '../../ui/format';
 import { Frame, gate, load, Section } from '../../ui/frame';
 import { listHref, options, Pager, SearchPanel } from '../../ui/list-controls';
@@ -360,6 +361,13 @@ async function DemoList({
   );
   return (
     <div className="el-stack">
+      {list.academicUnavailable ? (
+        <Unavailable
+          name="Academic OS"
+          result={list.academicUnavailable}
+          note="Attendance and teachers recorded there show as not known."
+        />
+      ) : null}
       <ul className="el-grid ops-kpis" aria-label="Demo figures">
         {tiles.map(([label, value, note, patch]) => (
           <li key={label}>

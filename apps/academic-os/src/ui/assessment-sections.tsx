@@ -7,7 +7,7 @@ import type {
   validateAssessment,
 } from '../server';
 import { MODULE_PATHS } from '../server/paths';
-import { StateBadge, fmtDateTime } from './badges';
+import { StateBadge, fmtDateTime, words } from './badges';
 
 type Assessment = Awaited<ReturnType<typeof getAssessment>>;
 type Validation = Awaited<ReturnType<typeof validateAssessment>>;
@@ -33,7 +33,7 @@ export function ScoringSection({ a }: { a: Assessment }) {
       <DataTable
         rows={a.sections}
         rowKey={(s) => s.id}
-        empty={<EmptyState title="No sections configured" />}
+        empty={<EmptyState title="No sections configured" description="Marks are entered as totals until a coordinator adds sections." />}
         columns={[
           { key: 'code', header: 'Section', render: (s) => `${s.code} ${s.name}` },
           { key: 'q', header: 'Questions', numeric: true, render: (s) => s.questionCount },
@@ -250,7 +250,7 @@ export function AnalysisSection({ x }: { x: Analysis }) {
               ),
           },
           { key: 'date', header: 'Date', render: (c) => fmtDay(c.date, 'Not recorded') },
-          { key: 'kind', header: 'Kind', render: (c) => c.kind.replace(/_/g, ' ') },
+          { key: 'kind', header: 'Kind', render: (c) => words(c.kind) },
           { key: 'max', header: 'Out of', numeric: true, render: (c) => c.max },
           {
             key: 'avg',

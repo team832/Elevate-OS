@@ -9,6 +9,7 @@ import { reviewReasons } from '../domain/attendance';
 import { addDays, istToday } from '../domain/dates';
 import { deriveDays, hrAttendanceStaff, listRange } from './attendance';
 import type { Actor } from './context';
+import { listLeaveApplications } from './leave-applications';
 
 export { attendanceSummary } from './attendance';
 
@@ -58,6 +59,12 @@ export async function hrAttendanceCounts(
       label: 'Correction requests waiting',
       value: pending?.n ?? 0,
       href: `${BASE}?tab=corrections`,
+    },
+    {
+      key: 'attendance_leave_pending',
+      label: 'Leave applications waiting',
+      value: (await listLeaveApplications(db, user, { status: 'pending' })).total,
+      href: `${BASE}?tab=leave`,
     },
     {
       key: 'attendance_unmarked_yesterday',

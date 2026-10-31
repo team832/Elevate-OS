@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
-import { ButtonLink, Card, EmptyState, PageHeader } from '@elevate/shared-ui';
-import { reviewChoices, reviewTarget, reviewableStudents } from '../../../server';
+import { Alert, ButtonLink, Card, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { REVIEW_PICKER_LIMIT, reviewChoices, reviewTarget, reviewableStudents } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
@@ -23,7 +23,7 @@ export default async function NewReviewPage({ searchParams }: { searchParams: Pr
   const actor = actorFor(access.user);
   const prefilled = Boolean(ref.studentId || ref.coreStudentId);
   const data = await load(async () => ({ ...(prefilled ? { target: await reviewTarget(db, actor, ref), students: [] } : { target: null, students: await reviewableStudents(db, actor) }), choices: ref.coreStudentId ? undefined : await reviewChoices(db, actor) }));
-  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError level={1} error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError level={1} back="reviews" error={data.error} /></AcademicShell>;
   const { target, students, choices } = data.data;
   const extra = target?.demo
     ? { coreStudentId: ref.coreStudentId, opsDemoSessionId: ref.opsDemoSessionId, sessionId: target.sessionId ?? undefined }
@@ -38,6 +38,12 @@ export default async function NewReviewPage({ searchParams }: { searchParams: Pr
         description="Write what you saw in class. A draft is visible only to you. Once published it is shared with coordinators, the student’s other teachers of the same subject and authorised Business Operations staff, and it is never edited: revise it as a new version or withdraw it. Student feedback about teachers is a separate record."
         actions={<ButtonLink href={MODULE_PATHS.reviews}>All reviews</ButtonLink>}
       />
+      {students.length === REVIEW_PICKER_LIMIT ? (
+        <Alert tone="info">
+          The list stops at the first {REVIEW_PICKER_LIMIT.toLocaleString('en-IN')} students, A to Z.
+          To review anyone else, open the student from their class roster.
+        </Alert>
+      ) : null}
       <Card>
         {!target && students.length === 0 ? (
           <EmptyState title="No students to review" description="You can review students placed in batches you are assigned to today. Open a class roster to review a demo student." />

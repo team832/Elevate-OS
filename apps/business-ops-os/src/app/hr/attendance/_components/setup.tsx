@@ -1,13 +1,14 @@
-/** HR attendance: the "Schedules" and "Holidays and leave" tabs. */
+/** HR attendance: the "Schedules" and "Holidays and recorded leave" tabs. */
 import { StatusBadge } from '@elevate/shared-ui';
 import { OPS_WEEKDAYS, type OpsWeeklyPattern } from '@elevate/database';
+import { LEAVE_WHY_HIDDEN } from '../../../../domain/leave';
 import { DECISION_STATE_LABELS, type DecisionState } from '../../../../domain/policies';
 import type { AttendanceSetup } from '../../../../server/attendance-lists';
 import { ActionForm, type FieldSpec } from '../../../../ui/action-form';
 import { decisionTone, fmtDate } from '../../../../ui/format';
 import { RecordTable } from '../../../../ui/record-table';
 import { Segment } from '../../../../ui/sections';
-import { API } from './days';
+import { API, BASE } from './days';
 
 type Schedule = AttendanceSetup['schedules'][number];
 const DAY_NAMES = {
@@ -266,7 +267,11 @@ export function CalendarTab({
               render: (l) => `${fmtDate(l.fromDate)} to ${fmtDate(l.toDate)}`,
             },
             { key: 'kind', header: 'Kind', render: (l) => l.kind },
-            { key: 'reason', header: 'Reason', render: (l) => l.reason ?? 'Not recorded' },
+            {
+              key: 'reason',
+              header: 'Reason',
+              render: (l) => (l.reason === undefined ? LEAVE_WHY_HIDDEN : (l.reason ?? 'Not recorded')),
+            },
             {
               key: 'status',
               header: 'Status',
@@ -311,7 +316,13 @@ export function CalendarTab({
       {canManage ? (
         <Segment
           title="Record approved leave"
-          description="Leave requests are not handled here; record leave that has been approved."
+          description={
+            <>
+              For leave approved outside Elevate OS. Staff applications are on the{' '}
+              <a href={`${BASE}?tab=leave`}>Leave applications</a> tab; approving one records it
+              here by itself.
+            </>
+          }
         >
           <ActionForm
             action={`${API}/leave`}

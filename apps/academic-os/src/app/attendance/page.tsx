@@ -11,7 +11,7 @@ import {
 } from '@elevate/shared-ui';
 import { attendanceWorklist } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
-import { StateBadge, fmtRange } from '../../ui/badges';
+import { StateBadge, fmtRange, words, fmtSlot } from '../../ui/badges';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +29,7 @@ export default async function StudentAttendancePage({ searchParams }: { searchPa
   if (access.status !== 'allowed') return <AcademicShell access={access} active="attendance">{null}</AcademicShell>;
   const all = (await searchParams).view === 'all';
   const data = await load(() => attendanceWorklist(getDb(), actorFor(access.user)));
-  if (!data.ok) return <AcademicShell access={access} active="attendance"><LoadError level={1} error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="attendance"><LoadError level={1} back="attendance" error={data.error} /></AcademicShell>;
   const { window, rows } = data.data;
   const shown = all ? rows : rows.filter((s) => s.ended && s.unmarked > 0);
   return (
@@ -51,8 +51,8 @@ export default async function StudentAttendancePage({ searchParams }: { searchPa
               : <EmptyState title="No class is waiting for marks" description="A class that has ended appears here until each placed student has a mark." />
           }
           columns={[
-            { key: 'when', header: 'Class', render: (s) => <strong>{`${fmtDay(s.date)} ${s.startTime}`}</strong> },
-            { key: 'batch', header: 'Batch', render: (s) => `${s.batchCode} · ${s.subjectName ?? s.sessionType.replace('_', ' ')}` },
+            { key: 'when', header: 'Class', render: (s) => <strong>{fmtSlot(s.date, s.startTime)}</strong> },
+            { key: 'batch', header: 'Batch', render: (s) => `${s.batchCode} · ${s.subjectName ?? words(s.sessionType)}` },
             { key: 'delivery', header: 'Delivery', render: (s) => <StateBadge state={s.status === 'held' ? 'delivered' : s.status} /> },
             {
               key: 'marks',

@@ -286,11 +286,21 @@ export function reconcilePlan(
 }
 
 type Version = { id: string; supersedesPlanId: string | null };
+type PlanInstalment = InstalmentLike & { planId: string };
+type PlanRow = PlanLedgerRow & { planId?: string | null };
 
-/** Every version of the agreement `plan` belongs to, oldest first (`family` = the student's versions). */
-export function versionChain<P extends Version>(plan: P, family: readonly P[]): P[] {
-  const byId = new Map<string, P>(family.map((p) => [p.id, p]));
-  const next = new Map(family.map((p) => [p.supersedesPlanId, p]));
+const add = <T>(groups: Map<string, T[]>, key: string, value: T) => {
+  const list = groups.get(key);
+  if (list) list.push(value);
+  else groups.set(key, [value]);
+};
+
+const versionLinks = <P extends Version>(family: readonly P[]) => ({
+  byId: new Map<string, P>(family.map((p) => [p.id, p])),
+  next: new Map(family.map((p) => [p.supersedesPlanId, p])),
+});
+
+function chainOf<P extends Version>(plan: P, { byId, next }: ReturnType<typeof versionLinks<P>>) {
   let root = plan;
   for (let p = byId.get(root.supersedesPlanId ?? ''); p; p = byId.get(p.supersedesPlanId ?? ''))
     root = p;
@@ -299,53 +309,99 @@ export function versionChain<P extends Version>(plan: P, family: readonly P[]): 
   return chain;
 }
 
+/** Every version of the agreement `plan` belongs to, oldest first (`family` = the student's versions). */
+export const versionChain = <P extends Version>(plan: P, family: readonly P[]): P[] =>
+  chainOf(plan, versionLinks(family));
+
 /**
  * The ledger of an agreement version is every row of its version chain. `rows` as recorded;
  * `mapped` as they count for this version: on it, and a row naming an instalment of another
- * version counts for the instalment with the same number.
+ * version counts for the instalment with the same number. Groups everything once and returns the
+ * reader: a call per agreement over the whole list is what made /ops quadratic (RVD-001).
  */
-export function versionRows<
-  P extends Version,
-  I extends InstalmentLike & { planId: string },
-  R extends PlanLedgerRow & { planId?: string | null },
->(plan: P, family: readonly P[], instalments: readonly I[], ledger: readonly R[]) {
-  const chain = versionChain(plan, family);
-  const own = instalments.filter((i) => i.planId === plan.id);
-  const idOf = new Map(own.map((i) => [i.sequence, i.id]));
+function versionReader<P extends Version, I extends PlanInstalment, R extends PlanRow>(
+  family: readonly P[],
+  instalments: readonly I[],
+  ledger: readonly R[],
+) {
+  const links = versionLinks(family);
   const sequenceOf = new Map(instalments.map((i) => [i.id, i.sequence]));
-  const chainIds = new Set(chain.map((p) => p.id));
-  const rows = ledger.filter((r) => r.planId && chainIds.has(r.planId));
-  const mapped = rows.map((r) => ({
-    ...r,
-    planId: plan.id,
-    instalmentId: r.instalmentId
-      ? (idOf.get(sequenceOf.get(r.instalmentId) ?? 0) ?? r.instalmentId)
-      : null,
-  }));
-  return { chain, own, rows, mapped };
-}
-
-/** One agreement version as every surface reads it (A-FEE-1, A-FEE-2, A-FEE-4, A-FEE-7). */
-export function agreementPosition<
-  P extends Version & { totalPaise: number },
-  I extends InstalmentLike & { planId: string },
-  R extends PlanLedgerRow & { planId?: string | null },
->(plan: P, family: readonly P[], instalments: readonly I[], ledger: readonly R[], today: IsoDate) {
-  const { chain, own, rows, mapped } = versionRows(plan, family, instalments, ledger);
-  const totals = planTotals(plan.totalPaise, own, mapped);
-  const allocated = allocateInstalments(own, mapped, today);
-  return {
-    plan,
-    totals,
-    instalments: allocated,
-    status: agreementStatus(allocated, totals),
-    nextDue: nextDue(allocated),
-    aboveInstalmentsPaise: owedAboveInstalments(totals, allocated),
-    ledger: rows,
-    reconciliation: reconcilePlan(totals, own, mapped),
-    versions: chain,
+  const instalmentsOf = new Map<string, I[]>();
+  for (const i of instalments) add(instalmentsOf, i.planId, i);
+  const positionsOf = new Map<string, number[]>();
+  ledger.forEach((r, n) => {
+    if (r.planId) add(positionsOf, r.planId, n);
+  });
+  return (plan: P) => {
+    const chain = chainOf(plan, links);
+    const own = instalmentsOf.get(plan.id) ?? [];
+    const idOf = new Map(own.map((i) => [i.sequence, i.id]));
+    // Back in the order given: the ledger is newest first across the versions of a chain.
+    const rows = [...new Set(chain.map((p) => p.id))]
+      .flatMap((id) => positionsOf.get(id) ?? [])
+      .sort((a, b) => a - b)
+      .map((n) => ledger[n]!);
+    const mapped = rows.map((r) => ({
+      ...r,
+      planId: plan.id,
+      instalmentId: r.instalmentId
+        ? (idOf.get(sequenceOf.get(r.instalmentId) ?? 0) ?? r.instalmentId)
+        : null,
+    }));
+    return { chain, own, rows, mapped };
   };
 }
+
+export const versionRows = <P extends Version, I extends PlanInstalment, R extends PlanRow>(
+  plan: P,
+  family: readonly P[],
+  instalments: readonly I[],
+  ledger: readonly R[],
+) => versionReader(family, instalments, ledger)(plan);
+
+/** Agreement versions as every surface reads them (A-FEE-1, A-FEE-2, A-FEE-4, A-FEE-7). */
+export function agreementPositions<
+  P extends Version & { totalPaise: number },
+  I extends PlanInstalment,
+  R extends PlanRow,
+>(
+  plans: readonly P[],
+  family: readonly P[],
+  instalments: readonly I[],
+  ledger: readonly R[],
+  today: IsoDate,
+) {
+  const read = versionReader(family, instalments, ledger);
+  return plans.map((plan) => {
+    const { chain, own, rows, mapped } = read(plan);
+    const totals = planTotals(plan.totalPaise, own, mapped);
+    const allocated = allocateInstalments(own, mapped, today);
+    return {
+      plan,
+      totals,
+      instalments: allocated,
+      status: agreementStatus(allocated, totals),
+      nextDue: nextDue(allocated),
+      aboveInstalmentsPaise: owedAboveInstalments(totals, allocated),
+      ledger: rows,
+      reconciliation: reconcilePlan(totals, own, mapped),
+      versions: chain,
+    };
+  });
+}
+
+/** One agreement version: agreementPositions of one. */
+export const agreementPosition = <
+  P extends Version & { totalPaise: number },
+  I extends PlanInstalment,
+  R extends PlanRow,
+>(
+  plan: P,
+  family: readonly P[],
+  instalments: readonly I[],
+  ledger: readonly R[],
+  today: IsoDate,
+) => agreementPositions([plan], family, instalments, ledger, today)[0]!;
 
 /** List status of a student from the overall states of their agreements in force. */
 export function studentFeeStatus(activePlans: readonly InstalmentStatus[]): StudentFeeStatus {

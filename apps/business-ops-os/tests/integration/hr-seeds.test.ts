@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import {
   departments,
   opsDailyAttendance,
+  opsLeaveApplications,
   opsLeaveRecords,
   opsStaffDepartments,
   opsStaffProfiles,
@@ -123,6 +124,26 @@ describe('db:clear-samples and the HR sample tables', () => {
       isSample: true,
       approvedBy: hr.id,
     });
+    // Sample leave applications go first (one holds a sample leave record); a real one stays.
+    const [sampleLeave] = await db().select({ id: opsLeaveRecords.id }).from(opsLeaveRecords);
+    const application = { kind: 'Casual', reason: 'Sample reason', appliedBy: hr.id };
+    await db()
+      .insert(opsLeaveApplications)
+      .values([
+        {
+          ...application,
+          staffId: sample!.id,
+          fromDate: '2026-10-21',
+          toDate: '2026-10-21',
+          status: 'approved',
+          decidedBy: hr.id,
+          decidedAt: new Date(),
+          leaveRecordId: sampleLeave!.id,
+          isSample: true,
+        },
+        { ...application, staffId: real.id, fromDate: '2026-10-22', toDate: '2026-10-22', isSample: true },
+        { ...application, staffId: real.id, fromDate: '2026-10-23', toDate: '2026-10-23' },
+      ]);
     await db()
       .insert(opsTeacherFeedbackSummaries)
       .values({
@@ -138,11 +159,15 @@ describe('db:clear-samples and the HR sample tables', () => {
     const counts = await clearSamples(db());
     expect(counts).toMatchObject({
       'ops.daily_attendance': 1,
+      'ops.leave_applications': 2,
       'ops.leave_records': 1,
       'ops.teacher_feedback_summaries': 1,
       'ops.staff_departments': 1,
       'core.staff_members': 1,
     });
     expect(await db().select().from(opsDailyAttendance)).toHaveLength(1); // the real row stays
+    expect(await db().select().from(opsLeaveApplications)).toMatchObject([
+      { staffId: real.id, fromDate: '2026-10-23', isSample: false },
+    ]);
   });
 });

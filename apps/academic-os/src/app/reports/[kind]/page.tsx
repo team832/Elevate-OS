@@ -9,6 +9,7 @@ import { reportParams, reportQuery, type ReportKind } from '../../../server/sche
 import { PrintButton } from '../../../ui/print-button';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 import '../print.css';
+import { fmtDateTime } from '../../../ui/badges';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Report' };
@@ -31,7 +32,7 @@ async function Body({ access, kind, params }: { access: PageAccess; kind: string
   if (!data.ok && data.error instanceof ValidationError)
     // Opened without its filters (e.g. a bookmarked link): send the user to the filter form, not an error.
     return <EmptyState level={1} title="Choose what to report on" description={data.error.message} action={<ButtonLink href={MODULE_PATHS.reports}>Open the reports page</ButtonLink>} />;
-  if (!data.ok) return <LoadError error={data.error} />;
+  if (!data.ok) return <LoadError level={1} back="home" error={data.error} />;
   const r = data.data;
   query.set('format', 'csv');
   return (
@@ -86,7 +87,7 @@ async function Body({ access, kind, params }: { access: PageAccess; kind: string
             <li key={n}>{n}</li>
           ))}
         </ul>
-        <p className="el-field-hint">Generated {new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(new Date())} IST by {access.user.displayName}.</p>
+        <p className="el-field-hint">Generated {fmtDateTime(new Date())} IST by {access.user.displayName}.</p>
       </div>
     </>
   );

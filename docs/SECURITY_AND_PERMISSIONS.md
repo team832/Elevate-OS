@@ -185,7 +185,7 @@ Generated from the code by `npm run docs:permissions` (check with `npm run docs:
 | `ops:teaching_assignments:read` |  | ✓ |  |  |  |  |  | ✓ | ✓ |  | ✓ |
 | `ops:attendance:read` |  | ✓ | own | own | own | own | own | ✓ | ✓ | own | ✓ |
 | `ops:attendance:manage` |  |  |  |  |  |  |  | ✓ |  |  | ✓ |
-| `ops:attendance:request` |  |  | own | own | own | own | own | ✓ |  | own | ✓ |
+| `ops:attendance:request` |  | own | own | own | own | own | own | ✓ |  | own | ✓ |
 | `ops:work_reports:read` |  | ✓ |  |  |  |  |  | ✓ | ✓ |  | ✓ |
 | `ops:teacher_feedback:read` |  |  |  |  |  |  |  | ✓ |  |  | ✓ |
 | `ops:teacher_feedback:manage` |  |  |  |  |  |  |  | ✓ |  |  | ✓ |

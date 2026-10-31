@@ -96,7 +96,11 @@ async function StaffAttendance({
       <div className="ops-panels">
         <Segment
           title={`Attendance on ${fmtDate(date)}`}
-          meta={day ? <AttendanceBadge status={day.status} basis={day.basis} /> : null}
+          meta={
+            day ? (
+              <AttendanceBadge status={day.status} basis={day.basis} scheduled={day.scheduled} />
+            ) : null
+          }
           flush
         >
           <DetailTable

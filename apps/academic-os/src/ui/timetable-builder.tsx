@@ -10,6 +10,7 @@ import { useState, type FormEvent } from 'react';
 import { Alert, Button, DataTable, Field, Select, TextInput } from '@elevate/shared-ui';
 import { WEEKDAY_NAMES } from '../domain/time';
 import { ErrorAlert, send, type ErrorView } from './api-form';
+import { fmtClock } from './badges';
 
 type BatchOption = { id: string; code: string; subjects: { id: string; name: string }[] };
 export type BuildResult = {
@@ -108,7 +109,7 @@ export function BuildResultPanel({ result, patternsPath }: { result: BuildResult
           rows={result.drafts}
           rowKey={(d) => d.id}
           columns={[
-            { key: 'slot', header: 'Weekly slot', render: (d) => <a href={`${patternsPath}/${d.id}`}><strong>{WEEKDAY_NAMES[d.weekday - 1]} {d.startTime}</strong></a> },
+            { key: 'slot', header: 'Weekly slot', render: (d) => <a href={`${patternsPath}/${d.id}`}><strong>{WEEKDAY_NAMES[d.weekday - 1]} {fmtClock(d.startTime)}</strong></a> },
             { key: 'subject', header: 'Subject', render: (d) => d.subjectName },
             { key: 'teacher', header: 'Teacher', render: (d) => d.teacherName },
             { key: 'room', header: 'Room', render: (d) => d.roomCode ?? 'No room' },

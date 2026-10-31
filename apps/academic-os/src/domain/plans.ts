@@ -13,6 +13,9 @@
 export const PLAN_STATUSES = ['locked', 'provisional', 'proposed', 'superseded'] as const;
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
 
+/** What a batch follows (currentPlanForBatch). Any other plan is a planning record, for reference only. */
+export const TEACHING_PLAN_STATUSES = ['locked', 'provisional'] as const;
+
 /** Statuses an approval may move a plan to. */
 export const APPROVAL_TARGETS = ['locked', 'provisional'] as const;
 export type ApprovalTarget = (typeof APPROVAL_TARGETS)[number];

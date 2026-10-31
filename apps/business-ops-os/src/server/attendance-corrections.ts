@@ -178,7 +178,7 @@ export async function decideCorrection(
       actor,
       await userIdsForStaff(tx, [c.staffId]),
       'work',
-      '/my-attendance',
+      '/my-attendance?view=requests',
       {
         kind: `attendance.correction_${body.decision}`,
         title: `Your attendance correction for ${fmtDay(c.workDate)} was ${body.decision}`,
@@ -192,11 +192,15 @@ export async function decideCorrection(
 const KEPT = 'The times were added; the status HR decided earlier for this day still stands.';
 
 /** Who can decide this person's request: holders of ops:attendance:manage reaching them, never themselves. */
-async function attendanceManagers(db: Database, staffId: string): Promise<UserId[]> {
+export async function attendanceManagers(
+  db: Database,
+  staffId: string,
+  allowed: (roles: readonly string[]) => boolean = () => true,
+): Promise<UserId[]> {
   const out: UserId[] = [];
   for (const id of await userIdsHolding(db, 'ops:attendance:manage')) {
     const holder: Actor = { id, roles: await loadRoles(db, id) };
-    if ((await staffIdForUser(db, id)) === staffId) continue;
+    if (!allowed(holder.roles) || (await staffIdForUser(db, id)) === staffId) continue;
     if ((await hrAttendanceStaff(db, holder, { ids: [staffId] })).length) out.push(id);
   }
   return out;

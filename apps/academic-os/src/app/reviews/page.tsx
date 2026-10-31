@@ -5,7 +5,7 @@ import {
   ButtonLink,
   Card,
   DataTable,
-  EmptyState,
+  ListEmpty,
   PageHeader,
   Subnav,
   fmtDay,
@@ -36,7 +36,7 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Prom
   const parsed = reviewsQuery.safeParse(Object.fromEntries(given));
   const query = parsed.success ? parsed.data : {};
   const data = await load(() => listReviews(getDb(), actorFor(access.user), query));
-  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError level={1} error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="reviews"><LoadError level={1} back="home" error={data.error} /></AcademicShell>;
   const qs = new URLSearchParams(given).toString();
   const current = `${MODULE_PATHS.reviews}${qs ? `?${qs}` : ''}`;
   const pendingStudent = query.academicStudentId && !data.data.some((r) => r.status === 'submitted');
@@ -54,7 +54,7 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Prom
           rows={data.data}
           rowKey={(r) => r.id}
           sampleOf={(r) => r.isSample}
-          empty={<EmptyState title="No reviews here" description="Write a review from a class roster or with “Write a review”. Reviews of students outside your current classes are not listed." />}
+          empty={<ListEmpty noun="reviews" params={p} first="Write a review from a class roster or with “Write a review”. Reviews of students outside your current classes are not listed." />}
           columns={[
             { key: 'student', header: 'Student', render: (r) => <a href={MODULE_PATHS.review(r.id)}>{r.studentName}</a> },
             { key: 'type', header: 'Type', render: (r) => TYPE_LABELS[r.reviewType] },

@@ -12,7 +12,7 @@ import { namesOf } from '../../server/admissions';
 import { listApprovalInbox } from '../../server/approvals';
 import { listAppointments } from '../../server/appointments';
 import { listDemos } from '../../server/demos';
-import { listFollowUps } from '../../server/follow-ups';
+import { countFollowUps, listFollowUps } from '../../server/follow-ups';
 import { myDay, NO_STAFF_RECORD } from '../../server/staff-tasks';
 import { StatCard } from '../../ui/charts';
 import { fmtDateTime, humanise } from '../../ui/format';
@@ -58,9 +58,13 @@ export async function Today({ user }: { user: AuthenticatedUser }) {
     when('ops:appointments:read', (db) =>
       listAppointments(db, user, { from: today, to: today }, 50),
     ),
-    when('ops:leads:read', async (db) =>
-      (await listFollowUps(db, user, { view: 'mine', now })).filter((f) => f.dueDate <= today),
-    ),
+    when('ops:leads:read', async (db) => {
+      const due = { view: 'mine', dueBy: today, now } as const;
+      return {
+        rows: await listFollowUps(db, user, due),
+        total: await countFollowUps(db, user, due),
+      };
+    }),
     when('ops:tasks:read', (db) => myDay(db, user, today)),
     load((db) => listApprovalInbox(db, user)),
   ]);
@@ -130,7 +134,7 @@ export async function Today({ user }: { user: AuthenticatedUser }) {
     {
       key: 'followups',
       label: 'Your follow-ups due',
-      value: figure(followUps, (d) => d.length),
+      value: figure(followUps, (d) => d.total),
       note: 'Overdue or due today',
       href: '#my-follow-ups',
     },
@@ -206,9 +210,9 @@ export async function Today({ user }: { user: AuthenticatedUser }) {
         }
       >
         <Panel r={followUps}>
-          {(rows) => (
+          {({ rows, total }) => (
             <RecordTable
-              caption={`${rows.length} due${rows.length > 10 ? ' · showing the 10 oldest' : ''}`}
+              caption={`${total} due${total > 10 ? ' · showing the 10 oldest' : ''}`}
               rows={rows.slice(0, 10)}
               rowKey={(f) => f.id}
               rowHref={(f) => `/ops/leads/${f.leadId}`}

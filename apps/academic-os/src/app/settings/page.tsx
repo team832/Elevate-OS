@@ -1,6 +1,17 @@
 import type { Metadata } from 'next';
 import { getDb } from '@elevate/database';
-import { Card, PageHeader, StatusBadge } from '@elevate/shared-ui';
+import { settingFieldName } from '@elevate/shared-types';
+import {
+  Card,
+  IN_USE_NOT_APPROVED,
+  PageHeader,
+  SETTINGS_STATE_NOTE,
+  settingLine,
+  settingShape,
+  SettingFields,
+  StatusBadge,
+} from '@elevate/shared-ui';
+import { SETTING_DEFINITIONS, type SettingKey } from '../../domain';
 import { listSettings } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
@@ -11,8 +22,8 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Academic settings' };
 
 const STATUS_OPTIONS = [
-  { value: 'proposed', label: 'Proposed (not approved by the owner)' },
-  { value: 'approved', label: 'Approved by the owner' },
+  { value: 'proposed', label: IN_USE_NOT_APPROVED },
+  { value: 'approved', label: 'Approved' },
 ];
 
 const TITLES: Record<string, string> = {
@@ -27,8 +38,10 @@ const TITLES: Record<string, string> = {
   'reviews.cadence_days': 'Progress review cadence',
   'timetable.substitute_authoriser': 'Who authorises a substitute',
 };
-const words = (k: string) => k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
-const readable = (v: unknown) => (v === null ? 'Not set' : v === true ? 'Yes' : v === false ? 'No' : String(v).replace(/_/g, ' '));
+const label = (key: string) => (key === 'lastN' ? 'Last N results' : settingFieldName(key));
+/** The setting's value as real fields, from its own rules. */
+const shapeOf = (key: SettingKey, value: unknown) =>
+  settingShape(SETTING_DEFINITIONS[key].schema, value, { label });
 
 export default async function SettingsPage() {
   // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
@@ -47,26 +60,25 @@ async function Body() {
     <>
       <PageHeader
         title="Academic settings"
-        description="Rules that change how Academic OS counts and shows things. A proposed value is in use but the owner has not approved it; mark a value approved only after the owner's decision is recorded."
+        description={`Rules that change how Academic OS counts and shows things. ${SETTINGS_STATE_NOTE} Mark a value approved only after the owner's decision is recorded.`}
       />
       <div className="el-stack">
         {data.data.map((s) => (
           <Card
             key={s.key}
-            title={TITLES[s.key] ?? words(s.key.split('.').at(-1)!.replace(/_/g, ' '))}
-            meta={s.status === 'approved' ? <StatusBadge tone="success">Approved by the owner</StatusBadge> : <StatusBadge tone="warning">Not approved by the owner</StatusBadge>}
-            description={s.description}
+            title={TITLES[s.key] ?? settingFieldName(s.key.split('.').at(-1)!)}
+            meta={s.status === 'approved' ? <StatusBadge tone="success">Approved</StatusBadge> : <StatusBadge tone="info">{IN_USE_NOT_APPROVED}</StatusBadge>}
           >
-            <ul>
-              {Object.entries(s.value).map(([k, v]) => (
-                <li key={k}>
-                  {words(k)}: <strong>{readable(v)}</strong>
-                </li>
-              ))}
-            </ul>
+            <p>
+              <strong>{settingLine(shapeOf(s.key, s.value), s.value)}</strong>
+            </p>
             <p className="el-field-hint">
               {s.isDefault ? 'Default value, never changed' : `Last changed ${fmtDateTime(s.updatedAt)}`}
             </p>
+            <details className="el-explain">
+              <summary>What it controls</summary>
+              <p>{s.description}</p>
+            </details>
             <details>
               <summary>Change this setting</summary>
               <ApiForm
@@ -76,7 +88,7 @@ async function Body() {
                 successMessage="Setting saved and audited."
                 idPrefix={`set-${s.key.replace(/\W/g, '-')}`}
                 fields={[
-                  { name: 'value', label: 'New value', type: 'json', required: true, defaultValue: JSON.stringify(s.value, null, 2), hint: 'Keep the braces and quotes as shown; null means not set. The server checks the value against this setting’s rules and refuses anything else.' },
+                  { name: 'value', label: 'New value', type: 'json', required: true, control: <SettingFields name="value" shape={shapeOf(s.key, s.value)} value={s.value} /> },
                   { name: 'status', label: 'Status', type: 'select', required: true, options: STATUS_OPTIONS, defaultValue: s.status },
                   { name: 'decisionRef', label: 'Owner decision reference (needed to approve)', placeholder: 'D-061', hint: 'Only the owner decides. Enter the reference of the owner’s recorded decision (D-0xx / OD-0xx); without it, approval is refused.' },
                 ]}

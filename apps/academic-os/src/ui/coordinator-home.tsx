@@ -5,6 +5,7 @@ import {
   BarChart,
   Card,
   DataTable,
+  ButtonLink,
   EmptyState,
   MetricStrip,
   StatCard,
@@ -15,7 +16,7 @@ import {
 } from '@elevate/shared-ui';
 import type { buildAcademicDeliverySummary, coordinatorOverview } from '../server';
 import { MODULE_PATHS } from '../server/paths';
-import { fmtRange, programmeName } from './badges';
+import { fmtRange, programmeName, fmtSlot } from './badges';
 
 type Overview = Awaited<ReturnType<typeof coordinatorOverview>>;
 type Summary = Awaited<ReturnType<typeof buildAcademicDeliverySummary>>;
@@ -146,7 +147,7 @@ export function CoordinatorTiles({ o }: { o: Overview }) {
             emptyText="No active batch has a locked or provisional curriculum plan."
           />
         ) : (
-          <EmptyState title="No active batches" />
+          <EmptyState title="No active batches" action={<ButtonLink href={MODULE_PATHS.batches}>Open Batches</ButtonLink>} />
         )}
       </Card>
     </div>
@@ -172,7 +173,7 @@ export function UncoveredClasses({ o }: { o: Overview }) {
             render: (s) => (
               <a href={MODULE_PATHS.attendance(s.id)}>
                 <strong>
-                  {fmtDay(s.date)} {s.startTime}
+                  {fmtSlot(s.date, s.startTime)}
                 </strong>
               </a>
             ),

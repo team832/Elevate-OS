@@ -45,6 +45,7 @@ try {
   const home = {
     operations_manager: 'ops',
     hr_manager: 'ops',
+    admissions_counsellor: 'ops',
     teacher: 'academic',
     marketing_manager: 'marketing',
     marketing_contributor: 'marketing',

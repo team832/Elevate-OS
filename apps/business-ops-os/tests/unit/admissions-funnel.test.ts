@@ -24,6 +24,21 @@ describe('A-REP-1 funnel is nested', () => {
   });
 });
 
+describe('A-REP-1 a stage nobody can know is missing, never 0 (D-060, Academic unreadable)', () => {
+  const booked = { demoBooked: true };
+  it.each([
+    ['attendance unknown, not converted', [{ attended: null, completed: null }], [1, 1, null, null, 0, 0]],
+    ['attendance unknown, converted', [{ attended: null, completed: null, converted: true }], [1, 1, null, null, null, 0]],
+    ['attended here, later days unknown', [{ attended: true, completed: null }], [1, 1, 1, null, 0, 0]],
+    ['one known lead beside an unknown one', [{ attended: true, completed: true }, { attended: null, completed: null }], [2, 2, null, null, 0, 0]],
+    ['no demo booked: nothing to know', [{ demoBooked: false, attended: null }], [1, 0, 0, 0, 0, 0]],
+  ])('%s', (_name, leads, counts) => {
+    const f = admissionsFunnel(leads.map((l) => lead({ ...booked, ...l })));
+    expect(f.map((s) => s.count)).toEqual(counts);
+    for (const s of f) if (s.count === null) expect(s.ratePct).toBeNull();
+  });
+});
+
 describe('A-REP-2 conversion rate = converted ÷ decided', () => {
   it.each([
     [['open', 'open'], { demos: 2, decided: 0, converted: 0, ratePct: null }],

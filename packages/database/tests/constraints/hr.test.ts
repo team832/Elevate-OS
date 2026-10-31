@@ -15,6 +15,7 @@ import {
   OPS_FEEDBACK_IMPORT_OUTCOMES,
   OPS_FEEDBACK_IMPORT_STATUSES,
   OPS_FEEDBACK_SUMMARY_STATUSES,
+  OPS_LEAVE_APPLICATION_STATUSES,
   OPS_LEAVE_STATUSES,
   OPS_PUNCH_SOURCES,
 } from '../../src/schema/index';
@@ -61,6 +62,22 @@ const correction = (o: Row = {}): Row => ({
   requested_status: 'present',
   reason: 'Forgot to check out',
   requested_by_user_id: by(),
+  ...o,
+});
+const leaveApplication = (o: Row = {}): Row => ({
+  staff_id: staff(),
+  kind: 'Casual',
+  from_date: '2026-11-10',
+  to_date: '2026-11-11',
+  reason: 'Family function',
+  applied_by: by(),
+  ...o,
+});
+const decided = (status: string, o: Row = {}): Row => ({
+  status,
+  decided_by: by,
+  decided_at: NOW,
+  decision_note: 'Checked',
   ...o,
 });
 const attendanceImport = (o: Row = {}): Row => ({
@@ -146,8 +163,31 @@ beforeAll(async () => {
   await ins('ops.holidays', { holiday_on: '2026-11-08', name: 'Sample holiday', created_by: by() });
   ids.attendanceImport = await ins('ops.attendance_imports', attendanceImport({ sha256: SHA }));
   await ins('ops.attendance_punches', punch());
+  ids.leaveRecord2 = await ins('ops.leave_records', {
+    staff_id: staff(),
+    from_date: '2026-11-22',
+    to_date: '2026-11-23',
+    kind: 'Casual',
+    approved_by: by(),
+  });
   await ins('ops.daily_attendance', day());
   await ins('ops.attendance_corrections', correction());
+  ids.leaveRecord = await ins('ops.leave_records', {
+    staff_id: staff(),
+    from_date: '2026-11-20',
+    to_date: '2026-11-21',
+    kind: 'Casual',
+    approved_by: by(),
+  });
+  await ins(
+    'ops.leave_applications',
+    leaveApplication({
+      status: 'approved',
+      decided_by: by(),
+      decided_at: NOW,
+      leave_record_id: ids.leaveRecord,
+    }),
+  );
   ids.feedbackImport = await ins('ops.teacher_feedback_imports', feedbackImport({ sha256: SHA }));
   await ins('ops.teacher_feedback_import_rows', {
     import_id: ids.feedbackImport,
@@ -314,6 +354,90 @@ describe('staff attendance (§12)', () => {
           'blank kind': [{ kind: ' ' }, 'leave_records_kind_check'],
         },
       ),
+      vocab(
+        'leave application statuses (OPS_LEAVE_APPLICATION_STATUSES)',
+        'ops.leave_applications',
+        OPS_LEAVE_APPLICATION_STATUSES,
+        'leave_applications_status_check',
+        (v) =>
+          leaveApplication(
+            v === 'pending'
+              ? {}
+              : v === 'cancelled'
+                ? { status: v, cancelled_by: by(), cancelled_at: NOW }
+                : {
+                    status: v,
+                    decided_by: by(),
+                    decided_at: NOW,
+                    decision_note: 'Checked',
+                    leave_record_id: v === 'approved' ? ids.leaveRecord2 : null,
+                  },
+          ),
+      ),
+      variants('leave application rules', 'ops.leave_applications', leaveApplication, {
+        'waiting for a decision': [{}, 'ok'],
+        'ends before it starts': [{ to_date: '2026-11-09' }, 'leave_applications_dates_check'],
+        'one day': [{ to_date: '2026-11-10' }, 'ok'],
+        'blank reason': [{ reason: ' ' }, 'leave_applications_reason_check'],
+        'blank kind': [{ kind: ' ' }, 'leave_applications_kind_check'],
+        'no reason at all': [{ reason: null }, '23502'],
+        'version zero': [{ version: 0 }, 'leave_applications_version_check'],
+        'rejected without a reason': [
+          decided('rejected', { decision_note: ' ' }),
+          'leave_applications_decided_check',
+        ],
+        'rejected with a reason': [decided('rejected'), 'ok'],
+        'approved without who': [
+          { status: 'approved', leave_record_id: id('leaveRecord2') },
+          'leave_applications_decided_check',
+        ],
+        'approved without a leave record': [decided('approved'), 'leave_applications_record_check'],
+        'pending with a leave record': [
+          { leave_record_id: id('leaveRecord2') },
+          'leave_applications_record_check',
+        ],
+        'rejected with a leave record': [
+          decided('rejected', { leave_record_id: id('leaveRecord2') }),
+          'leave_applications_record_check',
+        ],
+        'pending but marked decided': [
+          { decided_by: by, decided_at: NOW },
+          'leave_applications_decided_check',
+        ],
+        'cancelled without who': [
+          { status: 'cancelled', cancelled_at: NOW },
+          'leave_applications_cancelled_check',
+        ],
+        'pending but marked cancelled': [
+          { cancelled_by: by, cancelled_at: NOW },
+          'leave_applications_cancelled_check',
+        ],
+        'cancelled while pending, no reason needed': [
+          { status: 'cancelled', cancelled_by: by, cancelled_at: NOW },
+          'ok',
+        ],
+        'approved leave cancelled with no reason': [
+          decided('cancelled', {
+            leave_record_id: id('leaveRecord2'),
+            cancelled_by: by,
+            cancelled_at: NOW,
+          }),
+          'leave_applications_cancelled_check',
+        ],
+        'approved leave cancelled with a reason': [
+          decided('cancelled', {
+            leave_record_id: id('leaveRecord2'),
+            cancelled_by: by,
+            cancelled_at: NOW,
+            cancel_reason: 'Came back early',
+          }),
+          'ok',
+        ],
+        'second application on the same leave record': [
+          decided('approved', { leave_record_id: id('leaveRecord') }),
+          'leave_applications_leave_record_key',
+        ],
+      }),
       variants('import rules', 'ops.attendance_imports', attendanceImport, {
         'same file again': [{ sha256: SHA }, 'attendance_imports_sha256_key'],
         'committed without a time': [{ status: 'committed' }, 'attendance_imports_committed_check'],

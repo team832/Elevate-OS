@@ -321,6 +321,7 @@ export async function listStudents(
         cohort: cohortOf(studentProgs.map((p) => p.code)),
         intendedBatchId: a.intendedBatchId,
         enrolledBatchId: a.enrolledBatchId,
+        enrolmentId: a.enrolmentId,
         counsellorStaffId: a.counsellorStaffId,
         counsellorName: r.counsellorName,
         ...caseState(a),

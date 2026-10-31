@@ -25,7 +25,7 @@ export default async function MarksPage({ params }: { params: Promise<{ id: stri
 
 async function Body({ access, id }: { access: PageAccess; id: string }) {
   const data = await load(() => getMarksSheet(getDb(), actorFor(access.user), id));
-  if (!data.ok) return <LoadError error={data.error} />;
+  if (!data.ok) return <LoadError level={1} back="assessments" error={data.error} />;
   const { assessment: a, bounds, canWithhold, canCorrect, rows } = data.data;
   const states = Object.entries(STATE_LABELS)
     .filter(([v]) => v !== 'withheld' || canWithhold)

@@ -19,19 +19,22 @@ import { istToday, istWeekContaining } from '../../domain';
 import { admissionsFunnel, conversionBy, studentSummary } from '../../domain/admissions-funnel';
 import { demoProgress } from '../../domain/demos';
 import { studentPopulation } from '../../domain/student-lifecycle';
+import { classesWithMarks, type MarksReader } from '../academic-summary';
 import { accessScope, type Actor } from '../context';
+import { groupBy } from '../ops-common';
 import { ownSets, type AdmissionsReportOptions } from './admissions';
 
 /**
  * Admissions funnel for leads first received in the period; demo conversion for demos with a
  * class in the period (the demo list's date-filter rule, so report links show the same demos),
  * grouped by programme, counsellor and — with `ops:lead_attribution:read` — source/campaign;
- * student counts right now. Own scope as in `buildAdmissionsReport`. Persisted rows only.
+ * student counts right now. Own scope as in `buildAdmissionsReport`. Persisted rows, plus Academic's
+ * marks for the cohort's demo classes (D-060); a stage they decide is missing while Academic is down.
  */
 export async function buildAdmissionsFunnel(
   db: Database,
   actor: Actor,
-  options: AdmissionsReportOptions = {},
+  options: AdmissionsReportOptions & { marks?: MarksReader } = {},
 ) {
   const access = await accessScope(db, actor, 'ops:admissions:read');
   const now = options.now ?? new Date();
@@ -50,6 +53,8 @@ export async function buildAdmissionsFunnel(
     db.select().from(opsDemos),
     db
       .select({
+        id: opsDemoSessions.id,
+        academicSessionRef: opsDemoSessions.academicSessionRef,
         demoId: opsDemoSessions.demoId,
         dayNumber: opsDemoSessions.dayNumber,
         startsAt: opsDemoSessions.startsAt,
@@ -87,19 +92,33 @@ export async function buildAdmissionsFunnel(
   for (const s of sessions) sessionsOf.set(s.demoId, [...(sessionsOf.get(s.demoId) ?? []), s]);
   const demosOf = new Map<string, typeof demos>();
   for (const d of demos) demosOf.set(d.leadId, [...(demosOf.get(d.leadId) ?? []), d]);
+  const cohort = leads.filter((l) => ownLead(l.id) && inWindow(l.at));
+  const inCohort = new Set(cohort.flatMap((l) => (demosOf.get(l.id) ?? []).map((d) => d.id as string)));
+  const { marks, classes } = await classesWithMarks(
+    db,
+    sessions.filter((s) => inCohort.has(s.demoId)),
+    { now, read: options.marks },
+  );
+  const classesOf = groupBy(classes, (s) => s.demoId);
   // D-1: completed = every planned demo DAY attended (not a count of classes).
   const progress = (d: (typeof demos)[number]) =>
-    demoProgress(sessionsOf.get(d.id) ?? [], d.plannedDayCount);
+    demoProgress(classesOf.get(d.id) ?? [], d.plannedDayCount);
+  /** True if a demo shows it; else null while one of the classes is not known. */
+  const shown = (ds: typeof demos, show: (d: (typeof demos)[number]) => boolean) =>
+    ds.some(show)
+      ? true
+      : ds.some((d) => classesOf.get(d.id)?.some((s) => s.unknown))
+        ? null
+        : false;
 
-  const cohort = leads.filter((l) => ownLead(l.id) && inWindow(l.at));
   const funnel = admissionsFunnel(
     cohort.map((l) => {
       const ds = demosOf.get(l.id) ?? [];
       const converted = ds.filter((d) => d.outcome === 'converted');
       return {
         demoBooked: ds.length > 0,
-        attended: ds.some((d) => progress(d).sessionsAttended > 0),
-        completed: ds.some((d) => progress(d).attended >= d.plannedDayCount),
+        attended: shown(ds, (d) => progress(d).sessionsAttended > 0),
+        completed: shown(ds, (d) => progress(d).attended >= d.plannedDayCount),
         converted: converted.length > 0,
         enrolled: converted.some((d) =>
           Boolean(admissionById.get(d.convertedAdmissionId as string)?.enrolledAt),
@@ -157,6 +176,9 @@ export async function buildAdmissionsFunnel(
     window,
     scope: access.scope,
     funnel,
+    /** Academic's marks could not be read: `Funnel` says so when a stage is missing. */
+    academicUnavailable:
+      marks.status === 'unavailable' ? { reason: marks.reason, fetchedAt: marks.checkedAt } : null,
     demoConversion: {
       total: heldDemos.length,
       byProgramme: conversionBy(heldDemos, (h) => h.programme).map((g) => ({

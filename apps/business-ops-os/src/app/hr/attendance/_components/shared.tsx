@@ -6,6 +6,7 @@ import { StatusBadge, type Tone } from '@elevate/shared-ui';
 import {
   ATTENDANCE_STATUS_LABELS,
   ATTENDANCE_STATUSES,
+  isNoScheduleDay,
   REVIEW_REASON_LABELS,
   type AttendanceStatus,
 } from '../../../../domain/attendance';
@@ -33,18 +34,31 @@ const MEANING: Record<AttendanceStatus, string> = {
   absent: 'HR confirmed an absence. Never set automatically.',
   unmarked:
     'A working day with no check-in (or a very short day) and no HR decision yet. Not an absence.',
-  on_leave: 'Approved leave recorded by HR.',
+  on_leave: 'Approved leave: an application HR approved, or leave HR recorded.',
   holiday:
     'An approved staff holiday for everyone or for this branch. A proposed holiday does not change the day.',
   weekly_off: 'Not a working day in the work schedule.',
 };
+
+const NO_SCHEDULE = 'No schedule';
 
 export const statusOptions = ATTENDANCE_STATUSES.map((s) => ({
   value: s,
   label: ATTENDANCE_STATUS_LABELS[s],
 }));
 
-export function AttendanceBadge({ status, basis }: { status: AttendanceStatus; basis?: string }) {
+export function AttendanceBadge({
+  status,
+  basis,
+  scheduled,
+}: {
+  status: AttendanceStatus;
+  basis?: string;
+  /** null = no work schedule is known, so nothing can be judged about an unrecorded day. */
+  scheduled?: boolean | null;
+}) {
+  if (scheduled !== undefined && isNoScheduleDay({ status, scheduled, basis: basis as never }))
+    return <StatusBadge>{NO_SCHEDULE}</StatusBadge>;
   return (
     <>
       <StatusBadge tone={TONE[status]}>{ATTENDANCE_STATUS_LABELS[status]}</StatusBadge>
@@ -75,6 +89,15 @@ export function Legend() {
             <dd>{MEANING[s]}</dd>
           </div>
         ))}
+        <div>
+          <dt>
+            <AttendanceBadge status="unmarked" scheduled={null} />
+          </dt>
+          <dd>
+            No work schedule is set for this person, so the system cannot say whether this was a
+            working day. Nothing is wrong with the day. The Unmarked filter includes these days.
+          </dd>
+        </div>
       </dl>
       <p>
         Statuses come from check-ins and check-outs (entered by HR or imported from a file), the
@@ -115,7 +138,7 @@ export function DayTable({
     {
       key: 'status',
       header: 'Status',
-      render: (r) => <AttendanceBadge status={r.status} basis={r.basis} />,
+      render: (r) => <AttendanceBadge status={r.status} basis={r.basis} scheduled={r.scheduled} />,
     },
     { key: 'in', header: 'First in', render: (r) => (r.firstIn ? timeText(r.firstIn) : '—') },
     { key: 'out', header: 'Last out', render: (r) => (r.lastOut ? timeText(r.lastOut) : '—') },
@@ -147,6 +170,7 @@ export function DayTable({
       columns={columns}
       rowHref={rowHref}
       linkColumn={staff ? 'staff' : 'date'}
+      pageScroll={!staff}
     />
   );
 }

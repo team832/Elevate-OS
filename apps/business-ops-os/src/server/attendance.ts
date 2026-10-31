@@ -5,7 +5,22 @@
  * and which no recomputation touches. Class delivery and teaching logs are never read here
  * (scenario 10). Own scope = your own days only; another person's id → 404.
  */
-import { and, asc, eq, gte, ilike, inArray, lt, lte, ne, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  ne,
+  not,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { containsPattern } from '@elevate/server-kit';
 import {
   departments,
@@ -50,6 +65,9 @@ export interface AttendanceStaff {
   scheduleId: string | null;
 }
 
+/** A teacher is staff with a subject capability: the Teachers directory's own rule (teachers.ts). */
+const teaches = sql`exists (select 1 from ops.staff_subject_capabilities c where c.staff_id = ${staffMembers.id})`;
+
 /** Current staff (or the named people), optionally narrowed; `scope` = an HR scope condition. */
 export function attendanceStaff(
   db: Database,
@@ -58,6 +76,7 @@ export function attendanceStaff(
     department?: string;
     branch?: string;
     q?: string;
+    who?: 'teachers' | 'other';
     scope?: SQL;
   } = {},
 ): Promise<AttendanceStaff[]> {
@@ -82,6 +101,7 @@ export function attendanceStaff(
         where.scope,
         where.department ? eq(staffMembers.departmentId, where.department as never) : undefined,
         where.branch ? eq(opsStaffProfiles.branchId, where.branch as never) : undefined,
+        where.who === 'teachers' ? teaches : where.who === 'other' ? not(teaches) : undefined,
         where.q
           ? or(
               ilike(staffMembers.fullName, containsPattern(where.q)),
@@ -217,7 +237,13 @@ export function listRange(query: { from?: string; to?: string }, today = istToda
 async function readableStaff(
   db: Database,
   actor: Actor,
-  query: { staffId?: string; department?: string; branch?: string; q?: string },
+  query: {
+    staffId?: string;
+    department?: string;
+    branch?: string;
+    q?: string;
+    who?: 'teachers' | 'other';
+  },
 ) {
   const access = await accessScope(db, actor, 'ops:attendance:read');
   if (access.scope === 'own') {
@@ -230,6 +256,7 @@ async function readableStaff(
     department: query.department,
     branch: query.branch,
     q: query.q,
+    who: query.who,
   });
 }
 
@@ -267,6 +294,8 @@ export async function listAttendance(db: Database, actor: Actor, query: Attendan
     total: rows.length,
     page,
     pageSize: ATTENDANCE_PAGE_SIZE,
+    /** People these filters cover, before the status and review filters. */
+    staffCount: staff.length,
     byDate,
   };
 }
@@ -291,6 +320,32 @@ export async function attendanceDay(db: Database, actor: Actor, staffId: string,
   const mine = punchesByDay(punches.map((p) => ({ ...p, at: p.punchedAt }))).get(date) ?? [];
   return { staff, date, day, punches: mine };
 }
+
+/**
+ * The next holidays for this branch or everyone, nearest first; a proposed one is listed and says
+ * so (it does not change a day until HR approves it). No permission check: the caller read the
+ * person's days first.
+ */
+export const upcomingHolidays = (db: Database, branchId: string | null, today: IsoDate, limit = 5) =>
+  db
+    .select({
+      id: opsHolidays.id,
+      holidayOn: opsHolidays.holidayOn,
+      name: opsHolidays.name,
+      decisionState: opsHolidays.decisionState,
+    })
+    .from(opsHolidays)
+    .where(
+      and(
+        gte(opsHolidays.holidayOn, today),
+        inArray(opsHolidays.decisionState, ['approved', 'locked', 'proposed']),
+        branchId
+          ? or(isNull(opsHolidays.branchId), eq(opsHolidays.branchId, branchId as never))
+          : isNull(opsHolidays.branchId),
+      ),
+    )
+    .orderBy(asc(opsHolidays.holidayOn))
+    .limit(limit);
 
 /**
  * Brief §14 attendance figures for one person and period (REP's monthly report). No permission

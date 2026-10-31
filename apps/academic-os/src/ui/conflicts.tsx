@@ -10,7 +10,9 @@ interface Finding {
   unverified?: boolean;
 }
 
-export function ConflictList({ verdict, hard, preferences, notes = [] }: { verdict: string; hard: readonly Finding[]; preferences: readonly Finding[]; notes?: readonly string[] }) {
+/** `checked` and `notes` (what was not checked) come from the timetable check; "Feasible" is only said of a complete one. */
+export function ConflictList({ verdict, hard, preferences, checked = [], notes = [] }: { verdict: string; hard: readonly Finding[]; preferences: readonly Finding[]; checked?: readonly string[]; notes?: readonly string[] }) {
+  const partial = verdict === 'feasible' && notes.length > 0;
   const table = (rows: readonly Finding[]) => (
     <DataTable
       rows={rows.map((r, i) => ({ ...r, key: `${r.code}-${i}` }))}
@@ -25,8 +27,14 @@ export function ConflictList({ verdict, hard, preferences, notes = [] }: { verdi
   return (
     <div className="el-stack">
       <p>
-        Result: <StateBadge state={verdict} /> — {hard.length} hard conflict(s), {preferences.length} preference warning(s).
+        Result: {partial ? <StatusBadge tone="warning">Partial conflict check</StatusBadge> : <StateBadge state={verdict} />} — {hard.length} hard conflict(s), {preferences.length} preference warning(s){partial ? ' in what was checked' : ''}.
       </p>
+      {checked.length > 0 ? (
+        <Alert tone={notes.length > 0 ? 'warning' : 'info'}>
+          <p>Checked: {checked.join(', ')}.</p>
+          {notes.length > 0 ? <p>Not checked: {notes.join(' ')}</p> : null}
+        </Alert>
+      ) : null}
       {hard.length > 0 ? (
         <Alert tone="danger" title="Hard conflicts">
           {table(hard)}
@@ -37,11 +45,6 @@ export function ConflictList({ verdict, hard, preferences, notes = [] }: { verdi
           {table(preferences)}
         </Alert>
       ) : null}
-      {notes.map((n) => (
-        <p key={n} className="el-field-hint">
-          {n}
-        </p>
-      ))}
     </div>
   );
 }

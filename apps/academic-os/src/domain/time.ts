@@ -21,6 +21,12 @@ export function formatClock(minutes: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+/** "4:30 pm" for a stored clock time (`HH:MM`, IST): what staff read, on screens and in notices. */
+export function fmtClock(clock: string): string {
+  const [h, m] = clock.split(':').map(Number) as [number, number];
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+}
+
 /** Weekday names by ISO number − 1 (index 0 = Monday). */
 export const WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
 

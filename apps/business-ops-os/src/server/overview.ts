@@ -8,6 +8,7 @@ import { can, type Permission } from '@elevate/authorization';
 import type { Database } from '@elevate/database';
 import { addDays, daysBetween, isIsoDate, istToday, type IsoDate, type KpiWindow } from '../domain';
 import { reviewsAuthored } from './academic-reviews';
+import { marksReader } from './academic-summary';
 import { buildAdmissionsOverview } from './admissions-overview';
 import type { Actor } from './context';
 import { activitySeries, buildDashboard } from './dashboard';
@@ -104,6 +105,7 @@ export async function buildOverview(
   const dashboard = has('ops:dashboard:read');
   const span = daysBetween(range.from, range.to);
   const tooLong = span >= MAX_PERIOD_DAYS;
+  const marks = marksReader(db);
   const [
     funnel,
     report,
@@ -116,9 +118,9 @@ export async function buildOverview(
     kpis,
     series,
   ] = await Promise.all([
-    part(admissions, () => buildAdmissionsFunnel(db, actor, { ...range, now })),
+    part(admissions, () => buildAdmissionsFunnel(db, actor, { ...range, now, marks })),
     part(admissions, () => buildAdmissionsReport(db, actor, { ...range, now })),
-    part(admissions, () => buildAdmissionsOverview(db, actor, { ...range, now })),
+    part(admissions, () => buildAdmissionsOverview(db, actor, { ...range, now, marks })),
     part(fees, () => listCollections(db, actor, { ...range, page: 1 })),
     part(fees, () => listOutstanding(db, actor, { page: 1 }, now)),
     part(dashboard, () => fetchCrossModuleSummaries(range, summaries)),

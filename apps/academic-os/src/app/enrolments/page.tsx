@@ -3,6 +3,7 @@ import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import type { PageAccess } from '@elevate/server-kit/next';
 import {
+  Alert,
   Card,
   DataTable,
   EmptyState,
@@ -16,7 +17,7 @@ import { listBatches, listPlacementViews } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { PLACEMENT_VIEWS } from '../../server/schemas-placements';
 import { ApiForm } from '../../ui/api-form';
-import { StateBadge, programmeName } from '../../ui/badges';
+import { StateBadge, programmeName, fmtSpan } from '../../ui/badges';
 import { EndEnrolmentForm, placementNote } from '../../ui/batch-tabs';
 import { AcademicShell, LoadError, actorFor, gate, load, workspaceLink } from '../../ui/shell';
 
@@ -70,7 +71,7 @@ async function Body({ access, view }: { access: PageAccess; view: View }) {
     const href = ref ? workspaceLink(access.user, 'ops', `/students/${ref}`) : null;
     return href ? <a href={href}>Admission and fees</a> : ref ? 'In Business Operations' : 'Not linked';
   };
-  const placementText = (r: Row) => (r.placement ? `${r.placement.batchCode}, ${fmtDay(r.placement.startDate)} to ${fmtDay(r.placement.endDate, 'now')}${r.placement.endedReason ? ` (${placementNote(r.placement)})` : ''}` : 'Awaiting batch');
+  const placementText = (r: Row) => (r.placement ? `${r.placement.batchCode}, ${fmtSpan(r.placement.startDate, r.placement.endDate)}${r.placement.endedReason ? ` (${placementNote(r.placement)})` : ''}` : 'Awaiting batch');
   return (
     <>
       {header}
@@ -81,6 +82,12 @@ async function Body({ access, view }: { access: PageAccess; view: View }) {
         items={PLACEMENT_VIEWS.map((v) => ({ key: v, label: LABELS[v], href: `${PATH}?view=${v}`, count: list.counts[v] }))}
       >
         <div className="el-stack">
+          {list.total > list.rows.length ? (
+            <Alert tone="info">
+              Showing the first {list.rows.length.toLocaleString('en-IN')} of {list.total.toLocaleString('en-IN')}, A to Z.{' '}
+              <a href={MODULE_PATHS.students}>Search Students</a> by name or code to find anyone else.
+            </Alert>
+          ) : null}
           <Card>
             <DataTable
               compact

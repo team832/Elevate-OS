@@ -3,10 +3,12 @@ import { can, scopeFor } from '@elevate/authorization';
 import { PageHeader, Subnav } from '@elevate/shared-ui';
 import { listTeachingAssignments } from '../../../../server/hr-assignments';
 import { getHrStaff, hrFormOptions, type HrStaff } from '../../../../server/hr-staff';
+import { listLeaveApplications } from '../../../../server/leave-applications';
 import { fmtDateTime, humanise } from '../../../../ui/format';
 import { Frame, gate, load, Section } from '../../../../ui/frame';
 import { Segment, Timeline } from '../../../../ui/sections';
 import { AssignmentsTable } from '../../assignments/assignments-table';
+import { LeaveTable } from '../../attendance/_components/leave';
 import { HR_ACTS, HrActModal, HrOverview, LinkedList } from '../staff-hr-record';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +21,7 @@ const TABS: [string, string, ((u: AuthenticatedUser) => boolean) | null][] = [
   ['overview', 'Overview', null],
   ['responsibilities', 'Responsibilities', (u) => can(u, 'ops:teaching_assignments:read')],
   ['attendance', 'Attendance', (u) => scopeFor(u, 'ops:attendance:read') === 'all'],
+  ['leave', 'Leave', (u) => scopeFor(u, 'ops:attendance:read') === 'all'],
   ['tasks', 'Tasks and submissions', (u) => can(u, 'ops:tasks:review')],
   ['reports', 'Work reports', (u) => can(u, 'ops:work_reports:read')],
   ['feedback', 'Feedback', (u) => can(u, 'ops:teacher_feedback:read')],
@@ -86,16 +89,17 @@ async function Record({ user, id, sp }: { user: AuthenticatedUser; id: string; s
   const acting = act && can(user, act.permission) ? act : undefined;
   const r = await load(async (db) => {
     const d = await getHrStaff(db, user, id);
-    const [o, assignments] = await Promise.all([
+    const [o, assignments, leave] = await Promise.all([
       acting ? hrFormOptions(db) : null,
       tab === 'responsibilities'
         ? listTeachingAssignments(db, user, { staffId: d.staff.id })
         : null,
+      tab === 'leave' ? listLeaveApplications(db, user, { staffId: d.staff.id }) : null,
     ]);
-    return { d, o, assignments };
+    return { d, o, assignments, leave };
   });
   if (!r.ok) return r.view;
-  const { d, o, assignments } = r.data;
+  const { d, o, assignments, leave } = r.data;
   const self = `/ops/hr/staff/${d.staff.id}`;
   const here = tab === 'overview' ? self : `${self}?tab=${tab}`;
   const actHref = (a: string) => `${self}?act=${a}`;
@@ -129,6 +133,20 @@ async function Record({ user, id, sp }: { user: AuthenticatedUser; id: string; s
           actions={<a href={`/academic/teachers/${d.staff.id}`}>Open in Academic OS</a>}
         >
           <AssignmentsTable result={assignments} withTeacher={false} />
+        </Segment>
+      ) : null}
+      {leave ? (
+        <Segment
+          title="Leave applications"
+          flush
+          description="Latest first. Leave HR recorded directly is on the attendance page."
+          actions={
+            <a href={`/ops/hr/attendance?tab=leave&status=all&staffId=${d.staff.id}`}>
+              Open in attendance
+            </a>
+          }
+        >
+          <LeaveTable rows={leave.items} empty="This person has not applied for leave." />
         </Segment>
       ) : null}
       {linked ? (

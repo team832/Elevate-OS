@@ -6,7 +6,7 @@
  * loading / error / success states and refreshes the server-rendered page.
  */
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Alert,
   Button,
@@ -44,6 +44,8 @@ export interface FormField {
   defaultValue?: string | number | boolean;
   placeholder?: string;
   maxLength?: number;
+  /** The field's own inputs instead of the default one; they must post `name` (SettingFields). */
+  control?: ReactNode;
 }
 
 export interface ApiFormProps {
@@ -336,6 +338,13 @@ export function ApiForm({
       {fields.map((f) => {
         const id = `${idPrefix}-${f.name}`;
         const type = f.type ?? 'text';
+        if (f.control)
+          return (
+            <div key={f.name}>
+              {f.control}
+              {errorOf(f.name) ? <p className="el-field-error">{errorOf(f.name)}</p> : null}
+            </div>
+          );
         if (type === 'checkbox') {
           return (
             <Checkbox

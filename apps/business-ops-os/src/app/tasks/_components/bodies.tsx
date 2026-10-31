@@ -115,8 +115,16 @@ async function TaskView({ user, base, id }: Omit<BodyProps, 'searchParams'> & { 
       listAttachments(db, user, 'task', d.id),
     ]);
     return { d, staff: options?.staff ?? [], open: open?.rows ?? [], files };
-  });
-  if (!r.ok) return r.view;
+  }, 1);
+  if (!r.ok)
+    return (
+      <>
+        {r.view}
+        <p>
+          <a href={taskPaths(base).tasks}>Back to tasks</a>
+        </p>
+      </>
+    );
   const { d, staff, open, files } = r.data;
   const candidates = open
     .filter((t) => t.status !== 'done' && t.status !== 'cancelled')

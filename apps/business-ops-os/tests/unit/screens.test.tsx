@@ -436,10 +436,10 @@ describe('tasks and end-of-day reports', () => {
     reviewerName: null,
     selfLogged: false,
     assignedByName: null,
-    requesterName: null,
-    requesterNote: null,
+    createdByName: 'Sample Creator',
+    requesterText: 'Sample Creator (created this task)',
     source: 'manual',
-    departmentName: null,
+    departmentText: null,
     priority: 'high',
     receivedAt: new Date(NOW),
     plannedStartOn: null,
@@ -462,15 +462,13 @@ describe('tasks and end-of-day reports', () => {
 
   it('task facts: missing people and text are named, progress is marked self-reported', () => {
     const out = html(<TaskFacts d={task} base="/ops" />);
-    expect(out.match(/Not recorded/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(out.match(/Not recorded/g)?.length).toBeGreaterThanOrEqual(2);
     for (const t of [
-      'None recorded',
-      'No acceptance criteria recorded',
+      'Only the title was given',
       '0% (self-reported)',
       'No review step: the owner marks it done',
-      'Not specified',
       'Delivered: not yet',
-      'Read: not yet',
+      'Notice read: not yet',
       'Acknowledged: not yet',
     ])
       expect(out).toContain(t);

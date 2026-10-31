@@ -28,7 +28,7 @@ import {
   type Database,
 } from '@elevate/database';
 import type { SessionId } from '@elevate/shared-types';
-import { addDays, toIsoDate } from '@elevate/shared-types';
+import { addDays } from '@elevate/shared-types';
 import {
   createAssessmentInternal,
   internalActor,
@@ -39,6 +39,7 @@ import {
 import { getAssessmentDetail } from '../src/server/services/assessment-views';
 import { allocatePlacement } from '../src/server/services/placements';
 import { finaliseAssessment } from '../src/server/services/results';
+import { sampleAnchorDate } from './samples';
 
 export { getAssessmentDetail };
 
@@ -133,6 +134,54 @@ export const SAMPLE_TESTS: readonly SampleTest[] = [
 ];
 export const PENDING_IMPORT_TEST = 'SAMPLE-CLAT-CA-01';
 
+/** The demo teacher's Quant tests on SAMPLE-IPMAT-B: marks half entered, none entered, final, upcoming. */
+export const DEMO_TEACHER_TESTS: readonly SampleTest[] = [
+  {
+    code: 'SAMPLE-IPMAT-B-QUANT-01',
+    title: 'IPMAT batch B Quant test: Percentages (sample)',
+    kind: 'chapter_test',
+    batches: ['SAMPLE-IPMAT-B'],
+    subject: 'QUANT',
+    teacher: 'teacher@elevateeducation.in',
+    day: -3,
+    rule: { maxMarks: '50' },
+    marks: ['41', '36', 'A', null, null, null],
+  },
+  {
+    code: 'SAMPLE-IPMAT-B-QUANT-02',
+    title: 'IPMAT batch B Quant test: Ratio and Proportion (sample)',
+    kind: 'chapter_test',
+    batches: ['SAMPLE-IPMAT-B'],
+    subject: 'QUANT',
+    teacher: 'teacher@elevateeducation.in',
+    day: -1,
+    rule: { maxMarks: '40' },
+    marks: [],
+  },
+  {
+    code: 'SAMPLE-IPMAT-B-QUANT-03',
+    title: 'IPMAT batch B Quant test: Number Systems (sample)',
+    kind: 'chapter_test',
+    batches: ['SAMPLE-IPMAT-B'],
+    subject: 'QUANT',
+    teacher: 'teacher@elevateeducation.in',
+    day: -12,
+    rule: { maxMarks: '30' },
+    marks: ['27', '24', '24', '19', 'A', '15'],
+    finalise: true,
+  },
+  {
+    code: 'SAMPLE-IPMAT-B-QUANT-04',
+    title: 'IPMAT batch B Quant test: Averages (sample)',
+    kind: 'chapter_test',
+    batches: ['SAMPLE-IPMAT-B'],
+    subject: 'QUANT',
+    teacher: 'teacher@elevateeducation.in',
+    day: 6,
+    rule: { maxMarks: '40' },
+  },
+];
+
 const userId = async (db: Database, email: string) =>
   (await db.select({ id: users.id }).from(users).where(eq(users.email, email)))[0]?.id ?? null;
 
@@ -195,23 +244,41 @@ export async function placeSampleEnrolments(
   return placed;
 }
 
+type TestOptions = {
+  actorEmail: string;
+  admissionNumbers: { coreStudentId: string; admissionNumber: string }[];
+};
+
 /** Create the sample tests; `admissionNumbers` = Ops numbers of admitted students by core student id. */
-export async function seedSampleTests(
-  db: Database,
-  opts: {
-    actorEmail: string;
-    admissionNumbers: { coreStudentId: string; admissionNumber: string }[];
-  },
-) {
+export async function seedSampleTests(db: Database, opts: TestOptions) {
   if (await db.$count(academicAssessments, eq(academicAssessments.isSample, true))) return null;
+  return writeTests(db, SAMPLE_TESTS, opts);
+}
+
+/** The demo teacher's tests, each once. */
+export async function seedDemoTeacherTests(db: Database, opts: TestOptions) {
+  const known = await db
+    .select({ code: academicAssessments.code })
+    .from(academicAssessments)
+    .where(
+      inArray(
+        academicAssessments.code,
+        DEMO_TEACHER_TESTS.map((t) => t.code),
+      ),
+    );
+  const missing = DEMO_TEACHER_TESTS.filter((t) => !known.some((k) => k.code === t.code));
+  return missing.length ? writeTests(db, missing, opts) : null;
+}
+
+async function writeTests(db: Database, list: readonly SampleTest[], opts: TestOptions) {
   const uid = await userId(db, opts.actorEmail);
   if (!uid) return null;
   const actor = await internalActor(db, uid, 'sample-seed');
-  const today = toIsoDate();
+  const today = sampleAnchorDate();
   const y = Number(today.slice(0, 4)) - (today.slice(5, 7) < '04' ? 1 : 0);
   const academicYear = `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
   const ids = new Map<string, string>();
-  for (const t of SAMPLE_TESTS) {
+  for (const t of list) {
     const batches = await db
       .select({
         id: academicBatches.id,
@@ -289,11 +356,12 @@ export async function seedSampleTests(
         return [{ ...base, attendance: 'present', marksState: 'not_entered', score: null }];
       return [{ ...base, attendance: 'present', marksState: 'verified', score: m }];
     });
-    await recordScores(db, actor, id, {
-      source: 'manual',
-      rows,
-      overwriteVerified: false,
-    } as never);
+    if (rows.length)
+      await recordScores(db, actor, id, {
+        source: 'manual',
+        rows,
+        overwriteVerified: false,
+      } as never);
     if (t.finalise) await finaliseAssessment(db, actor, id);
     if (t.publish)
       await publishInternal(db, actor, id, {

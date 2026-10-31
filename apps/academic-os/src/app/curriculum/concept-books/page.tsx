@@ -18,7 +18,8 @@ export default async function ConceptBooksPage() {
     <AcademicShell access={access} active="curriculum">
       <PageHeader
         title="Concept-book indices"
-        description="Chapter indices only. Question counts are planned allocations, not written questions."
+        meta={<StatusBadge tone="neutral">Planning record</StatusBadge>}
+        description="Chapter indices only: planning records, not teaching material yet. Question counts are planned allocations, not written questions."
         tabs={<Subnav label="Curriculum" items={CURRICULUM_TABS} current={MODULE_PATHS.conceptBooks} />}
       />
       {!data.ok ? (
@@ -28,7 +29,7 @@ export default async function ConceptBooksPage() {
       ) : (
         <div className="el-stack">
           <Alert tone="info">
-            {data.data.numberedChapters} numbered chapters across {data.data.books.length} books. {data.data.note}
+            {data.data.numberedChapters} numbered chapters across {data.data.books.length} books; content has been started for {data.data.books.flatMap((b) => b.chapters).filter((c) => c.contentStatus !== 'not_started').length}. {data.data.note}
           </Alert>
           {data.data.books.map((b) => (
             <Card key={b.bookCode} title={`${b.bookCode} — ${b.bookTitle}`} description={`${b.numberedChapters} numbered chapters`}>
@@ -40,7 +41,7 @@ export default async function ConceptBooksPage() {
                   { key: 'title', header: 'Title' },
                   { key: 'section', header: 'Section', render: (c) => c.section ?? '—' },
                   { key: 'status', header: 'Index', render: (c) => (c.status === 'active' ? <PlanBadge status={c.indexStatus} /> : <StatusBadge tone="neutral">{words(c.status)}{c.aliasOfCode ? ` → ${c.aliasOfCode}` : ''}</StatusBadge>) },
-                  { key: 'content', header: 'Content', render: (c) => <StatusBadge tone="neutral">{words(c.contentStatus)}</StatusBadge> },
+                  { key: 'content', header: 'Chapter content', render: (c) => <StatusBadge tone="neutral">{words(c.contentStatus)}</StatusBadge> },
                   {
                     key: 'q',
                     header: 'Questions (planned)',

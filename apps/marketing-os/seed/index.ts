@@ -11,4 +11,6 @@ import type { SeedDefinition } from '@elevate/database/seed';
 import { marketingLegacySeed } from './reference';
 import { marketingSampleSeeds } from './samples';
 
+export { seedFillMarketing } from './fill';
+
 export const seeds: readonly SeedDefinition[] = [marketingLegacySeed, ...marketingSampleSeeds];

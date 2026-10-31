@@ -15,15 +15,15 @@ import { getStudentProgress, getStudentRecord, listStaff } from '../../../server
 import { modulePath } from '../../../domain';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
-import { StateBadge, programmeName, words } from '../../../ui/badges';
+import { StateBadge, programmeName, words, wordOptions } from '../../../ui/badges';
 import { placementNote } from '../../../ui/batch-tabs';
 import { InterventionsTable } from '../../../ui/interventions';
-import { AcademicShell, LoadError, actorFor, gate, load, workspaceLink } from '../../../ui/shell';
+import { AcademicShell, LoadError, actorFor, gate, load, sectionLabel, workspaceLink } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Student progress' };
+export const metadata: Metadata = { title: 'Student record' };
 
-const TRIGGERS = ['repeated_absence', 'declining_scores', 'low_scores', 'missed_assessments', 'overdue_catch_up', 'other'].map((v) => ({ value: v, label: v.replace(/_/g, ' ') }));
+const TRIGGERS = wordOptions(['repeated_absence', 'declining_scores', 'low_scores', 'missed_assessments', 'overdue_catch_up', 'other']);
 
 export default async function StudentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -38,7 +38,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
     progress: canProgress ? await getStudentProgress(db, actor, id) : null,
     staff: canWrite ? await listStaff(db) : [],
   }));
-  if (!data.ok) return <AcademicShell access={access} active="students"><LoadError level={1} error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="students"><LoadError level={1} back="students" error={data.error} /></AcademicShell>;
   const { record, progress, staff } = data.data;
   const s = record.student;
   const opsRef = 'coreStudentId' in s && can(access.user, 'academic:enrolments:read') ? (s.coreStudentId ?? s.sourceAdmissionId) : null;
@@ -49,7 +49,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
         title={s.fullName}
         meta={<><StateBadge state={s.status} /> <SourceBadge source={s.isSample ? 'sample' : 'live'} /> <span className="el-field-hint">{s.code}</span></>}
         description={`${s.currentStage ? words(s.currentStage) : 'Stage not recorded'}${s.contactsHidden ? ' · contact details hidden for your role' : ''}`}
-        actions={<>{opsHref ? <a href={opsHref}>Admission, KYC and fees in Business Operations</a> : null} <a href={`${modulePath('reviews')}?academicStudentId=${s.id}`}>Teacher reviews</a> <ButtonLink href={MODULE_PATHS.students}>All students</ButtonLink></>}
+        actions={<>{opsHref ? <a href={opsHref}>Admission, KYC and fees in Business Operations</a> : null} {canProgress ? <a href={MODULE_PATHS.studentProgress(s.id)}>Progress and support</a> : null} <a href={`${modulePath('reviews')}?academicStudentId=${s.id}`}>Teacher reviews</a> <ButtonLink href={MODULE_PATHS.students}>{sectionLabel(access.user, 'students')}</ButtonLink></>}
       />
       <div className="el-stack">
         {!s.contactsHidden ? (
@@ -120,7 +120,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
                   empty={<EmptyState title="No missed classes recorded" />}
                   columns={[
                     { key: 'date', header: 'Date', render: (m) => fmtDay(m.date) },
-                    { key: 'reason', header: 'Reason', render: (m) => m.reason.replace(/_/g, ' ') },
+                    { key: 'reason', header: 'Reason', render: (m) => words(m.reason) },
                   ]}
                 />
               </Card>
@@ -134,13 +134,13 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
                 rowKey={(t) => t.id}
                 empty={<EmptyState title="No catch-up tasks" />}
                 columns={[
-                  { key: 'reason', header: 'Reason', render: (t) => t.reason.replace(/_/g, ' ') },
+                  { key: 'reason', header: 'Reason', render: (t) => words(t.reason) },
                   { key: 'due', header: 'Due', render: (t) => fmtDay(t.dueDate) },
                   { key: 'status', header: 'Status', render: (t) => <StateBadge state={t.status} /> },
                   { key: 'note', header: 'Note', render: (t) => t.note ?? '' },
                 ]}
               />
-              <p className="el-field-hint">Ranked catch-up lists per batch are on the <a href={MODULE_PATHS.progress}>Progress</a> page.</p>
+              <p className="el-field-hint">Ranked catch-up lists per batch and every support plan are on <a href={MODULE_PATHS.progress}>Progress and support</a>.</p>
             </Card>
             <Card title="Interventions">
               <InterventionsTable rows={progress.interventions} canWrite={canWrite} />

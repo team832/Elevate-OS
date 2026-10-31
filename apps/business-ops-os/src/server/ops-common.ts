@@ -37,7 +37,10 @@ export function groupBy<T>(rows: readonly T[], key: (r: T) => string | null) {
   const out = new Map<string, T[]>();
   for (const r of rows) {
     const k = key(r);
-    if (k) out.set(k, [...(out.get(k) ?? []), r]);
+    if (!k) continue;
+    const list = out.get(k);
+    if (list) list.push(r);
+    else out.set(k, [r]);
   }
   return out;
 }

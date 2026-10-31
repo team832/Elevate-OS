@@ -11,6 +11,7 @@ import { ADMISSION_STATUS_LABELS, istToday, type AdmissionStatus } from '../doma
 import { documentChecklist } from '../domain/admission-form';
 import { ageOn } from '../domain/applications';
 import { FEE_BALANCE_LABELS } from '../domain/fees';
+import { batchLabel } from '../domain/students';
 import {
   constructiveSummary,
   inIstPeriod,
@@ -166,12 +167,9 @@ export async function buildSnapshot(
     },
     programmes: profile.cases.map((c) => ({
       programme: c.programme?.name ?? 'Not recorded',
-      batch: c.enrolledBatchId
-        ? (available?.enrolments.find((e) => e.programmeCode === c.programme?.code)?.batchName ??
-          'Assigned in Academic OS')
-        : c.intendedBatchId
-          ? 'Requested from Academic OS'
-          : 'To be assigned',
+      batch:
+        available?.enrolments.find((e) => e.programmeCode === c.programme?.code)?.batchName ??
+        batchLabel(c.enrolledBatchId, c.intendedBatchId, c.enrolmentId),
       status: c.statusLabel,
     })),
     academic,

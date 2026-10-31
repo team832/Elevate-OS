@@ -7,10 +7,12 @@
 import { and, asc, count, desc, eq, ilike, inArray, ne, or } from 'drizzle-orm';
 import { containsPattern } from '@elevate/server-kit';
 import { z } from 'zod';
-import { can, grantsForRole } from '@elevate/authorization';
+import { can, grantsForRole, ROLES } from '@elevate/authorization';
 import {
+  departments,
   opsHrRequestEvents as events,
   opsHrRequests as requests,
+  opsStaffProfiles,
   staffMembers,
   userRoles,
   users,
@@ -32,7 +34,7 @@ import type { HrRequestListQuery } from './hr-requests-schemas';
 import { hrReachWhere, hrScopeFor, hrScopeStaff, inHrReach } from './hr-scope';
 
 export { inHrReach };
-import { rowById } from './ops-common';
+import { groupBy, rowById } from './ops-common';
 import { loadSettings } from './settings';
 
 export type HrRequestRow = typeof requests.$inferSelect;
@@ -150,36 +152,63 @@ async function lookups(db: Database, staffIds: readonly (string | null)[] = []) 
   };
 }
 
-/** Active staff with a login (who a request can be for, or forwarded to), by name. */
+/**
+ * Who a request can be for, or forwarded to, by name: active staff with a working login who can
+ * reply. Role and department tell people apart; if those match too, their staff code does.
+ */
 export async function activeStaffOptions(db: Database, exclude?: string | null) {
   // Replying needs ops:hr_requests:create (viewerOn): someone without it could only be a dead end.
-  const roles = ROLE_KEYS.filter((r) => grantsForRole(r).has('ops:hr_requests:create'));
+  const replies = ROLE_KEYS.filter((r) => grantsForRole(r).has('ops:hr_requests:create'));
   const rows = await db
-    .selectDistinct({ id: staffMembers.id, name: staffMembers.fullName })
+    .select({
+      id: staffMembers.id,
+      name: staffMembers.fullName,
+      role: userRoles.role,
+      department: departments.name,
+      code: opsStaffProfiles.staffCode,
+    })
     .from(staffMembers)
-    .innerJoin(userRoles, eq(userRoles.userId, staffMembers.userId))
+    .innerJoin(users, eq(users.id, staffMembers.userId))
+    .innerJoin(userRoles, eq(userRoles.userId, users.id))
+    .leftJoin(departments, eq(departments.id, staffMembers.departmentId))
+    .leftJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id))
     .where(
       and(
         eq(staffMembers.status, 'active'),
-        inArray(userRoles.role, roles),
+        eq(users.status, 'active'),
         exclude ? ne(staffMembers.id, exclude as StaffMemberId) : undefined,
       ),
     )
-    .orderBy(asc(staffMembers.fullName));
-  return rows.map((p) => ({ value: p.id as string, label: p.name }));
+    .orderBy(asc(staffMembers.fullName), asc(userRoles.role));
+  const people = [...groupBy(rows, (r) => r.id).values()]
+    .filter((roles) => roles.some((r) => replies.includes(r.role)))
+    .map((roles) => {
+      const [p] = roles as [(typeof rows)[number]];
+      const jobs = roles.flatMap((r) => ROLES[r.role]?.label ?? []).join(', ');
+      return { p, label: `${p.name} (${jobs}, ${p.department ?? 'no department'})` };
+    });
+  const uses = groupBy(people, (x) => x.label);
+  return people.map(({ p, label }) => ({
+    value: p.id as string,
+    label: uses.get(label)!.length > 1 ? `${label} · ${p.code ?? p.id.slice(0, 8)}` : label,
+  }));
 }
 
-/** The new-request form: categories and who a request can be for (HR, named roles, colleagues). */
-export async function requestFormOptions(db: Database, actor: Actor) {
+/** The new-request form: categories and who a request can be for (HR, named roles, colleagues; `find` narrows the colleagues). */
+export async function requestFormOptions(db: Database, actor: Actor, find?: string) {
   await accessScope(db, actor, 'ops:hr_requests:create');
   const { named, categories } = await lookups(db);
   const staff = await activeStaffOptions(db, await staffIdForUser(db, actor.id));
+  const words = find?.trim().toLowerCase();
+  const matching = words ? staff.filter((p) => p.label.toLowerCase().includes(words)) : staff;
   return {
     categories: categories.map((c) => ({ value: c.code, label: c.label })),
+    /** Colleagues on the list before any search, and how many the search left. */
+    people: { all: staff.length, shown: matching.length },
     recipients: [
       { value: 'hr', label: 'HR (no one else)' },
       ...Object.keys(named).map((k) => ({ value: `key:${k}`, label: recipientKeyLabel(k) })),
-      ...staff.map((p) => ({ value: `staff:${p.value}`, label: p.label })),
+      ...matching.map((p) => ({ value: `staff:${p.value}`, label: p.label })),
     ],
   };
 }

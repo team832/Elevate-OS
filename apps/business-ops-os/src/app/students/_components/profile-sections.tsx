@@ -20,6 +20,7 @@ import {
 import { ADMISSION_STATUS_LABELS, type AdmissionStatus } from '../../../domain';
 import { addDays, istToday } from '../../../domain/dates';
 import { ACTIVE_CASE_STATUSES } from '../../../domain/student-lifecycle';
+import { batchLabel } from '../../../domain/students';
 import type { getStudent } from '../../../server/students';
 import { ActionForm, type FieldSpec } from '../../../ui/action-form';
 import { fmtDate, fmtDateTime, fmtPaise, humanise, statusTone } from '../../../ui/format';
@@ -36,15 +37,14 @@ type Level = { level?: 2 | 3 };
 export const statusLabel = (s: string) =>
   ADMISSION_STATUS_LABELS[s as AdmissionStatus] ?? humanise(s);
 
-/** Batches belong to Academic OS; Ops only knows whether one is requested or assigned. */
-export const batchLabel = (enrolled: string | null, intended: string | null) =>
-  enrolled ? 'Assigned in Academic OS' : intended ? 'Requested from Academic OS' : 'To be assigned';
+export { batchLabel };
 
 /**
  * "Class 12 Commerce (batch assigned) + IPMAT preparation (batch Sample IPMAT A, from Academic OS)":
- * `placed` is Academic's batch name per enrolment id; without one, Ops' own state is shown.
+ * `placed` is Academic's batch name per enrolment id, null when Academic could not be read; without
+ * a name, Ops' own state is shown.
  */
-export const programmesLine = (d: Profile, placed: ReadonlyMap<string, string>) =>
+export const programmesLine = (d: Profile, placed: ReadonlyMap<string, string> | null) =>
   d.cases
     .filter(
       (c) =>
@@ -52,8 +52,8 @@ export const programmesLine = (d: Profile, placed: ReadonlyMap<string, string>) 
         c.population === 'on_hold',
     )
     .map((c) => {
-      const batch = c.enrolmentId && placed.get(c.enrolmentId);
-      return `${c.programme?.name ?? 'Programme not set'} (batch ${batch ? `${batch}, from Academic OS` : c.enrolledBatchId ? 'assigned' : c.intendedBatchId ? 'requested' : 'to be assigned'})`;
+      const batch = c.enrolmentId && placed?.get(c.enrolmentId);
+      return `${c.programme?.name ?? 'Programme not set'} (batch ${batch ? `${batch}, from Academic OS` : c.enrolledBatchId ? 'assigned' : c.enrolmentId && !placed ? 'not known, Academic OS unavailable' : c.intendedBatchId ? 'requested' : 'to be assigned'})`;
     })
     .join(' + ') || 'No active programme';
 
@@ -145,7 +145,7 @@ export function ProgrammesTable({ d, user }: { d: Profile; user: Principal }) {
         {
           key: 'batch',
           header: 'Batch',
-          render: (c) => batchLabel(c.enrolledBatchId, c.intendedBatchId),
+          render: (c) => batchLabel(c.enrolledBatchId, c.intendedBatchId, c.enrolmentId),
         },
         { key: 'admitted', header: 'Admitted', render: (c) => fmtDate(c.admissionDate) },
         { key: 'enrolled', header: 'Enrolled', render: (c) => fmtDateTime(c.enrolledAt) },

@@ -25,7 +25,7 @@ import {
 import { MODULE_PATHS } from '../../../../server/paths';
 import { ApiForm } from '../../../../ui/api-form';
 import { AttendanceForm } from '../../../../ui/attendance-form';
-import { StateBadge, fmtDateTime } from '../../../../ui/badges';
+import { StateBadge, fmtDateTime, fmtSlot } from '../../../../ui/badges';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -79,7 +79,7 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
   if (!data.ok)
     return (
       <AcademicShell access={access} active="attendance">
-        <LoadError level={1} error={data.error} />
+        <LoadError level={1} back="teaching" error={data.error} />
       </AcademicShell>
     );
   const { session, info, roster, demoAttendees, counts, teachers, history, candidates, staff, reviewLinks } =
@@ -98,7 +98,7 @@ export default async function ClassPage({ params }: { params: Promise<{ sessionI
       <PageHeader
         title={`${info.batchCode} · ${info.subjectName ?? 'Class'}`}
         meta={<StateBadge state={session.status === 'held' ? 'delivered' : session.status} />}
-        description={`${fmtDay(session.date)}, ${session.startTime} IST · ${session.durationMinutes} min · ${where} · Planned teacher: ${info.teacherName ?? 'not set'}`}
+        description={`${fmtSlot(session.date, session.startTime)} IST · ${session.durationMinutes} min · ${where} · Planned teacher: ${info.teacherName ?? 'not set'}`}
         actions={
           <>
             {session.onlineLink ? (

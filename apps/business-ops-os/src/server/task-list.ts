@@ -80,7 +80,10 @@ export function listWhere(access: TaskAccess, q: Partial<TaskListQuery>) {
     visibleFilter(access, q.staffId),
     q.q ? ilike(tasks.title, containsPattern(q.q)) : undefined,
     q.priority ? eq(tasks.priority, q.priority) : undefined,
-    q.departmentId ? eq(tasks.departmentId, q.departmentId as never) : undefined,
+    // The department the record shows: its own, else the owner's (task-detail.ts).
+    q.departmentId
+      ? sql`coalesce(${tasks.departmentId}, (select s.department_id from core.staff_members s where s.id = ${tasks.staffId})) = ${q.departmentId}`
+      : undefined,
     q.from ? gte(tasks.dueOn, q.from) : undefined,
     q.to ? lte(tasks.dueOn, q.to) : undefined,
     q.ack
@@ -158,6 +161,12 @@ export async function listTasks(
         dueOn: tasks.dueOn,
         dueTime: tasks.dueTime,
         originalDueOn: tasks.originalDueOn,
+        /** Who moved the deadline last, when and why (task history). */
+        lastDueChange: sql<{
+          by: string;
+          at: string;
+          reason: string | null;
+        } | null>`(select json_build_object('by', u.display_name, 'at', e.occurred_at, 'reason', e.reason) from ops.task_events e join core.users u on u.id = e.actor_user_id where e.task_id = ${tasks.id} and e.kind = 'due_changed' order by e.occurred_at desc limit 1)`,
         recurrence: tasks.recurrence,
         acknowledgedAt: tasks.acknowledgedAt,
         deliveredAt: tasks.deliveredAt,

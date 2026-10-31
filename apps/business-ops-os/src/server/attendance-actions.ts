@@ -3,12 +3,13 @@
  * day decisions, approved leave, holidays, work schedules and who follows which schedule. Every
  * change is audited. Nobody records or decides their own attendance.
  */
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
   opsAttendancePunches,
   opsDailyAttendance,
   opsHolidays,
+  opsLeaveApplications,
   opsLeaveRecords,
   opsStaffProfiles,
   opsWorkSchedules,
@@ -22,6 +23,7 @@ import {
 } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import { istToday } from '../domain/dates';
+import { LEAVE_NOT_APPROVER, leaveAudit, leaveRange, mayApproveLeave } from '../domain/leave';
 import { hrAttendanceStaff } from './attendance';
 import type {
   assignScheduleBody,
@@ -32,8 +34,10 @@ import type {
   punchBody,
   scheduleBody,
 } from './attendance-schemas';
-import { accessScope, notFound, staffIdForUser, type Actor } from './context';
+import { accessScope, notFound, staffIdForUser, userIdsForStaff, type Actor } from './context';
 import { fieldError, opsAudit, rowById } from './ops-common';
+import { loadSettings } from './settings';
+import { notifyHosted } from './task-links';
 
 const audit = opsAudit('attendance');
 
@@ -130,10 +134,11 @@ export async function saveDecision(
   return row!;
 }
 
+/** Also the path an approved application takes (leave-applications.ts). */
 export async function recordLeave(
   db: Database,
   actor: Actor,
-  body: z.output<typeof leaveBody>,
+  body: z.output<typeof leaveBody> & { isSample?: boolean },
   requestId?: string,
 ) {
   await manage(db, actor, body.staffId);
@@ -142,12 +147,12 @@ export async function recordLeave(
       .insert(opsLeaveRecords)
       .values({ ...body, staffId: body.staffId as StaffMemberId, approvedBy: actor.id })
       .returning();
-    await audit(tx, actor, row!.id, 'attendance.leave_recorded', { after: row }, requestId);
+    await audit(tx, actor, row!.id, 'attendance.leave_recorded', leaveAudit({ after: row }), requestId);
     return row!;
   });
 }
 
-/** Cancel approved leave (the days are worked out again without it). Not your own. */
+/** Cancel approved leave (the days are worked out again without it) and any application it came from. Not your own. */
 export async function cancelLeave(
   db: Database,
   actor: Actor,
@@ -163,11 +168,55 @@ export async function cancelLeave(
       throw new InvalidStateTransitionError('This leave is already cancelled.');
     const [row] = await tx
       .update(opsLeaveRecords)
-      .set({ status: 'cancelled', updatedAt: new Date() })
+      .set({
+        status: 'cancelled',
+        // Not in the audit trail (words about leave): the record keeps them, for the same few readers.
+        reason: sql`concat_ws('. ', ${opsLeaveRecords.reason}, ${`Cancelled: ${body.reason}`}::text)`,
+        updatedAt: new Date(),
+      })
       .where(eq(opsLeaveRecords.id, id))
       .returning();
-    const data = { before, after: row, metadata: { reason: body.reason } };
-    await audit(tx, actor, id, 'attendance.leave_cancelled', data, requestId);
+    await audit(tx, actor, id, 'attendance.leave_cancelled', leaveAudit({ before, after: row }), requestId);
+    const [application] = await tx
+      .update(opsLeaveApplications)
+      .set({
+        status: 'cancelled',
+        cancelledBy: actor.id,
+        cancelledAt: new Date(),
+        cancelReason: body.reason,
+        version: sql`${opsLeaveApplications.version} + 1`,
+      })
+      .where(
+        and(eq(opsLeaveApplications.leaveRecordId, id), eq(opsLeaveApplications.status, 'approved')),
+      )
+      .returning();
+    if (application) {
+      // Inside the transaction: throwing here undoes both updates above.
+      if (!mayApproveLeave(actor.roles, (await loadSettings(tx))['hr.leave_approver'].value.who))
+        throw new ForbiddenError(LEAVE_NOT_APPROVER);
+      await opsAudit('leave_application')(
+        tx,
+        actor,
+        application.id,
+        'leave.cancelled',
+        leaveAudit({ after: application }),
+        requestId,
+      );
+      await notifyHosted(
+        tx,
+        actor,
+        await userIdsForStaff(tx, [application.staffId]),
+        'work',
+        '/my-attendance?view=leave',
+        {
+          kind: 'leave.cancelled',
+          title: `Your ${application.kind} leave for ${leaveRange(application.fromDate, application.toDate)} was cancelled by HR`,
+          body: body.reason,
+          entityType: 'leave_application',
+          entityId: application.id,
+        },
+      );
+    }
     return row!;
   });
 }

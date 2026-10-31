@@ -17,7 +17,7 @@ import { countUnread } from '@elevate/notifications';
 import { requirePageAccess, workspaceHrefs, type PageAccess } from '@elevate/server-kit/next';
 import { toAppError } from '@elevate/server-kit';
 import { workNav } from '@elevate/business-ops-os/work';
-import { AppShell, ErrorState, LoadingState } from '@elevate/shared-ui';
+import { AppShell, ButtonLink, ErrorState, LoadingState } from '@elevate/shared-ui';
 import { MODULE } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
 import type { Actor } from '../server/context';
@@ -212,6 +212,13 @@ const NAV: {
   },
 ];
 
+const labelOf = (n: (typeof NAV)[number], user: AuthenticatedUser) =>
+  scopeFor(user, n.permission) === 'own' && n.ownLabel ? n.ownLabel : n.label;
+
+/** A section's name as this person's rail shows it: "My batches" for a teacher, "Batches" for a coordinator. Page titles use it too. */
+export const sectionLabel = (user: AuthenticatedUser, key: Section) =>
+  labelOf(NAV.find((n) => n.key === key)!, user);
+
 /** Sidebar items for this user (cosmetic: every page and route checks again on the server). */
 export function navFor(user: AuthenticatedUser, active?: Section) {
   return NAV.flatMap((n) => {
@@ -220,7 +227,7 @@ export function navFor(user: AuthenticatedUser, active?: Section) {
     return [
       {
         href: n.href,
-        label: scope === 'own' && n.ownLabel ? n.ownLabel : n.label,
+        label: labelOf(n, user),
         group: n.group,
         active: n.key === active,
       },
@@ -305,6 +312,7 @@ export async function AcademicShell({
           level={1}
           title="No access to this page"
           description="Your roles do not include the permission this page needs. Ask an academic coordinator or a platform administrator."
+          action={<ButtonLink href={MODULE_PATHS.home}>Back to My day</ButtonLink>}
         />
       ) : (
         <Suspense fallback={<LoadingState label={loading} />}>{children}</Suspense>
@@ -313,15 +321,32 @@ export async function AcademicShell({
   );
 }
 
-/** Render a load failure honestly (never as empty data). Only AppError 4xx messages are shown; anything else stays generic (6.6). `level` 1 when it replaces the whole page. */
-export function LoadError({ error, level }: { error: unknown; level?: 1 | 2 }) {
+const NOT_FOUND_REASON =
+  'The link may be out of date or mistyped, or you may not be assigned to this record. Ask an academic coordinator if you expected to see it.';
+
+/**
+ * Render a load failure honestly (never as empty data). Only AppError 4xx messages are shown; anything
+ * else stays generic (6.6). When it replaces the whole page (`level` 1) it needs `back`, the section
+ * to return to. The same words whether a record is missing or out of scope, so nothing leaks.
+ */
+export function LoadError({
+  error,
+  level,
+  back,
+}: { error: unknown; level?: 2; back?: undefined } | { error: unknown; level: 1; back: Section }) {
   const known = toAppError(error);
+  const section = NAV.find((n) => n.key === back);
+  const action = section ? <ButtonLink href={section.href}>Back to {section.label.toLowerCase()}</ButtonLink> : undefined;
+  const notFound = known.code === 'NOT_FOUND';
+  // On a record page the only value sent is the id in the link, so a malformed one is a missing record.
+  const malformed = level === 1 && known.status === 400;
   if (known.status < 500) {
     return (
       <ErrorState
         level={level}
-        title={known.code === 'NOT_FOUND' ? 'Not found' : 'Cannot show this'}
-        description={known.message}
+        title={notFound ? known.message.replace(/\.$/, '') : malformed ? 'Record not found' : 'Cannot show this'}
+        description={notFound || malformed ? NOT_FOUND_REASON : known.message}
+        action={action}
       />
     );
   }
@@ -331,6 +356,7 @@ export function LoadError({ error, level }: { error: unknown; level?: 1 | 2 }) {
       level={level}
       title="Could not load this page"
       description="The data could not be loaded. Try again; if it keeps happening, tell a platform administrator."
+      action={action}
     />
   );
 }

@@ -40,6 +40,12 @@ export type OpsWeeklyPattern = Record<
   { start: string; end: string } | null
 >;
 export const OPS_LEAVE_STATUSES = ['approved', 'cancelled'] as const;
+export const OPS_LEAVE_APPLICATION_STATUSES = [
+  'pending',
+  'approved',
+  'rejected',
+  'cancelled',
+] as const;
 export const OPS_PUNCH_DIRECTIONS = ['in', 'out'] as const;
 export const OPS_PUNCH_SOURCES = ['manual', 'import'] as const;
 export const OPS_ATTENDANCE_IMPORT_STATUSES = ['preview', 'committed'] as const;
@@ -108,7 +114,7 @@ export const opsHolidays = ops.table(
   ],
 );
 
-/** Approved leave recorded by HR (leave requests are not modelled). `kind` is HR's own wording. */
+/** Approved leave: recorded by HR directly, or written when an application is approved. `kind` is HR's own wording or the application's type. */
 export const opsLeaveRecords = ops.table(
   'leave_records',
   {
@@ -129,6 +135,66 @@ export const opsLeaveRecords = ops.table(
     check('leave_records_status_check', sql`${t.status} IN ${inList(OPS_LEAVE_STATUSES)}`),
     check('leave_records_dates_check', sql`${t.toDate} >= ${t.fromDate}`),
     check('leave_records_kind_check', filled(t.kind)),
+  ],
+);
+
+/**
+ * A staff member's application for leave (owner decision 31 Oct 2026): waits for HR, who approve or
+ * reject it (a rejection needs a reason); the applicant may cancel while it waits, HR cancels
+ * approved leave with a reason. Approval writes the one leave record attendance reads. No balances.
+ */
+export const opsLeaveApplications = ops.table(
+  'leave_applications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    staffId: staffRefRestrict('staff_id').notNull(),
+    /** The type as named in setting hr.leave_types when the person applied. */
+    kind: text('kind').notNull(),
+    fromDate: isoDate('from_date').notNull(),
+    toDate: isoDate('to_date').notNull(),
+    reason: text('reason').notNull(),
+    status: text('status', { enum: OPS_LEAVE_APPLICATION_STATUSES }).notNull().default('pending'),
+    appliedBy: userRef('applied_by').notNull(),
+    decidedBy: userRef('decided_by'),
+    decidedAt: instant('decided_at'),
+    decisionNote: text('decision_note'),
+    cancelledBy: userRef('cancelled_by'),
+    cancelledAt: instant('cancelled_at'),
+    cancelReason: text('cancel_reason'),
+    /** The leave record approval wrote; kept after cancelling, when that record is cancelled too. */
+    leaveRecordId: uuid('leave_record_id').references(() => opsLeaveRecords.id, {
+      onDelete: 'restrict',
+    }),
+    /** Rises with every change: a decision made on an older copy is refused. */
+    version: integer('version').notNull().default(1),
+    isSample: boolean('is_sample').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('leave_applications_staff_from_idx').on(t.staffId, t.fromDate),
+    index('leave_applications_status_from_idx').on(t.status, t.fromDate),
+    uniqueIndex('leave_applications_leave_record_key').on(t.leaveRecordId),
+    check(
+      'leave_applications_status_check',
+      sql`${t.status} IN ${inList(OPS_LEAVE_APPLICATION_STATUSES)}`,
+    ),
+    check('leave_applications_dates_check', sql`${t.toDate} >= ${t.fromDate}`),
+    check('leave_applications_kind_check', filled(t.kind)),
+    check('leave_applications_reason_check', filled(t.reason)),
+    check('leave_applications_version_check', sql`${t.version} >= 1`),
+    check(
+      'leave_applications_decided_check',
+      sql`(${t.decidedAt} IS NULL) = (${t.decidedBy} IS NULL) AND (${t.status} <> 'pending' OR ${t.decidedAt} IS NULL) AND (${t.status} NOT IN ('approved', 'rejected') OR ${t.decidedAt} IS NOT NULL) AND (${t.status} <> 'rejected' OR ${filled(t.decisionNote)})`,
+    ),
+    check(
+      'leave_applications_cancelled_check',
+      sql`(${t.status} = 'cancelled') = (${t.cancelledAt} IS NOT NULL) AND (${t.cancelledAt} IS NULL) = (${t.cancelledBy} IS NULL) AND (${t.status} <> 'cancelled' OR ${t.leaveRecordId} IS NULL OR ${filled(t.cancelReason)})`,
+    ),
+    check(
+      'leave_applications_record_check',
+      sql`(${t.status} <> 'approved' OR ${t.leaveRecordId} IS NOT NULL) AND (${t.status} NOT IN ('pending', 'rejected') OR ${t.leaveRecordId} IS NULL)`,
+    ),
   ],
 );
 

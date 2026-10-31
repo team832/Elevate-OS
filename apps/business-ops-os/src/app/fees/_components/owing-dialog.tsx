@@ -26,7 +26,7 @@ const courseLine = (r: FeeYearStudent) =>
   r.courses
     .map(
       (c) =>
-        `${c.name ?? 'Programme not set'}, batch ${batchLabel(c.enrolledBatchId, c.intendedBatchId).replace(/^./, (x) => x.toLowerCase())}`,
+        `${c.name ?? 'Programme not set'}, batch ${batchLabel(c.enrolledBatchId, c.intendedBatchId, c.enrolmentId).replace(/^./, (x) => x.toLowerCase())}`,
     )
     .join(' + ') || 'Not recorded in Business Operations';
 

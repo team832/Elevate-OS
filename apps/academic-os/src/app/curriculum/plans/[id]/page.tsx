@@ -14,7 +14,7 @@ import {
 import { getCourse, getPlan } from '../../../../server';
 import { MODULE_PATHS } from '../../../../server/paths';
 import { ApiForm } from '../../../../ui/api-form';
-import { PlanBadge, StateBadge, fmtDateTime } from '../../../../ui/badges';
+import { PlanBadge, StateBadge, fmtDateTime, wordOptions } from '../../../../ui/badges';
 import { AcademicShell, LoadError, gate, load } from '../../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +29,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
     const plan = await getPlan(db, id);
     return { ...plan, course: await getCourse(db, plan.plan.courseId) };
   });
-  if (!data.ok) return <AcademicShell access={access} active="curriculum"><LoadError level={1} error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="curriculum"><LoadError level={1} back="curriculum" error={data.error} /></AcademicShell>;
   const { plan, items, totals, totalClasses, totalHours, approvals, supersededBy, course } = data.data;
   const canWrite = can(access.user, 'academic:courses:write');
   const canApprove = can(access.user, 'academic:curriculum:approve');
@@ -39,8 +39,8 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
       <PageHeader
         title={`${plan.code} — ${plan.title}`}
         description={`Course ${course.code} · version ${plan.version}`}
-        meta={<><PlanBadge status={plan.status} /> <PlanBadge status={plan.countsStatus} prefix="counts" /> <PlanBadge status={plan.datesStatus} prefix="dates" /></>}
-        actions={<ButtonLink href={MODULE_PATHS.curriculum}>All plans</ButtonLink>}
+        meta={<><PlanBadge status={plan.status} prefix="plan" /> <PlanBadge status={plan.countsStatus} prefix="counts" /> <PlanBadge status={plan.datesStatus} prefix="dates" /></>}
+        actions={<ButtonLink href={MODULE_PATHS.curriculum}>Back to curriculum</ButtonLink>}
       />
       <div className="el-stack">
         <Alert tone="info" title="This is a plan, not delivery">
@@ -58,7 +58,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
           <DataTable compact
             rows={totals}
             rowKey={(t) => t.subjectCode}
-            empty={<EmptyState title="No items yet" />}
+            empty={<EmptyState title="No items yet" description={canWrite && plan.status === 'proposed' ? 'Add the first item below.' : 'An academic coordinator adds items while the plan is proposed.'} />}
             columns={[
               { key: 'subjectCode', header: 'Subject' },
               { key: 'teaching', header: 'Teaching', numeric: true },
@@ -88,7 +88,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
               successMessage="Approval requested."
               idPrefix="req"
               fields={[
-                { name: 'targetStatus', label: 'Make this plan', type: 'select', required: true, options: (plan.status === 'proposed' ? ['locked', 'provisional'] : ['locked']).map((v) => ({ value: v, label: v })) },
+                { name: 'targetStatus', label: 'Make this plan', type: 'select', required: true, options: wordOptions(plan.status === 'proposed' ? ['locked', 'provisional'] : ['locked']) },
                 { name: 'comment', label: 'Comment', type: 'textarea' },
               ]}
             />
@@ -110,7 +110,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
           <DataTable compact
             rows={items}
             rowKey={(i) => i.id}
-            empty={<EmptyState title="No items" />}
+            empty={<EmptyState title="No items" description={canWrite && plan.status === 'proposed' ? 'Add the first item below.' : 'An academic coordinator adds items while the plan is proposed.'} />}
             columns={[
               { key: 'sequence', header: '#', numeric: true },
               { key: 'lessonCode', header: 'Lesson' },

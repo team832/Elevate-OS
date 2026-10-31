@@ -19,7 +19,7 @@ import { getLogExceptions, listBatches, listClassRecords, listSessions, listStaf
 import { MODULE_PATHS } from '../../server/paths';
 import { classRecordsQuery } from '../../server/schemas-teaching';
 import { ApiButton, ApiForm } from '../../ui/api-form';
-import { StateBadge, fmtDateTime } from '../../ui/badges';
+import { StateBadge, fmtDateTime, fmtSlot } from '../../ui/badges';
 import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 import { ACTIVITY_OPTIONS, COMPLETION_OPTIONS, activityLabel } from './log-labels';
@@ -78,7 +78,7 @@ async function Body({ access, params }: { access: PageAccess; params: Params }) 
               rowKey={(s) => s.id}
               empty={<EmptyState title="No classes in the last 14 days" description="Classes you teach appear here once they are on the timetable." />}
               columns={[
-                { key: 'when', header: 'Class', render: (s) => `${fmtDay(s.date)} ${s.startTime} · ${s.batchCode}` },
+                { key: 'when', header: 'Class', render: (s) => `${fmtSlot(s.date, s.startTime)} · ${s.batchCode}` },
                 { key: 'planned', header: 'Planned topic', render: (s) => s.chapterTitle ?? 'None planned' },
                 { key: 'delivered', header: 'Delivery', render: (s) => (s.status === 'held' ? <StateBadge state="held" /> : 'Not marked delivered') },
                 { key: 'log', header: 'Log', render: (s) => (logState(s.id) ? <StateBadge state={logState(s.id)} /> : 'Not written') },
@@ -93,7 +93,7 @@ async function Body({ access, params }: { access: PageAccess; params: Params }) 
             rowKey={(s) => s.id}
             empty={<EmptyState title="No delivered class is waiting for a log" description="A delivered class appears here until its log is submitted." />}
             columns={[
-              { key: 'when', header: 'Class', render: (s) => <a href={MODULE_PATHS.teachingLog(s.id)}>{`${fmtDay(s.date)} ${s.startTime} · ${s.batchCode}`}</a> },
+              { key: 'when', header: 'Class', render: (s) => <a href={MODULE_PATHS.teachingLog(s.id)}>{`${fmtSlot(s.date, s.startTime)} · ${s.batchCode}`}</a> },
               { key: 'teacher', header: 'Teacher', render: (s) => s.teacherName ?? 'No teacher' },
               { key: 'planned', header: 'Planned topic', render: (s) => s.chapterTitle ?? 'None planned' },
             ]}
@@ -105,7 +105,7 @@ async function Body({ access, params }: { access: PageAccess; params: Params }) 
             rowKey={(s) => s.id}
             empty={<EmptyState title="No differences between plan and logs" description="A delivered class appears here if its submitted log names other chapters than the plan." />}
             columns={[
-              { key: 'when', header: 'Class', render: (s) => `${fmtDay(s.date)} ${s.startTime} · ${s.batchCode}` },
+              { key: 'when', header: 'Class', render: (s) => `${fmtSlot(s.date, s.startTime)} · ${s.batchCode}` },
               { key: 'teacher', header: 'Teacher', render: (s) => s.teacherName ?? 'No teacher' },
               { key: 'planned', header: 'Planned', render: (s) => s.chapterCode },
               { key: 'logged', header: 'Logged', render: (s) => s.loggedChapters.join(', ') },

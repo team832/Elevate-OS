@@ -14,6 +14,7 @@ import {
   academicAssessmentDetailV1Schema,
   academicAssessmentListV1Schema,
   AppError,
+  ConflictError,
   ForbiddenError,
   InternalError,
   NotFoundError,
@@ -46,12 +47,20 @@ export function assertCan(actor: Actor, permission: Permission) {
 const read = <S extends z.ZodType>(path: string, schema: S) =>
   fetchInternal(academicUrl(`${BASE}${path}`), schema, { caller: 'ops', timeoutMs: 8000 });
 
-const UNREACHABLE =
-  'Academic OS could not be reached, so nothing was changed. Try again in a minute.';
-/** Academic's refusal as the same kind of error here (its message is written for people). */
+/**
+ * Academic's refusal as the same kind of error here (its message is written for people). Stopped
+ * or slow is a plain refusal, not a fault of ours: no 500, no stack. A timed-out write may have
+ * been saved, so it never says "nothing was changed".
+ */
 export function refusal(r: Extract<InternalWriteResult<unknown>, { ok: false }>): AppError {
-  if (r.status === 0 || r.status >= 500 || r.error.code === 'CONTRACT_MISMATCH')
-    return new InternalError(UNREACHABLE);
+  if (r.status === 0)
+    return new ConflictError(
+      r.error.message === 'Timed out'
+        ? 'Academic OS did not answer in time. Check the record before trying again.'
+        : `Academic OS could not be reached (${r.error.message}), so nothing was changed. Try again in a minute.`,
+    );
+  if (r.status >= 500 || r.error.code === 'CONTRACT_MISMATCH')
+    return new InternalError('Academic OS reported a problem. Check the record before trying again.');
   const code = (
     { 400: 'VALIDATION_FAILED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 409: 'CONFLICT' } as const
   )[r.status as 400];
@@ -88,19 +97,19 @@ export async function academicWrite(
   throw refusal(r);
 }
 
-/** The Academic record; throws when it cannot be read (writes and imports need it). */
-export async function requireTest(actor: Actor, id: string): Promise<TestDetail> {
+/** The Academic record for a page: `unavailable` is shown as "Source unavailable", never zeros. */
+export async function testDetail(actor: Actor, id: string) {
   assertCan(actor, 'ops:assessments:read');
   const r = await read(`/${id}`, academicAssessmentDetailV1Schema);
-  if (r.status === 'available') return r.data;
-  if (r.reason === 'HTTP 404') throw new NotFoundError('Test not found.');
-  throw new InternalError(`Academic OS could not be read (${sourceReasonWords(r.reason)}). Try again in a minute.`);
+  if (r.status === 'unavailable' && r.reason === 'HTTP 404') throw new NotFoundError('Test not found.');
+  return r;
 }
 
-/** The Academic record for a page: `unavailable` is shown as "Source unavailable", never zeros. */
-export function testDetail(actor: Actor, id: string) {
-  assertCan(actor, 'ops:assessments:read');
-  return read(`/${id}`, academicAssessmentDetailV1Schema);
+/** The Academic record; refuses when it cannot be read (writes and imports need it). */
+export async function requireTest(actor: Actor, id: string): Promise<TestDetail> {
+  const r = await testDetail(actor, id);
+  if (r.status === 'available') return r.data;
+  throw new ConflictError(`Academic OS could not be read (${sourceReasonWords(r.reason)}). Try again in a minute.`);
 }
 
 const matches = (a: TestSummary, q: TestListQuery) =>

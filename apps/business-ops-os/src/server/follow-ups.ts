@@ -173,7 +173,7 @@ export async function closeFollowUp(
 
 export type FollowUpView = 'mine' | 'overdue' | 'due_today' | 'open' | 'all';
 
-type FollowUpOptions = { view?: FollowUpView; leadId?: string; now?: Date };
+type FollowUpOptions = { view?: FollowUpView; leadId?: string; dueBy?: IsoDate; now?: Date };
 
 /** The list's conditions; null when the reader has none to see. */
 async function followUpWhere(db: Database, actor: Actor, options: FollowUpOptions) {
@@ -196,6 +196,7 @@ async function followUpWhere(db: Database, actor: Actor, options: FollowUpOption
     conditions.push(eq(opsFollowUps.status, 'open'), eq(opsFollowUps.dueDate, today));
   if (view === 'open') conditions.push(eq(opsFollowUps.status, 'open'));
   if (options.leadId) conditions.push(eq(opsFollowUps.leadId, options.leadId as LeadId));
+  if (options.dueBy) conditions.push(lte(opsFollowUps.dueDate, options.dueBy));
   // Admission follow-ups belong to the admissions case (D-073): Marketing sees lead ones only.
   if (!can(actor, 'ops:admissions:read')) conditions.push(isNull(opsFollowUps.admissionId));
   return conditions;

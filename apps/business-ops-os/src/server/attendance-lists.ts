@@ -3,6 +3,7 @@
  * Readers of everyone's attendance only (ops:attendance:read, all scope).
  */
 import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
+import { can } from '@elevate/authorization';
 import {
   branches,
   departments,
@@ -15,8 +16,9 @@ import {
 } from '@elevate/database';
 import { ForbiddenError } from '@elevate/shared-contracts';
 import { addDays, istToday } from '../domain/dates';
+import { leaveRowsFor } from '../domain/leave';
 import { hrAttendanceStaff } from './attendance';
-import { accessScope, type Actor } from './context';
+import { accessScope, staffIdForUser, type Actor } from './context';
 import { hrReachWhere, hrScopeFor } from './organisation';
 import { inOrder } from './ops-common';
 
@@ -48,6 +50,7 @@ export async function attendanceSetup(db: Database, actor: Actor) {
     db
       .select({
         id: opsLeaveRecords.id,
+        staffId: opsLeaveRecords.staffId,
         staffName,
         fromDate: opsLeaveRecords.fromDate,
         toDate: opsLeaveRecords.toDate,
@@ -75,7 +78,7 @@ export async function attendanceSetup(db: Database, actor: Actor) {
   return {
     schedules,
     holidays,
-    leave,
+    leave: leaveRowsFor(leave, can(actor, 'ops:attendance:manage'), await staffIdForUser(db, actor.id)),
     staff,
     staffOptions: staff.map((s) => ({
       value: s.id as string,

@@ -47,6 +47,8 @@ export interface FieldSpec {
   section?: string;
   /** A select with nothing to choose from: what to do first. */
   emptyHint?: ReactNode;
+  /** The field's own inputs instead of the default one; they must post `name` (SettingFields). */
+  control?: ReactNode;
 }
 
 export interface ActionFormProps {
@@ -391,6 +393,13 @@ export function ActionForm({
         ) : null}
       </>
     );
+    if (f.control)
+      return (
+        <div key={f.name} className="el-field el-field-wide">
+          {f.control}
+          {notes}
+        </div>
+      );
     if (f.type === 'hidden')
       return <input key={f.name} type="hidden" name={f.name} defaultValue={f.defaultValue} />;
     if (f.type === 'checkbox')

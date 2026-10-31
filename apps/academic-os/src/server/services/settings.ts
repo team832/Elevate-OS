@@ -6,7 +6,7 @@
 import { eq } from 'drizzle-orm';
 import { academicSettings, type Database } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
-import { NotFoundError, ValidationError } from '@elevate/shared-contracts';
+import { NotFoundError, plainSettingIssue, ValidationError } from '@elevate/shared-contracts';
 import {
   SETTING_DEFINITIONS,
   SETTING_KEYS,
@@ -49,8 +49,8 @@ export async function updateSetting(
   if (!isSettingKey(key)) throw new NotFoundError(`Unknown setting "${key}".`);
   const parsed = SETTING_DEFINITIONS[key].schema.safeParse(input.value);
   if (!parsed.success) {
-    throw new ValidationError(`Invalid value for ${key}.`, {
-      details: parsed.error.issues.map((i) => ({ location: 'body', path: ['value', ...i.path], message: i.message })),
+    throw new ValidationError('This value cannot be saved.', {
+      details: parsed.error.issues.map((i) => ({ location: 'body', path: ['value'], message: plainSettingIssue(i) })),
     });
   }
   return withTransaction(db, async (tx) => {

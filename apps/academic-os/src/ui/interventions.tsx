@@ -23,7 +23,7 @@ export function InterventionsTable({ rows, canWrite }: { rows: Rows; canWrite: b
       compact
       rows={rows}
       rowKey={(i) => i.id}
-      empty={<EmptyState title="No support plans" description="Open one from a student's progress page when the evidence calls for it." />}
+      empty={<EmptyState title="No support plans" description={canWrite ? "Open one from a student's progress page when the evidence calls for it." : 'An academic coordinator opens these when the evidence calls for it.'} />}
       columns={[
         { key: 'student', header: 'Student', render: (i) => <a href={MODULE_PATHS.studentProgress(i.studentId)}>{i.studentName}</a> },
         { key: 'concern', header: 'Concern and evidence', render: (i) => `${i.trigger.replace(/_/g, ' ')}: ${i.description}${i.evidence ? ` — ${i.evidence}` : ''}` },

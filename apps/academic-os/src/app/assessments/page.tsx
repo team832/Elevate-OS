@@ -1,20 +1,20 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Card, DataTable, EmptyState, PageHeader, fmtDay } from '@elevate/shared-ui';
+import { Card, DataTable, ListEmpty, PageHeader, fmtDay } from '@elevate/shared-ui';
 import { getCourse, listAssessments, listBatches } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { assessmentsQuery } from '../../server/schemas';
 import { myAssessmentIds, TEACHER_ASSESSMENT_LISTS } from '../../server/services/teacher-assessment-counts';
 import { ApiForm } from '../../ui/api-form';
-import { StateBadge } from '../../ui/badges';
+import { StateBadge, wordOptions, words, fmtSlot } from '../../ui/badges';
 import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Assessments' };
 
-const KINDS = ['chapter_test', 'sectional', 'full_mock', 'practice'].map((v) => ({ value: v, label: v.replace(/_/g, ' ') }));
+const KINDS = wordOptions(['chapter_test', 'sectional', 'full_mock', 'practice']);
 
 export default async function AssessmentsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   // Gate before the Suspense boundary so a signed-out visitor gets a real 307 (D-022).
@@ -67,13 +67,13 @@ async function Body({ access, batchId, mine }: { access: PageAccess; batchId?: s
               rows={data.data.assessments}
               rowKey={(a) => a.id}
               sampleOf={(a) => a.isSample}
-              empty={<EmptyState title="No assessments" description={data.data.filtered ? 'None in this list right now.' : canWrite ? 'Create one below.' : 'Assessments of your batches appear here once a coordinator creates them.'} />}
+              empty={<ListEmpty noun="assessments" params={{ batchId, mine }} first={canWrite ? 'Create one below.' : 'Assessments of your batches appear here once a coordinator creates them.'} />}
               columns={[
                 { key: 'code', header: 'Code', render: (a) => <a href={MODULE_PATHS.assessment(a.id)}>{a.code}</a> },
                 { key: 'title', header: 'Title' },
-                { key: 'kind', header: 'Kind', render: (a) => a.kind.replace(/_/g, ' ') },
+                { key: 'kind', header: 'Kind', render: (a) => words(a.kind) },
                 { key: 'batch', header: 'Batch', render: (a) => a.batchCode },
-                { key: 'date', header: 'Date', render: (a) => (a.scheduledDate ? `${fmtDay(a.scheduledDate)}${a.startTime ? ` ${a.startTime}` : ''}` : 'not scheduled') },
+                { key: 'date', header: 'Date', render: (a) => (a.scheduledDate ? (a.startTime ? fmtSlot(a.scheduledDate, a.startTime) : fmtDay(a.scheduledDate)) : 'not scheduled') },
                 { key: 'duration', header: 'Minutes', numeric: true, render: (a) => (a.durationMinutes === null ? 'unknown' : a.durationMinutes) },
                 { key: 'status', header: 'Status', render: (a) => <><StateBadge state={a.status} />{a.publishedAt ? <> <StateBadge state={a.provisional ? 'provisional' : 'published'} /></> : null}</> },
               ]}

@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Card, DataTable, EmptyState, PageHeader, Subnav, fmtDay } from '@elevate/shared-ui';
+import { Card, DataTable, EmptyState, PageHeader, Subnav } from '@elevate/shared-ui';
 import type { PageAccess } from '@elevate/server-kit/next';
 import { WEEKDAY_NAMES } from '../../../domain';
 import { getCourse, listBatches, listPatterns, listRooms, listStaff } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
-import { PlanBadge } from '../../../ui/badges';
+import { PlanBadge, fmtSpan, fmtClock } from '../../../ui/badges';
 import { BuildTimetableForm } from '../../../ui/timetable-builder';
 import { AcademicShell, LoadError, TIMETABLE_TABS, actorFor, gate, load } from '../../../ui/shell';
 
@@ -59,12 +59,12 @@ async function Body({ access }: { access: PageAccess }) {
               rowKey={(p) => p.id}
               empty={<EmptyState title="No patterns yet" description={canWrite ? 'Create a draft below, then preview and publish it.' : 'An academic coordinator publishes the weekly timetable.'} />}
               columns={[
-                { key: 'when', header: 'Weekly slot', render: (p) => <a href={MODULE_PATHS.pattern(p.id)}><strong>{WEEKDAY_NAMES[p.weekday - 1]} {p.startTime}</strong></a> },
+                { key: 'when', header: 'Weekly slot', render: (p) => <a href={MODULE_PATHS.pattern(p.id)}><strong>{WEEKDAY_NAMES[p.weekday - 1]} {fmtClock(p.startTime)}</strong></a> },
                 { key: 'batch', header: 'Batch', render: (p) => p.batchCode },
                 { key: 'subject', header: 'Subject', render: (p) => p.subjectName },
                 { key: 'teacher', header: 'Teacher', render: (p) => p.teacherName },
                 { key: 'room', header: 'Room', render: (p) => p.roomCode ?? (p.onlineLink ? 'Online' : '—') },
-                { key: 'range', header: 'Dates', render: (p) => `${fmtDay(p.effectiveFrom)} to ${fmtDay(p.effectiveTo, 'open')}` },
+                { key: 'range', header: 'Dates', render: (p) => fmtSpan(p.effectiveFrom, p.effectiveTo) },
                 { key: 'status', header: 'Status', render: (p) => <PlanBadge status={p.status} /> },
               ]}
             />

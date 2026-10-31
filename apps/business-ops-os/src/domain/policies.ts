@@ -6,6 +6,7 @@
  * Pure: the server loads stored overrides and calls `resolveSettings()`.
  */
 import type { z } from 'zod';
+import { plainSettingIssue } from '@elevate/shared-contracts';
 import type { DecisionState, PolicyDefinition } from './policies-base';
 import { DECISION_STATES } from './policies-base';
 import { ADMISSION_SETTING_DEFINITIONS, admissionSettingSchemas } from './policies-admission';
@@ -133,6 +134,6 @@ export function validateSettingChange(
     };
   const parsed = (settingSchemas[key] as z.ZodType).safeParse(value);
   if (!parsed.success)
-    return { ok: false, message: parsed.error.issues[0]?.message ?? 'Invalid value.' };
+    return { ok: false, message: plainSettingIssue(parsed.error.issues[0]!) };
   return { ok: true, key, value: parsed.data, decisionState: 'proposed' };
 }

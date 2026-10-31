@@ -37,6 +37,7 @@ import { assertBatchInScope, audit, resolveScope, todayIst, type Actor } from '.
 import type { PLACEMENT_VIEWS, allocateBody, endEnrolmentBody, transferBody } from '../schemas-placements';
 import { getBatchCoverage } from './curriculum';
 import { getSetting } from './settings';
+import { fmtClock } from '../../domain/time';
 
 const pl = academicBatchPlacements;
 type Batch = typeof academicBatches.$inferSelect;
@@ -75,7 +76,7 @@ export async function clashMessages(tx: Database, enrolment: Enrolment, batch: B
   const existing = sessions.filter((x) => others.some((o) => o.batchId === x.batchId && x.date >= o.startDate && (!o.endDate || x.date <= o.endDate)));
   const code = (batchId: string) => others.find((o) => o.batchId === batchId)?.batchCode ?? batchId;
   return findSessionClashes(existing, sessions.filter((x) => x.batchId === batch.id), from).map(
-    (c) => `${fmtDay(c.date)}: ${batch.code} at ${c.incoming.startTime} overlaps ${code(c.existing.batchId)} at ${c.existing.startTime}`,
+    (c) => `${fmtDay(c.date)}: ${batch.code} at ${fmtClock(c.incoming.startTime)} overlaps ${code(c.existing.batchId)} at ${fmtClock(c.existing.startTime)}`,
   );
 }
 
@@ -266,8 +267,10 @@ export async function seatReport(db: Database, batch: Pick<Batch, 'id' | 'capaci
   return { capacity: batch.capacity, placed: await seatsTaken(db, batch.id, day), demoAttendeesUpcoming: Number(n), demoRule: { counts: rule.value.counts, status: rule.status } };
 }
 
-/** Enrolment lists: awaiting batch, placed, transfers, ended — tab counts come from the same rows. */
-export async function listPlacementViews(db: Database, actor: Actor, view: (typeof PLACEMENT_VIEWS)[number]) {
+export const ENROLMENT_LIST_LIMIT = 2000;
+
+/** Enrolment lists: awaiting batch, placed, transfers, ended. Tab counts and `total` cover every enrolment; `rows` stop at `limit`. */
+export async function listPlacementViews(db: Database, actor: Actor, view: (typeof PLACEMENT_VIEWS)[number], limit = ENROLMENT_LIST_LIMIT) {
   await resolveScope(db, actor, 'academic:enrolments:read');
   const rows = await db
     .select({
@@ -284,8 +287,7 @@ export async function listPlacementViews(db: Database, actor: Actor, view: (type
     .innerJoin(academicStudents, eq(academicStudents.id, academicEnrolments.studentId))
     .innerJoin(programmes, eq(programmes.id, academicEnrolments.programmeId))
     .leftJoin(academicCourses, eq(academicCourses.id, academicEnrolments.courseId))
-    .orderBy(asc(academicStudents.fullName))
-    .limit(2000); // shortcut: no paging; add it when a centre has more than 2,000 enrolments
+    .orderBy(asc(academicStudents.fullName));
   const byEnrolment = new Map<string, Awaited<ReturnType<typeof placementHistory>>>();
   for (const p of withReasons(actor, await placementHistory(db, {}))) byEnrolment.set(p.enrolmentId, [...(byEnrolment.get(p.enrolmentId) ?? []), p]);
   const out = rows.map((r) => {
@@ -326,7 +328,9 @@ export async function listPlacementViews(db: Database, actor: Actor, view: (type
     transfers: out.filter((r) => r.transfers.length > 0).length,
     ended: out.filter((r) => r.view === 'ended').length,
   };
-  const shown = out.filter((r) => (view === 'transfers' ? r.transfers.length > 0 : r.view === view));
+  const inView = out.filter((r) => (view === 'transfers' ? r.transfers.length > 0 : r.view === view));
+  // shortcut: no pages; the page says when it stops. Add paging when one tab passes the limit in real use.
+  const shown = inView.slice(0, limit);
   // Proposed catch-up per transfer, as of today (computed once per batch pair).
   const catchUp = new Map<string, Awaited<ReturnType<typeof proposedCatchUp>>>();
   for (const t of view === 'transfers' ? shown.flatMap((r) => r.transfers) : []) {
@@ -336,6 +340,7 @@ export async function listPlacementViews(db: Database, actor: Actor, view: (type
   return {
     view,
     counts,
+    total: inView.length,
     rows: shown.map((r) => ({ ...r, transfers: r.transfers.map((t) => ({ ...t, catchUp: catchUp.get(`${t.fromBatchId}:${t.toBatchId}`)?.chapters ?? null })) })),
   };
 }

@@ -1,22 +1,29 @@
 /**
  * /ops/hr/attendance (owner brief 23 Oct 2026 §12): staff days by date, what needs review,
- * correction requests, schedules, holidays and leave, and punch file imports. Everyone's
+ * correction requests, leave applications, schedules, holidays and recorded leave, and punch file imports. Everyone's
  * attendance (ops:attendance:read, all scope); changes need ops:attendance:manage.
  */
 import { can, type Principal } from '@elevate/authorization';
 import { PageHeader, Subnav } from '@elevate/shared-ui';
 import { listAttendance } from '../../../server/attendance';
-import { attendanceListQuery, correctionListQuery } from '../../../server/attendance-schemas';
+import {
+  attendanceListQuery,
+  correctionListQuery,
+  leaveListQuery,
+} from '../../../server/attendance-schemas';
 import { listCorrections } from '../../../server/attendance-corrections';
 import { getPunchImport, listPunchImports } from '../../../server/attendance-import';
 import { aiBlocked } from '../../../server/ai-drafts';
 import { attendanceSetup } from '../../../server/attendance-lists';
+import { staffIdForUser } from '../../../server/context';
+import { canDecideLeave, listLeaveApplications } from '../../../server/leave-applications';
 import { ActionForm } from '../../../ui/action-form';
 import { fmtDate } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref, Pager } from '../../../ui/list-controls';
 import { API, BASE, DaysTab } from './_components/days';
 import { ImportTab } from './_components/import';
+import { LeaveTab } from './_components/leave';
 import { CalendarTab, SchedulesTab } from './_components/setup';
 import { CorrectionsTable, Legend } from './_components/shared';
 
@@ -28,8 +35,9 @@ const TABS = [
   ['', 'Days'],
   ['review', 'Needs review'],
   ['corrections', 'Corrections'],
+  ['leave', 'Leave applications'],
   ['schedules', 'Schedules'],
-  ['calendar', 'Holidays and leave'],
+  ['calendar', 'Holidays and recorded leave'],
   ['import', 'Import punches'],
 ] as const;
 
@@ -54,7 +62,11 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
   const canManage = can(user, 'ops:attendance:manage');
   const result = await load(async (db) => {
     const setup = await attendanceSetup(db, user);
-    const raw = { ...params, review: tab === 'review' ? (params.review ?? '1') : undefined };
+    // A GET form sends its blank fields as empty strings: blank means no filter, not a bad one.
+    const raw = {
+      ...Object.fromEntries(Object.entries(params).filter(([, v]) => v)),
+      review: tab === 'review' ? params.review || '1' : undefined,
+    };
     const query =
       attendanceListQuery.safeParse(raw).data ?? attendanceListQuery.parse({ review: raw.review });
     return {
@@ -73,6 +85,22 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
               },
             )
           : null,
+      leave:
+        tab === 'leave'
+          ? {
+              list: await listLeaveApplications(
+                db,
+                user,
+                leaveListQuery.safeParse({
+                  status: params.status === 'all' ? undefined : (params.status ?? 'pending'),
+                  staffId: params.staffId || undefined,
+                  page: params.page,
+                }).data ?? { status: 'pending' },
+              ),
+              canDecide: await canDecideLeave(db, user),
+              ownStaffId: await staffIdForUser(db, user.id),
+            }
+          : null,
       imports: tab === 'import' && canManage ? await listPunchImports(db, user) : [],
       preview:
         tab === 'import' && canManage && params.import
@@ -89,10 +117,10 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
         <Subnav
           label="Attendance views"
           items={TABS.filter(([k]) => canManage || k !== 'import').map(([k, label]) => [
-            listHref(BASE, { tab: k || undefined }),
+            listHref(BASE, { tab: k || undefined, who: params.who }),
             label,
           ])}
-          current={listHref(BASE, { tab: tab || undefined })}
+          current={listHref(BASE, { tab: tab || undefined, who: params.who })}
         />
       }
     />
@@ -104,7 +132,7 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
         {result.view}
       </>
     );
-  const { setup, list, corrections, imports, preview, ai } = result.data;
+  const { setup, list, corrections, leave, imports, preview, ai } = result.data;
   return (
     <>
       {header}
@@ -178,6 +206,7 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
           />
         </>
       ) : null}
+      {leave ? <LeaveTab {...leave} params={params} /> : null}
       {tab === 'schedules' ? <SchedulesTab setup={setup} canManage={canManage} /> : null}
       {tab === 'calendar' ? (
         <CalendarTab

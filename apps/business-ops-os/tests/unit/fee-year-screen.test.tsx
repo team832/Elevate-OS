@@ -14,7 +14,7 @@ const student = (id: string, extra: Partial<FeeYearStudent>): FeeYearStudent => 
   studentName: `Sample Student ${id}`,
   isSample: false,
   admissionNumber: null,
-  courses: [{ name: 'CLAT', enrolledBatchId: null, intendedBatchId: 'b1' }],
+  courses: [{ name: 'CLAT', enrolledBatchId: null, intendedBatchId: 'b1', enrolmentId: null }],
   closed: false,
   reconciled: true,
   billedPaise: 100_000_00,
@@ -57,6 +57,15 @@ describe('Outstanding tuition drill-down', () => {
     expect(out).toContain('₹25,000 overdue, ₹0 due now (today) and ₹1,50,000 not yet due');
     expect(out).toContain('Academic year 2026-27');
     expect(out).toContain('All courses');
+  });
+
+  it('an enrolled student placed only in Academic is not "to be assigned"', () => {
+    const placed = student('p', {
+      courses: [{ name: 'CLAT', enrolledBatchId: null, intendedBatchId: null, enrolmentId: 'e1' }],
+    });
+    const words = render(true, [placed]);
+    expect(words).toContain('CLAT, batch kept in Academic OS');
+    expect(words).not.toContain('to be assigned');
   });
 
   it('never calls anyone a defaulter', () => {

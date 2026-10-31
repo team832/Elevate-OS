@@ -64,7 +64,7 @@ async function Body({ access }: { access: PageAccess }) {
                 rows={data.data.processed}
                 rowKey={(p) => p.id}
                 sampleOf={(p) => Boolean(p.isSample)}
-                empty={<EmptyState title="Nothing processed yet" />}
+                empty={<EmptyState title="Nothing processed yet" description="Confirmed admissions land here once the intake is processed." />}
                 columns={[
                   { key: 'when', header: 'Processed', render: (p) => fmtDateTime(p.processedAt) },
                   { key: 'student', header: 'Student', render: (p) => (p.studentId ? <a href={MODULE_PATHS.student(p.studentId)}>{p.studentName}</a> : p.studentName) },

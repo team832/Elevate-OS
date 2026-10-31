@@ -1,17 +1,17 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, Button, Card, DataTable, EmptyState, PageHeader } from '@elevate/shared-ui';
+import { Alert, Button, Card, DataTable, ListEmpty, PageHeader } from '@elevate/shared-ui';
 import { STUDENT_LIST_LIMIT, listBatches, listStudents } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
 import { StateBadge, words } from '../../ui/badges';
 import { Filter } from '../../ui/filters';
 import type { PageAccess } from '@elevate/server-kit/next';
-import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
+import { AcademicShell, LoadError, actorFor, gate, load, sectionLabel } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Academic students' };
+export const metadata: Metadata = { title: 'Students' };
 
 const STATES = [
   { value: 'current', label: 'Current students' },
@@ -54,7 +54,7 @@ async function Body({
   return (
     <>
       <PageHeader
-        title="Students"
+        title={sectionLabel(access.user, 'students')}
         description="Teachers see only students in their batches."
       />
       <form method="get" className="el-inline-form">
@@ -87,22 +87,23 @@ async function Body({
               rowKey={(s) => s.id}
               sampleOf={(s) => s.isSample}
               empty={
-                <EmptyState
-                  title="No students"
-                  description={
-                    q
-                      ? 'No student matches this search.'
-                      : 'Students arrive through the enrolment intake or manual entry.'
+                <ListEmpty
+                  noun="students"
+                  params={{ q, state: state === 'current' ? undefined : state }}
+                  first={
+                    canWrite
+                      ? 'Students arrive through the enrolment intake, or add one below.'
+                      : 'Students appear here once a coordinator places them in a batch you teach.'
                   }
                 />
               }
               columns={[
                 {
-                  key: 'code',
-                  header: 'Code',
-                  render: (s) => <a href={MODULE_PATHS.student(s.id)}>{s.code}</a>,
+                  key: 'fullName',
+                  header: 'Name',
+                  render: (s) => <a href={MODULE_PATHS.student(s.id)}>{s.fullName}</a>,
                 },
-                { key: 'fullName', header: 'Name' },
+                { key: 'code', header: 'Code' },
                 { key: 'stage', header: 'Stage', render: (s) => (s.currentStage ? words(s.currentStage) : '—') },
                 {
                   key: 'batches',

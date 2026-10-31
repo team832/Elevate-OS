@@ -8,6 +8,7 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { StatusBadge } from '@elevate/shared-ui';
 import {
+  ACADEMIC_NOT_KNOWN,
   ATTENDANCE_LABELS,
   DAY_STATE_LABELS,
   DEMO_FEE_LABELS,
@@ -122,8 +123,8 @@ function DayStrip({ d }: { d: DemoRecord }) {
                   <li key={s.id}>
                     {s.subject ?? 'Class'}{' '}
                     <Badge
-                      value={s.attendance}
-                      label={ATTENDANCE_LABELS[s.attendance as Attendance]}
+                      value={s.unknown ? 'unknown' : s.attendance}
+                      label={s.unknown ? ACADEMIC_NOT_KNOWN : ATTENDANCE_LABELS[s.attendance as Attendance]}
                     />
                     <br />
                     <span className="el-field-hint">{teacherText(s)}</span>

@@ -24,7 +24,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
   if (!data.ok)
     return (
       <AcademicShell access={access} active="curriculum">
-        <LoadError level={1} error={data.error} />
+        <LoadError level={1} back="curriculum" error={data.error} />
       </AcademicShell>
     );
   const c = data.data;
@@ -34,7 +34,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
         title={`${c.code} — ${c.name}`}
         description={`${programmeName(c.programmeCode)} · version ${c.version}. Weight is a chapter's relative importance for catch-up priority, 1 to 10; 1 means unweighted.`}
         meta={<StateBadge state={c.status} />}
-        actions={<ButtonLink href={MODULE_PATHS.curriculum}>All courses</ButtonLink>}
+        actions={<ButtonLink href={MODULE_PATHS.curriculum}>Back to curriculum</ButtonLink>}
       />
       <div className="el-stack">
         <CourseChapters subjects={c.subjects} chapters={c.chapters} />
@@ -44,7 +44,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
             caption="Plan versions of this course"
             rows={c.plans}
             rowKey={(p) => p.id}
-            empty={<EmptyState title="No plan versions yet" />}
+            empty={<EmptyState title="No plan versions yet" description="An academic coordinator creates plan versions on the Curriculum page." />}
             columns={[
               {
                 key: 'code',

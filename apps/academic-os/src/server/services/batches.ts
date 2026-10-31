@@ -10,6 +10,7 @@ import {
   academicCourses,
   academicPlanItems,
   academicRooms,
+  academicSubjects,
   academicTeacherAssignments,
   programmes,
   staffMembers,
@@ -53,6 +54,10 @@ export async function listBatches(db: Database, actor: Actor) {
     .where(scope.kind === 'own' ? inArray(academicBatches.id, scope.batchIds) : undefined)
     .orderBy(asc(academicBatches.code));
   const placed = await placedCounts(db);
+  const taught = scope.kind === 'own' ? scope.assignments : [];
+  const subjects = taught.length
+    ? await db.select({ id: academicSubjects.id, name: academicSubjects.name }).from(academicSubjects).where(inArray(academicSubjects.id, taught.map((a) => a.subjectId)))
+    : [];
   return rows.map(({ batch, course, programmeCode }) => ({
     ...batch,
     courseCode: course.code,
@@ -60,6 +65,8 @@ export async function listBatches(db: Database, actor: Actor) {
     programmeCode,
     classLength: classLengthOf(batch, course),
     activeEnrolments: placed.get(batch.id) ?? 0,
+    /** Own scope: what the teacher teaches in this batch today. */
+    mySubjects: subjects.filter((s) => taught.some((a) => a.batchId === batch.id && a.subjectId === s.id)).map((s) => s.name),
   }));
 }
 

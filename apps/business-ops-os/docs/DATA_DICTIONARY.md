@@ -1543,3 +1543,188 @@ One legacy record of a batch and its outcome (the reconciliation report reads th
 | `follow_up_on` | date | no |  | 2026-10-21 | Follow up day (Asia/Kolkata calendar day). |
 | `is_sample` | boolean | yes (default false) |  | false | Is sample. |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+
+### `ops.work_schedules`
+
+A weekly working pattern; staff without one follow the single default schedule.
+
+- **Written by:** `src/server/attendance-actions.ts`
+- **Sample or real:** Reference or configuration data (not person data).
+- **Links to:** `created_by` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `name` | text | yes |  |  | Name. |
+| `weekly_pattern` | jsonb | yes |  |  | Weekly pattern. |
+| `grace_minutes` | integer | yes (default 0) |  | 1 | Minutes after the start before an arrival counts as late (setting hr.attendance.late_grace_minutes is the default). |
+| `is_default` | boolean | yes (default false) |  | false | Is default. |
+| `created_by` | uuid | yes |  | (id) | User who created the row. → `core.users` |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+| `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
+
+### `ops.holidays`
+
+Staff holiday (null branch = every branch). Not batch calendar exclusions (Academic).
+
+- **Written by:** `src/server/attendance-actions.ts`
+- **Sample or real:** Reference or configuration data (not person data).
+- **Links to:** `branch_id` → `core.branches` (on delete restrict); `created_by` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `holiday_on` | date | yes |  | 2026-10-21 | Holiday day (Asia/Kolkata calendar day). |
+| `name` | text | yes |  |  | Name. |
+| `branch_id` | uuid | no |  | (id) | Branch id. → `core.branches` |
+| `decision_state` | text | yes (default proposed) | `proposed`, `approved`, `locked`, `open`, `pending_verification`, `superseded` | proposed | Decision state. |
+| `created_by` | uuid | yes |  | (id) | User who created the row. → `core.users` |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+
+### `ops.leave_records`
+
+Approved leave: recorded by HR directly, or written when an application is approved. `kind` is HR's own wording or the application's type.
+
+- **Written by:** `src/server/attendance-actions.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `approved_by` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `staff_id` | uuid | yes |  | (id) | Staff member. → `core.staff_members` |
+| `from_date` | date | yes |  | 2026-10-21 | From day (Asia/Kolkata calendar day). |
+| `to_date` | date | yes |  | 2026-10-21 | To day (Asia/Kolkata calendar day). |
+| `kind` | text | yes |  |  | What kind of row this is (allowed values listed). |
+| `status` | text | yes (default approved) | `approved`, `cancelled` | approved | Current state (allowed values listed). |
+| `approved_by` | uuid | yes |  | (id) | User who approved it. → `core.users` |
+| `reason` | text | no |  |  | Why (free text). |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+| `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
+
+### `ops.leave_applications`
+
+A staff member's application for leave (owner decision 31 Oct 2026): waits for HR, who approve or reject it (a rejection needs a reason); the applicant may cancel while it waits, HR cancels approved leave with a reason. Approval writes the one leave record attendance reads. No balances.
+
+- **Written by:** `src/server/attendance-actions.ts`, `src/server/leave-applications.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `applied_by` → `core.users` (on delete restrict); `decided_by` → `core.users` (on delete restrict); `cancelled_by` → `core.users` (on delete restrict); `leave_record_id` → `ops.leave_records` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `staff_id` | uuid | yes |  | (id) | Staff member. → `core.staff_members` |
+| `kind` | text | yes |  |  | The type as named in setting hr.leave_types when the person applied. |
+| `from_date` | date | yes |  | 2026-10-21 | From day (Asia/Kolkata calendar day). |
+| `to_date` | date | yes |  | 2026-10-21 | To day (Asia/Kolkata calendar day). |
+| `reason` | text | yes |  |  | Why (free text). |
+| `status` | text | yes (default pending) | `pending`, `approved`, `rejected`, `cancelled` | pending | Current state (allowed values listed). |
+| `applied_by` | uuid | yes |  | (id) | User who applied it. → `core.users` |
+| `decided_by` | uuid | no |  | (id) | User who decided it. → `core.users` |
+| `decided_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was decided (UTC). |
+| `decision_note` | text | no |  |  | Note about the decision. |
+| `cancelled_by` | uuid | no |  | (id) | User who cancelled it. → `core.users` |
+| `cancelled_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was cancelled (UTC). |
+| `cancel_reason` | text | no |  |  | Why it was cancel (free text). |
+| `leave_record_id` | uuid | no |  | (id) | The leave record approval wrote; kept after cancelling, when that record is cancelled too. → `ops.leave_records` |
+| `version` | integer | yes (default 1) |  | 1 | Rises with every change: a decision made on an older copy is refused. |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+| `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
+
+### `ops.attendance_imports`
+
+One uploaded punch file; the same file (sha256) is processed once. `rows` = parsed preview.
+
+- **Written by:** `src/server/attendance-import.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `created_by` → `core.users` (on delete restrict); `committed_by` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `sha256` | text | yes | `^[0-9a-f]{64}$` | A | Sha256. |
+| `source_label` | text | yes |  |  | Where the file came from, as entered (never claims a device connection). |
+| `rows` | jsonb | yes |  |  | Rows. |
+| `rows_total` | integer | yes (default 0) |  | 1 | Rows total. |
+| `rows_valid` | integer | yes (default 0) |  | 1 | Rows valid. |
+| `rows_invalid` | integer | yes (default 0) |  | 1 | Rows invalid. |
+| `rows_duplicate` | integer | yes (default 0) |  | 1 | Rows duplicate. |
+| `status` | text | yes (default preview) | `preview`, `committed` | preview | Current state (allowed values listed). |
+| `created_by` | uuid | yes |  | (id) | User who created the row. → `core.users` |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+| `committed_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was committed (UTC). |
+| `committed_by` | uuid | no |  | (id) | User who committed it. → `core.users` |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+
+### `ops.attendance_punches`
+
+A raw check-in or check-out. The same punch is stored once, whatever its source.
+
+- **Written by:** `src/server/attendance-actions.ts`, `src/server/attendance-corrections.ts`, `src/server/attendance-import.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `import_id` → `ops.attendance_imports` (on delete restrict); `entered_by` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `staff_id` | uuid | yes |  | (id) | Staff member. → `core.staff_members` |
+| `punched_at` | timestamp with time zone | yes |  | 2026-10-21T10:30:00Z | When it was punched (UTC). |
+| `direction` | text | yes | `in`, `out` | in | Direction. |
+| `source` | text | yes | `manual`, `import` | manual | Source. |
+| `source_ref` | text | no |  |  | Row reference inside the source file, or a note for a manual entry. |
+| `import_id` | uuid | no |  | (id) | Import id. → `ops.attendance_imports` |
+| `entered_by` | uuid | yes |  | (id) | User who entered it. → `core.users` |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+
+### `ops.daily_attendance`
+
+The day's attendance status: computed from punches, schedule, leave and holidays, or decided by HR (`basis = hr_decision`, with who). `unmarked` = no data; never read as absent.
+
+- **Written by:** `src/server/attendance-actions.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `decided_by_user_id` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `staff_id` | uuid | yes |  | (id) | Staff member. → `core.staff_members` |
+| `work_date` | date | yes |  | 2026-10-21 | Work day (Asia/Kolkata calendar day). |
+| `status` | text | yes (default unmarked) | `present`, `absent`, `half_day`, `unmarked`, `on_leave`, `holiday`, `weekly_off` | present | Current state (allowed values listed). |
+| `first_in` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | First in. |
+| `last_out` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | Last out. |
+| `late_minutes` | integer | no |  | 1 | null = not computed (no schedule or no check-in). |
+| `missing_checkout` | boolean | yes (default false) |  | false | Missing checkout. |
+| `basis` | text | yes (default computed) | `computed`, `hr_decision` | computed | Basis. |
+| `decided_by_user_id` | uuid | no |  | (id) | Decided by user id. → `core.users` |
+| `note` | text | no |  |  | Free-text notes. |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+| `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
+
+### `ops.attendance_corrections`
+
+An employee's request to correct one day; HR approves or rejects it (one open request per day).
+
+- **Written by:** `src/server/attendance-corrections.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `requested_by_user_id` → `core.users` (on delete restrict); `decided_by` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `staff_id` | uuid | yes |  | (id) | Staff member. → `core.staff_members` |
+| `work_date` | date | yes |  | 2026-10-21 | Work day (Asia/Kolkata calendar day). |
+| `requested_status` | text | no | `present`, `absent`, `half_day`, `unmarked`, `on_leave`, `holiday`, `weekly_off` | present | Requested status. |
+| `requested_in` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | Requested in. |
+| `requested_out` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | Requested out. |
+| `reason` | text | yes |  |  | Why (free text). |
+| `status` | text | yes (default pending) | `pending`, `approved`, `rejected` | pending | Current state (allowed values listed). |
+| `requested_by_user_id` | uuid | yes |  | (id) | Requested by user id. → `core.users` |
+| `decided_by` | uuid | no |  | (id) | User who decided it. → `core.users` |
+| `decided_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was decided (UTC). |
+| `decision_note` | text | no |  |  | Note about the decision. |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |

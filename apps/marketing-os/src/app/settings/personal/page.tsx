@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { MyReminderPreview } from '@elevate/business-ops-os/work';
 import { getDb } from '@elevate/database';
 import { Alert, Button, Card, Checkbox, Field, TextArea, TextInput } from '@elevate/shared-ui';
 import { formatIst, modulePath } from '../../../domain';
@@ -30,11 +31,11 @@ const DAY_LABELS = {
 } as const satisfies Record<(typeof WEEKDAYS)[number], string>;
 const VIEW_LABELS = { month: 'Month', week: 'Week', list: 'List' };
 const REMINDER_LABELS = {
-  '': 'Only when HR sends them',
-  '2': 'Every 2 hours',
-  '4': 'Every 4 hours',
-  '8': 'Every 8 hours',
-  '24': 'Once a day',
+  '': "On HR's schedule",
+  '2': 'No more often than every 2 hours',
+  '4': 'No more often than every 4 hours',
+  '8': 'No more often than every 8 hours',
+  '24': 'No more often than once a day',
 };
 
 export default async function PersonalSettingsPage({
@@ -187,12 +188,13 @@ export default async function PersonalSettingsPage({
                 </Card>
                 <Card
                   title="Notifications"
-                  description="Reminders and pop-up notices are not sent yet; your choice is kept for when they are."
+                  description="What you get about your open tasks, and the two things you can change."
                 >
+                  <MyReminderPreview personalHours={p.notifications.reminderIntervalHours} />
                   <div className="el-grid">
                     <PickField
                       id="reminder"
-                      label="Extra reminders about my open tasks"
+                      label="Repeat reminders to acknowledge a task"
                       value={p.notifications.reminderIntervalHours?.toString() ?? ''}
                       options={optionsOf(REMINDER_LABELS)}
                       hint="Reminders HR requires are always sent on HR's schedule, whatever you choose here."

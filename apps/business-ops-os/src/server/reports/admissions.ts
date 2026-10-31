@@ -208,10 +208,13 @@ export async function buildAdmissionsReport(
         .where(
           and(
             eq(approvals.policy, feeAgreementPolicy.key),
-            inArray(
-              opsFeePlans.admissionId,
-              admissions.map((a) => a.id),
-            ),
+            // feeState is only read per admission below: all scope sends no list of every case.
+            own
+              ? inArray(
+                  opsFeePlans.admissionId,
+                  admissions.map((a) => a.id),
+                )
+              : undefined,
           ),
         )
         .orderBy(desc(approvals.requestedAt), desc(approvals.id))

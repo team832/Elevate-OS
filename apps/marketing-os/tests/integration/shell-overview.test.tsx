@@ -532,6 +532,10 @@ describe('screens: campaign page and Personal Settings', () => {
     expect(html).toContain('never change HR deadlines, task assignments, permissions');
     expect(html).toContain('Not saved yet.');
     expect(html).toContain('Reminders HR requires are always sent');
+    // The preview comes from HR's real values, and is honest that nothing runs by itself.
+    expect(html).toContain('You get a reminder 24 hours before a task is due');
+    expect(html).toContain('no scheduler exists');
+    expect(html).not.toContain('not sent yet');
   });
 });
 

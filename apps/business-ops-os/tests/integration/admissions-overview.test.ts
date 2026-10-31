@@ -2,10 +2,12 @@
  * Admissions overview (owner brief §4): KPI read with date/programme filters, own scope, fee
  * figures, onboarding and the confirmation gap check. Fictional data only.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import {
+  opsAdmissionChecks,
   opsAdmissions,
+  opsApplications,
   opsDemos,
   opsDemoSessions,
   opsFeePlans,
@@ -15,10 +17,12 @@ import {
   type Database,
 } from '@elevate/database';
 import { createTestUser, setupTestDatabase, type TestUser } from '@elevate/testing';
-import { addDays, istToday } from '../../src/domain';
+import { addDays, istToday, READINESS_GAP_LABELS } from '../../src/domain';
 import { buildAdmissionsOverview } from '../../src/server/admissions-overview';
+import { approvalChecks, confirmationCheck } from '../../src/server/applications';
 import { listApplications } from '../../src/server/applications-read';
 import { applicationListQuery } from '../../src/server/applications-schemas';
+import { loadSettings } from '../../src/server/settings';
 import { pendingCase } from './admissions-fixtures';
 import { confirmAs, signedApplication, type People } from './application-fixtures';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
@@ -180,13 +184,74 @@ describe('admissions overview (brief §4)', () => {
 
 describe('Approval blocked: the tile and the list it opens agree', () => {
   it('lists only signed applications an item still blocks', async () => {
-    const blockedList = () => listApplications(ctx.db, manager, applicationListQuery.parse({ status: 'signatures_confirmed', blocked: '1' }));
+    const blockedList = () =>
+      listApplications(
+        ctx.db,
+        manager,
+        applicationListQuery.parse({ status: 'signatures_confirmed', blocked: '1' }),
+      );
     await signedApplication(ctx.db, people, { name: 'Sample Signed Clean' });
     expect((await blockedList()).total).toBe(0);
     const held = await signedApplication(ctx.db, people, { name: 'Sample Signed Held' });
-    await ctx.db.delete(opsSignatureConfirmations).where(eq(opsSignatureConfirmations.applicationId, held.applicationId as never));
+    await ctx.db
+      .delete(opsSignatureConfirmations)
+      .where(eq(opsSignatureConfirmations.applicationId, held.applicationId as never));
     const list = await blockedList();
     expect(list.items.map((a) => a.id)).toEqual([held.applicationId]);
     expect((await overview(manager)).applications.approvalBlocked).toBe(list.total);
+  });
+
+  it('checked together each application reads as it does alone, in the same few statements (RVD-004)', async () => {
+    const unverified = await signedApplication(ctx.db, people, {
+      name: 'Sample Signed Unverified',
+    });
+    await ctx.db
+      .delete(opsAdmissionChecks)
+      .where(eq(opsAdmissionChecks.admissionId, unverified.admissionId as never));
+    const rows = await ctx.db
+      .select({ app: opsApplications, admission: opsAdmissions })
+      .from(opsApplications)
+      .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsApplications.admissionId))
+      .where(eq(opsApplications.status, 'signatures_confirmed'));
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+    await ctx.db.insert(opsFeeRecords).values({
+      code: 'FEE-990001',
+      admissionId: unverified.admissionId as never,
+      leadId: rows.find((r) => r.admission.id === unverified.admissionId)!.admission.leadId,
+      kind: 'received',
+      amountPaise: 7_000_00,
+      recordedBy: manager.id,
+    });
+    const settings = await loadSettings(ctx.db);
+    const select = vi.spyOn(ctx.db, 'select');
+    const statements = async (of: typeof rows) => {
+      select.mockClear();
+      const checks = await approvalChecks(ctx.db, of, settings);
+      return { checks, count: select.mock.calls.length };
+    };
+    const [one, many] = [await statements(rows.slice(0, 1)), await statements(rows)];
+    select.mockRestore();
+    expect(many.count).toBe(one.count);
+    expect(many.count).toBeLessThan(20);
+    for (const { app, admission } of rows) {
+      const alone = await confirmationCheck(ctx.db, app, admission, settings);
+      expect(many.checks.find((c) => c.id === app.id)).toEqual({ id: app.id, ...alone });
+    }
+    const gapsOf = (id: string) => many.checks.find((c) => c.id === id)!.gaps.map((g) => g.message);
+    expect(gapsOf(unverified.applicationId)).toEqual(
+      expect.arrayContaining([READINESS_GAP_LABELS.fee_verification_1]),
+    );
+    const named = many.checks.find((c) => c.id === unverified.applicationId)!;
+    expect(named.live.student.fullName).toBe('Sample Signed Unverified');
+    expect(named.live.feeAgreement?.instalments).toHaveLength(3);
+    // One application's money stays its own.
+    expect(many.checks.map((c) => c.paid.tuitionPaise).sort((a, b) => b - a)).toEqual([
+      7_000_00,
+      ...many.checks.slice(1).map(() => 0),
+    ]);
+    expect(named.paid.tuitionPaise).toBe(7_000_00);
+    expect(
+      many.checks.filter((c) => c.gaps.length === 0).map((c) => c.live.student.fullName),
+    ).toContain('Sample Signed Clean');
   });
 });

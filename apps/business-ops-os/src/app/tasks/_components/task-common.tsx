@@ -65,7 +65,7 @@ export const TaskBadge = ({
 export const TASK_LABEL = { high: 'High', medium: 'Medium', low: 'Low' } as const;
 export const PRIORITY_OPTIONS = TASK_PRIORITIES.map((p) => ({ value: p, label: TASK_LABEL[p] }));
 
-export const dueText = (t: { dueOn: string; dueTime: string | null }) =>
+export const dueText = (t: { dueOn?: string | null; dueTime?: string | null }) =>
   `${fmtDate(t.dueOn)}${t.dueTime ? `, ${t.dueTime.slice(0, 5)} IST` : ''}`;
 
 /** Due label in IST words: "Overdue since …", "Due today, 17:30 IST", "Due 24 Oct 2026". */
@@ -81,17 +81,30 @@ export function dueLabel(
     : `Due ${dueText(t)}`;
 }
 
-/** The deadline in force, and the original when it moved (brief §10). */
+/** The deadline in force, the original when it moved, and who moved it last (brief §10); why is in the title. */
 export function Deadline({
   t,
 }: {
-  t: { dueOn: string; dueTime: string | null; originalDueOn: string; status: TaskStatus };
+  t: {
+    dueOn: string;
+    dueTime: string | null;
+    originalDueOn: string;
+    status: TaskStatus;
+    lastDueChange?: { by: string; at: string; reason: string | null } | null;
+  };
 }) {
+  const change = t.lastDueChange;
+  const moved = [
+    t.originalDueOn !== t.dueOn && `originally ${fmtDate(t.originalDueOn)}`,
+    change && `changed by ${change.by}, ${istWhen(new Date(change.at))}`,
+  ].filter(Boolean);
   return (
     <>
       {deadlineText(t.dueOn, t.dueTime)}
-      {t.originalDueOn !== t.dueOn ? (
-        <span className="el-field-hint"> (originally {fmtDate(t.originalDueOn)})</span>
+      {moved.length ? (
+        <span className="el-field-hint" title={change?.reason ?? undefined}>
+          {` (${moved.join('; ')})`}
+        </span>
       ) : null}
       {isOverdue(t, new Date()) ? (
         <>

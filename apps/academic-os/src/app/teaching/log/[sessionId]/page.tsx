@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import { can } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { Alert, ButtonLink, Card, DataTable, PageHeader, fmtDay } from '@elevate/shared-ui';
+import { Alert, ButtonLink, Card, DataTable, PageHeader } from '@elevate/shared-ui';
 import { getSessionLog } from '../../../../server';
 import { MODULE_PATHS } from '../../../../server/paths';
 import { ApiForm, type FormField } from '../../../../ui/api-form';
-import { StateBadge, fmtDateTime } from '../../../../ui/badges';
+import { StateBadge, fmtDateTime, fmtSlot } from '../../../../ui/badges';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../../ui/shell';
 import { ACTIVITY_OPTIONS, COMPLETION_OPTIONS, activityLabel } from '../../log-labels';
 
@@ -38,7 +38,7 @@ export default async function ClassLogPage({ params }: { params: Promise<{ sessi
   const access = await gate('academic:classes:read', MODULE_PATHS.teachingLog(sessionId));
   if (access.status !== 'allowed') return <AcademicShell access={access} active="teaching">{null}</AcademicShell>;
   const data = await load(() => getSessionLog(getDb(), actorFor(access.user), sessionId));
-  if (!data.ok) return <AcademicShell access={access} active="teaching"><LoadError level={1} error={data.error} /></AcademicShell>;
+  if (!data.ok) return <AcademicShell access={access} active="teaching"><LoadError level={1} back="teaching" error={data.error} /></AcademicShell>;
   const { session, batchCode, plannedChapterCode, plannedChapterTitle, chapters, records, delivered, deadlineHours } = data.data;
   const canRecord = can(access.user, 'academic:classes:record') && session.status !== 'cancelled' && session.status !== 'rescheduled';
   const drafts = records.filter((r) => r.state === 'draft');
@@ -47,7 +47,7 @@ export default async function ClassLogPage({ params }: { params: Promise<{ sessi
   return (
     <AcademicShell access={access} active="teaching">
       <PageHeader
-        title={`Class log — ${batchCode}, ${fmtDay(session.date)} ${session.startTime}`}
+        title={`Class log — ${batchCode}, ${fmtSlot(session.date, session.startTime)}`}
         meta={<StateBadge state={session.status} />}
         description={`Planned: ${plannedChapterCode ? `${plannedChapterCode} ${plannedChapterTitle}` : 'no chapter planned'} · ${session.durationMinutes} min timetabled`}
         actions={<ButtonLink href={MODULE_PATHS.teaching}>All teaching logs</ButtonLink>}

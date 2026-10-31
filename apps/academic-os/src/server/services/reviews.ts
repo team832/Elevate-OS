@@ -414,6 +414,8 @@ export async function buildStudentReviewsV1(db: Database, query: z.output<typeof
   });
 }
 
+export const REVIEW_PICKER_LIMIT = 1000;
+
 /** Students the actor may write a review for now (enrolled; demo students come from roster links). */
 export async function reviewableStudents(db: Database, actor: Actor, now = new Date()) {
   await resolveScope(db, actor, 'academic:reviews:write');
@@ -424,7 +426,7 @@ export async function reviewableStudents(db: Database, actor: Actor, now = new D
     .from(academicStudents)
     .where(placed ? inArray(academicStudents.id, placed) : undefined)
     .orderBy(academicStudents.fullName)
-    .limit(1000);
+    .limit(REVIEW_PICKER_LIMIT);
 }
 
 /** Batches and subjects the actor may name on a review: a teacher's assignments open today; a coordinator's, every active batch and its course's subjects. */

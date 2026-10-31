@@ -6,7 +6,7 @@ import { metric, type Metric } from '@elevate/shared-contracts';
 import { daysBetween, istToday, windowLabel } from './dates';
 import type { KpiWindow } from './kpis';
 import { APPLICATION_STATUS_LABELS, type ApplicationStatus } from './applications';
-import { demoProgress, sessionsInRange } from './demos';
+import { ATTENDANCE_SOURCE_UNAVAILABLE, demoProgress, sessionsInRange } from './demos';
 import type { PlanTotals } from './fee-plans';
 import {
   effectiveRecords,
@@ -36,7 +36,8 @@ type DaySession = Parameters<typeof demoProgress>[0][number];
 
 export interface OverviewDemoRow {
   plannedDayCount: number;
-  sessions: readonly DaySession[];
+  /** `unknown`: Academic cannot be read and may hold this class's mark (classesWithMarks). */
+  sessions: readonly (DaySession & { unknown?: boolean })[];
   /** When the demo's admission was confirmed (its admission approval); null = not (yet). */
   confirmedAt: Date | null;
 }
@@ -46,9 +47,9 @@ export interface OverviewDemoRow {
  * (D-1: a day counts once when one of its classes was attended; classes are not days).
  */
 export function demoDayProgress(rows: readonly OverviewDemoRow[], window: KpiWindow) {
-  const progress = rows
-    .filter((r) => sessionsInRange(r.sessions, window.from, window.to))
-    .map((r) => demoProgress(r.sessions, r.plannedDayCount));
+  const held = rows.filter((r) => sessionsInRange(r.sessions, window.from, window.to));
+  const unknown = held.some((r) => r.sessions.some((s) => s.unknown));
+  const progress = held.map((r) => demoProgress(r.sessions, r.plannedDayCount));
   const sum = (k: 'attended' | 'planned') => progress.reduce((n, p) => n + p[k], 0);
   const m = meta(
     'Demo days attended by demos with a class in the window: a day counts once when at least one of its classes was attended (present or late). Classes are not days.',
@@ -58,10 +59,13 @@ export function demoDayProgress(rows: readonly OverviewDemoRow[], window: KpiWin
   return {
     demos: progress.length,
     plannedDays: sum('planned'),
-    allDaysAttended: progress.filter((p) => p.attended >= p.planned).length,
-    daysAttended: progress.length
-      ? metric.ok(sum('attended'), m)
-      : metric.missing('No demo had a class in the window.', m),
+    /** null = not known. */
+    allDaysAttended: unknown ? null : progress.filter((p) => p.attended >= p.planned).length,
+    daysAttended: unknown
+      ? metric.missing(ATTENDANCE_SOURCE_UNAVAILABLE, m)
+      : progress.length
+        ? metric.ok(sum('attended'), m)
+        : metric.missing('No demo had a class in the window.', m),
   };
 }
 

@@ -19,7 +19,7 @@ export function CourseChapters({
   subjects: readonly Subject[];
   chapters: readonly Chapter[];
 }) {
-  if (!subjects.length) return <EmptyState title="No subjects on this course yet" />;
+  if (!subjects.length) return <EmptyState title="No subjects on this course yet" description="An academic coordinator adds subjects and chapters to a course." />;
   return (
     <>
       {subjects.map((s) => {
@@ -31,7 +31,7 @@ export function CourseChapters({
               caption={`Chapters of ${s.name}`}
               rows={rows}
               rowKey={(c) => c.id}
-              empty={<EmptyState title="No chapters in this subject yet" />}
+              empty={<EmptyState title="No chapters in this subject yet" description="An academic coordinator adds chapters to a subject." />}
               columns={[
                 { key: 'code', header: 'Chapter' },
                 { key: 'title', header: 'Title' },

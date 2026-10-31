@@ -64,7 +64,10 @@ describe('HR grants', () => {
     ['ops:work_reports:read', all(...LEADERS)],
     ['ops:teaching_assignments:read', all(...LEADERS)],
     ['ops:attendance:read', { ...own(...STAFF), ...all(...LEADERS) }],
-    ['ops:attendance:request', { ...own(...STAFF), ...all('operations_manager', 'hr_manager') }],
+    [
+      'ops:attendance:request',
+      { ...own(...STAFF, 'director'), ...all('operations_manager', 'hr_manager') },
+    ],
     ['ops:teacher_feedback_summaries:read', { ...own('teacher'), ...all(...LEADERS) }],
     [
       'ops:tasks:review',

@@ -6,7 +6,7 @@
  * assignments (the server checks the choice); campaigns and events have no list yet.
  */
 import type { FieldSpec } from '../../../ui/action-form';
-import { RECURRENCE_OPTIONS } from '../../tasks/_components/log-task';
+import { ACTIONABLE_HINT, RECURRENCE_OPTIONS } from '../../tasks/_components/log-task';
 import { PRIORITY_OPTIONS } from '../../tasks/_components/task-common';
 
 type Option = { value: string; label: string };
@@ -34,7 +34,7 @@ export function newTaskFields(
   const L = 'Links and attachments';
   const V = 'Visibility';
   return [
-    { name: 'title', label: 'Title', required: true, section: B },
+    { name: 'title', label: 'Title', required: true, hint: ACTIONABLE_HINT, section: B },
     {
       name: 'category',
       label: 'Category',

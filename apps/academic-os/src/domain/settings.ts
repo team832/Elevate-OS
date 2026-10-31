@@ -56,7 +56,7 @@ export const SETTING_DEFINITIONS = {
         flatThreshold: z.number().min(0).max(50),
       })
       .strict()
-      .refine((v) => v.minPoints <= v.lastN, { error: 'minPoints cannot exceed lastN' }),
+      .refine((v) => v.minPoints <= v.lastN, { error: 'Min points cannot be more than Last N results.' }),
     defaultValue: DEFAULT_TREND_OPTIONS,
   },
   'attendance.denominator': {

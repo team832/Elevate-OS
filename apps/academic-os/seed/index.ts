@@ -27,11 +27,14 @@ import { ownerAssignmentsSeed } from './owner-assignments';
 import { sampleTeachingSeed, studentsSeed } from './samples';
 import { syllabusDraftsSeed } from './syllabus';
 
+export { seedFillTeaching } from './fill-teaching';
 export {
+  DEMO_TEACHER_TESTS,
   getAssessmentDetail,
   PENDING_IMPORT_TEST,
   placeSampleEnrolments,
   SAMPLE_TESTS,
+  seedDemoTeacherTests,
   seedSampleTests,
 } from './sample-tests';
 

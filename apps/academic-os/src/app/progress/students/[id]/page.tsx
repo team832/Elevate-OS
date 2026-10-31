@@ -14,7 +14,7 @@ import type { PageAccess } from '@elevate/server-kit/next';
 import { getStudentProgress, listStaff, todayIst } from '../../../../server';
 import { MODULE_PATHS } from '../../../../server/paths';
 import { ApiForm } from '../../../../ui/api-form';
-import { StateBadge } from '../../../../ui/badges';
+import { StateBadge, fmtSpan, words } from '../../../../ui/badges';
 import { InterventionsTable, PLAN_FIELDS } from '../../../../ui/interventions';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../../ui/shell';
 
@@ -49,7 +49,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
     p: await getStudentProgress(db, actorFor(access.user), id),
     staff: canWrite ? await listStaff(db) : [],
   }));
-  if (!data.ok) return <LoadError error={data.error} />;
+  if (!data.ok) return <LoadError level={1} back="progress" error={data.error} />;
   const { p, staff } = data.data;
   return (
     <>
@@ -104,7 +104,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
                   ? 'No countable attendance recorded yet.'
                   : `${b.attendance.ratePercent}%`}{' '}
                 · {b.attendance.heldSessions} delivered in placement (
-                {b.placements.map((w) => `${fmtDay(w.startDate)} to ${fmtDay(w.endDate, 'now')}`).join(', ')}) ·
+                {b.placements.map((w) => fmtSpan(w.startDate, w.endDate)).join(', ')}) ·
                 present {b.attendance.present}, late {b.attendance.late}, partial{' '}
                 {b.attendance.partial}, absent {b.attendance.absent}, excused {b.attendance.excused}{' '}
                 · <strong>not recorded {b.attendance.notRecorded}</strong>
@@ -117,7 +117,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
                 empty={<EmptyState title="No missed classes recorded" />}
                 columns={[
                   { key: 'date', header: 'Date', render: (m) => fmtDay(m.date) },
-                  { key: 'reason', header: 'Reason', render: (m) => m.reason.replace(/_/g, ' ') },
+                  { key: 'reason', header: 'Reason', render: (m) => words(m.reason) },
                 ]}
               />
             </Card>
@@ -156,7 +156,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
                     render: (r) => <a href={MODULE_PATHS.assessment(r.assessmentId)}>{r.code}</a>,
                   },
                   { key: 'date', header: 'Date', render: (r) => fmtDay(r.date, 'Not recorded') },
-                  { key: 'kind', header: 'Kind', render: (r) => r.kind.replace(/_/g, ' ') },
+                  { key: 'kind', header: 'Kind', render: (r) => words(r.kind) },
                   {
                     key: 'score',
                     header: 'Score',
@@ -258,7 +258,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
             rowKey={(t) => t.id}
             empty={<EmptyState title="No catch-up tasks" />}
             columns={[
-              { key: 'reason', header: 'Reason', render: (t) => t.reason.replace(/_/g, ' ') },
+              { key: 'reason', header: 'Reason', render: (t) => words(t.reason) },
               { key: 'due', header: 'Due', render: (t) => fmtDay(t.dueDate, 'No date') },
               { key: 'status', header: 'Status', render: (t) => <StateBadge state={t.status} /> },
               { key: 'note', header: 'Note', render: (t) => t.note ?? '' },

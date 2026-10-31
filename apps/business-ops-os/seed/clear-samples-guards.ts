@@ -23,6 +23,9 @@ export class ClearSamplesRefused extends Error {
 
 /** Each query returns one `problem` text per real record that would lose a required link. */
 const PRECHECKS: readonly string[] = [
+  // A holiday with no branch means every branch: emptying the link would widen it.
+  `SELECT 'Holiday "' || name || '" on ' || holiday_on || ' is on the sample branch; move it to a real branch first.' AS problem
+   FROM ops.holidays WHERE branch_id ${IN('s_branches')} AND name NOT LIKE 'Sample holiday%'`,
   `SELECT 'Target "' || t.metric_key || '" (' || t.period_start || ' to ' || t.period_end || ') is set on sample campaign '
      || c.code || '; delete it or set it on a real campaign first.' AS problem
    FROM marketing.targets t JOIN marketing.campaigns c ON c.id = t.campaign_id
@@ -68,6 +71,36 @@ const PRECHECKS: readonly string[] = [
 
 /** Optional links of real rows to sample rows: [plain line, table, UPDATE … RETURNING id]. */
 const REAL_LINKS: readonly [string, string, string][] = [
+  [
+    'real staff member(s) from sample work schedules',
+    'ops.staff_profiles',
+    `UPDATE ops.staff_profiles SET work_schedule_id = NULL
+     WHERE NOT is_sample AND work_schedule_id ${IN('s_schedules')} RETURNING staff_id AS id`,
+  ],
+  [
+    'real staff member(s) from the sample branch',
+    'ops.staff_profiles',
+    `UPDATE ops.staff_profiles SET branch_id = NULL
+     WHERE NOT is_sample AND branch_id ${IN('s_branches')} RETURNING staff_id AS id`,
+  ],
+  [
+    'real teaching assignment(s) from the sample branch',
+    'academic.teacher_assignments',
+    `UPDATE academic.teacher_assignments SET branch_id = NULL
+     WHERE branch_id ${IN('s_branches')} RETURNING id`,
+  ],
+  [
+    'real class(es) from sample rooms',
+    'academic.class_sessions',
+    `UPDATE academic.class_sessions SET room_id = NULL
+     WHERE room_id ${IN('s_rooms')} AND id NOT ${IN('s_academic_sessions')} RETURNING id`,
+  ],
+  [
+    'real weekly pattern(s) from sample rooms',
+    'academic.timetable_patterns',
+    `UPDATE academic.timetable_patterns SET room_id = NULL
+     WHERE room_id ${IN('s_rooms')} AND batch_id NOT ${IN('s_academic_batches')} RETURNING id`,
+  ],
   [
     'real calendar item(s) from sample ideas, campaigns or tasks',
     'marketing.calendar_items',

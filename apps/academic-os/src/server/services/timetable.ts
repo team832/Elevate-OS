@@ -26,7 +26,7 @@ import { withTransaction } from '@elevate/server-kit';
 import { ConflictError, InvalidStateTransitionError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import { fmtDay, type BatchId, type StaffMemberId } from '@elevate/shared-types';
 import type { z } from 'zod';
-import { checkTimetable, teachersOf, type ClassLength, type TimetableCheckResult, type TimetableSession } from '../../domain';
+import { checkTimetable, fmtClock, teachersOf, type ClassLength, type TimetableCheckResult, type TimetableSession } from '../../domain';
 import { assertBatchInScope, assertSessionInScope, audit, resolveScope, type Actor } from '../context';
 import type { checkTimetableBody, rescheduleSessionBody, sessionInput } from '../schemas';
 import { activeStaffOrThrow } from './assignments';
@@ -275,7 +275,7 @@ export async function recordCancellation(tx: Database, actor: Actor, before: Ses
   await audit(tx, actor, { action: 'class_session.cancelled', entityType: 'class_session', entityId: before.id, before, after, metadata: { reason } });
   const teacher = options.quiet ? null : await teacherUserId(tx, before.teacherStaffId);
   if (teacher) {
-    await notify(tx, { userIds: [teacher], module: 'academic', kind: 'class_session.cancelled', title: `Class on ${fmtDay(before.date)} at ${before.startTime} cancelled`, body: reason, link: '/academic/timetable', entityType: 'class_session', entityId: before.id });
+    await notify(tx, { userIds: [teacher], module: 'academic', kind: 'class_session.cancelled', title: `Class on ${fmtDay(before.date)} at ${fmtClock(before.startTime)} cancelled`, body: reason, link: '/academic/timetable', entityType: 'class_session', entityId: before.id });
   }
 }
 
@@ -321,7 +321,7 @@ export async function rescheduleSession(db: Database, actor: Actor, sessionId: s
     await audit(tx, actor, { action: 'class_session.scheduled', entityType: 'class_session', entityId: created!.id, after: created, metadata: { rescheduledFrom: session.id } });
     const teachers = [await teacherUserId(tx, session.teacherStaffId), await teacherUserId(tx, created!.teacherStaffId)].filter((u): u is NonNullable<typeof u> => Boolean(u));
     if (teachers.length > 0) {
-      await notify(tx, { userIds: teachers, module: 'academic', kind: 'class_session.rescheduled', title: `Class moved from ${fmtDay(session.date)} ${session.startTime} to ${fmtDay(input.date)} ${input.startTime}`, body: input.reason, link: '/academic/timetable', entityType: 'class_session', entityId: created!.id });
+      await notify(tx, { userIds: teachers, module: 'academic', kind: 'class_session.rescheduled', title: `Class moved from ${fmtDay(session.date)} ${fmtClock(session.startTime)} to ${fmtDay(input.date)} ${fmtClock(input.startTime)}`, body: input.reason, link: '/academic/timetable', entityType: 'class_session', entityId: created!.id });
     }
     return { original: updated!, replacement: created!, warnings: check.preferences };
   });

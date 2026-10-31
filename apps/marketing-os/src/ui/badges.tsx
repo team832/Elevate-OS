@@ -1,4 +1,4 @@
-import { StatusBadge, type Tone } from '@elevate/shared-ui';
+import { IN_USE_NOT_APPROVED, StatusBadge, type Tone } from '@elevate/shared-ui';
 import {
   coverageLabel,
   type AggregatedMetric,
@@ -68,8 +68,13 @@ export function PlacementBadge({
   return <StatusBadge tone={tone}>{cap(status)}</StatusBadge>;
 }
 
+/** A proposed rule is working today: the words say so (shared-ui SETTINGS_STATE_NOTE). */
 export function ProposedBadge({ status }: { status: string }) {
-  return <StatusBadge tone={status === 'approved' ? 'success' : 'warning'}>{cap(status)}</StatusBadge>;
+  return status === 'proposed' ? (
+    <StatusBadge tone="info">{IN_USE_NOT_APPROVED}</StatusBadge>
+  ) : (
+    <StatusBadge tone={status === 'approved' ? 'success' : 'neutral'}>{cap(status)}</StatusBadge>
+  );
 }
 
 export function RuleCheckSummary({ check }: { check: RuleCheckResult }) {

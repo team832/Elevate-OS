@@ -26,6 +26,8 @@ export interface RecordTableProps<T> {
   sampleOf?: (row: T) => boolean;
   /** The column the rows are ordered by: announced by aria-sort, with its direction in the heading. */
   sortedBy?: { column: string; direction: 'ascending' | 'descending' };
+  /** A short list that never pages (a month of days): the page scrolls, not the table. */
+  pageScroll?: boolean;
 }
 
 const cell = <T,>(c: Column<T>, row: T): ReactNode => {
@@ -44,6 +46,7 @@ export function RecordTable<T>({
   linkColumn = columns[0]?.key,
   sampleOf,
   sortedBy,
+  pageScroll,
 }: RecordTableProps<T>) {
   const value = (c: Column<T>, row: T) =>
     c.key === linkColumn && sampleOf?.(row) ? (
@@ -106,7 +109,7 @@ export function RecordTable<T>({
       </tbody>
     </table>
   );
-  const wrap = tableWrapClass(rows.length);
+  const wrap = tableWrapClass(pageScroll ? 0 : rows.length);
   return rowHref ? (
     <RowLinks className={wrap}>{table}</RowLinks>
   ) : (

@@ -25,11 +25,11 @@ import {
 } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { ApiForm } from '../../ui/api-form';
-import { StateBadge, words } from '../../ui/badges';
+import { StateBadge, fmtClock, wordOptions, words } from '../../ui/badges';
 import { ConflictList } from '../../ui/conflicts';
 import { Filter } from '../../ui/filters';
 import { PrintButton } from '../../ui/print-button';
-import { AcademicShell, LoadError, TIMETABLE_TABS, actorFor, gate, load } from '../../ui/shell';
+import { AcademicShell, LoadError, TIMETABLE_TABS, actorFor, gate, load, sectionLabel } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Timetable' };
@@ -107,7 +107,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
   return (
     <>
       <PageHeader
-        title="Timetable"
+        title={sectionLabel(access.user, 'timetable')}
         description={`${week ? 'Week' : 'Agenda'} from ${fmtDay(from)} to ${fmtDay(to)} (IST). Clashes block scheduling; preferences only warn. Delivered means a teacher marked the class delivered.`}
         actions={<PrintButton label="Print timetable" />}
         tabs={
@@ -171,14 +171,20 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
           ) : (
             <Agenda sessions={data.data.sessions} canWrite={canWrite} />
           )}
-          <Card title={`Conflict check ${fmtDay(from)} to ${fmtDay(to)}`}>
-            <ConflictList
-              verdict={data.data.check.verdict}
-              hard={data.data.check.hard}
-              preferences={data.data.check.preferences}
-              notes={data.data.check.notes}
-            />
-          </Card>
+          {data.data.sessions.length > 0 ? (
+            <Card
+              title={`Conflict check ${fmtDay(from)} to ${fmtDay(to)}`}
+              description={seesAll ? undefined : 'Your classes only.'}
+            >
+              <ConflictList
+                verdict={data.data.check.verdict}
+                hard={data.data.check.hard}
+                preferences={data.data.check.preferences}
+                checked={data.data.check.checked}
+                notes={data.data.check.notes}
+              />
+            </Card>
+          ) : null}
           {canWrite ? (
             <ScheduleForms
               batches={data.data.batches}
@@ -193,7 +199,7 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
 }
 
 const sessionLine = (s: SessionListRow) =>
-  `${s.startTime} · ${s.batchCode} · ${s.subjectName ?? s.sessionType}`;
+  `${fmtClock(s.startTime)} · ${s.batchCode} · ${s.subjectName ?? words(s.sessionType)}`;
 
 /** The primary view: an accessible list grouped by day. */
 function Agenda({ sessions, canWrite }: { sessions: SessionListRow[]; canWrite: boolean }) {
@@ -224,7 +230,7 @@ function Agenda({ sessions, canWrite }: { sessions: SessionListRow[]; canWrite: 
                 header: 'Time',
                 render: (s) => (
                   <a href={MODULE_PATHS.attendance(s.id)}>
-                    <strong>{s.startTime}</strong>
+                    <strong>{fmtClock(s.startTime)}</strong>
                     <span className="el-visually-hidden"> {s.batchCode}</span>
                   </a>
                 ),
@@ -234,7 +240,7 @@ function Agenda({ sessions, canWrite }: { sessions: SessionListRow[]; canWrite: 
               {
                 key: 'subject',
                 header: 'Subject',
-                render: (s) => s.subjectName ?? s.sessionType.replace('_', ' '),
+                render: (s) => s.subjectName ?? words(s.sessionType),
               },
               {
                 key: 'teacher',
@@ -340,7 +346,7 @@ function ScheduleForms({
   return (
     <Card
       title="Schedule a single class"
-      description="For a weekly series use Patterns. The server checks teacher, batch, room and student overlaps, closures, teacher availability, class length and workload before saving."
+      description="For a weekly series use Patterns. The server checks teacher, batch, room and student overlaps, closures, teacher availability, class length and, when a cap is configured, workload before saving."
     >
       {batches.length === 0 ? (
         <Alert tone="info">Create a batch first.</Alert>
@@ -374,10 +380,7 @@ function ScheduleForms({
               name: 'sessionType',
               label: 'Type',
               type: 'select',
-              options: ['teaching', 'practice', 'catch_up', 'test', 'discussion'].map((v) => ({
-                value: v,
-                label: v.replace('_', ' '),
-              })),
+              options: wordOptions(['teaching', 'practice', 'catch_up', 'test', 'discussion']),
             },
             {
               name: 'teacherStaffId',

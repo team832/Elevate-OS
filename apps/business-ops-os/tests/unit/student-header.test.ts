@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { programmesLine, type Profile } from '../../src/app/students/_components/profile-sections';
+import { batchLabel, programmesLine, type Profile } from '../../src/app/students/_components/profile-sections';
 
 const profile = (c: object) =>
   ({
@@ -33,5 +33,25 @@ describe('student header programmes line', () => {
     ],
   ])('%s', (_name, c, placed, line) => {
     expect(programmesLine(profile(c), new Map(Object.entries(placed)))).toBe(line);
+  });
+
+  it.each([
+    ['enrolled, Academic unreadable: not known', {}, 'IPMAT preparation (batch not known, Academic OS unavailable)'],
+    ['a batch Ops knows stays', { enrolledBatchId: 'b' }, 'IPMAT preparation (batch assigned)'],
+    ['not enrolled: Ops knows no batch was asked for', { enrolmentId: null }, 'IPMAT preparation (batch to be assigned)'],
+    ['not enrolled, requested', { enrolmentId: null, intendedBatchId: 'b' }, 'IPMAT preparation (batch requested)'],
+  ])('Academic down: %s', (_name, c, line) => {
+    expect(programmesLine(profile(c), null)).toBe(line);
+  });
+});
+
+describe('batch label where Ops reads no source', () => {
+  it.each([
+    ['b', null, 'e', 'Assigned in Academic OS'],
+    [null, null, 'e', 'Kept in Academic OS'],
+    [null, 'b', null, 'Requested from Academic OS'],
+    [null, null, null, 'To be assigned'],
+  ])('enrolled %s, intended %s, enrolment %s: %s', (enrolled, intended, enrolment, label) => {
+    expect(batchLabel(enrolled, intended, enrolment)).toBe(label);
   });
 });

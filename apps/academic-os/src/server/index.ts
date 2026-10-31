@@ -7,6 +7,7 @@ export { MODULE_PATHS } from './paths';
 export { authOptions } from './auth';
 export * from './context';
 export * from './services/curriculum';
+export * from './services/catalogue';
 export * from './services/batches';
 export * from './services/assignments';
 export * from './services/timetable';
