@@ -256,8 +256,15 @@ export async function seedCharges(
     else if (charges.registration !== 'due') {
       const { row, details } = await entry('registration', due, 11);
       await check(db, checker, row.id, details.method);
-      if (charges.registration === 'refunded')
+      if (charges.registration === 'refunded') {
         await refund(row.id, due, 'Registration refunded: cancelled before classes began.', 12);
+        await recordFee(db, people.finance.actor, admissionId, {
+          chargeCategory: 'registration',
+          kind: 'waiver',
+          amountPaise: due,
+          notes: 'Charge waived with the refund: the family cancelled before classes began.',
+        });
+      }
     }
   }
 

@@ -71,7 +71,7 @@ async function acknowledgeReviews(db: Database) {
     ['Read with the academic manager; the family should hear about the attendance.', 'Call the parent this week.'],
     ['Read; passed to the batch coordinator.', null],
   ] as const;
-  if (ops && sent.length)
+  if (ops && sent.length && !(await db.$count(opsReviewAcknowledgements, eq(opsReviewAcknowledgements.isSample, true))))
     await db
       .insert(opsReviewAcknowledgements)
       .values(

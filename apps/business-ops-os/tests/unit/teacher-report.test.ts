@@ -41,7 +41,7 @@ const activity = (over: Partial<AcademicTeacherActivityV1> = {}): AcademicTeache
       },
     ],
     sessions: {
-      planned: ok(40, 'Classes timetabled for this teacher in the window.'),
+      planned: ok(4, 'Classes timetabled for this teacher in the window.'),
       delivered: ok(36, 'Classes marked delivered with this teacher as an actual teacher.'),
       cancelled: ok(2, 'Classes cancelled in the window.'),
       substituted: ok(1, 'Classes a substitute taught instead.'),
@@ -76,7 +76,7 @@ describe('teacher report facts (pure)', () => {
   });
 
   it.each([
-    ['no planned classes', { planned: ok(0, 'x') }],
+    ['no planned or delivered classes', { planned: ok(0, 'x'), delivered: ok(0, 'x') }],
     ['delivered not reported', { delivered: missing('x', 'y') }],
   ])('the delivered share is not computable with %s', (_n, sessions) => {
     const a = activity();

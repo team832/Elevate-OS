@@ -115,13 +115,13 @@ function feeTables(pdf: PdfBuilder, r: AdmissionRecord) {
   pdf.heading('08  Instalment & payment tracker');
   pdf.table(
     [
-      { header: 'Payment', width: 0.16 },
-      { header: 'Due date', width: 0.13 },
-      { header: 'Due amount', width: 0.15, align: 'right' },
-      { header: 'Received', width: 0.15, align: 'right' },
+      { header: 'Payment', width: 0.18 },
+      { header: 'Due date', width: 0.12 },
+      { header: 'Due amount', width: 0.13, align: 'right' },
+      { header: 'Received', width: 0.13, align: 'right' },
       { header: 'Date of receipt', width: 0.14 },
-      { header: 'Mode', width: 0.12 },
-      { header: 'Balance', width: 0.15, align: 'right' },
+      { header: 'Mode', width: 0.17 },
+      { header: 'Balance', width: 0.13, align: 'right' },
     ],
     r.tracker.map((t) => [
       t.label,
@@ -171,10 +171,11 @@ export async function admissionFormPdf(
     size: 'a4-dense',
   });
   institute(pdf);
-  if (r.isSample) pdf.banner(SAMPLE_BANNER, 'neutral');
-  if (!r.admission)
-    pdf.banner('Application — admission pending. This is not an admission until it is confirmed.');
-  const pending = 'On confirmation';
+  // One banner: the first sheet has no room for two beside the photo box and the signatures.
+  const pending = 'Application — admission pending. This is not an admission until it is confirmed.';
+  if (!r.admission) pdf.banner(r.isSample ? `${SAMPLE_BANNER}. ${pending}` : pending);
+  else if (r.isSample) pdf.banner(SAMPLE_BANNER, 'neutral');
+  const onConfirmation = 'On confirmation';
   pdf.table(
     [
       { header: 'Application no.', width: 0.25 },
@@ -185,8 +186,8 @@ export async function admissionFormPdf(
     [
       [
         r.reference,
-        day(r.admission?.date) ?? pending,
-        r.admission?.number ?? pending,
+        day(r.admission?.date) ?? onConfirmation,
+        r.admission?.number ?? onConfirmation,
         fill(day(s.startDate)),
       ],
     ],
@@ -385,6 +386,6 @@ export async function idCardPdf(c: {
     ['Programme', c.programmes],
     ['Academic year', c.academicYear ?? 'Not set'],
   ]);
-  if (c.isSample) pdf.banner(SAMPLE_BANNER, 'neutral');
+  if (c.isSample) pdf.paragraph(SAMPLE_BANNER); // a banner would push a long programme name off the card
   return pdf.finish();
 }

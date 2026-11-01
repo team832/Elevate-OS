@@ -213,7 +213,7 @@ describe('teacher reports (owner brief 22 Oct 2026)', () => {
     });
     expect(
       s.academic.status === 'available' && s.academic.delivery.classes.map((f) => f.value),
-    ).toEqual([20, 18, 1]);
+    ).toEqual([38, 18, 1]);
     expect(s.academic.status === 'available' && s.academic.delivery.pending[2]!.value).toBeNull();
     // Only the two reviews dated in the period, never their text.
     expect(s.reviews).toEqual({ shareable: 1, internal: 1, latest: today });
@@ -227,7 +227,7 @@ describe('teacher reports (owner brief 22 Oct 2026)', () => {
     });
     expect(s.workOn).toEqual([
       '3 teaching logs pending',
-      '1 classes cancelled',
+      '1 class cancelled',
       '28 expected workdays without an EOD report',
     ]);
     expect(JSON.stringify(s)).not.toMatch(/phone|email|@example\.test|"notes"/i);

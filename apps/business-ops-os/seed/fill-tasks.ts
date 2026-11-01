@@ -334,7 +334,7 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
   const overdue = tasks.filter(
     (t) => ['pending', 'in_progress', 'changes_requested'].includes(t.status) && t.dueOn < c.day(0),
   );
-  if (overdue.length)
+  if (overdue.length && !(await db.$count(opsTaskReminders, inArray(opsTaskReminders.taskId, sampleIds))))
     await db
       .insert(opsTaskReminders)
       .values(

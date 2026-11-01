@@ -81,7 +81,7 @@ describe('marketing sample seed', () => {
     expect(items).toHaveLength(SAMPLE_CALENDAR.length + 1); // + the approved idea put on the calendar
     const published = items.find((i) => i.status === 'published')!;
     expect(published).toMatchObject({ publishedUrl: null });
-    expect(published.publicationEvidence).toMatch(/nothing was posted/);
+    expect(published.publicationEvidence).toMatch(/Screenshot/);
     expect(items.some((i) => i.ideaId)).toBe(true);
 
     const work = await ctx.db.select().from(marketingOptimisationItems);

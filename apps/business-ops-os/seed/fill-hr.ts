@@ -421,7 +421,7 @@ const EVERY_OTHER_TEACHER: readonly [string, string, number, 'approved' | 'draft
   ['Bhavna Soni', 'COM-C12-A', 5, 'approved'],
   ['Lata Krishnan', 'CLAT-A', 6, 'approved'],
 ];
-const SUMMARY_WORDS = [
+const SUMMARY_WORDS: readonly (readonly [string, string, string])[] = [
   ['Clear board work and steady pace.', 'More practice before tests.', 'Students say the classes are easy to follow and ask for more timed practice before tests.'],
   ['Patient with doubts and approachable after class.', 'Homework comes back late at times.', 'Most responses praise how doubts are handled; several ask for homework to come back sooner.'],
   ['Well prepared; examples are close to the exam.', 'The last topic of a class is often rushed.', 'A good month. Students like the examples and ask for a slower finish.'],

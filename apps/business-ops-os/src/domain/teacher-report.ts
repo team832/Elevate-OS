@@ -89,16 +89,25 @@ export interface ReviewFacts {
 
 /** Measured, non-zero counts only; absent data never becomes an item. */
 export function workOn(delivery: DeliveryFacts | null, work: WorkFacts | null): string[] {
-  const items: [string, number | null][] = [];
+  const items: [string, string, number | null][] = [];
   if (delivery)
     items.push(
-      ['teaching logs pending', delivery.pending[0]!.value],
-      ['classes without attendance recorded', delivery.pending[1]!.value],
-      ['assessments pending marking', delivery.pending[2]!.value],
-      ['classes cancelled', delivery.classes[2]!.value],
+      ['teaching log', 'teaching logs', delivery.pending[0]!.value],
+      ['class', 'classes', delivery.pending[1]!.value],
+      ['assessment', 'assessments', delivery.pending[2]!.value],
+      ['class', 'classes', delivery.classes[2]!.value],
     );
-  if (work) items.push(['expected workdays without an EOD report', work.eod.missing]);
-  const out = items.filter(([, n]) => n).map(([what, n]) => `${n} ${what}`);
+  if (work) items.push(['expected workday', 'expected workdays', work.eod.missing]);
+  const what = [
+    ' pending',
+    ' without attendance recorded',
+    ' pending marking',
+    ' cancelled',
+    ' without an EOD report',
+  ];
+  const out = items.flatMap(([one, many, n], i) =>
+    n ? [`${n} ${n === 1 ? one : many}${what[delivery ? i : 4]}`] : [],
+  );
   return out.length ? out : ['Nothing pending in this period.'];
 }
 

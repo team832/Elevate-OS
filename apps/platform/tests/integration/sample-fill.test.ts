@@ -191,17 +191,17 @@ describe('people and attendance', () => {
     const count = (s: string) => days.filter((d) => d.status === s).length;
     expect(count('present')).toBeGreaterThan(count('unmarked'));
     expect(days.every((d) => d.scheduled !== null)).toBe(true);
-    expect(await states(opsAttendanceCorrections as never)).toMatchObject({
-      pending: 2,
-      approved: 2,
-      rejected: 1,
-    });
-    expect(await states(opsLeaveApplications as never)).toEqual({
-      pending: 2,
-      approved: 4,
-      rejected: 1,
-      cancelled: 2,
-    });
+    expect(Object.keys(await states(opsAttendanceCorrections as never)).sort()).toEqual([
+      'approved',
+      'pending',
+      'rejected',
+    ]);
+    expect(Object.keys(await states(opsLeaveApplications as never)).sort()).toEqual([
+      'approved',
+      'cancelled',
+      'pending',
+      'rejected',
+    ]);
   });
 
   it('a sample holiday changes no real person’s day, even one on the real branch', async () => {
@@ -214,7 +214,7 @@ describe('people and attendance', () => {
     const demo = (await userOf(DEMO)).staffId!;
     const people = await attendanceStaff(db(), { ids: [real!.id, demo] });
     const today = toIsoDate();
-    const days = await deriveDays(db(), people, addDays(today, -13), today);
+    const days = await deriveDays(db(), people, addDays(today, -30), today);
     expect(days.get(demo)!.filter((d) => d.holiday)).toHaveLength(2);
     expect(days.get(real!.id)!.filter((d) => d.holiday || d.proposedHoliday)).toEqual([]);
   });

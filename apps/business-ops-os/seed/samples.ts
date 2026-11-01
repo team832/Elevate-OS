@@ -43,7 +43,7 @@ import {
 } from '../src/server/demos';
 import type { SessionAction } from '../src/server/demos-schemas';
 import { DEMO_SUBJECTS, SAMPLE_STUDENTS, type SampleStudent } from './sample-cases';
-import { feePlanAction } from '../src/server/fees';
+import { feePlanAction, recordPlanEntry } from '../src/server/fees';
 import { createFollowUp } from '../src/server/follow-ups';
 import { createLead, logActivity } from '../src/server/leads';
 import { changeStudentLifecycle } from '../src/server/students';
@@ -278,7 +278,7 @@ export async function seedSamples(db: Database, log: (m: string) => void = () =>
           requestEnrolment: !s.convert.noEnrolment,
           ...(s.convert.refusedBatch ? { intendedBatchId: CLOSED_BATCH_ID } : {}),
           ...(s.convert.withdrawReason ? { withdrawReason: s.convert.withdrawReason } : {}),
-          ...(s.convert.correctAddress ? { correctAddress: s.convert.correctAddress } : {}),
+          ...(s.convert.correctAddress ? { correctAddress: true as const } : {}),
         });
     } else if (s.charges)
       await seedCharges(db, people, {
@@ -447,6 +447,25 @@ export async function seedSampleLifecycle(db: Database, log: (m: string) => void
       l.action === 'exit' && l.exitStatus === 'cancelled_before_enrolment'
         ? 'admitted'
         : 'enrolled';
+    // A family leaving before classes owes nothing: the tuition is waived before the balance is taken.
+    if (l.action === 'exit' && l.closePlan)
+      for (const plan of await db
+        .select({ id: opsFeePlans.id, total: opsFeePlans.totalPaise })
+        .from(opsFeePlans)
+        .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsFeePlans.admissionId))
+        .innerJoin(opsLeads, eq(opsLeads.id, opsAdmissions.leadId))
+        .where(
+          and(
+            eq(opsLeads.studentEmail, emailOf(s)),
+            eq(opsFeePlans.status, 'active'),
+            eq(opsAdmissions.status, needs),
+          ),
+        ))
+        await recordPlanEntry(db, manager.actor, plan.id, {
+          kind: 'waiver',
+          amountPaise: plan.total,
+          notes: l.closePlan,
+        } as never);
     // Every programme case of the student: the bundle holds and leaves together.
     const cases = await db
       .select({ id: opsAdmissions.id })

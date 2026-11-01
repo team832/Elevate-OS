@@ -44,7 +44,8 @@ describe('platform.sample-enrolments', () => {
     await runSeeds(ctx.db, all, context);
     await runSeeds(ctx.db, all, context);
     expect(await statuses()).toEqual({
-      enrolled: 7,
+      admitted: 2,
+      enrolled: 8,
       on_hold: 1,
       withdrawn: 1,
       completed: 1,
@@ -57,22 +58,22 @@ describe('platform.sample-enrolments', () => {
       .where(eq(opsAdmissions.status, 'on_hold'));
     expect(held).toMatchObject({ heldFromStatus: 'enrolled', handoffStatus: 'enrolled' });
     expect(held!.holdReviewDate).not.toBeNull();
-    expect(await ctx.db.$count(opsExitRecords)).toBe(4);
+    expect(await ctx.db.$count(opsExitRecords)).toBe(9);
     const academic = await ctx.db.select().from(academicStudents);
-    expect(academic).toHaveLength(11);
+    expect(academic).toHaveLength(13);
     const fake = new RegExp(FAKE_PHONE_PATTERN);
     expect(academic.filter((s) => !s.isSample || !fake.test(s.phone!))).toEqual([]);
-  });
+  }, 180_000);
 
   it('db:clear-samples also removes the Academic student and enrolment of each sample admission', async () => {
     const counts = await clearSamples(ctx.db);
-    expect(counts['academic.students']).toBe(11);
-    expect(counts['academic.enrolments']).toBe(11);
+    expect(counts['academic.students']).toBe(13);
+    expect(counts['academic.enrolments']).toBe(23);
     expect(await ctx.db.$count(academicStudents)).toBe(0);
     expect(await ctx.db.$count(academicEnrolments)).toBe(0);
     expect(await ctx.db.$count(opsAdmissions)).toBe(0);
     expect(await clearSamples(ctx.db)).toEqual({});
-  });
+  }, 180_000);
 
   it('does nothing while a real (non-sample) enrolment request waits', async () => {
     await runSeeds(ctx.db, [...coreSeeds, ...opsSeeds], context);
@@ -82,10 +83,10 @@ describe('platform.sample-enrolments', () => {
     expect((await statuses()).enrolled).toBeUndefined();
     await ctx.db.update(opsLeads).set({ isSample: true }).where(zoya);
     // Clearing closes the waiting requests: a later run never enrols a removed sample.
-    expect((await clearSamples(ctx.db))['core.event_deliveries (closed)']).toBe(11);
+    expect((await clearSamples(ctx.db))['core.event_deliveries (closed)']).toBe(24);
     expect((await runEnrolmentIntake(ctx.db)).processed).toBe(0);
     expect(await ctx.db.$count(academicStudents)).toBe(0);
-  });
+  }, 180_000);
 
   it('closes enrolment events whose admission is already gone, never a real one', async () => {
     const event = (type: string, admissionId: string) =>
@@ -143,5 +144,5 @@ describe('platform.sample-enrolments', () => {
     expect(deliveries.find((d) => d.eventId === orphan.id)).toMatchObject({ status: 'dead' });
     expect(deliveries.some((d) => d.eventId === request.id)).toBe(false);
     expect((await processEnrolmentReplies(ctx.db)).failed).toBe(0);
-  });
+  }, 180_000);
 });

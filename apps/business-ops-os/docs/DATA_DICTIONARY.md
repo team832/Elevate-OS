@@ -21,12 +21,12 @@ comment and regenerate. Pictures of how the tables connect: [DATA_MODEL.md](DATA
 ## Sample data vs real data
 
 Development data is **sample data** (D-036): leads, students and staff carry
-`is_sample = true`, read "<First> Sample Student" or "Sample <role>", use `@example.test`
-emails and have no phone numbers. The screens show a SAMPLE DATA badge. Rows that belong
+`is_sample = true` and are made-up people with `@example.test` emails and phones from the
++9111000 block no real line uses. The screens show a SAMPLE DATA badge. Rows that belong
 to a sample lead or student (admissions, demos, sessions, fees, meetings) are sample too.
 Before real use run `npm run db:clear-samples` — it deletes every sample row and keeps real
-ones. The seven owner-supplied teachers are real directory records and never get sample
-classes or meetings.
+ones. The seven owner-supplied teachers are real directory records, loaded by the reference
+seed only, and never get sample classes or meetings.
 
 ## Tables
 

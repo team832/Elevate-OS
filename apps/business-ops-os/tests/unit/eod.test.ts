@@ -411,7 +411,7 @@ describe('work-report facts for a week (brief 23 Oct 2026 §13–14)', () => {
     const r = facts.timeliness!;
     expect(r).toMatchObject({ eligible: 1, late: 1, rate: 0 });
     const changes = factSections(facts).find((s) => s.title === 'Deadline changes')!;
-    expect(changes.rows[0]!.cells[1]).toBe('22 Oct 2026 → 24 Oct 2026');
+    expect(changes.rows[0]!.cells[1]).toBe('22 Oct 2026 to 24 Oct 2026');
     expect(r.revisions).toEqual([
       {
         taskId: 'm',

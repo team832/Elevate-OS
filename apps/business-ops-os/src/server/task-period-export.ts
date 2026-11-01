@@ -99,7 +99,8 @@ export async function periodReportPdf(
   const pdf = await createPdf({
     title: 'Task and EOD report',
     reference: filterLine(r, q),
-    templateVersion: 'task-period-report v1',
+    templateVersion: 'task-period-report v2',
+    size: 'a4-dense',
   });
   if (r.people.length) {
     const made = await db.$count(
@@ -123,15 +124,28 @@ export async function periodReportPdf(
       'Task events and work updates; work reports in Business Ops; expected report days from HR attendance.',
     ],
   ]);
-  pdf.heading('By person');
-  pdf.table(
-    PEOPLE_HEADER.filter((h) => h !== 'Department').map((header, i) => ({
-      header,
-      width: i === 0 ? 0.28 : 0.72 / (PEOPLE_HEADER.length - 2),
-      align: i ? ('right' as const) : undefined,
-    })),
-    r.people.map((p) => personRow(p).filter((_, i) => i !== 1)),
-  );
+  // Two tables: twelve figures on one A4 line break their headings in the middle of words.
+  for (const [title, from, to, nameWidth] of [
+    ['By person: tasks', 2, 9, 0.24],
+    ['By person: work reports', 9, 13, 0.4],
+  ] as const) {
+    const figures = PEOPLE_HEADER.slice(from, to);
+    pdf.heading(title);
+    pdf.table(
+      [
+        { header: PEOPLE_HEADER[0]!, width: nameWidth },
+        ...figures.map((header) => ({
+          header,
+          width: (1 - nameWidth) / figures.length,
+          align: 'right' as const,
+        })),
+      ],
+      r.people.map((p) => {
+        const row = personRow(p);
+        return [row[0], ...row.slice(from, to)];
+      }),
+    );
+  }
   pdf.heading(`Blocked at cut-off (${r.blockers.length})`);
   if (r.blockers.length)
     pdf.table(

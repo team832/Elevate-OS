@@ -516,7 +516,12 @@ export async function seedFillSupport(db: Database, log: (m: string) => void = (
         });
       });
     });
-    if (rows.length) await db.insert(academicInterventions).values(rows);
+    if (rows.length) {
+      await db.insert(academicInterventions).values(rows);
+      // The demo teacher's My day needs live support work to show.
+      await db.execute(sql`UPDATE academic.interventions SET responsible_staff_id = coalesce((SELECT s.id FROM core.staff_members s JOIN core.users u ON u.id = s.user_id WHERE u.email = 'teacher@elevateeducation.in'), responsible_staff_id)
+        WHERE id IN (SELECT id FROM academic.interventions WHERE status IN ('open', 'in_progress') ORDER BY id LIMIT 2)`);
+    }
     const away = AWAY.flatMap(([name, from, to, reason, withdrawn]) => {
       const p = staff.find((s) => s.name === name);
       return p

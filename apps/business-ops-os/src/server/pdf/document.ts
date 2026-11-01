@@ -90,7 +90,7 @@ export class PdfBuilder extends PdfCanvas {
    */
   keyValuePairs(rows: [string, Cell, string?, Cell?][], { photo = false } = {}) {
     const [w, h] = [99, 128];
-    const fractions = photo ? [0.15, 0.24, 0.13, 0.28] : [0.21, 0.29, 0.2, 0.3];
+    const fractions = photo ? [0.15, 0.24, 0.13, 0.28] : [0.18, 0.32, 0.18, 0.32];
     const styles = [MUTED, INK, MUTED, INK].map((color) => ({ font: this.regular, color }));
     if (photo) this.ensure(h + 8);
     const top = this.y;

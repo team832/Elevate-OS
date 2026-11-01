@@ -94,7 +94,7 @@ const STUDENT_REPORTS: readonly {
     status: 'final',
     madeAgo: 2,
     covers: 60,
-    comment: 'One of the strongest students in the batch; all dues are clear.',
+    comment: 'All dues are clear. Her attendance needs watching: she missed two chapter tests.',
   },
   {
     first: 'Kavya',
@@ -102,7 +102,7 @@ const STUDENT_REPORTS: readonly {
     status: 'reviewed',
     madeAgo: 2,
     covers: 60,
-    comment: 'Kavya is doing very well; the next step is finishing full papers on time.',
+    comment: 'Kavya explains methods well to her group. Coming to every test is the next step.',
     fees: true,
   },
   {

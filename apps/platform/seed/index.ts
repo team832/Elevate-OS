@@ -22,7 +22,7 @@ export const seeds: readonly SeedDefinition[] = [
     module: 'platform',
     dependsOn: ['ops.samples'],
     description:
-      'Sample admissions → Academic intake → Ops enrolment replies (real consumers), then sample holds and exits',
+      'Sample admissions → Academic intake → Ops enrolment replies (real consumers)',
     run: async ({ db, log }) => {
       const [real] = await db
         .select({ id: opsAdmissions.id })
@@ -37,8 +37,16 @@ export const seeds: readonly SeedDefinition[] = [
       log(
         `platform.sample-enrolments: intake ${JSON.stringify(intake)}, replies ${JSON.stringify(replies)}`,
       );
+    },
+  }),
+  defineSeed({
+    name: 'platform.sample-lifecycle',
+    module: 'platform',
+    dependsOn: ['platform.sample-enrolments'],
+    description: 'Sample holds and exits, and Academic closes the enrolments of those who left',
+    run: async ({ db, log }) => {
       await seedSampleLifecycle(db, log);
-      log(`platform.sample-enrolments: exits ${JSON.stringify(await runEnrolmentExits(db))}`);
+      log(`platform.sample-lifecycle: exits ${JSON.stringify(await runEnrolmentExits(db))}`);
     },
   }),
   sampleTestSeed,

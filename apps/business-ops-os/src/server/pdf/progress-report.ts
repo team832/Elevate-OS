@@ -72,11 +72,11 @@ function kyc(pdf: PdfBuilder, k: NonNullable<ReportSnapshot['kyc']>) {
   else
     pdf.table(
       [
-        { header: 'Guardian', width: 0.22 },
-        { header: 'Relationship', width: 0.14 },
+        { header: 'Guardian', width: 0.21 },
+        { header: 'Relationship', width: 0.16 },
         { header: 'Phone', width: 0.17 },
         { header: 'Email', width: 0.33 },
-        { header: 'Consent', width: 0.14 },
+        { header: 'Consent', width: 0.13 },
       ],
       k.guardians.map((g) => [
         g.name,

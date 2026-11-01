@@ -34,7 +34,7 @@ import {
 import { sampleRowIds } from '@elevate/database/seed';
 import type { AcademicTeacherActivityV1 } from '@elevate/shared-contracts';
 import type { StaffMemberId, UserId } from '@elevate/shared-types';
-import { addDays, daysBetween, istInstant, weekdayOf, type IsoDate } from '../src/domain/dates';
+import { addDays, daysBetween, weekdayOf, type IsoDate } from '../src/domain/dates';
 import { periodOf } from '../src/domain/work-report';
 import { sampleAnchorDate } from './sample-staff';
 import {
@@ -319,6 +319,7 @@ export async function seedFillWork(
             recurrenceParentId: m.id as never,
             details: m.brief.details,
             acceptanceCriteria: m.brief.done,
+            expectedDeliverable: m.brief.deliverable,
             category: m.brief.category,
             departmentId: m.s.departmentId,
           },
@@ -430,6 +431,8 @@ export async function seedFillWork(
               legacyRef: `deskday_backup_json:rohit:${legacyId}`,
               importBatchId: batch!.id,
               details: 'Carried over from the old task tracker with its dates.',
+              expectedDeliverable: 'The finished item, as filed in the old tracker.',
+              acceptanceCriteria: 'Marked done in the old tracker on the date shown.',
               category: 'Content',
               departmentId: rohit.departmentId,
             },
@@ -572,5 +575,9 @@ export async function seedFillWork(
     }
   }
   await db.execute(sql`UPDATE ops.eod_reports SET notes = 'Nothing to raise today.' WHERE is_sample AND notes IS NULL AND status = 'draft'`);
-  log(`ops.fill-work: ${added} task(s), ${reports} work report(s) for ${staff.length} people; ${istInstant(anchor).toISOString().slice(0, 10)}`);
+  await db.execute(sql`UPDATE ops.staff_tasks SET requester_note = CASE source WHEN 'recurring' THEN 'Weekly routine set by the department head.' WHEN 'import' THEN 'Carried over from the old tracker.' ELSE 'Asked for by the department head.' END
+    WHERE is_sample AND source <> 'self' AND requester_staff_id IS NULL AND requester_note IS NULL`);
+  await db.execute(sql`UPDATE ops.task_submissions SET evidence = 'Team shared folder.' WHERE evidence IS NULL AND task_id IN (SELECT id FROM ops.staff_tasks WHERE is_sample)`);
+  await db.execute(sql`UPDATE ops.task_submissions SET completion_note = 'Finished and shared with the reviewer.' WHERE completion_note LIKE 'Version%' AND task_id IN (SELECT id FROM ops.staff_tasks WHERE is_sample)`);
+  log(`ops.fill-work: ${added} task(s), ${reports} work report(s) for ${staff.length} people`);
 }

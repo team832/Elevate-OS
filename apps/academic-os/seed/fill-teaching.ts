@@ -80,8 +80,6 @@ const markOf = (student: string, session: string): 'present' | 'late' | 'absent'
   return r < 80 ? 'present' : r < 88 ? 'late' : r < 96 ? 'absent' : 'excused';
 };
 
-const DELIVERY_NOTES = ['Taught as planned.', 'Finished on time.', 'Ran ten minutes over.'];
-
 /** The demo teacher's classes at every stage. */
 const DEMO_CLASSES: readonly {
   day: number;
@@ -255,7 +253,6 @@ export async function seedFillTeaching(db: Database, log: (m: string) => void = 
       ),
     );
   const known = new Set(existing.map((s) => `${s.batchId}:${s.subjectId}:${s.date}:${s.time}`));
-  const isSunday = (d: string) => new Date(`${d}T12:00:00Z`).getUTCDay() === 0;
 
   let classes = 0;
   const addClass = async (o: {

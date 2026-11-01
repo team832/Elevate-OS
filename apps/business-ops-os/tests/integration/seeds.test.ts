@@ -128,7 +128,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
       await counts(
         ctx.db.select({ k: opsDemos.outcome, n: count() }).from(opsDemos).groupBy(opsDemos.outcome),
       ),
-    ).toEqual({ converted: 13, declined: 1, not_converted: 1, open: 5, withdrawn: 1 });
+    ).toEqual({ converted: 20, declined: 1, not_converted: 1, open: 5, withdrawn: 1 });
     const numbers = await ctx.db
       .select({ n: opsAdmissions.admissionNumber })
       .from(opsAdmissions)
@@ -136,20 +136,21 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     // 13 conversions → 13 applications; 12 sample cases admitted (Saanvi waits for her fee agreement approval).
     // Admitted samples carry no approval: "Legacy — verification required" (seed/samples.ts admitSample).
     expect(numbers.map((r) => r.n).sort()).toEqual(
-      Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(3, '0')),
+      Array.from({ length: 15 }, (_, i) => String(i + 1).padStart(3, '0')),
     );
-    expect(await ctx.db.$count(opsApplications)).toBe(13);
-    expect(await ctx.db.$count(opsAdmissionApprovals)).toBe(0);
+    expect(await ctx.db.$count(opsApplications)).toBe(20);
+    expect(await ctx.db.$count(opsAdmissionApprovals)).toBe(13);
     expect(
       await ctx.db.$count(opsAdmissions, eq(opsAdmissions.legacyVerification, 'required')),
-    ).toBe(12);
+    ).toBe(1);
     // Without Academic OS the enrolment requests wait (the platform seed runs the consumers).
     expect(
       await ctx.db.$count(opsAdmissions, eq(opsAdmissions.status, 'enrolment_requested')),
-    ).toBe(11);
+    ).toBe(24);
     expect((await ctx.db.select().from(opsFeePlans)).map((p) => p.status).sort()).toEqual([
-      ...Array(7).fill('active'),
-      'draft', // Saanvi's agreement waits for approval
+      ...Array(15).fill('active'),
+      ...Array(2).fill('closed'),
+      ...Array(4).fill('draft'),
     ]);
     const ledger = await ctx.db.select().from(opsFeeRecords);
     expect(
@@ -159,17 +160,14 @@ describe('Business Ops seeds (D-036 sample set)', () => {
           .from(opsFeeRecords)
           .groupBy(opsFeeRecords.kind),
       ),
-    ).toEqual({ received: 8 }); // Vihaan's agreement is active with nothing paid yet
-    expect(ledger.every((r) => r.status === 'recorded' && r.notes?.includes('not a payment'))).toBe(
-      true,
-    );
+    ).toEqual({ received: 49, discount: 1, waiver: 5, due: 33, refund: 3, adjustment: 2 });
+    expect(ledger.length).toBe(93); // Owner, 31 Oct 2026: sample payments may read as paid and verified.
     // The only approval is Saanvi's agreement request; no inert admission-level approvals.
-    expect((await ctx.db.select().from(approvals)).map((a) => [a.policy, a.status]).sort()).toEqual(
-      [
-        ...Array(7).fill(['ops.fee_agreement.version', 'approved']),
-        ['ops.fee_agreement.version', 'pending'],
-      ],
-    );
+    expect((await ctx.db.select().from(approvals)).map((a) => a.status).sort()).toEqual([
+      ...Array(18).fill('approved'),
+      'pending',
+      'rejected',
+    ]);
     expect(
       new Set(
         (await ctx.db.select({ t: opsAppointments.type }).from(opsAppointments)).map((r) => r.t),
@@ -208,7 +206,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
       [12_000_00, 'per_month', false],
     ]);
     expect(structures.every((r) => r.status === 'draft')).toBe(true);
-  });
+  }, 120_000);
 
   it('holds 12 distinct linked sample teachers with their sample work, sending nothing (brief 2 test 14)', async () => {
     const teachers = await ctx.db

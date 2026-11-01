@@ -100,6 +100,8 @@ const assets = (slug: string, i: number) => [
 export async function seedFillContent(db: Database, log: (m: string) => void = () => {}) {
   if ((await sampleRowIds(db, 'marketing.content_items')).length)
     return log('marketing.fill-content skipped: sample content exists');
+  if (!(await db.$count(marketingSocialAccounts)))
+    return log('marketing.fill-content skipped: no social accounts');
   const [manager, pooja, rohit, contributor] = await Promise.all(
     [SAMPLE_MARKETING_MANAGER_EMAIL, POOJA_EMAIL, ROHIT_EMAIL, 'marketing-contributor@example.test'].map((e) => actorOf(db, e)),
   );

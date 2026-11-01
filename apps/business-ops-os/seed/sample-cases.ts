@@ -63,7 +63,7 @@ export interface SampleStudent {
     /** Asks for a batch Academic no longer has, so Academic refuses the enrolment. */
     refusedBatch?: true;
     withdrawReason?: string;
-    correctAddress?: string;
+    correctAddress?: true;
   };
   /** Hold or exit, applied by `seedSampleLifecycle` once the status allows it. */
   lifecycle?:
@@ -288,7 +288,7 @@ export const SAMPLE_STUDENTS: readonly SampleStudent[] = [
     steps: allPresent,
     convert: {
       programmes: ['CLASS_12', 'IPMAT'],
-      correctAddress: 'House 142, Ashoka Vihar, near the water tank, Sikar, Rajasthan',
+      correctAddress: true,
     },
     fees: {
       dueIn: [-18, -3, 60],
@@ -332,12 +332,12 @@ export const SAMPLE_STUDENTS: readonly SampleStudent[] = [
   {
     first: 'Rohan',
     stage: 'gap_year',
-    programme: 'CUET',
-    shows: 'active: Dropper + CUET; a wrong payment reversed; instalment 2 due this week',
+    programme: 'CLAT',
+    shows: 'active: Dropper + CLAT, online; a wrong payment reversed; instalment 2 due this week',
     days: [-18, -17, -16],
     hour: 11,
     steps: allPresent,
-    convert: { programmes: ['DROPPER', 'CUET'], online: true },
+    convert: { programmes: ['DROPPER', 'CLAT'], online: true },
     fees: {
       dueIn: [-15, 4, 64],
       paid: 1,

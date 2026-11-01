@@ -51,7 +51,7 @@ beforeAll(async () => {
 describe('the sample set', () => {
   it('its exits reached Academic through the real consumer; nothing failed', async () => {
     const closed = await ctx.db.select().from(opsAdmissions).where(inArray(opsAdmissions.status, ['withdrawn', 'completed', 'transferred']));
-    expect(closed).toHaveLength(3);
+    expect(closed).toHaveLength(6);
     const want = { withdrawn: 'withdrawn', completed: 'completed', transferred: 'withdrawn' } as const;
     for (const c of closed) expect(await statusOf(c.enrolmentId)).toBe(want[c.status as keyof typeof want]);
     const stuck = await ctx.db.select().from(eventDeliveries).where(and(eq(eventDeliveries.consumer, ACADEMIC_CONSUMERS.enrolmentExit), inArray(eventDeliveries.status, ['failed', 'dead'])));
@@ -62,7 +62,9 @@ describe('the sample set', () => {
 
 describe('entry, exit, replay, return', () => {
   it('exit ends the one enrolment; a replay does nothing; readmission gives the same person a new enrolment; exiting again ends only that one', async () => {
-    const [old] = await enrolledCases();
+    // A student with one enrolment: a second one keeps them current after this exit.
+    const enrolments = await ctx.db.select().from(academicEnrolments);
+    const old = (await enrolledCases()).find((c) => enrolments.filter((e) => e.studentId === c.academicStudentId).length === 1);
     const firstEnrolment = old!.enrolmentId;
     await exit(old!.id);
     expect(await statusOf(firstEnrolment)).toBe('active'); // Academic is told when the consumer runs

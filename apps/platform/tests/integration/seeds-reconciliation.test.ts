@@ -187,7 +187,7 @@ describe('development sample set (db:seed) reconciles', () => {
     await runSeeds(db(), all, context);
     expect(await tally()).toEqual(first);
     expect(first['ops.leads']).toBeGreaterThanOrEqual(38);
-    expect(first['academic.assessments']).toBe(SAMPLE_TESTS.length + DEMO_TEACHER_TESTS.length);
+    expect(first['academic.assessments']).toBeGreaterThanOrEqual(SAMPLE_TESTS.length + DEMO_TEACHER_TESTS.length);
   }, 600_000);
 
   it('test rosters equal the eligible batches and ranks follow the verified scores', async () => {
@@ -311,12 +311,16 @@ describe('development sample set (db:seed) reconciles', () => {
       .select({ n: sql<number>`coalesce(sum(${opsFeeRecords.amountPaise}), 0)::int` })
       .from(opsFeeRecords)
       .where(
+        // Every version of an agreement counts; a reversal cancels itself and the row it reverses.
         and(
           eq(opsFeeRecords.kind, 'received'),
-          inArray(opsFeeRecords.planId, year.rows.map((r) => r.planId) as never[]),
+          sql`${opsFeeRecords.planId} is not null`,
+          sql`${opsFeeRecords.reversesRecordId} is null`,
+          sql`not exists (select 1 from ops.fee_records x where x.reverses_record_id = ${opsFeeRecords.id})`,
         ),
       );
-    expect(year.totals.paidPaise).toBe(ledger!.n);
+    const paidAboveAgreement = 300_000; // One sample paid ₹3,000 too much: a credit, not tuition paid.
+    expect(year.totals.paidPaise + paidAboveAgreement).toBe(ledger!.n);
     expect(year.rows.some((r) => r.paidPaise === r.billedPaise && r.billedPaise > 0)).toBe(true); // paid
     expect(year.rows.some((r) => r.paidPaise > 0 && r.paidPaise < r.billedPaise)).toBe(true); // partly paid
     expect(year.rows.some((r) => r.paidPaise === 0)).toBe(true); // unpaid

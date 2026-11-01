@@ -217,6 +217,7 @@ const DOCUMENTS: Record<string, DocCase[]> = {
     ['photograph', VERIFIED],
     ['previous_marksheet', VERIFIED],
     ['address_proof', 'The address on the copy cannot be read; a clearer copy was asked for.'],
+    ['other', VERIFIED],
   ],
   Vihaan: [
     ['school_id', VERIFIED],
@@ -452,7 +453,7 @@ export interface ApplicationWalk {
   intendedBatchId?: string;
   withdrawReason?: string;
   /** A correction after signing: new version, signature invalidated, signed again. */
-  correctAddress?: string;
+  correctAddress?: true;
 }
 
 const versionOf = async (db: Database, id: string) =>
@@ -515,7 +516,9 @@ export async function walkApplication(db: Database, people: People, w: Applicati
   if (w.correctAddress) {
     await saveApplication(db, counsellor.actor, id, {
       version: await versionOf(db, id),
-      student: { address: w.correctAddress },
+      student: {
+        address: knownPerson(w.first).address.replace(',', ', near the water tank,'),
+      },
     } as never);
     await printAndSign();
   }

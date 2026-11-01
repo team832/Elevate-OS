@@ -448,6 +448,8 @@ export async function seedFillAdmissions(db: Database, log: (m: string) => void 
   const counsellor = await seedActor(db, 'admissions-counsellor@example.test');
   if (!manager?.staffId || !counsellor?.staffId)
     return log('ops.fill-admissions skipped: no sample staff');
+  // First, so the second enquiry it adds gets the details and preferences below in the same run.
+  await fillDuplicates(db, manager.actor);
   await fillPeopleDetails(db, manager.actor);
   for (const statement of FILLS) await db.execute(statement);
   const anchor = anchorDay();
@@ -457,7 +459,6 @@ export async function seedFillAdmissions(db: Database, log: (m: string) => void 
     for (const c of await casesOf(db, first))
       if (c.status !== 'lost')
         await transitionAdmission(db, manager.actor, c.id, { to: 'lost', reason, reasonCode });
-  await fillDuplicates(db, manager.actor);
 
   // Students related to each other, linked by staff (never merged).
   for (const [x, y, note] of [
