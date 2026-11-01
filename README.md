@@ -202,7 +202,7 @@ Not in `.env`: `ELEVATE_BASE_PATH` is declared by each `next.config.ts` and inli
 | `INTEGRATION_CONTRACT.md` | Identities, IDs, ownership, permissions, API, events, summaries, versioning, failure behaviour |
 | `DATABASE_DESIGN.md` | Schemas, conventions, core tables |
 | `IMPLEMENTATION_STATUS.md` | What is built and the evidence |
-| `docs/DECISIONS.md` | Decision log (D-001 … D-131) |
+| `docs/DECISIONS.md` | Decision log (D-001 … D-132) |
 | `docs/RELEASE.md` | The release package: build, contents, install, what it does not do, go-live blockers |
 | `docs/CASELETS.md` | The master register of use cases and their first-package results |
 | `docs/WORKSPACES.md` | The three role workspaces: URLs, dev commands, demo sign-ins, sign-in and access rules, role × workspace matrix |
