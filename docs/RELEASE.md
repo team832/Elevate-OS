@@ -2,7 +2,7 @@
 
 The release package is one folder (and one archive) holding the four built apps, the database steps and the scripts that start and check them. Decision: D-112. Status per D-013: **Implemented; checked on three packages on the developer's PC, with a final one to come. Never Deployed.** No host is chosen and nothing is on the internet.
 
-The first package was built on 31 Oct 2026 from a working tree with uncommitted changes (`manifest.json` says `dirty: true`). Figures below come from that package unless marked. Two more followed the same day after a fix round each, also from an uncommitted tree: the second with 11,016 files, 310.7 MB, archive 92.7 MB, 425 s, secret scan OK on all 11,016 files; the third with 11,032 files. Results on all three are under "Checks on the package". Final package and its re-test: `[coordinator fills final numbers]`.
+The first package was built on 31 Oct 2026 from a working tree with uncommitted changes (`manifest.json` says `dirty: true`). Figures below come from that package unless marked. Two more followed the same day after a fix round each, also from an uncommitted tree: the second with 11,016 files, 310.7 MB, archive 92.7 MB, 425 s, secret scan OK on all 11,016 files; the third with 11,032 files. Results on all three are under "Checks on the package". Final package and its re-test: GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held).
 
 ## Build it
 
@@ -188,6 +188,6 @@ First package, database `elevate_v2`:
 | Earlier defects | RV-A 22 pass, 2 fail (API-010, API-011, both left). RV-B 58 pass, 1 fail. RV-C 57 pass, 3 fail, 5 partial, 6 not run, 3 open as recorded |
 | Browser | 6,160 page loads: 14 console errors, all from defects fixed after this pass |
 
-The failures found on these three were fixed in the source afterwards, except what `HANDOFF.md` "Known limits" lists. Re-test on the final package: `[coordinator fills final numbers]`.
+The failures found on these three were fixed in the source afterwards, except what `HANDOFF.md` "Known limits" lists. Re-test on the final package: GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held).
 
 Not checked anywhere yet: a real Google sign-in, a real phone on the Wi-Fi, a restore, Linux, a host.

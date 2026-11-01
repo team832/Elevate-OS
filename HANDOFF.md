@@ -40,13 +40,23 @@ What I did:
 What I need from you: step 10 below, in order, on your own computer. Then the first group,
   "Stops real use", in "Decisions waiting for you": real staff cannot use this without those three.
 What's next:
-- The final re-test on the rebuilt package: [coordinator fills final numbers]
+- The final re-test on the rebuilt package: GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held)
 - Your own look at the screens, above all the arrows under tables you mentioned. I fixed four
   arrow-like things and cannot tell which you meant. Pictures of each are under "Pictures you can
   look at" below: please tell me if the arrows you saw are still there.
 - Choosing where to host it, once the three decisions are made.
 Placeholders still to replace: 26 (the placeholders list says what each one is).
 ```
+
+**Final state, 1 Nov 2026.** Everything in the test data is made up: normal English names, fake phone numbers, named parents, KYC, forms, fees, attendance, reviews, tasks and reports, all marked sample and removable in one step. Your seven real teachers are not in it.
+
+**Not re-checked after the made-up data went in,** because memory and your usage limit ran short. Each of these passed on the package before it, except the two marked:
+- The full list of use cases, money worked out by hand, simultaneous-action tests and attacks. Automatic tests and a page walk did run on the final package.
+- The screens by real clicks in a browser, including two layout fixes that have never been seen in the real app (the HR settings form and student codes on My Day; not yet proven).
+- The system with Academic switched off, including the new wording on a demo record (not yet proven).
+- Speed on large data. Keep the PC plugged in: battery about doubled the times.
+
+**Known in the made-up data.** Sample work reports say "Academic OS was not asked for this report" in their Academic section. Most students have only one to three test results, so the trend lines on their reports say "insufficient data". Files and attachments stay empty because no file storage is chosen. A database that already holds your seven teachers keeps them, blank, beside the made-up ones.
 
 **What this does not mean.** I cannot tell you there are no errors anywhere. These are still true:
 - **Not checked by anyone yet:** a real Google sign-in, a real phone on your Wi-Fi, restoring a backup, any server other than this PC, and your own database, which I do not touch.
@@ -737,7 +747,7 @@ The 21 questions from this milestone are the rows marked **New 24 Oct** under "E
 6. **Fee donut drill-down.** As `business@` on :3000 → Fees → choose the academic year and course → the chart shows paid and outstanding tuition with due-now, overdue and future tiles → click "outstanding": the list of students and its header total match the chart exactly.
 
 ### Checks
-Checks (31 Oct 2026): `npm run validate`, four webpack builds and the final re-test: `[coordinator fills final numbers]`. First re-test, on the first package: 266 use cases, 260 pass, 3 fail, 3 held. Third package: 262 pass, 1 fail (ACH-01, fixed in source after), 3 held. Last re-test so far, on the fourth package: 263 pass, 0 fail, 3 held. Work after commit `a1f6ec7` is on no package yet. Details in §6.
+Checks (31 Oct 2026): `npm run validate`, four webpack builds and the final re-test: GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held). First re-test, on the first package: 266 use cases, 260 pass, 3 fail, 3 held. Third package: 262 pass, 1 fail (ACH-01, fixed in source after), 3 held. Last re-test so far, on the fourth package: 263 pass, 0 fail, 3 held. Work after commit `a1f6ec7` is on no package yet. Details in §6.
 
 Checks (24 Oct 2026, run by the coordinator): typecheck PASS; lint PASS (0 warnings); tests 4,074 of 4,075 passed in the full run — the 1 failure was a 30 s timeout under load in `applications.test.ts`, which passes 30/30 on its own; secret scan OK (1,775 files); webpack builds exit 0 for all four apps (platform, marketing-os, academic-os, business-ops-os). **Browser pass: not done** that day (skipped at the owner's request to save time). The browser pass of 31 Oct is in §6.
 
@@ -765,9 +775,9 @@ Checks (24 Oct 2026, run by the coordinator): typecheck PASS; lint PASS (0 warni
 | Password reset / change screen, shared login rate limit, outbox scheduler, Google re-authentication for confirmation | **Not built** | `infrastructure/deployment/README.md`; `C:\OPENBOT\Elevate-Not-Working` |
 | Migrations `0015_hr_staff_workspaces`, `0016_milestone_hr_marketing_tests` | **Applied on the owner's computer** 23 Oct (`db:check` 19/19; frozen) | `packages/database/migrations/` |
 | Milestone 23–24 Oct (D-094 … D-109): Tests and Mock Tests, score import, ranks and publication, requests through HR, lead stages and calls, Marketing calendar / ideas plan / SEO-AIO-GEO / targets / monthly report, reminders and pop-ups, annual fee chart, sample data | Implemented, Tested (rules and API); grants **Proposed**; browser pass pending | "Milestone 23–24 Oct 2026" above; `IMPLEMENTATION_STATUS.md` |
-| Debug pass 26 Oct and 30–31 Oct (D-112 … D-125): exit reaches Academic, workspace membership enforced on data connections, one fee statement, insert-only seeds, jobs panel, Hindi PDFs, release package | Implemented; tested on the first, second and third packages; final re-test `[coordinator fills final numbers]` | `IMPLEMENTATION_STATUS.md` "Debug pass", `docs/RELEASE.md`, `docs/CASELETS.md` |
+| Debug pass 26 Oct and 30–31 Oct (D-112 … D-125): exit reaches Academic, workspace membership enforced on data connections, one fee statement, insert-only seeds, jobs panel, Hindi PDFs, release package | Implemented; tested on the first, second and third packages; final re-test GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held) | `IMPLEMENTATION_STATUS.md` "Debug pass", `docs/RELEASE.md`, `docs/CASELETS.md` |
 | Migration `0017` (seven indexes, link rule) | Written and tested; **status on the owner's computer unknown** (step 10) | `docs/DATABASE_MIGRATION_PLAN.md` |
-| Work after commit `a1f6ec7` (D-126 … D-131): leave applications, mock data everywhere, honest words with Academic stopped, settings as real fields, fee positions grouped once, the owner's two inspection lists | Implemented; automated tests in source; on no package yet; final re-test `[coordinator fills final numbers]` | `IMPLEMENTATION_STATUS.md` "Debug pass", `docs/DECISIONS.md` |
+| Work after commit `a1f6ec7` (D-126 … D-131): leave applications, mock data everywhere, honest words with Academic stopped, settings as real fields, fee positions grouped once, the owner's two inspection lists | Implemented; automated tests in source; on no package yet; final re-test GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held) | `IMPLEMENTATION_STATUS.md` "Debug pass", `docs/DECISIONS.md` |
 | Migration `0018` (leave applications, two indexes) | Written and tested; **not applied on the owner's computer** (step 10) | `docs/DATABASE_MIGRATION_PLAN.md` |
 | Business facts (fees per programme, staff, holidays, targets) | **Missing — owner** | `PLACEHOLDERS.md`; OD-001…OD-048 in `docs/EXISTING_PROJECT_AUDIT.md` §9 |
 
@@ -872,7 +882,7 @@ Later runs: on 22 Oct 2026 a scripted headless-Chrome pass opened every static p
 
 ### Final verification — 31 Oct 2026
 
-`npm run validate`: `[coordinator fills final numbers]`. Four webpack builds: `[coordinator fills final numbers]`. Re-test on the final package: `[coordinator fills final numbers]`.
+`npm run validate`: GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held). Four webpack builds: GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held). Re-test on the final package: GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held).
 
 First re-test, on the **first package** (database `elevate_v2`, ports 3000 to 3003, other checkers running). The failures below were fixed in the source afterwards, so these numbers describe that package only:
 

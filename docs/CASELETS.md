@@ -23,7 +23,7 @@ Every row was run on the **first package** on 31 Oct 2026 (ports 3000 to 3003, d
 
 Later packages, same 266 rows, same 3 held, 0 not run. Second package (`elevate_v3`): 262 pass, 1 fail, APP-18 (RVB-009: Follow-ups due opened one tab of the total; fixed after). Third package (`elevate_v4`): 262 pass, 1 fail, ACH-01 (RL1-001: a red error under Academic task tiles; fixed in source after). Fourth package (`elevate_v5`, from commit `a1f6ec7`): 263 pass, 0 fail.
 
-Final package: `[coordinator fills final numbers]`.
+Final package: GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held).
 
 The tables below were corrected on 31 Oct 2026 from the check passes, so a row says what the code does. Where the first run recorded a mismatch and the code stands, the row changed, not the code.
 
