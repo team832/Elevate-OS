@@ -14,7 +14,7 @@ import {
   placeSampleEnrolments,
   seedSampleTests,
 } from '@elevate/academic-os/seed';
-import { seedSampleScoreImport } from '@elevate/business-ops-os/seed';
+import { seedConfirmedScoreImport, seedSampleScoreImport } from '@elevate/business-ops-os/seed';
 
 const OPS_MANAGER = 'operations-manager@example.test';
 
@@ -49,6 +49,12 @@ export async function seedPlatformSampleTests(db: Database, log: (m: string) => 
   const imported = await seedSampleScoreImport(
     db,
     (await getAssessmentDetail(db, pending)) as never,
+    OPS_MANAGER,
+  );
+  await seedConfirmedScoreImport(
+    db,
+    (await getAssessmentDetail(db, tests.get('IPMAT-MOCK-01')!)) as never,
+    'academic-coordinator@example.test',
     OPS_MANAGER,
   );
   log(

@@ -65,9 +65,9 @@ const NOT_NAMES = new Set(
 );
 
 /**
- * Known people reduced to their name words, ready for `redact`: sample people ("Sample …") are
- * left out, and so are role, subject and catalogue words (`catalogue`: programme names and codes),
- * so "Sample Maths Teacher" masks nothing and "the teacher explains" stays readable.
+ * Known people reduced to their name words, ready for `redact`: role, subject and catalogue words
+ * (`catalogue`: programme names and codes) are left out, so "Maths Teacher" masks nothing and "the
+ * teacher explains" stays readable.
  */
 export function namesToMask(names: readonly string[], catalogue: readonly string[] = []) {
   const stop = new Set([
@@ -75,7 +75,6 @@ export function namesToMask(names: readonly string[], catalogue: readonly string
     ...catalogue.flatMap((c) => c.toLowerCase().split(/[^\p{L}]+/u)),
   ]);
   return names
-    .filter((n) => !/\bsample\b/i.test(n))
     .map((n) =>
       n
         .split(/[\s.]+/)

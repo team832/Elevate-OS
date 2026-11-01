@@ -12,6 +12,7 @@ import {
   opsFeePlans,
   opsFeeRecords,
   opsKycDocuments,
+  students,
   type Database,
   type opsApplications,
 } from '@elevate/database';
@@ -37,7 +38,7 @@ export async function admissionRecord(
   generatedAt: Date,
 ): Promise<AdmissionRecord> {
   const planId = snapshot.feeAgreement?.planId;
-  const [docs, records, family, checks, [approval]] = await inOrder([
+  const [docs, records, family, checks, [approval], [person]] = await inOrder([
     db
       .select({
         documentType: opsKycDocuments.documentType,
@@ -69,6 +70,7 @@ export async function admissionRecord(
         ),
       ),
     db.select().from(opsAdmissionApprovals).where(eq(opsAdmissionApprovals.applicationId, app.id)),
+    db.select({ isSample: students.isSample }).from(students).where(eq(students.id, app.studentId)),
   ]);
   const names = await namesOf(db, [...checks.map((c) => c.by), approval?.approvedBy ?? null]);
   const agreement = family.find((p) => p.id === planId);
@@ -105,6 +107,7 @@ export async function admissionRecord(
   const chain = agreement ? versionChain(agreement, family) : [];
   const inForce = acceptedVersions(family).inForce.find((p) => chain.includes(p));
   return {
+    isSample: person?.isSample ?? false,
     reference: app.reference,
     version,
     generatedAt,

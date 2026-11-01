@@ -21,6 +21,7 @@ export async function teacherReportPdf(
     reference: meta.referenceCode,
     templateVersion: `Template ${meta.templateVersion}`,
     generatedAt: meta.createdAt,
+    size: 'a4-dense',
   });
   if (s.teacher.isSample) pdf.banner('Sample data — fictional teacher', 'neutral');
   pdf.keyValues([

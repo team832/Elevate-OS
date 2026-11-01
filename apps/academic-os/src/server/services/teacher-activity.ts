@@ -18,7 +18,6 @@ import {
   academicSubjects,
   academicTeacherReviews,
   academicTeacherUnavailability,
-  opsStaffProfiles,
   staffMembers,
   type Database,
 } from '@elevate/database';
@@ -63,8 +62,7 @@ export async function listTeachers(db: Database, actor: Actor, now = new Date())
   const recent = { from: addDays(today as IsoDate, -LOOKBACK_DAYS) as string, to: today };
   const assignments = await assignmentsOf(db, scope.kind === 'own' ? [scope.staffId!] : undefined);
   const staffIds = [...new Set(assignments.map((a) => a.staffMemberId as string))];
-  // The one flag on a staff member lives on Ops's profile row (core.staff_members has none): read-only, no write crosses.
-  const staff = staffIds.length ? await db.select({ id: staffMembers.id, fullName: staffMembers.fullName, status: staffMembers.status, isSample: opsStaffProfiles.isSample }).from(staffMembers).leftJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id)).where(inArray(staffMembers.id, staffIds as StaffMemberId[])).orderBy(asc(staffMembers.fullName)) : [];
+  const staff = staffIds.length ? await db.select().from(staffMembers).where(inArray(staffMembers.id, staffIds as StaffMemberId[])).orderBy(asc(staffMembers.fullName)) : [];
   const out = [];
   for (const s of staff) {
     const own = assignments.filter((a) => a.staffMemberId === s.id);
@@ -74,7 +72,8 @@ export async function listTeachers(db: Database, actor: Actor, now = new Date())
     out.push({
       staffId: s.id,
       name: s.fullName,
-      isSample: s.isSample ?? false,
+      // Academic's own flag (D-011): a teacher of sample batches only. Ops holds the staff flag and applies it on its own screens.
+      isSample: own.length > 0 && own.every((a) => a.batchIsSample),
       /** HR ended their employment; assignments and classes stay until someone moves them. */
       left: s.status === 'inactive',
       subjects: [...new Set(mine.map((a) => a.subjectName))],

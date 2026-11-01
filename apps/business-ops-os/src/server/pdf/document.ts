@@ -162,12 +162,23 @@ export class PdfBuilder extends PdfCanvas {
     this.y -= lead / 2;
   }
 
-  /** Label → value rows; a missing value prints "—". */
-  keyValues(rows: [string, Cell][]) {
+  /** Label → value rows; a missing value prints "—". `together` moves the whole block to one page. */
+  keyValues(rows: [string, Cell][], { together = false } = {}) {
     const styles = [
       { font: this.regular, color: MUTED },
       { font: this.regular, color: INK },
     ];
+    if (together)
+      this.ensure(
+        rows.reduce((h, row) => {
+          const [label, value] = row.map(this.clean) as [string, string];
+          const lines = Math.max(
+            this.wrap(label, this.regular, this.p.body, this.width * 0.32 - 2 * PAD).length,
+            this.wrap(value, this.regular, this.p.body, this.width * 0.68 - 2 * PAD).length,
+          );
+          return h + lines * this.p.body * LEAD + 2 * PAD;
+        }, 0),
+      );
     for (const row of rows) this.row(row.map(this.clean), [0.32, 0.68], styles);
     this.y -= this.p.body / 2;
   }
@@ -194,11 +205,14 @@ export class PdfBuilder extends PdfCanvas {
       const noteLines = r.note
         ? this.wrap(this.clean(r.note), this.regular, size * 0.85, this.width - labelW)
         : [];
-      this.ensure(rowH + noteLines.length * size * LEAD);
+      const labels = this.wrap(this.clean(r.label), this.regular, size, labelW - PAD);
+      const extra = Math.max(0, labels.length - 1 - noteLines.length) * size * LEAD;
+      this.ensure(rowH + Math.max(noteLines.length, labels.length - 1) * size * LEAD);
       this.y -= rowH;
       const base = this.y + 4;
-      const [label] = this.wrap(this.clean(r.label), this.regular, size, labelW - PAD);
-      this.text(label ?? '', this.p.margin, base, this.regular, size);
+      labels.forEach((line, n) =>
+        this.text(line, this.p.margin, base - n * size * LEAD, this.regular, size),
+      );
       this.page.drawRectangle({
         x: trackX,
         y: base - 1,
@@ -229,6 +243,7 @@ export class PdfBuilder extends PdfCanvas {
         this.y -= size * LEAD * 0.9;
         this.text(line, trackX, this.y + 4, this.regular, size * 0.85, MUTED);
       }
+      this.y -= extra;
     }
     this.y -= this.p.body / 2;
   }
@@ -254,10 +269,13 @@ export class PdfBuilder extends PdfCanvas {
   banner(value: string, tone: keyof typeof TONES = 'warning') {
     const [bg, fg] = TONES[tone];
     const size = this.p.body * 1.1;
+    const tight = 'tight' in this.p;
+    const inset = tight ? PAD : 2 * PAD;
     const lines = this.wrap(this.clean(value), this.bold, size, this.width - 4 * PAD);
-    const height = lines.length * size * LEAD + 4 * PAD;
-    this.ensure(height + 6);
-    this.y -= height + 6;
+    const height = lines.length * size * LEAD + 2 * inset;
+    const gap = tight ? 3 : 6;
+    this.ensure(height + gap);
+    this.y -= height + gap;
     this.page.drawRectangle({
       x: this.p.margin,
       y: this.y,
@@ -271,13 +289,13 @@ export class PdfBuilder extends PdfCanvas {
       this.text(
         line,
         this.p.margin + 2 * PAD,
-        this.y + height - 2 * PAD - (n + 1) * size * LEAD + 3,
+        this.y + height - inset - (n + 1) * size * LEAD + 3,
         this.bold,
         size,
         fg,
       ),
     );
-    this.y -= 6;
+    this.y -= gap;
   }
 
   /** Boxes for physical signatures, up to three per line: label, signature line, name, date line. */
@@ -294,7 +312,8 @@ export class PdfBuilder extends PdfCanvas {
       }));
       const nameRows = Math.max(1, ...wrapped.map((b) => b.name.length)) - 1;
       const labelRows = Math.max(...wrapped.map((b) => b.label.length));
-      const height = 92 + (nameRows + labelRows) * lead; // label, 40pt to sign on, signature line, name, date
+      // Label, room to sign on (less at paper-form density), signature line, name, date.
+      const height = ('tight' in this.p ? 76 : 92) + (nameRows + labelRows) * lead;
       this.ensure(height + 8);
       this.y -= height + 8;
       const b = this.y;

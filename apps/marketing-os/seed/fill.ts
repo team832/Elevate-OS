@@ -151,9 +151,9 @@ const FILLS = (programmeOf: (c: string) => string | null) => [
         WHEN 'CLAT-CA-SERIES' THEN 'CLAT aspirants in Class 11 and 12'
         ELSE 'Class 12 commerce students and parents' END),
       objective = CASE code
-        WHEN 'IPMAT-WEBINAR' THEN 'Fill the parents’ webinar and follow up each family who registers (sample).'
-        WHEN 'CLAT-CA-SERIES' THEN 'Keep CLAT aspirants reading the week’s news with one post and one quiz a week (sample).'
-        ELSE 'Bring families to the CA Foundation open house (sample).' END,
+        WHEN 'IPMAT-WEBINAR' THEN 'Fill the parents’ webinar and follow up each family who registers.'
+        WHEN 'CLAT-CA-SERIES' THEN 'Keep CLAT aspirants reading the week’s news with one post and one quiz a week.'
+        ELSE 'Bring families to the CA Foundation open house.' END,
       channels = CASE WHEN cardinality(channels) = 0 THEN ARRAY['instagram', 'email'] ELSE channels END,
       programme_id = coalesce(programme_id, CASE code
         WHEN 'IPMAT-WEBINAR' THEN ${programmeOf('IPMAT')}::uuid
@@ -162,28 +162,28 @@ const FILLS = (programmeOf: (c: string) => string | null) => [
     WHERE is_sample`,
   sql`UPDATE marketing.ideas SET
       series = coalesce(series, course_prefix || ' basics'),
-      objective = coalesce(objective, 'Answer one question families ask often, in their words (sample).'),
-      brief = coalesce(brief, coalesce(problem_need, title) || ' One clear idea, no result claims (sample).'),
+      objective = coalesce(objective, 'Answer one question families ask often, in their words.'),
+      brief = coalesce(brief, coalesce(problem_need, title) || ' One clear idea, no result claims.'),
       audience = CASE WHEN audience = 'Sample audience' THEN CASE course_prefix
         WHEN 'IPMAT' THEN 'Class 12 students preparing for IPMAT'
         WHEN 'CLAT' THEN 'CLAT aspirants in Class 11 and 12'
         WHEN 'COM' THEN 'Class 11 and 12 commerce students'
         ELSE 'Students and parents in and around Sikar' END ELSE audience END,
-      hypothesis = CASE WHEN hypothesis LIKE 'Sample proposal%' THEN 'If it answers the question plainly, more families will ask for a demo class. To be tested; no result claimed (sample).' ELSE hypothesis END
+      hypothesis = CASE WHEN hypothesis LIKE 'Sample proposal%' THEN 'If it answers the question plainly, more families will ask for a demo class. To be tested; no result claimed.' ELSE hypothesis END
     WHERE is_sample`,
   sql`UPDATE marketing.optimisation_items SET
-      baseline_observation = CASE WHEN baseline_observation LIKE 'Sample baseline%' THEN 'The page has no clear title and no answer to the first question families ask. Typed by hand (sample).' ELSE baseline_observation END,
-      required_change = CASE WHEN required_change LIKE 'Sample change%' THEN 'Add a plain title, a short answer at the top and links to the course pages (sample).' ELSE required_change END,
-      measurement_source = coalesce(measurement_source, 'Typed by hand after a search; no tool is connected (sample)'),
+      baseline_observation = CASE WHEN baseline_observation LIKE 'Sample baseline%' THEN 'The page has no clear title and no answer to the first question families ask. Typed by hand.' ELSE baseline_observation END,
+      required_change = CASE WHEN required_change LIKE 'Sample change%' THEN 'Add a plain title, a short answer at the top and links to the course pages.' ELSE required_change END,
+      measurement_source = coalesce(measurement_source, 'Typed by hand after a search; no tool is connected'),
       observation_on = coalesce(observation_on, ${anchor()}::date - 10)
     WHERE is_sample`,
   sql`UPDATE marketing.targets SET note = CASE metric_key
-      WHEN 'qualified_leads' THEN 'Leads who have a programme and a next step (sample target).'
-      WHEN 'follow_ups_completed' THEN 'Every follow-up closed with an outcome (sample target).'
-      WHEN 'demo_bookings' THEN 'Demo classes booked this month (sample target).'
-      WHEN 'approved_content' THEN 'Items the manager approved this month (sample target).'
-      WHEN 'published_content' THEN 'Items marked published; sample items were not really posted (sample target).'
-      ELSE 'Deliverables of this campaign (sample target).' END
+      WHEN 'qualified_leads' THEN 'Leads who have a programme and a next step.'
+      WHEN 'follow_ups_completed' THEN 'Every follow-up closed with an outcome.'
+      WHEN 'demo_bookings' THEN 'Demo classes booked this month.'
+      WHEN 'approved_content' THEN 'Items the manager approved this month.'
+      WHEN 'published_content' THEN 'Items marked published; sample items were not really posted.'
+      ELSE 'Deliverables of this campaign.' END
     WHERE is_sample`,
 ];
 
@@ -263,7 +263,7 @@ export async function seedFillMarketing(db: Database, log: (m: string) => void =
     await db
       .update(marketingCalendarItems)
       .set({
-        brief: `${text[0]} (sample)`,
+        brief: `${text[0]}`,
         audience: text[1],
         programmeId: programmeOf(text[2]) as never,
         channel: CHANNELS[i.itemType as keyof typeof CHANNELS] ?? 'other',
@@ -284,8 +284,8 @@ export async function seedFillMarketing(db: Database, log: (m: string) => void =
       topic,
       targetQuery,
       categoryKey,
-      baselineObservation: 'The page answers no common question yet. Typed by hand (sample).',
-      requiredChange: 'Add a short answer at the top and a clear title (sample).',
+      baselineObservation: 'The page answers no common question yet. Typed by hand.',
+      requiredChange: 'Add a short answer at the top and a clear title.',
       ownerStaffId: owner.staffId as never,
       dueOn: addDays(anchor(), 10),
       checks: [],
@@ -295,8 +295,8 @@ export async function seedFillMarketing(db: Database, log: (m: string) => void =
       platform,
       query: targetQuery,
       observedOn: addDays(anchor(), -6),
-      result: `Sample observation: ${seen} Typed by hand, not connected.`,
-      note: 'Sample observation.',
+      result: `${seen} Typed by hand, not connected.`,
+      note: 'Typed by hand after a search.',
     });
   }
   if (newItems.length)
@@ -328,7 +328,7 @@ export async function seedFillMarketing(db: Database, log: (m: string) => void =
         // The shape a real import stores (src/domain/metrics-csv.ts), which the import page reads.
         rejected: [1, 2].map((rowNumber) => ({
           rowNumber,
-          reasons: ['Sample row: no real post, nothing stored.'],
+          reasons: ['No post matches this row; nothing stored.'],
         })),
         importedBy: manager.id,
       } as never)

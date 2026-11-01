@@ -6,11 +6,12 @@
  * student. Student and guardian feedback after the demo stay checklist items.
  */
 import { can } from '@elevate/authorization';
+import { ACADEMIC_NOT_KNOWN } from '../../../domain/demos';
 import { RecordTable } from '../../../ui/record-table';
 import { Segment } from '../../../ui/sections';
 import { AcademicReviewList } from '../../../ui/student-feedback-section';
 import { ChecklistForm, ChecklistTable } from './demo-activity';
-import { ReviewBadge } from './demo-bits';
+import { ReviewBadge, reviewsNotKnown } from './demo-bits';
 import type { DemoTabProps } from './demo-record';
 
 export function DemoFeedback({ d, user, level }: DemoTabProps) {
@@ -29,7 +30,11 @@ export function DemoFeedback({ d, user, level }: DemoTabProps) {
         <RecordTable
           rows={rows}
           rowKey={(t) => `${t.dayNumber}-${t.staffId}`}
-          empty="No teacher has taken a class on this demo yet."
+          empty={
+            reviewsNotKnown(d)
+              ? ACADEMIC_NOT_KNOWN
+              : 'No teacher has taken a class on this demo yet.'
+          }
           columns={[
             { key: 'day', header: 'Day', numeric: true, render: (t) => t.dayNumber },
             {

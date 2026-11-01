@@ -6,18 +6,20 @@
  * owner-supplied real teachers (./teachers.ts) are never given a class, meeting or feedback.
  * Teacher reviews of students are Academic's (owner answer 1): sample ones are seeded there.
  * Each case is walked through the real services, so history, audit and admission numbers
- * are genuine. Dates are relative to today (IST); leads arrive over the last 30 days.
+ * are genuine: applications to their stage (./fill-application.ts), money (./fill-fees.ts).
+ * Dates are relative to today (IST); leads arrive over the last 30 days.
  * Idempotent per case: a case whose lead email exists is skipped, so new cases can be added
  * to a seeded database. Enrolment needs Academic OS: the platform seed
  * (apps/platform/seed) runs the real handoff consumers and then `seedSampleLifecycle`.
  * Fee plans use the sample fee structure (./sample-placeholders.ts). Remove samples:
  * `npm run db:clear-samples`.
  */
-import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import {
   opsAdmissions,
   opsAppointments,
   opsDemos,
+  opsFeePlans,
   opsFollowUps,
   opsGuardians,
   opsLeads,
@@ -28,14 +30,11 @@ import {
   type Database,
 } from '@elevate/database';
 import { defineSeed, knownPerson } from '@elevate/database/seed';
-import { withTransaction } from '@elevate/server-kit';
 import type { IsoDateTime, RoleKey, StaffMemberId, UserId } from '@elevate/shared-types';
-import { addDays, istToday, type ExitStatus, type IsoDate } from '../src/domain';
-import type { AppointmentType } from '../src/domain/appointments';
-import { combinationLabel } from '../src/domain/catalog';
+import { addDays, istToday, type IsoDate } from '../src/domain';
 import { recordAdmissionCheck } from '../src/server/admissions';
 import { changeAppointment, scheduleAppointment } from '../src/server/appointments';
-import { assignAdmissionNumber, convertDemo } from '../src/server/conversion';
+import { convertDemo } from '../src/server/conversion';
 import {
   createDemo,
   setDemoChecklistItem,
@@ -43,421 +42,29 @@ import {
   updateDemoSession,
 } from '../src/server/demos';
 import type { SessionAction } from '../src/server/demos-schemas';
-import {
-  createFeePlan,
-  decideFeePlan,
-  feePlanAction,
-  recordPlanEntry,
-  requestFeePlanApproval,
-} from '../src/server/fees';
+import { DEMO_SUBJECTS, SAMPLE_STUDENTS, type SampleStudent } from './sample-cases';
+import { feePlanAction } from '../src/server/fees';
 import { createFollowUp } from '../src/server/follow-ups';
-import { publishEnrolmentRequest } from '../src/server/enrolment';
 import { createLead, logActivity } from '../src/server/leads';
-import { applyTransition } from '../src/server/pipeline';
-import { loadSettings } from '../src/server/settings';
-import { addGuardian, changeStudentLifecycle } from '../src/server/students';
+import { changeStudentLifecycle } from '../src/server/students';
+import {
+  addParents,
+  admitLegacy,
+  leadDetails,
+  recordDocuments,
+  walkApplication,
+  type People,
+} from './fill-application';
+import { seedCharges, seedFeeAgreement } from './fill-fees';
 import { SAMPLE_LOGIN_TEACHER, SAMPLE_TEACHERS } from './reference';
-import { PROGRAMME_NAMES, sampleFee } from './sample-placeholders';
 
-const SAMPLE_FIGURE = 'Sample figure (development data; not a payment).';
+export const TANISHA_EMAIL = knownPerson('Tanisha').email;
 const thisYear = Number(istToday(new Date()).slice(0, 4));
 const SAMPLE_YEAR = `${thisYear}-${String((thisYear + 1) % 100).padStart(2, '0')}`;
-const NO_SCHEDULE = 'No approved fee schedule (OD-013); sample figures only';
+/** The Academic batch a refused enrolment asks for: closed long ago, so it is not found there. */
+const CLOSED_BATCH_ID = '0f3b8f54-7c1e-4a5e-9d27-1a2b3c4d5e6f';
 
-/** Demo subjects per programme; each subject has one sample teacher. */
-const DEMO_SUBJECTS = {
-  CLAT: ['English', 'Legal Reasoning', 'Logical Reasoning'],
-  IPMAT: ['Mathematics', 'English', 'Logical Reasoning'],
-  CUET: ['English', 'Economics', 'Current Affairs'],
-  CA_FOUNDATION: ['Accountancy', 'Mathematics', 'Economics'],
-  CLASS_11: ['Accountancy', 'Economics', 'Mathematics'],
-} as const;
-
-type Step =
-  | { session: number; body: SessionAction }
-  /** Reschedule to that many days from today, at the student's class hour. */
-  | { session: number; rescheduleToDay: number; reason: string }
-  | { checklist: string; status: 'complete' | 'pending'; reason?: string }
-  | { outcome: 'declined' | 'withdrawn' | 'not_converted'; reason: string };
-const mark =
-  (attendance: 'present' | 'absent') =>
-  (session: number): Step => ({ session, body: { action: 'attendance', attendance } });
-const present = mark('present');
-const absent = mark('absent');
-const allPresent = [present(1), present(2), present(3)];
-
-interface SampleMeeting {
-  type: AppointmentType;
-  /** `counsellor`, or the subject whose sample teacher meets. */
-  with: string;
-  day: number;
-  hour: number;
-  purpose?: string;
-  /** Past meetings: completed with this outcome, or cancelled with this reason. */
-  outcome?: string;
-  cancel?: string;
-}
-
-interface SampleStudent {
-  first: string;
-  stage: 'class_11' | 'class_12' | 'gap_year';
-  programme: keyof typeof DEMO_SUBJECTS;
-  /** The case this record shows. */
-  shows: string;
-  /** Demo class days relative to today and the IST hour of the classes. */
-  days: [number, number, number];
-  hour: number;
-  steps: Step[];
-  /**
-   * Conversion → application draft. `admit`: the case is then admitted as a sample WITHOUT the
-   * final confirmation (see `admitSample`); `requestEnrolment` also hands it to Academic OS.
-   */
-  convert?: {
-    programmes: string[];
-    admit?: boolean;
-    requestEnrolment?: boolean;
-  };
-  /** Hold or exit, applied by `seedSampleLifecycle` once the status allows it. */
-  lifecycle?:
-    | { action: 'hold'; reason: string }
-    | { action: 'exit'; exitStatus: ExitStatus; reason: string; guardianFeedback?: string };
-  /** Annual agreement: the three instalment due days and how many are paid; `pendingApproval` stops at the approval request. */
-  fees?: { dueIn: number[]; paid: number; pendingApproval?: boolean };
-  meetings?: SampleMeeting[];
-  followUp?: { title: string; dueIn: number };
-}
-
-const enrol = (programmes: string[]) => ({ programmes, admit: true, requestEnrolment: true });
-
-export const SAMPLE_STUDENTS: readonly SampleStudent[] = [
-  {
-    first: 'Tanisha',
-    stage: 'class_12',
-    programme: 'CLAT',
-    shows:
-      'S1 present, S2 present, S3 scheduled; mock not scheduled; fee structure, admission details and feedback pending',
-    days: [-2, -1, 1],
-    hour: 16,
-    steps: [
-      present(1),
-      present(2),
-      { session: 3, body: { action: 'mock', mockStatus: 'pending' } },
-      {
-        checklist: 'fee_structure_explained',
-        status: 'pending',
-        reason: 'To explain after class 3.',
-      },
-      { checklist: 'admission_process_explained', status: 'pending' },
-    ],
-    meetings: [
-      { type: 'demo_review', with: 'English', day: 1, hour: 18, purpose: 'Review after class 3' },
-      {
-        type: 'student_counselling',
-        with: 'counsellor',
-        day: 2,
-        hour: 11,
-        purpose: 'Fee structure and admission steps',
-      },
-    ],
-    followUp: { title: 'Explain the fee structure to the parent', dueIn: 0 },
-  },
-  {
-    first: 'Aarav',
-    stage: 'class_12',
-    programme: 'IPMAT',
-    shows: 'all three classes attended, decision open',
-    days: [-5, -4, -3],
-    hour: 15,
-    steps: [...allPresent, { session: 3, body: { action: 'mock', mockStatus: 'prepared' } }],
-    meetings: [
-      {
-        type: 'demo_review',
-        with: 'Mathematics',
-        day: -2,
-        hour: 12,
-        purpose: 'Review of the three demo classes',
-        outcome: 'Strong quantitative base; recommend the IPMAT batch.',
-      },
-    ],
-    followUp: { title: 'Ask the family for their decision', dueIn: -2 },
-  },
-  {
-    first: 'Meera',
-    stage: 'class_11',
-    programme: 'CUET',
-    shows: 'one absence (class 2), class 3 upcoming',
-    days: [-3, -2, 2],
-    hour: 17,
-    steps: [present(1), absent(2)],
-  },
-  {
-    first: 'Kabir',
-    stage: 'class_11',
-    programme: 'CLAT',
-    shows: 'class 1 rescheduled at the family’s request',
-    days: [2, 3, 4],
-    hour: 14,
-    steps: [{ session: 1, rescheduleToDay: 5, reason: 'Family travelling on the first date.' }],
-  },
-  {
-    first: 'Riya',
-    stage: 'class_12',
-    programme: 'IPMAT',
-    shows: 'demo completed, not converted',
-    days: [-9, -8, -7],
-    hour: 11,
-    steps: [
-      present(1),
-      present(2),
-      absent(3),
-      { outcome: 'not_converted', reason: 'Family chose to wait a year.' },
-    ],
-  },
-  {
-    first: 'Dev',
-    stage: 'class_12',
-    programme: 'CLAT',
-    shows: 'declined after class 1',
-    days: [-6, 3, 4],
-    hour: 12,
-    steps: [present(1), { outcome: 'declined', reason: 'Chose another institute.' }],
-  },
-  {
-    first: 'Ishaan',
-    stage: 'class_11',
-    programme: 'CUET',
-    shows: 'withdrawn before the first class',
-    days: [6, 7, 8],
-    hour: 13,
-    steps: [{ outcome: 'withdrawn', reason: 'Moved to another city before the demo.' }],
-  },
-  {
-    first: 'Zoya',
-    stage: 'class_12',
-    programme: 'CLAT',
-    shows: 'Class 12 Commerce + CLAT, enrolled; fee plan with a payment; meetings',
-    days: [-12, -11, -10],
-    hour: 10,
-    steps: allPresent,
-    convert: enrol(['CLASS_12', 'CLAT']),
-    fees: { dueIn: [-5, 40, 100], paid: 1 },
-    meetings: [
-      {
-        type: 'parent_teacher_meeting',
-        with: 'Mathematics',
-        day: 5,
-        hour: 16,
-        purpose: 'First-month progress',
-      },
-      {
-        type: 'teacher_academic',
-        with: 'English',
-        day: 3,
-        hour: 15,
-        cancel: 'Student unwell (sample).',
-      },
-    ],
-  },
-  {
-    first: 'Sana',
-    stage: 'gap_year',
-    programme: 'IPMAT',
-    shows: 'converted to Dropper + IPMAT, then cancelled before enrolment (past student)',
-    days: [-12, -11, -10],
-    hour: 17,
-    steps: allPresent,
-    convert: { programmes: ['DROPPER', 'IPMAT'], admit: true },
-    lifecycle: {
-      action: 'exit',
-      exitStatus: 'cancelled_before_enrolment',
-      reason: 'Family moved to another city before classes began (sample).',
-      guardianFeedback: 'Would return if the family moves back (sample).',
-    },
-  },
-  {
-    first: 'Arjun',
-    stage: 'class_11',
-    programme: 'CLAT',
-    shows: 'active: Class 11 Commerce + CLAT; fee instalment 2 upcoming',
-    days: [-24, -23, -22],
-    hour: 9,
-    steps: allPresent,
-    convert: enrol(['CLASS_11', 'CLAT']),
-    fees: { dueIn: [-20, 25, 85], paid: 1 },
-    meetings: [
-      {
-        type: 'guardian_counselling',
-        with: 'counsellor',
-        day: -8,
-        hour: 18,
-        purpose: 'Settling-in conversation with the parent',
-        outcome: 'Parent happy with the timetable; asked for monthly updates.',
-      },
-    ],
-  },
-  {
-    first: 'Diya',
-    stage: 'class_12',
-    programme: 'IPMAT',
-    shows: 'active: Class 12 Commerce + IPMAT; instalment 2 overdue; PTM upcoming',
-    days: [-21, -20, -19],
-    hour: 10,
-    steps: allPresent,
-    convert: enrol(['CLASS_12', 'IPMAT']),
-    fees: { dueIn: [-18, -3, 60], paid: 1 },
-    meetings: [
-      {
-        type: 'parent_teacher_meeting',
-        with: 'Mathematics',
-        day: 6,
-        hour: 17,
-        purpose: 'Quant progress and mock plan',
-      },
-    ],
-  },
-  {
-    first: 'Kavya',
-    stage: 'class_12',
-    programme: 'CA_FOUNDATION',
-    shows: 'active: Class 12 Commerce + CA Foundation; fees fully paid; PTM held',
-    days: [-21, -20, -19],
-    hour: 15,
-    steps: allPresent,
-    convert: enrol(['CLASS_12', 'CA_FOUNDATION']),
-    fees: { dueIn: [-18, -5, -1], paid: 3 },
-    meetings: [
-      {
-        type: 'parent_teacher_meeting',
-        with: 'Accountancy',
-        day: -2,
-        hour: 17,
-        purpose: 'First test review',
-        outcome: 'Accounts fundamentals solid; continue the weekly practice papers.',
-      },
-    ],
-  },
-  {
-    first: 'Rohan',
-    stage: 'gap_year',
-    programme: 'CUET',
-    shows: 'active: Dropper + CUET; instalment 2 due this week',
-    days: [-18, -17, -16],
-    hour: 11,
-    steps: allPresent,
-    convert: enrol(['DROPPER', 'CUET']),
-    fees: { dueIn: [-15, 4, 64], paid: 1 },
-  },
-  {
-    first: 'Anaya',
-    stage: 'class_11',
-    programme: 'CLASS_11',
-    shows: 'active: Class 11 Commerce only; instalment 2 overdue',
-    days: [-18, -17, -16],
-    hour: 14,
-    steps: allPresent,
-    convert: enrol(['CLASS_11']),
-    fees: { dueIn: [-15, -2, 40], paid: 1 },
-  },
-  {
-    first: 'Vihaan',
-    stage: 'class_12',
-    programme: 'CUET',
-    shows:
-      'active: Class 12 Commerce + CUET; fee agreement active, nothing paid yet (instalment 1 overdue)',
-    days: [-15, -14, -13],
-    hour: 12,
-    steps: allPresent,
-    convert: enrol(['CLASS_12', 'CUET']),
-    fees: { dueIn: [-12, 3, 50], paid: 0 },
-  },
-  {
-    first: 'Myra',
-    stage: 'class_11',
-    programme: 'IPMAT',
-    shows: 'on hold after enrolment (Class 11 Commerce + IPMAT), review in two weeks',
-    days: [-24, -23, -22],
-    hour: 16,
-    steps: allPresent,
-    convert: enrol(['CLASS_11', 'IPMAT']),
-    lifecycle: { action: 'hold', reason: 'Family medical leave for a month (sample).' },
-    meetings: [
-      {
-        type: 'guardian_counselling',
-        with: 'counsellor',
-        day: 10,
-        hour: 12,
-        purpose: 'Review of the hold',
-      },
-    ],
-  },
-  {
-    first: 'Aditya',
-    stage: 'class_12',
-    programme: 'CLAT',
-    shows: 'former: withdrew after enrolment (Class 12 Commerce + CLAT)',
-    days: [-21, -20, -19],
-    hour: 17,
-    steps: allPresent,
-    convert: enrol(['CLASS_12', 'CLAT']),
-    lifecycle: {
-      action: 'exit',
-      exitStatus: 'withdrawn',
-      reason: 'Chose to prepare at home (sample).',
-      guardianFeedback: 'Travel time was too long (sample).',
-    },
-  },
-  {
-    first: 'Ira',
-    stage: 'class_12',
-    programme: 'CUET',
-    shows: 'former: completed the programme (Class 12 Commerce + CUET)',
-    days: [-18, -17, -16],
-    hour: 16,
-    steps: allPresent,
-    convert: enrol(['CLASS_12', 'CUET']),
-    lifecycle: {
-      action: 'exit',
-      exitStatus: 'completed',
-      reason: 'Finished the CUET crash course (sample).',
-    },
-  },
-  {
-    first: 'Reyansh',
-    stage: 'class_11',
-    programme: 'CUET',
-    shows: 'former: transferred out (Class 11 Commerce + CUET)',
-    days: [-15, -14, -13],
-    hour: 16,
-    steps: allPresent,
-    convert: enrol(['CLASS_11', 'CUET']),
-    lifecycle: {
-      action: 'exit',
-      exitStatus: 'transferred',
-      reason: 'Family moved; continuing at another centre (sample).',
-    },
-  },
-  {
-    first: 'Saanvi',
-    stage: 'gap_year',
-    programme: 'CLAT',
-    shows: 'converted to Dropper + CLAT; fee agreement waiting for approval',
-    days: [-9, -8, -7],
-    hour: 16,
-    steps: allPresent,
-    convert: { programmes: ['DROPPER', 'CLAT'] },
-    fees: { dueIn: [10, 70, 130], paid: 0, pendingApproval: true },
-    followUp: { title: 'Chase the fee agreement approval', dueIn: 0 },
-  },
-  {
-    first: 'Parth',
-    stage: 'class_12',
-    programme: 'IPMAT',
-    shows: 'demo booked, first class in three days',
-    days: [3, 4, 5],
-    hour: 11,
-    steps: [],
-  },
-];
+export { SAMPLE_STUDENTS };
 
 const emailOf = (s: SampleStudent) => knownPerson(s.first).email;
 
@@ -512,13 +119,29 @@ const istInstant = (today: IsoDate) => (offset: number, hour: number) =>
     `${addDays(today, offset)}T${String(hour).padStart(2, '0')}:00:00+05:30`,
   ).toISOString() as IsoDateTime;
 
+const SOURCES = ['WALK_IN', 'REFERRAL', 'GOOGLE_SEARCH_MAPS', 'INSTAGRAM_ORGANIC', 'SEMINAR'];
+const FIRST_VISIT = [
+  'Walked in with a parent after school to ask about batches.',
+  'Came with an older cousin who studied here.',
+  'Asked about fees and the demo classes at the front desk.',
+  'Parent visited alone first; the student came for the second talk.',
+];
+const CHECK_REFERENCE: Record<string, string> = {
+  admission_form: 'Paper form filed in the admissions folder.',
+  documents_verified: 'Originals seen at the front desk.',
+  fee_verification_1: 'Fee and instalment dates read out to the parent.',
+  down_payment_verified: 'First payment matched with the receipt book.',
+};
+
 export async function seedSamples(db: Database, log: (m: string) => void = () => {}) {
   const manager = await seedActor(db, 'operations-manager@example.test');
   const counsellor = await seedActor(db, 'admissions-counsellor@example.test');
   const director = await seedActor(db, 'director@example.test');
+  const finance = await seedActor(db, 'finance-officer@example.test');
   const teacher = await seedActor(db, 'teacher@example.test');
-  if (!manager || !counsellor?.staffId || !director || !teacher?.staffId)
+  if (!manager || !counsellor?.staffId || !director || !finance || !teacher?.staffId)
     return log('ops.samples skipped: sample users missing');
+  const people: People = { manager, counsellor, director, finance };
   const teachers = await sampleTeachers(db, teacher.staffId);
   const today = istToday(new Date());
   const at = istInstant(today);
@@ -540,27 +163,32 @@ export async function seedSamples(db: Database, log: (m: string) => void = () =>
       guardianPhone: parent.phone,
       currentStage: s.stage,
       programmeCode: s.programme,
-      interestMode: 'offline',
-      sourceCode: 'WALK_IN',
+      interestMode: s.convert?.online ? 'online' : i % 5 === 3 ? 'undecided' : 'offline',
+      sourceCode: SOURCES[i % SOURCES.length],
       ownerStaffId: counsellor.staffId,
       receivedAt: at(counsellingDay - 2, 9),
       isSample: true,
     } as never);
+    // The rest of the KYC before anything is printed: a later fill would make a signed form stale.
+    await db
+      .update(opsLeads)
+      .set(leadDetails(s.first, parent.relationship)!.lead)
+      .where(eq(opsLeads.id, lead.id));
     await logActivity(db, actor, lead.id, {
       kind: 'visit',
       outcome: 'visited',
-      note: 'Walk-in enquiry (sample).',
+      note: FIRST_VISIT[i % FIRST_VISIT.length],
     } as never);
     const counselling = await book(db, actor, {
       type: 'student_counselling',
       admissionId: admission.id,
       staffId: counsellor.staffId,
       startsAt: at(counsellingDay, 10 + (i % 8)),
-      purpose: 'Programme choice (sample).',
+      purpose: 'Programme choice.',
     });
     await changeAppointment(db, actor, counselling.id, {
       action: 'complete',
-      outcome: 'Family wants a demo (sample).',
+      outcome: 'Family wants to see three demo classes before deciding.',
       nextStep: 'Book the demo classes',
     } as never);
     const demo = await createDemo(db, actor, {
@@ -571,7 +199,7 @@ export async function seedSamples(db: Database, log: (m: string) => void = () =>
         subject: DEMO_SUBJECTS[s.programme][n]!,
         teacherStaffId: teachers.get(DEMO_SUBJECTS[s.programme][n]!) ?? null,
       })),
-      notes: 'Sample demo.',
+      notes: 'Three trial classes agreed with the parent at the counselling meeting.',
     });
     for (const step of s.steps) {
       if ('session' in step) {
@@ -592,39 +220,73 @@ export async function seedSamples(db: Database, log: (m: string) => void = () =>
         });
       else await updateDemo(db, actor, demo.id, { action: 'outcome', ...step });
     }
-    const studentId = s.convert
-      ? (
-          await convertSample(
-            db,
-            { manager, counsellor },
-            admission.id,
-            demo.id,
-            s.convert,
-            addDays(today, s.days[2] + 2),
-          )
-        ).studentId
-      : null;
-    if (studentId)
-      await addGuardian(db, manager.actor, studentId, {
-        fullName: parent.fullName,
-        relationship: parent.relationship,
-        email: parent.email,
-        phone: parent.phone,
-        preferredContact: 'email',
-        consentStatus: 'given',
-      } as never);
-    if (studentId && s.fees && s.convert)
-      await seedFeePlan(
+    const money = { first: s.first, admissionId: admission.id, today };
+    const programmes = s.convert?.programmes ?? [s.programme];
+    if (s.fees && !s.convert) {
+      const [row] = await db
+        .select({ studentId: opsAdmissions.studentId })
+        .from(opsAdmissions)
+        .where(eq(opsAdmissions.id, admission.id));
+      await recordChecks(db, { manager, counsellor }, admission.id);
+      await seedFeeAgreement(db, people, {
+        ...money,
+        studentId: row!.studentId!,
+        programmes,
+        fees: s.fees,
+        academicYear: SAMPLE_YEAR,
+      });
+    }
+    if (s.convert) {
+      const { id, studentId } = await convertSample(
         db,
-        { manager, counsellor, director },
+        { manager, counsellor },
         admission.id,
-        studentId,
-        s.convert.programmes,
-        s.fees,
-        today,
+        demo.id,
+        s.convert,
+        addDays(today, s.days[2] + 2),
       );
-    if (s.convert?.admit)
-      await admitSample(db, manager.actor, admission.id, s.convert.requestEnrolment ?? false);
+      const day = addDays(today, Math.min(s.days[2] + 1, 0));
+      await addParents(db, manager.actor, studentId, s.first, parent.relationship);
+      await recordDocuments(db, people, studentId, s.first, day);
+      if (s.fees)
+        await seedFeeAgreement(db, people, {
+          ...money,
+          studentId,
+          programmes,
+          fees: s.fees,
+          academicYear: SAMPLE_YEAR,
+        });
+      if (s.charges)
+        await seedCharges(db, people, {
+          ...money,
+          demo,
+          charges: s.charges,
+          day: addDays(today, s.days[0]),
+        });
+      const stage = s.convert.stage ?? 'confirmed';
+      if (stage === 'legacy' || stage === 'legacy_verified')
+        await admitLegacy(db, people, admission.id, stage === 'legacy_verified');
+      else
+        await walkApplication(db, people, {
+          first: s.first,
+          classStage: s.stage,
+          relationship: parent.relationship,
+          stage,
+          applicationId: id,
+          academicYear: SAMPLE_YEAR,
+          day,
+          requestEnrolment: !s.convert.noEnrolment,
+          ...(s.convert.refusedBatch ? { intendedBatchId: CLOSED_BATCH_ID } : {}),
+          ...(s.convert.withdrawReason ? { withdrawReason: s.convert.withdrawReason } : {}),
+          ...(s.convert.correctAddress ? { correctAddress: s.convert.correctAddress } : {}),
+        });
+    } else if (s.charges)
+      await seedCharges(db, people, {
+        ...money,
+        demo,
+        charges: s.charges,
+        day: addDays(today, s.days[0]),
+      });
     added += 1;
   }
   await seedMeetingsAndFollowUps(db, { manager, counsellor }, teachers, today);
@@ -665,7 +327,7 @@ async function seedMeetingsAndFollowUps(
           .limit(1)
       : [];
     for (const m of s.meetings ?? []) {
-      const purpose = m.purpose ? `${m.purpose} (sample).` : null;
+      const purpose = m.purpose ? `${m.purpose}.` : null;
       const about = c.studentId ? { studentId: c.studentId } : { leadId: c.leadId };
       const seen = await db.$count(
         opsAppointments,
@@ -729,124 +391,42 @@ const book = (db: Database, actor: Actor, input: Record<string, unknown>) =>
     ...input,
   } as never);
 
-async function convertSample(
+/** The admission checks, the two fee checks by two different people (BR-OPS-7). */
+async function recordChecks(
   db: Database,
   { manager, counsellor }: Record<'manager' | 'counsellor', Seeded>,
+  admissionId: string,
+) {
+  for (const [itemKey, reference] of Object.entries(CHECK_REFERENCE))
+    await recordAdmissionCheck(db, counsellor.actor, admissionId, {
+      itemKey,
+      status: 'done',
+      reference,
+    } as never);
+  await recordAdmissionCheck(db, manager.actor, admissionId, {
+    itemKey: 'fee_verification_2',
+    status: 'done',
+    reference: 'Amounts checked against the fee structure.',
+  } as never);
+}
+
+async function convertSample(
+  db: Database,
+  people: Record<'manager' | 'counsellor', Seeded>,
   admissionId: string,
   demoId: string,
   convert: NonNullable<SampleStudent['convert']>,
   effectiveDate: IsoDate,
 ) {
-  for (const itemKey of [
-    'admission_form',
-    'documents_verified',
-    'fee_verification_1',
-    'down_payment_verified',
-  ])
-    await recordAdmissionCheck(db, counsellor.actor, admissionId, {
-      itemKey,
-      status: 'done',
-      reference: 'Sample reference',
-    } as never);
-  await recordAdmissionCheck(db, manager.actor, admissionId, {
-    itemKey: 'fee_verification_2',
-    status: 'done',
-  } as never);
-  return convertDemo(db, counsellor.actor, demoId, {
+  await recordChecks(db, people, admissionId);
+  return convertDemo(db, people.counsellor.actor, demoId, {
     identityVerified: true,
     guardianConfirmation: 'confirmed',
     programmeCodes: convert.programmes,
-    deliveryMode: 'offline',
+    deliveryMode: convert.online ? 'online' : 'offline',
     effectiveDate,
-    feePlanReference: NO_SCHEDULE,
+    feePlanReference: `Fee structure ${SAMPLE_YEAR}`,
   } as never);
-}
-
-/**
- * Sample-only shortcut (D-036): an admission without the password-confirmed approval cannot be
- * made honestly in a seed (no declaration text is approved and no approver types a password),
- * so sample cases that must look admitted are admitted directly and marked
- * `legacy_verification = 'required'`: the UI shows "Legacy — verification required" and no
- * approval, signed form or payment evidence is invented. The number comes from the real counter.
- */
-async function admitSample(
-  db: Database,
-  actor: Actor,
-  admissionId: string,
-  requestEnrolment: boolean,
-) {
-  const settings = await loadSettings(db);
-  await withTransaction(db, async (tx) => {
-    const [row] = await tx
-      .select({ a: opsAdmissions, isSample: opsLeads.isSample })
-      .from(opsAdmissions)
-      .innerJoin(opsLeads, eq(opsLeads.id, opsAdmissions.leadId))
-      .where(eq(opsAdmissions.id, admissionId as never))
-      .for('update');
-    if (!row?.isSample) throw new Error('admitSample is for sample cases only');
-    const number = await assignAdmissionNumber(
-      tx,
-      actor,
-      row.a,
-      settings['admissions.number.format'].value,
-    );
-    // A legacy record entered today: admitted the day before its intended start (the day the first
-    // instalment falls due), so Ops "Admitted on" matches Academic's placement and the fee ledger.
-    const admissionDate = row.a.intendedStartDate
-      ? addDays(row.a.intendedStartDate as IsoDate, -1)
-      : null;
-    const admitted = await applyTransition(tx, {
-      admission: { ...row.a, admissionNumber: number, admissionDate },
-      to: 'admitted',
-      actorUserId: actor.id,
-      reason: 'Sample admission seeded without final confirmation (legacy marker).',
-      context: { readinessMissing: [] },
-      patch: { legacyVerification: 'required', admissionDate },
-      settings,
-    });
-    if (requestEnrolment) await publishEnrolmentRequest(tx, actor, admitted, { settings });
-  });
-}
-
-/**
- * Active annual agreement (50/25/25 of the sample fee) through the real flow: the manager makes it,
- * the counsellor asks for its approval, the director approves, the manager activates; the first
- * `paid` instalments are received.
- */
-async function seedFeePlan(
-  db: Database,
-  { manager, counsellor, director }: Record<'manager' | 'counsellor' | 'director', Seeded>,
-  admissionId: string,
-  studentId: string,
-  programmes: readonly string[],
-  fees: NonNullable<SampleStudent['fees']>,
-  today: IsoDate,
-) {
-  const totalPaise = sampleFee(programmes);
-  const label = combinationLabel(programmes, PROGRAMME_NAMES);
-  const plan = await createFeePlan(db, manager.actor, {
-    admissionId,
-    studentId,
-    label,
-    pricingReference: `Sample fee structure: ${label}`,
-    academicYear: SAMPLE_YEAR,
-    totalPaise,
-    dueDates: fees.dueIn.map((d) => addDays(today, d)),
-  } as never);
-  await requestFeePlanApproval(db, counsellor.actor, plan.id, {});
-  if (fees.pendingApproval) return;
-  await decideFeePlan(db, director.actor, plan.id, { decision: 'approved' });
-  await feePlanAction(db, manager.actor, plan.id, { action: 'activate' } as never);
-  for (const inst of plan.instalments.slice(0, fees.paid))
-    await recordPlanEntry(db, manager.actor, plan.id, {
-      kind: 'received',
-      amountPaise: inst.amountPaise,
-      paymentDate: inst.dueDate < today ? inst.dueDate : today,
-      receiptReference: `SAMPLE-RCPT-${inst.id.slice(0, 8)}`,
-      method: 'bank_transfer',
-      instalmentId: inst.id,
-      notes: SAMPLE_FIGURE,
-    } as never);
 }
 
 /**
@@ -856,31 +436,53 @@ async function seedFeePlan(
  */
 export async function seedSampleLifecycle(db: Database, log: (m: string) => void = () => {}) {
   const manager = await seedActor(db, 'operations-manager@example.test');
-  if (!manager) return;
+  const counsellor = await seedActor(db, 'admissions-counsellor@example.test');
+  if (!manager || !counsellor) return;
   const today = istToday(new Date());
   let changed = 0;
   for (const s of SAMPLE_STUDENTS) {
     const l = s.lifecycle;
     if (!l) continue;
-    const [a] = await db
-      .select({ id: opsAdmissions.id, status: opsAdmissions.status })
-      .from(opsAdmissions)
-      .innerJoin(opsLeads, eq(opsLeads.id, opsAdmissions.leadId))
-      .where(and(eq(opsLeads.studentEmail, emailOf(s)), isNotNull(opsAdmissions.admissionNumber)));
     const needs =
       l.action === 'exit' && l.exitStatus === 'cancelled_before_enrolment'
         ? 'admitted'
         : 'enrolled';
-    if (a?.status !== needs) continue;
-    await changeStudentLifecycle(
-      db,
-      manager.actor,
-      a.id,
-      (l.action === 'hold'
-        ? { ...l, reviewDate: addDays(today, 14) }
-        : { ...l, exitDate: today, reactivationAllowed: true }) as never,
-    );
-    changed += 1;
+    // Every programme case of the student: the bundle holds and leaves together.
+    const cases = await db
+      .select({ id: opsAdmissions.id })
+      .from(opsAdmissions)
+      .innerJoin(opsLeads, eq(opsLeads.id, opsAdmissions.leadId))
+      .where(and(eq(opsLeads.studentEmail, emailOf(s)), eq(opsAdmissions.status, needs)));
+    for (const a of cases) {
+      if (l.action === 'hold')
+        await changeStudentLifecycle(db, manager.actor, a.id, {
+          ...l,
+          reviewDate: addDays(today, 14),
+        } as never);
+      else {
+        const { closePlan, daysAgo, reactivate, ...exit } = l;
+        await changeStudentLifecycle(db, (reactivate ? counsellor : manager).actor, a.id, {
+          ...exit,
+          exitDate: addDays(today, -daysAgo),
+          reactivationAllowed: true,
+        } as never);
+        if (reactivate)
+          await changeStudentLifecycle(db, manager.actor, a.id, {
+            action: 'reactivate',
+            reason: reactivate,
+          } as never);
+        if (closePlan)
+          for (const plan of await db
+            .select({ id: opsFeePlans.id })
+            .from(opsFeePlans)
+            .where(and(eq(opsFeePlans.admissionId, a.id), eq(opsFeePlans.status, 'active'))))
+            await feePlanAction(db, manager.actor, plan.id, {
+              action: 'close',
+              reason: closePlan,
+            } as never);
+      }
+      changed += 1;
+    }
   }
   log(`ops.samples lifecycle: ${changed} hold/exit change(s)`);
 }

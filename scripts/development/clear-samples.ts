@@ -11,7 +11,7 @@
 import { isLocalDatabaseUrl, loadEnv } from '@elevate/configuration';
 import { loadRootEnv } from '@elevate/configuration/node';
 import { createDatabase } from '@elevate/database';
-import { disableDemoAccounts } from '@elevate/database/seed';
+import { retireSampleLogins } from '@elevate/database/seed';
 import { ClearSamplesRefused, clearSamples } from '@elevate/business-ops-os/seed';
 
 loadRootEnv();
@@ -33,9 +33,9 @@ try {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   for (const [table, n] of Object.entries(counts)) console.log(`  ${table.padEnd(32)} ${n}`);
   console.log(`db:clear-samples — ${total} sample row(s) deleted; no real record was deleted.`);
-  // The shared-password demo sign-ins (D-072) must not survive into real use.
+  // No sample sign-in survives into real use, and no made-up name reads as an employee (D-072).
   console.log(
-    `db:clear-samples — ${await disableDemoAccounts(handle.db)} demo account(s) switched off.`,
+    `db:clear-samples — ${await retireSampleLogins(handle.db)} sample login(s) switched off and renamed "Removed sample login"; none can sign in.`,
   );
   // The test database holds made-up teachers only; a real database needs the real ones back.
   console.log(

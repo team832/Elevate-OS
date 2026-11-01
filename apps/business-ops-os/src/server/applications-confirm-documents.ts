@@ -85,9 +85,16 @@ export async function acknowledgementDocument(db: Database, actor: Actor, admiss
 
 /** GET /admissions/{id}/id-card — CR80 card: name, number, programme, academic year. */
 export async function idCardDocument(db: Database, actor: Actor, admissionId: string) {
-  const { approval, accepted } = await confirmedAdmission(db, actor, admissionId);
+  const { admission, approval, accepted } = await confirmedAdmission(db, actor, admissionId);
   const s = accepted.application;
+  const [person] = admission.studentId
+    ? await db
+        .select({ isSample: students.isSample })
+        .from(students)
+        .where(eq(students.id, admission.studentId))
+    : [];
   const bytes = await idCardPdf({
+    isSample: person?.isSample ?? false,
     fullName: s.student.fullName,
     admissionNumber: approval.admissionNumber,
     programmes: s.programmes.map((p) => p.name).join(' + '),

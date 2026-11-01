@@ -2,15 +2,22 @@
  * Every demo login lands on a populated view (brief 23 Oct 2026 §4, §25): after `npm run db:seed`
  * and `npm run db:seed-demo-accounts`, each account's STORED roles open its workspace and its main
  * list is not empty, read through the same services the screens use and in the account's own
- * scope. The real teachers see only their real assignments; pending ones have no batch yet.
+ * scope. The four teacher logins are made-up teachers and see their own assignments.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { hashPassword, type AuthenticatedUser } from '@elevate/authentication';
 import { can, workspacesFor } from '@elevate/authorization';
 import { assessmentListQuerySchema } from '@elevate/shared-contracts';
-import { opsHrRequestEvents, staffMembers, userRoles, users, type Database } from '@elevate/database';
 import {
+  opsHrRequestEvents,
+  staffMembers,
+  userRoles,
+  users,
+  type Database,
+} from '@elevate/database';
+import {
+  COVER_TEACHERS,
   coreSeeds,
   DEMO_ACCOUNTS,
   DEV_ASSUMPTION_ACCOUNTS,
@@ -25,6 +32,7 @@ import { seeds as academicSeeds } from '@elevate/academic-os/seed';
 import { seeds as opsSeeds } from '@elevate/business-ops-os/seed';
 import { seeds as marketingSeeds } from '@elevate/marketing-os/seed';
 import { seeds as platformSeeds } from '../../seed';
+import { OWNER_SUPPLIED_STAFF } from '../../../business-ops-os/seed/teachers';
 import { feeYear } from '../../../business-ops-os/src/server/fee-year';
 import { hrQueue, inHrReach } from '../../../business-ops-os/src/server/hr-requests-read';
 import { hrRequestListQuery } from '../../../business-ops-os/src/server/hr-requests-schemas';
@@ -134,6 +142,34 @@ const MAIN_VIEW: [string, string, (l: Login) => Promise<number[]>][] = [
   ),
 ];
 
+describe('after db:seed-demo-accounts', () => {
+  it('no row anywhere, address or name, holds a word of a real teacher’s name', async () => {
+    const words = OWNER_SUPPLIED_STAFF.flatMap((t) => t.fullName.split(' ')).filter(
+      (w) => w !== "Ma'am",
+    );
+    const pattern = `(${[...new Set(words)].join('|')})`;
+    const rows = async (q: string) =>
+      ((await db().execute(sql.raw(q))) as unknown as { rows: Record<string, unknown>[] }).rows;
+    expect(
+      await rows(
+        `SELECT email FROM core.users WHERE email ~* '${pattern}' OR display_name ~* '${pattern}'`,
+      ),
+    ).toEqual([]);
+    const tables = await rows(
+      `SELECT table_schema || '.' || table_name AS t FROM information_schema.tables
+       WHERE table_schema IN ('core', 'ops', 'academic', 'marketing') AND table_type = 'BASE TABLE'`,
+    );
+    const found: string[] = [];
+    for (const { t } of tables)
+      if (
+        (await rows(`SELECT 1 FROM ${String(t)} x WHERE x::text ~* '\\m${pattern}\\M' LIMIT 1`))
+          .length
+      )
+        found.push(String(t));
+    expect(found).toEqual([]);
+  });
+});
+
 describe('demo logins land on a populated view', () => {
   it('covers every demo account', () => {
     expect(MAIN_VIEW.map(([e]) => e).sort()).toEqual(DEMO_ACCOUNTS.map((a) => a.email).sort());
@@ -152,23 +188,16 @@ describe('demo logins land on a populated view', () => {
       expect(await inHrReach(db(), hr.user, (await login(email)).staffId!)).toBe(true);
   });
 
-  it.each([
-    ['satish@elevateeducation.in', 3],
-    ['nikunjbindal@elevateeducation.in', 1],
-    ['soma@elevateeducation.in', 1],
-    ['tushar@elevateeducation.in', 0],
-  ])('%s opens academic with only their real assignments (%i)', async (email, n) => {
-    expect(DEV_ASSUMPTION_ACCOUNTS.some((a) => a.email === email)).toBe(true);
-    const l = await login(email);
-    expect(workspacesFor(l.user)).toContain('academic');
-    const rows = await listAssignmentsFor(db(), { staffIds: [l.staffId!] });
-    expect(rows).toHaveLength(n);
-    // Pending = recorded without a batch: the honest "no batch yet" state, no sample batch.
-    for (const r of rows) {
-      const row = r as { status: string; batchId: string | null; batchCode?: string | null };
-      if (row.status === 'pending') expect(row.batchId).toBeNull();
-      expect(row.batchCode ?? '').not.toMatch(/^SAMPLE-/);
-    }
-    expect((await listAssessments(db(), l.academic as never)).every((a) => !a.isSample)).toBe(true);
-  });
+  it.each(DEV_ASSUMPTION_ACCOUNTS.map((a) => [a.email, a.staffFullName] as const))(
+    '%s opens academic as the made-up teacher %s, with that teacher’s assignments',
+    async (email, name) => {
+      const l = await login(email);
+      expect(workspacesFor(l.user)).toContain('academic');
+      expect(l.user.displayName).toBe(name);
+      const rows = await listAssignmentsFor(db(), { staffIds: [l.staffId!] });
+      expect(rows).toHaveLength(
+        COVER_TEACHERS.find((t) => t.fullName === name)!.assignments.length,
+      );
+    },
+  );
 });

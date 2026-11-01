@@ -22,9 +22,10 @@ import { formatPaise } from '../../domain/fees';
 import { humanise } from '../../ui/format';
 import { createPdf, type PdfBuilder } from './document';
 
-export const FORM_TEMPLATE_VERSION = 'admission-form/2';
-const ACK_TEMPLATE_VERSION = 'admission-acknowledgement/2';
-const CARD_TEMPLATE_VERSION = 'id-card/1';
+export const FORM_TEMPLATE_VERSION = 'admission-form/3';
+const ACK_TEMPLATE_VERSION = 'admission-acknowledgement/3';
+const CARD_TEMPLATE_VERSION = 'id-card/2';
+const SAMPLE_BANNER = 'Sample data — fictional student';
 const BLANK = '____________________';
 /** A value, or a blank line to fill in by hand (never "0"). */
 const fill = (v: string | number | null | undefined) =>
@@ -76,6 +77,7 @@ export interface AdmissionRecord {
   checkedBy: string[];
   /** Null before final confirmation. */
   admission: { number: string; date: string; approvedBy: string | null } | null;
+  isSample?: boolean;
 }
 
 function institute(pdf: PdfBuilder) {
@@ -169,6 +171,7 @@ export async function admissionFormPdf(
     size: 'a4-dense',
   });
   institute(pdf);
+  if (r.isSample) pdf.banner(SAMPLE_BANNER, 'neutral');
   if (!r.admission)
     pdf.banner('Application — admission pending. This is not an admission until it is confirmed.');
   const pending = 'On confirmation';
@@ -197,7 +200,8 @@ export async function admissionFormPdf(
       ['Student name', st.fullName, 'Date of birth', v(day(st.dateOfBirth))],
       ['Gender', v(f.gender), 'Mobile', v(st.phone)],
       ['WhatsApp', v(f.whatsapp), 'Email', v(st.email)],
-      ['Address', v([st.address, st.city].filter(Boolean).join(', '))],
+      // Staff often type the city into the address; it prints once.
+      ['Address', v(st.city && st.address?.includes(st.city) ? st.address : [st.address, st.city].filter(Boolean).join(', '))],
     ],
     { photo: true },
   );
@@ -218,10 +222,10 @@ export async function admissionFormPdf(
   if (others.length)
     pdf.table(
       [
-        { header: 'Other guardian', width: 0.4 },
-        { header: 'Relationship', width: 0.2 },
+        { header: 'Other guardian', width: 0.27 },
+        { header: 'Relationship', width: 0.15 },
         { header: 'Mobile', width: 0.2 },
-        { header: 'Email', width: 0.2 },
+        { header: 'Email', width: 0.38 },
       ],
       others.map((o) => [o.fullName, label(RELATIONSHIP, o.relationship), o.phone, o.email]),
     );
@@ -262,7 +266,7 @@ export async function admissionFormPdf(
     r.documents
       .map(
         (d) =>
-          `${box(d.state === 'verified')} ${d.label}${d.state === 'not_recorded' ? '' : ` (${DOCUMENT_STATE_LABELS[d.state].toLowerCase()})`}`,
+          `${box(d.state === 'verified')}\u00a0${d.label}${d.state === 'not_recorded' ? '' : ` (${DOCUMENT_STATE_LABELS[d.state].toLowerCase()})`}`,
       )
       .join('    '),
   );
@@ -328,8 +332,10 @@ export async function acknowledgementPdf(a: AcknowledgementInput) {
     title: 'Admission acknowledgement',
     reference: `Admission no. ${r.admission.number}`,
     templateVersion: `Template ${ACK_TEMPLATE_VERSION}`,
+    size: 'a4-dense',
   });
   institute(pdf);
+  if (r.isSample) pdf.banner(SAMPLE_BANNER, 'neutral');
   pdf.banner(`Admission confirmed — admission number ${r.admission.number}`, 'success');
   pdf.keyValues([
     ['Student', r.snapshot.student.fullName],
@@ -363,6 +369,7 @@ export async function idCardPdf(c: {
   admissionNumber: string;
   programmes: string;
   academicYear: string | null;
+  isSample?: boolean;
 }) {
   const pdf = await createPdf({
     title: 'Student ID card',
@@ -378,5 +385,6 @@ export async function idCardPdf(c: {
     ['Programme', c.programmes],
     ['Academic year', c.academicYear ?? 'Not set'],
   ]);
+  if (c.isSample) pdf.banner(SAMPLE_BANNER, 'neutral');
   return pdf.finish();
 }

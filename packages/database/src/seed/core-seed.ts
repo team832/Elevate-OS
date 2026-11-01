@@ -94,6 +94,15 @@ export const SEED_USERS: readonly {
     managerRole: 'director',
   },
   {
+    // A second person on the ledger: a fee record is checked by someone other than its recorder.
+    role: 'finance_officer',
+    email: 'finance-officer@example.test',
+    displayName: PEOPLE.financeOfficer,
+    department: 'FINANCE',
+    title: 'Accounts officer',
+    managerRole: 'operations_manager',
+  },
+  {
     role: 'auditor',
     email: 'auditor@example.test',
     displayName: PEOPLE.auditor,

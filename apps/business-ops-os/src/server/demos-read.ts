@@ -160,14 +160,18 @@ async function demoExtras(
       .where(inArray(opsFollowUps.admissionId, [...new Set(demos.map((d) => d.admissionId))]))
       .orderBy(asc(opsFollowUps.dueDate)),
   ]);
-  const { marks, classes } = await classesWithMarks(db, sessions, {
-    ...opts,
-    now: opts.now ?? new Date(),
-  });
+  const now = opts.now ?? new Date();
+  const { marks, classes } = await classesWithMarks(db, sessions, { ...opts, now });
+  // Ops holds the plan: once a class has started, Academic may name someone else.
+  const plannedOnly = (s: { startsAt: Date }) => marks.status === 'unavailable' && s.startsAt <= now;
   const marked = classes.map((s) => ({
     ...s,
     teacherName:
-      s.academic?.teacherNames.join(', ') || s.teacherName || (s.unknown ? ACADEMIC_NOT_KNOWN : null),
+      s.academic?.teacherNames.join(', ') ||
+      (s.teacherName && plannedOnly(s)
+        ? `${s.teacherName} (planned; Academic OS unavailable)`
+        : s.teacherName) ||
+      (s.unknown ? ACADEMIC_NOT_KNOWN : null),
   }));
   return {
     marks,
@@ -236,7 +240,10 @@ function summarise(
       : progress,
     /** All classes recorded ("completed"): the outcome is still open until someone closes it. */
     completed: demo.completedAt !== null,
-    attendance: demoAttendanceStatus(demo.outcome, sessions),
+    attendance:
+      demo.outcome !== 'cancelled' && sessions.some((s) => s.unknown)
+        ? ('unknown' as const)
+        : demoAttendanceStatus(demo.outcome, sessions),
     ...nextSession(
       sessions.filter((s) => !s.unknown),
       now,

@@ -1,11 +1,11 @@
 /**
  * `npm run db:seed-demo-accounts` — DEVELOPMENT ONLY (D-072). Creates or refreshes the local
  * demo sign-ins (business administrator, HR manager, teacher, marketing manager, two marketing
- * employees) plus the four teacher logins, labelled development assumptions linked to the
- * owner-supplied staff records (brief 23 Oct 2026 §4, R10; soma@ = "Soma", owner to confirm), all with
+ * employees) plus the four teacher logins, linked to made-up teachers (brief 23 Oct 2026 §4, R10;
+ * owner 31 Oct 2026, "made up everything"), all with
  * LOCAL_DEMO_PASSWORD from the root .env (never printed). Refuses NODE_ENV=production and
  * non-local databases. Safe to run again. Run `npm run db:seed` first so the departments and
- * the owner-supplied staff exist.
+ * the made-up teachers exist.
  */
 import { hashPassword } from '@elevate/authentication';
 import { appOrigin, isLocalDatabaseUrl, loadEnv } from '@elevate/configuration';

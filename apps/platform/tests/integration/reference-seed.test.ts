@@ -25,6 +25,7 @@ import { runSeeds } from '@elevate/database/seed';
 import type { RoleKey, UserId } from '@elevate/shared-types';
 import { setupTestDatabase } from '@elevate/testing';
 import { referenceSeedList } from '../../../../scripts/release/reference-seeds';
+import { OWNER_SUPPLIED_STAFF } from '../../../business-ops-os/seed/teachers';
 import { createLead } from '../../../business-ops-os/src/server/leads';
 import { createLeadBody } from '../../../business-ops-os/src/server/schemas';
 
@@ -166,7 +167,10 @@ describe('optional seeds', () => {
     expect(await total(staffMembers)).toBe(0);
     await seed(['owner-staff']);
     const staff = await db().select().from(staffMembers);
-    expect(staff).toHaveLength(8);
+    // Exactly the real list: no made-up person ever comes through this door.
+    expect(staff.map((s) => s.fullName).sort()).toEqual(
+      OWNER_SUPPLIED_STAFF.map((s) => s.fullName).sort(),
+    );
     expect(staff.every((s) => s.userId === null)).toBe(true);
     expect(Object.values(await sampleCounts()).every((n) => n === 0)).toBe(true);
     const [satish] = await db()

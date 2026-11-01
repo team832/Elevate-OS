@@ -17,7 +17,7 @@ import type { AcademicStudentSummaryV1 } from '@elevate/shared-contracts';
 import { istToday } from './dates';
 
 /** /3 (D-111): adds the overall comment a person writes or edits from an AI draft. */
-export const REPORT_TEMPLATE_VERSION = 'progress-report/3';
+export const REPORT_TEMPLATE_VERSION = 'progress-report/4';
 export const REPORT_SECTIONS = [
   'overview',
   'kyc',

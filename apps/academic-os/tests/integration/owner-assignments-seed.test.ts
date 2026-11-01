@@ -22,7 +22,7 @@ import {
 import { coreSeeds, runSeeds } from '@elevate/database/seed';
 import { createTestUser, setupTestDatabase } from '@elevate/testing';
 import { seeds } from '../../seed';
-import { OWNER_ASSIGNMENT_SOURCE, OWNER_ASSIGNMENTS } from '../../seed/owner-assignments';
+import { OWNER_ASSIGNMENT_SOURCE, OWNER_ASSIGNMENTS, ownerAssignmentsSeed } from '../../seed/owner-assignments';
 import { withdrawAssignment } from '../../src/server';
 import { opsSeedStubs } from './sample-seed-stubs';
 
@@ -36,7 +36,7 @@ const teachers = async (db: Database) => {
     if (!found) await db.insert(staffMembers).values({ fullName, title: 'Teacher' });
   }
 };
-const seedAll = (db: Database) => runSeeds(db, [...coreSeeds, ...opsSeedStubs(undefined, teachers), ...seeds], { seedUserPassword: 'test-only-seed-password', hashPassword, log: () => {} });
+const seedAll = (db: Database) => runSeeds(db, [...coreSeeds, ...opsSeedStubs(undefined, teachers), ...seeds, ownerAssignmentsSeed], { seedUserPassword: 'test-only-seed-password', hashPassword, log: () => {} });
 
 async function assignmentsByStaff(db: Database) {
   const rows = await db

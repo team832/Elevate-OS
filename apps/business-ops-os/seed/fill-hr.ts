@@ -17,6 +17,7 @@ import {
   opsTeacherFeedbackImportRows,
   opsTeacherFeedbackImports,
   opsTeacherFeedbackSummaries,
+  staffMembers,
   students,
   type Database,
 } from '@elevate/database';
@@ -189,6 +190,81 @@ export const FILL_REQUESTS: readonly RequestCase[] = [
     daysAgo: 3,
     steps: [['review', null, 'Make this a small task for the coordinator.']],
   },
+  {
+    subject: 'Printer in the staff room is out of toner',
+    from: 'academic-coordinator@example.test',
+    to: 'hr',
+    category: 'resources',
+    urgency: 'normal',
+    message: 'We cannot print the Saturday test papers. Who orders toner now?',
+    daysAgo: 1,
+    steps: [],
+  },
+  {
+    subject: 'Change of emergency contact',
+    from: 'dev.malhotra@example.test',
+    to: 'hr',
+    category: 'other',
+    urgency: 'low',
+    message: 'My brother has moved abroad. Please change my emergency contact to my wife.',
+    daysAgo: 8,
+    steps: [
+      ['review', null, 'Private details: update on the staff record.'],
+      ['resolve', 'Updated on your staff record. Please check that it reads correctly.', 'Done on the staff record.'],
+    ],
+  },
+  {
+    subject: 'Extra class on Sunday before the mock',
+    from: 'raghav.sethi@example.test',
+    to: 'academic-manager@example.test',
+    category: 'classes',
+    urgency: 'high',
+    message: 'Batch A has asked for one extra Logical Reasoning class on Sunday morning before the mock. May I take it?',
+    daysAgo: 3,
+    steps: [
+      ['review', null, 'For the academic manager.'],
+      ['forward', 'A teacher asks to take one extra class on Sunday morning before the mock. Is that acceptable?', 'Forwarded.'],
+      ['answer', 'Yes, once, in Room 101. Please mark attendance as usual.', null],
+    ],
+  },
+  {
+    subject: 'A parent asked me about moving an instalment',
+    from: 'isha.nair@example.test',
+    to: 'academic-manager@example.test',
+    category: 'other',
+    urgency: 'urgent',
+    message: 'After class a parent asked to move the second instalment by two weeks because of a medical bill. Who can agree this?',
+    daysAgo: 2,
+    steps: [
+      ['review', null, 'Academic manager knows the family.'],
+      ['forward', 'A parent asks to move the second instalment by two weeks after a medical bill. Can this be agreed?', 'Forwarded.'],
+      ['answer', 'Please send the parent to the counsellor; a one-time move can be agreed there with the reason on the plan.', null],
+      ['relay', 'Please send the parent to the counsellor, who can agree a one-time move and record it on the plan.', null],
+    ],
+  },
+  {
+    subject: 'A training course in Jaipur',
+    from: 'marketing-contributor@example.test',
+    to: 'hr',
+    category: 'development',
+    message: 'There is a two-day design course in Jaipur next month. Would the centre pay half?',
+    daysAgo: 7,
+    steps: [
+      ['review', null, 'No training budget this quarter.'],
+      ['decline', 'There is no training budget this quarter. Please ask again in January.', 'Told her when to ask again.'],
+    ],
+  },
+  {
+    subject: 'Who approves my Saturday timetable change',
+    from: 'neel.shah@example.test',
+    to: 'hr',
+    category: 'timetable',
+    urgency: 'low',
+    message: 'I would like to swap my Saturday slot with Thursday. Should I ask you or the coordinator?',
+    draft: true,
+    daysAgo: 0,
+    steps: [],
+  },
 ];
 
 const PROJECTOR_TASK = 'Show Isha how the projector booking sheet works';
@@ -243,6 +319,7 @@ export async function seedFillRequests(db: Database, log: (m: string) => void = 
     } as never);
     const answerer = r.to === 'schar' ? schar! : r.to === 'hr' ? null : await seedActor(db, r.to);
     for (const [action, body, hrNote] of r.steps) {
+      if (action === 'answer' && !answerer) continue;
       if (action === 'answer')
         await hrRequestAction(db, answerer!.actor, row.id, 'respond', { body });
       else await hrRequestAction(db, hr.actor, row.id, action, { body, hrNote });
@@ -308,14 +385,67 @@ const CATEGORIES = [
   'helpfulness_of_materials',
 ];
 const COMMENTS = [
-  'Explains each step on the board and waits for questions (sample).',
-  'The practice sheets are useful before tests (sample).',
-  'Sometimes moves fast through the last topic of the class (sample).',
-  'Answers doubts after class when asked (sample).',
-  'Starts on time and comes prepared (sample).',
-  'I would like more worked examples for hard questions (sample).',
-  'Homework is checked and returned quickly (sample).',
-  'Revision before the test helped me (sample).',
+  'Explains each step on the board and waits for questions.',
+  'The practice sheets are useful before tests.',
+  'Sometimes moves fast through the last topic of the class.',
+  'Answers doubts after class when asked.',
+  'Starts on time and comes prepared.',
+  'I would like more worked examples for hard questions.',
+  'Homework is checked and returned quickly.',
+  'Revision before the test helped me.',
+];
+
+/** [teacher, batch, approved responses, summary state]: everyone not named below by hand. */
+const EVERY_OTHER_TEACHER: readonly [string, string, number, 'approved' | 'draft' | 'withdrawn' | null][] = [
+  ['Karan Bedi', 'COM-C12-A', 7, 'approved'],
+  ['Nisha Rao', 'IPMAT-A', 9, 'approved'],
+  ['Dev Malhotra', 'CLAT-A', 8, 'approved'],
+  ['Kavya Joshi', 'CLAT-A', 6, 'draft'],
+  ['Mehul Desai', 'COM-C12-A', 5, 'approved'],
+  ['Tara Kapoor', 'COM-C11-A', 6, 'approved'],
+  ['Neel Shah', 'CAF-A', 7, 'approved'],
+  ['Sanya Kulkarni', 'COM-C12-A', 5, 'draft'],
+  ['Anil Chawla', 'COM-C11-A', 8, 'approved'],
+  ['Farida Khan', 'CLAT-A', 10, 'approved'],
+  ['Imran Qureshi', 'CLAT-A', 5, 'withdrawn'],
+  ['Lalit Bhatt', 'CLAT-A', 7, 'approved'],
+  ['Geeta Menon', 'CLAT-A', 6, 'approved'],
+  ['Hemant Joshi', 'COM-C11-A', 5, 'approved'],
+  ['Tanvi Gokhale', 'CAF-A', 6, 'draft'],
+  ['Ramesh Chandak', 'COM-C11-A', 11, 'approved'],
+  ['Kunal Vyas', 'COM-C12-A', 9, 'approved'],
+  ['Jatin Oberoi', 'COM-C11-A', 7, 'approved'],
+  ['Priya Thomas', 'COM-C12-A', 8, 'approved'],
+  ['Siddharth Rao', 'IPMAT-B', 9, 'approved'],
+  ['Usha Pandey', 'COM-C12-A', 6, 'approved'],
+  ['Bhavna Soni', 'COM-C12-A', 5, 'approved'],
+  ['Lata Krishnan', 'CLAT-A', 6, 'approved'],
+];
+const SUMMARY_WORDS = [
+  ['Clear board work and steady pace.', 'More practice before tests.', 'Students say the classes are easy to follow and ask for more timed practice before tests.'],
+  ['Patient with doubts and approachable after class.', 'Homework comes back late at times.', 'Most responses praise how doubts are handled; several ask for homework to come back sooner.'],
+  ['Well prepared; examples are close to the exam.', 'The last topic of a class is often rushed.', 'A good month. Students like the examples and ask for a slower finish.'],
+  ['Keeps the class engaged and starts on time.', 'Weaker students want more worked steps.', 'Students enjoy the classes; a few ask for steps to be written out in full.'],
+  ['Materials are useful for revision.', 'More discussion of wrong answers.', 'The notes are valued. Several responses ask for more time on why an answer is wrong.'],
+];
+const COMMENT_MORE = [
+  'Explains the reason behind each step, not only the method.',
+  'I understood the chapter only after this teacher’s class.',
+  'Would like the test papers discussed in more detail.',
+  'Always ready to take questions after class.',
+  'Please give more practice questions on the hard topics.',
+  'Good examples from real exam papers.',
+  'The class is lively, but the pace is quick at the end.',
+  'My child comes home clear about the homework.',
+];
+/** A development action for the teachers below, in turn. */
+const MORE_ACTIONS = [
+  'Keep ten minutes at the end of each class for questions.',
+  'Return homework within three days.',
+  'Share a revision plan a week before each test.',
+  'Sit in on a colleague’s class this month.',
+  'Add one worked example to each practice sheet.',
+  'Discuss wrong answers after each test, not only the marks.',
 ];
 
 /** [teacher, months back, approved responses, summary state, its words]. */
@@ -389,31 +519,51 @@ const FEEDBACK_SETS: readonly {
     },
   },
   { teacher: ADITI, back: 1, n: 2, batch: 'CAF-A', summary: null },
+  ...EVERY_OTHER_TEACHER.map(([teacher, batch, n, summary], i) => {
+    const w = SUMMARY_WORDS[i % SUMMARY_WORDS.length]!;
+    return {
+      teacher,
+      back: ((i % 2) + 1) as 1 | 2,
+      n,
+      batch,
+      summary,
+      words: { strengths: w[0], improve: w[1], text: w[2] },
+    };
+  }),
 ];
 
 /** [teacher, words, due in days, state, agreed]. */
 const ACTIONS: readonly [string, string, number, 'open' | 'done' | 'dropped', boolean][] = [
   [
     TEACHER,
-    'Keep the last ten minutes of each class for the hardest question of the day (sample).',
+    'Keep the last ten minutes of each class for the hardest question of the day.',
     7,
     'open',
     true,
   ],
-  [TEACHER, 'Add two worked examples to each practice sheet (sample).', 14, 'open', false],
-  [TEACHER, 'Share the revision plan before each chapter test (sample).', -5, 'done', true],
-  [TEACHER, 'Observe a colleague’s doubt class (sample).', -2, 'open', true],
+  [TEACHER, 'Add two worked examples to each practice sheet.', 14, 'open', false],
+  [TEACHER, 'Share the revision plan before each chapter test.', -5, 'done', true],
+  [TEACHER, 'Observe a colleague’s doubt class.', -2, 'open', true],
   [
     ARJUN,
-    'Offer ten minutes of doubt time after class on two days a week (sample).',
+    'Offer ten minutes of doubt time after class on two days a week.',
     10,
     'open',
     true,
   ],
-  [ARJUN, 'Pair with a new teacher for one class (sample).', 20, 'dropped', false],
+  [ARJUN, 'Pair with a new teacher for one class.', 20, 'dropped', false],
 ];
 
 const score = (seed: number, i: number) => 3 + ((seed * 7 + i * 3) % 3);
+/** A teacher by login address, or by name when they have no login. */
+const teacherNamed = async (db: Database, who: string) => {
+  if (who.includes('@')) return seedActor(db, who);
+  const [s] = await db
+    .select({ id: staffMembers.id })
+    .from(staffMembers)
+    .where(eq(staffMembers.fullName, who));
+  return s ? { staffId: s.id } : null;
+};
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 
 export async function seedFillFeedback(db: Database, log: (m: string) => void = () => {}) {
@@ -451,7 +601,7 @@ export async function seedFillFeedback(db: Database, log: (m: string) => void = 
     .returning();
   let importRow = 0;
   for (const set of FEEDBACK_SETS) {
-    const teacher = await seedActor(db, set.teacher);
+    const teacher = await teacherNamed(db, set.teacher);
     if (!teacher?.staffId) continue;
     const p = monthBack(set.back);
     const batch = batches.find((b) => b.code === set.batch);
@@ -481,7 +631,7 @@ export async function seedFillFeedback(db: Database, log: (m: string) => void = 
           reviewedAt: decided,
           reviewedByUserId: hr.actor.id,
           isSample: true,
-          comment: COMMENTS[(set.n + i) % COMMENTS.length]!,
+          comment: (set.teacher.includes('@') ? COMMENTS : COMMENT_MORE)[(set.n + i) % 8]!,
           moderationStatus: 'approved',
           moderatedBy: hr.actor.id,
           moderatedAt: decided,
@@ -539,26 +689,26 @@ export async function seedFillFeedback(db: Database, log: (m: string) => void = 
     reviewedByUserId: hr.actor.id,
   };
   await db.insert(feedback).values([
-    { ...base, rating: 4, comment: 'Waiting for HR to read (sample).' },
+    { ...base, rating: 4, comment: 'Waiting for HR to read.' },
     {
       ...base,
       rating: 2,
-      comment: 'Waiting for HR to read: homework took too long to come back (sample).',
+      comment: 'Waiting for HR to read: homework took too long to come back.',
     },
     {
       ...base,
       rating: 1,
-      comment: 'Names another student (sample).',
+      comment: 'Names another student.',
       moderationStatus: 'rejected',
-      moderationNote: 'Names a student; not usable (sample).',
+      moderationNote: 'Names a student; not usable.',
       ...when,
     },
     {
       ...base,
       rating: 5,
-      comment: 'Duplicate entry on the same form (sample).',
+      comment: 'Duplicate entry on the same form.',
       moderationStatus: 'hidden',
-      moderationNote: 'Same paper entered twice (sample).',
+      moderationNote: 'Same paper entered twice.',
       ...when,
     },
   ]);
@@ -581,26 +731,26 @@ export async function seedFillFeedback(db: Database, log: (m: string) => void = 
   await db.insert(opsTeacherFeedbackImportRows).values(
     (
       [
-        ['valid', ARJUN_NAME, '4', 'Clear about shortcuts (sample).', []],
+        ['valid', ARJUN_NAME, '4', 'Clear about shortcuts.', []],
         [
           'invalid',
           ARJUN_NAME,
           '9',
-          'Rating out of range (sample).',
+          'Rating out of range.',
           ['Ratings go from 1 to 5.'],
         ],
         [
           'duplicate',
           ARJUN_NAME,
           '4',
-          'Clear about shortcuts (sample).',
+          'Clear about shortcuts.',
           ['The same answer is on row 1.'],
         ],
         [
           'unresolved',
           UNMATCHED_TEACHER,
           '3',
-          'Teacher name not found (sample).',
+          'Teacher name not found.',
           ['No teacher matches this name.'],
         ],
       ] as const
@@ -636,6 +786,20 @@ export async function seedFillFeedback(db: Database, log: (m: string) => void = 
       agreed,
     });
     if (state !== 'open') await updateAction(db, hr.actor, row.id, { status: state });
+  }
+  for (const [i, [name]] of EVERY_OTHER_TEACHER.entries()) {
+    const teacher = await teacherNamed(db, name);
+    if (!teacher?.staffId) continue;
+    const row = await createAction(db, hr.actor, {
+      teacherStaffId: teacher.staffId,
+      summaryId: null,
+      action: MORE_ACTIONS[i % MORE_ACTIONS.length]!,
+      ownerStaffId: hr.staffId,
+      dueOn: addDays(anchor, i % 4 === 0 ? -3 - i : 5 + i),
+      agreed: i % 3 !== 2,
+    });
+    if (i % 5 === 1) await updateAction(db, hr.actor, row.id, { status: 'done' });
+    if (i % 7 === 3) await updateAction(db, hr.actor, row.id, { status: 'dropped' });
   }
   // No route may set the sample flag.
   for (const t of [opsTeacherFeedbackSummaries, opsTeacherDevelopmentActions])

@@ -112,7 +112,7 @@ export async function seedFeeStructures(db: Database, log: (m: string) => void =
         mode: 'both' as const,
         amountPaise: sampleFee(codes),
         instalmentCount: 3,
-        instalmentNote: 'At admission, after 3 months and after 6 months (sample template).',
+        instalmentNote: 'At admission, after 3 months and after 6 months.',
         source: 'sample' as const,
         sourceNote: SAMPLE_SOURCE,
         isSample: true,

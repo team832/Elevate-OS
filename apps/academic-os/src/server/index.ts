@@ -19,6 +19,7 @@ export * from './services/progress';
 export * from './services/intake';
 export * from './services/enrolment-exit';
 export * from './services/summary';
+export { buildStudentSummary } from './services/student-summary';
 export * from './services/settings';
 export * from './services/marks';
 export * from './services/reviews';

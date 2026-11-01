@@ -12,5 +12,6 @@ import { marketingLegacySeed } from './reference';
 import { marketingSampleSeeds } from './samples';
 
 export { seedFillMarketing } from './fill';
+export { seedFillContent } from './fill-content';
 
 export const seeds: readonly SeedDefinition[] = [marketingLegacySeed, ...marketingSampleSeeds];

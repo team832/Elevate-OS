@@ -36,6 +36,7 @@ import {
   opsLeads,
   opsScoreImportRows,
   opsScoreImports,
+  opsStaffProfiles,
   opsStaffTasks,
   userRoles,
   users,
@@ -231,8 +232,9 @@ describe('development sample set (db:seed) reconciles', () => {
     // Only sample teachers are responsible for or evaluate a sample test (never a real teacher).
     const teacherIds = tests.flatMap((t) => [t.responsibleTeacherStaffId, t.evaluatorStaffId]);
     const teachers = await db()
-      .select({ name: staffMembers.fullName })
+      .select({ isSample: opsStaffProfiles.isSample })
       .from(staffMembers)
+      .leftJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id))
       .where(
         inArray(
           staffMembers.id,
@@ -240,8 +242,8 @@ describe('development sample set (db:seed) reconciles', () => {
         ),
       );
     expect(teachers.length).toBeGreaterThan(0);
-    expect(teachers.every((t) => t.name.startsWith('Sample '))).toBe(true);
-    const mock = tests.find((t) => t.code === 'SAMPLE-IPMAT-MOCK-01')!;
+    expect(teachers.every((t) => t.isSample)).toBe(true);
+    const mock = tests.find((t) => t.code === 'IPMAT-MOCK-01')!;
     expect(
       await db().$count(
         academicAssessmentBatches,
@@ -270,7 +272,7 @@ describe('development sample set (db:seed) reconciles', () => {
       ),
     ).toBe(1);
 
-    const clat = tests.find((t) => t.code === 'SAMPLE-CLAT-CA-01')!;
+    const clat = tests.find((t) => t.code === 'CLAT-CA-01')!;
     const clatRows = await db()
       .select()
       .from(academicAssessmentRoster)
@@ -291,8 +293,8 @@ describe('development sample set (db:seed) reconciles', () => {
     const states = tests.map((t) => [t.code, t.status]);
     expect(states).toEqual(
       expect.arrayContaining([
-        ['SAMPLE-C11-MATH-01', 'finalised'],
-        ['SAMPLE-CAF-ACC-01', 'scheduled'],
+        ['C11-MATH-01', 'finalised'],
+        ['CAF-ACC-01', 'scheduled'],
       ]),
     );
   });

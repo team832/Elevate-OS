@@ -15,7 +15,7 @@ import {
   type Database,
 } from '@elevate/database';
 import { defineSeed } from '@elevate/database/seed';
-import { seedDemoTeacherTests, seedFillTeaching } from '@elevate/academic-os/seed';
+import { seedDemoTeacherTests, seedFillTeaching, seedFillTests } from '@elevate/academic-os/seed';
 import {
   seedFillAdmissions,
   seedFillAttendance,
@@ -23,8 +23,13 @@ import {
   seedFillPeople,
   seedFillRequests,
   seedFillTasks,
+  seedFillWork,
 } from '@elevate/business-ops-os/seed';
-import { seedFillMarketing } from '@elevate/marketing-os/seed';
+import { teacherActivity } from '@elevate/academic-os/server';
+import { seedFillContent, seedFillMarketing } from '@elevate/marketing-os/seed';
+import { addDays, toIsoDate } from '@elevate/shared-types';
+import { seedFillAudit } from './fill-audit';
+import { seedFillReports } from './fill-reports';
 
 async function demoTeacherTests(db: Database, log: (m: string) => void) {
   if (!(await db.$count(academicBatches, eq(academicBatches.isSample, true))))
@@ -39,10 +44,9 @@ async function demoTeacherTests(db: Database, log: (m: string) => void) {
       .innerJoin(students, eq(students.id, opsAdmissions.studentId))
       .where(and(eq(students.isSample, true), isNotNull(opsAdmissions.admissionNumber)))
   ).map((r) => ({ coreStudentId: r.coreStudentId!, admissionNumber: r.admissionNumber! }));
-  await seedDemoTeacherTests(db, {
-    actorEmail: 'operations-manager@example.test',
-    admissionNumbers,
-  });
+  const opts = { actorEmail: 'operations-manager@example.test', admissionNumbers };
+  await seedDemoTeacherTests(db, opts);
+  await seedFillTests(db, opts);
 }
 
 /** Ops has read the teachers' sent reviews: its own acknowledgement, in its own words. */
@@ -60,19 +64,29 @@ async function acknowledgeReviews(db: Database) {
         inArray(academicTeacherReviews.status, ['submitted']),
       ),
     )
-    .limit(2);
+    .limit(40);
+  const WORDS = [
+    ['Read; shared with the counsellor.', 'Mention this at the next parent call.'],
+    ['Read; nothing to do for now.', null],
+    ['Read with the academic manager; the family should hear about the attendance.', 'Call the parent this week.'],
+    ['Read; passed to the batch coordinator.', null],
+  ] as const;
   if (ops && sent.length)
     await db
       .insert(opsReviewAcknowledgements)
       .values(
-        sent.map((r) => ({
-          reviewKey: r.key,
-          reviewVersion: r.version,
-          acknowledgedByUserId: ops.id,
-          note: 'Read; shared with the counsellor (sample).',
-          followUp: 'Mention this at the next parent call (sample).',
-          isSample: true,
-        })),
+        sent
+          // Not every sent review has been read yet: the rest stay waiting on the screen.
+          .filter((_, i) => i % 3 !== 2)
+          .map((r, i) => ({
+            reviewKey: r.key,
+            reviewVersion: r.version,
+            acknowledgedByUserId: ops.id,
+            note: WORDS[i % WORDS.length]![0],
+            followUp: WORDS[i % WORDS.length]![1],
+            followUpOn: WORDS[i % WORDS.length]![1] ? addDays(toIsoDate(), 3 + (i % 5)) : null,
+            isSample: true,
+          })),
       )
       .onConflictDoNothing();
 }
@@ -104,6 +118,11 @@ const STEPS: readonly [
     seedFillRequests,
   ],
   ['tasks', 'Task briefs, the demo teacher’s tasks in every state, work reports', seedFillTasks],
+  [
+    'work',
+    'Everyone’s tasks in every state, work reports by day, week and month, a tracker import',
+    (db, log) => seedFillWork(db, log, (id, window) => teacherActivity(db, id, window)),
+  ],
   ['feedback', 'Feedback imports, responses, summaries and development actions', seedFillFeedback],
   [
     'admissions',
@@ -111,7 +130,14 @@ const STEPS: readonly [
     seedFillAdmissions,
   ],
   ['marketing', 'Campaign, idea, calendar and SEO details', seedFillMarketing],
+  [
+    'content',
+    'Content on sample ideas: versions, reviews, placements, publications, figures, personal settings',
+    seedFillContent,
+  ],
   ['acknowledgements', 'Ops acknowledgements of sent teacher reviews', acknowledgeReviews],
+  ['reports', 'Past student and teacher reports, made and finalised by the real services', seedFillReports],
+  ['audit', 'Audit rows for what the fill wrote directly, so the audit screens read as a history', seedFillAudit],
 ];
 
 export const sampleFillSeeds = STEPS.map(([step, description, run], i) =>

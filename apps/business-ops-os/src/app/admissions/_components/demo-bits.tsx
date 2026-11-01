@@ -63,6 +63,9 @@ export const ReviewBadge = ({ state }: { state: ReviewState }) => (
 
 /** Teachers per demo day with their review state (from server/feedback.ts demoFeedbackByDay). */
 export const reviewTeachers = (d: DemoRecord) => d.feedback.flatMap((day) => day.teachers);
+/** Reviews cannot be counted: a state is not known, or Academic may hold a class's actual teacher (classesWithMarks). */
+export const reviewsNotKnown = (d: DemoRecord) =>
+  d.sessions.some((s) => s.unknown) || reviewTeachers(d).some((t) => t.state === 'unknown');
 
 type Option = { value: string; label: string };
 /** The programme's name from the picker options; an unknown code stays. */

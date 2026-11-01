@@ -12,7 +12,7 @@ import type { AcademicTeacherActivityV1, Metric } from '@elevate/shared-contract
 import { windowLabel, type IsoDate } from './dates';
 
 /** /2 (D-111): adds the overall comment a person writes or edits from an AI draft. */
-export const TEACHER_REPORT_TEMPLATE_VERSION = 'teacher-report/2';
+export const TEACHER_REPORT_TEMPLATE_VERSION = 'teacher-report/3';
 
 /** A count with its definition; `value` null = not measured. `text` overrides how it prints. */
 export interface Figure {
@@ -29,9 +29,21 @@ const fig = (label: string, m: Metric): Figure => ({
   definition: m.status === 'missing' ? `${m.definition} Not reported: ${m.reason}.` : m.definition,
 });
 
-/** Delivery figures as Academic reports them; the share needs both counts and a planned class. */
+/**
+ * Delivery figures as Academic reports them. Academic's `planned` holds only the classes not yet
+ * delivered, so the classes planned for the period are those plus the delivered ones; read alone, a
+ * teacher who delivered everything would show 0 planned and no share.
+ */
 export function deliveryFacts(a: AcademicTeacherActivityV1) {
-  const { planned, delivered, cancelled } = a.sessions;
+  const { planned: notYet, delivered, cancelled } = a.sessions;
+  const planned =
+    notYet.value !== null && delivered.value !== null
+      ? {
+          ...notYet,
+          value: notYet.value + delivered.value,
+          definition: `Classes delivered in the window plus: ${notYet.definition}`,
+        }
+      : notYet;
   const share =
     planned.value && delivered.value !== null
       ? round1((delivered.value / planned.value) * 100)

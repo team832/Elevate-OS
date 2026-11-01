@@ -220,7 +220,7 @@ export const studentsSeed = defineSeed({
               batchId: batch!.id,
               startDate: batch!.startDate,
               source: 'manual',
-              manualReason: 'Development seed (sample student)',
+              manualReason: 'Enrolled by the coordinator when the batch opened.',
             })
             .returning({ id: academicEnrolments.id })
         )[0]!.id;
@@ -562,7 +562,7 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
         startTime: s.time,
         durationMinutes: minutes,
         status: s.outcome === 'delivered' ? 'held' : s.outcome,
-        statusReason: s.outcome === 'cancelled' ? 'Room unavailable (sample).' : null,
+        statusReason: s.outcome === 'cancelled' ? 'Room unavailable.' : null,
         kind: s.makeupFor ? 'makeup' : 'regular',
         makeupForSessionId: s.makeupFor ? (ids.get(s.makeupFor) as never) : null,
         deliveredAt: s.outcome === 'delivered' ? deliveredAt : null,
@@ -599,7 +599,7 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
                 role: 'substitute' as const,
                 participation: 'actual' as const,
                 replacesStaffId: who(s.teacher).staffId,
-                reason: 'Isha Nair on board-exam duty (sample).',
+                reason: 'Isha Nair on board-exam duty.',
                 authorisedByUserId: manager.userId,
               },
             ]
@@ -632,7 +632,7 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
         completion: s.log,
         actualMinutes: minutes,
         notes: 'Sample teaching log.',
-        catchUpNeeded: s.log === 'partial' ? 'Finish the exercise set next class (sample).' : null,
+        catchUpNeeded: s.log === 'partial' ? 'Finish the exercise set next class.' : null,
         state: 'submitted',
         submittedAt: instant(s.date, s.time, minutes + 60),
         recordedByUserId: actual.userId,
@@ -669,10 +669,10 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
       sessionId: ids.get('q1') as never,
       periodFrom: addDays(anchor, -14),
       periodTo: addDays(anchor, -1),
-      strengths: 'Sets up equations quickly (sample).',
-      areasForSupport: 'Checks units less often under time pressure (sample).',
-      attendanceEvidence: 'Present in the classes recorded this fortnight (sample).',
-      suggestedAction: 'Two timed arithmetic sets a week (sample).',
+      strengths: 'Sets up equations quickly.',
+      areasForSupport: 'Checks units less often under time pressure.',
+      attendanceEvidence: 'Present in the classes recorded this fortnight.',
+      suggestedAction: 'Two timed arithmetic sets a week.',
       status: 'submitted',
       submittedAt: instant(addDays(anchor, -1), '19:00'),
     }),
@@ -680,7 +680,7 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
       academicStudentId: p2!.studentId,
       enrolmentId: p2!.enrolmentId,
       subjectId: subjectOf('IPMAT-A', 'VERBAL'),
-      strengths: 'Draft — not yet submitted (sample).',
+      strengths: 'Draft — not yet submitted.',
     }),
     ...(demo && ids.has('demo')
       ? [
@@ -690,7 +690,7 @@ export async function seedSampleTeaching(db: Database, log: (m: string) => void 
             opsDemoSessionId: demo.id,
             sessionId: ids.get('demo') as never,
             subjectId: subjectOf('IPMAT-A', 'LR'),
-            strengths: 'Followed the arrangement puzzles well in the demo class (sample).',
+            strengths: 'Followed the arrangement puzzles well in the demo class.',
             status: 'submitted' as const,
             submittedAt: instant(demoDate!, '20:00'),
           }),

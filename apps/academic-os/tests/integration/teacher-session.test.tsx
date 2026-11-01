@@ -149,8 +149,8 @@ beforeAll(async () => {
   coordinator = (await createTestUser(ctx.db, { roles: ['academic_coordinator'] })) as never;
   await staffFor(ctx.db, coordinator as never, 'Sample Coordinator');
   const batches = await db().select().from(academicBatches);
-  batchB = batches.find((b) => b.code === 'SAMPLE-IPMAT-B')!.id;
-  batchCaf = batches.find((b) => b.code === 'SAMPLE-CAF')!.id;
+  batchB = batches.find((b) => b.code === 'IPMAT-B')!.id;
+  batchCaf = batches.find((b) => b.code === 'CAF-A')!.id;
   const plans = await db().select().from(academicCurriculumPlans);
   plan253 = plans.find((p) => p.code === 'IPMAT-BASELINE-253')!.id;
   supersededPlan = plans.find((p) => p.status === 'superseded')!.id;
@@ -176,7 +176,7 @@ describe('every record page says what went wrong and offers a way back', () => {
     expect(h1(html)).toBe('Batch not found');
     expect(text(html)).toContain('may not be assigned');
     expect(html).toContain('href="/academic/batches"');
-    expect(html).not.toContain('SAMPLE-CAF');
+    expect(html).not.toContain('CAF-A');
   });
 
   it('no permission for the page: a heading, the reason and a way back to My day', async () => {
@@ -213,7 +213,7 @@ describe('the sample teacher follows the links their lists show', () => {
 
   it.each([
     ['Teaching logs', () => TeachingPage(search())],
-    ['Attendance', () => AttendancePage(search())],
+    ['Attendance', () => AttendancePage(search({ view: 'all' }))],
   ])('%s: class times read in 12-hour words, hidden labels too (RL2-018)', async (_name, page) => {
     as.user = teacher;
     const shown = text(await render(page()));
@@ -236,7 +236,7 @@ describe('the sample teacher follows the links their lists show', () => {
 
   it.each([
     ['plan IPMAT-BASELINE-253', () => `/academic/curriculum/plans/${plan253}`, 'IPMAT-BASELINE-253'],
-    ['batch SAMPLE-IPMAT-B', () => `/academic/batches/${batchB}`, 'Sample IPMAT batch B'],
+    ['batch IPMAT-B', () => `/academic/batches/${batchB}`, 'IPMAT batch B'],
   ])('%s opens for the assigned teacher, and its list links to it', async (_name, href, title) => {
     as.user = teacher;
     expect(h1(await render(open(href())))).toContain(title);
@@ -286,8 +286,8 @@ describe('My batches and Batches', () => {
     const mine = await render(BatchesPage());
     expect(h1(mine)).toBe('My batches');
     expect([...mine.matchAll(/<th [^>]*scope="col"[^>]*>(.*?)<\/th>/g)].map((m) => m[1])).toEqual(['Batch', 'Subject', 'Students', 'Status']);
-    expect(text(mine)).toContain('Sample IPMAT batch B');
-    expect(text(mine)).toContain('SAMPLE-IPMAT-B');
+    expect(text(mine)).toContain('IPMAT batch B');
+    expect(text(mine)).toContain('IPMAT-B');
     expect(text(mine)).toContain('Quant');
     as.user = coordinator;
     const all = await render(BatchesPage());

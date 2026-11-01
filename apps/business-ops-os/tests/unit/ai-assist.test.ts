@@ -14,7 +14,7 @@ import { resolveSettings } from '../../src/domain/policies';
 
 describe('redact (feedback text before it is sent)', () => {
   it.each([
-    ['Asha found the pace too fast', ['Sample Asha Verma'], '[name] found the pace too fast'],
+    ['Asha found the pace too fast', ['Asha Verma'], '[name] found the pace too fast'],
     ['Call 98290 12345 or +91-98290-12345', [], 'Call [phone] or [phone]'],
     ['mail asha@example.test please', [], 'mail [email] please'],
     ['ADM no SAMPLE-ADM-1 / EE-2026-00042 / EL/2026/001', [], 'ADM no [code] / [code] / [code]'],
@@ -59,15 +59,16 @@ describe('namesToMask (only real names; readable text stays readable)', () => {
   const names = namesToMask(
     [
       'Sample Maths Teacher',
-      'X Sample Student',
+      'Aarav Sample Student',
       'Priya Malhotra',
       'Rohit Physics Jain',
       'Riya Sharma',
     ],
     ['IPMAT', 'Integrated Programme in Management'],
   );
-  it('drops sample people and role, subject and catalogue words', () =>
-    expect(names).toEqual(['Priya Malhotra', 'Rohit Jain', 'Riya Sharma']));
+  // A name never decides what is sample: every name word is masked, the role words are not.
+  it('drops role, subject and catalogue words, and nothing else', () =>
+    expect(names).toEqual(['Aarav', 'Priya Malhotra', 'Rohit Jain', 'Riya Sharma']));
   it.each([
     [
       'The teacher explains integration well in Maths',

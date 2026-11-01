@@ -104,7 +104,10 @@ export function DemoAttendance({ d, user, options, level }: DemoTabProps) {
                 header: 'Teacher review',
                 render: (s) => (
                   <ReviewBadge
-                    state={teachers.find((t) => t.sessionIds.includes(s.id))?.state ?? 'not_due'}
+                    state={
+                      teachers.find((t) => t.sessionIds.includes(s.id))?.state ??
+                      (s.unknown ? 'unknown' : 'not_due')
+                    }
                   />
                 ),
               },

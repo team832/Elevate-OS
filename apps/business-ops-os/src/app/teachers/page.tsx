@@ -1,6 +1,7 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { EmptyState, PageHeader, ListEmpty } from '@elevate/shared-ui';
 import { getTeacherProfile, listTeachers, subjectCatalogue } from '../../server/teachers';
+import { SampleBadge } from '../meetings/appointment-view';
 import { humanise } from '../../ui/format';
 import { PeopleNav } from '../../ui/admissions-nav';
 import { Frame, gate, load, Section } from '../../ui/frame';
@@ -102,7 +103,7 @@ async function Directory({ user, sp }: { user: AuthenticatedUser; sp: Params }) 
             render: (t) => (
               <>
                 {t.displayName}
-                {t.staffCode ? ` · ${t.staffCode}` : ''}
+                {t.staffCode ? ` · ${t.staffCode}` : ''} <SampleBadge show={t.isSample} />
                 {t.verificationStatus === 'confirmed' ? null : (
                   <>
                     {' '}

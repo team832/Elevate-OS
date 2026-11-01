@@ -4,7 +4,7 @@
  *   audited: a real calendar item from a sample idea, a real task about a sample lead, a real HR
  *   request linked to a sample task;
  * - required links stop the command before anything changes, with a plain list: a real target on a
- *   sample campaign, a real test covering a real batch and SAMPLE-CAF, a real content item made
+ *   sample campaign, a real test covering a real batch and CAF-A, a real content item made
  *   from a sample idea.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -73,7 +73,7 @@ const ideaOf = async (title: string) =>
     await db()
       .select()
       .from(marketingIdeas)
-      .where(eq(marketingIdeas.title, `${title} (sample proposal)`))
+      .where(and(eq(marketingIdeas.title, title), eq(marketingIdeas.isSample, true)))
   )[0]!;
 
 let real: { calendarId: string; taskId: string; requestId: string };
@@ -142,7 +142,7 @@ describe('db:clear-samples and real rows', () => {
     const [campaign] = await db()
       .select()
       .from(marketingCampaigns)
-      .where(eq(marketingCampaigns.code, 'SAMPLE-IPMAT-WEBINAR'));
+      .where(eq(marketingCampaigns.code, 'IPMAT-WEBINAR'));
     const today = toIsoDate();
     const target = await createTarget(db(), manager.user, {
       scope: 'campaign',
@@ -162,7 +162,7 @@ describe('db:clear-samples and real rows', () => {
         title: 'Real mixed test',
         kind: 'chapter_test',
         academicYear: '2026-27',
-        batchIds: [id('CAF-SEP27-REG'), id('SAMPLE-CAF')],
+        batchIds: [id('CAF-SEP27-REG'), id('CAF-A')],
         maxMarks: '10',
       } as never,
     );
@@ -180,9 +180,9 @@ describe('db:clear-samples and real rows', () => {
     expect(problems).toEqual(
       expect.arrayContaining([
         expect.stringMatching(
-          /^Target "campaign_deliverables" .* sample campaign SAMPLE-IPMAT-WEBINAR/,
+          /^Target "campaign_deliverables" .* sample campaign IPMAT-WEBINAR/,
         ),
-        'Test MOCK-07 covers real batch CAF-SEP27-REG and sample batch SAMPLE-CAF; remove the sample batch from it first.',
+        'Test MOCK-07 covers real batch CAF-SEP27-REG and sample batch CAF-A; remove the sample batch from it first.',
         expect.stringMatching(/^Content item "Real webinar script" was made from sample idea /),
       ]),
     );

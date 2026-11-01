@@ -17,7 +17,12 @@ import {
   staffMembers,
   users,
 } from '@elevate/database';
-import { coreSeeds, MARKETING_EMPLOYEES, runSeeds } from '@elevate/database/seed';
+import {
+  coreSeeds,
+  FAKE_PHONE_PATTERN,
+  MARKETING_EMPLOYEES,
+  runSeeds,
+} from '@elevate/database/seed';
 import { setupTestDatabase } from '@elevate/testing';
 import { seeds } from '../../seed';
 import { SAMPLE_MARKETING_LEADS } from '../../seed/sample-leads';
@@ -50,7 +55,12 @@ describe('marketing team sample set (Ops)', () => {
   it('has about 40 leads, each employee owning some, with calls and follow-ups due today and overdue', async () => {
     const leads = await ctx.db.select().from(opsLeads);
     expect(leads).toHaveLength(SAMPLE_LEAD_COUNT + SAMPLE_MARKETING_LEADS.length);
-    expect(leads.every((l) => l.isSample && !l.studentPhone && !l.guardianPhone)).toBe(true);
+    const fake = new RegExp(FAKE_PHONE_PATTERN);
+    expect(
+      leads.filter(
+        (l) => !l.isSample || !fake.test(l.studentPhone!) || !fake.test(l.guardianPhone!),
+      ),
+    ).toEqual([]);
     const staff = await ctx.db
       .select({ email: users.email, id: staffMembers.id })
       .from(staffMembers)
@@ -121,9 +131,7 @@ describe('marketing team sample set (Ops)', () => {
         expect([t.staffId, t.backupStaffId]).not.toContain(t.reviewerStaffId);
       }
     }
-    const team = tasks.filter(
-      (t) => t.title.endsWith('(sample)') && t.details?.startsWith('Sample task:'),
-    );
+    const team = tasks.filter((t) => t.details?.startsWith('Sample task:'));
     expect(team.length).toBeGreaterThanOrEqual(SAMPLE_TEAM_TASKS.length);
     const today = istToday(new Date());
     const has = (f: (t: (typeof tasks)[number]) => boolean) => expect(tasks.some(f)).toBe(true);

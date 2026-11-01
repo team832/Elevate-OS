@@ -16,8 +16,10 @@ import AdmissionsReportPage from '../../src/app/reports/admissions/page';
 import ReportsPage from '../../src/app/reports/page';
 import { addDays, istToday } from '../../src/domain/dates';
 import { buildAdmissionsOverview } from '../../src/server/admissions-overview';
+import { getDemo } from '../../src/server/demos';
 import { buildOverview } from '../../src/server/overview';
 import { buildAdmissionsFunnel } from '../../src/server/reports/admissions-funnel';
+import { reviewsPayload, stubAcademic } from './academic-stub';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 import { caseOf, identity } from './lifecycle-fixtures';
 
@@ -193,4 +195,75 @@ describe('the /ops home', () => {
     expect(o.funnel).toMatchObject({ ok: true, data: { academicUnavailable: { reason: expect.any(String) } } });
     expect(o.pipeline).toMatchObject({ ok: true, data: { demos: { days: { allDaysAttended: null } } } });
   });
+});
+
+describe('a demo record states nothing it cannot know (RVD-011, RVD-012)', () => {
+  let actual: StaffUser;
+  let linked: { demo: string; session: string };
+  let planned: { demo: string; session: string };
+  const record = (open: string) =>
+    page(<AdmissionsPage searchParams={Promise.resolve({ view: 'current', open })} />);
+  const up = () =>
+    stubAcademic({
+      reviews: (url: URL) => reviewsPayload([], url.searchParams.get('coreStudentId')),
+      'demo-attendance': {
+        items: [linked, planned].map((c) => ({
+          opsDemoSessionId: c.session,
+          academicSessionId: c.session,
+          status: 'present',
+          recordedAt: null,
+          teacherStaffIds: [actual.staffId],
+          teacherNames: ['Sample Actual Teacher'],
+        })),
+      },
+    });
+  const demoWith = async (name: string, session: Partial<typeof opsDemoSessions.$inferInsert>) => {
+    const a = await caseOf(ctx.db, manager.id, await identity(ctx.db, name), 'demo_scheduled');
+    const [demo] = await ctx.db
+      .insert(opsDemos)
+      .values({ admissionId: a.id, leadId: a.leadId, feeTermsState: 'not_discussed', plannedSessionCount: 1, plannedDayCount: 1, createdBy: manager.id })
+      .returning();
+    const [row] = await ctx.db
+      .insert(opsDemoSessions)
+      .values({ demoId: demo!.id, sessionNumber: 1, dayNumber: 1, startsAt: new Date(Date.now() - 86_400_000), subject: 'Quant', ...session })
+      .returning();
+    return { demo: demo!.id, session: row!.id };
+  };
+
+  beforeAll(async () => {
+    actual = await staffUser(ctx.db, ['teacher'], { name: 'Sample Actual Teacher' });
+    const plan = await staffUser(ctx.db, ['teacher'], { name: 'Sample Plan Teacher' });
+    // Linked to Academic, with no teacher in Ops: only Academic can name who taught.
+    linked = await demoWith('Sample Linked Demo', {});
+    // Planned in Ops with its attendance stored there, so not `unknown`; Academic names someone else.
+    planned = await demoWith('Sample Planned Demo', { teacherStaffId: plan.staffId, attendance: 'present', recordedAt: new Date(), recordedBy: manager.id });
+  });
+
+  const stoppedChecks = async () => {
+    stopped();
+    const out = await record(linked.demo);
+    expect(out).toContain('Not known: Academic OS unavailable');
+    for (const falseWords of ['None awaited', 'No teacher has taken a class', 'No review expected', '0 of 1 days'])
+      expect(out).not.toContain(falseWords);
+    expect((await getDemo(ctx.db, manager, linked.demo)).attendance).toBe('unknown');
+    const other = await record(planned.demo);
+    expect(other).toContain('Sample Plan Teacher (planned; Academic OS unavailable)');
+    for (const falseWords of ['None awaited', '0 of 1 received']) expect(other).not.toContain(falseWords);
+  };
+
+  it('Academic stopped, before Ops has seen the link: not known, and the plan is called the plan', stoppedChecks);
+
+  it('control, Academic running: the review is awaited, the actual teacher is named', async () => {
+    up();
+    const out = await record(linked.demo);
+    for (const words of ['1 awaited (see Teacher feedback)', 'No review submitted', 'Sample Actual Teacher'])
+      expect(out).toContain(words);
+    expect(out).not.toContain('Not known: Academic OS unavailable');
+    expect((await getDemo(ctx.db, manager, linked.demo)).attendance).toBe('attended');
+    const other = await record(planned.demo);
+    expect(other).toContain('Sample Actual Teacher');
+    expect(other).not.toContain('(planned; Academic OS unavailable)');
+  });
+
+  it('Academic stopped again, with the link now stored: the same words', stoppedChecks);
 });

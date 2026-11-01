@@ -165,6 +165,7 @@ export async function listTeachers(
       fullName: s.fullName,
       displayName: p?.displayName ?? s.fullName,
       staffCode: p?.staffCode ?? null,
+      isSample: p?.isSample ?? false,
       department,
       manager,
       status: s.status,

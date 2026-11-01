@@ -56,7 +56,7 @@ describe('seedDemoAccounts', () => {
     const [user] = await t.db.select().from(users).where(eq(users.id, userId));
     expect(user!.passwordHash).toBeNull();
     const [staff] = await t.db.select().from(staffMembers).where(eq(staffMembers.id, staffId));
-    expect(staff).toMatchObject({ managerId: manager!.id, fullName: 'Sample Pooja Verma' });
+    expect(staff).toMatchObject({ managerId: manager!.id, fullName: MARKETING_EMPLOYEES[0].displayName });
     const [profile] = await t.db
       .select()
       .from(opsStaffProfiles)
@@ -85,7 +85,8 @@ describe('seedDemoAccounts', () => {
       const staff = await t.db.select().from(staffMembers).where(eq(staffMembers.userId, user.id));
       expect(staff).toHaveLength(1);
       expect(user.displayName).toBe(a.displayName);
-      expect(user.displayName).toMatch(/^Sample |\(demo\)$/);
+      // Owner, 31 Oct 2026: a normal made-up name, nothing that reads as a role or a marker.
+      expect(user.displayName).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
     }
   });
 

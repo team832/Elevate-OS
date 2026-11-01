@@ -260,6 +260,7 @@ export class PdfCanvas {
     const widths = fractions.map((f) => f * this.width);
     let cols = cells.map((c, i) => this.wrap(c, styles[i]!.font, size, widths[i]! - 2 * PAD));
     const freshRoom = Math.floor((this.p.h - this.p.top - this.p.bottom) / lead) - 4;
+    const padY = 'tight' in this.p ? PAD - 1 : PAD; // paper-form density: the form's first sheet is full
     let justBroke = false;
     for (;;) {
       const need = Math.max(...cols.map((c) => c.length));
@@ -271,7 +272,7 @@ export class PdfCanvas {
         continue;
       }
       const take = Math.max(1, Math.min(need, room));
-      const height = take * lead + 2 * PAD;
+      const height = take * lead + 2 * padY;
       const bottom = this.y - height;
       if (fill)
         this.page.drawRectangle({
@@ -286,7 +287,7 @@ export class PdfCanvas {
         const { font, color, align } = styles[i]!;
         lines.slice(0, take).forEach((line, n) => {
           const dx = align === 'right' ? widths[i]! - PAD - this.widthOf(line, font, size) : PAD;
-          this.text(line, x + dx, this.y - PAD - (n + 1) * lead + 3, font, size, color);
+          this.text(line, x + dx, this.y - padY - (n + 1) * lead + 3, font, size, color);
         });
         x += widths[i]!;
       });

@@ -412,7 +412,7 @@ describe('what each draft is built from', () => {
       .select()
       .from(opsReportExports)
       .where(eq(opsReportExports.id, student.data!.id as never));
-    expect(p!.templateVersion).toBe('progress-report/3');
+    expect(p!.templateVersion).toBe('progress-report/4');
     expect((await progressReportPdf(p!.snapshot as never, p!)).lines).toContain(comment);
   });
 });

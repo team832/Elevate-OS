@@ -150,7 +150,7 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
           t.requesterStaffId ||
           t.assignedByStaffId,
         requesterNote:
-          text.note ?? t.requesterNote ?? (t.source === 'self' ? 'My own task (sample).' : null),
+          text.note ?? t.requesterNote ?? (t.source === 'self' ? 'My own task.' : null),
         plannedStartOn: text.start === undefined ? t.plannedStartOn : addDays(c.day(0), text.start),
         deliveredAt: t.status === 'draft' ? null : t.receivedAt,
         ...(batch && t.staffId === named[DEMO]?.staffId && !t.relatedId
@@ -167,7 +167,7 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
         .update(opsTaskSubmissions)
         .set({
           completionNote: text.submitted,
-          evidence: 'Sample shared folder; no real file (sample).',
+          evidence: 'Team shared folder.',
         })
         .where(eq(opsTaskSubmissions.taskId, t.id));
   }
@@ -193,7 +193,7 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
       .set(set)
       .where(and(eq(opsStaffTasks.title, title), eq(opsStaffTasks.isSample, true)));
   // Submitted before an expected deliverable was recorded: the service would have asked for evidence.
-  await db.execute(sql`UPDATE ops.task_submissions s SET evidence = 'Sample shared folder; no real file (sample).'
+  await db.execute(sql`UPDATE ops.task_submissions s SET evidence = 'Team shared folder.'
     FROM ops.staff_tasks t WHERE t.id = s.task_id AND t.is_sample AND t.expected_deliverable IS NOT NULL AND s.evidence IS NULL`);
   const taskOf = (title: string) => tasks.find((t) => t.title === title);
 
@@ -221,7 +221,7 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
     .from(opsTaskUpdates)
     .where(
       and(
-        eq(opsTaskUpdates.workPerformed, 'Marked half of the answer sheets (sample).'),
+        eq(opsTaskUpdates.workPerformed, 'Marked half of the answer sheets.'),
         inArray(opsTaskUpdates.taskId, sampleIds),
       ),
     );
@@ -235,13 +235,13 @@ export async function seedFillTasks(db: Database, log: (m: string) => void = () 
         occurredOn: marked.occurredOn,
         occurredAt: marked.occurredAt,
         recordedAt: c.at([-2, '10:00']),
-        workPerformed: 'Marked four of the six answer sheets (sample).',
+        workPerformed: 'Marked four of the six answer sheets.',
         result: 'Four sheets marked, not three.',
         remainingWork: 'Two sheets, then enter the marks.',
         nextStep: 'Finish marking and enter them on the sheet.',
         durationMinutes: marked.durationMinutes,
         correctsUpdateId: marked.id,
-        correctionReason: 'I counted the sheets again (sample).',
+        correctionReason: 'I counted the sheets again.',
         isSample: true,
       })
       .onConflictDoNothing();

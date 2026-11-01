@@ -18,7 +18,7 @@ import {
   academicTeacherAssignments,
   type Database,
 } from '@elevate/database';
-import { coreSeeds, runSeeds } from '@elevate/database/seed';
+import { coreSeeds, FAKE_PHONE_PATTERN, runSeeds } from '@elevate/database/seed';
 import { createTestUser, setupTestDatabase } from '@elevate/testing';
 import { seeds } from '../../seed';
 import { SAMPLE_BATCHES } from '../../seed/samples';
@@ -170,7 +170,7 @@ describe('Academic OS seeds (legacy planning data, fictional people)', () => {
     expect(rows.every((r) => r.contentStatus === 'not_started')).toBe(true);
   });
 
-  it('seeds nothing as delivered and only sample students (D-036: no phones, is_sample)', async () => {
+  it('seeds nothing as delivered and only made-up students (fake phones, is_sample)', async () => {
     for (const table of [
       academicClassRecords,
       academicAttendance,
@@ -182,8 +182,10 @@ describe('Academic OS seeds (legacy planning data, fictional people)', () => {
     }
     const students = await ctx.db.select().from(academicStudents);
     for (const s of students) {
-      expect(s).toMatchObject({ isSample: true, phone: null, guardianPhone: null });
-      expect(s.fullName).toMatch(/^\w+ Sample Student$/);
+      expect(s.isSample).toBe(true);
+      expect(s.phone).toMatch(new RegExp(FAKE_PHONE_PATTERN));
+      expect(s.guardianPhone).toMatch(new RegExp(FAKE_PHONE_PATTERN));
+      expect(s.fullName).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
       expect(s.email).toMatch(/@example\.test$/);
     }
     const batches = await ctx.db.select().from(academicBatches);

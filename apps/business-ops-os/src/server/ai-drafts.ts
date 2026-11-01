@@ -85,8 +85,8 @@ export const csvMappingBody = z.object({
 });
 
 /**
- * Real staff (but `except`), student and lead names to mask before anything is sent; sample
- * people, role and subject words and programme names/codes are left out (namesToMask).
+ * Staff (but `except`), real student and lead names to mask before anything is sent; role and
+ * subject words and programme names/codes are left out (namesToMask).
  * shortcut: loads all names per request; cache them if the tables grow past tens of thousands.
  */
 export async function knownNames(db: Database, except?: string) {

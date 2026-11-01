@@ -72,10 +72,10 @@ function kyc(pdf: PdfBuilder, k: NonNullable<ReportSnapshot['kyc']>) {
   else
     pdf.table(
       [
-        { header: 'Guardian', width: 0.28 },
-        { header: 'Relationship', width: 0.16 },
-        { header: 'Phone', width: 0.18 },
-        { header: 'Email', width: 0.24 },
+        { header: 'Guardian', width: 0.22 },
+        { header: 'Relationship', width: 0.14 },
+        { header: 'Phone', width: 0.17 },
+        { header: 'Email', width: 0.33 },
         { header: 'Consent', width: 0.14 },
       ],
       k.guardians.map((g) => [
@@ -258,21 +258,32 @@ export async function progressReportPdf(
             ['Homework and practice', f.homeworkEvidence],
             ['Academic concerns', f.academicConcerns],
           ];
-      pdf.keyValues([
-        ['Teacher / subject', who],
-        ...(ptm ? [] : internal),
-        [h.strengths, f.strengths],
-        [h.reviewAreas, f.areasToImprove],
-        [h.reviewNext, f.actionPlan],
-      ]);
+      pdf.keyValues(
+        [
+          ['Teacher / subject', who],
+          ...(ptm ? [] : internal),
+          [h.strengths, f.strengths],
+          [h.reviewAreas, f.areasToImprove],
+          [h.reviewNext, f.actionPlan],
+        ],
+        { together: true },
+      );
     }
   }
 
   if (s.summary) {
-    list(pdf, 'What the records show', s.summary.evidence);
-    list(pdf, h.strengths, s.summary.strengths);
-    list(pdf, h.areas, s.summary.areas);
-    list(pdf, h.nextSteps, s.summary.nextSteps);
+    // A parent reads each thing once (at most two pages): the attendance sentence and the teachers'
+    // reviews above already say these.
+    list(
+      pdf,
+      'What the records show',
+      s.summary.evidence.filter((e) => !(ptm && has('attendance') && e.startsWith('Attendance'))),
+    );
+    if (!ptm || !s.feedback?.length) {
+      list(pdf, h.strengths, s.summary.strengths);
+      list(pdf, h.areas, s.summary.areas);
+      list(pdf, h.nextSteps, s.summary.nextSteps);
+    }
   }
   if (s.comment) {
     pdf.heading('Overall comment');

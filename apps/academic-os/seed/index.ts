@@ -26,6 +26,7 @@ import { sampleTeachingSeed, studentsSeed } from './samples';
 import { syllabusDraftsSeed } from './syllabus';
 
 export { seedFillTeaching } from './fill-teaching';
+export { seedFillTests } from './fill-tests';
 export {
   DEMO_TEACHER_TESTS,
   getAssessmentDetail,

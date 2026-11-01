@@ -29,6 +29,7 @@ export const PEOPLE = {
   operationsManager: 'Manish Goyal',
   hrManager: 'Rekha Saxena',
   auditor: 'Naveen Gupta',
+  financeOfficer: 'Harish Sodhi',
   businessLogin: 'Alok Dubey',
   hrLogin: 'Shalini Mishra',
   teacherLogin: 'Vivek Kaushik',
@@ -155,7 +156,8 @@ const STUDENT_FIRST_NAMES = (
   'Aanya Bhavya Charvi Dhruv Eshan Farah Gauri Ishita Hriday Jiya Kiaan Lavanya Manav Nysa Ojas ' +
   'Ishika Pranav Rehan Siya ' +
   'Nitya Advik Pihu Reva Tejas Yuvan Arnav Kiara Vivaan Navya Shaurya Anvi Aadhya Yash Ritika Om ' +
-  'Samaira Prisha Ayaan Sara Rudra Inaya Krish Laksh Mahi Veer Riddhi Ahaan Anika Jai Pari'
+  'Samaira Prisha Ayaan Sara Rudra Inaya Krish Laksh Mahi Veer Riddhi Ahaan Anika Jai Pari ' +
+  'Harini Mohit Neha Sahil Tanya Ruhi Lakshya Bhumi'
 ).split(' ');
 /** Ishika and Ishita share their parents: the duplicate pair waiting for the merge review. */
 const SAME_FAMILY: Readonly<Record<string, string>> = { Ishika: 'Ishita' };
@@ -175,7 +177,9 @@ const MOTHERS = (
   'Sunita Anita Kavita Sarita Seema Neelam Poonam Manju Suman Asha Lalita Pushpa Rashmi Vandana ' +
   'Archana Renu Savita Madhu Sangeeta Mamta Nirmala Kiran Alka Geetika Preeti Shilpa Swati'
 ).split(' ');
-const KIN = 'Amit Neeraj Vishal Rakesh Shyam Gopal Bhanu Madan Kishore Anand Tarun Ankit'.split(' ');
+const KIN = 'Amit Neeraj Vishal Rakesh Shyam Gopal Bhanu Madan Kishore Anand Tarun Ankit'.split(
+  ' ',
+);
 const COLONIES = [
   'Lotus Residency',
   'Green Park Colony',
@@ -257,6 +261,17 @@ export const everySampleName = () => [
       return [p.fullName, p.father.fullName, p.mother.fullName];
     }),
   ),
+];
+
+/**
+ * Logins older seeds linked to real staff. Kept out of demo-accounts.ts on purpose: the release
+ * preflight reads that file's addresses, and a real person may use one of these in production.
+ */
+export const FORMER_DEV_LOGINS = [
+  'satish@elevateeducation.in',
+  'soma@elevateeducation.in',
+  'nikunjbindal@elevateeducation.in',
+  'tushar@elevateeducation.in',
 ];
 
 const SAMPLE_ROW_CREATED = 'sample.row_created';

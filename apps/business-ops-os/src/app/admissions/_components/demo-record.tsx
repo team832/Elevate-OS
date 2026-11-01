@@ -16,6 +16,7 @@ import {
   MOCK_LABELS,
   type Attendance,
 } from '../../../domain/demos';
+import { REVIEW_STATE_LABELS } from '../../../domain/feedback';
 import { getDemo, type DemoRecord } from '../../../server/demos';
 import { formOptions } from '../../../server/options';
 import { ActionForm } from '../../../ui/action-form';
@@ -32,6 +33,7 @@ import {
   FollowUpCell,
   programmeNames,
   reasonField,
+  reviewsNotKnown,
   reviewTeachers,
   SampleBadge,
 } from './demo-bits';
@@ -134,7 +136,10 @@ function DayStrip({ d }: { d: DemoRecord }) {
             ) : null}
             {states.length ? (
               <span className="el-field-hint">
-                Teacher reviews: {received} of {states.length} received
+                Teacher reviews:{' '}
+                {states.includes('unknown')
+                  ? REVIEW_STATE_LABELS.unknown
+                  : `${received} of ${states.length} received`}
               </span>
             ) : null}
           </li>
@@ -227,7 +232,11 @@ function Overview({ d, user, options, level }: DemoTabProps) {
             },
             {
               label: 'Teacher reviews',
-              value: awaited ? `${awaited} awaited (see Teacher feedback)` : 'None awaited',
+              value: reviewsNotKnown(d)
+                ? REVIEW_STATE_LABELS.unknown
+                : awaited
+                  ? `${awaited} awaited (see Teacher feedback)`
+                  : 'None awaited',
             },
             {
               label: 'Next follow-up',

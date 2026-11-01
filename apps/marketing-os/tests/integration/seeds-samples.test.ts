@@ -57,7 +57,7 @@ describe('marketing sample seed', () => {
       .from(marketingIdeas)
       .where(eq(marketingIdeas.isSample, true));
     expect(ideas.map((i) => i.title).sort()).toEqual(
-      SAMPLE_IDEAS.map((i) => `${i.title} (sample proposal)`).sort(),
+      SAMPLE_IDEAS.map((i) => i.title).sort(),
     );
     expect(new Set(ideas.map((i) => i.status))).toEqual(
       new Set(['idea', 'submitted', 'approved', 'changes_requested']),

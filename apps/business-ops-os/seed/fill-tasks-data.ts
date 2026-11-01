@@ -70,7 +70,7 @@ export const FILL_TEACHER_TASKS: readonly SampleTask[] = [
       {
         kind: 'blocked_set',
         at: [-1, '12:00'],
-        reason: 'No free room on Tuesday; the coordinator is checking the timetable (sample).',
+        reason: 'No free room on Tuesday; the coordinator is checking the timetable.',
       },
     ],
     updates: [
@@ -126,7 +126,7 @@ export const FILL_TEACHER_TASKS: readonly SampleTask[] = [
       {
         kind: 'changes_requested',
         at: [-1, '11:00'],
-        reason: 'Add the compound interest formulas and keep it to one page (sample).',
+        reason: 'Add the compound interest formulas and keep it to one page.',
       },
     ],
   },
@@ -181,7 +181,7 @@ export const FILL_TEACHER_TASKS: readonly SampleTask[] = [
       {
         kind: 'cancelled',
         at: [-3, '10:00'],
-        reason: 'The batch has a mock test that Saturday (sample).',
+        reason: 'The batch has a mock test that Saturday.',
       },
     ],
   },
@@ -201,7 +201,7 @@ export const FILL_TEACHER_TASKS: readonly SampleTask[] = [
       {
         kind: 'reopened',
         at: [-1, '09:30'],
-        reason: 'A student found a third answer that does not match (sample).',
+        reason: 'A student found a third answer that does not match.',
       },
     ],
   },
@@ -325,7 +325,7 @@ export const TASK_TEXT: Readonly<Record<string, TaskText>> = {
     done: 'The count matches the attendance list, or the missing names are written down.',
     category: CAT.check,
     requested: 'coordinator',
-    note: 'Asked in person in the staff room (sample).',
+    note: 'Asked in person in the staff room.',
   },
   'Set the Quant practice paper for Friday': {
     details:
@@ -470,7 +470,7 @@ export const TASK_TEXT: Readonly<Record<string, TaskText>> = {
     details:
       'When the post is approved, share it on the channels you handle and note where it went.',
     deliverable: 'A note of where it was shared',
-    done: 'Each channel is listed. Sample: no real channel is used.',
+    done: 'Each channel is listed.',
     category: CAT.content,
   },
   'Prepare the Percentages worksheet for IPMAT batch B': {
@@ -487,7 +487,7 @@ export const TASK_TEXT: Readonly<Record<string, TaskText>> = {
     done: 'The count matches the roster or missing names are listed.',
     category: CAT.check,
     requested: 'coordinator',
-    note: 'Asked at the staff-room meeting (sample).',
+    note: 'Asked at the staff-room meeting.',
   },
   'Set 30 Time and Work questions for the Friday practice': {
     details:
@@ -585,35 +585,35 @@ export const DUE_CHANGES: readonly [string, number, 'manager', string, number][]
     'Set 30 Time and Work questions for the Friday practice',
     2,
     'manager',
-    'The class moved from Wednesday to Friday (sample).',
+    'The class moved from Wednesday to Friday.',
     -2,
   ],
   [
     'Enter the marks of the Quant unit test',
     1,
     'manager',
-    'The answer sheets came a day late from the exam desk (sample).',
+    'The answer sheets came a day late from the exam desk.',
     -4,
   ],
   [
     'Build the IPMAT Quant formula sheet',
     3,
     'manager',
-    'Changes requested after review; three more days agreed (sample).',
+    'Changes requested after review; three more days agreed.',
     -1,
   ],
   [
     'Set the Quant practice paper for Friday',
     1,
     'manager',
-    'The topic list changed after Monday’s class (sample).',
+    'The topic list changed after Monday’s class.',
     -1,
   ],
   [
     'Compile the weekly current-affairs notes',
     2,
     'manager',
-    'A public holiday fell in the week (sample).',
+    'A public holiday fell in the week.',
     -3,
   ],
 ];
@@ -625,42 +625,42 @@ export const COMMENTS: readonly [string, 'owner' | 'manager', number, string, st
     'manager',
     -2,
     '11:00',
-    'Please keep ten questions at the easy level for the new students (sample).',
+    'Please keep ten questions at the easy level for the new students.',
   ],
   [
     'Set 30 Time and Work questions for the Friday practice',
     'owner',
     -1,
     '09:40',
-    'Done; easy ones are at the start of the paper (sample).',
+    'Done; easy ones are at the start of the paper.',
   ],
   [
     'Check the Number Systems homework of batch B',
     'manager',
     0,
     '10:00',
-    'Thanks. Please raise the mistakes in the next class (sample).',
+    'Thanks. Please raise the mistakes in the next class.',
   ],
   [
     'Build the IPMAT Quant formula sheet',
     'owner',
     -1,
     '12:30',
-    'Will add compound interest and move the mensuration part to page two of the notes instead (sample).',
+    'Will add compound interest and move the mensuration part to page two of the notes instead.',
   ],
   [
     'Plan the Legal Reasoning doubt session',
     'manager',
     -1,
     '15:30',
-    'I have asked the coordinator about the room (sample).',
+    'I have asked the coordinator about the room.',
   ],
   [
     'Prepare the integration practice sheet with an answer key',
     'manager',
     -1,
     '16:10',
-    'Answer key received, reading it today (sample).',
+    'Answer key received, reading it today.',
   ],
 ];
 
@@ -701,90 +701,90 @@ export const CHECKLISTS: readonly [string, string[], number][] = [
 export const NOTES: Readonly<
   Record<string, { result: string; remaining?: string; next?: string; evidence?: string }>
 > = {
-  'Drafted 20 of the 50 questions (sample).': {
+  'Drafted 20 of the 50 questions.': {
     result: 'Twenty questions drafted.',
     remaining: 'Thirty questions and the key.',
     next: 'Write the next fifteen questions tomorrow.',
   },
-  'Checked the answer key of the first 20 questions (sample).': {
+  'Checked the answer key of the first 20 questions.': {
     result: 'Two answers corrected.',
     remaining: 'Key for the other thirty.',
     next: 'Finish the key by Thursday.',
   },
-  'Listed the doubts students raised this week (sample).': {
+  'Listed the doubts students raised this week.': {
     result: 'Eleven doubts, grouped into three topics.',
     remaining: 'Pick the passages; book the room.',
     next: 'Ask the coordinator about a room.',
   },
-  'Checked 32 homework notebooks (sample).': {
+  'Checked 32 homework notebooks.': {
     result: 'Four students had not handed in.',
-    evidence: 'Marked notebook list with the coordinator (sample).',
+    evidence: 'Marked notebook list with the coordinator.',
   },
-  'Uploaded the key and checked two disputed answers (sample).': {
+  'Uploaded the key and checked two disputed answers.': {
     result: 'Both disputed answers were correct as printed.',
-    evidence: 'Key on the test record (sample).',
+    evidence: 'Key on the test record.',
   },
-  'Collected the week’s news items (sample).': {
+  'Collected the week’s news items.': {
     result: 'Fourteen items collected.',
     remaining: 'Write a line on each.',
     next: 'Finish by the weekend.',
   },
-  'Picked four case studies (sample).': {
+  'Picked four case studies.': {
     result: 'Four cases chosen.',
     remaining: 'Questions and model answers.',
     next: 'Write questions for the first two.',
   },
-  'Wrote 15 journal-entry questions (sample).': {
+  'Wrote 15 journal-entry questions.': {
     result: 'Fifteen entries written.',
     remaining: 'Three ledger questions and answers.',
     next: 'Write the ledgers on Monday.',
   },
-  'Outlined the reasoning section (sample).': {
+  'Outlined the reasoning section.': {
     result: 'Outline of eighteen questions.',
     remaining: 'General awareness and arithmetic parts.',
     next: 'Draft the reasoning questions.',
   },
-  'Wrote the first 18 questions with worked answers (sample).': {
+  'Wrote the first 18 questions with worked answers.': {
     result: 'Eighteen questions ready.',
     remaining: 'Twelve more questions.',
     next: 'Write the three-worker problems.',
   },
-  'Checked difficulty against the last IPMAT paper (sample).': {
+  'Checked difficulty against the last IPMAT paper.': {
     result: 'Slightly easier than the paper; two made harder.',
     remaining: 'Twelve more questions.',
     next: 'Finish tomorrow.',
   },
-  'Listed the seven doubts students asked most (sample).': {
+  'Listed the seven doubts students asked most.': {
     result: 'Seven doubts in two groups.',
     remaining: 'Worked examples; a room.',
     next: 'Wait for the room, then share the plan.',
   },
-  'Checked 6 notebooks and noted three common mistakes (sample).': {
+  'Checked 6 notebooks and noted three common mistakes.': {
     result: 'All six checked.',
-    evidence: 'Mistake list attached to the submission (sample).',
+    evidence: 'Mistake list attached to the submission.',
   },
-  'Uploaded the key and rechecked questions 12 and 19 (sample).': {
+  'Uploaded the key and rechecked questions 12 and 19.': {
     result: 'Both answers stand.',
-    evidence: 'Key on the test record (sample).',
+    evidence: 'Key on the test record.',
   },
-  'Marked half of the answer sheets (sample).': {
+  'Marked half of the answer sheets.': {
     result: 'Three of six sheets marked.',
     remaining: 'Three sheets, then enter the marks.',
     next: 'Finish marking and enter them on the sheet.',
   },
-  'Outlined the worked examples (sample).': {
+  'Outlined the worked examples.': {
     result: 'Outline of six examples.',
     remaining: 'Write the examples.',
     next: 'Write two examples a day.',
   },
-  'Called three of the six families (sample).': {
+  'Called three of the six families.': {
     result: 'Two want the fee structure by email; one will decide next week.',
     remaining: 'Three families.',
     next: 'Call the other three tomorrow.',
   },
-  'Made three sizes and shared them with the team (sample).': {
+  'Made three sizes and shared them with the team.': {
     result: 'Story, square and portrait sizes ready.',
-    evidence: 'Files in the team folder (sample).',
+    evidence: 'Files in the team folder.',
   },
 };
 
@@ -811,7 +811,7 @@ export const FILL_MARKETING_REPORTS: readonly SampleReport[] = [
     day: -31,
     kind: 'month',
     submit: [-27, '11:30'],
-    summary: 'Webinar campaign started; sample leads followed up. No results to claim.',
+    summary: 'Webinar campaign started; leads followed up. No results to claim yet.',
     plan: 'Fill the webinar and start the open-house campaign.',
   },
   {
@@ -821,7 +821,7 @@ export const FILL_MARKETING_REPORTS: readonly SampleReport[] = [
     review: {
       kind: 'revision_requested',
       at: [-1, '20:00'],
-      text: 'Say which sources the carousel still needs (sample).',
+      text: 'Say which sources the carousel still needs.',
     },
     summary: 'Worked on the carousel and booked the hall.',
     plan: 'Finish the carousel.',
@@ -866,7 +866,7 @@ export const FILL_REPORTS: readonly SampleReport[] = [
     review: {
       kind: 'revision_requested',
       at: [-3, '20:10'],
-      text: 'Please say which sheets are still to be marked (sample).',
+      text: 'Please say which sheets are still to be marked.',
     },
     summary: 'Marked half of the unit test sheets.',
     plan: 'Finish marking.',
@@ -943,7 +943,7 @@ export const FILL_REPORTS: readonly SampleReport[] = [
     review: {
       kind: 'revision_requested',
       at: [-1, '11:00'],
-      text: 'The current-affairs notes are overdue: please give a new date (sample).',
+      text: 'The current-affairs notes are overdue: please give a new date.',
     },
     summary: 'Classes as planned; notes are behind.',
     plan: 'Finish the notes.',

@@ -130,7 +130,7 @@ export function factSections(f: EodFacts): { title: string; rows: FactRow[] }[] 
           {
             title: 'Deadline changes',
             rows: t.revisions.map((x) =>
-              row(x.taskId, x.title, fmtDaysIn(`${x.from} → ${x.to}`), x.reason ?? 'No reason recorded'),
+              row(x.taskId, x.title, fmtDaysIn(`${x.from} to ${x.to}`), x.reason ?? 'No reason recorded'),
             ),
           },
         ]

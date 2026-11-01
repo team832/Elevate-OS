@@ -36,6 +36,7 @@ import { feeRecordAction, recordFee } from '../../src/server/fees';
 import { POST as schedule } from '../../src/app/api/v1/appointments/route';
 import { demoSessionsForDay, getDemo as loadDemo } from '../../src/server/demos';
 import { POST as transition } from '../../src/app/api/v1/admissions/[id]/transitions/route';
+import { knownPerson } from '@elevate/database/seed';
 import { sampleSeeds, TANISHA_EMAIL } from '../../seed/samples';
 import { referenceSeeds } from '../../seed/reference';
 import { review, reviewsPayload, stubAcademic } from './academic-stub';
@@ -455,8 +456,8 @@ describe('ops.samples seed', () => {
       .where(inArray(opsLeads.studentEmail, [TANISHA_EMAIL]));
     expect(leads).toHaveLength(1);
     const tanisha = leads[0]!;
-    expect(tanisha).toMatchObject({ studentName: 'Tanisha Demo Student', isSample: true });
-    expect(tanisha.studentPhone).toBeNull();
+    expect(tanisha).toMatchObject({ studentName: knownPerson('Tanisha').fullName, isSample: true });
+    expect(tanisha.studentPhone).toBe(knownPerson('Tanisha').phone);
     const [demo] = await ctx.db.select().from(opsDemos).where(eq(opsDemos.leadId, tanisha.id));
     const d = await loadDemo(ctx.db, manager, demo!.id);
     expect(d.demo.isSample).toBe(true);

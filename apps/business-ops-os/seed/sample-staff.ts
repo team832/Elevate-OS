@@ -67,7 +67,10 @@ async function upsertLoginStaff(
   const [user] = await db
     .insert(users)
     .values({ email: v.email, displayName: v.name, passwordHash, status: 'active' })
-    .onConflictDoUpdate({ target: users.email, set: { displayName: v.name, passwordHash } })
+    .onConflictDoUpdate({
+      target: users.email,
+      set: { displayName: v.name, passwordHash, status: 'active' },
+    })
     .returning({ id: users.id });
   await db.insert(userRoles).values({ userId: user!.id, role: v.role }).onConflictDoNothing();
   const values = {
@@ -76,6 +79,7 @@ async function upsertLoginStaff(
     title: v.title,
     departmentId: v.departmentId,
     managerId: v.managerId,
+    status: 'active' as const,
   };
   const [existing] = await db
     .select({ id: staffMembers.id })

@@ -21,6 +21,7 @@ import {
   type Database,
 } from '@elevate/database';
 import { defineSeed } from '@elevate/database/seed';
+import type { AcademicTeacherActivityV1 } from '@elevate/shared-contracts';
 import type { StaffMemberId, UserId } from '@elevate/shared-types';
 import { addDays, istInstant, type IsoDate } from '../src/domain/dates';
 import { buildEodFacts } from '../src/domain/eod';
@@ -47,6 +48,8 @@ export interface Update {
   /** A late entry: written later, keeps its work day. */
   recorded?: At;
   blocker?: string;
+  /** Any other column of the update (result, what remains, next step, evidence). */
+  extra?: Partial<typeof opsTaskUpdates.$inferInsert>;
 }
 export interface SampleTask {
   /** A key of the work context's people (a staff code, or a name given by the caller). */
@@ -66,6 +69,10 @@ export interface SampleTask {
   deliverable?: string;
   steps: Step[];
   updates?: Update[];
+  /** What the assignee says when handing in; default: the version number. */
+  completionNote?: string;
+  /** Any other column of the task (brief, category, department, links). */
+  extra?: Partial<typeof opsStaffTasks.$inferInsert>;
 }
 
 export const ack = (day: number, time: string): Step => ({ kind: 'acknowledged', at: [day, time] });
@@ -141,7 +148,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
       {
         kind: 'blocked_set',
         at: [-1, '15:00'],
-        reason: 'Waiting for a free room from the coordinator (sample).',
+        reason: 'Waiting for a free room from the coordinator.',
       },
     ],
     updates: [
@@ -190,7 +197,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
       {
         kind: 'changes_requested',
         at: [-1, '10:00'],
-        reason: 'Please attach the answer key (sample).',
+        reason: 'Please attach the answer key.',
       },
       { kind: 'submitted_for_review', at: [-1, '15:30'] },
     ],
@@ -242,7 +249,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
       {
         kind: 'reopened',
         at: [-1, '09:30'],
-        reason: 'Two answers in the key were wrong; re-mark needed (sample).',
+        reason: 'Two answers in the key were wrong; re-mark needed.',
       },
     ],
   },
@@ -256,7 +263,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
     priority: 'low',
     steps: [
       ack(-6, '12:30'),
-      { kind: 'cancelled', at: [-2, '11:00'], reason: 'The lecture moved to next term (sample).' },
+      { kind: 'cancelled', at: [-2, '11:00'], reason: 'The lecture moved to next term.' },
     ],
   },
   {
@@ -275,7 +282,7 @@ export const SAMPLE_TASKS: readonly SampleTask[] = [
         kind: 'reassigned',
         at: [-2, '09:00'],
         to: 'EMP-T10',
-        reason: 'Mehul is on exam duty this week (sample).',
+        reason: 'Mehul is on exam duty this week.',
       },
       ack(-2, '09:30'),
       to('in_progress', -2, '11:00'),
@@ -338,7 +345,7 @@ export const SAMPLE_EODS: readonly SampleReport[] = [
     review: {
       kind: 'revision_requested',
       at: [-1, '20:00'],
-      text: 'Say which homework sets are still unchecked (sample).',
+      text: 'Say which homework sets are still unchecked.',
     },
   },
   {
@@ -504,7 +511,7 @@ export async function writeSampleTask(db: Database, t: SampleTask, c: WorkContex
       assignedByStaffId: t.source === 'manager' ? manager.staffId : null,
       source: t.source,
       requesterStaffId: t.source === 'verbal' ? manager.staffId : null,
-      requesterNote: t.source === 'verbal' ? 'Asked in person in the staff room (sample).' : null,
+      requesterNote: t.source === 'verbal' ? 'Asked in person in the staff room.' : null,
       reviewerStaffId: t.review ? manager.staffId : null,
       reviewRequired: Boolean(t.review),
       receivedAt: at(t.received),
@@ -528,6 +535,7 @@ export async function writeSampleTask(db: Database, t: SampleTask, c: WorkContex
       acknowledgedByUserId: acknowledged?.by ?? null,
       isSample: true,
       createdBy: creator.userId,
+      ...t.extra,
     })
     .returning({ id: opsStaffTasks.id });
   await db.insert(opsTaskEvents).values(events.map((e) => ({ ...e, taskId: task!.id })));
@@ -540,9 +548,9 @@ export async function writeSampleTask(db: Database, t: SampleTask, c: WorkContex
           .values({
             taskId: task!.id,
             version: i + 1,
-            completionNote: `Version ${i + 1} handed in (sample).`,
+            completionNote: i === 0 && t.completionNote ? t.completionNote : `Version ${i + 1} handed in.`,
             // A task with an expected deliverable is submitted with it (as the service requires).
-            evidence: t.deliverable ? `Sample shared folder: version ${i + 1} (sample).` : null,
+            evidence: t.deliverable ? `Team shared folder: version ${i + 1}.` : null,
             submittedByUserId: owner.userId,
             submittedAt,
           })
@@ -567,12 +575,13 @@ export async function writeSampleTask(db: Database, t: SampleTask, c: WorkContex
       occurredOn: day(u.on),
       occurredAt: u.at ? at(u.at) : null,
       recordedAt: at(u.recorded ?? u.span?.[1] ?? u.at!),
-      workPerformed: `${u.work} (sample).`,
+      workPerformed: `${u.work}.`,
       blocker: u.blocker ?? null,
       durationMinutes: u.minutes ?? null,
       startedAt: u.span ? at(u.span[0]) : null,
       endedAt: u.span ? at(u.span[1]) : null,
       isSample: true,
+      ...u.extra,
     });
   return task!.id;
 }
@@ -606,6 +615,8 @@ export async function writeSampleReport(
     allEvents,
     allUpdates,
   }: { allTasks: WorkTask[]; allEvents: WorkEvent[]; allUpdates: WorkUpdate[] },
+  /** What Academic reported for this person and period, when the caller may ask it. */
+  teaching?: AcademicTeacherActivityV1,
 ) {
   const { at, day, manager } = c;
   const owner = c.people.get(e.owner)!;
@@ -621,15 +632,17 @@ export async function writeSampleReport(
     tasks: allTasks,
     events: allEvents.filter((x) => x.occurredAt <= cutoff),
     updates: allUpdates.filter((u) => u.authorStaffId === owner.staffId && u.recordedAt <= cutoff),
-    academic: {
-      status: 'unavailable',
-      reason: 'Sample data: the seed does not ask Academic OS',
-      fetchedAt: cutoff.toISOString(),
-    },
+    academic: teaching
+      ? { status: 'available', data: teaching, fetchedAt: cutoff.toISOString() }
+      : {
+          status: 'unavailable',
+          reason: 'Academic OS was not asked for this report',
+          fetchedAt: cutoff.toISOString(),
+        },
   });
   const narrative = {
-    summary: e.summary ?? 'Sample end-of-day summary written by the teacher.',
-    nextDayPlan: e.plan ?? 'Continue the open tasks (sample).',
+    summary: e.summary ?? 'Classes taken as planned; open work is listed below.',
+    nextDayPlan: e.plan ?? 'Continue the open tasks.',
     notes: e.notes ?? null,
   };
   const status = e.review?.kind ?? (e.submit ? 'submitted' : 'draft');

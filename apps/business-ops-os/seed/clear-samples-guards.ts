@@ -55,11 +55,11 @@ const PRECHECKS: readonly string[] = [
    FROM ops.score_imports i LEFT JOIN academic.assessments a ON a.id = i.assessment_id
    WHERE NOT i.is_sample AND a.is_sample`,
   `SELECT 'Content item "' || c.title || '" was made from sample idea ' || i.code || '; move it to a real idea first.' AS problem
-   FROM marketing.content_items c JOIN marketing.ideas i ON i.id = c.idea_id WHERE i.id ${IN('s_ideas')}`,
+   FROM marketing.content_items c JOIN marketing.ideas i ON i.id = c.idea_id WHERE i.id ${IN('s_ideas')} AND c.id NOT ${IN('s_content')}`,
   `SELECT 'Placement ' || coalesce(p.code, p.id::text) || ' belongs to sample idea ' || i.code || '; move it to a real idea first.' AS problem
-   FROM marketing.placements p JOIN marketing.ideas i ON i.id = p.idea_id WHERE i.id ${IN('s_ideas')}`,
+   FROM marketing.placements p JOIN marketing.ideas i ON i.id = p.idea_id WHERE i.id ${IN('s_ideas')} AND p.id NOT ${IN('s_placements')}`,
   `SELECT 'Placement group ' || g.code || ' belongs to sample idea ' || i.code || '; move it to a real idea first.' AS problem
-   FROM marketing.placement_groups g JOIN marketing.ideas i ON i.id = g.idea_id WHERE i.id ${IN('s_ideas')}`,
+   FROM marketing.placement_groups g JOIN marketing.ideas i ON i.id = g.idea_id WHERE i.id ${IN('s_ideas')} AND g.id NOT ${IN('s_groups')}`,
   `SELECT 'Task "' || t.title || '" waits on sample task "' || s.title || '"; remove that dependency first.' AS problem
    FROM ops.task_dependencies d JOIN ops.staff_tasks t ON t.id = d.task_id JOIN ops.staff_tasks s ON s.id = d.depends_on_task_id
    WHERE d.depends_on_task_id ${IN('s_tasks')} AND d.task_id NOT ${IN('s_tasks')}`,
@@ -109,6 +109,22 @@ const REAL_LINKS: readonly [string, string, string][] = [
        campaign_id = CASE WHEN campaign_id ${IN('s_campaigns')} THEN NULL ELSE campaign_id END,
        related_task_id = CASE WHEN related_task_id ${IN('s_tasks')} THEN NULL ELSE related_task_id END
      WHERE NOT is_sample AND (idea_id ${IN('s_ideas')} OR campaign_id ${IN('s_campaigns')} OR related_task_id ${IN('s_tasks')})
+     RETURNING id`,
+  ],
+  [
+    'real calendar item(s) from sample content',
+    'marketing.calendar_items',
+    `UPDATE marketing.calendar_items SET content_item_id = NULL, placement_id = NULL
+     WHERE NOT is_sample AND (content_item_id ${IN('s_content')} OR placement_id ${IN('s_placements')}) RETURNING id`,
+  ],
+  [
+    'real post figures from sample placements',
+    'marketing.metric_snapshots',
+    `UPDATE marketing.metric_snapshots SET
+       placement_id = CASE WHEN placement_id ${IN('s_placements')} THEN NULL ELSE placement_id END,
+       suggested_placement_id = CASE WHEN suggested_placement_id ${IN('s_placements')} THEN NULL ELSE suggested_placement_id END
+     WHERE (import_id IS NULL OR import_id NOT ${IN('s_metric_imports')})
+       AND (placement_id ${IN('s_placements')} OR suggested_placement_id ${IN('s_placements')})
      RETURNING id`,
   ],
   [

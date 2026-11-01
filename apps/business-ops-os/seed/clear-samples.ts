@@ -5,7 +5,8 @@
  * members, ideas, calendar items, SEO/AIO/GEO items and observations, targets). Reference data
  * (lead stages, SEO/AIO/GEO categories) is not sample and stays.
  * Tables with no is_sample column (schedules, holidays, rooms, branches, events, metric imports) are
- * known by the record the seed left (markSampleRows, seed/sample-people.ts), never by a name.
+ * known by the record the seed left (markSampleRows, seed/sample-people.ts). Older seeds left no such
+ * record: their rows are known by OLD_ROWS below, exact names no real row carries.
  * Sample = `ops.leads.is_sample`, `core.students.is_sample`, `ops.fee_structures.is_sample`,
  * `is_sample` tasks, EOD reports and import batches, Academic `is_sample` batches (with their
  * sessions, logs and teachers), students, placements, demo attendees and reviews, `is_sample`
@@ -32,9 +33,30 @@ import { RELATED_SET, refuseRequiredLinks, unlinkRealRows } from './clear-sample
 
 export { ClearSamplesRefused } from './clear-samples-guards';
 
+const BY_SAMPLE_LOGIN = (column: string) =>
+  `${column} IN (SELECT id FROM core.users WHERE email LIKE '%@example.test')`;
+const OLD_ADDRESS = `'%.sample@example.test'`;
+const OLD_STUDENT = `'% Sample Student'`;
+/**
+ * Rows the seeds up to 31 Oct 2026 made in tables with no flag: the exact names they wrote, and where
+ * the table records its author, written by a sample login too. A person's "Sample room" stays.
+ */
+const OLD_ROWS = {
+  events: `type IN ('event', 'webinar') AND title IN ('Sample IPMAT parents’ webinar (fictional)', 'Sample CLAT open house (fictional)') AND ${BY_SAMPLE_LOGIN('created_by')}`,
+  schedules: `name IN ('Sample schedule: teaching days (fictional)', 'Sample schedule: office days (fictional)', 'Sample schedule: weekend classes (fictional)') AND ${BY_SAMPLE_LOGIN('created_by')}`,
+  holidays: `name IN ('Sample holiday: centre foundation day (fictional)', 'Sample holiday: staff training day (fictional)', 'Sample holiday: local festival, to be confirmed (fictional)') AND ${BY_SAMPLE_LOGIN('created_by')}`,
+  rooms: `(code, name) IN (('SAMPLE-R1', 'Sample Room 1 (fictional)'), ('SAMPLE-R2', 'Sample Room 2 (fictional)'), ('SAMPLE-HALL', 'Sample seminar hall (fictional)'))`,
+  branches: `code = 'SAMPLE_BRANCH' AND name = 'Sample branch (fictional)'`,
+  metrics: `file_name = 'Sample metrics export (fictional).csv' AND ${BY_SAMPLE_LOGIN('imported_by')}`,
+};
+
 /** Temporary id sets, built once: [name, SELECT]. */
 const SETS: readonly [string, string][] = [
-  ['s_leads', `SELECT id FROM ops.leads WHERE is_sample`],
+  [
+    's_leads',
+    `SELECT id FROM ops.leads WHERE is_sample
+       OR (student_email LIKE ${OLD_ADDRESS} AND (student_name LIKE ${OLD_STUDENT} OR student_name = 'Tanisha Demo Student'))`,
+  ],
   ['s_admissions', `SELECT id FROM ops.admissions WHERE lead_id IN (SELECT id FROM s_leads)`],
   [
     's_students',
@@ -52,7 +74,8 @@ const SETS: readonly [string, string][] = [
     `SELECT id FROM ops.appointments WHERE lead_id IN (SELECT id FROM s_leads)
        OR admission_id IN (SELECT id FROM s_admissions) OR student_id IN (SELECT id FROM s_students)
        OR demo_id IN (SELECT id FROM s_demos)
-       OR id IN (${sampleRowsSql('ops.appointments')})`,
+       OR id IN (${sampleRowsSql('ops.appointments')})
+       OR ${OLD_ROWS.events}`,
   ],
   [
     's_plans',
@@ -60,7 +83,8 @@ const SETS: readonly [string, string][] = [
   ],
   [
     's_academic_students',
-    `SELECT id FROM academic.students WHERE source_admission_id IN (SELECT id FROM s_admissions) OR is_sample`,
+    `SELECT id FROM academic.students WHERE source_admission_id IN (SELECT id FROM s_admissions) OR is_sample
+       OR (email LIKE ${OLD_ADDRESS} AND full_name LIKE ${OLD_STUDENT})`,
   ],
   ['s_academic_batches', `SELECT id FROM academic.batches WHERE is_sample`],
   [
@@ -86,14 +110,37 @@ const SETS: readonly [string, string][] = [
      WHERE p.is_sample AND m.user_id IS NULL`,
   ],
   ['s_hr_requests', `SELECT id FROM ops.hr_requests WHERE is_sample`],
-  ['s_schedules', sampleRowsSql('ops.work_schedules')],
-  ['s_holidays', sampleRowsSql('ops.holidays')],
-  ['s_rooms', sampleRowsSql('academic.rooms')],
-  ['s_branches', sampleRowsSql('core.branches')],
-  ['s_metric_imports', sampleRowsSql('marketing.metric_imports')],
+  [
+    's_schedules',
+    `${sampleRowsSql('ops.work_schedules')} UNION SELECT id FROM ops.work_schedules WHERE ${OLD_ROWS.schedules}`,
+  ],
+  [
+    's_holidays',
+    `${sampleRowsSql('ops.holidays')} UNION SELECT id FROM ops.holidays WHERE ${OLD_ROWS.holidays}`,
+  ],
+  [
+    's_rooms',
+    `${sampleRowsSql('academic.rooms')} UNION SELECT id FROM academic.rooms WHERE ${OLD_ROWS.rooms}`,
+  ],
+  [
+    's_branches',
+    `${sampleRowsSql('core.branches')} UNION SELECT id FROM core.branches WHERE ${OLD_ROWS.branches}`,
+  ],
+  [
+    's_metric_imports',
+    `${sampleRowsSql('marketing.metric_imports')} UNION SELECT id FROM marketing.metric_imports WHERE ${OLD_ROWS.metrics}`,
+  ],
   ['s_campaigns', `SELECT id FROM marketing.campaigns WHERE is_sample`],
   ['s_ideas', `SELECT id FROM marketing.ideas WHERE is_sample`],
   ['s_opt_items', `SELECT id FROM marketing.optimisation_items WHERE is_sample`],
+  ['s_content', sampleRowsSql('marketing.content_items')],
+  ['s_placements', sampleRowsSql('marketing.placements')],
+  ['s_groups', sampleRowsSql('marketing.placement_groups')],
+  ['s_preferences', sampleRowsSql('core.user_preferences')],
+  [
+    's_plans_academic',
+    `SELECT id FROM academic.curriculum_plans WHERE batch_id IN (SELECT id FROM s_academic_batches)`,
+  ],
   RELATED_SET,
 ];
 
@@ -137,10 +184,54 @@ const DELETES: readonly [string, string][] = [
   ],
   ['marketing.targets', `DELETE FROM marketing.targets WHERE is_sample`],
   ['marketing.calendar_items', `DELETE FROM marketing.calendar_items WHERE is_sample`],
+  // Sample content (seed fill-content.ts), children first; legacy items are never in these sets.
+  [
+    'marketing.metric_values',
+    `DELETE FROM marketing.metric_values WHERE snapshot_id IN (SELECT id FROM marketing.metric_snapshots WHERE import_id ${IN('s_metric_imports')} OR placement_id ${IN('s_placements')})`,
+  ],
+  [
+    'marketing.metric_snapshots',
+    `DELETE FROM marketing.metric_snapshots WHERE import_id ${IN('s_metric_imports')} OR placement_id ${IN('s_placements')}`,
+  ],
   [
     'marketing.metric_imports',
     `DELETE FROM marketing.metric_imports WHERE id ${IN('s_metric_imports')}`,
   ],
+  [
+    'marketing.publishing_attempts',
+    `DELETE FROM marketing.publishing_attempts WHERE record_id IN (SELECT id FROM marketing.publishing_records WHERE placement_id ${IN('s_placements')})`,
+  ],
+  [
+    'marketing.publishing_records',
+    `DELETE FROM marketing.publishing_records WHERE placement_id ${IN('s_placements')}`,
+  ],
+  ['marketing.placements', `DELETE FROM marketing.placements WHERE id ${IN('s_placements')}`],
+  ['marketing.placement_groups', `DELETE FROM marketing.placement_groups WHERE id ${IN('s_groups')}`],
+  [
+    'marketing.content_comments',
+    `DELETE FROM marketing.content_comments WHERE content_item_id ${IN('s_content')}`,
+  ],
+  [
+    'marketing.content_assets',
+    `DELETE FROM marketing.content_assets WHERE version_id IN (SELECT id FROM marketing.content_versions WHERE content_item_id ${IN('s_content')})`,
+  ],
+  [
+    'marketing.content_reviews',
+    `DELETE FROM marketing.content_reviews WHERE content_item_id ${IN('s_content')}`,
+  ],
+  [
+    'core.approvals (content)',
+    `DELETE FROM core.approvals WHERE subject_module = 'marketing' AND subject_id ${IN('s_content')}`,
+  ],
+  [
+    'marketing.content_assignments',
+    `DELETE FROM marketing.content_assignments WHERE content_item_id ${IN('s_content')}`,
+  ],
+  [
+    'marketing.content_versions',
+    `DELETE FROM marketing.content_versions WHERE content_item_id ${IN('s_content')}`,
+  ],
+  ['marketing.content_items', `DELETE FROM marketing.content_items WHERE id ${IN('s_content')}`],
   ['marketing.ideas', `DELETE FROM marketing.ideas WHERE id ${IN('s_ideas')}`],
   [
     'marketing.campaign_members',
@@ -212,6 +303,13 @@ const DELETES: readonly [string, string][] = [
     `DELETE FROM ops.${t} WHERE task_id ${IN('s_tasks')}`,
   ]),
   ['ops.staff_tasks', `DELETE FROM ops.staff_tasks WHERE id ${IN('s_tasks')}`],
+  ['core.user_preferences', `DELETE FROM core.user_preferences WHERE user_id ${IN('s_preferences')}`],
+  // Only values the seed stored and nobody has changed since (a real login's change stays).
+  [
+    'academic.settings',
+    `DELETE FROM academic.settings WHERE key IN (SELECT entity_id FROM core.audit_events WHERE action = 'sample.row_created' AND entity_type = 'academic.settings')
+       AND updated_by_user_id IN (SELECT id FROM core.users WHERE email = 'academic-manager@example.test')`,
+  ],
   [
     'ops.task_import_batches',
     `DELETE FROM ops.task_import_batches WHERE id ${IN('s_import_batches')}`,
@@ -308,6 +406,10 @@ const DELETES: readonly [string, string][] = [
     `DELETE FROM ops.guardians WHERE student_id ${IN('s_students')} OR lead_id ${IN('s_leads')}`,
   ],
   ['ops.report_exports', `DELETE FROM ops.report_exports WHERE student_id ${IN('s_students')}`],
+  [
+    'ops.teacher_report_exports',
+    `DELETE FROM ops.teacher_report_exports WHERE id IN (${sampleRowsSql('ops.teacher_report_exports')})`,
+  ],
   ['ops.contact_preferences', `DELETE FROM ops.contact_preferences WHERE lead_id ${IN('s_leads')}`],
   ['ops.lead_activities', `DELETE FROM ops.lead_activities WHERE lead_id ${IN('s_leads')}`],
   ['ops.lead_stage_history', `DELETE FROM ops.lead_stage_history WHERE lead_id ${IN('s_leads')}`],
@@ -360,6 +462,15 @@ const DELETES: readonly [string, string][] = [
   [
     'academic.class_sessions',
     `DELETE FROM academic.class_sessions WHERE id ${IN('s_academic_sessions')}`,
+  ],
+  // Batch-scoped plans carry no foreign key to the batch (the service checks it); items cascade.
+  [
+    'core.approvals (plans)',
+    `DELETE FROM core.approvals WHERE subject_module = 'academic' AND subject_type = 'curriculum_plan' AND subject_id ${IN('s_plans_academic')}`,
+  ],
+  [
+    'academic.curriculum_plans',
+    `DELETE FROM academic.curriculum_plans WHERE id ${IN('s_plans_academic')}`,
   ],
   [
     'academic.timetable_patterns',
@@ -454,11 +565,15 @@ const UNLINK = [
   `UPDATE ops.eod_report_versions SET revision_request_event_id = NULL WHERE report_id ${IN('s_eods')}`,
   `UPDATE academic.class_sessions SET rescheduled_from_session_id = NULL, makeup_for_session_id = NULL WHERE id ${IN('s_academic_sessions')}`,
   `UPDATE academic.class_records SET corrects_record_id = NULL WHERE session_id ${IN('s_academic_sessions')}`,
+  `UPDATE academic.curriculum_plans SET supersedes_plan_id = NULL WHERE id ${IN('s_plans_academic')}`,
+  `UPDATE marketing.content_items SET current_version_id = NULL, approved_version_id = NULL, approval_id = NULL WHERE id ${IN('s_content')}`,
+  `UPDATE marketing.placements SET placement_group_id = NULL WHERE id ${IN('s_placements')}`,
   `UPDATE academic.teacher_reviews SET supersedes_id = NULL WHERE is_sample`,
   `UPDATE academic.batch_placements SET transfer_from_placement_id = NULL WHERE is_sample`,
   `UPDATE ops.leads SET merged_into_lead_id = NULL WHERE id ${IN('s_leads')}`,
   `UPDATE ops.teacher_student_feedback SET supersedes_id = NULL WHERE student_id ${IN('s_students')} OR teacher_staff_id ${IN('s_staff')}`,
-  `UPDATE ops.kyc_documents SET superseded_by_id = NULL, superseded_at = NULL WHERE student_id ${IN('s_students')}`,
+  // Pointing at itself, not empty: an old version must stay marked superseded (one live document per kind).
+  `UPDATE ops.kyc_documents SET superseded_by_id = id WHERE superseded_by_id IS NOT NULL AND student_id ${IN('s_students')}`,
   `UPDATE ops.fee_plans SET supersedes_plan_id = NULL, version = 1 WHERE id ${IN('s_plans')}`,
   `UPDATE ops.admissions SET application_id = NULL WHERE id ${IN('s_admissions')}`,
   `UPDATE ops.fee_records SET reverses_record_id = NULL WHERE admission_id ${IN('s_admissions')} OR lead_id ${IN('s_leads')}`,

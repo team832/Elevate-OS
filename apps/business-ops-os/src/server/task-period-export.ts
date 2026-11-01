@@ -1,6 +1,8 @@
 /** Downloads of the team / period report (CSV, PDF): same scope as the report, and audited. */
-import type { Database } from '@elevate/database';
+import { and, eq, inArray } from 'drizzle-orm';
+import { opsStaffProfiles, type Database } from '@elevate/database';
 import { recordAudit, toCsv } from '@elevate/server-kit';
+import type { StaffMemberId } from '@elevate/shared-types';
 import { fmtDate, fmtDateTime } from '../ui/format';
 import type { Actor } from './context';
 import { createPdf } from './pdf/document';
@@ -99,6 +101,19 @@ export async function periodReportPdf(
     reference: filterLine(r, q),
     templateVersion: 'task-period-report v1',
   });
+  if (r.people.length) {
+    const made = await db.$count(
+      opsStaffProfiles,
+      and(
+        inArray(
+          opsStaffProfiles.staffId,
+          r.people.map((p) => p.staffId as StaffMemberId),
+        ),
+        eq(opsStaffProfiles.isSample, true),
+      ),
+    );
+    if (made) pdf.banner('Sample data — includes fictional staff', 'neutral');
+  }
   pdf.keyValues([
     ['Period', `${fmtDate(r.window.from)} – ${fmtDate(r.window.to)} (IST)`],
     ['Cut-off', fmtDateTime(r.asOf)],

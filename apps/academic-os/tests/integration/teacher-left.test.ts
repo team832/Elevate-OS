@@ -4,7 +4,7 @@
  */
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { academicTeacherAssignments, staffMembers } from '@elevate/database';
+import { academicBatches, academicTeacherAssignments, staffMembers } from '@elevate/database';
 import { setupTestDatabase } from '@elevate/testing';
 import { checkTimetableFor, coordinatorOverview, createPattern, createSessions, listTeachers, uncoveredSessions } from '../../src/server';
 import { assignSubstitute } from '../../src/server/services/delivery';
@@ -69,6 +69,15 @@ describe('a teacher who has left', () => {
     await expect(createPattern(ctx.db, actor(u.coordinator), { batchId: w.batch.id, subjectId: w.quant.id, staffId: w.teacherStaff, weekday: 1, startTime: '09:00', durationMinutes: 75, effectiveFrom: '2099-04-01', effectiveTo: '2099-04-30' } as never)).rejects.toMatchObject(refused);
     const { sessions } = await createSessions(ctx.db, actor(u.coordinator), [session('teacher2Staff', 'verbal', '2099-03-04')]);
     await expect(assignSubstitute(ctx.db, actor(u.coordinator), sessions[0]!.id, { staffId: w.teacherStaff, reason: 'Cover (fictional)' } as never)).rejects.toMatchObject(refused);
+  });
+
+  it('the teachers list marks sample teachers by their batches, never by the name', async () => {
+    await ctx.db.update(staffMembers).set({ fullName: 'Sample Looking Person' }).where(eq(staffMembers.id, w.teacherStaff));
+    const marked = async () => (await listTeachers(ctx.db, actor(u.coordinator))).find((t) => t.staffId === w.teacherStaff)!.isSample;
+    expect(await marked()).toBe(false);
+    await ctx.db.update(academicBatches).set({ isSample: true }).where(eq(academicBatches.id, w.batch.id));
+    expect(await marked()).toBe(true);
+    await ctx.db.update(academicBatches).set({ isSample: false }).where(eq(academicBatches.id, w.batch.id));
   });
 
   it('a substitute clears the flag', async () => {

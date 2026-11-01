@@ -13,6 +13,10 @@ export {
   retryEnrolmentHandoff,
 } from './enrolment';
 export { changeStudentLifecycle } from './student-lifecycle';
+export { generateStudentReport, setStudentReportStatus, studentReportPdf } from './student-report';
+export { generateTeacherReport, teacherReportPdf } from './teacher-report';
+export { getStudent } from './student-profile';
+export { plansWithLedger } from './fee-agreements';
 export { runFollowUpReminders } from './follow-ups';
 export { APPROVAL_SOURCES, listApprovalInbox, type ApprovalSource } from './approvals';
 export { updateStaff } from './organisation';

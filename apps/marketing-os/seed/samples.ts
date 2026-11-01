@@ -334,7 +334,7 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
     if (i.review === 'changes_requested')
       await changeIdeaStatus(db, manager, idea.id, {
         status: 'changes_requested',
-        reason: 'Name the chapters it covers (sample).',
+        reason: 'Name the chapters it covers.',
       });
     if (i.plan !== undefined)
       calendarIds.push((await planIdea(db, owner, idea.id, { plannedAt: at(i.plan) })).item.id);
@@ -354,11 +354,11 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
     for (const step of STEPS[c.state]!) {
       const reviewer = ['approve', 'request_changes', 'schedule', 'publish'].includes(step);
       await actOnCalendarItem(db, reviewer ? manager : owner, item.id, step, {
-        note: step === 'request_changes' ? 'Use the course page wording (sample).' : undefined,
-        reason: step === 'cancel' ? 'The partner school postponed (sample).' : undefined,
+        note: step === 'request_changes' ? 'Use the course page wording.' : undefined,
+        reason: step === 'cancel' ? 'The partner school postponed.' : undefined,
         evidence:
           step === 'publish'
-            ? 'Sample evidence: screenshot of the post kept in the team folder (sample, nothing was posted).'
+            ? 'Screenshot of the post kept in the team folder; nothing was really posted.'
             : undefined,
         publishedAt: step === 'publish' ? at(c.day!, 12) : undefined,
       });
@@ -376,7 +376,7 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
       observation: [
         'Google search',
         'IPMAT coaching in Sikar',
-        'Sample observation: the page was not in the first ten results.',
+        'The page was not in the first ten results.',
       ],
     },
     {
@@ -389,7 +389,7 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
       observation: [
         'Search AI answer',
         'What current affairs topics come in CLAT?',
-        'Sample observation: the AI answer did not cite the page.',
+        'The AI answer did not cite the page.',
       ],
     },
     {
@@ -402,7 +402,7 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
       observation: [
         'Chat assistant',
         'Which institutes in Sikar coach for CLAT?',
-        'Sample observation: Elevate was not named in the answer.',
+        'Elevate was not named in the answer.',
       ],
     },
   ];
@@ -427,18 +427,18 @@ export async function seedMarketingSamples(db: Database, log: (m: string) => voi
       query: query!,
       observedOn: addDays(today, -10),
       result: `${result} Typed by hand, not connected.`,
-      note: 'Sample observation.',
+      note: 'Typed by hand after a search.',
     });
     if (!w.review) continue;
     await updateOptimisationItem(db, owner, item.id, {
-      evidence: 'Sample evidence: before/after notes in the team folder (sample).',
+      evidence: 'Before and after notes in the team folder.',
       done: [...w.checks],
     });
     await submitOptimisationItem(db, owner, item.id);
     if (w.review === 'approved')
       await reviewOptimisationItem(db, manager, item.id, {
         decision: 'approved',
-        note: 'Checked (sample).',
+        note: 'Checked.',
       });
   }
 

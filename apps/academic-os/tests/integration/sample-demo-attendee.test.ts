@@ -16,7 +16,7 @@ import {
   users,
   type Database,
 } from '@elevate/database';
-import { coreSeeds, defineSeed, runSeeds } from '@elevate/database/seed';
+import { coreSeeds, defineSeed, knownPerson, runSeeds } from '@elevate/database/seed';
 import { addDays, toIsoDate } from '@elevate/shared-types';
 import { setupTestDatabase } from '@elevate/testing';
 import { seeds } from '../../seed';
@@ -59,7 +59,7 @@ const opsStubs = [
         .values({
           code: 'LEAD-990001',
           studentName: 'Diya Sample Student',
-          studentEmail: 'diya.sample@example.test',
+          studentEmail: knownPerson('Diya').email,
           firstReceivedAt: new Date(),
           isSample: true,
           createdBy: by!.id,
@@ -126,7 +126,7 @@ describe('academic sample seeds: demo attendee and the real planning batch', () 
     const [student] = await ctx.db
       .select()
       .from(academicStudents)
-      .where(eq(academicStudents.code, 'STU-DEMO0001'));
+      .where(eq(academicStudents.code, 'STU-00000001'));
     await ctx.db.insert(academicEnrolments).values({
       studentId: student!.id,
       programmeId: planning!.programmeId,

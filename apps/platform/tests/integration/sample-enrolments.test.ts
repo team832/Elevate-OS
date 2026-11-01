@@ -17,7 +17,7 @@ import {
   programmes,
   users,
 } from '@elevate/database';
-import { coreSeeds, runSeeds } from '@elevate/database/seed';
+import { coreSeeds, FAKE_PHONE_PATTERN, knownPerson, runSeeds } from '@elevate/database/seed';
 import { setupTestDatabase } from '@elevate/testing';
 import { runEnrolmentIntake } from '@elevate/academic-os/server';
 import { processEnrolmentReplies } from '@elevate/business-ops-os/server';
@@ -60,7 +60,8 @@ describe('platform.sample-enrolments', () => {
     expect(await ctx.db.$count(opsExitRecords)).toBe(4);
     const academic = await ctx.db.select().from(academicStudents);
     expect(academic).toHaveLength(11);
-    expect(academic.every((s) => / Sample Student$/.test(s.fullName) && !s.phone)).toBe(true);
+    const fake = new RegExp(FAKE_PHONE_PATTERN);
+    expect(academic.filter((s) => !s.isSample || !fake.test(s.phone!))).toEqual([]);
   });
 
   it('db:clear-samples also removes the Academic student and enrolment of each sample admission', async () => {
@@ -75,7 +76,7 @@ describe('platform.sample-enrolments', () => {
 
   it('does nothing while a real (non-sample) enrolment request waits', async () => {
     await runSeeds(ctx.db, [...coreSeeds, ...opsSeeds], context);
-    const zoya = eq(opsLeads.studentEmail, 'zoya.sample@example.test');
+    const zoya = eq(opsLeads.studentEmail, knownPerson('Zoya').email);
     await ctx.db.update(opsLeads).set({ isSample: false }).where(zoya);
     await runSeeds(ctx.db, all, context);
     expect((await statuses()).enrolled).toBeUndefined();

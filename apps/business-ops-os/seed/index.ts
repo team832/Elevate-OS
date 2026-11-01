@@ -17,12 +17,14 @@ import { sampleWorkSeeds } from './sample-work';
 import { sampleSeeds } from './samples';
 
 export { ClearSamplesRefused, clearSamples } from './clear-samples';
-export { seedSampleLifecycle } from './samples';
-export { seedSampleScoreImport } from './sample-score-import';
+export { seedActor, seedSampleLifecycle } from './samples';
+export { seedConfirmedScoreImport, seedSampleScoreImport } from './sample-score-import';
 export { seedFillAdmissions } from './fill-admissions';
 export { seedFillFeedback, seedFillRequests } from './fill-hr';
-export { seedFillAttendance, seedFillPeople } from './fill-people';
+export { seedFillAttendance } from './fill-attendance';
+export { seedFillPeople } from './fill-people';
 export { seedFillTasks } from './fill-tasks';
+export { seedFillWork } from './fill-work';
 
 export const seeds: readonly SeedDefinition[] = [
   ...referenceSeeds,

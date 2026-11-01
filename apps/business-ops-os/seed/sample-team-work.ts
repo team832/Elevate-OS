@@ -197,7 +197,7 @@ export async function seedSampleTeamWork(db: Database, log: (m: string) => void 
   }
   const parent = (await createTask(db, hr.actor, {
     title: 'Share the CA Foundation open-house post on your channels',
-    details: 'Sample parent task: one child per employee, each tracked on its own.',
+    details: 'One copy of this task for each employee, each tracked on its own.',
     assignees: [...people.values()].map((p) => p.staffId!),
     assignedByStaffId: manager.staffId,
     reviewRequired: false,
@@ -221,7 +221,7 @@ export async function seedSampleTeamWork(db: Database, log: (m: string) => void 
     const row = await createHrRequest(db, sender.actor, {
       category: r.category,
       subject: r.subject,
-      message: why('Sample message written for local testing'),
+      message: why('Please see the details in the subject and reply when you can'),
       recipient: r.to === 'manager' ? `staff:${manager.staffId}` : r.to,
       relatedKind: 'none',
       urgency: 'normal',

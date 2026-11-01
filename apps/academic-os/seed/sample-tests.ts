@@ -47,7 +47,7 @@ export { getAssessmentDetail };
 
 type Mark = string | 'A' | '-' | null;
 /** Per roster row (by name): a verified score, `A` absent, `-` present with no score, null unmarked. */
-interface SampleTest {
+export interface SampleTest {
   code: string;
   title: string;
   kind: 'chapter_test' | 'sectional' | 'full_mock';
@@ -239,7 +239,7 @@ export async function placeSampleEnrolments(
       enrolmentId: e.id,
       batchId: batch.id,
       startDate: e.startDate ?? undefined,
-      reason: 'Sample student placed by the development seed.',
+      reason: 'Placed in the batch at enrolment.',
     });
     // No route may set the sample flag.
     await db
@@ -251,7 +251,7 @@ export async function placeSampleEnrolments(
   return placed;
 }
 
-type TestOptions = {
+export type TestOptions = {
   actorEmail: string;
   admissionNumbers: { coreStudentId: string; admissionNumber: string }[];
 };
@@ -277,7 +277,7 @@ export async function seedDemoTeacherTests(db: Database, opts: TestOptions) {
   return missing.length ? writeTests(db, missing, opts) : null;
 }
 
-async function writeTests(db: Database, list: readonly SampleTest[], opts: TestOptions) {
+export async function writeTests(db: Database, list: readonly SampleTest[], opts: TestOptions) {
   const uid = await userId(db, opts.actorEmail);
   if (!uid) return null;
   const actor = await internalActor(db, uid, 'sample-seed');
@@ -304,13 +304,12 @@ async function writeTests(db: Database, list: readonly SampleTest[], opts: TestO
           eq(academicSubjects.code, t.subject),
         ),
       );
-    const teacher = await db.select({ id: users.id }).from(users).where(eq(users.email, t.teacher));
-    const [staff] = teacher[0]
-      ? await db
-          .select({ id: staffMembers.id })
-          .from(staffMembers)
-          .where(eq(staffMembers.userId, teacher[0].id))
-      : [];
+    // By email, or by name for a teacher with no login.
+    const [staff] = await db
+      .select({ id: staffMembers.id })
+      .from(staffMembers)
+      .leftJoin(users, eq(users.id, staffMembers.userId))
+      .where(t.teacher.includes('@') ? eq(users.email, t.teacher) : eq(staffMembers.fullName, t.teacher));
     const id = await createAssessmentInternal(db, actor, {
       code: t.code,
       title: t.title,
@@ -375,7 +374,7 @@ async function writeTests(db: Database, list: readonly SampleTest[], opts: TestO
         version: 1,
         rankingScope: 'roster',
         provisional: false,
-        note: 'Sample results.',
+        note: 'Results shared with the batch.',
       });
   }
   return ids;

@@ -208,7 +208,7 @@ describe('AI drafts', () => {
     for (const headers of [
       ['Riya Sharma', 'EL/2026/014', 'Mr Gupta explains badly about doubts in the evening batch'],
       ['DEMO-T01', '2026-10-19 09:02', 'in', 'Sample Respondent Asha'],
-      ['Teacher', 'Subject', 'Student name'],
+      ['Teacher', 'Course', 'Student name'],
     ])
       expect((await csv(f.u.hr_manager, { kind: 'feedback', headers, samples: [] })).status).toBe(
         200,
@@ -217,7 +217,7 @@ describe('AI drafts', () => {
     expect(out).toContain('0. "[name]"');
     expect(out).toContain('1. "[value]"');
     expect(out).toContain('2. "Mr [name] explains badly about doubts in"');
-    for (const heading of ['0. "Teacher"', '1. "Subject"', '2. "Student name"'])
+    for (const heading of ['0. "Teacher"', '1. "Course"', '2. "Student name"'])
       expect(out).toContain(heading);
     for (const leak of [
       'Riya',

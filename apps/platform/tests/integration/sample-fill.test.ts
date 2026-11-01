@@ -1,13 +1,14 @@
 /**
- * Owner, 31 Oct 2026: "Fill everything, every detail, with mock data", on the rules of D-036. After
- * `npm run db:seed` every screen the owner named has complete fictional records in every state, the
- * demo teacher's login is populated through the services its screens call, no real teacher and no
- * phone number is on a sample row, and db:clear-samples removes it all, puts the Schar setting back
- * to unset and leaves real rows alone.
+ * Owner, 31 Oct 2026: "Fill everything, every detail, with mock data" and "made up everything". After
+ * `npm run db:seed` every screen the owner named has complete made-up records in every state, the
+ * demo teacher's login is populated through the services its screens call, no real teacher is in any
+ * row, every phone is from the fake block, and db:clear-samples removes it all by the record the seed
+ * left (never by a name), puts the Schar setting back to unset and leaves real rows alone; the
+ * reference seed then brings the real teachers back with no sample history.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { eq, sql } from 'drizzle-orm';
-import { hashPassword, type AuthenticatedUser } from '@elevate/authentication';
+import { eq, inArray, sql } from 'drizzle-orm';
+import { checkPassword, hashPassword, type AuthenticatedUser } from '@elevate/authentication';
 import {
   academicBatches,
   academicClassRecords,
@@ -34,7 +35,16 @@ import {
   users,
   type Database,
 } from '@elevate/database';
-import { coreSeeds, disableDemoAccounts, runSeeds, SAMPLE_SCHAR } from '@elevate/database/seed';
+import {
+  COVER_TEACHERS,
+  coreSeeds,
+  everySampleName,
+  FAKE_PHONE_PATTERN,
+  retireSampleLogins,
+  runSeeds,
+  SAMPLE_SCHAR,
+  sampleRowIds,
+} from '@elevate/database/seed';
 import {
   addDays,
   toIsoDate,
@@ -51,6 +61,7 @@ import {
 } from '@elevate/business-ops-os/seed';
 import { seeds as marketingSeeds } from '@elevate/marketing-os/seed';
 import { seeds as platformSeeds } from '../../seed';
+import { referenceSeedList } from '../../../../scripts/release/reference-seeds';
 import { OWNER_SUPPLIED_STAFF } from '../../../business-ops-os/seed/teachers';
 import {
   deriveDays,
@@ -61,7 +72,9 @@ import { myFeedback } from '../../../business-ops-os/src/server/feedback-teacher
 import { hrRequestListQuery } from '../../../business-ops-os/src/server/hr-requests-schemas';
 import { hrQueue } from '../../../business-ops-os/src/server/hr-requests-read';
 import { loadSettings } from '../../../business-ops-os/src/server/settings';
+import { listTeachers as listOpsTeachers } from '../../../business-ops-os/src/server/teachers';
 import { teacherDay } from '../../../academic-os/src/server/services/my-day';
+import { previewPattern } from '../../../academic-os/src/server/services/patterns';
 
 const ctx = setupTestDatabase();
 const db = () => ctx.db as Database;
@@ -91,6 +104,12 @@ const groupCount = async <T extends { status: string }>(list: Promise<T[]>) =>
     (m, r) => ({ ...m, [r.status]: (m[r.status] ?? 0) + 1 }),
     {},
   );
+/** A real person the seeds know nothing about. */
+const realStaff = async (fullName: string) => {
+  const [s] = await db().insert(staffMembers).values({ fullName }).returning();
+  await db().insert(opsStaffProfiles).values({ staffId: s!.id });
+  return s!;
+};
 const states = async (
   table: Parameters<ReturnType<Database['select']>['from']>[0] & { isSample: never; status: never },
 ) => groupCount(db().select().from(table).where(eq(table.isSample, true)) as never);
@@ -152,7 +171,7 @@ describe('tasks', () => {
 });
 
 describe('people and attendance', () => {
-  it('names the fictional Schar for the sample set', async () => {
+  it('names the made-up Schar for the sample set', async () => {
     const schar = await userOf(SAMPLE_SCHAR.email);
     expect((await loadSettings(db()))['hr.request_recipients'].value).toEqual({
       schar: schar.staffId,
@@ -187,7 +206,7 @@ describe('people and attendance', () => {
 
   it('a sample holiday changes no real person’s day, even one on the real branch', async () => {
     const [sikar] = await db().select().from(branches).where(eq(branches.code, 'SIKAR'));
-    const [real] = await db().select().from(staffMembers).where(eq(staffMembers.fullName, 'Sobha'));
+    const real = await realStaff('Mohit Nandan');
     await db()
       .update(opsStaffProfiles)
       .set({ branchId: sikar!.id })
@@ -219,20 +238,176 @@ describe('people and attendance', () => {
     expect(r!.n).toBe(0);
   });
 
-  it('no sample row has a phone number', async () => {
+  it('every phone column is filled, and only from the fake block', async () => {
     const columns = await rows(
       `SELECT c.table_schema || '.' || c.table_name AS t, c.column_name AS c FROM information_schema.columns c
-       WHERE c.table_schema IN ('ops', 'academic', 'marketing', 'core') AND c.column_name LIKE '%phone%'
-         AND c.column_name NOT LIKE '%verified%' AND c.column_name NOT LIKE '%consent%'
-         AND c.table_name IN ('leads', 'guardians', 'students', 'staff_private_details')`,
+       WHERE c.table_schema IN ('ops', 'academic', 'marketing', 'core')
+         AND c.column_name ~ 'phone|mobile|whatsapp'`,
     );
-    expect(columns.length).toBeGreaterThan(3);
+    expect(columns.length).toBe(8);
     for (const { t, c } of columns) {
       const [r] = await rows(
-        `SELECT count(*)::int AS n FROM ${String(t)} WHERE ${String(c)} IS NOT NULL`,
+        `SELECT count(*) FILTER (WHERE ${String(c)} IS NULL)::int AS blank,
+           count(*) FILTER (WHERE ${String(c)} !~ '${FAKE_PHONE_PATTERN}')::int AS other,
+           count(*)::int AS n FROM ${String(t)}`,
       );
-      expect(r!.n, `${String(t)}.${String(c)}`).toBe(0);
+      expect(r, `${String(t)}.${String(c)}`).toMatchObject({ blank: 0, other: 0 });
+      expect(r!.n, `${String(t)}.${String(c)}`).toBeGreaterThan(0);
     }
+  });
+
+  it('no row anywhere holds a word of a real teacher’s name', async () => {
+    const words = OWNER_SUPPLIED_STAFF.flatMap((t) => t.fullName.split(' ')).filter(
+      (w) => w !== "Ma'am",
+    );
+    const pattern = `\\m(${[...new Set(words)].join('|')})\\M`;
+    const [control] = await rows(`SELECT 'on leave: Sobha.' ~* '${pattern}' AS hit`);
+    expect(control!.hit).toBe(true);
+    const tables = await rows(
+      `SELECT table_schema || '.' || table_name AS t FROM information_schema.tables
+       WHERE table_schema IN ('core', 'ops', 'academic', 'marketing') AND table_type = 'BASE TABLE'`,
+    );
+    expect(tables.length).toBeGreaterThan(100);
+    const found: string[] = [];
+    for (const { t } of tables) {
+      const [r] = await rows(
+        `SELECT count(*)::int AS n FROM ${String(t)} x WHERE x::text ~* '${pattern}'`,
+      );
+      if (r!.n) found.push(String(t));
+    }
+    expect(found).toEqual([]);
+  });
+
+  it.each([
+    ['core.users', 'display_name'],
+    ['core.staff_members', 'full_name'],
+    ['core.students', 'full_name'],
+    ['academic.students', 'full_name'],
+    ['academic.students', 'guardian_name'],
+    ['academic.session_demo_attendees', 'display_name'],
+    ['ops.leads', 'student_name'],
+    ['ops.leads', 'guardian_name'],
+    ['ops.leads', 'emergency_contact_name'],
+    ['ops.guardians', 'full_name'],
+    ['ops.staff_private_details', 'emergency_contact_name'],
+  ])('%s.%s holds normal two-word names only', async (table, column) => {
+    const wrong = await rows(
+      `SELECT ${column} AS name FROM ${table} WHERE ${column} !~ '^[A-Z][a-z]+ [A-Z][a-z]+$'
+         OR ${column} ~* '(sample|demo|test|mock|fictional|teacher|manager|parent|student)'`,
+    );
+    expect(wrong).toEqual([]);
+    expect(await rows(`SELECT 1 FROM ${table} LIMIT 1`)).toHaveLength(1);
+  });
+
+  it.each([
+    ['academic.batches', 'code', 'is_sample'],
+    ['academic.batches', 'name', 'is_sample'],
+    ['academic.assessments', 'code', 'is_sample'],
+    ['academic.assessments', 'title', 'is_sample'],
+    ['academic.rooms', 'name', 'true'],
+    ['marketing.campaigns', 'code', 'is_sample'],
+    ['marketing.campaigns', 'name', 'is_sample'],
+    ['marketing.calendar_items', 'title', 'is_sample'],
+    ['marketing.ideas', 'title', 'is_sample'],
+    ['marketing.optimisation_items', 'topic', 'is_sample'],
+    ['marketing.metric_imports', 'file_name', 'true'],
+    ['ops.staff_tasks', 'title', 'is_sample'],
+    ['ops.hr_requests', 'subject', 'is_sample'],
+    ['ops.follow_ups', 'title', 'true'],
+    ['ops.appointments', 'title', 'title IS NOT NULL'],
+    ['ops.work_schedules', 'name', 'true'],
+    ['ops.holidays', 'name', 'true'],
+    ['core.branches', 'name', 'true'],
+    ['core.staff_members', 'title', 'true'],
+    ['ops.staff_profiles', 'staff_code', 'is_sample'],
+  ])('%s.%s reads like a real one', async (table, column, where) => {
+    expect(
+      await rows(
+        `SELECT ${column} AS title FROM ${table} WHERE ${where} AND ${column} ~* 'sample|fictional|\\mdemo account\\M'`,
+      ),
+    ).toEqual([]);
+  });
+
+  it('every sample student has a father and a mother with a name, email, number and address', async () => {
+    const families = await rows(
+      `SELECT s.id, count(DISTINCT g.relationship)::int AS parents,
+         count(g.email)::int AS emails, count(g.phone)::int AS phones, count(g.address)::int AS addresses
+       FROM core.students s LEFT JOIN ops.guardians g ON g.student_id = s.id WHERE s.is_sample GROUP BY 1`,
+    );
+    expect(families.length).toBeGreaterThan(20);
+    expect(
+      families.filter(
+        (f) => f.parents !== 2 || f.emails !== 2 || f.phones !== 2 || f.addresses !== 2,
+      ),
+    ).toEqual([]);
+    // A lead with no student record holds the other parent as its emergency contact.
+    expect(
+      await rows(
+        `SELECT student_name FROM ops.leads WHERE is_sample AND (guardian_name = emergency_contact_name
+           OR address IS NULL OR previous_school IS NULL OR school_board IS NULL OR city IS NULL OR date_of_birth IS NULL)`,
+      ),
+    ).toEqual([]);
+    expect(
+      await rows(
+        `SELECT full_name FROM academic.students WHERE is_sample AND (date_of_birth IS NULL
+           OR school_board IS NULL OR city IS NULL OR guardian_name IS NULL OR guardian_email IS NULL)`,
+      ),
+    ).toEqual([]);
+  });
+
+  it('every sample staff member has private details', async () => {
+    expect(
+      await rows(
+        `SELECT p.staff_id FROM ops.staff_profiles p LEFT JOIN ops.staff_private_details d ON d.staff_id = p.staff_id
+         WHERE p.is_sample AND (d.staff_id IS NULL OR d.address IS NULL OR d.personal_email IS NULL OR d.emergency_contact_name IS NULL)`,
+      ),
+    ).toEqual([]);
+  });
+
+  it('made-up teachers hold the real teachers’ subjects with assignments on sample batches', async () => {
+    for (const t of COVER_TEACHERS) {
+      const [row] = await rows(
+        `SELECT (SELECT count(*)::int FROM ops.staff_subject_capabilities c WHERE c.staff_id = m.id) AS subjects,
+           (SELECT count(*)::int FROM academic.teacher_assignments a JOIN academic.batches b ON b.id = a.batch_id
+             WHERE a.staff_member_id = m.id AND a.status = 'active' AND b.is_sample) AS assignments
+         FROM core.staff_members m WHERE m.full_name = '${t.fullName}'`,
+      );
+      expect(row, t.fullName).toEqual({
+        subjects: t.subjects.length,
+        assignments: t.assignments.length,
+      });
+    }
+  });
+
+  it('Ops marks its teachers by its own flag', async () => {
+    const { user } = await userOf('operations-manager@example.test');
+    const { teachers } = await listOpsTeachers(db(), user);
+    expect(teachers.length).toBeGreaterThan(10);
+    expect(teachers.filter((t) => !t.isSample)).toEqual([]);
+  });
+
+  it('RL1-004: the seeded metric import has the shape the import page reads', async () => {
+    const [imported] = await rows(`SELECT rejected FROM marketing.metric_imports`);
+    expect(imported!.rejected).toEqual([
+      { rowNumber: 1, reasons: [expect.any(String)] },
+      { rowNumber: 2, reasons: [expect.any(String)] },
+    ]);
+  });
+
+  it('RL1-005: the seeded weekly pattern has an end date and its page opens', async () => {
+    const [pattern] = await db().select().from(academicTimetablePatterns);
+    expect(pattern!.effectiveTo).not.toBeNull();
+    const { user } = await userOf('academic-coordinator@example.test');
+    await expect(previewPattern(db(), { user } as never, pattern!.id)).resolves.toBeTruthy();
+  });
+
+  it('RL1-007: every placement of a sample student is marked sample', async () => {
+    expect(
+      await rows(
+        `SELECT p.id FROM academic.batch_placements p JOIN academic.enrolments e ON e.id = p.enrolment_id
+         JOIN academic.students s ON s.id = e.student_id WHERE s.is_sample AND NOT p.is_sample`,
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -244,7 +419,7 @@ describe('requests through HR', () => {
     const [answered] = await db()
       .select()
       .from(opsHrRequests)
-      .where(eq(opsHrRequests.subject, 'Dates for the campus visit (sample)'));
+      .where(eq(opsHrRequests.subject, 'Dates for the campus visit'));
     const kinds = (
       await db()
         .select()
@@ -321,34 +496,50 @@ describe('db:clear-samples after the fill', () => {
   it('removes the fill, puts the Schar setting back to unset and keeps real rows', async () => {
     const hr = await userOf('hr-manager@example.test');
     // Real rows that sit beside the fill, and a real person on a sample schedule.
+    // Real rows named the way sample rows once were stay: a name decides nothing.
     await db()
       .insert(opsWorkSchedules)
-      .values({ name: 'Real office hours', weeklyPattern: {} as never, createdBy: hr.user.id });
+      .values([
+        { name: 'Real office hours', weeklyPattern: {} as never, createdBy: hr.user.id },
+        { name: 'Sample schedule: ours', weeklyPattern: {} as never, createdBy: hr.user.id },
+      ]);
     await db()
       .insert(opsHolidays)
-      .values({ holidayOn: '2027-01-26', name: 'Republic Day', createdBy: hr.user.id });
-    await db().insert(academicRooms).values({ code: 'ROOM-1', name: 'Real room' });
-    const [sampleSchedule] = await rows(
-      `SELECT id FROM ops.work_schedules WHERE name LIKE 'Sample schedule%' LIMIT 1`,
-    );
-    const [realStaff] = await db()
-      .select()
-      .from(staffMembers)
-      .where(eq(staffMembers.fullName, "Olivia Ma'am"));
+      .values([
+        { holidayOn: '2027-01-26', name: 'Republic Day', createdBy: hr.user.id },
+        { holidayOn: '2027-01-27', name: 'Sample holiday: ours', createdBy: hr.user.id },
+      ]);
+    await db()
+      .insert(academicRooms)
+      .values([
+        { code: 'ROOM-1', name: 'Real room' },
+        { code: 'SAMPLE-OURS', name: 'Sample room we really have' },
+      ]);
+    const [sampleScheduleId] = await sampleRowIds(db(), 'ops.work_schedules');
+    const teacher = await realStaff('Rupesh Nandan');
     await db()
       .update(opsStaffProfiles)
-      .set({ workScheduleId: sampleSchedule!.id as never })
-      .where(eq(opsStaffProfiles.staffId, realStaff!.id));
+      .set({ workScheduleId: sampleScheduleId as never })
+      .where(eq(opsStaffProfiles.staffId, teacher.id));
     // Real work put on the sample room and the sample branch: unlinked, never deleted or blocking.
-    const [sampleRoom] = await db().select().from(academicRooms).limit(1);
+    const [sampleRoomId] = await sampleRowIds(db(), 'academic.rooms');
+    const [sampleRoom] = await db()
+      .select()
+      .from(academicRooms)
+      .where(eq(academicRooms.id, sampleRoomId as never));
+    // A sample row someone renamed on screen still goes.
+    await db()
+      .update(academicRooms)
+      .set({ name: 'Renamed on screen' })
+      .where(eq(academicRooms.id, sampleRoom!.id));
     const [sampleBranch] = await db()
       .select()
       .from(branches)
-      .where(eq(branches.code, 'SAMPLE_BRANCH'));
+      .where(eq(branches.code, 'FATEHPUR_ROAD'));
     await db()
       .update(opsStaffProfiles)
       .set({ branchId: sampleBranch!.id })
-      .where(eq(opsStaffProfiles.staffId, realStaff!.id));
+      .where(eq(opsStaffProfiles.staffId, teacher.id));
     const [batch] = await db()
       .select()
       .from(academicBatches)
@@ -372,7 +563,7 @@ describe('db:clear-samples after the fill', () => {
       .values({
         batchId: batch!.id,
         subjectId: quant!.id,
-        staffId: realStaff!.id,
+        staffId: teacher.id,
         roomId: sampleRoom!.id,
         weekday: 1,
         startTime: '09:00',
@@ -400,7 +591,7 @@ describe('db:clear-samples after the fill', () => {
 
     const lines: string[] = [];
     const deleted = await clearSamples(db(), (l) => lines.push(l));
-    await disableDemoAccounts(db());
+    await retireSampleLogins(db());
 
     for (const table of [
       'ops.work_schedules',
@@ -436,20 +627,112 @@ describe('db:clear-samples after the fill', () => {
     expect(patternAfter!.roomId).toBeNull();
     expect((await loadSettings(db()))['hr.request_recipients'].value).toEqual({ schar: null });
     expect(await db().$count(opsSettings, eq(opsSettings.key, 'hr.request_recipients'))).toBe(0);
-    expect((await db().select().from(opsWorkSchedules)).map((s) => s.name)).toEqual([
+    expect((await db().select().from(opsWorkSchedules)).map((s) => s.name).sort()).toEqual([
       'Real office hours',
+      'Sample schedule: ours',
     ]);
-    expect((await db().select().from(opsHolidays)).map((h) => h.name)).toEqual(['Republic Day']);
-    expect((await db().select().from(academicRooms)).map((r) => r.code)).toEqual(['ROOM-1']);
+    expect((await db().select().from(opsHolidays)).map((h) => h.name).sort()).toEqual([
+      'Republic Day',
+      'Sample holiday: ours',
+    ]);
+    expect((await db().select().from(academicRooms)).map((r) => r.code).sort()).toEqual([
+      'ROOM-1',
+      'SAMPLE-OURS',
+    ]);
     const [profile] = await db()
       .select()
       .from(opsStaffProfiles)
-      .where(eq(opsStaffProfiles.staffId, realStaff!.id));
+      .where(eq(opsStaffProfiles.staffId, teacher.id));
     expect(profile).toMatchObject({ workScheduleId: null, branchId: null });
     expect(await rows(`SELECT id FROM ops.appointments`)).toEqual([]);
     expect(await rows(`SELECT id FROM marketing.metric_imports`)).toEqual([]);
     expect(await clearSamples(db())).toEqual({});
   });
+
+  it('every surviving login and staff record reads as removed, and none can sign in', async () => {
+    const logins = await db().select().from(users);
+    expect(logins.length).toBeGreaterThan(20);
+    expect(
+      logins.filter(
+        (u) =>
+          !u.displayName.startsWith('Removed sample login ') ||
+          u.status !== 'disabled' ||
+          u.passwordHash !== null,
+      ),
+    ).toEqual([]);
+    expect(
+      await checkPassword(db(), 'hr-manager@example.test', context.seedUserPassword),
+    ).toBeNull();
+    const kept = await rows(
+      `SELECT m.full_name, m.status, p.display_name FROM core.staff_members m
+       JOIN ops.staff_profiles p ON p.staff_id = m.id WHERE p.is_sample`,
+    );
+    expect(kept.length).toBeGreaterThan(20);
+    expect(
+      kept.filter(
+        (s) =>
+          !String(s.full_name).startsWith('Removed sample staff ') ||
+          s.status !== 'inactive' ||
+          s.display_name !== null,
+      ),
+    ).toEqual([]);
+    // The audit trail and the event outbox are append-only history; nothing else keeps a made-up name.
+    const pattern = everySampleName().join('|');
+    const tables = await rows(
+      `SELECT table_schema || '.' || table_name AS t FROM information_schema.tables
+       WHERE table_schema IN ('core', 'ops', 'academic', 'marketing') AND table_type = 'BASE TABLE'
+         AND table_name NOT IN ('audit_events', 'integration_events')`,
+    );
+    const found: string[] = [];
+    for (const { t } of tables)
+      if ((await rows(`SELECT 1 FROM ${String(t)} x WHERE x::text ~ '${pattern}' LIMIT 1`)).length)
+        found.push(String(t));
+    expect(found).toEqual([]);
+  });
+
+  it('the reference seed then brings the real teachers back with no sample history', async () => {
+    await runSeeds(db(), referenceSeedList(['owner-staff']), context);
+    const real = await db()
+      .select({
+        id: staffMembers.id,
+        userId: staffMembers.userId,
+        isSample: opsStaffProfiles.isSample,
+      })
+      .from(staffMembers)
+      .innerJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id))
+      .where(
+        inArray(
+          staffMembers.fullName,
+          OWNER_SUPPLIED_STAFF.map((t) => t.fullName),
+        ),
+      );
+    expect(real).toHaveLength(OWNER_SUPPLIED_STAFF.length);
+    expect(real.filter((r) => r.userId || r.isSample)).toEqual([]);
+    const ids = real.map((r) => `'${r.id}'`).join(', ');
+    for (const [table, column] of [
+      ['ops.staff_tasks', 'staff_id'],
+      ['ops.eod_reports', 'staff_id'],
+      ['ops.attendance_punches', 'staff_id'],
+      ['ops.leave_applications', 'staff_id'],
+      ['ops.staff_private_details', 'staff_id'],
+      ['ops.student_teacher_feedback', 'teacher_staff_id'],
+      ['ops.demo_sessions', 'teacher_staff_id'],
+      ['ops.appointments', 'staff_id'],
+      ['academic.class_sessions', 'teacher_staff_id'],
+      ['academic.session_teachers', 'staff_id'],
+      ['academic.timetable_patterns', 'staff_id'],
+    ]) {
+      const [r] = await rows(`SELECT count(*)::int AS n FROM ${table} WHERE ${column} IN (${ids})`);
+      expect(r!.n, table).toBe(0);
+    }
+    // Their assignments are the owner's, on real batches or none.
+    expect(
+      await rows(
+        `SELECT 1 FROM academic.teacher_assignments a JOIN academic.batches b ON b.id = a.batch_id
+         WHERE a.staff_member_id IN (${ids}) AND b.is_sample`,
+      ),
+    ).toEqual([]);
+  }, 120_000);
 
   it('never overwrites a Schar someone chose on the screen', async () => {
     const hr = await userOf('hr-manager@example.test');

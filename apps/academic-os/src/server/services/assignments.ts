@@ -46,6 +46,7 @@ const assignmentRows = (db: Database, where: SQL | undefined) =>
       id: t.id,
       batchId: t.batchId,
       batchCode: academicBatches.code,
+      batchIsSample: academicBatches.isSample,
       subjectId: t.subjectId,
       subjectCode: academicSubjects.code,
       subjectName: academicSubjects.name,

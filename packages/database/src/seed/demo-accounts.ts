@@ -1,9 +1,16 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, like, or, sql } from 'drizzle-orm';
 import type { RoleKey, StaffMemberId, UserId } from '@elevate/shared-types';
 import type { Database } from '../client';
-import { departments, staffMembers, userRoles, users } from '../schema/core';
+import {
+  departments,
+  notifications,
+  sessions,
+  staffMembers,
+  userRoles,
+  users,
+} from '../schema/core';
 import { opsStaffProfiles } from '../schema/ops';
-import { COVER_TEACHERS, PEOPLE } from './sample-people';
+import { COVER_TEACHERS, FORMER_DEV_LOGINS, PEOPLE } from './sample-people';
 import { syncStaffHistory } from './staff-history';
 
 /**
@@ -59,8 +66,8 @@ export const [POOJA_EMAIL, ROHIT_EMAIL] = MARKETING_EMPLOYEES.map((e) => e.email
   string,
 ];
 export const SAMPLE_MARKETING_MANAGER_EMAIL = 'marketing-manager@example.test';
-/** Free text written by a seed, labelled: `Call back (sample).` */
-export const sampleText = (s: string) => `${s} (sample).`;
+/** Free text written by a seed, one sentence. */
+export const sampleText = (s: string) => `${s}.`;
 
 /**
  * The fictional person the sample set names as Schar (setting hr.request_recipients, D-096), so a
@@ -68,9 +75,8 @@ export const sampleText = (s: string) => `${s} (sample).`;
  * puts the setting back to unset. The role is the narrowest that can answer a forwarded request.
  */
 export const SAMPLE_SCHAR = {
-  email: 'schar.sample@example.test',
+  email: 'schar.mathur@elevateeducation.in',
   displayName: PEOPLE.schar,
-  formerNames: ['Sample Schar (fictional)'],
   role: 'admissions_counsellor',
   department: 'LEADERSHIP_OPERATIONS',
   title: 'Executive assistant',
@@ -118,14 +124,14 @@ export const DEMO_EMAILS: readonly string[] = DEMO_ACCOUNTS.map((a) => a.email);
 /**
  * Development assumptions (brief 23 Oct 2026 §4, rulings R10 and PLAN): four teacher logins for
  * local testing only, each linked to a made-up teacher (COVER_TEACHERS, owner 31 Oct 2026: "made up
- * everything"), with the teacher role and the same guards as the demo accounts. The addresses stay
- * because other scripts sign in with them; no real person is linked. Teaching assignments come from
- * Academic's sample seed, never from the email. `db:clear-samples` disables these logins.
+ * everything"), with the teacher role and the same guards as the demo accounts. Addresses are
+ * written out here because the release preflight reads them from this file. No real person is linked.
+ * Teaching assignments come from Academic's sample seed, never from the email. `db:clear-samples`
+ * disables these logins.
  */
-const devAccount = (email: string, staffFullName: string, formerName: string) => ({
+const devAccount = (email: string, staffFullName: string) => ({
   email,
   displayName: staffFullName,
-  formerNames: [formerName],
   role: 'teacher' as const,
   staffFullName,
 });
@@ -133,29 +139,21 @@ const coverName = (subject: string) =>
   COVER_TEACHERS.find((t) => (t.subjects as readonly string[]).includes(subject))!.fullName;
 
 export const DEV_ASSUMPTION_ACCOUNTS = [
+  devAccount('kunal.vyas@elevateeducation.in', coverName('Class 11 Mathematics')),
+  devAccount('lata.krishnan@elevateeducation.in', coverName('CLAT Current Affairs')),
+  devAccount('ramesh.chandak@elevateeducation.in', coverName('CUET Accountancy')),
   devAccount(
-    'satish@elevateeducation.in',
-    coverName('Class 11 Mathematics'),
-    'Satish Raghuvanshi (development assumption)',
-  ),
-  devAccount(
-    'soma@elevateeducation.in',
-    coverName('CLAT Current Affairs'),
-    'Soma (development assumption, owner to confirm)',
-  ),
-  devAccount(
-    'nikunjbindal@elevateeducation.in',
-    coverName('CUET Accountancy'),
-    'Nikunj Bindal (development assumption)',
-  ),
-  devAccount(
-    'tushar@elevateeducation.in',
+    'siddharth.rao@elevateeducation.in',
     coverName('IPM / IIM Bangalore-oriented programmes'),
-    'Tushar Bhakte (development assumption)',
   ),
 ];
 
 const DEV_EMAILS: readonly string[] = DEV_ASSUMPTION_ACCOUNTS.map((a) => a.email);
+/** Only as an older seed named them: a real person's own account at that address is left alone. */
+const FORMER_DEV = and(
+  inArray(users.email, FORMER_DEV_LOGINS),
+  like(users.displayName, '%(development assumption%'),
+);
 
 /** Throws unless this is a development run against a local database with a usable password. */
 export function assertDemoSeedAllowed(input: {
@@ -171,6 +169,9 @@ export function assertDemoSeedAllowed(input: {
 
 type Named = { email: string; displayName: string; formerNames?: readonly string[] };
 
+const REMOVED_LOGIN = 'Removed sample login';
+const REMOVED_STAFF = 'Removed sample staff';
+
 /** Emails among `accounts` held by an account this seed did not create. */
 async function foreignEmails(db: Database, accounts: readonly Named[]) {
   const existing = await db
@@ -185,7 +186,10 @@ async function foreignEmails(db: Database, accounts: readonly Named[]) {
   return existing
     .filter((u) => {
       const a = accounts.find((x) => x.email === u.email)!;
-      return ![a.displayName, ...(a.formerNames ?? [])].includes(u.displayName);
+      return (
+        !u.displayName.startsWith(REMOVED_LOGIN) &&
+        ![a.displayName, ...(a.formerNames ?? [])].includes(u.displayName)
+      );
     })
     .map((u) => u.email);
 }
@@ -368,7 +372,7 @@ export async function disableDemoAccounts(db: Database): Promise<number> {
   const rows = await db
     .update(users)
     .set({ status: 'disabled', passwordHash: null })
-    .where(inArray(users.email, [...DEMO_EMAILS, ...DEV_EMAILS]))
+    .where(or(inArray(users.email, [...DEMO_EMAILS, ...DEV_EMAILS]), FORMER_DEV))
     .returning({ id: users.id });
   const ids = rows.map((r) => r.id);
   if (!ids.length) return 0;
@@ -378,6 +382,53 @@ export async function disableDemoAccounts(db: Database): Promise<number> {
     .update(staffMembers)
     .set({ userId: null })
     .where(and(inArray(staffMembers.userId, ids), real));
-  await db.update(staffMembers).set({ status: 'inactive' }).where(inArray(staffMembers.userId, ids));
+  await db
+    .update(staffMembers)
+    .set({ status: 'inactive' })
+    .where(inArray(staffMembers.userId, ids));
   return rows.length;
+}
+
+/**
+ * The last step of `db:clear-samples`. Sample logins and their staff records stay because other
+ * records point at them, but a normal English name in Users & roles would read as a real employee:
+ * each now reads as removed, cannot sign in and has no open session or notice. @example.test is never a real
+ * account (D-030). Running `db:seed` again restores them. Returns how many logins.
+ */
+export async function retireSampleLogins(db: Database): Promise<number> {
+  await disableDemoAccounts(db);
+  const sampleStaff = sql`SELECT ${opsStaffProfiles.staffId} FROM ${opsStaffProfiles} WHERE ${opsStaffProfiles.isSample}`;
+  const retired = await db
+    .update(users)
+    .set({
+      displayName: sql`${REMOVED_LOGIN} || ' ' || left(${users.id}::text, 6)`,
+      status: 'disabled',
+      passwordHash: null,
+    })
+    .where(
+      or(
+        like(users.email, '%@example.test'),
+        inArray(users.email, [...DEMO_EMAILS, ...DEV_EMAILS]),
+        FORMER_DEV,
+        sql`${users.id} IN (SELECT ${staffMembers.userId} FROM ${staffMembers} WHERE ${staffMembers.id} IN (${sampleStaff}))`,
+      ),
+    )
+    .returning({ id: users.id });
+  const ids = retired.map((r) => r.id);
+  await db.delete(sessions).where(inArray(sessions.userId, ids));
+  // Nobody can read these any more, and they repeat made-up names.
+  await db.delete(notifications).where(inArray(notifications.userId, ids));
+  await db
+    .update(staffMembers)
+    .set({
+      fullName: sql`${REMOVED_STAFF} || ' ' || left(${staffMembers.id}::text, 6)`,
+      title: null,
+      status: 'inactive',
+    })
+    .where(or(sql`${staffMembers.id} IN (${sampleStaff})`, inArray(staffMembers.userId, ids)));
+  await db
+    .update(opsStaffProfiles)
+    .set({ displayName: null })
+    .where(eq(opsStaffProfiles.isSample, true));
+  return retired.length;
 }

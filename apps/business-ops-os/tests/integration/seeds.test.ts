@@ -37,14 +37,21 @@ import {
   opsTaskDependencies,
   programmes,
 } from '@elevate/database';
-import { coreSeeds, runSeeds } from '@elevate/database/seed';
+import {
+  COVER_TEACHERS,
+  coreSeeds,
+  FAKE_PHONE_PATTERN,
+  PEOPLE,
+  runSeeds,
+  SUBJECT_TEACHERS,
+} from '@elevate/database/seed';
 import { setupTestDatabase } from '@elevate/testing';
 import { clearSamples, seeds } from '../../seed';
 import { SAMPLE_LEAD_COUNT, SAMPLE_STUDENTS } from '../../seed/samples';
 import { SAMPLE_MARKETING_LEADS } from '../../seed/sample-leads';
 import { ALLOWED_PROGRAMME_COMBINATIONS } from '../../src/domain/catalog';
 import { istToday } from '../../src/domain';
-import { OWNER_SUPPLIED_STAFF } from '../../seed/teachers';
+import { OWNER_SUPPLIED_STAFF, seedTeachers } from '../../seed/teachers';
 import {
   NO_MANAGER_CODE,
   SAMPLE_MANAGER,
@@ -55,10 +62,11 @@ import { SAMPLE_EODS, SAMPLE_TASKS } from '../../seed/sample-work';
 
 const ctx = setupTestDatabase();
 const context = { seedUserPassword: 'test-only-seed-password', hashPassword, log: () => {} };
-const SAMPLE_NAME = /^(\w+ Sample Student|Tanisha Demo Student)$/;
+const NORMAL_NAME = /^[A-Z][a-z]+ [A-Z][a-z]+$/;
+const FAKE_PHONE = new RegExp(FAKE_PHONE_PATTERN);
 
 describe('Business Ops seeds (D-036 sample set)', () => {
-  it('are idempotent and hold one clearly-named sample set plus the owner-supplied staff', async () => {
+  it('are idempotent and hold one sample set of made-up people, no owner-supplied staff', async () => {
     await runSeeds(ctx.db, [...coreSeeds, ...seeds], context);
     await runSeeds(ctx.db, [...coreSeeds, ...seeds], context);
 
@@ -68,13 +76,15 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     expect(leads).toHaveLength(SAMPLE_LEAD_COUNT + SAMPLE_MARKETING_LEADS.length);
     expect(new Set(leads.map((l) => l.studentName)).size).toBe(leads.length);
     for (const l of leads) {
-      expect(l).toMatchObject({ isSample: true, studentPhone: null, guardianPhone: null });
-      expect(l.studentName).toMatch(SAMPLE_NAME);
+      expect(l.isSample).toBe(true);
+      expect(l.studentPhone).toMatch(FAKE_PHONE);
+      expect(l.guardianPhone).toMatch(FAKE_PHONE);
+      expect(l.studentName).toMatch(NORMAL_NAME);
       expect(l.studentEmail).toMatch(/@example\.test$/);
     }
     expect((await ctx.db.select().from(students)).every((s) => s.isSample)).toBe(true);
 
-    // Staff: owner-supplied real people, or "Sample …" with a sample profile.
+    // Staff: made-up people with a sample profile; the real people come from the reference seed only.
     const staff = await ctx.db
       .select({
         id: staffMembers.id,
@@ -85,14 +95,8 @@ describe('Business Ops seeds (D-036 sample set)', () => {
       .from(staffMembers)
       .leftJoin(opsStaffProfiles, eq(opsStaffProfiles.staffId, staffMembers.id));
     const ownerSupplied = new Set<string>(OWNER_SUPPLIED_STAFF.map((s) => s.fullName));
-    const real = staff.filter((s) => ownerSupplied.has(s.fullName));
-    expect(real).toHaveLength(OWNER_SUPPLIED_STAFF.length);
-    expect(real.every((s) => s.userId === null && !s.isSample)).toBe(true);
-    expect(
-      staff
-        .filter((s) => !ownerSupplied.has(s.fullName))
-        .every((s) => s.isSample && s.fullName.startsWith('Sample ')),
-    ).toBe(true);
+    expect(staff.filter((s) => ownerSupplied.has(s.fullName))).toEqual([]);
+    expect(staff.filter((s) => !s.isSample || !NORMAL_NAME.test(s.fullName))).toEqual([]);
 
     // HR history (open rows) equals the current department and manager after seeding twice.
     expect(await ctx.db.$count(opsStaffDepartments)).toBeGreaterThan(0);
@@ -104,13 +108,6 @@ describe('Business Ops seeds (D-036 sample set)', () => {
         OR m.manager_id IS DISTINCT FROM h.manager_staff_id`)) as { rows: unknown[] };
     expect(drift.rows).toEqual([]);
 
-    // Real teachers are never given a sample class or meeting.
-    const realIds = real.map((s) => s.id);
-    expect(
-      await ctx.db.$count(opsDemoSessions, inArray(opsDemoSessions.teacherStaffId, realIds)),
-    ).toBe(0);
-    expect(await ctx.db.$count(opsAppointments, inArray(opsAppointments.staffId, realIds))).toBe(0);
-
     // Every demo session has the sample teacher of its subject.
     const sessions = await ctx.db
       .select({ subject: opsDemoSessions.subject, teacher: staffMembers.fullName })
@@ -119,7 +116,9 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     expect(sessions).toHaveLength(SAMPLE_STUDENTS.length * 3);
     for (const s of sessions)
       expect(s.teacher).toBe(
-        s.subject === 'Mathematics' ? 'Sample Maths Teacher' : `Sample ${s.subject} Teacher`,
+        s.subject === 'Mathematics'
+          ? PEOPLE.mathsTeacher
+          : SUBJECT_TEACHERS.find(([, subject]) => subject === s.subject)![0],
       );
 
     // Cases: outcomes, applications, admission numbers (3 digits, D-037), fee plans.
@@ -245,7 +244,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     expect(manager!.role).toBe('academic_coordinator');
     for (const t of teachers) {
       expect(t).toMatchObject({ role: 'teacher', isSample: true, note: SAMPLE_STAFF_LABEL });
-      expect(t.name).toMatch(/^Sample /);
+      expect(t.name).toMatch(NORMAL_NAME);
       expect(t.email).toMatch(/^[a-z]+\.[a-z]+@example\.test$/);
       expect(t.managerId).toBe(t.code === NO_MANAGER_CODE ? null : manager!.staffId);
     }
@@ -337,6 +336,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
   });
 
   it('db:clear-samples removes every sample row and keeps the owner-supplied staff', async () => {
+    await seedTeachers(ctx.db);
     // An Academic sample batch and student (normally from the Academic seed) go too.
     const [programme] = await ctx.db.select().from(programmes).limit(1);
     const [course] = await ctx.db
@@ -362,7 +362,7 @@ describe('Business Ops seeds (D-036 sample set)', () => {
     expect(counts['academic.batches']).toBe(1);
     expect(counts['academic.students']).toBe(1);
     expect(counts['ops.leads']).toBe(SAMPLE_LEAD_COUNT + SAMPLE_MARKETING_LEADS.length);
-    expect(counts['core.staff_members']).toBe(6); // the sample teachers without logins
+    expect(counts['core.staff_members']).toBe(SUBJECT_TEACHERS.length + COVER_TEACHERS.length); // the sample teachers without logins
     expect(counts['ops.fee_structures']).toBe(ALLOWED_PROGRAMME_COMBINATIONS.length);
     for (const table of [
       opsLeads,

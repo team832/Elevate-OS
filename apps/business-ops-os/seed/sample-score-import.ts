@@ -83,3 +83,69 @@ export async function seedSampleScoreImport(db: Database, d: TestDetail, actorEm
   );
   return { id: imp!.id, counts: review.counts };
 }
+
+/**
+ * The sheet a published test's marks came from: read by the same rules, every row matched, confirmed
+ * by the person who checked it. Academic already holds these marks, so this only adds the record.
+ */
+export async function seedConfirmedScoreImport(
+  db: Database,
+  d: TestDetail,
+  actorEmail: string,
+  confirmerEmail: string,
+) {
+  const [actor, confirmer] = await Promise.all([
+    seedActor(db, actorEmail),
+    seedActor(db, confirmerEmail),
+  ]);
+  const marked = d.roster.filter((r) => !r.removedAt && r.score !== null);
+  if (!actor || !confirmer || !marked.length) return null;
+  const lines = [
+    ['Admission number', 'Student code', 'Name', 'Total', 'Attendance'],
+    ...marked.map((r) => [
+      r.admissionNumber,
+      r.admissionNumber ? null : r.studentCode,
+      r.displayName,
+      String(r.score),
+      'present',
+    ]),
+  ];
+  const csv = readScoreCsv(lines.map((l) => l.map(csvCell).join(',')).join('\n'));
+  if (!csv.ok) throw new Error(csv.error);
+  const rules = markingRules(d);
+  const { mapping } = suggestScoreMapping(csv.header, rules.sections);
+  const staged = stageScoreRows(csv.rows, mapping, rules, 'file');
+  const review = reviewScoreImport(totalsOnly(staged), rosterEntries(d), new Map());
+  const [imp] = await db
+    .insert(opsScoreImports)
+    .values({
+      assessmentId: d.assessment.id,
+      source: 'manual',
+      status: 'confirmed',
+      mapping,
+      rowsTotal: staged.length,
+      counts: review.counts,
+      createdBy: actor.actor.id,
+      confirmedBy: confirmer.actor.id,
+      confirmedAt: new Date(Date.now() - 2 * 86_400_000),
+      isSample: true,
+    })
+    .returning();
+  await db.insert(opsScoreImportRows).values(
+    review.rows.map((r, i) => ({
+      importId: imp!.id,
+      rowNo: r.rowNumber,
+      original: r.original,
+      parsed: { ...staged[i]!, original: undefined, warnings: r.warnings } as never,
+      matchStatus: r.match.status,
+      matchBasis: r.match.basis,
+      rosterEntryId: r.match.rosterEntryId,
+      studentId: r.match.studentId,
+      candidates: r.match.candidates.map((x) => ({ ...x })),
+      resolution: 'matched' as const,
+      change: r.change,
+      errors: r.errors,
+    })),
+  );
+  return { id: imp!.id, counts: review.counts };
+}
