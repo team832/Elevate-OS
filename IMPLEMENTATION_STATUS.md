@@ -884,7 +884,7 @@ _Owner's brief of 6 Nov: work out how the app should be structured, find good op
 | 6N-16 | Print on every page and spreadsheet (CSV) downloads (D-155) | owner request | Tested; reviewed in the final review (FR-B) | `print.test.tsx` 29 passed, screens 137 + 530 + 78 + 305 + 55; exports 20 + 24 + 52 + 80 passed; FR-B M7: the outstanding download now refuses over 5,000 rows |
 | 6N-17 | `npm run dev`/`office` refuse to start while a migration waits; backup and restore without `pg_dump` (`db:backup`, `db:restore`); a `?host=` in `DATABASE_URL` counts as not local (D-024) | REV-0019 backup finding; FR-A M1 | Tested; reviewed (FR-A), fixed | `dev-start-migrations.test.ts` 7 passed; `json-backup.test.ts` 10 passed (RED proven), round 1 34 passed; real PostgreSQL 18.4: 168 MB of files, backup 11 s, restore 17 s, 185 tables identical |
 | 6N-18 | Tidy: lint for module entries and test-only code, 59 deep imports rewritten (T1); exact duplicates merged, −45 lines (T2); files over 800 lines split, database calls moved out of pages (T3) | A1 code review | Tested | T1 eslint exit 0; T2 134 + 107 + 177 + 204 + 70 + 6 passed; T3 90 + 118 + 50 + 139 + 171 passed; no TypeScript file over 800 lines |
-| 6N-19 | Migration `0020` for wave 4 (D-154) | | **Written and reviewed, not applied** on the owner's computer | REV-0020 apply-safe on a throwaway PostgreSQL 18.4; sha256 `6ac4bfc0…6c4009`; `wave4-0020.test.ts`, `wave4-0020-hr.test.ts`, 91 passed |
+| 6N-19 | Migration `0020` for wave 4 (D-154) | | **Written, reviewed and applied on the owner's computer 6 Nov 2026 (db:backup 162 tables / 6,669 rows, db:migrate 21 files, db:check 22/22) and frozen** | REV-0020 apply-safe on a throwaway PostgreSQL 18.4; sha256 `6ac4bfc0…6c4009`; `wave4-0020.test.ts`, `wave4-0020-hr.test.ts`, 91 passed |
 
 ### Wave 4: the 16 features (all Implemented with automated tests; no browser pass yet)
 Every business number is a Proposed setting, off or not set unless stated. Evidence = each agent's runs of the touched files, after the review rounds.
@@ -920,7 +920,7 @@ Also in wave 4: menus and page gates for every new page (FX-MENU2: 144 + 75 + 26
 - **No browser pass** on any of this work. `e2e/` (12 checks) has never run against running apps.
 - **Races:** PGlite has one connection, so lock orders and in-transaction re-checks are shown to exist, not proven under load. On real PostgreSQL only: 8 leave approvals at once, 30 sign-in failures at once, 14 receipts at once, 9 lead-sharing picks.
 - `npm run office:build` (the four webpack builds) passed on final-1 (exit 0, 251 s); no package from this code; the built apps were not started or walked; the background runner has not ticked under `next start`; memory flags not measured; office mode with files in the database not tried.
-- **Migration `0020` is not applied** on the owner's computer, so no new screen works there yet.
+- Migration `0020` is applied on the owner's computer 6 Nov 2026 (db:backup 162 tables / 6,669 rows, db:migrate 21 files, db:check 22/22) and frozen; the new screens can now run on the owner's computer (not yet opened there in a browser).
 - Staff checklist templates are not in the release reference seeds (a first install starts with none).
 - The prototype `C:\OPENBOT\Elevate` shows none of this.
 
