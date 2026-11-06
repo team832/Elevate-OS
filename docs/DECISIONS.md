@@ -822,7 +822,7 @@ The owner's answer, 6 Nov 2026, to one question listing the 16 gaps found by com
 - **Evidence:** `tests/integration/certificates.test.ts` (in the FX-DOCS counts of D-138).
 
 ## D-140 — Admit cards for mock tests (Approved, owner decision 6 Nov 2026; Implemented, automated tests)
-- **Built:** roll numbers per roster row, given once in order of batch then name, never reused (the test row is locked while numbering); venue (a room, "Online", or "Venue not set"); instructions per test or the default; the card shows the current admission number. Bulk PDF for a test or a batch, two cards per A4 page, from Business Operations (`/ops/api/v1/assessments/{id}/admit-cards`, `ops:assessments:manage`) and Academic (`/academic/api/v1/assessments/{id}/admit-cards`, `academic:assessments:write`).
+- **Built:** roll numbers per roster row, given once in order of batch then name, never reused (the test row is locked while numbering); venue (a room, "Online", or "Venue not set"); instructions per test or the default; the card shows the current admission number. Bulk PDF for a test or a batch, two cards per A4 page, from Business Operations (`/ops/api/v1/assessments/{id}/admit-cards`, `ops:assessments:manage`). The Academic route (`/academic/api/v1/assessments/{id}/admit-cards`, `academic:assessments:write`) only gives roll numbers and stores the venue and instructions; it prints nothing.
 - **Proposed:** `tests.admit_card_instructions` (bring the card and a photo ID, arrive 15 minutes early, no phones or notes); `tests.admit_card_block_defaulters` **off** (when on, students with a tuition instalment past due get no card and are listed instead).
 - **Review rulings:** a cancelled test gets no admit cards (FR-C).
 - **Evidence:** `apps/academic-os/tests/integration/admit-cards.test.ts`, `apps/business-ops-os/tests/integration/admit-cards.test.ts` (in the FX-DOCS counts).
@@ -858,7 +858,7 @@ The owner's answer, 6 Nov 2026, to one question listing the 16 gaps found by com
 ## D-146 — Staff joining and leaving checklists, ID cards and assets (Approved, owner decision 6 Nov 2026; Implemented, automated tests)
 - **Built:** "Joining and leaving" `/ops/hr/checklists` and assets `/ops/hr/assets` (read `ops:hr:read`; changes `ops:staff:manage`; templates `ops:hr_settings:manage`). Templates are versioned (one active per event); one checklist per person per event, each item pending, done or not applicable with who and when. Asset register: type, tag, description, holder, issued and returned (when, by whom), condition; a tag is out with one person at a time. The leaver notice lists unreturned assets and open leaving items.
 - **Proposed (seeded as template version 1 by `db:seed`):** joining ID card issued, keys handed over, devices issued, induction done, policies explained; leaving ID card returned, keys returned, devices returned, handover done, final settlement noted.
-- **Known:** the templates are not in the release reference seeds, so a first install starts with none until HR publishes them.
+- **Release seed:** since 6 Nov 2026 the templates are in `scripts/release/reference-seeds.ts`; a first install gets version 1 once a real operations manager exists (tested in `apps/platform/tests/integration/reference-seed.test.ts`).
 - **Evidence:** `tests/integration/staff-records.test.ts`, `staff-records-screens.test.tsx` (in the FX-HRX counts of D-147).
 
 ## D-147 — Cover for approvals while someone is away (Approved, owner decision 6 Nov 2026; Implemented, automated tests)

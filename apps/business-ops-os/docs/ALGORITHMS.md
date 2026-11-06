@@ -1016,7 +1016,7 @@ Code: `src/server/ai-report-drafts.ts`, `src/server/ai-drafts.ts` (`ask`, `known
 7. **Edge cases.** `flagClasses` asks Academic how many classes the teacher has planned from today to the last day. None: no notice. A count: coordinators get it, with no type and no reason. No answer: coordinators are asked to check, because missing is not zero; the approval stands. Wholly past leave and non-teachers are not checked. `cancelLeave` on a record closes its application in the same transaction.
 8. **Permissions.** No new keys. Director's own `ops:attendance:request` is a new Proposed grant. Auditors read and cannot apply. A platform administrator has no way in.
 9. **Tests.** `tests/unit/leave.test.ts`, `tests/integration/leave-applications.test.ts`, `leave-screens.test.tsx`.
-10. **Limitations.** Race proven on PGlite only until the final round. HR's direct record skips the overlap check. A sole operations manager outside HR's departments reaches nobody with their own application. Coordinators get a count, not the classes (`shortcut:` in `flagClasses`; naming them needs a new contract version), and hear nothing on a cancel. Owner questions: `HANDOFF.md`.
+10. **Limitations.** Race proven on PGlite only until the final round. HR's direct record takes the same lock and checks as an approval (since D-134). A sole operations manager outside HR's departments reaches nobody with their own application. Coordinators get a count, not the classes (`shortcut:` in `flagClasses`; naming them needs a new contract version), and hear nothing on a cancel. Owner questions: `HANDOFF.md`.
 Code: `src/domain/leave.ts`, `src/server/leave-applications.ts`, `src/server/attendance-actions.ts`.
 
 ## Added after commit `a1f6ec7`, 31 Oct 2026 (on no package yet)
