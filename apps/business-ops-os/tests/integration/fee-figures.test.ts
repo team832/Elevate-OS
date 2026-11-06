@@ -393,7 +393,8 @@ describe('a change waiting for approval (HMO-002)', () => {
     expect(html.indexOf('₹70,000')).toBeLessThan(html.indexOf('₹90,000'));
     expect(html.match(/Record a payment/g)).toHaveLength(1);
     expect(html.match(/Payment history/g)).toHaveLength(1);
-    expect(html.match(/Tuition, 2026-27/g)).toHaveLength(1);
+    // Counted as visible text: the table's scroll region repeats the caption in its aria-label.
+    expect(html.match(/>Tuition, 2026-27</g)).toHaveLength(1);
   });
 
   it('the Fees tab shows the accepted version and the draft apart; money posts only on the accepted one', async () => {
