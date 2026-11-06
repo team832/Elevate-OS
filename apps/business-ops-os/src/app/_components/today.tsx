@@ -244,7 +244,11 @@ export async function Today({ user }: { user: AuthenticatedUser }) {
           id="my-approvals"
           title="Approvals waiting for you"
           flush
-          actions={<a href="/ops/operations/approvals">Open approvals</a>}
+          actions={
+            <OpenLink user={user} href="/ops/operations/approvals" fallback={null}>
+              Open fee approvals
+            </OpenLink>
+          }
         >
           <Panel r={approvals}>
             {(d) => {

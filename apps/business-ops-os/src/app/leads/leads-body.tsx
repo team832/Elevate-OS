@@ -21,6 +21,7 @@ import { LeadCreateForm } from '../../ui/lead-create-form';
 import { listHref, options, Pager, SearchPanel } from '../../ui/list-controls';
 import { FormModal, RecordModal } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
+import { ExportLink } from '../../ui/export-link';
 import { Segment } from '../../ui/sections';
 import { SampleBadge } from '../admissions/_components/demo-bits';
 import { LEAD_ACTS, LeadActModal, type LeadAct } from './lead-acts';
@@ -361,6 +362,11 @@ function LeadList({
         ]}
       />
       <Pager basePath={BASE} params={sp} page={page} pageSize={PAGE_SIZE} total={total} />
+      <ExportLink
+        list="leads"
+        base={base}
+        params={{ q: sp.q, stage: sp.stage, leadStage: sp.leadStage, flag: sp.flag }}
+      />
     </div>
   );
 }

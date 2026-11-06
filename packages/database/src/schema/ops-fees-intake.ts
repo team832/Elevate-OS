@@ -141,6 +141,8 @@ export const opsFeeRecords = ops.table(
     voidedAt: instant('voided_at'),
     /** Why the record was voided (required). */
     voidReason: text('void_reason'),
+    /** Approval cover (F4-10): the approver a cover posted this discount or waiver for. */
+    onBehalfOf: userRef('on_behalf_of'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -186,6 +188,10 @@ export const opsFeeRecords = ops.table(
     check(
       'fee_records_voided_check',
       sql`${t.status} <> 'voided' OR (${t.voidedBy} IS NOT NULL AND ${t.voidReason} IS NOT NULL)`,
+    ),
+    check(
+      'fee_records_on_behalf_check',
+      sql`${t.onBehalfOf} IS NULL OR ${t.onBehalfOf} <> ${t.recordedBy}`,
     ),
   ],
 );
@@ -290,8 +296,64 @@ export const opsFeeInstalments = ops.table(
   },
   (t) => [
     uniqueIndex('fee_instalments_plan_sequence_key').on(t.planId, t.sequence),
+    // Defaulter list (F4-04): instalments whose due date has passed.
+    index('fee_instalments_due_idx').on(t.dueDate),
     check('fee_instalments_sequence_positive', sql`${t.sequence} >= 1`),
     check('fee_instalments_amount_positive', sql`${t.amountPaise} > 0`),
+  ],
+);
+
+/**
+ * Gap-free number series (F4-01 receipts, F4-02 certificates): `receipt/2026-27`,
+ * `certificate.<type>/2026-27`. Take a number by inserting the row ON CONFLICT DO NOTHING, then
+ * SELECT … FOR UPDATE, use `next_value`, add 1, all in the transaction that writes the document.
+ */
+export const opsDocumentCounters = ops.table(
+  'document_counters',
+  {
+    series: text('series').primaryKey(),
+    nextValue: integer('next_value').notNull().default(1),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('document_counters_next_check', sql`${t.nextValue} >= 1`),
+    check(
+      'document_counters_series_format',
+      sql`${t.series} ~ '^[a-z][a-z0-9_.]{1,59}/[0-9]{4}-[0-9]{2}$'`,
+    ),
+  ],
+);
+
+/**
+ * The receipt of one `received` fee record (F4-01): numbered the first time it is issued, from
+ * series `receipt/<financial year>`; never renumbered. `print_count` > 1 prints "Duplicate"; a
+ * reversed payment's receipt prints "Cancelled" (read from the ledger, not stored here).
+ */
+export const opsFeeReceipts = ops.table(
+  'fee_receipts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    feeRecordId: uuid('fee_record_id')
+      .notNull()
+      .references(() => opsFeeRecords.id, { onDelete: 'restrict' })
+      .$type<OpsFeeRecordId>(),
+    /** As printed, e.g. ER/2026-27/000001 (format setting, Proposed). */
+    receiptNumber: text('receipt_number').notNull(),
+    /** Indian financial year April–March, e.g. 2026-27. */
+    financialYear: text('financial_year').notNull(),
+    sequence: integer('sequence').notNull(),
+    issuedAt: instant('issued_at').notNull().defaultNow(),
+    issuedBy: userRef('issued_by').notNull(),
+    printCount: integer('print_count').notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex('fee_receipts_fee_record_key').on(t.feeRecordId),
+    uniqueIndex('fee_receipts_number_key').on(t.receiptNumber),
+    uniqueIndex('fee_receipts_sequence_key').on(t.financialYear, t.sequence),
+    check('fee_receipts_number_check', sql`length(trim(${t.receiptNumber})) > 0`),
+    check('fee_receipts_year_format', sql`${t.financialYear} ~ '^[0-9]{4}-[0-9]{2}$'`),
+    check('fee_receipts_sequence_check', sql`${t.sequence} >= 1`),
+    check('fee_receipts_print_count_check', sql`${t.printCount} >= 0`),
   ],
 );
 

@@ -12,7 +12,7 @@ import { MarketingPage, Section, param, type SearchParams } from '../../ui/shell
 import { TeamDeliverables } from './team-deliverables';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Deliverables' };
+export const metadata: Metadata = { title: 'Content and deliverables' };
 
 const PATH = modulePath('deliverables');
 const pageOf = (v: string | undefined) => Math.max(1, Number.parseInt(v ?? '1', 10) || 1);
@@ -26,7 +26,7 @@ export default async function DeliverablesPage({ searchParams }: { searchParams:
       permission="marketing:module:access"
       path={PATH}
       active="deliverables"
-      title="Deliverables"
+      title="Content and deliverables"
       description="What is owed from tasks, content and the calendar. Approved and published externally are separate: approving never publishes or sends anything."
       searchParams={sp}
     >

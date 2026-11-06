@@ -3,7 +3,7 @@
  * MKT schema contract). Read-only, in the caller's lead scope; Marketing counts these rows, so a
  * target's actual always equals its drill-down. Periods are IST days, `cutoff` freezes a snapshot.
  */
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import {
   auditEvents,
   opsAdmissionApprovals,
@@ -14,11 +14,12 @@ import {
   opsLeads,
   opsLeadStageHistory,
   opsLeadStages,
+  staffMembers,
   type Database,
 } from '@elevate/database';
 import { addDays, istInstant, type IsoDate } from '../domain';
 import { isConfirmedAdmission } from '../domain/lead-stages';
-import { accessScope, type Actor } from './context';
+import { accessScope, userIdsHolding, type Actor } from './context';
 import { leadScope } from './leads-read';
 
 export type LeadMetric =
@@ -67,6 +68,7 @@ export async function leadMetricRecords(
   if (stage) return leadStageEntries(db, actor, { ...q, stageKey: stage });
 
   if (q.metric === 'follow_ups_completed') {
+    const caseReaders = await userIdsHolding(db, 'ops:admissions:read');
     const rows = await db
       .select({
         id: opsFollowUps.id,
@@ -77,10 +79,13 @@ export async function leadMetricRecords(
       })
       .from(opsFollowUps)
       .innerJoin(opsLeads, eq(opsLeads.id, opsFollowUps.leadId))
+      .innerJoin(staffMembers, eq(staffMembers.id, opsFollowUps.ownerStaffId))
       .where(
         and(
           scope,
           eq(opsFollowUps.status, 'done'),
+          // A case's follow-up counts only for an owner who may read cases (D-073).
+          or(isNull(opsFollowUps.admissionId), inArray(staffMembers.userId, caseReaders)),
           gte(opsFollowUps.completedAt, start),
           lt(opsFollowUps.completedAt, end),
           owners(opsFollowUps.ownerStaffId as never),

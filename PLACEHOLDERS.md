@@ -38,8 +38,12 @@ Elevate OS never makes up your business facts. Wherever a fact is missing, the s
 | Database account | Holds all the data; must be in your name | At go-live |
 | Email / SMS / WhatsApp service | So the system can send reminders, event invitations and end-of-day reports (today it records them and sends nothing) | When you want messages sent |
 | Shared look-around account `team@elevateeducation.in` | Exists on this computer only, read-only; its password was typed in chat, so it must be changed (steps in `HANDOFF.md`) | Now |
-| File storage | Test papers and answer keys, score imports and task files. Refused in office mode and online until you choose a provider. Identity documents keep a reference only | Before anyone needs uploads in office mode |
-| Who runs the background jobs | There is no timer. An exit reaches Academic, and reminders go out, only when someone presses the button on the Overview | Now: a name and how often |
+| How often each background job runs | Since 6 Nov 2026 the jobs can run by themselves, but every one is off until someone switches it on in Settings → Background jobs. Until then an exit reaches Academic, and reminders go out, only when someone presses Run now (D-133) | Now: how often each should run, then switch them on |
+| Certificate wording (6 Nov 2026) | Certificates (`/ops/certificates`, student record). Nothing can be issued until you approve it | Approve or change the drafted course completion and bonafide wording, and add any other type (D-139; HANDOFF Q9) |
+| Consent wording for logins of students under 18 (6 Nov 2026) | Student record → Portal access. No student under 18 can get a login until you approve it | Approve or change the drafted wording, ideally after a lawyer reads it (DPDP Act 2023; D-150; HANDOFF Q41) |
+| Website form consent wording and your website address (6 Nov 2026) | The enquiry form `/ops/enquire` stays closed until you approve the wording | Approve or change the drafted wording; the address of any website that will send enquiries (D-152; HANDOFF Q46, Q47) |
+| Salary components and leave allowances (6 Nov 2026) | Payroll and HR → Leave allowances show nothing until they are added | The earnings and deductions that make up a salary, and how many days of each leave type each person gets (D-151, D-149; HANDOFF Q14, Q25) |
+| Admit card instructions and receipt number format (6 Nov 2026) | Admit cards and fee receipts use drafted text and `ER/2026-27/000001` | Confirm or change them (D-140, D-138; HANDOFF Q5, Q10) |
 | The address the system will live at | The four addresses are built into the package, so a new address needs a new build (`docs/RELEASE.md`) | At go-live |
 | Attendance device or app | Only if you use a biometric device; today attendance is entered by hand or by spreadsheet upload | Optional |
 | Publishing tool (Metricool or similar) and YouTube key | So Marketing can publish and read numbers | Marketing go-live |

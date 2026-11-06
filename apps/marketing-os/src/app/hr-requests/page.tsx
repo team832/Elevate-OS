@@ -4,7 +4,7 @@ import { MODULE, modulePath } from '../../domain';
 import { MarketingPage } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Requests through HR' };
+export const metadata: Metadata = { title: 'Requests to HR' };
 
 /** Requests sent through HR and what HR forwarded to you (brief §6, §9, D-073); Ops' one implementation. */
 export default async function HrRequestsPage({

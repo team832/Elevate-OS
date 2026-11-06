@@ -15,6 +15,7 @@ import {
   opsLeadStages,
   opsLeads,
   opsOnboardingTemplates,
+  opsStaffChecklistTemplates,
   programmes,
   staffMembers,
   userRoles,
@@ -25,9 +26,8 @@ import { runSeeds } from '@elevate/database/seed';
 import type { RoleKey, UserId } from '@elevate/shared-types';
 import { setupTestDatabase } from '@elevate/testing';
 import { referenceSeedList } from '../../../../scripts/release/reference-seeds';
-import { OWNER_SUPPLIED_STAFF } from '../../../business-ops-os/seed/teachers';
-import { createLead } from '../../../business-ops-os/src/server/leads';
-import { createLeadBody } from '../../../business-ops-os/src/server/schemas';
+import { OWNER_SUPPLIED_STAFF } from '@elevate/business-ops-os/seed';
+import { createLead, createLeadBody } from '@elevate/business-ops-os/server';
 
 const ctx = setupTestDatabase();
 const db = () => ctx.db as Database;
@@ -97,7 +97,10 @@ describe('reference seed on an empty database', () => {
 
     expect(Object.values(await sampleCounts()).every((n) => n === 0)).toBe(true);
     expect(Object.keys(await sampleCounts()).length).toBeGreaterThan(3);
-    expect(await total(users)).toBe(0);
+    // The one account: the website form's system user, which nobody can sign in as (F4-15).
+    expect(
+      (await db().select().from(users)).map((u) => [u.email, u.status, u.passwordHash]),
+    ).toEqual([['website-form@elevateeducation.in', 'disabled', null]]);
     expect(await total(userRoles)).toBe(0);
     expect(await total(staffMembers)).toBe(0);
     expect(said.join('\n')).not.toContain('@example.test');
@@ -128,11 +131,13 @@ describe('reference seed on an empty database', () => {
     expect(await total(opsOnboardingTemplates)).toBe(0);
     expect(await total(opsFeeStructures)).toBe(0);
     const said = await seed();
-    expect(said.filter((m) => m.includes('no operations manager yet'))).toHaveLength(2);
+    expect(await total(opsStaffChecklistTemplates)).toBe(0);
+    expect(said.filter((m) => m.includes('no operations manager yet'))).toHaveLength(3);
 
     await realUser('reference-manager@elevateeducation.in', 'operations_manager');
     await seed();
     expect(await total(opsOnboardingTemplates)).toBe(1);
+    expect(await total(opsStaffChecklistTemplates)).toBe(2); // joining + leaving, version 1
     const fees = await db().select().from(opsFeeStructures);
     expect(fees.map((f) => [f.source, f.status, f.isSample])).toEqual([
       ['website_stated', 'draft', false],

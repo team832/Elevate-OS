@@ -42,6 +42,7 @@ import {
 } from './context';
 import { opsAudit } from './ops-common';
 import { createRuleFollowUp } from './follow-ups';
+import { shareNewLead } from './lead-sharing';
 import { setInitialLeadStage } from './lead-stages';
 import { createAdmissionRecord } from './pipeline';
 import { lockWorkableLead, maskedLead, notifyAssigned, type LeadRow } from './leads-access';
@@ -114,7 +115,7 @@ export async function createLead(
       );
     ownerStaffId = access.staffId;
   }
-  const owner = ownerStaffId ? await activeStaff(db, ownerStaffId, 'ownerStaffId') : null;
+  let owner = ownerStaffId ? await activeStaff(db, ownerStaffId, 'ownerStaffId') : null;
   const actorStaffId = await staffIdForUser(db, actor.id);
   const settings = await loadSettings(db);
   const receivedAt = input.receivedAt ? new Date(input.receivedAt) : new Date();
@@ -122,10 +123,14 @@ export async function createLead(
   const acknowledgement = input.acknowledgeDuplicates?.reason ?? null;
 
   const outcome = await withTransaction(db, async (tx) => {
+    // The code lock first: a parallel save of the same contact is committed before this check.
+    const code = await nextCode(tx, 'lead', 'ops.leads');
     const matches = await matchesForNew(tx, contacts, input.studentName, previousSchool);
     if (matches.some((m) => m.level === 'exact') && !input.acknowledgeDuplicates)
       return { refused: matches };
-    const code = await nextCode(tx, 'lead', 'ops.leads');
+    // F4-16: a lead nobody owns goes to the next counsellor of its sharing rule (rule row locked).
+    const sharing = ownerStaffId ? null : await shareNewLead(tx, settings, programme?.id ?? null);
+    if (sharing?.owner) [owner, ownerStaffId] = [sharing.owner, sharing.owner.id];
     const now = new Date();
     const [inserted] = await tx
       .insert(opsLeads)
@@ -184,6 +189,7 @@ export async function createLead(
           leadId: lead.id,
           duplicates: matches.map((m) => ({ code: m.code, level: m.level, signals: m.signals })),
           acknowledgement,
+          sharing: sharing && { ruleId: sharing.ruleId, outcome: sharing.outcome },
         },
       },
       requestId,
@@ -346,6 +352,8 @@ export async function addEnquiry(
   leadId: string,
   input: EnquiryInput,
   requestId?: string,
+  /** False for the public website form: a stranger's post only adds a note (REV-W4 I2). */
+  { openCase = true }: { openCase?: boolean } = {},
 ) {
   const access = await accessScope(db, actor, 'ops:leads:write');
   await assertSource(db, input.sourceCode);
@@ -363,7 +371,7 @@ export async function addEnquiry(
       .values(enquiryValues(lead.id, input, programme?.id ?? null, receivedAt, actor.id))
       .returning();
     let admission = null;
-    if (programme) {
+    if (programme && openCase) {
       const open = await tx
         .select({ id: opsAdmissions.id, status: opsAdmissions.status })
         .from(opsAdmissions)

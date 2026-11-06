@@ -159,7 +159,7 @@ function AssessmentList({
         empty={
           <EmptyState
             title={empty}
-            description="Assessments of your batches are listed under All assessments."
+            description="Tests of your batches are listed under All tests."
           />
         }
         columns={[
@@ -187,7 +187,7 @@ function AssessmentList({
           },
         ]}
       />
-      <ListLink href={MODULE_PATHS.assessments}>All assessments</ListLink>
+      <ListLink href={MODULE_PATHS.assessments}>All tests</ListLink>
     </Card>
   );
 }

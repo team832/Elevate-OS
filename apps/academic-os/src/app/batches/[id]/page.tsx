@@ -37,7 +37,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
     [`${MODULE_PATHS.batch(b.id)}?tab=teachers`, 'Teachers'],
     [filtered(MODULE_PATHS.timetable), 'Timetable'],
     [filtered(MODULE_PATHS.teaching), 'Teaching logs'],
-    [filtered(MODULE_PATHS.assessments), 'Assessments'],
+    [filtered(MODULE_PATHS.assessments), 'Tests and mock tests'],
     [filtered(MODULE_PATHS.progress), 'Progress'],
   ];
   const staffList = await load(() => listStaff(db));

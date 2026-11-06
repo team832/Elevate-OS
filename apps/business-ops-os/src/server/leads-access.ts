@@ -3,13 +3,13 @@
  * who may work on a lead, private-field masking (D-028) and the "lead assigned" notice.
  */
 import { scopeFor } from '@elevate/authorization';
+import { eq } from 'drizzle-orm';
 import { opsLeads, type Database } from '@elevate/database';
 import { ConflictError, ForbiddenError } from '@elevate/shared-contracts';
-import type { UserId } from '@elevate/shared-types';
+import type { LeadId, UserId } from '@elevate/shared-types';
 import { omitKyc, redactStudentPrivate } from '../domain/students';
-import { staffIdForUser, type AccessScope, type Actor } from './context';
+import { notFound, staffIdForUser, type AccessScope, type Actor } from './context';
 import { leadCovered } from './lead-duplicates';
-import { rowById } from './ops-common';
 import { notifyHosted } from './task-links';
 
 export type LeadRow = typeof opsLeads.$inferSelect;
@@ -52,8 +52,17 @@ export async function maskedLead(db: Database, actor: Actor, lead: LeadRow) {
   return (await canSeeLeadPrivate(db, actor, lead, true)) ? masked : omitKyc(masked);
 }
 
-export const getLeadRow = (db: Database, id: string, lock = false) =>
-  rowById(db, opsLeads, id, 'Lead', lock);
+/**
+ * A lead by id, optionally locked FOR NO KEY UPDATE: lead writers never change its key, so they
+ * still queue behind each other but no longer block a case path holding KEY SHARE on the lead
+ * (the fee path did, and deadlocked).
+ */
+export async function getLeadRow(db: Database, id: string, lock = false) {
+  const q = db.select().from(opsLeads).where(eq(opsLeads.id, id as LeadId)).limit(1);
+  const [row] = lock ? await q.for('no key update') : await q;
+  if (!row) notFound('Lead');
+  return row;
+}
 
 /** Lock a lead the caller may work on; merged leads are read-only. */
 export async function lockWorkableLead(

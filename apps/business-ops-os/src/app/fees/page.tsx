@@ -16,7 +16,7 @@ import { DetailTable, Segment } from '../../ui/sections';
 import { AnnualTuition } from './_components/annual-tuition';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Fees' };
+export const metadata = { title: 'Fee structure' };
 
 type Params = Record<string, string | undefined>;
 type Fee = Awaited<ReturnType<typeof listFeeStructures>>['items'][number];
@@ -59,7 +59,7 @@ export default async function FeesPage({ searchParams }: { searchParams: Promise
   return (
     <Frame access={access} active="fees">
       <PageHeader
-        title="Fees"
+        title="Fee structure"
         description="Annual tuition billed, paid and outstanding for an academic year, then course fees by programme and mode."
         tabs={<FeesNav current="structure" user={access.user} />}
       />

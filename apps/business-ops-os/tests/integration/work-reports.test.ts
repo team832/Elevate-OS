@@ -6,6 +6,7 @@ import {
   notifications,
   opsEodReportVersions,
   opsLeaveRecords,
+  opsSettings,
   opsStaffTasks,
   opsTaskEvents,
   opsWorkSchedules,
@@ -72,6 +73,10 @@ const versions = (id: string) =>
 
 beforeAll(async () => {
   await setupReference(ctx.db);
+  // Report days are in Sept 2026: no late filing window here (F4-11: eod-more-detail.test.tsx).
+  await ctx.db
+    .insert(opsSettings)
+    .values({ key: 'eod.late_filing_window', value: { days: null }, decisionState: 'proposed' });
   lead = await staffUser(ctx.db, ['admissions_counsellor'], { name: 'Sample Lead' });
   a = await staffUser(ctx.db, ['admissions_counsellor'], {
     managerId: lead.staffId,

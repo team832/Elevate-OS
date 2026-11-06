@@ -9,6 +9,7 @@ import { istWhen } from '../../../domain/staff-tasks';
 import { listTasks } from '../../../server/staff-tasks';
 import { taskListQuery } from '../../../server/staff-tasks-schemas';
 import { ActionForm } from '../../../ui/action-form';
+import { TaskReviewNav } from '../../../ui/admissions-nav';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref, Pager } from '../../../ui/list-controls';
 import { RecordTable } from '../../../ui/record-table';
@@ -16,7 +17,7 @@ import { Deadline, type Params } from '../../tasks/_components/task-common';
 import { TaskModal } from '../../tasks/_components/task-modal';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Submission review' };
+export const metadata = { title: 'Task review' };
 
 const BASE = '/ops/hr/review';
 const API = '/ops/api/v1/staff-tasks';
@@ -27,8 +28,9 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
   return (
     <Frame access={access} active="hr-review">
       <PageHeader
-        title="Submission review"
+        title="Task review"
         description="Submitted work you may decide on, oldest first. Submitting is not approval; nobody reviews their own work."
+        tabs={<TaskReviewNav current="review" user={access.user} />}
       />
       <Section label="Loading submissions…">
         <Queue user={access.user} sp={sp} />

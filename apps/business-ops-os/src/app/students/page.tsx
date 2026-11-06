@@ -117,7 +117,7 @@ export default async function ActiveStudentsPage({
                     <a href={BASE}>Clear filters</a>
                   ) : (
                     <OpenLink user={access.user} href="/ops/admissions" fallback={null}>
-                      Open demo students
+                      Open demos
                     </OpenLink>
                   )
                 }

@@ -103,13 +103,13 @@ One real person who is (or was) a student: the canonical student identity shared
 
 One login account. Written only by authentication and platform admin.
 
-- **Written by:** `src/server/hr-staff-actions.ts`, `src/server/organisation.ts`
+- **Written by:** `src/server/hr-staff-actions.ts`, `src/server/organisation.ts`, `src/server/portal-access.ts`
 - **Sample or real:** Reference or configuration data (not person data).
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
 |---|---|---|---|---|---|
 | `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
-| `email` | text | yes | `^[^@[:space:]]+@(elevateeducation\.in\|example\.test)$` |  | Email. |
+| `email` | text | yes | `^[^@[:space:]]+@(elevateeducation\.in\|example\.test\|portal\.invalid)$` |  | Email. |
 | `display_name` | text | yes |  |  | Display name. |
 | `password_hash` | text | no |  |  | Password hash. |
 | `status` | text | yes (default active) | `active`, `disabled` | active | Current state (allowed values listed). |
@@ -206,7 +206,7 @@ One person who enquired (usually a student, often through a parent): contact det
 
 Each enquiry a person made (one lead can enquire several times, from several sources).
 
-- **Written by:** `src/server/leads-actions.ts`, `src/server/leads.ts`
+- **Written by:** `src/server/leads-actions.ts`, `src/server/leads.ts`, `src/server/website-form.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
 - **Links to:** `lead_id` → `ops.leads` (on delete restrict); `source_code` → `ops.lead_sources` (on delete restrict); `programme_id` → `core.programmes` (on delete restrict); `created_by` → `core.users` (on delete restrict)
 
@@ -224,6 +224,8 @@ Each enquiry a person made (one lead can enquire several times, from several sou
 | `interest_mode` | text | yes (default undecided) | `offline`, `online`, `undecided` | offline | Offline, online or undecided, as said in this enquiry. |
 | `notes` | text | no |  |  | Free-text notes. |
 | `merged_from_lead_id` | uuid | no |  | (id) | Lead this enquiry originally belonged to, when it was moved by a merge. |
+| `consent_text_version` | text | no |  |  | Website form (F4-15): version of the consent text the person ticked, and when. |
+| `consent_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was consent (UTC). |
 | `created_by` | uuid | yes |  | (id) | User who created the row. → `core.users` |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
 
@@ -927,13 +929,58 @@ Sibling links between two students, stored once as an ordered pair (lower id fir
 | `created_by` | uuid | yes |  | (id) | User who created the row. → `core.users` |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
 
+### `ops.certificates`
+
+Certificate register (F4-02): one row per certificate issued, numbered from series `certificate.<type>/<financial year>` (ops.document_counters). `body` is the wording as printed, so a reprint (same number, "Duplicate" when print_count > 1) never changes when the template does. Types and template text are settings (Proposed). Revoked with a reason, never deleted.
+
+- **Written by:** `src/server/certificates.ts`
+- **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
+- **Links to:** `student_id` → `core.students` (on delete restrict); `programme_id` → `core.programmes` (on delete restrict); `issued_by` → `core.users` (on delete restrict); `revoked_by` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `certificate_type` | text | yes | `^[a-z][a-z0-9_]{1,39}$` | AA | Setting key of the type, e.g. course_completion, bonafide. |
+| `certificate_number` | text | yes |  |  | Certificate number. |
+| `financial_year` | text | yes | `^[0-9]{4}-[0-9]{2}$` | 0001-01 | Financial year. |
+| `sequence` | integer | yes |  | 1 | Sequence. |
+| `student_id` | uuid | yes |  | (id) | The student (canonical identity, core.students). → `core.students` |
+| `programme_id` | uuid | no |  | (id) | Programme (CLAT, IPMAT, Class 12 Commerce …). → `core.programmes` |
+| `batch_id` | uuid | no |  | (id) | Academic OS batch named on the certificate (plain id, no FK across modules). |
+| `issue_date` | date | yes |  | 2026-10-21 | Issue day (Asia/Kolkata calendar day). |
+| `body` | text | yes |  |  | Body. |
+| `status` | text | yes (default issued) | `issued`, `revoked` | issued | Current state (allowed values listed). |
+| `issued_by` | uuid | yes |  | (id) | User who issued it. → `core.users` |
+| `issued_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When it was issued (UTC). |
+| `print_count` | integer | yes (default 0) |  | 1 | Print count. |
+| `revoked_by` | uuid | no |  | (id) | User who revoked it. → `core.users` |
+| `revoked_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was revoked (UTC). |
+| `revoke_reason` | text | no |  |  | Why it was revoke (free text). |
+
+### `ops.absence_calls`
+
+A call to a student's family about absences (F4-06); the absences come from Academic.
+
+- **Written by:** `src/server/absences.ts`
+- **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
+- **Links to:** `student_id` → `core.students` (on delete restrict); `called_by` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `student_id` | uuid | yes |  | (id) | The student (canonical identity, core.students). → `core.students` |
+| `outcome` | text | yes | `reached`, `no_answer`, `wrong_number`, `will_attend` | reached | Result, in words or as a listed value. |
+| `note` | text | no |  |  | Free-text notes. |
+| `called_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When it was called (UTC). |
+| `called_by` | uuid | yes |  | (id) | User who called it. → `core.users` |
+
 ### `ops.fee_records`
 
 Manually recorded administrative fee records per admission (OPS-072). NOT a payment system: no gateway, no card data, never a verified transaction. The accounts system stays the record (OD-013); these rows are what an authorised staff member typed in, optionally checked by a second, different person. Amounts are integer paise in INR (no floats). Rows are never deleted: a mistake is voided with a reason. Summary rules: domain/fees.ts.
 
 - **Written by:** `src/server/fee-ledger.ts`, `src/server/fees.ts`
 - **Sample or real:** Follows its parent: sample when the lead / student it belongs to is sample.
-- **Links to:** `admission_id` → `ops.admissions` (on delete restrict); `lead_id` → `ops.leads` (on delete restrict); `reverses_record_id` → `ops.fee_records` (on delete restrict); `demo_id` → `ops.demos` (on delete restrict); `plan_id` → `ops.fee_plans` (on delete restrict); `instalment_id` → `ops.fee_instalments` (on delete restrict); `recorded_by` → `core.users` (on delete restrict); `verified_by` → `core.users` (on delete restrict); `voided_by` → `core.users` (on delete restrict)
+- **Links to:** `admission_id` → `ops.admissions` (on delete restrict); `lead_id` → `ops.leads` (on delete restrict); `reverses_record_id` → `ops.fee_records` (on delete restrict); `demo_id` → `ops.demos` (on delete restrict); `plan_id` → `ops.fee_plans` (on delete restrict); `instalment_id` → `ops.fee_instalments` (on delete restrict); `recorded_by` → `core.users` (on delete restrict); `verified_by` → `core.users` (on delete restrict); `voided_by` → `core.users` (on delete restrict); `on_behalf_of` → `core.users` (on delete restrict)
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
 |---|---|---|---|---|---|
@@ -965,6 +1012,7 @@ Manually recorded administrative fee records per admission (OPS-072). NOT a paym
 | `voided_by` | uuid | no |  | (id) | User who voided it. → `core.users` |
 | `voided_at` | timestamp with time zone | no |  | 2026-10-21T10:30:00Z | When it was voided (UTC). |
 | `void_reason` | text | no |  |  | Why the record was voided (required). |
+| `on_behalf_of` | uuid | no |  | (id) | Approval cover (F4-10): the approver a cover posted this discount or waiver for. → `core.users` |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
 | `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
 
@@ -1017,6 +1065,38 @@ Instalments of a plan: sequence 1..n, an IST due date and an amount (sum = plan 
 | `amount_paise` | bigint | yes |  | 4000000 (₹40,000) | Amount due in integer paise. |
 | `note` | text | no |  |  | Free-text notes. |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+
+### `ops.document_counters`
+
+Gap-free number series (F4-01 receipts, F4-02 certificates): `receipt/2026-27`, `certificate.<type>/2026-27`. Take a number by inserting the row ON CONFLICT DO NOTHING, then SELECT … FOR UPDATE, use `next_value`, add 1, all in the transaction that writes the document.
+
+- **Written by:** `src/server/document-numbers.ts`
+- **Sample or real:** Reference or configuration data (not person data).
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `series` | text | yes | `^[a-z][a-z0-9_.]{1,59}/[0-9]{4}-[0-9]{2}$` | AA/0001-01 | Series. |
+| `next_value` | integer | yes (default 1) |  | 1 | Next value. |
+| `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
+
+### `ops.fee_receipts`
+
+The receipt of one `received` fee record (F4-01): numbered the first time it is issued, from series `receipt/<financial year>`; never renumbered. `print_count` > 1 prints "Duplicate"; a reversed payment's receipt prints "Cancelled" (read from the ledger, not stored here).
+
+- **Written by:** `src/server/receipts.ts`
+- **Sample or real:** Reference or configuration data (not person data).
+- **Links to:** `fee_record_id` → `ops.fee_records` (on delete restrict); `issued_by` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `fee_record_id` | uuid | yes |  | (id) | Fee record id. → `ops.fee_records` |
+| `receipt_number` | text | yes |  |  | As printed, e.g. ER/2026-27/000001 (format setting, Proposed). |
+| `financial_year` | text | yes | `^[0-9]{4}-[0-9]{2}$` | 0001-01 | Indian financial year April–March, e.g. 2026-27. |
+| `sequence` | integer | yes |  | 1 | Sequence. |
+| `issued_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When it was issued (UTC). |
+| `issued_by` | uuid | yes |  | (id) | User who issued it. → `core.users` |
+| `print_count` | integer | yes (default 0) |  | 1 | Print count. |
 
 ### `ops.fee_structures`
 
@@ -1421,7 +1501,7 @@ One staff member's work report for one period — the report identity (one per s
 | `period_start` | date | yes |  | 2026-10-21 | Period start. |
 | `period_end` | date | yes |  | 2026-10-21 | Period end. |
 | `report_date` | date | no |  | 2026-10-21 | Report day (Asia/Kolkata calendar day). |
-| `status` | text | yes (default draft) | `draft`, `submitted`, `revision_requested`, `acknowledged` | draft | Current state (allowed values listed). |
+| `status` | text | yes (default draft) | `draft`, `submitted`, `revision_requested`, `acknowledged`, `more_detail_requested` | draft | Current state (allowed values listed). |
 | `snapshot` | jsonb | yes |  |  | Shape: EodSnapshot (business-ops domain/staff-tasks.ts); packages cannot import app types. |
 | `summary` | text | no |  |  | Summary. |
 | `next_day_plan` | text | no |  |  | Next day plan. |
@@ -1472,7 +1552,7 @@ The manager side of an EOD: views, comments, requests, acknowledgement, follow-u
 | `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
 | `report_id` | uuid | yes |  | (id) | Report id. → `ops.eod_reports` |
 | `version_id` | uuid | no |  | (id) | Version id. → `ops.eod_report_versions` |
-| `kind` | text | yes | `viewed`, `comment`, `clarification_requested`, `revision_requested`, `acknowledged`, `follow_up_task_created` | viewed | What kind of row this is (allowed values listed). |
+| `kind` | text | yes | `viewed`, `comment`, `clarification_requested`, `revision_requested`, `acknowledged`, `follow_up_task_created`, `more_detail_requested` | viewed | What kind of row this is (allowed values listed). |
 | `actor_user_id` | uuid | yes |  | (id) | User who made the change. → `core.users` |
 | `text` | text | no |  |  | Text. |
 | `task_id` | uuid | no |  | (id) | The follow-up task created from the report. → `ops.staff_tasks` |
@@ -1599,6 +1679,7 @@ Approved leave: recorded by HR directly, or written when an application is appro
 | `status` | text | yes (default approved) | `approved`, `cancelled` | approved | Current state (allowed values listed). |
 | `approved_by` | uuid | yes |  | (id) | User who approved it. → `core.users` |
 | `reason` | text | no |  |  | Why (free text). |
+| `day_part` | text | no | `first_half`, `second_half` | first_half | Day part. |
 | `is_sample` | boolean | yes (default false) |  | false | Is sample. |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
 | `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
@@ -1609,7 +1690,7 @@ A staff member's application for leave (owner decision 31 Oct 2026): waits for H
 
 - **Written by:** `src/server/attendance-actions.ts`, `src/server/leave-applications.ts`
 - **Sample or real:** Own flag: `is_sample = true` marks a sample row.
-- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `applied_by` → `core.users` (on delete restrict); `decided_by` → `core.users` (on delete restrict); `cancelled_by` → `core.users` (on delete restrict); `leave_record_id` → `ops.leave_records` (on delete restrict)
+- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `applied_by` → `core.users` (on delete restrict); `decided_by` → `core.users` (on delete restrict); `cancelled_by` → `core.users` (on delete restrict); `leave_record_id` → `ops.leave_records` (on delete restrict); `on_behalf_of` → `core.users` (on delete restrict)
 
 | Column | Type | Required | Allowed values / format | Example | Meaning |
 |---|---|---|---|---|---|
@@ -1629,9 +1710,53 @@ A staff member's application for leave (owner decision 31 Oct 2026): waits for H
 | `cancel_reason` | text | no |  |  | Why it was cancel (free text). |
 | `leave_record_id` | uuid | no |  | (id) | The leave record approval wrote; kept after cancelling, when that record is cancelled too. → `ops.leave_records` |
 | `version` | integer | yes (default 1) |  | 1 | Rises with every change: a decision made on an older copy is refused. |
+| `day_part` | text | no | `first_half`, `second_half` | first_half | Day part. |
+| `on_behalf_of` | uuid | no |  | (id) | Approval cover (F4-10): the approver the decider acted for. → `core.users` |
 | `is_sample` | boolean | yes (default false) |  | false | Is sample. |
 | `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
 | `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
+
+### `ops.leave_allowances`
+
+Yearly leave allowance per staff member and type (F4-12). No row = "No allowance set": no balance is shown or enforced. Balance = days + Σ leave_adjustments.days − approved leave in the year (a half day = 0.5); Unpaid never uses a balance.
+
+- **Written by:** `src/server/leave-balances.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `created_by` → `core.users` (on delete restrict); `updated_by` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `staff_id` | uuid | yes |  | (id) | Staff member. → `core.staff_members` |
+| `leave_type` | text | yes |  |  | Leave type. |
+| `year_start` | date | yes |  | 2026-10-21 | Year start. |
+| `days` | numeric(5, 1) | yes |  |  | Days. |
+| `created_by` | uuid | yes |  | (id) | User who created the row. → `core.users` |
+| `updated_by` | uuid | no |  | (id) | User who last changed the row. → `core.users` |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
+| `updated_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row last changed (UTC). |
+
+### `ops.leave_adjustments`
+
+Days added to or taken off a leave year: one carry-forward (> 0) and any HR adjustments.
+
+- **Written by:** `src/server/leave-balances.ts`
+- **Sample or real:** Own flag: `is_sample = true` marks a sample row.
+- **Links to:** `staff_id` → `core.staff_members` (on delete restrict); `created_by` → `core.users` (on delete restrict)
+
+| Column | Type | Required | Allowed values / format | Example | Meaning |
+|---|---|---|---|---|---|
+| `id` | uuid | yes (default gen_random_uuid()) |  | (id) | Row id (generated). |
+| `staff_id` | uuid | yes |  | (id) | Staff member. → `core.staff_members` |
+| `leave_type` | text | yes |  |  | Leave type. |
+| `year_start` | date | yes |  | 2026-10-21 | Year start. |
+| `kind` | text | yes | `carry_forward`, `adjustment` | carry_forward | What kind of row this is (allowed values listed). |
+| `days` | numeric(5, 1) | yes |  |  | Days. |
+| `reason` | text | yes |  |  | Why (free text). |
+| `created_by` | uuid | yes |  | (id) | User who created the row. → `core.users` |
+| `is_sample` | boolean | yes (default false) |  | false | Is sample. |
+| `created_at` | timestamp with time zone | yes (default now()) |  | 2026-10-21T10:30:00Z | When the row was created (UTC). |
 
 ### `ops.attendance_imports`
 

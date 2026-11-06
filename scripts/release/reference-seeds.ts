@@ -15,8 +15,10 @@ import {
 } from '../../apps/academic-os/seed/reference';
 import { leadReferenceSeeds } from '../../apps/business-ops-os/seed/lead-reference';
 import { onboardingTemplateSeeds } from '../../apps/business-ops-os/seed/onboarding-templates';
+import { staffChecklistTemplateSeeds } from '../../apps/business-ops-os/seed/staff-checklist-templates';
 import { teacherSeeds } from '../../apps/business-ops-os/seed/teachers';
 import { websiteFeesSeed } from '../../apps/business-ops-os/seed/website-fees';
+import { websiteFormSeeds } from '../../apps/business-ops-os/seed/website-form';
 import {
   marketingLegacySeed,
   marketingRegistrySeed,
@@ -27,6 +29,7 @@ import { coreReferenceSeeds, type SeedDefinition } from '@elevate/database/seed'
 export const REFERENCE_SEEDS: readonly SeedDefinition[] = [
   ...coreReferenceSeeds,
   ...leadReferenceSeeds,
+  ...websiteFormSeeds,
   optimisationCategoriesSeed,
   marketingRegistrySeed,
   ipmatBaselineSeed,
@@ -38,6 +41,7 @@ export const REFERENCE_SEEDS: readonly SeedDefinition[] = [
   batchesSeed,
   // Both need a real operations manager and say so until one exists; a later run loads them.
   ...onboardingTemplateSeeds,
+  ...staffChecklistTemplateSeeds,
   websiteFeesSeed,
 ];
 

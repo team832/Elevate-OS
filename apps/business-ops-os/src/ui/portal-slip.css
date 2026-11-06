@@ -1,0 +1,42 @@
+/* Portal setup slip (F4-13): a dialog on screen; on paper the slip alone. */
+.portal-slip {
+  max-width: 34rem;
+  padding: var(--el-space-5);
+}
+.portal-slip-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--el-space-2) var(--el-space-4);
+}
+.portal-slip-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.portal-slip-mono {
+  font-family: var(--el-font-mono);
+}
+.portal-slip-code {
+  font-size: 1.5rem;
+  letter-spacing: 0.15em;
+}
+.portal-slip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--el-space-3);
+}
+
+@media print {
+  body:has(> dialog.portal-slip[open]) > :not(dialog.portal-slip) {
+    display: none !important;
+  }
+  dialog.portal-slip {
+    position: static;
+    max-width: none;
+    border: 0;
+    box-shadow: none;
+  }
+  dialog.portal-slip::backdrop,
+  .portal-slip-screen-only {
+    display: none;
+  }
+}

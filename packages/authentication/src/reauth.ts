@@ -13,8 +13,8 @@ export type ReauthResult =
       retryAfterMs?: number;
     };
 
-// Separate from the login throttle: 5 failures / 15 min per user → 15 min lock (in memory, see throttle.ts).
-const reauthThrottle = new LoginThrottle();
+// Separate from the login throttle: 5 failures / 15 min per user → 15 min lock (see throttle.ts).
+const reauthThrottle = new LoginThrottle('reauth');
 
 /**
  * Fresh password re-check of an already signed-in user (D-041, e.g. confirming an admission).
@@ -26,9 +26,21 @@ export async function verifyCurrentUserPassword(
   userId: UserId,
   password: string,
 ): Promise<ReauthResult> {
-  const key = `reauth|${userId}`;
-  const locked = reauthThrottle.retryAfterMs(key);
-  if (locked > 0) return { ok: false, reason: 'locked', retryAfterMs: locked };
+  const locked = async (): Promise<ReauthResult | null> => {
+    const retryAfterMs = await reauthThrottle.retryAfterMs(db, userId);
+    return retryAfterMs > 0 ? { ok: false, reason: 'locked', retryAfterMs } : null;
+  };
+  const notAGuess = async (reason: 'inactive' | 'no_password'): Promise<ReauthResult> => {
+    await reauthThrottle.undo(db, userId);
+    return { ok: false, reason };
+  };
+  const before = await locked();
+  if (before) return before;
+  // Counted before the slow check, as at sign-in: a guess the count puts past the limit is refused unchecked.
+  if (!(await reauthThrottle.recordFailure(db, userId))) {
+    await reauthThrottle.undo(db, userId);
+    return (await locked()) ?? { ok: false, reason: 'locked' };
+  }
 
   const [user] = await db
     .select({ email: users.email, passwordHash: users.passwordHash, status: users.status })
@@ -39,15 +51,9 @@ export async function verifyCurrentUserPassword(
     ? await verifyPassword(password, user.passwordHash)
     : await burnVerificationTime(password).then(() => false);
   if (!user || user.status !== 'active' || !isAllowedEmail(user.email))
-    return { ok: false, reason: 'inactive' };
-  if (!user.passwordHash) return { ok: false, reason: 'no_password' };
-  if (!ok) {
-    reauthThrottle.recordFailure(key);
-    const retryAfterMs = reauthThrottle.retryAfterMs(key);
-    return retryAfterMs > 0
-      ? { ok: false, reason: 'locked', retryAfterMs }
-      : { ok: false, reason: 'wrong_password' };
-  }
-  reauthThrottle.reset(key);
+    return notAGuess('inactive');
+  if (!user.passwordHash) return notAGuess('no_password');
+  if (!ok) return (await locked()) ?? { ok: false, reason: 'wrong_password' };
+  await reauthThrottle.reset(db, userId);
   return { ok: true, method: 'password', verifiedAt: new Date() };
 }

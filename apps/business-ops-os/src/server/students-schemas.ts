@@ -3,7 +3,7 @@
  * guardians, student search and student reports (owner brief §6–§9, §15).
  */
 import { z } from 'zod';
-import { isoDateSchema } from '@elevate/shared-contracts';
+import { isoDateSchema, optText } from '@elevate/shared-contracts';
 import { OPS_EXIT_MATERIAL_STATUSES, OPS_GUARDIAN_RELATIONSHIPS } from '@elevate/database';
 import { EXIT_STATUSES } from '../domain';
 import { COHORT_PROGRAMMES } from '../domain/catalog';
@@ -11,7 +11,6 @@ import { STUDENT_FEE_STATUSES } from '../domain/fee-plans';
 import { PAST_OUTCOMES } from '../domain/student-lifecycle';
 import { studentListQuery } from './admissions-schemas';
 
-const optText = (max: number) => z.string().trim().max(max).nullish();
 const reason = z.string().trim().min(3).max(1000);
 
 /** POST /demos/{id}/convert */

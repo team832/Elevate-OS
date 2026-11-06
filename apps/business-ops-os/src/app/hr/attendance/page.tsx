@@ -1,12 +1,13 @@
 /**
  * /ops/hr/attendance (owner brief 23 Oct 2026 §12): staff days by date, what needs review,
- * correction requests, leave applications, schedules, holidays and recorded leave, and punch file imports. Everyone's
+ * correction requests, leave applications, leave allowances and balances (F4-12), schedules, holidays and recorded leave, and punch file imports. Everyone's
  * attendance (ops:attendance:read, all scope); changes need ops:attendance:manage.
  */
 import { can, type Principal } from '@elevate/authorization';
 import { PageHeader, Subnav } from '@elevate/shared-ui';
 import { listAttendance } from '../../../server/attendance';
 import {
+  allowanceListQuery,
   attendanceListQuery,
   correctionListQuery,
   leaveListQuery,
@@ -16,19 +17,28 @@ import { getPunchImport, listPunchImports } from '../../../server/attendance-imp
 import { aiBlocked } from '../../../server/ai-drafts';
 import { attendanceSetup } from '../../../server/attendance-lists';
 import { staffIdForUser } from '../../../server/context';
-import { canDecideLeave, listLeaveApplications } from '../../../server/leave-applications';
+import {
+  canDecideLeave,
+  leaveTypes,
+  listLeaveApplications,
+  teachingStaff,
+} from '../../../server/leave-applications';
+import { allowanceSheet } from '../../../server/leave-balances';
 import { ActionForm } from '../../../ui/action-form';
+import { istToday } from '../../../domain/dates';
 import { fmtDate } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref, Pager } from '../../../ui/list-controls';
+import { AllowancesTab } from './_components/allowances';
 import { API, BASE, DaysTab } from './_components/days';
 import { ImportTab } from './_components/import';
-import { LeaveTab } from './_components/leave';
+import { leaveFiles, LeaveTab } from './_components/leave';
+import { RegisterDownload } from './_components/register-download';
 import { CalendarTab, SchedulesTab } from './_components/setup';
 import { CorrectionsTable, Legend } from './_components/shared';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Attendance' };
+export const metadata = { title: 'Attendance and leave' };
 
 type Params = Record<string, string | undefined>;
 const TABS = [
@@ -36,6 +46,7 @@ const TABS = [
   ['review', 'Needs review'],
   ['corrections', 'Corrections'],
   ['leave', 'Leave applications'],
+  ['allowances', 'Leave allowances'],
   ['schedules', 'Schedules'],
   ['calendar', 'Holidays and recorded leave'],
   ['import', 'Import punches'],
@@ -69,6 +80,19 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
     };
     const query =
       attendanceListQuery.safeParse(raw).data ?? attendanceListQuery.parse({ review: raw.review });
+    const leave =
+      tab === 'leave'
+        ? await listLeaveApplications(
+            db,
+            user,
+            leaveListQuery.safeParse({
+              status: params.status === 'all' ? undefined : (params.status ?? 'pending'),
+              staffId: params.staffId || undefined,
+              page: params.page,
+            }).data ?? { status: 'pending' },
+          )
+        : null;
+    const canDecide = !!leave && (await canDecideLeave(db, user));
     return {
       setup,
       list: tab === '' || tab === 'review' ? await listAttendance(db, user, query) : null,
@@ -85,33 +109,34 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
               },
             )
           : null,
-      leave:
-        tab === 'leave'
-          ? {
-              list: await listLeaveApplications(
-                db,
-                user,
-                leaveListQuery.safeParse({
-                  status: params.status === 'all' ? undefined : (params.status ?? 'pending'),
-                  staffId: params.staffId || undefined,
-                  page: params.page,
-                }).data ?? { status: 'pending' },
-              ),
-              canDecide: await canDecideLeave(db, user),
-              ownStaffId: await staffIdForUser(db, user.id),
-            }
+      leave: leave && {
+        list: leave,
+        canDecide,
+        ownStaffId: await staffIdForUser(db, user.id),
+        // Leave letters are read only by leave approvers (attachment-access.ts): no column for others.
+        files: canDecide ? await leaveFiles(db, user, '/ops/api/v1', leave.items) : undefined,
+      },
+      allowances:
+        tab === 'allowances'
+          ? await allowanceSheet(db, user, allowanceListQuery.safeParse(params).data ?? {})
           : null,
+      types: tab === 'calendar' ? await leaveTypes(db) : [],
       imports: tab === 'import' && canManage ? await listPunchImports(db, user) : [],
       preview:
         tab === 'import' && canManage && params.import
           ? await getPunchImport(db, user, params.import)
           : null,
       ai: tab === 'import' && canManage ? await aiBlocked(db, user, 'csvMapping') : null,
+      // Send to Academic again (D-134): teachers' leave, for leave approvers.
+      resendFor:
+        tab === 'calendar' && (await canDecideLeave(db, user))
+          ? await teachingStaff(db, setup.leave.map((l) => l.staffId))
+          : new Set<string>(),
     };
   });
   const header = (
     <PageHeader
-      title="Attendance"
+      title="Attendance and leave"
       description="Staff check-ins and check-outs, daily status and HR decisions. Separate from classes taught."
       tabs={
         <Subnav
@@ -132,7 +157,8 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
         {result.view}
       </>
     );
-  const { setup, list, corrections, leave, imports, preview, ai } = result.data;
+  const { setup, list, corrections, leave, allowances, types, imports, preview, ai, resendFor } =
+    result.data;
   return (
     <>
       {header}
@@ -145,6 +171,9 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
           review={tab === 'review'}
           canManage={canManage}
         />
+      ) : null}
+      {list && tab === '' ? (
+        <RegisterDownload params={params} today={istToday(new Date())} />
       ) : null}
       {corrections ? (
         <>
@@ -207,12 +236,17 @@ async function HrAttendance({ user, params }: { user: Principal; params: Params 
         </>
       ) : null}
       {leave ? <LeaveTab {...leave} params={params} /> : null}
+      {allowances ? (
+        <AllowancesTab sheet={allowances} canManage={canManage} staffOptions={setup.staffOptions} />
+      ) : null}
       {tab === 'schedules' ? <SchedulesTab setup={setup} canManage={canManage} /> : null}
       {tab === 'calendar' ? (
         <CalendarTab
           setup={setup}
           canManage={canManage}
           canDecideHolidays={can(user, 'ops:hr_settings:manage')}
+          resendFor={resendFor}
+          types={types}
         />
       ) : null}
       {tab === 'import' && canManage ? (

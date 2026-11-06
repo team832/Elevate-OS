@@ -10,4 +10,5 @@ export * from './summaries';
 export * from './phone';
 export * from './modules/marketing';
 export * from './modules/academic';
+export * from './modules/academic-admit-cards';
 export * from './modules/ops';

@@ -1,5 +1,5 @@
 /* Data tables (DataTable, RecordTable): a rounded well; the header row is raised; rows warm on hover.
- * Mobile first: compact tables are labelled blocks on phones and a real table from 720px. */
+ * Mobile first: compact tables are labelled blocks on phones and a real table from 720px and on paper. */
 .el-table-wrap {
   /* Contains visually hidden text (and the hidden compact header), so it never widens the page. */
   position: relative;
@@ -121,7 +121,7 @@
 }
 /* In a phone card a number lines up with the other values, not against the far edge, and a value
  * with no label (row actions) takes the whole width. */
-@media (max-width: 719.98px) {
+@media screen and (max-width: 719.98px) {
   .el-table-compact td.el-num {
     text-align: left;
   }
@@ -143,7 +143,7 @@
     z-index: 1;
   }
 }
-@media (min-width: 720px) {
+@media print, (min-width: 720px) {
   .el-table-compact {
     display: table;
   }

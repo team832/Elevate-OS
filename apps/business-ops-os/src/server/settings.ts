@@ -33,8 +33,8 @@ export async function updateSetting(
   actor: Actor,
   input: { key: string; value: unknown; note?: string | null },
   requestId?: string,
-  /** HR settings are changed with ops:hr_settings:manage (server/hr-settings.ts). */
-  permission: Permission = 'ops:settings:manage',
+  /** HR keys: ops:hr_settings:manage (server/hr-settings.ts); job keys: whoever runs jobs (D-133). */
+  permission: Permission = input.key.startsWith('jobs.') ? 'ops:jobs:run' : 'ops:settings:manage',
 ) {
   await accessScope(db, actor, permission);
   const check = validateSettingChange(input.key, input.value);

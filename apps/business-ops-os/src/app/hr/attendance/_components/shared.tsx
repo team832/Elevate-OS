@@ -12,6 +12,7 @@ import {
   SHOWN_STATUSES,
   type AttendanceStatus,
 } from '../../../../domain/attendance';
+import { LEAVE_DAY_PART_LABELS, type LeaveDayPart } from '../../../../domain/leave';
 import type { AttendanceRow } from '../../../../server/attendance';
 import type { listCorrections } from '../../../../server/attendance-corrections';
 import { fmtDate, fmtDateTime } from '../../../../ui/format';
@@ -42,8 +43,8 @@ const MEANING: Record<AttendanceStatus, string> = {
   weekly_off: 'Not a working day in the work schedule.',
 };
 
-/** What HR may decide a day is. */
-export const statusOptions = ATTENDANCE_STATUSES.map((s) => ({
+/** What HR may decide a day is: never On leave, which only a leave record sets (the server refuses it). */
+export const statusOptions = ATTENDANCE_STATUSES.filter((s) => s !== 'on_leave').map((s) => ({
   value: s,
   label: ATTENDANCE_STATUS_LABELS[s],
 }));
@@ -57,17 +58,24 @@ export function AttendanceBadge({
   status,
   basis,
   scheduled,
+  leavePart,
 }: {
   status: AttendanceStatus;
   basis?: string;
   /** null = no work schedule is known, so nothing can be judged about an unrecorded day. */
   scheduled?: boolean | null;
+  /** On leave for one half only (F4-12). */
+  leavePart?: LeaveDayPart | null;
 }) {
   if (scheduled !== undefined && isNoScheduleDay({ status, scheduled, basis: basis as never }))
     return <StatusBadge>{SHOWN_STATUS_LABELS.no_schedule}</StatusBadge>;
+  const half = status === 'on_leave' && leavePart;
   return (
     <>
-      <StatusBadge tone={TONE[status]}>{ATTENDANCE_STATUS_LABELS[status]}</StatusBadge>
+      <StatusBadge tone={TONE[status]}>
+        {half ? SHOWN_STATUS_LABELS.half_day_leave : ATTENDANCE_STATUS_LABELS[status]}
+      </StatusBadge>
+      {half ? <span className="el-field-hint"> ({LEAVE_DAY_PART_LABELS[half]})</span> : null}
       {basis === 'hr_decision' ? <span className="el-field-hint"> Decided by HR</span> : null}
     </>
   );
@@ -95,6 +103,15 @@ export function Legend() {
             <dd>{MEANING[s]}</dd>
           </div>
         ))}
+        <div>
+          <dt>
+            <AttendanceBadge status="on_leave" leavePart="first_half" />
+          </dt>
+          <dd>
+            Approved leave for the first or second half of the day only: 0.5 of a day where HR set
+            an allowance, and one of the days on leave in the totals.
+          </dd>
+        </div>
         <div>
           <dt>
             <AttendanceBadge status="unmarked" scheduled={null} />
@@ -144,7 +161,14 @@ export function DayTable({
     {
       key: 'status',
       header: 'Status',
-      render: (r) => <AttendanceBadge status={r.status} basis={r.basis} scheduled={r.scheduled} />,
+      render: (r) => (
+        <AttendanceBadge
+          status={r.status}
+          basis={r.basis}
+          scheduled={r.scheduled}
+          leavePart={r.leavePart}
+        />
+      ),
     },
     { key: 'in', header: 'First in', render: (r) => (r.firstIn ? timeText(r.firstIn) : '—') },
     { key: 'out', header: 'Last out', render: (r) => (r.lastOut ? timeText(r.lastOut) : '—') },

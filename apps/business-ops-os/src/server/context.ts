@@ -12,6 +12,7 @@ import {
   type Principal,
 } from '@elevate/authorization';
 import { programmes, staffMembers, userRoles, users, type Database } from '@elevate/database';
+import { staffIdForUser } from '@elevate/server-kit';
 import { ForbiddenError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import { ROLE_KEYS, type ProgrammeId, type StaffMemberId, type UserId } from '@elevate/shared-types';
 import { CODE_FORMATS, formatCode, type CodeKind } from '../domain';
@@ -19,15 +20,7 @@ import { ancestorChain } from '../domain/graph';
 
 export type Actor = Principal;
 
-/** The staff record linked to a user (null when the user is not staff). */
-export async function staffIdForUser(db: Database, userId: UserId): Promise<StaffMemberId | null> {
-  const [row] = await db
-    .select({ id: staffMembers.id })
-    .from(staffMembers)
-    .where(eq(staffMembers.userId, userId))
-    .limit(1);
-  return row?.id ?? null;
-}
+export { staffIdForUser };
 
 /**
  * Every staff member whose `manager_id` chain leads to `staffId` (direct and indirect reports,

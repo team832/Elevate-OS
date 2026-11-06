@@ -27,6 +27,7 @@ import {
 } from '@elevate/database';
 import { sampleRowIds } from '@elevate/database/seed';
 import { addDays, type IsoDate } from '@elevate/shared-types';
+import { datedTests } from '../src/server/services/timetable';
 import { sampleAnchorDate } from './samples';
 
 /** [batch, subject, teacher, ISO weekday, start]. Tara and Neel work Wednesday to Sunday. */
@@ -423,6 +424,9 @@ export async function seedFillTimetable(
     hold(a.batchId, a.date, a.time, a.minutes);
     if (a.teacher) hold(a.teacher, a.date, a.time, a.minutes);
   }
+  // A sample test holds its batches too: no class during a test (ruling 6 Nov 2026).
+  for (const { a, batchIds } of await datedTests(db, {}))
+    if (a.startTime && a.durationMinutes) for (const b of batchIds) hold(b, a.scheduledDate!, a.startTime, a.durationMinutes);
 
   type Planned = {
     row: SessionRow;

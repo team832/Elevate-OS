@@ -3,9 +3,10 @@ import { withContentSecurityPolicy } from '@elevate/configuration/security-heade
 import { isAllowedActionOrigin } from '@elevate/configuration/workspaces';
 
 /**
- * Module proxy (Next.js 16's renamed middleware): sets the Content-Security-Policy with a
- * fresh nonce on every page, whether reached directly or through the platform's rewrite.
- * Static security headers are in next.config.ts. Access is checked on each page and route.
+ * Module proxy (Next.js 16's renamed middleware): refuses a page POST from another site and sets
+ * the Content-Security-Policy with a fresh nonce on every page, whether reached directly or through
+ * the platform's rewrite. Static security headers come from `zoneConfig()` (@elevate/configuration).
+ * Access is checked on each page and route.
  */
 export function proxy(request: NextRequest) {
   if (request.method === 'POST' && !isAllowedActionOrigin(request))

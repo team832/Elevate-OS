@@ -230,7 +230,7 @@ export function OverviewBlocks({ o, user }: { o: Overview; user: Principal }) {
             definition="Demos with a class in the period by their recorded outcome."
             freshness={now}
             href={to(demoListHref(r))}
-            link="Demo students"
+            link="Demos"
           >
             <OutcomeDonut report={funnel.data} user={user} />
           </Block>

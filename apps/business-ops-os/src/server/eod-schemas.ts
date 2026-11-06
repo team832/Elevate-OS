@@ -1,9 +1,8 @@
 import { z } from 'zod';
-import { isoDateSchema } from '@elevate/shared-contracts';
+import { isoDateSchema, optText } from '@elevate/shared-contracts';
 import { EOD_STATUSES } from '../domain/staff-tasks';
 import { PERIOD_KINDS } from '../domain/work-report';
 
-const optText = (max: number) => z.string().trim().max(max).nullish();
 const required = (max: number) => z.string().trim().min(1, 'Required').max(max);
 
 /** Build or refresh the draft for the day, week or month containing `reportDate`; narrative fields are saved when given. */
@@ -31,6 +30,7 @@ export const EOD_REVIEW_ACTIONS = [
   'clarification_requested',
   'revision_requested',
   'acknowledged',
+  'more_detail_requested',
 ] as const;
 export const eodReviewBody = z
   .object({ kind: z.enum(EOD_REVIEW_ACTIONS), text: optText(4000) })
@@ -84,6 +84,7 @@ export const REPORT_STANDINGS = [
   'submitted',
   'revision_requested',
   'acknowledged',
+  'more_detail_requested',
 ] as const;
 /** HR work-report list: one row per staff member for the period containing `date`. */
 export const workReportListQuery = z.object({

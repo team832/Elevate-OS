@@ -55,6 +55,7 @@ export async function attendanceSetup(db: Database, actor: Actor) {
         fromDate: opsLeaveRecords.fromDate,
         toDate: opsLeaveRecords.toDate,
         kind: opsLeaveRecords.kind,
+        dayPart: opsLeaveRecords.dayPart,
         status: opsLeaveRecords.status,
         reason: opsLeaveRecords.reason,
         isSample: opsLeaveRecords.isSample,

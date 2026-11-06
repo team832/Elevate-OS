@@ -27,11 +27,10 @@ import {
   academicBatches,
   academicEnrolments,
   academicTeacherAssignments,
-  staffMembers,
   type AcademicSubjectId,
   type Database,
 } from '@elevate/database';
-import { recordAudit } from '@elevate/server-kit';
+import { recordAudit, staffIdForUser } from '@elevate/server-kit';
 import { ForbiddenError, NotFoundError } from '@elevate/shared-contracts';
 import { toIsoDate, type BatchId, type StaffMemberId, type StudentId } from '@elevate/shared-types';
 
@@ -45,14 +44,7 @@ export type TeachingFact = { batchId: BatchId; subjectId: AcademicSubjectId; aca
 export type OwnScope = { kind: 'own'; staffId: StaffMemberId | null; batchIds: BatchId[]; assignments: TeachingFact[] };
 export type Scope = { kind: 'all' } | OwnScope;
 
-export async function staffIdForUser(db: Database, userId: string): Promise<StaffMemberId | null> {
-  const [row] = await db
-    .select({ id: staffMembers.id })
-    .from(staffMembers)
-    .where(eq(staffMembers.userId, userId as AuthenticatedUser['id']))
-    .limit(1);
-  return row?.id ?? null;
-}
+export { staffIdForUser };
 
 const ta = academicTeacherAssignments;
 /** The end of an assignment window: its end date, else open while `active` (an `ended` row without a date is closed). */

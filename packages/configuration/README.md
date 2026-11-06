@@ -17,8 +17,10 @@ Invalid environment configuration for "platform" — 2 problem(s):
 ```
 
 Other exports:
-- `loadRootEnv()` — loads `<repo>/.env` into `process.env` for scripts without overwriting existing values (Next.js apps use `@next/env` in `next.config.ts` instead).
+- `loadRootEnv()` — loads `<repo>/.env` into `process.env` without overwriting existing values; scripts call it, and the Next.js apps load it through `zoneConfig()`.
 - `findRepoRoot()`, `isLocalDatabaseUrl(url)` (used by `db:reset` / `db:start` safety checks).
+- `zoneConfig({ basePath?, env, … })` (`@elevate/configuration/next-config`, 6 Nov 2026) — the one `next.config` of all four apps: root `.env`, base path and `/` redirect, security headers, shared `transpilePackages`, standalone output for `release:package`, and the memory flags `webpackMemoryOptimizations` and `preloadEntriesOnStart: false` (not yet measured). Test: `tests/next-config.test.ts`.
+- `securityHeaders()` (`/security-headers`); `appOrigin()` and the origin checks (`/workspaces`).
 
 Load configuration lazily (inside a handler or a memoised getter), never at module top level — `next build` evaluates modules without a database.
 

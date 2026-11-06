@@ -18,7 +18,7 @@ import type { deliverBody, substituteBody } from '../schemas-sessions';
 import { activeStaffOrThrow } from './assignments';
 import { assertLoggable, assertSessionAccess, lockSession } from './session-guards';
 import { getSetting } from './settings';
-import { checkAgainst, conflictContext, lockTimetable, refuseConflicts, teachersBySession, teacherUserId, toTimetableSession } from './timetable';
+import { checkAgainst, conflictContext, lockTimetable, refuseConflicts, teachersBySession, teacherUserId, toTimetableSession, weekRange } from './timetable';
 import { fmtClock } from '../../domain/time';
 
 const activeRows = (tx: Database, sessionId: string, participation: 'planned' | 'actual') =>
@@ -98,9 +98,12 @@ export async function assignSubstitute(db: Database, actor: Actor, sessionId: st
     await activeStaffOrThrow(tx, input.staffId);
     const planned = await activeRows(tx, session.id, 'planned');
     if (planned.some((p) => p.staffId === input.staffId)) throw new ConflictError('That teacher is already on this session.');
-    const ctx = await conflictContext(tx, session.date, session.date);
-    const others = planned.filter((p) => p.replacesStaffId !== session.teacherStaffId && p.staffId !== session.teacherStaffId).map((p) => p.staffId as string);
-    refuseConflicts(checkAgainst(ctx, [toTimetableSession(session, [input.staffId, ...others])]), 'The substitute is not free at this time; nothing was changed.');
+    const week = weekRange({ from: session.date, to: session.date }); // the weekly workload cap needs the whole week
+    const ctx = await conflictContext(tx, week.from, week.to);
+    // Only what is about the substitute blocks cover (REV-4 ruling): their overlaps, availability, leaving, workload.
+    const check = checkAgainst(ctx, [toTimetableSession(session, [input.staffId])]);
+    const hard = check.hard.filter((c) => c.code.startsWith('TEACHER_'));
+    refuseConflicts({ ...check, hard, verdict: hard.length ? 'infeasible' : 'feasible' }, 'The substitute is not free at this time; nothing was changed.');
     // Earlier substitutes for the same teacher stop being planned (kept, marked removed).
     const now = new Date();
     for (const p of planned.filter((p) => p.replacesStaffId === session.teacherStaffId)) {

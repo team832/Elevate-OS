@@ -2,6 +2,8 @@
 
 Since 22 Oct 2026 this is the **Marketing workspace** at http://localhost:3002/marketing (D-072; guide: `docs/WORKSPACES.md` at the repo root): campaigns, content and metric imports, plus the lead and follow-up screens and each person's own tasks and EOD reports, mounted from Business Ops' shared entries (D-073). Runs Elevate’s social content from idea to measured post under the brand rules, with an explicit, version-bound approval before anything is scheduled or published. Built in wave 2 by the Marketing team. **Status: Implemented and Tested in the repository; nothing is Deployed. No real platform is connected — publishing is a mock that says so.**
 
+**6 Nov 2026 (D-153, D-155; Implemented, automated tests, no browser pass):** the Lead sharing tab and My payslips (both mounted from Business Operations), CSV downloads, print on every page. Routes: `docs/API.md`.
+
 ## 1. Scope and boundaries
 - **Owns (D-010):** social accounts, ideas, content items, versions, assets (metadata), reviews, comments, assignments, placements, collab groups, publishing records/attempts, metric imports/snapshots/values, campaigns, brand rules, policy settings — all in the `marketing` schema.
 - **Does not own:** leads/enquiries (Business Ops), students/consent records (Academic/platform), users and roles (platform). Output to others is `MarketingSummaryV1`. Since 22 Oct 2026 Marketing imports exactly two Business Ops entries, `@elevate/business-ops-os/work` and `@elevate/business-ops-os/leads` (ESLint `SHARED_ENTRIES`, D-073), to show the one lead record, follow-ups and own tasks in this workspace; the records stay in the `ops` schema.

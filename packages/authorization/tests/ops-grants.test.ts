@@ -104,3 +104,22 @@ describe('HR grants', () => {
     }
   });
 });
+
+// FEATURES-W4 (6 Nov 2026), PROPOSED-GRANTS-2026-11-06: salaries stay out of every broad grant.
+describe('wave 4 grants', () => {
+  it.each([
+    ['ops:certificates:issue', all('operations_manager', 'director')],
+    ['ops:payroll:manage', all('hr_manager', 'director')],
+    ['ops:payroll:approve', all('director')],
+    ['ops:payslips:read', own(...STAFF, 'operations_manager', 'director', 'hr_manager')],
+  ] as const)('%s is held by exactly %j', (permission, expected) => {
+    expect(holders(permission)).toEqual(expected);
+  });
+
+  it.each(['student', 'guardian'] as const)(
+    '%s holds only the portal (F4-13), never a workspace or the staff home',
+    (role) => {
+      expect([...grantsForRole(role)]).toEqual([['platform:portal:access', 'own']]);
+    },
+  );
+});

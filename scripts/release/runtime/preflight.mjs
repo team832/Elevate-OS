@@ -94,6 +94,7 @@ async function checkDatabase() {
     const hasUsers = await exists(client, 'core.users');
     const hasNotifications = await exists(client, 'core.notifications');
     const pending0017 = pending.some((tag) => tag.startsWith('0017'));
+    const pending0019 = pending.some((tag) => tag.startsWith('0019'));
     if (pending0017 && hasNotifications) {
       // The same rule migration 0017 adds: a stored link that breaks it makes the migration fail.
       const { n } = await firstRow(
@@ -105,7 +106,7 @@ async function checkDatabase() {
       else ok('Migration 0017 precheck: no stored notification link breaks its rule.');
     }
 
-    if (!hasUsers) return { pending0017, hasNotifications };
+    if (!hasUsers) return { pending0017, pending0019, hasNotifications };
 
     const samples = await sampleRows(client);
     if (samples > 0) fail(`${samples} sample row(s) in this database. Production must hold none: use an empty database.`);
@@ -121,6 +122,7 @@ async function checkDatabase() {
 
     return {
       pending0017,
+      pending0019,
       hasNotifications,
       hasProgrammes: Number((await firstRow(client, 'SELECT count(*) AS n FROM core.programmes')).n) > 0,
       hasAdmin: Number((await firstRow(client, `SELECT count(*) AS n FROM core.user_roles r JOIN core.users u ON u.id = r.user_id WHERE r.role = 'platform_admin' AND u.status = 'active'`)).n) > 0,

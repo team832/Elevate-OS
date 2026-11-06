@@ -9,4 +9,5 @@ export * from './health';
 export * from './paths';
 export * from './search';
 export * from './csv';
+export * from './staff';
 export { createLogger, type Logger, type LogLevel } from '@elevate/configuration';

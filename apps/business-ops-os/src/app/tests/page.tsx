@@ -27,7 +27,7 @@ import {
 } from './_components/labels';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Tests and Mock Tests' };
+export const metadata = { title: 'Tests and mock tests' };
 
 type Params = Record<string, string | undefined>;
 const FILTERS = ['courseId', 'batchId', 'teacherStaffId', 'from', 'to'] as const;
@@ -38,7 +38,7 @@ export default async function TestsPage({ searchParams }: { searchParams: Promis
   return (
     <Frame access={access} active="tests">
       <PageHeader
-        title="Tests and Mock Tests"
+        title="Tests and mock tests"
         description="Tests are kept in Academic OS; teachers see the same record there. Schedule tests, upload papers, import scores and publish results here."
         actions={
           can(access.user, 'ops:assessments:manage') ? (

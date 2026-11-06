@@ -4,6 +4,7 @@ import { Fragment } from 'react';
 import { EmptyState, PageHeader, SETTINGS_STATE_NOTE, StatusBadge } from '@elevate/shared-ui';
 import type { ResolvedSetting } from '../../domain';
 import { getCrmAdapter } from '../../server/adapters/crm';
+import { listJobs } from '../../server/jobs';
 import { listTemplates } from '../../server/onboarding';
 import { listSettings } from '../../server/settings';
 import { AdmissionsNav } from '../../ui/admissions-nav';
@@ -13,6 +14,7 @@ import { listHref, SearchPanel } from '../../ui/list-controls';
 import { FormModal, RecordModal } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
 import { DetailTable, Segment } from '../../ui/sections';
+import { BackgroundJobs } from './_components/background-jobs';
 import { OnboardingTemplates } from './_components/onboarding-templates';
 import {
   decisionWords,
@@ -53,6 +55,8 @@ const GROUPS: [string, RegExp][] = [
   ['Fees', /^fees\./],
   ['Events and appointments', /^(events|appointments)\./],
   ['Reports', /^reports\./],
+  ['Leads and website form', /^leads\./],
+  ['Student and parent portal', /^portal\./],
   ['Other', /./],
 ];
 const groupOf = (key: string) => GROUPS.find(([, re]) => re.test(key))![0];
@@ -85,15 +89,17 @@ async function Settings({
   admissions: boolean;
 }) {
   const r = await load(async (db) => {
-    const [settings, crm, templates] = await Promise.all([
+    const [settings, crm, templates, jobs] = await Promise.all([
       listSettings(db, user),
       getCrmAdapter().status(),
       admissions ? listTemplates(db, user) : [],
+      admissions ? [] : listJobs(db, user),
     ]);
-    return { settings, crm, templates };
+    // Job settings have their own section (BackgroundJobs).
+    return { settings: settings.filter((s) => !s.key.startsWith('jobs.')), crm, templates, jobs };
   });
   if (!r.ok) return r.view;
-  const { settings, crm, templates } = r.data;
+  const { settings, crm, templates, jobs } = r.data;
   const q = sp.q?.trim().toLowerCase();
   const rows = settings.filter(
     (s) =>
@@ -128,6 +134,7 @@ async function Settings({
           />
         </Segment>
       )}
+      {admissions ? null : <BackgroundJobs jobs={jobs} canRun={can(user, 'ops:jobs:run')} />}
       <SearchPanel
         action={BASE}
         hidden={admissions ? { group: 'admissions' } : undefined}

@@ -22,7 +22,9 @@ import { StudentFeedbackSection } from '../../../ui/student-feedback-section';
 import { StudentFeesSection } from '../../../ui/student-fees-section';
 import { KycTab } from '../_components/profile-kyc';
 import { OnboardingTab } from '../_components/profile-onboarding';
+import { PortalAccessSegment } from '../_components/profile-portal';
 import { AcademicSections } from '../_components/academic-sections';
+import { StudentCertificates } from '../_components/certificates';
 import {
   ActivityTimeline,
   AdmissionFacts,
@@ -206,7 +208,20 @@ async function panel(
       );
     }
     case 'kyc':
-      return <KycTab d={d} user={user} action={query.action} documentId={query.doc} base={base} />;
+      return (
+        <>
+          <KycTab d={d} user={user} action={query.action} documentId={query.doc} base={base} />
+          {studentId && d.person.privateFields === 'visible' ? (
+            <PortalAccessSegment
+              studentId={studentId}
+              name={d.person.fullName}
+              user={user}
+              action={query.action}
+              base={base}
+            />
+          ) : null}
+        </>
+      );
     case 'enrolments':
       return (
         <>
@@ -274,30 +289,33 @@ async function panel(
       );
     case 'reports':
       return (
-        <Segment title="Reports and documents" flush>
-          <DetailTable
-            rows={[
-              {
-                label: 'Student report',
-                value: d.actions.report ? (
-                  <a href={`/ops/students/${studentId}/report`}>
-                    Open or generate the student report
-                  </a>
-                ) : (
-                  'Needs permission to generate student reports and a linked student record.'
-                ),
-              },
-              openHref(user, `/ops/admissions/${d.admission.id}`) && {
-                label: 'Admission form and acknowledgement',
-                value: <a href={`/ops/admissions/${d.admission.id}`}>On the admission record</a>,
-              },
-              {
-                label: 'Identity documents',
-                value: 'Masked references only, under KYC and guardians (no scans are stored).',
-              },
-            ]}
-          />
-        </Segment>
+        <>
+          <Segment title="Reports and documents" flush>
+            <DetailTable
+              rows={[
+                {
+                  label: 'Student report',
+                  value: d.actions.report ? (
+                    <a href={`/ops/students/${studentId}/report`}>
+                      Open or generate the student report
+                    </a>
+                  ) : (
+                    'Needs permission to generate student reports and a linked student record.'
+                  ),
+                },
+                openHref(user, `/ops/admissions/${d.admission.id}`) && {
+                  label: 'Admission form and acknowledgement',
+                  value: <a href={`/ops/admissions/${d.admission.id}`}>On the admission record</a>,
+                },
+                {
+                  label: 'Identity documents',
+                  value: 'Masked references only, under KYC and guardians (no scans are stored).',
+                },
+              ]}
+            />
+          </Segment>
+          <StudentCertificates d={d} user={user} />
+        </>
       );
     case 'timeline':
       return (

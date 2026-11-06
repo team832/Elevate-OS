@@ -52,6 +52,36 @@ describe('an unknown API path (RVA-008)', () => {
   });
 });
 
+describe('crossSite (F4-15): a public form another website may post to', () => {
+  const form = defineRoute({ permission: 'public', crossSite: true }, async ({ user }) => ({ user }));
+  const fromAnotherSite = async (route: typeof form, cookie = '') =>
+    route(
+      new Request('http://localhost:3000/ops/api/v1/form', {
+        method: 'POST',
+        headers: { host: 'localhost:3000', origin: 'https://evil.example', cookie },
+      }),
+      { params: Promise.resolve({}) },
+    );
+
+  it('skips the generic refusal on that route only, and never reads the session', async () => {
+    const someone = await createTestUser(ctx.db, { roles: ['operations_manager'] });
+    const res = await fromAnotherSite(form, `elevate_session=${someone.token}`);
+    expect(res.status).toBe(200);
+    expect((await res.json()).data).toEqual({ user: null });
+    expect((await fromAnotherSite(unknownApiRoute)).status).toBe(403);
+  });
+
+  it.each(['ops:leads:write', 'authenticated'] as const)(
+    'is refused with permission %s, by the type and when defined',
+    (permission) => {
+      // @ts-expect-error crossSite is only for public routes
+      expect(() => defineRoute({ permission, crossSite: true }, async () => null)).toThrow(
+        /only for public routes/,
+      );
+    },
+  );
+});
+
 describe('defineRoute', () => {
   it('401 UNAUTHENTICATED without a session', async () => {
     const res = await callRoute(

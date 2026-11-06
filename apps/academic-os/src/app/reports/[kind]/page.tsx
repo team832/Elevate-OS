@@ -6,7 +6,6 @@ import type { PageAccess } from '@elevate/server-kit/next';
 import { buildReport } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { reportParams, reportQuery, type ReportKind } from '../../../server/schemas-assessment';
-import { PrintButton } from '../../../ui/print-button';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 import '../print.css';
 import { fmtDateTime } from '../../../ui/badges';
@@ -42,7 +41,6 @@ async function Body({ access, kind, params }: { access: PageAccess; kind: string
         description={r.subtitle}
         actions={
           <>
-            <PrintButton />
             <ButtonLink href={`${MODULE_PATHS.api(`reports/${kind}`)}?${query}`} download>
               Download CSV
             </ButtonLink>

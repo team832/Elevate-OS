@@ -36,6 +36,7 @@ import { burnVerificationTime, verifyPassword } from './password';
 import {
   SESSION_TTL_MS,
   createSession,
+  getSessionSecret,
   loadRoles,
   revokeSessionByToken,
   validateSession,
@@ -43,11 +44,6 @@ import {
 import { LoginThrottle } from './throttle';
 
 const log = createLogger({ component: 'authentication' });
-
-/** SESSION_SECRET from the environment (validated, read lazily). */
-export function getSessionSecret(): string {
-  return loadEnvKeys(['SESSION_SECRET'], process.env, 'authentication').SESSION_SECRET;
-}
 
 /** Resolve the signed-in user from a Request's cookie (route handlers, tests). */
 export async function getUserFromRequest(request: Request, db: Database = getDb()) {
@@ -286,9 +282,9 @@ export function withQuery(path: string, params: Record<string, string>): string 
  * `?error=`). Sets the `elevate_session` cookie on success.
  */
 export function createLoginHandler(options: AuthHandlerOptions) {
-  const throttle = options.throttle ?? new LoginThrottle();
-  const ipThrottle = options.ipThrottle ?? new LoginThrottle({ maxFailures: 50 });
-  const emailThrottle = options.emailThrottle ?? new LoginThrottle({ maxFailures: 20 });
+  const throttle = options.throttle ?? new LoginThrottle('login');
+  const ipThrottle = options.ipThrottle ?? new LoginThrottle('login-ip');
+  const emailThrottle = options.emailThrottle ?? new LoginThrottle('login-email');
   return async function login(request: Request): Promise<Response> {
     const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
     const crossSite = refuseCrossSite(request, requestId);
@@ -319,32 +315,39 @@ export function createLoginHandler(options: AuthHandlerOptions) {
       }
       const account = email.toLowerCase();
       const key = `${account}|${ip}`;
-      if (
-        throttle.retryAfterMs(key) > 0 ||
-        ipThrottle.retryAfterMs(ip) > 0 ||
-        emailThrottle.retryAfterMs(account) > 0
-      ) {
-        throw new RateLimitedError('Too many failed sign-in attempts. Try again in 15 minutes.');
-      }
       const db = (options.getDb ?? getDb)();
       const secret = (options.getSecret ?? getSessionSecret)();
+      const limits = [
+        [throttle, key],
+        [ipThrottle, ip],
+        [emailThrottle, account],
+      ] as const;
+      const each = <T>(run: (limit: LoginThrottle, k: string) => Promise<T>) =>
+        Promise.all(limits.map(([limit, k]) => run(limit, k)));
+      const undoAll = () => each((limit, k) => limit.undo(db, k));
+      const tooMany = () =>
+        new RateLimitedError('Too many failed sign-in attempts. Try again in 15 minutes.');
+      if ((await each((limit, k) => limit.retryAfterMs(db, k))).some((ms) => ms > 0))
+        throw tooMany();
       // Counted before the slow check: recorded after it, every guess in a burst passes the test above.
-      throttle.recordFailure(key);
-      ipThrottle.recordFailure(ip);
-      emailThrottle.recordFailure(account);
-      const user = await checkPassword(db, email, password).catch((error: unknown) => {
-        throttle.undo(key);
-        ipThrottle.undo(ip);
-        emailThrottle.undo(account);
+      // A guess the count puts past a limit raced past that test too: taken back and refused.
+      if ((await each((limit, k) => limit.recordFailure(db, k))).includes(false)) {
+        await undoAll();
+        throw tooMany();
+      }
+      const user = await checkPassword(db, email, password).catch(async (error: unknown) => {
+        await undoAll();
         throw error;
       });
       if (!user) {
         log.warn('login failed', { requestId, module: options.module, ip });
         throw new UnauthenticatedError('Email or password is incorrect.');
       }
-      throttle.reset(key);
-      ipThrottle.undo(ip);
-      emailThrottle.reset(account);
+      await Promise.all([
+        throttle.reset(db, key),
+        ipThrottle.undo(db, ip),
+        emailThrottle.reset(db, account),
+      ]);
       const session = await openSession(db, request, {
         userId: user.userId,
         secret,

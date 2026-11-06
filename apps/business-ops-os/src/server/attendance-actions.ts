@@ -3,7 +3,7 @@
  * day decisions, approved leave, holidays, work schedules and who follows which schedule. Every
  * change is audited. Nobody records or decides their own attendance.
  */
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, lte, ne, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
   opsAttendancePunches,
@@ -23,7 +23,13 @@ import {
 } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import { istToday } from '../domain/dates';
-import { LEAVE_NOT_APPROVER, leaveAudit, leaveRange, mayApproveLeave } from '../domain/leave';
+import {
+  LEAVE_NOT_APPROVER,
+  leaveAudit,
+  leaveRange,
+  mayApproveLeave,
+  type LeaveDayPart,
+} from '../domain/leave';
 import { hrAttendanceStaff } from './attendance';
 import type {
   assignScheduleBody,
@@ -35,6 +41,7 @@ import type {
   scheduleBody,
 } from './attendance-schemas';
 import { accessScope, notFound, staffIdForUser, userIdsForStaff, type Actor } from './context';
+import { refuseOverBalance } from './leave-balances';
 import { fieldError, opsAudit, rowById } from './ops-common';
 import { loadSettings } from './settings';
 import { notifyHosted } from './task-links';
@@ -106,6 +113,10 @@ export async function saveDecision(
   },
   requestId?: string,
 ) {
+  if (d.status === 'absent' && (await approvedLeaveOver(tx, d.staffId, d.workDate, d.workDate)))
+    throw new ConflictError(
+      'This day is on approved leave, so it already counts as leave. Cancel the leave first to mark it absent.',
+    );
   const values = {
     status: d.status,
     basis: 'hr_decision' as const,
@@ -134,22 +145,98 @@ export async function saveDecision(
   return row!;
 }
 
-/** Also the path an approved application takes (leave-applications.ts). */
+const approvedLeaveOver = async (tx: Database, staffId: string, from: string, to: string) =>
+  (
+    await tx
+      .select({ fromDate: opsLeaveRecords.fromDate, toDate: opsLeaveRecords.toDate })
+      .from(opsLeaveRecords)
+      .where(
+        and(
+          eq(opsLeaveRecords.staffId, staffId as StaffMemberId),
+          eq(opsLeaveRecords.status, 'approved'),
+          lte(opsLeaveRecords.fromDate, to),
+          gte(opsLeaveRecords.toDate, from),
+        ),
+      )
+      .limit(1)
+  )[0];
+
+/**
+ * Locks one person's leave dates for this transaction (applying, recording and approving all take
+ * it, so the second of two at once sees the first), then refuses approved leave over them.
+ */
+export async function holdLeaveDates(tx: Database, staffId: string, from: string, to: string) {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${`ops.leave_applications:${staffId}`}))`,
+  );
+  const clash = await approvedLeaveOver(tx, staffId, from, to);
+  if (clash)
+    throw new ConflictError(
+      `Approved leave is already recorded for ${leaveRange(clash.fromDate, clash.toDate)}. Choose other dates, or have that leave cancelled first.`,
+    );
+}
+
+type LeaveInput = Omit<z.output<typeof leaveBody>, 'dayPart'> & {
+  dayPart?: LeaveDayPart | null;
+  isSample?: boolean;
+};
+
+/**
+ * HR records approved leave directly: within setting hr.leave_approver and HR's scope, never your
+ * own, of a type in hr.leave_types (so balances and unpaid days see it, as for an application).
+ */
 export async function recordLeave(
   db: Database,
   actor: Actor,
-  body: z.output<typeof leaveBody> & { isSample?: boolean },
+  body: LeaveInput,
   requestId?: string,
 ) {
   await manage(db, actor, body.staffId);
-  return withTransaction(db, async (tx) => {
-    const [row] = await tx
-      .insert(opsLeaveRecords)
-      .values({ ...body, staffId: body.staffId as StaffMemberId, approvedBy: actor.id })
-      .returning();
-    await audit(tx, actor, row!.id, 'attendance.leave_recorded', leaveAudit({ after: row }), requestId);
-    return row!;
-  });
+  const settings = await loadSettings(db);
+  if (!mayApproveLeave(actor.roles, settings['hr.leave_approver'].value.who))
+    throw new ForbiddenError(LEAVE_NOT_APPROVER);
+  if (!settings['hr.leave_types'].value.types.includes(body.kind))
+    throw fieldError('kind', 'Choose a leave type from the list');
+  return withTransaction(db, (tx) => writeLeave(tx, actor, body, requestId));
+}
+
+/**
+ * The leave record, for a caller that has checked who may approve it: recordLeave, or decideLeave
+ * naming the application in `applicationId`. Never over approved leave, a pending application or
+ * (under "Leave balances: refuse") the balance.
+ */
+export async function writeLeave(
+  tx: Database,
+  actor: Actor,
+  { applicationId, ...body }: LeaveInput & { applicationId?: string },
+  requestId?: string,
+) {
+  await holdLeaveDates(tx, body.staffId, body.fromDate, body.toDate);
+  // Recorded over a waiting application, that application could never be approved.
+  const [pending] = await tx
+    .select({ fromDate: opsLeaveApplications.fromDate, toDate: opsLeaveApplications.toDate })
+    .from(opsLeaveApplications)
+    .where(
+      and(
+        eq(opsLeaveApplications.staffId, body.staffId as StaffMemberId),
+        eq(opsLeaveApplications.status, 'pending'),
+        lte(opsLeaveApplications.fromDate, body.toDate),
+        gte(opsLeaveApplications.toDate, body.fromDate),
+        applicationId ? ne(opsLeaveApplications.id, applicationId) : undefined,
+      ),
+    )
+    .limit(1);
+  if (pending)
+    throw new ConflictError(
+      `There is a pending leave application for ${leaveRange(pending.fromDate, pending.toDate)}. Decide it instead, on the Leave applications tab.`,
+    );
+  await refuseOverBalance(tx, body);
+  const [row] = await tx
+    .insert(opsLeaveRecords)
+    .values({ ...body, staffId: body.staffId as StaffMemberId, approvedBy: actor.id })
+    .returning();
+  await audit(tx, actor, row!.id, 'attendance.leave_recorded', leaveAudit({ after: row }), requestId);
+  return row!;
 }
 
 /** Cancel approved leave (the days are worked out again without it) and any application it came from. Not your own. */

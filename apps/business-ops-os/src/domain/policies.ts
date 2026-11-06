@@ -11,8 +11,13 @@ import type { DecisionState, PolicyDefinition } from './policies-base';
 import { DECISION_STATES } from './policies-base';
 import { ADMISSION_SETTING_DEFINITIONS, admissionSettingSchemas } from './policies-admission';
 import { ASSESSMENT_SETTING_DEFINITIONS, assessmentSettingSchemas } from './policies-assessments';
+import { DOCUMENT_SETTING_DEFINITIONS, documentSettingSchemas } from './policies-documents';
 import { HR_SETTING_DEFINITIONS, hrSettingSchemas } from './policies-hr';
+import { JOB_SETTING_DEFINITIONS, jobSettingSchemas } from './policies-jobs';
+import { LEAD_SETTING_DEFINITIONS, leadSettingSchemas } from './policies-leads';
+import { LEAVE_SETTING_DEFINITIONS, leaveSettingSchemas } from './policies-leave';
 import { PIPELINE_SETTING_DEFINITIONS, pipelineSettingSchemas } from './policies-pipeline';
+import { PORTAL_SETTING_DEFINITIONS, portalSettingSchemas } from './policies-portal';
 
 export { DECISION_STATE_LABELS, DECISION_STATES, type DecisionState } from './policies-base';
 export {
@@ -22,13 +27,19 @@ export {
   REPORT_AUDIENCES,
 } from './policies-admission';
 export { FEEDBACK_TEACHER_VISIBILITY, TASK_REOPENERS, WEEKDAYS } from './policies-hr';
+export { jobSlot } from './policies-jobs';
 
 // Spread order is the settings list order (SETTING_KEYS).
 export const settingSchemas = {
   ...pipelineSettingSchemas,
+  ...leadSettingSchemas,
   ...admissionSettingSchemas,
   ...hrSettingSchemas,
+  ...leaveSettingSchemas,
   ...assessmentSettingSchemas,
+  ...documentSettingSchemas,
+  ...jobSettingSchemas,
+  ...portalSettingSchemas,
 };
 
 export type SettingKey = keyof typeof settingSchemas;
@@ -39,9 +50,14 @@ export type SettingDefinition<K extends SettingKey = SettingKey> = PolicyDefinit
 
 export const SETTING_DEFINITIONS: { [K in SettingKey]: SettingDefinition<K> } = {
   ...PIPELINE_SETTING_DEFINITIONS,
+  ...LEAD_SETTING_DEFINITIONS,
   ...ADMISSION_SETTING_DEFINITIONS,
   ...HR_SETTING_DEFINITIONS,
+  ...LEAVE_SETTING_DEFINITIONS,
   ...ASSESSMENT_SETTING_DEFINITIONS,
+  ...DOCUMENT_SETTING_DEFINITIONS,
+  ...JOB_SETTING_DEFINITIONS,
+  ...PORTAL_SETTING_DEFINITIONS,
 };
 export const SETTING_KEYS = Object.keys(SETTING_DEFINITIONS) as SettingKey[];
 

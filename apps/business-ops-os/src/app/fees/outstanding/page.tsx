@@ -11,6 +11,7 @@ import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref, Pager } from '../../../ui/list-controls';
 import { openHref } from '../../../ui/open-link';
 import { RecordTable } from '../../../ui/record-table';
+import { ExportLink } from '../../../ui/export-link';
 import { paymentNote } from '../_components/owing-dialog';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,7 @@ export default async function OutstandingPage({ searchParams }: { searchParams: 
   const access = await gate('ops:fees:read', BASE);
   const sp = await searchParams;
   return (
-    <Frame access={access} active="fees">
+    <Frame access={access} active="fees-outstanding">
       <PageHeader
         title="Outstanding instalments"
         description={`Tuition instalments of fee agreements in force with money still owed, oldest due date first. ${paymentNote(access.user)}`}
@@ -144,6 +145,7 @@ async function Outstanding({ user, sp }: { user: AuthenticatedUser; sp: Params }
         ]}
       />
       <Pager basePath={BASE} params={params} page={d.page} pageSize={d.pageSize} total={d.total} />
+      <ExportLink list="outstanding" params={params} />
     </div>
   );
 }

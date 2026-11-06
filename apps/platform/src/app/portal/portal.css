@@ -1,0 +1,84 @@
+/* Student and parent portal (F4-13): one narrow column, phone first (390 px), shared tokens only. */
+.portal {
+  min-height: 100dvh;
+  background: var(--el-bg);
+}
+.portal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--el-space-3);
+  padding: var(--el-space-3) var(--el-space-4);
+  background: var(--el-surface);
+  border-bottom: 1px solid var(--el-border);
+}
+.portal-brand {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+}
+.portal-main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: var(--el-space-4);
+}
+.portal-main .el-subnav {
+  overflow-x: auto;
+}
+.portal-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--el-space-3);
+}
+.portal-links a {
+  display: block;
+  min-height: 44px;
+  padding: var(--el-space-4);
+  background: var(--el-surface);
+  border: 1px solid var(--el-border);
+  border-radius: var(--el-radius);
+  box-shadow: var(--el-shadow);
+  color: var(--el-text);
+  text-decoration: none;
+}
+.portal-links a:hover,
+.portal-links a:focus-visible {
+  border-color: var(--el-accent);
+}
+.portal-links strong {
+  display: block;
+  font-family: var(--el-font-display);
+}
+.portal-links span {
+  color: var(--el-text-muted);
+}
+.portal-form {
+  display: grid;
+  gap: var(--el-space-4);
+  max-width: 26rem;
+}
+.portal-form input {
+  font-size: 1rem;
+}
+.portal-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--el-space-2) var(--el-space-4);
+  margin: 0;
+}
+.portal-facts dd {
+  margin: 0;
+}
+@media (min-width: 720px) {
+  .portal-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media print {
+  .portal-bar,
+  .el-skip-link {
+    display: none;
+  }
+}

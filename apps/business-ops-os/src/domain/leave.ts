@@ -1,7 +1,7 @@
 /**
  * Leave applications (owner decision 31 Oct 2026; rows in server/leave-applications.ts). Pure rules:
  * dates, who may approve, who may cancel what. Past-dated leave is allowed: sick leave is often
- * applied for afterwards. No balances, entitlements or accrual: those rules are the owner's.
+ * applied for afterwards. Balances (allowances, all Proposed) are in leave-balance.ts.
  */
 import { fmtDay } from '@elevate/shared-types';
 import { addDays, type IsoDate } from './dates';
@@ -16,8 +16,19 @@ export const LEAVE_STATUS_LABELS: Record<LeaveStatus, string> = {
 };
 /** An application in one of these holds its dates: another may not overlap them. */
 export const LEAVE_HOLDS_DATES = ['pending', 'approved'] as const;
+/** Half-day leave (F4-12): one day only; null = whole days. Mirrors OPS_LEAVE_DAY_PARTS. */
+export const LEAVE_DAY_PARTS = ['first_half', 'second_half'] as const;
+export type LeaveDayPart = (typeof LEAVE_DAY_PARTS)[number];
+export const LEAVE_DAY_PART_LABELS: Record<LeaveDayPart, string> = {
+  first_half: 'first half',
+  second_half: 'second half',
+};
+export const HALF_DAY_ONE_DAY = 'A half day is one day: make the first and last day the same.';
 /** Setting hr.leave_approver names roles from this list. */
 export const LEAVE_APPROVERS = ['hr_manager', 'operations_manager'] as const;
+
+/** The leave action that sends a teacher's leave to Academic OS once more (D-134). */
+export const RESEND_TO_ACADEMIC = 'Send to Academic again';
 
 export const LEAVE_NOT_APPROVER =
   'Under the HR setting "Who approves leave", your role does not decide leave.';
@@ -94,6 +105,10 @@ export function cancelRefusal(status: LeaveStatus, mine: boolean) {
     : null;
 }
 
-/** "2 Nov 2026 to 4 Nov 2026", or the one day. */
-export const leaveRange = (from: string, to: string) =>
-  from === to ? fmtDay(from) : `${fmtDay(from)} to ${fmtDay(to)}`;
+/** "2 Nov 2026 to 4 Nov 2026", the one day, or "2 Nov 2026 (first half)". */
+export const leaveRange = (from: string, to: string, dayPart?: LeaveDayPart | null) =>
+  from !== to
+    ? `${fmtDay(from)} to ${fmtDay(to)}`
+    : dayPart
+      ? `${fmtDay(from)} (${LEAVE_DAY_PART_LABELS[dayPart]})`
+      : fmtDay(from);

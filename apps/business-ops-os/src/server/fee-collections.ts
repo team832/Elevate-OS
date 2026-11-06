@@ -192,6 +192,18 @@ const tally = (list: readonly Instalment[]) => ({
   samplePaise: list.reduce((n, i) => n + (i.isSample ? i.remainingPaise : 0), 0),
 });
 
+/** The outstanding list's filters: view and due-date range (also the spreadsheet download's). */
+export const filterOutstanding = (
+  all: readonly OutstandingInstalment[],
+  q: { status?: OutstandingView; from?: string; to?: string },
+) =>
+  all.filter(
+    (i) =>
+      (!q.status || OUTSTANDING_VIEWS[q.status](i)) &&
+      (!q.from || (i.dueDate !== null && i.dueDate >= q.from)) &&
+      (!q.to || (i.dueDate !== null && i.dueDate <= q.to)),
+  );
+
 /** One page of outstanding instalments by view and due-date range, with the count per view. */
 export async function listOutstanding(
   db: Database,
@@ -200,12 +212,7 @@ export async function listOutstanding(
   now = new Date(),
 ) {
   const all = await outstandingInstalments(db, actor, now);
-  const rows = all.filter(
-    (i) =>
-      (!q.status || OUTSTANDING_VIEWS[q.status](i)) &&
-      (!q.from || (i.dueDate !== null && i.dueDate >= q.from)) &&
-      (!q.to || (i.dueDate !== null && i.dueDate <= q.to)),
-  );
+  const rows = filterOutstanding(all, q);
   return {
     rows: rows.slice((q.page - 1) * FEE_PAGE_SIZE, q.page * FEE_PAGE_SIZE),
     total: rows.length,

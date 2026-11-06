@@ -31,6 +31,10 @@ export function formatAdmissionNumber(
   return parts.filter(Boolean).join(format.separator);
 }
 
+/** One written form per number (C1-6): digits only → padded to the width ("42", "0042" → "042"). */
+export const normaliseAdmissionNumber = (value: string, width: number) =>
+  /^\d+$/.test(value) ? value.replace(/^0+(?=\d)/, '').padStart(width, '0') : value;
+
 export const ADMISSION_NUMBER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9/-]{0,39}$/;
 export const OVERRIDE_REASON_MIN = 10;
 

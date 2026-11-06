@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { eq } from 'drizzle-orm';
 import {
   auditEvents,
+  loginAttempts,
   sessions,
   staffMembers,
   userRoles,
@@ -100,8 +101,9 @@ beforeAll(async () => {
   db = t.db;
 });
 afterAll(() => t.close());
-beforeEach(() => {
+beforeEach(async () => {
   issue = (nonce) => idToken(claims(nonce));
+  await db.delete(loginAttempts); // the IP limit is shared through the database
 });
 
 function handlers(over: Partial<Parameters<typeof createGoogleSignInHandlers>[0]> = {}) {
@@ -361,8 +363,22 @@ describe('Google sign-in: callback', () => {
     expect(await sessionCount()).toBe(before);
   });
 
+  it('a database error while counting a refused sign-in still lands on the login page', async () => {
+    const down = new Proxy(db, {
+      get: (target, key, receiver) =>
+        key === 'insert'
+          ? () => {
+              throw new Error('database down');
+            }
+          : Reflect.get(target, key, receiver),
+    });
+    issue = (nonce) => idToken(claims(nonce, { hd: 'gmail.com' }));
+    const { location } = await signIn(handlers({ getDb: () => down }));
+    expect(location).toBe('/login?error=unavailable&next=%2Fdashboard');
+  });
+
   it('repeated failures from one IP are throttled', async () => {
-    const h = handlers({ ipThrottle: new LoginThrottle({ maxFailures: 2 }) });
+    const h = handlers({ ipThrottle: new LoginThrottle('google-ip', 2) });
     issue = (nonce) => idToken(claims(nonce, { hd: 'gmail.com' }));
     await signIn(h);
     await signIn(h);

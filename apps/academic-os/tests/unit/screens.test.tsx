@@ -405,54 +405,34 @@ describe('Batch, support and teacher views', () => {
 
 describe('Academic navigation (brief §6)', () => {
   const as = (...roles: string[]) => ({ id: 'u1', roles }) as never;
+  const TEACHING = ['Teaching logs', 'Homework', 'Student attendance', 'Tests and mock tests', 'Student reviews', 'Curriculum'];
+  const COORDINATION = ['Teachers', 'Enrolments', 'Enrolment intake', 'Progress and support', 'Reports'];
+  const MINE = ['My tasks', 'My attendance and leave', 'My payslips', 'My reports'];
   it.each([
     [
       'teacher',
-      [
-        'My day',
-        'My meetings',
-        'My timetable',
-        'My batches',
-        'My students',
-        'Curriculum',
-        'Teaching logs',
-        'Student attendance',
-        'Assessments',
-        'Student reviews',
-        'My tasks',
-        'My attendance',
-        'My reports',
-        'Feedback and development',
-        'Requests through HR',
-      ],
+      ['My day', 'My meetings', 'Calendar', 'My timetable', 'My batches', 'My students', ...TEACHING, ...MINE, 'Feedback and development', 'Requests to HR'],
     ],
     [
       'academic_coordinator',
-      [
-        'My day',
-        'Timetable',
-        'Batches',
-        'Students',
-        'Curriculum',
-        'Teaching logs',
-        'Student attendance',
-        'Assessments',
-        'Student reviews',
-        'My tasks',
-        'My attendance',
-        'My reports',
-        'Requests through HR',
-        'Teachers',
-        'Enrolments',
-        'Enrolment intake',
-        'Progress and support',
-        'Reports',
-        'Academic settings',
-      ],
+      ['My day', 'Calendar', 'Timetable', 'Batches', 'Students', ...TEACHING, ...COORDINATION, 'Academic settings', ...MINE, 'Requests to HR'],
     ],
-    ['marketing_manager', ['My tasks', 'My attendance', 'My reports', 'Requests through HR']], // own items only; the workspace gate keeps them out of this shell
+    [
+      'director',
+      ['My day', 'My meetings', 'Calendar', 'Timetable', 'Batches', 'Students', ...TEACHING, ...COORDINATION, ...MINE, 'Feedback and development', 'Requests to HR'],
+    ],
+    ['marketing_manager', [...MINE, 'Requests to HR']], // own items only; the workspace gate keeps them out of this shell
   ])('%s sees its items in order; Coordination only with all-scope permissions', (role, labels) => {
     expect(navFor(as(role)).map((n) => n.label)).toEqual(labels);
+  });
+
+  it('groups follow the site map: Today, Teaching, Coordination, My work', () => {
+    expect([...new Set(navFor(as('academic_coordinator', 'teacher')).map((n) => n.group))]).toEqual([
+      'Today',
+      'Teaching',
+      'Coordination',
+      'My work',
+    ]);
   });
 
   it('renders the teacher sidebar with My tasks, My attendance, My reports and Feedback under /academic, never /ops', () => {
@@ -476,7 +456,10 @@ describe('Academic navigation (brief §6)', () => {
     for (const [href, label] of [
       ['/academic/meetings', 'My meetings'],
       ['/academic/tasks', 'My tasks'],
-      ['/academic/my-attendance', 'My attendance'],
+      ['/academic/my-attendance', 'My attendance and leave'],
+      ['/academic/my-payslips', 'My payslips'],
+      ['/academic/calendar', 'Calendar'],
+      ['/academic/homework', 'Homework'],
       ['/academic/my-reports', 'My reports'],
       ['/academic/my-feedback', 'Feedback and development'],
     ]) {

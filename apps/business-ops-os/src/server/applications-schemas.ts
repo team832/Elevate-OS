@@ -1,11 +1,10 @@
 /** Request schemas for admission applications and final confirmation (owner brief §6–§7). */
 import { z } from 'zod';
-import { isoDateSchema } from '@elevate/shared-contracts';
+import { isoDateSchema, optText } from '@elevate/shared-contracts';
 import { OPS_STUDENT_STAGES } from '@elevate/database';
 import { APPLICATION_STATUSES } from '../domain/applications';
 import { istToday } from '../domain/dates';
 
-const optText = (max: number) => z.string().trim().max(max).nullish();
 const version = z.int().min(1);
 
 /** GET /applications */

@@ -30,6 +30,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test -c e2e",
     "secret-scan": "node scripts/validation/secret-scan.mjs",
     "validate": "npm run typecheck && npm run lint && npm run test && npm run secret-scan",
     "db:start": "node scripts/development/db-server.mjs",
@@ -41,15 +42,18 @@
     "db:reset": "tsx scripts/development/db-reset.ts",
     "db:clear-samples": "tsx scripts/development/clear-samples.ts",
     "db:check": "tsx scripts/development/db-check.ts",
-    "db:backup": "node scripts/backup/pg-backup.mjs",
+    "db:backup": "node scripts/backup/json-backup.ts backup",
+    "db:restore": "node scripts/backup/json-backup.ts restore",
     "release:package": "node scripts/release/package.mjs",
     "docs:permissions": "tsx scripts/development/permission-matrix.ts",
     "docs:data-dictionary": "tsx scripts/development/data-dictionary.ts",
     "docs:code-map": "node scripts/development/code-map.mjs"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@eslint/js": "10.0.1",
     "@next/eslint-plugin-next": "16.4.2",
+    "@playwright/test": "1.64.1",
     "@types/node": "24.19.2",
     "concurrently": "10.0.6",
     "drizzle-orm": "0.45.4",
@@ -63,6 +67,9 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.71.2",
     "vitest": "5.0.5"
+  },
+  "overrides": {
+    "playwright-core": "1.64.1"
   },
   "allowScripts": {
     "@embedded-postgres/windows-x64@18.4.0-beta.17": true,

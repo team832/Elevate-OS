@@ -15,7 +15,7 @@ import {
   ValidationError,
   withTransaction,
 } from '@elevate/server-kit';
-import { httpUrlSchema } from '@elevate/shared-contracts';
+import { httpUrlSchema, optText } from '@elevate/shared-contracts';
 import {
   CALENDAR_ACTION_TEXT,
   CALENDAR_ITEM_TYPES,
@@ -36,7 +36,6 @@ export * from './calendar-queries';
 export type CalendarItemRow = typeof marketingCalendarItems.$inferSelect;
 type ItemInsert = typeof marketingCalendarItems.$inferInsert;
 
-const optText = (max: number) => z.string().trim().max(max).nullish();
 const optUuid = z.uuid().nullish();
 /** A form's `YYYY-MM-DDTHH:MM` is IST; a full ISO instant keeps its offset. */
 export const istDateTime = z.union([

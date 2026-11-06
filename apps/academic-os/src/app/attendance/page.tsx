@@ -12,6 +12,7 @@ import { attendanceWorklist } from '../../server';
 import { MODULE_PATHS } from '../../server/paths';
 import { StateBadge, fmtRange, words, fmtSlot } from '../../ui/badges';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
+import { RegisterDownload } from './register-download';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Student attendance' };
@@ -65,6 +66,7 @@ export default async function StudentAttendancePage({ searchParams }: { searchPa
           ]}
         />
       </Card>
+      <RegisterDownload user={access.user} />
     </AcademicShell>
   );
 }

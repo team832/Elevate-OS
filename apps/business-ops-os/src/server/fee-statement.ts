@@ -17,6 +17,8 @@ import { inOrder } from './ops-common';
 export async function feeStatementFor(
   db: Database,
   a: Pick<typeof Admissions.$inferSelect, 'id' | 'studentId'>,
+  /** Only ledger rows recorded up to then (a receipt's balance after its payment). */
+  upTo?: Date,
 ) {
   const [plans, rows] = await inOrder([
     a.studentId ? db.select().from(opsFeePlans).where(eq(opsFeePlans.studentId, a.studentId)) : [],
@@ -31,7 +33,22 @@ export async function feeStatementFor(
       ),
   ]);
   return feeStatement(
-    plans,
-    rows.map(({ r }) => r),
+    upTo ? asAt(plans, upTo) : plans,
+    rows.map(({ r }) => r).filter((r) => !upTo || r.recordedAt <= upTo),
   );
 }
+
+/**
+ * The agreement versions as they stood at `t`: versions made later left out, later activations
+ * and closings undone, so a receipt's balance never changes on a reprint.
+ * shortcut: activation is dated by its approval's decision (no activation time is stored); a
+ * payment recorded between the two sees that version a little early. Store activated_at if it matters.
+ */
+const asAt = (plans: (typeof opsFeePlans.$inferSelect)[], t: Date) =>
+  plans
+    .filter((p) => p.createdAt <= t)
+    .map((p) => {
+      const approvedAt = p.approvedAt && p.approvedAt <= t ? p.approvedAt : null;
+      const status = p.closedAt && p.closedAt <= t ? 'closed' : approvedAt ? 'active' : 'draft';
+      return { ...p, approvedAt, status };
+    });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ROLE_KEYS, ROLES } from '@elevate/authorization';
+import { STAFF_ROLE_KEYS } from '@elevate/authentication';
+import { ROLES } from '@elevate/authorization';
 import {
   AccountStatus,
   fmtWhen,
@@ -58,8 +59,10 @@ describe('Users & roles screen pieces', () => {
   it('every role checkbox is labelled, described by its hint, and only held roles are ticked', () => {
     const out = html(<RoleChecklist held={['director']} />);
     expect(out).toContain('<legend>Roles</legend>');
-    expect(out.match(/type="checkbox"/g)).toHaveLength(ROLE_KEYS.length);
-    for (const key of ROLE_KEYS) {
+    expect(out.match(/type="checkbox"/g)).toHaveLength(STAFF_ROLE_KEYS.length);
+    // Student and parent logins are given only from the student record (F4-13).
+    expect(out).not.toMatch(/value="(student|guardian)"/);
+    for (const key of STAFF_ROLE_KEYS) {
       expect(out).toContain(`aria-describedby="role-${key}-about"`);
       expect(out).toContain(`id="role-${key}-about"`);
     }

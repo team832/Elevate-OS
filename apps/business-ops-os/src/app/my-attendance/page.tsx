@@ -2,7 +2,7 @@ import { Frame, gate } from '../../ui/frame';
 import { MyAttendanceBody } from './my-attendance-body';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'My attendance' };
+export const metadata = { title: 'My attendance and leave' };
 
 export default async function MyAttendancePage({
   searchParams,

@@ -18,6 +18,9 @@ export const ROLE_KEYS = [
   'finance_officer',
   // HR for teachers and marketing staff (brief 23 Oct 2026, supersedes D-032 in part). Proposed.
   'hr_manager',
+  // Student and parent portal logins (F4-13): the portal only, never a staff workspace.
+  'student',
+  'guardian',
 ] as const;
 
 export type RoleKey = (typeof ROLE_KEYS)[number];

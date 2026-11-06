@@ -342,7 +342,7 @@ export const academicTeacherActivityV1Schema = z.object({
   attendancePending: metricSchema,
   markingPending: metricSchema,
   reviews: z.object({ submitted: metricSchema, draft: metricSchema }),
-  /** Academic availability records (not HR leave). */
+  /** Availability records: entered by a coordinator, or approved HR leave sent by Business Ops (D-134). */
   unavailability: z.array(z.object({ from: isoDateSchema, to: isoDateSchema })),
   /**
    * Added 23 Oct 2026, optional so v1 consumers and stubs stay valid. Chapters of VERIFIED class

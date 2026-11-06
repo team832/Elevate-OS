@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe } from 'vitest';
 import {
   ACADEMIC_ASSIGNMENT_STATUSES,
   MARKETING_CAMPAIGN_MEMBER_ROLES,
+  OPS_ATTACHMENT_0019_OWNER_KINDS,
   OPS_ATTACHMENT_OWNER_KINDS,
   OPS_ATTACHMENT_PURPOSES,
   OPS_CORRECTION_STATUSES,
@@ -23,6 +24,8 @@ import { LATER, NOW, insert, runCases, setup, variants, vocab, type Row } from '
 
 const SHA = 'a'.repeat(64);
 const SHA2 = 'b'.repeat(64);
+const FILE_KEY = '5d1f3c2a-7b4e-4f60-9a8b-1c2d3e4f5a6b';
+const MB8 = 8 * 1024 * 1024;
 let ctx: Awaited<ReturnType<typeof setup>>;
 const ids: Record<string, string> = {};
 const id = (name: string) => () => ids[name];
@@ -45,6 +48,12 @@ const attachment = (o: Row = {}): Row => ({
   sha256: SHA,
   storage_key: `k-${Math.random()}`,
   uploaded_by_user_id: by(),
+  ...o,
+});
+const file = (o: Row = {}): Row => ({
+  key: crypto.randomUUID(),
+  bytes: new Uint8Array([1, 2, 3]),
+  size_bytes: 3,
   ...o,
 });
 const punch = (o: Row = {}): Row => ({
@@ -154,6 +163,7 @@ beforeAll(async () => {
     changed_by: by(),
   });
   await ins('ops.attachments', attachment({ storage_key: 'taken' }));
+  await ins('ops.attachment_files', file({ key: FILE_KEY }));
   await ins('ops.work_schedules', {
     name: 'Default',
     weekly_pattern: '{}',
@@ -293,6 +303,24 @@ describe('attachments', () => {
         'not a sha-256': [{ sha256: 'abc' }, 'attachments_sha_check'],
         'blank name': [{ original_name: ' ' }, 'attachments_name_check'],
         'storage key reused': [{ storage_key: 'taken' }, 'attachments_storage_key_key'],
+      }),
+      vocab(
+        'owner kinds added in 0019 (OPS_ATTACHMENT_0019_OWNER_KINDS)',
+        'ops.attachments',
+        OPS_ATTACHMENT_0019_OWNER_KINDS,
+        'attachments_owner_kind_check',
+        (v) => attachment({ owner_kind: v }),
+      ),
+      variants('files kept in the database (D-135)', 'ops.attachment_files', file, {
+        small: [{}, 'ok'],
+        '8 MB exactly': [{ bytes: () => new Uint8Array(MB8), size_bytes: MB8 }, 'ok'],
+        'over 8 MB': [
+          { bytes: () => new Uint8Array(MB8 + 1), size_bytes: MB8 + 1 },
+          'attachment_files_size_check',
+        ],
+        empty: [{ bytes: new Uint8Array(0), size_bytes: 0 }, 'attachment_files_size_check'],
+        'size does not match the bytes': [{ size_bytes: 4 }, 'attachment_files_size_check'],
+        'same key twice': [{ key: FILE_KEY }, 'attachment_files_pkey'],
       }),
     ],
   );

@@ -6,7 +6,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
 import { authedRequest, callRoute, setupTestDatabase } from '@elevate/testing';
-import { auditEvents, opsAdmissions } from '@elevate/database';
+import { auditEvents, opsAdmissions, opsFollowUps } from '@elevate/database';
 import type { IsoDate } from '@elevate/shared-types';
 import { leadsRoutes as R } from '../../src/leads';
 import {
@@ -18,6 +18,7 @@ import {
   REDACTED_LEAD,
 } from '../../src/server/lead-metrics';
 import { ensureSystemLeadStages } from '../../src/server/lead-stages';
+import { createLead, logActivity } from '../../src/server/leads';
 import { isoDaysFromNow, phone, setupReference, staffUser, type StaffUser } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -79,6 +80,7 @@ describe('leadMetricRecords', () => {
       nextFollowUpOn: day(1),
     });
     const q = { metric: 'follow_ups_completed' as const, ownerStaffIds: [a.staffId], ...period };
+    // The call completed the case's first-contact follow-up; Marketing never counts a case's.
     expect(await ids(q)).toEqual([]);
     const done = await post(
       R['follow-ups/[id]'].POST,
@@ -90,6 +92,23 @@ describe('leadMetricRecords', () => {
     );
     expect(done.status).toBe(200);
     expect(await ids(q)).toEqual([call.data!.followUp.id]);
+  });
+
+  it('a counsellor still counts the first-contact follow-up a successful contact completed', async () => {
+    const counsellor = await staffUser(ctx.db, ['admissions_counsellor'], { name: 'Sample Counsellor' });
+    const { lead } = await createLead(ctx.db, counsellor, {
+      studentName: 'Sample Counsellor Lead',
+      studentPhone: phone(),
+      interestMode: 'undecided',
+      sourceCode: 'UNKNOWN',
+    });
+    await logActivity(ctx.db, counsellor, lead.id, { kind: 'call', outcome: 'connected_two_way' });
+    const [firstContact] = await ctx.db
+      .select({ id: opsFollowUps.id })
+      .from(opsFollowUps)
+      .where(and(eq(opsFollowUps.leadId, lead.id), eq(opsFollowUps.kind, 'first_contact')));
+    const q = { metric: 'follow_ups_completed' as const, ownerStaffIds: [counsellor.staffId], ...period };
+    expect(await ids(q, counsellor)).toEqual([firstContact!.id]);
   });
 
   it('verified admissions are credited to the lead owner at confirmation, not a later owner', async () => {

@@ -192,16 +192,17 @@ describe('HR page gates', () => {
     expect(await html(director, <HrSettingsPage {...sp()} />)).toContain('No access');
   });
 
-  it('the HR nav group lists the ten areas; attendance needs all-scope read', () => {
-    const hrRows = NAV.filter((n) => n.group === 'HR');
+  it('the HR nav group lists the eleven areas; attendance needs all-scope read', () => {
+    const hrRows = NAV.filter((n) => n.group === 'Team (HR)');
     expect(hrRows.map((n) => n.href)).toEqual(
       [
         '',
         '/staff',
+        '/checklists', // Joining and leaving (F4-09)
         '/assignments',
         '/attendance',
-        '/tasks',
-        '/review',
+        '/payroll', // F4-14
+        '/review', // Task review: Submission review + Tasks (same permission)
         '/requests', // HR-REQ
         '/reports',
         '/feedback',

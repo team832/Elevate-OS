@@ -4,7 +4,8 @@
  * same query, the sender's and the recipient's lists, one request as that viewer may see it, and
  * the file rule for `hr_request` attachments. HR never sees drafts; nobody handles their own request.
  */
-import { and, asc, count, desc, eq, ilike, inArray, ne, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, ne, or, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { containsPattern } from '@elevate/server-kit';
 import { z } from 'zod';
 import { can, grantsForRole, ROLES } from '@elevate/authorization';
@@ -29,6 +30,7 @@ import {
   type HrQueueTab,
   type HrRequestRole,
 } from '../domain/hr-requests';
+import { coverPrincipals } from './approval-cover';
 import { accessScope, notFound, staffIdForUser, type Actor } from './context';
 import type { HrRequestListQuery } from './hr-requests-schemas';
 import { hrReachWhere, hrScopeFor, hrScopeStaff, inHrReach } from './hr-scope';
@@ -57,14 +59,27 @@ export async function hrCovers(db: Database, actor: Actor, sender: string, self:
   return { read: read && hit, manage: manage && hit };
 }
 
-/** The caller's roles on a request; `hr` = may manage it. Drafts belong to their sender alone. */
+/** Approval cover (F4-10): an approver the caller covers today whose HR reach takes this request (never the caller's own). */
+async function hrCoverOn(db: Database, actor: Actor, r: HrRequestRow, self: string | null) {
+  if (r.senderStaffId === self) return null;
+  for (const p of await coverPrincipals(db, actor.id, 'hr_request'))
+    if ((await hrCovers(db, p, r.senderStaffId, await staffIdForUser(db, p.id))).manage) return p;
+  return null;
+}
+
+/**
+ * The caller's roles on a request; `hr` = may manage it, as `as` (the caller, or the approver they
+ * cover, then `onBehalfOf`). Drafts belong to their sender alone.
+ */
 export async function viewerOn(db: Database, actor: Actor, r: HrRequestRow) {
   const self = await staffIdForUser(db, actor.id);
   const draft = r.status === 'draft';
   const staffSide = !!self && can(actor, 'ops:hr_requests:create');
-  const hr = draft
+  const own = draft
     ? { read: false, manage: false }
     : await hrCovers(db, actor, r.senderStaffId, self);
+  const cover = draft || own.manage ? null : await hrCoverOn(db, actor, r, self);
+  const hr = cover ? { read: true, manage: true } : own;
   const [forwarded] =
     staffSide && !draft
       ? await db
@@ -86,7 +101,41 @@ export async function viewerOn(db: Database, actor: Actor, r: HrRequestRow) {
     ...(hr.manage ? (['hr'] as const) : []),
     ...(forwarded ? (['recipient'] as const) : []),
   ];
-  return { self, roles, sender, hrRead: hr.read || hr.manage, recipient: !!forwarded };
+  return {
+    self,
+    roles,
+    sender,
+    hrRead: hr.read || hr.manage,
+    recipient: !!forwarded,
+    as: cover ?? actor,
+    onBehalfOf: cover?.id ?? null,
+  };
+}
+
+/**
+ * Who the queue reaches: the caller's HR reach (with ops:hr_requests:read) and, as approval cover,
+ * each approver covered today, never their own requests. A cover without HR's own access gets only
+ * the approvers' reach; nobody with neither gets a queue (403). undefined = everyone.
+ */
+async function queueReach(db: Database, actor: Actor) {
+  const covered = await coverPrincipals(db, actor.id, 'hr_request');
+  if (!covered.length) await accessScope(db, actor, 'ops:hr_requests:read');
+  const parts: SQL[] = [];
+  if (can(actor, 'ops:hr_requests:read')) {
+    const own = hrReachWhere(actor, await hrScopeFor(db, actor));
+    if (!own) return undefined;
+    parts.push(own);
+  }
+  for (const p of covered) {
+    const theirs = await staffIdForUser(db, p.id);
+    parts.push(
+      and(
+        hrReachWhere(p, await hrScopeFor(db, p)) ?? sql`true`,
+        theirs ? ne(requests.senderStaffId, theirs) : sql`true`,
+      )!,
+    );
+  }
+  return or(...parts);
 }
 
 /**
@@ -245,13 +294,13 @@ async function withLabels<
 
 /** The HR queue: one tab's page, and every tab's count from the same WHERE. */
 export async function hrQueue(db: Database, actor: Actor, q: HrRequestListQuery) {
-  await accessScope(db, actor, 'ops:hr_requests:read');
+  const reach = await queueReach(db, actor);
   const self = await staffIdForUser(db, actor.id);
   const text = q.q ? containsPattern(q.q) : null;
   const where = and(
     ne(requests.status, 'draft'),
     self ? ne(requests.senderStaffId, self) : undefined,
-    hrReachWhere(actor, await hrScopeFor(db, actor)),
+    reach,
     q.urgency ? eq(requests.urgency, q.urgency) : undefined,
     q.category ? eq(requests.category, q.category) : undefined,
     text ? or(ilike(requests.subject, text), ilike(staffMembers.fullName, text)) : undefined,
@@ -369,6 +418,8 @@ export async function listForwardedToMe(db: Database, actor: Actor) {
   }));
 }
 
+const behalf = alias(users, 'behalf');
+
 /** One request as the caller may see it (404 when they have no part in it). */
 export async function getHrRequest(db: Database, actor: Actor, id: string) {
   if (!isUuid(id)) notFound('Request');
@@ -387,6 +438,7 @@ export async function getHrRequest(db: Database, actor: Actor, id: string) {
       kind: events.kind,
       actorUserId: events.actorUserId,
       actorName: users.displayName,
+      behalfName: behalf.displayName,
       forwardedToStaffId: events.forwardedToStaffId,
       forwardedToName: staffMembers.fullName,
       visibleToRecipient: events.visibleToRecipient,
@@ -396,6 +448,7 @@ export async function getHrRequest(db: Database, actor: Actor, id: string) {
     })
     .from(events)
     .leftJoin(users, eq(users.id, events.actorUserId))
+    .leftJoin(behalf, eq(behalf.id, events.onBehalfOf))
     .leftJoin(staffMembers, eq(staffMembers.id, events.forwardedToStaffId))
     .where(eq(events.requestId, r.id))
     .orderBy(asc(events.createdAt));
@@ -403,9 +456,13 @@ export async function getHrRequest(db: Database, actor: Actor, id: string) {
     as === 'recipient'
       ? { as: 'recipient' as const, staffId: v.self!, userId: actor.id }
       : { as: as === 'hr' ? ('hr' as const) : ('sender' as const) };
-  const shown = eventsFor(viewer, rows).map(({ actorUserId, ...e }) =>
+  const shown = eventsFor(viewer, rows).map(({ actorUserId, behalfName, ...e }) =>
     as === 'hr'
-      ? { ...e, actorUserId }
+      ? {
+          ...e,
+          actorUserId,
+          actorName: behalfName ? `${e.actorName} on behalf of ${behalfName}` : e.actorName,
+        }
       : { ...e, forwardedToName: null, actorName: actorUserId === actor.id ? 'You' : 'HR' },
   );
   const allowed = HR_REQUEST_ACTIONS.filter(

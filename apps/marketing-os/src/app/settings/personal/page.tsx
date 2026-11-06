@@ -18,7 +18,7 @@ import { MarketingPage, Section, type SearchParams } from '../../../ui/shell';
 import { savePersonalSettingsAction } from './actions';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Personal Settings' };
+export const metadata: Metadata = { title: 'Personal settings' };
 
 const DAY_LABELS = {
   mon: 'Monday',
@@ -48,7 +48,7 @@ export default async function PersonalSettingsPage({
       permission="marketing:module:access"
       path={modulePath('settings/personal')}
       active="personal-settings"
-      title="Personal Settings"
+      title="Personal settings"
       description="How Marketing OS opens for you and how you plan your own day. Only you can see or change these."
       searchParams={await searchParams}
     >

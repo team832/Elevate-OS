@@ -100,7 +100,7 @@ export function CoordinatorTiles({ o }: { o: Overview }) {
     [
       'Assessments to mark',
       o.pendingMarking,
-      `Conducted, not finalised, as of ${fmtDay(o.today)}.`,
+      `In progress (conducted, or scheduled on or before today), not finalised, as of ${fmtDay(o.today)}.`,
       MODULE_PATHS.assessments,
       now,
     ],
@@ -159,7 +159,7 @@ export function UncoveredClasses({ o }: { o: Overview }) {
   return (
     <Card
       title={`Uncovered classes (${o.uncovered.sessions.length})`}
-      description={`Scheduled ${fmtRange(o.uncovered.range)}. Someone teaching this class (planned teacher, co-teacher or substitute) is unavailable and no replacement is recorded. Academic availability records, not HR leave; nothing is reassigned automatically.`}
+      description={`Scheduled ${fmtRange(o.uncovered.range)}. Someone teaching this class (planned teacher, co-teacher or substitute) is unavailable (an availability record, or approved HR leave) and no replacement is recorded. Nothing is reassigned automatically.`}
     >
       <DataTable
         compact

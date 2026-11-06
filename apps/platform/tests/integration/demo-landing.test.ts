@@ -32,20 +32,17 @@ import { seeds as academicSeeds } from '@elevate/academic-os/seed';
 import { seeds as opsSeeds } from '@elevate/business-ops-os/seed';
 import { seeds as marketingSeeds } from '@elevate/marketing-os/seed';
 import { seeds as platformSeeds } from '../../seed';
-import { OWNER_SUPPLIED_STAFF } from '../../../business-ops-os/seed/teachers';
-import { feeYear } from '../../../business-ops-os/src/server/fee-year';
-import { hrQueue, inHrReach } from '../../../business-ops-os/src/server/hr-requests-read';
-import { hrRequestListQuery } from '../../../business-ops-os/src/server/hr-requests-schemas';
-import { listLeads } from '../../../business-ops-os/src/server/leads';
-import { taskListQuery } from '../../../business-ops-os/src/server/staff-tasks-schemas';
-import { listTasks } from '../../../business-ops-os/src/server/task-list';
-import { listCalendarItems } from '../../../marketing-os/src/server/calendar-queries';
-import { listAssessments } from '../../../academic-os/src/server/services/assessments';
-import { listAssessmentsInternal } from '../../../academic-os/src/server/services/assessment-views';
+import { OWNER_SUPPLIED_STAFF } from '@elevate/business-ops-os/seed';
+import { feeYear, hrQueue, hrRequestListQuery, inHrReach } from '@elevate/business-ops-os/server';
+import { listLeads } from '@elevate/business-ops-os/leads';
+import { listTasks, taskListQuery } from '@elevate/business-ops-os/work';
+import { listCalendarItems } from '@elevate/marketing-os/server';
 import {
+  listAssessments,
+  listAssessmentsInternal,
   listAssignments,
   listAssignmentsFor,
-} from '../../../academic-os/src/server/services/assignments';
+} from '@elevate/academic-os/server';
 
 const ctx = setupTestDatabase();
 const db = () => ctx.db as Database;

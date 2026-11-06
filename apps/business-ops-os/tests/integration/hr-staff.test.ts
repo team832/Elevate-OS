@@ -10,6 +10,7 @@ import {
   auditEvents,
   departments,
   notifications,
+  opsFollowUps,
   opsStaffDepartments,
   opsStaffManagerHistory,
   opsStaffProfiles,
@@ -35,7 +36,9 @@ import { PUT as putSetting } from '../../src/app/api/v1/hr/settings/[key]/route'
 import { PUT as putMainSetting } from '../../src/app/api/v1/settings/[key]/route';
 import { POST as createStaff } from '../../src/app/api/v1/staff/route';
 import { PATCH as patchStaff } from '../../src/app/api/v1/staff/[id]/route';
+import { runFollowUpReminders } from '../../src/server/follow-ups';
 import { listTeachingAssignments } from '../../src/server/hr-assignments';
+import { createLead } from '../../src/server/leads';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -317,6 +320,27 @@ describe('End employment tells who can act (PPL-006); nothing moves by itself', 
     const rows = await notes('staff.employment_ended');
     expect(rows.find((n) => n.userId === coordinator.id)?.body).toMatch(/could not be read/);
     expect(rows.some((n) => n.userId === opsManager.id)).toBe(true);
+  });
+
+  it('names the open leads and follow-ups the leaver owns; their reminders are unreachable, never sent (C4-4)', async () => {
+    await db().delete(notifications).where(eq(notifications.kind, 'staff.employment_ended'));
+    const leaver = await staffUser(db(), ['admissions_counsellor'], { name: 'Sample Leaving Counsellor' });
+    await placeIn(leaver.staffId, 'ACADEMICS');
+    const { lead } = await createLead(db(), opsManager, {
+      studentName: 'Sample Handover Lead',
+      studentEmail: 'sample.handover@example.test',
+      interestMode: 'undecided',
+      sourceCode: 'WALK_IN',
+      ownerStaffId: leaver.staffId,
+    });
+    await db().update(opsFollowUps).set({ dueDate: '2026-10-01' }).where(eq(opsFollowUps.leadId, lead.id));
+    vi.stubGlobal('fetch', academicAnswers([]));
+    expect((await action(hr, leaver.staffId, 'end-employment', { leftOn: '2026-10-31', reason: 'Resigned' })).status).toBe(200);
+    const notice = (await notes('staff.employment_ended')).find((n) => n.userId === opsManager.id);
+    expect(notice?.body).toContain('Still holds 1 open lead, 1 open follow-up.');
+    expect((await runFollowUpReminders(db())).unreachable).toBeGreaterThanOrEqual(1);
+    const reminded = and(eq(notifications.userId, leaver.id), eq(notifications.entityType, 'follow_up'));
+    expect(await db().$count(notifications, reminded)).toBe(0);
   });
 
   it('someone holding nothing causes no notice', async () => {

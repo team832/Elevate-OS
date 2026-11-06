@@ -136,7 +136,7 @@ export async function enterMarks(db: Database, actor: Actor, assessmentId: strin
       const reason = [...new Set(Object.values(rowReasons))].join('; ') || undefined;
       if (a.status === 'finalised' && !reason) throw new InvalidStateTransitionError(canCorrect(actor) ? 'Results are final: say why the mark changes under Reason for the change; nothing was saved.' : 'Results are final: ask the academic coordinator to change this mark; nothing was saved.');
       const rows = input.marks.map(({ studentId, version, state, manualScore }) => {
-        if (state === 'withheld') throw new ValidationError('This test’s roster is managed in Tests and Mock Tests: a result cannot be withheld here.');
+        if (state === 'withheld') throw new ValidationError('This test’s roster is managed in Tests and mock tests: a result cannot be withheld here.');
         return { studentId: studentId as StudentId, version, ...ROSTER_FACTS[state], score: state === 'scored' ? (manualScore ?? null) : null };
       });
       const visible = await markStudentIds(tx, scope, a);

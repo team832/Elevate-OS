@@ -16,3 +16,14 @@ export function toCsv(header: readonly string[], rows: readonly (readonly CsvCel
   // The byte order mark tells Excel on Windows this is UTF-8; without it Hindi names and ₹ garble.
   return '﻿' + [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
+
+/** A CSV download (attachment, never cached); the filename is reduced to letters, digits, `_ . -`. */
+export function csvResponse(csv: string, filename: string): Response {
+  return new Response(csv, {
+    headers: {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-disposition': `attachment; filename="${filename.replace(/[^\w.-]/g, '_')}"`,
+      'cache-control': 'no-store',
+    },
+  });
+}

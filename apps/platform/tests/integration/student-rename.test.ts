@@ -19,11 +19,13 @@ import { coreSeeds, runSeeds } from '@elevate/database/seed';
 import { createTestUser, setupTestDatabase, type TestUser } from '@elevate/testing';
 import { runEnrolmentExits, runEnrolmentIntake } from '@elevate/academic-os/server';
 import { seeds as opsSeeds } from '@elevate/business-ops-os/seed';
-import { requestEnrolment } from '@elevate/business-ops-os/server';
+import {
+  feeYear,
+  outstandingInstalments,
+  requestEnrolment,
+  updateLead,
+} from '@elevate/business-ops-os/server';
 import { seeds as platformSeeds } from '../../seed';
-import { outstandingInstalments } from '../../../business-ops-os/src/server/fee-collections';
-import { feeYear } from '../../../business-ops-os/src/server/fee-year';
-import { updateLead } from '../../../business-ops-os/src/server/leads';
 
 const ctx = setupTestDatabase();
 let manager: TestUser;
@@ -49,7 +51,7 @@ const enrolled = async () => {
 beforeAll(async () => {
   await runSeeds(ctx.db, [...coreSeeds, ...opsSeeds, ...platformSeeds], { seedUserPassword: 'test-only-seed-password', hashPassword, log: () => {} });
   manager = await createTestUser(ctx.db, { roles: ['operations_manager'] });
-});
+}, 600_000);
 
 describe('a corrected student name', () => {
   it('reaches the canonical student and Academic; a replay does nothing; only a real change publishes', async () => {

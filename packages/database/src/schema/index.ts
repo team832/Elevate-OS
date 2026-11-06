@@ -26,6 +26,8 @@ import * as opsFeedbackSchema from './ops-feedback';
 import * as opsHrRequestsSchema from './ops-hr-requests';
 import * as opsScoreImportsSchema from './ops-score-imports';
 import * as opsLeadStagesSchema from './ops-lead-stages';
+import * as opsHrRecordsSchema from './ops-hr-records';
+import * as opsPayrollSchema from './ops-payroll';
 
 export * from './core';
 export * from './marketing';
@@ -55,6 +57,8 @@ export * from './ops-feedback';
 export * from './ops-hr-requests';
 export * from './ops-score-imports';
 export * from './ops-lead-stages';
+export * from './ops-hr-records';
+export * from './ops-payroll';
 
 /**
  * The schema files in load order, keyed by file name.
@@ -88,6 +92,8 @@ export const SCHEMA_MODULES = {
   'ops-hr-requests': opsHrRequestsSchema,
   'ops-score-imports': opsScoreImportsSchema,
   'ops-lead-stages': opsLeadStagesSchema,
+  'ops-hr-records': opsHrRecordsSchema,
+  'ops-payroll': opsPayrollSchema,
 } as const;
 
 export const MANAGED_SCHEMAS = ['core', 'marketing', 'academic', 'ops'] as const;
@@ -142,6 +148,8 @@ export const schema = merged as typeof coreSchema &
   typeof opsFeedbackSchema &
   typeof opsHrRequestsSchema &
   typeof opsScoreImportsSchema &
-  typeof opsLeadStagesSchema;
+  typeof opsLeadStagesSchema &
+  typeof opsHrRecordsSchema &
+  typeof opsPayrollSchema;
 
 export type Schema = typeof schema;

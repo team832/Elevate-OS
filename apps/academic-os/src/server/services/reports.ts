@@ -20,7 +20,7 @@ import {
 import { toCsv, type CsvCell } from '@elevate/server-kit';
 import { NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import { addDays, fmtDay, type IsoDate, type StaffMemberId } from '@elevate/shared-types';
-import { attendanceDefinition, summariseAttendance, weekStart } from '../../domain';
+import { attendanceDefinition, scorePercent, summariseAttendance, weekStart } from '../../domain';
 import { assertBatchInScope, audit, getBatchOrThrow, resolveScope, todayIst, type Actor } from '../context';
 import type { ReportKind, ReportQuery } from '../schemas-assessment';
 import { getBatchCoverage } from './curriculum';
@@ -110,14 +110,13 @@ async function assessmentReport(db: Database, actor: Actor, q: ReportQuery): Pro
   const results = await getResults(db, actor, id);
   const { analysis, sections } = await getAssessmentAnalysis(db, actor, id);
   const a = results.assessment;
-  const pct = (total: string | null, max: string) => (total === null || Number(max) <= 0 ? null : Math.round((Number(total) / Number(max)) * 1000) / 10);
   return {
     kind: 'assessment',
     title: `Assessment analysis: ${a.code}`,
     subtitle: `${a.title} · ${a.kind.replace(/_/g, ' ')} · ${fmtDay(a.scheduledDate, 'date not recorded')} · ${results.run ? `result version ${results.run.version} (${results.run.status})` : 'no final results'}`,
     definition: 'Average = mean of scored students only. Absent, exempt, withheld and pending (no result) are counted separately and never treated as 0. Rank and percentile are shown only under an approved policy.',
     columns: ['Student code', 'Student', 'Result', 'Score', 'Maximum', 'Score %', ...(results.showRank ? ['Rank', 'Percentile'] : [])],
-    rows: results.results.map((r) => [r.studentCode, r.studentName, r.state, r.totalScore === null ? null : Number(r.totalScore), Number(r.maxScore), pct(r.totalScore, r.maxScore), ...(results.showRank ? [r.rank, r.percentile === null ? null : Number(r.percentile)] : [])]),
+    rows: results.results.map((r) => [r.studentCode, r.studentName, r.state, r.totalScore === null ? null : Number(r.totalScore), Number(r.maxScore), scorePercent(r.totalScore, r.maxScore), ...(results.showRank ? [r.rank, r.percentile === null ? null : Number(r.percentile)] : [])]),
     notes: analysis
       ? [
           `Scored ${analysis.scored} of ${analysis.eligible} eligible; absent ${analysis.absent}, exempt ${analysis.exempt}, withheld ${analysis.withheld}, pending ${analysis.pending}.`,

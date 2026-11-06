@@ -107,6 +107,30 @@ describe('checkAssessmentSchedule', () => {
     expect(sameSlot.hard.map((c) => c.code)).toEqual(['ASSESSMENT_CLASH']);
   });
 
+  it('with batches given, only items sharing a batch clash or count for the gap (C2-3)', () => {
+    const at = { date: '2027-05-08', startTime: '09:00', durationMinutes: 60 };
+    const r = checkAssessmentSchedule({
+      candidates: [cand({ id: 't', ...at, batchIds: ['A', 'B'] })],
+      otherAssessments: [{ id: 'o', label: 'Other test', ...at, batchIds: ['C'] }],
+      classes: [{ id: 'c1', label: 'Class of B', ...at, batchIds: ['B'] }, { id: 'c2', label: 'Class of C', ...at, batchIds: ['C'] }],
+      blackouts: [],
+      minGap: { minDays: 3, enforcement: 'hard' },
+    });
+    expect(r.hard.map((c) => [c.code, c.otherId])).toEqual([['CLASS_CLASH', 'c1']]);
+  });
+
+  it('a test-type class of the test’s own batch is no clash; one of a batch that only shares a student is (REV-4 I-2)', () => {
+    const at = { date: '2027-05-08', startTime: '09:00', durationMinutes: 60 };
+    const r = checkAssessmentSchedule({
+      candidates: [cand({ id: 't', ...at, ownBatchIds: ['A'], batchIds: ['A', 'B'] })],
+      otherAssessments: [],
+      classes: [{ id: 'own', label: 'Test room A', ...at, batchIds: ['A'], testSession: true }, { id: 'shared', label: 'Test room B', ...at, batchIds: ['B'], testSession: true }],
+      blackouts: [],
+      minGap: null,
+    });
+    expect(r.hard.map((c) => c.otherId)).toEqual(['shared']);
+  });
+
   it('rejects a test on or before its prerequisites’ planned completion', () => {
     const r = checkAssessmentSchedule({ candidates: [cand({ id: 't', date: '2027-05-08', prerequisiteCompletion: '2027-05-08' })], otherAssessments: [], classes: [], blackouts: [], minGap: null });
     expect(r.hard.map((c) => c.code)).toEqual(['BEFORE_PREREQUISITE']);

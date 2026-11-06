@@ -290,7 +290,7 @@ export function MonthlyReports({ r, f }: { r: Overview['monthlyReports']; f: Das
     <Card
       title="Monthly report status"
       meta={<Provenance />}
-      actions={<a href={modulePath('my-reports?kind=month')}>My Work Updates</a>}
+      actions={<a href={modulePath('my-reports?kind=month')}>My reports</a>}
     >
       <Explain>
         Your own monthly report for this month and last month, as kept by Business Operations. Each

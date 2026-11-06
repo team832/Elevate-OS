@@ -3,7 +3,12 @@
  * take their output types). Documented in docs/API.md.
  */
 import { z } from 'zod';
-import { isoDateSchema, isoDateTimeSchema, programmeCodeSchema } from '@elevate/shared-contracts';
+import {
+  isoDateSchema,
+  isoDateTimeSchema,
+  optText,
+  programmeCodeSchema,
+} from '@elevate/shared-contracts';
 import {
   ADMISSION_CHECK_ITEMS,
   ADMISSION_STATUSES,
@@ -12,7 +17,6 @@ import {
 } from '../domain';
 
 const text = (max = 500) => z.string().trim().max(max);
-const optText = (max = 500) => text(max).nullish();
 const uuid = z.uuid();
 const optUuid = z.uuid().nullish();
 
@@ -214,6 +218,7 @@ export const OPS_JOBS = [
   'task-reminders',
   'enrolment-exits',
   'housekeeping',
+  'fee-reminders',
 ] as const;
 export const jobParams = z.object({ job: z.enum(OPS_JOBS) });
 export const dashboardQuery = z.object({

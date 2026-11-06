@@ -96,7 +96,7 @@ export function reminderPreview(s: ReminderSettings, personalHours?: number | nu
     schedule: `${who} a reminder ${hours(s.dueSoonHours)} before a task is due, then every ${hours(s.overdueRepeatHours)} while it is overdue, and ${ack}.`,
     personal: you
       ? `${choice} This choice only spaces out acknowledge reminders. Due-soon and overdue reminders always follow HR's settings. Turning off pop-ups does not stop a reminder: it still shows under the bell.`
-      : 'Personal Settings (in Marketing) can only make acknowledge reminders less frequent and turn off pop-ups. They cannot stop due-soon or overdue reminders or change a deadline.',
+      : 'Personal settings (in Marketing) can only make acknowledge reminders less frequent and turn off pop-ups. They cannot stop due-soon or overdue reminders or change a deadline.',
     running:
       'Nothing goes out on its own, because no scheduler exists yet. Reminders are created only when someone runs "Send task reminders" under Background jobs on the Business Operations overview. They show only inside Elevate OS, and only for tasks still open.',
   };

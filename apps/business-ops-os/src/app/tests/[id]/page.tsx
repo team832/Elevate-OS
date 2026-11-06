@@ -19,6 +19,7 @@ import {
   STATUS_LABELS,
   when,
 } from '../_components/labels';
+import { AdmitCards } from '../_components/admit-cards';
 import { ScoreUpload } from '../_components/score-upload';
 import { CancelTest, Papers, Publications, Roster } from '../_components/test-panels';
 
@@ -97,6 +98,7 @@ async function Body({ user, id }: { user: AuthenticatedUser; id: string }) {
           <DetailTable rows={detailRows(d)} />
         </Segment>
         <Roster d={d} manage={manage} addable={addable?.ok ? addable.data : []} />
+        {manage ? <AdmitCards d={d} user={user} /> : null}
         <Papers id={id} files={files} manage={manage} />
         <Segment
           title="Score imports"

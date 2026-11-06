@@ -67,7 +67,7 @@ describe('lead screens', () => {
   });
 
   it.each([
-    ['/ops', '/ops#my-follow-ups'],
+    ['/ops', '/ops/follow-ups'],
     ['/marketing', '/marketing/follow-ups'],
   ])('sales calls at %s: "Next steps" points at %s, a page that exists (RVA-001)', async (at, href) => {
     const out = await html(<SalesCallsBody user={employee} base={at} searchParams={{}} />);

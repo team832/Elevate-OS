@@ -1,6 +1,13 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { auditEvents, sessions, userRoles, users, type Database } from '@elevate/database';
+import {
+  auditEvents,
+  loginAttempts,
+  sessions,
+  userRoles,
+  users,
+  type Database,
+} from '@elevate/database';
 import { createTestDb, type TestDatabase } from '@elevate/database/testing';
 import type { UserId } from '@elevate/shared-types';
 import {
@@ -110,6 +117,8 @@ describe('cookie', () => {
 });
 
 describe('login / logout handlers', () => {
+  // The limits are shared through the database: each test starts with no counted failures.
+  beforeEach(() => db.delete(loginAttempts));
   const options = {
     module: 'platform' as const,
     loginPath: '/login',
@@ -175,7 +184,7 @@ describe('login / logout handlers', () => {
   it('throttles repeated failures → 429 RATE_LIMITED, even with the right password', async () => {
     const login = createLoginHandler({
       ...options,
-      throttle: new LoginThrottle({ maxFailures: 3 }),
+      throttle: new LoginThrottle('login', 3),
     });
     for (let i = 0; i < 3; i++) {
       expect(
@@ -193,7 +202,7 @@ describe('login / logout handlers', () => {
   it('a new X-Forwarded-For per attempt does not escape the per-email limit', async () => {
     const login = createLoginHandler({
       ...options,
-      emailThrottle: new LoginThrottle({ maxFailures: 3 }),
+      emailThrottle: new LoginThrottle('login-email', 3),
     });
     const attempt = (i: number, password: string) =>
       login(
@@ -227,9 +236,9 @@ describe('login / logout handlers', () => {
     const limited = (max = 5) =>
       createLoginHandler({
         ...options,
-        throttle: new LoginThrottle({ maxFailures: max }),
-        ipThrottle: new LoginThrottle({ maxFailures: max * 10 }),
-        emailThrottle: new LoginThrottle({ maxFailures: max * 4 }),
+        throttle: new LoginThrottle('login', max),
+        ipThrottle: new LoginThrottle('login-ip', max * 10),
+        emailThrottle: new LoginThrottle('login-email', max * 4),
       });
     const attempt = (login: (r: Request) => Promise<Response>, password: string) =>
       jsonLogin(login, { email: 'tara.teacher@example.test', password }).then((r) => r.status);
@@ -259,20 +268,23 @@ describe('login / logout handlers', () => {
     it('correct sign-ins never use up the limit of a shared address', async () => {
       const login = createLoginHandler({
         ...options,
-        ipThrottle: new LoginThrottle({ maxFailures: 3 }),
+        ipThrottle: new LoginThrottle('login-ip', 3),
       });
       for (let i = 0; i < 5; i++) expect(await attempt(login, RIGHT)).toBe(200);
     });
 
     it('a database failure says nothing about the password, so it is not counted', async () => {
-      let up = false;
       const login = createLoginHandler({
         ...options,
-        throttle: new LoginThrottle({ maxFailures: 3 }),
-        getDb: () => (up ? db : ({ select() { throw new Error('database down'); } } as never)),
+        throttle: new LoginThrottle('login', 3),
       });
-      for (let i = 0; i < 4; i++) expect(await attempt(login, RIGHT)).toBe(500);
-      up = true;
+      // Only the password check fails: the limit's own table stays up.
+      await t.pglite.exec('ALTER TABLE core.users RENAME TO users_down');
+      try {
+        for (let i = 0; i < 4; i++) expect(await attempt(login, RIGHT)).toBe(500);
+      } finally {
+        await t.pglite.exec('ALTER TABLE core.users_down RENAME TO users');
+      }
       expect(await attempt(login, RIGHT)).toBe(200);
     });
   });
@@ -280,7 +292,7 @@ describe('login / logout handlers', () => {
   it('a successful sign-in clears the per-email count', async () => {
     const login = createLoginHandler({
       ...options,
-      emailThrottle: new LoginThrottle({ maxFailures: 3 }),
+      emailThrottle: new LoginThrottle('login-email', 3),
     });
     const attempt = (password: string) =>
       jsonLogin(login, { email: 'tara.teacher@example.test', password });

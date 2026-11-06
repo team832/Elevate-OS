@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import { can, ROLE_KEYS, ROLES } from '@elevate/authorization';
+import { can, ROLES } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
 import { currentRequestId, requirePageAccess } from '@elevate/server-kit/next';
 import {
@@ -14,7 +14,7 @@ import {
   LoadingState,
   PageHeader,
 } from '@elevate/shared-ui';
-import { ORGANISATION_EMAIL_DOMAIN } from '@elevate/authentication';
+import { ORGANISATION_EMAIL_DOMAIN, STAFF_ROLE_KEYS } from '@elevate/authentication';
 import { PLATFORM_PATHS } from '../../../lib/shell';
 import { platformShell } from '../../../server/shell';
 import { listUsers, listUsersQuery, NO_ROLES, type ListUsersQuery } from '../../../server/users';
@@ -168,7 +168,7 @@ async function UserList({ query, raw }: { query: ListUsersQuery; raw: Record<str
             <select id="f-role" name="role" className="el-select" defaultValue={query.role ?? ''}>
               <option value="">Any role</option>
               <option value={NO_ROLES}>No roles yet</option>
-              {ROLE_KEYS.map((k) => (
+              {STAFF_ROLE_KEYS.map((k) => (
                 <option key={k} value={k}>
                   {ROLES[k].label}
                 </option>

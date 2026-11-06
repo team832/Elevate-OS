@@ -12,6 +12,7 @@ import {
   eventDeliveries,
   idempotencyKeys,
   integrationEvents,
+  loginAttempts,
   opsExitRecords,
   sessions,
 } from '@elevate/database';
@@ -186,7 +187,7 @@ describe('housekeeping job (F-11)', () => {
   const day = 24 * 60 * 60 * 1000;
   const ago = (days: number) => new Date(Date.now() - days * day);
 
-  it('purges sessions ended over 30 days ago and expired keys; live ones, audit and outbox stay', async () => {
+  it('purges sessions ended over 30 days ago, expired keys and expired sign-in attempt counts; live ones, audit and outbox stay', async () => {
     const user = await createTestUser(ctx.db, { roles: ['teacher'] });
     const session = (expiresAt: Date, revokedAt: Date | null = null) =>
       ctx.db.insert(sessions).values({ userId: user.id, tokenHash: crypto.randomUUID(), createdAt: ago(60), expiresAt, revokedAt }).returning().then((r) => r[0]!);
@@ -197,9 +198,12 @@ describe('housekeeping job (F-11)', () => {
     const key = (name: string, expiresAt: Date) => ctx.db.insert(idempotencyKeys).values({ scope: 'test', key: name, userId: user.id, requestHash: 'x', expiresAt }).returning().then((r) => r[0]!);
     const expired = await key('expired', ago(1));
     const fresh = await key('fresh', new Date(Date.now() + day));
+    const attempt = (hex: string, expiresAt: Date) => ctx.db.insert(loginAttempts).values({ keyHash: hex.repeat(64), failures: 3, windowStartedAt: ago(2), expiresAt });
+    await attempt('a', ago(1));
+    await attempt('b', new Date(Date.now() + day));
     const [auditBefore, outboxBefore] = [await ctx.db.$count(auditEvents), await ctx.db.$count(integrationEvents)];
 
-    expect(await runHousekeeping(ctx.db, manager, 'test-request')).toEqual({ sessions: 2, idempotencyKeys: 1 });
+    expect(await runHousekeeping(ctx.db, manager, 'test-request')).toEqual({ sessions: 2, idempotencyKeys: 1, loginAttempts: 1 });
 
     const left = (await ctx.db.select({ id: sessions.id }).from(sessions)).map((s) => s.id);
     expect(left).toEqual(expect.arrayContaining([recent.id, live.id]));
@@ -208,9 +212,10 @@ describe('housekeeping job (F-11)', () => {
     const keys = (await ctx.db.select({ id: idempotencyKeys.id }).from(idempotencyKeys)).map((k) => k.id);
     expect(keys).toContain(fresh.id);
     expect(keys).not.toContain(expired.id);
+    expect((await ctx.db.select({ k: loginAttempts.keyHash }).from(loginAttempts)).map((r) => r.k)).toEqual(['b'.repeat(64)]);
     expect(await ctx.db.$count(integrationEvents)).toBe(outboxBefore);
     expect(await ctx.db.$count(auditEvents)).toBe(auditBefore + 1);
     const [row] = await ctx.db.select().from(auditEvents).where(eq(auditEvents.action, 'housekeeping.run'));
-    expect(row).toMatchObject({ actorUserId: manager.id, after: { sessions: 2, idempotencyKeys: 1 } });
+    expect(row).toMatchObject({ actorUserId: manager.id, after: { sessions: 2, idempotencyKeys: 1, loginAttempts: 1 } });
   });
 });

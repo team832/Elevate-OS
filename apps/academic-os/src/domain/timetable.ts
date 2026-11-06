@@ -4,7 +4,7 @@
  * HARD constraints (any one makes the timetable infeasible):
  *   TEACHER_OVERLAP (incl. co-teachers and substitutes), BATCH_OVERLAP, ROOM_OVERLAP,
  *   STUDENT_OVERLAP (a student placed in both batches), TEACHER_UNAVAILABLE (academic
- *   availability record, not HR leave), TEACHER_LEFT (HR ended their employment; scheduled
+ *   availability record, a coordinator's or from approved HR leave), TEACHER_LEFT (HR ended their employment; scheduled
  *   classes only, a held class is history), ON_EXCLUSION, CROSSES_MIDNIGHT,
  *   DURATION_MISMATCH when the class length is locked/approved,
  *   TEACHER_WORKLOAD when the configured cap says `enforcement: 'hard'`.
@@ -16,7 +16,7 @@
  * It never claims a timetable is optimal.
  */
 import { fmtDay } from '@elevate/shared-types';
-import { eachDate, intervalsOverlap, isoWeekday, parseClock, weekStart } from './time';
+import { eachDate, fmtClock, intervalsOverlap, isoWeekday, parseClock, weekStart } from './time';
 
 export interface TimetableSession {
   id: string;
@@ -30,13 +30,17 @@ export interface TimetableSession {
   sessionType: 'teaching' | 'practice' | 'catch_up' | 'test' | 'discussion';
   /** Everyone teaching it (planned teacher unless replaced, co-teachers, substitutes); default [teacherStaffId]. */
   teacherStaffIds?: readonly string[];
+  /** Set on a scheduled test holding its batch (not a class): its name for clash messages. */
+  testLabel?: string;
 }
 
-/** Academic availability record (R2: not HR leave). */
+/** Academic availability record: entered by a coordinator, or made from approved HR leave (D-134). */
 export interface Unavailability {
   staffId: string;
   from: string;
   to: string;
+  /** Default `coordinator`. */
+  source?: 'coordinator' | 'hr_leave';
 }
 
 /** Effective-dated batch placement of a student (`to` null = open). */
@@ -175,6 +179,8 @@ export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult
         if (sb.start >= sa.end) break; // sorted by start: nothing later can overlap a
         if (!intervalsOverlap(sa.start, sa.end, sb.start, sb.end)) continue;
         const pair = [a.id, b.id];
+        const test = a.testLabel ? a : b.testLabel ? b : null;
+        const withTest = test && `this class clashes with the test ${test.testLabel} on ${fmtDay(test.date)} ${fmtClock(test.startTime)}.`;
         const bTeachers = teachersOf(b);
         if (teachersOf(a).some((t) => bTeachers.includes(t))) {
           conflicts.push({
@@ -185,13 +191,14 @@ export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult
             message: 'The same teacher is booked for two overlapping sessions.',
           });
         }
-        if (a.batchId === b.batchId) {
+        // A test-type class at its batch's test holds the room and invigilator: not a clash.
+        if (a.batchId === b.batchId && !(test && (test === a ? b : a).sessionType === 'test')) {
           conflicts.push({
             code: 'BATCH_OVERLAP',
             severity: 'hard',
             sessionIds: pair,
             date,
-            message: 'The same batch has two overlapping sessions.',
+            message: withTest ? `Same batch: ${withTest}` : 'The same batch has two overlapping sessions.',
           });
         }
         if (a.batchId !== b.batchId && input.placements?.length) {
@@ -202,7 +209,7 @@ export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult
               severity: 'hard',
               sessionIds: pair,
               date,
-              message: 'A student placed in both batches would have two overlapping classes.',
+              message: withTest ? `A student is placed in both batches: ${withTest}` : 'A student placed in both batches would have two overlapping classes.',
             });
           }
         }
@@ -227,7 +234,10 @@ export function checkTimetable(input: TimetableCheckInput): TimetableCheckResult
         severity: 'hard',
         sessionIds: [s.id],
         date: s.date,
-        message: `A teacher has an academic unavailability record from ${fmtDay(u.from)} to ${fmtDay(u.to)} (not HR leave).`,
+        message:
+          u.source === 'hr_leave'
+            ? `A teacher is on approved HR leave from ${fmtDay(u.from)} to ${fmtDay(u.to)}.`
+            : `A teacher has an academic unavailability record from ${fmtDay(u.from)} to ${fmtDay(u.to)} (not HR leave).`,
       });
     }
   }

@@ -23,6 +23,7 @@ const EOD: Record<NonNullable<TaskDay>['eod'], [word: string, note: string]> = {
   submitted: ['Submitted', 'Waiting for review.'],
   revision_requested: ['Changes requested', 'The reviewer sent it back.'],
   acknowledged: ['Acknowledged', 'Reviewed and accepted.'],
+  more_detail_requested: ['More detail requested', 'The reviewer asked for more detail.'],
 };
 
 const REPORT_TILES = [['week', 'This week’s report'], ['month', 'This month’s report']] as const;

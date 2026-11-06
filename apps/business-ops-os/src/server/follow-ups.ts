@@ -8,6 +8,7 @@ import {
   opsFollowUps,
   opsLeads,
   staffMembers,
+  users,
   type Database,
 } from '@elevate/database';
 import { can } from '@elevate/authorization';
@@ -27,7 +28,14 @@ import {
   type IsoDate,
   type ResolvedSettings,
 } from '../domain';
-import { accessScope, activeStaff, assertScope, staffIdForUser, type Actor } from './context';
+import {
+  accessScope,
+  activeStaff,
+  assertScope,
+  staffIdForUser,
+  userIdsHolding,
+  type Actor,
+} from './context';
 import { opsAudit, rowById } from './ops-common';
 import { linkFor } from './task-links';
 import { loadSettings } from './settings';
@@ -272,7 +280,9 @@ export async function followUpDaySummary(db: Database, actor: Actor, now = new D
 
 /**
  * Reminder job: notify the owner of every open follow-up that is due today or
- * overdue, once per IST day (`last_reminder_on`). Idempotent per day.
+ * overdue, once per IST day (`last_reminder_on`). Idempotent per day. An owner who has left
+ * (inactive staff or disabled login), or a case's follow-up whose owner may not read cases, is
+ * counted unreachable.
  */
 export async function runFollowUpReminders(
   db: Database,
@@ -293,18 +303,25 @@ export async function runFollowUpReminders(
         leadCode: opsLeads.code,
         studentName: opsLeads.studentName,
         ownerUserId: staffMembers.userId,
+        ownerActive: sql<boolean>`(${staffMembers.status} <> 'inactive' and ${users.status} = 'active')`,
+        admissionId: opsFollowUps.admissionId,
       })
       .from(opsFollowUps)
       .innerJoin(staffMembers, eq(staffMembers.id, opsFollowUps.ownerStaffId))
+      .leftJoin(users, eq(users.id, staffMembers.userId))
       .innerJoin(opsLeads, eq(opsLeads.id, opsFollowUps.leadId))
       .where(and(eq(opsFollowUps.status, 'open'), lte(opsFollowUps.dueDate, today)));
+    const caseReaders = new Set(await userIdsHolding(tx, 'ops:admissions:read'));
     const decisions = selectReminders(
       rows.map((r) => ({
         id: r.id,
         status: r.status,
         dueDate: r.dueDate as IsoDate,
         lastReminderOn: (r.lastReminderOn as IsoDate | null) ?? null,
-        ownerUserId: r.ownerUserId,
+        ownerUserId:
+          r.ownerActive && (!r.admissionId || caseReaders.has(r.ownerUserId!))
+            ? r.ownerUserId
+            : null,
       })),
       now,
     );

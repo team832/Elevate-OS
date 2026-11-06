@@ -17,7 +17,7 @@ import { withTransaction, containsPattern } from '@elevate/server-kit';
 import { ForbiddenError, InvalidStateTransitionError } from '@elevate/shared-contracts';
 import type { DepartmentId, StaffMemberId } from '@elevate/shared-types';
 import { isImportedReport } from '../domain/eod';
-import { KIND_LABELS, periodLabel } from '../domain/work-report';
+import { KIND_LABELS, periodLabel, REPORT_STATUS_LABELS } from '../domain/work-report';
 import {
   accessScope,
   managedStaffIds,
@@ -42,6 +42,7 @@ export const REVIEW_LABELS: Record<EodReviewInput['kind'] | 'follow_up_task_crea
   revision_requested: 'Changes requested',
   acknowledged: 'Reviewed',
   follow_up_task_created: 'Follow-up task created',
+  more_detail_requested: 'More detail requested',
 };
 
 /** Lock a report the actor may review (404 when they cannot read it at all). */
@@ -70,8 +71,9 @@ async function reviewable(tx: Database, actor: Actor, id: string) {
 }
 
 /**
- * Record a review action. Revision request → `revision_requested` (the owner edits and
- * resubmits a new version); acknowledge → `acknowledged`. Both need a submitted report.
+ * Record a review action. Request changes / ask for more detail (F4-11; note required) → that
+ * status: the owner edits and resubmits a new version; acknowledge → `acknowledged`. Each needs a
+ * submitted report; only its reviewer or an EOD reviewer may act (`reviewable`).
  * Viewing, and acknowledging twice, are recorded once.
  */
 export async function reviewReport(
@@ -99,14 +101,13 @@ export async function reviewReport(
         .limit(1);
       if (seen) return row;
     }
-    if (
-      (input.kind === 'revision_requested' || input.kind === 'acknowledged') &&
-      row.status !== 'submitted'
-    )
+    const { kind } = input;
+    const sendBack = kind === 'revision_requested' || kind === 'more_detail_requested';
+    if ((sendBack || kind === 'acknowledged') && row.status !== 'submitted')
       throw new InvalidStateTransitionError(
-        row.status === 'revision_requested'
-          ? 'Changes were already requested; wait for the new version.'
-          : 'This report was already reviewed.',
+        row.status === 'acknowledged'
+          ? 'This report was already reviewed.'
+          : `${REPORT_STATUS_LABELS[row.status]}: wait for the author's new version.`,
       );
     await tx.insert(reviewEvents).values({
       reportId: row.id,
@@ -115,12 +116,11 @@ export async function reviewReport(
       actorUserId: actor.id,
       text: input.text ?? null,
     });
-    const set =
-      input.kind === 'revision_requested'
-        ? { status: 'revision_requested' as const }
-        : input.kind === 'acknowledged'
-          ? { status: 'acknowledged' as const, reviewedBy: actor.id, reviewedAt: new Date() }
-          : null;
+    const set = sendBack
+      ? { status: kind }
+      : kind === 'acknowledged'
+        ? { status: kind, reviewedBy: actor.id, reviewedAt: new Date() }
+        : null;
     const [after] = set
       ? await tx
           .update(reports)

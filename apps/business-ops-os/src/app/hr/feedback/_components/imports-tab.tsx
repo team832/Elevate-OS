@@ -234,7 +234,7 @@ async function ImportModal({ user, params, id }: TabProps & { id: string }) {
             <AttachmentList
               rows={files}
               apiBase="/ops/api/v1"
-              empty="The original file was not stored (file storage is not set up)."
+              empty="The original file was not stored with this import."
             />
           ),
         },

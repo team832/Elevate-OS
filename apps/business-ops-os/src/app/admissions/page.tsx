@@ -40,7 +40,7 @@ import {
 import { ConvertForm, loadConversion } from './demos/[id]/convert/convert-form';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Demo students' };
+export const metadata = { title: 'Demos' };
 
 const BASE = '/ops/admissions';
 type Params = Record<string, string | undefined>;
@@ -65,7 +65,7 @@ export default async function AdmissionsPage({ searchParams }: { searchParams: P
   return (
     <Frame access={access} active="admissions">
       <PageHeader
-        title="Demo students"
+        title="Demos"
         description="Who is in a demo now, who starts next, and how finished demos ended."
         actions={
           write ? (
@@ -448,7 +448,7 @@ async function DemoList({
       />
       <Tabs
         idBase="demos"
-        label="Demo students"
+        label="Demos"
         selected={view}
         items={DEMO_LIST_VIEWS.map((v) => ({
           key: v,

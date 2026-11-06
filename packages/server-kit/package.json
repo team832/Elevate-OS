@@ -17,6 +17,7 @@
     "@elevate/authorization": "0.1.0",
     "@elevate/configuration": "0.1.0",
     "@elevate/database": "0.1.0",
+    "@elevate/notifications": "0.1.0",
     "@elevate/shared-contracts": "0.1.0",
     "@elevate/shared-types": "0.1.0",
     "drizzle-orm": "0.45.4",

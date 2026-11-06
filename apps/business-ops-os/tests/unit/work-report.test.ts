@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { IsoDate } from '../../src/domain/dates';
 import {
   expectation,
+  filingClosesAt,
   onTimeRate,
   periodLabel,
   periodOf,
+  reminderDay,
   reportDeadline,
   reportStanding,
   reviewTurnaround,
@@ -309,5 +311,80 @@ describe('A-REP-3 reviewer turnaround', () => {
       ]),
     ).toEqual({ decided: 2, waiting: 1, medianHours: 3.5 });
     expect(reviewTurnaround([]).medianHours).toBeNull();
+  });
+});
+
+describe('F4-11 late filing window and deadline reminder (IST)', () => {
+  const day = (s: string) => periodOf('day', d(s));
+  it.each([
+    [
+      '2 days after a 20:00 deadline',
+      day('2026-11-06'),
+      ist('2026-11-06', '20:00'),
+      2,
+      ist('2026-11-08', '20:00'),
+    ],
+    [
+      'across midnight: a 23:30 deadline',
+      day('2026-11-06'),
+      ist('2026-11-06', '23:30'),
+      2,
+      ist('2026-11-08', '23:30'),
+    ],
+    [
+      'no deadline: from the end of the day',
+      day('2026-11-06'),
+      null,
+      2,
+      ist('2026-11-09', '00:00'),
+    ],
+    [
+      '0 days: closes at the deadline',
+      day('2026-11-06'),
+      ist('2026-11-06', '20:00'),
+      0,
+      ist('2026-11-06', '20:00'),
+    ],
+    ['no limit set', day('2026-11-06'), ist('2026-11-06', '20:00'), null, null],
+    ['weekly reports have no window', WEEK, ist('2026-10-26', '10:00'), 2, null],
+  ] as const)('%s', (_n, p, deadline, days, want) => {
+    expect(filingClosesAt(p, deadline, days)).toEqual(want);
+  });
+
+  it.each([
+    ['19:00 IST, 60 min before 20:00', ist('2026-11-06', '19:00'), '20:00', 60, '2026-11-06'],
+    ['19:59 IST', ist('2026-11-06', '19:59'), '20:00', 60, '2026-11-06'],
+    ['18:59 IST: too early', ist('2026-11-06', '18:59'), '20:00', 60, null],
+    ['20:00 IST: deadline reached', ist('2026-11-06', '20:00'), '20:00', 60, null],
+    [
+      '23:45 IST for a 00:30 deadline: the next IST day',
+      ist('2026-11-06', '23:45'),
+      '00:30',
+      60,
+      '2026-11-07',
+    ],
+    [
+      '00:10 IST (still the 6th in UTC) for a 00:30 deadline',
+      ist('2026-11-07', '00:10'),
+      '00:30',
+      60,
+      '2026-11-07',
+    ],
+    [
+      '19:10 IST, 5 hours before: the same day, not the next',
+      ist('2026-11-06', '19:10'),
+      '20:00',
+      300,
+      '2026-11-06',
+    ],
+    [
+      '21:00 IST, 12 hours before: tomorrow is still too far',
+      ist('2026-11-06', '21:00'),
+      '20:00',
+      720,
+      null,
+    ],
+  ] as const)('reminder day at %s', (_n, now, time, minutes, want) => {
+    expect(reminderDay(now, time, minutes)).toBe(want);
   });
 });

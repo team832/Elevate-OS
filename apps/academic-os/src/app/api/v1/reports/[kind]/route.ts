@@ -1,4 +1,4 @@
-import { defineRoute } from '@elevate/server-kit';
+import { csvResponse, defineRoute } from '@elevate/server-kit';
 import { actorOf } from '../../../../../server/route-helpers';
 import { reportParams, reportQuery } from '../../../../../server/schemas-assessment';
 import { buildReport, exportReportCsv } from '../../../../../server';
@@ -13,5 +13,5 @@ export const dynamic = 'force-dynamic';
 export const GET = defineRoute({ permission: 'academic:module:access', params: reportParams, query: reportQuery }, async (ctx) => {
   if (ctx.query.format !== 'csv') return buildReport(ctx.db, actorOf(ctx), ctx.params.kind, ctx.query);
   const { filename, csv } = await exportReportCsv(ctx.db, actorOf(ctx), ctx.params.kind, ctx.query);
-  return new Response(csv, { headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${filename}"`, 'cache-control': 'no-store' } });
+  return csvResponse(csv, filename);
 });

@@ -61,6 +61,11 @@ export interface RouteSpec<
   maxBodyBytes?: number;
   /** Module label for logs; defaults to the permission's module prefix. */
   module?: ModuleKey;
+  /**
+   * Public routes only: take posts from other websites (a form on the owner's site). Skips the
+   * cross-site refusal and the session, so the handler must check the Origin itself.
+   */
+  crossSite?: [A] extends ['public'] ? true : never;
 }
 
 export interface RouteContext<
@@ -183,6 +188,24 @@ function requestIdFrom(request: Request): string {
   return incoming && /^[\w.:-]{8,100}$/.test(incoming) ? incoming : crypto.randomUUID();
 }
 
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// `code` also covers passcode and setupCode; `mapping` matches `pin` (harmless: it holds no ids).
+const SECRET_KEY = /password|secret|token|code|pin|otp|api.?key/i;
+
+/**
+ * Input with every UUID-shaped value in lower case. z.uuid() and PostgreSQL take any case but code
+ * compares ids as text (self checks, lock keys): one spelling per id. Keys stay as sent (never
+ * merged) and a value under a secret-like key stays exactly as typed.
+ */
+export function canonicalIds<T>(value: T): T {
+  if (typeof value === 'string') return (UUID_RE.test(value) ? value.toLowerCase() : value) as T;
+  if (Array.isArray(value)) return value.map(canonicalIds) as T;
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([k, v]) => [k, SECRET_KEY.test(k) ? v : canonicalIds(v)]),
+  ) as T;
+}
+
 function queryObject(url: URL): Record<string, string | string[]> {
   const out: Record<string, string | string[]> = {};
   for (const key of new Set(url.searchParams.keys())) {
@@ -228,6 +251,8 @@ export function defineRoute<
   handler: (ctx: RouteContext<A, B, Q, P>) => Promise<unknown>,
   options: DefineRouteOptions = {},
 ): RouteHandler {
+  if (spec.crossSite && spec.permission !== 'public')
+    throw new Error('crossSite is only for public routes: a signed-in route must refuse other sites.');
   return async (request, context) => {
     const started = Date.now();
     const requestId = requestIdFrom(request);
@@ -242,8 +267,9 @@ export function defineRoute<
     let response: Response;
     try {
       // 0. CSRF: every localhost port shares the session cookie, so a state change must come
-      // from this origin or a configured app origin (D-072).
-      if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && !isAllowedRequestOrigin(request))
+      // from this origin or a configured app origin (D-072). A crossSite route checks its own.
+      const write = !['GET', 'HEAD', 'OPTIONS'].includes(request.method);
+      if (write && !spec.crossSite && !isAllowedRequestOrigin(request))
         throw new ForbiddenError('This request came from another site and was refused.');
       const db = (options.getDb ?? getDb)();
 
@@ -278,7 +304,7 @@ export function defineRoute<
             }
           }
         }
-      } else {
+      } else if (!spec.crossSite) {
         user = await getUserFromRequest(request, db).catch(() => null);
         userId = user?.id;
       }
@@ -287,7 +313,7 @@ export function defineRoute<
       let params: unknown = undefined;
       if (spec.params) {
         const raw = (await context?.params) ?? {};
-        const parsed = spec.params.safeParse(raw);
+        const parsed = spec.params.safeParse(canonicalIds(raw));
         if (!parsed.success)
           throw new ValidationError('The URL is not valid.', {
             details: zodIssues(parsed.error, 'params'),
@@ -296,7 +322,7 @@ export function defineRoute<
       }
       let query: unknown = undefined;
       if (spec.query) {
-        const parsed = spec.query.safeParse(queryObject(url));
+        const parsed = spec.query.safeParse(canonicalIds(queryObject(url)));
         if (!parsed.success)
           throw new ValidationError('The query string is not valid.', {
             details: zodIssues(parsed.error, 'query'),
@@ -322,7 +348,7 @@ export function defineRoute<
           if (error instanceof PayloadTooLargeError) throw error;
           throw new ValidationError('The request body is not valid JSON.');
         }
-        const parsed = spec.body.safeParse(rawBody);
+        const parsed = spec.body.safeParse(canonicalIds(rawBody));
         if (!parsed.success)
           throw new ValidationError('Check the details and try again.', {
             details: zodIssues(parsed.error, 'body'),

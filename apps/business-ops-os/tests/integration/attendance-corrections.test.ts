@@ -156,7 +156,7 @@ DEMO-F01,${D2} 09:00,in`;
       staffId: w.finance.staffId,
       fromDate: D1,
       toDate: D1,
-      kind: 'Sample casual leave',
+      kind: 'Casual',
     });
     const hrSetup = await attendanceSetup(ctx.db, w.hr);
     expect(hrSetup.staffOptions.map((o) => o.value)).not.toContain(w.finance.staffId);

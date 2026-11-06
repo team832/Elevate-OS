@@ -40,6 +40,69 @@ export const academicEnrolmentExitRunV1Schema = z.strictObject({
 });
 
 /**
+ * Body of POST /academic/api/internal/v1/teacher-unavailability/hr-leave (D-134): Business Ops sends
+ * a teacher's approved HR leave, or its cancellation. Ids and dates only, never the type or reason.
+ */
+export const academicHrLeaveBody = z
+  .strictObject({
+    opsLeaveRecordId: z.uuid(),
+    staffId: staffMemberIdSchema,
+    fromDate: isoDateSchema,
+    toDate: isoDateSchema,
+    status: z.enum(['approved', 'cancelled']),
+  })
+  .refine((b) => b.toDate >= b.fromDate, {
+    path: ['toDate'],
+    message: 'The last day cannot be before the first day',
+  });
+
+/**
+ * Its reply: Academic's record for that leave (null when the person has no assignments or classes
+ * there, so nothing is kept), whether the record flags classes, and a count of the teacher's
+ * scheduled classes from today in those dates: approved, those that need cover now; cancelled,
+ * those this cancel put back with the teacher (no other active record still flags them), 0 when
+ * it was already cancelled. A cancel that comes before the approval is kept, already cancelled.
+ */
+export const academicHrLeaveV1Schema = z.strictObject({
+  recordId: z.uuid().nullable(),
+  active: z.boolean(),
+  classes: z.int().min(0),
+});
+export type AcademicHrLeaveV1 = z.infer<typeof academicHrLeaveV1Schema>;
+
+/** `GET /academic/api/internal/v1/absences?from&to` (caller `ops`, F4-06): `from` ≤ `to`, at most this many days. */
+export const ABSENCES_MAX_DAYS = 92;
+export const academicAbsencesQuery = z.strictObject({ from: isoDateSchema, to: isoDateSchema });
+
+/**
+ * Its reply: one row per class attendance mark `absent` on a class dated in the window, oldest
+ * first. Late, excused, partial and unmarked are not absences; cancelled or rescheduled classes and
+ * students without a canonical identity (`coreStudentId`) are left out. No names or contacts:
+ * Business Ops shows its own student record.
+ */
+export const academicAbsencesV1Schema = z.strictObject({
+  contract: z.literal('academic.absences'),
+  version: z.literal(1),
+  generatedAt: isoDateTimeSchema,
+  from: isoDateSchema,
+  to: isoDateSchema,
+  absences: z.array(
+    z.strictObject({
+      coreStudentId: z.uuid(),
+      batchId: batchIdSchema,
+      batchCode: z.string().min(1),
+      batchName: z.string().min(1),
+      sessionId: z.uuid(),
+      date: isoDateSchema,
+      /** Local (IST) `HH:MM`. */
+      startTime: z.string().regex(/^\d{2}:\d{2}$/),
+      subjectName: z.string().nullable(),
+    }),
+  ),
+});
+export type AcademicAbsencesV1 = z.infer<typeof academicAbsencesV1Schema>;
+
+/**
  * `academic.assessment.finalised` v1 — published in the same transaction that
  * writes an immutable result version (first finalisation or a re-score). It
  * carries counts only — never student names or scores — so a future consumer

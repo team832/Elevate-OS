@@ -12,6 +12,8 @@ Elevate OS is the internal operating system for **Elevate Education**, a coachin
 
 > 31 Oct 2026, later (D-126 … D-131): leave applications (migration `0018`), mock data everywhere, plain words when Academic is stopped, settings as real fields, fee pages that scale. In commit `d741b5b`; on no package yet.
 
+> 6 Nov 2026 (D-133 … D-156): background jobs that run by themselves once switched on (all off), approved teacher leave puts classes on the needs-cover list, uploaded files kept in the database, a sign-in limit shared by all apps, ids accepted in any case, grouped menus, print on every page and spreadsheet downloads, browser checks with Playwright and axe (`e2e/`, not yet run), a backup that can restore (`db:backup`, `db:restore`), and the 16 features the owner chose (D-138 … D-153: receipts, certificates, admit cards, overdue fees, homework, absent students, batch moves, calendar, joining and leaving, approval cover, EOD deadline, leave balances, student and parent portal, payroll, website form, lead sharing), built and tested with automated tests, every new setting Proposed and off. Migrations `0017`–`0019` are applied on the owner's computer (`db:check` 22/22); **`0020` (D-154) is written and reviewed but not applied**, and the apps refuse to start until it is. Not yet on a package or checked in a browser. Details: `IMPLEMENTATION_STATUS.md`, section "6 Nov 2026".
+
 > 23–24 Oct 2026 (D-094 … D-109): **Tests and Mock Tests** in Business Operations on one Academic test record (roster, score import from CSV or AI-read PDF, ranks, publication versions, paper and answer-key release), **requests through HR** in every workspace, **lead stages** and sales calls with conversion linked to confirmed admissions, the Marketing **calendar, ideas plan, SEO/AIO/GEO work, targets and monthly report**, task **reminders** and notification pop-ups, the **annual fee chart** with a reconciled drill-down, and a larger sample data set with demo sign-ins (11 since 31 Oct, D-127). Migrations `0015` and `0016` are **applied** on the owner's computer (`db:check` 19/19); the next is `0017`. All new grants are **Proposed** (`PROPOSED-GRANTS-2026-10-23b`). Details: `IMPLEMENTATION_STATUS.md`, section "Milestone 23–24 Oct 2026"; walkthrough and accounts: `HANDOFF.md`.
 
 ## Contents
@@ -119,13 +121,13 @@ All apps and scripts read the **root** `.env` (git-ignored; values already in th
 | `BUSINESS_OPS_OS_URL`, `ACADEMIC_OS_URL`, `MARKETING_OS_URL`, `PLATFORM_URL` | all | Origin of each app (defaults `http://localhost:3000`, `:3001`, `:3002`, `:3003`; `appOrigin()` in `packages/configuration/src/workspaces.ts`). The dev commands take the port from them; they are the only places a sign-in may redirect to and the only origins whose state-changing requests are accepted (D-072) |
 | `SEED_USER_PASSWORD` | `db:seed` | ≥ 12 chars; password of the fictional seed users |
 | `LOCAL_DEMO_PASSWORD` | `db:seed-demo-accounts` | ≥ 12 chars; shared password of the local demo sign-ins; never printed |
-| `ATTACHMENTS_DIR` | Business Operations (and the mounted task pages) | Folder for uploaded files in development; empty = `.data/attachments` (git-ignored). Production refuses uploads until a storage provider is chosen (D-085) |
+| `ATTACHMENTS_DIR` | Business Operations (and the mounted task pages) | Folder for uploaded files outside production; empty = `.data/attachments` (git-ignored). In production, office mode included, files are kept in the database instead (`ops.attachment_files`, D-135) and this is not read |
 | `GROQ_API_KEY`/`GROQ_MODEL`, `GEMINI_API_KEY`/`GEMINI_MODEL`, `OPENROUTER_API_KEY`/`OPENROUTER_MODEL` | AI draft helpers | Free AI providers, tried in this order (D-110); one is used only with both its key and model (no default in code); PDFs skip Groq. Keys only in the git-ignored `.env`; the secret scan blocks `gsk_`, `AQ.` and `sk-` keys. With none set the AI buttons say "AI drafting is not set up" |
 | `AI_TIMEOUT_MS`, `<PROVIDER>_BASE_URL` | AI draft helpers | Optional: give up on one provider after this many milliseconds (default 20000); another https address per provider (tests) |
 | `OFFICE_HOST` | `npm run office` | Optional: the address staff type on the office Wi-Fi; empty = this computer's Wi-Fi address, found at start (D-110) |
 | `INTERNAL_SERVICE_TOKENS` | all | Optional: one token per module, `<module>:<token>` pairs, same value everywhere. `INTERNAL_SERVICE_TOKEN` stays required (D-077) |
 | `BOOTSTRAP_OWNER_EMAILS` | all | Optional: first administrators, `@elevateeducation.in` only. Such an address gets its roles back at each sign-in |
-| `PG_BIN_DIR` | `db:backup` | Optional: folder holding `pg_dump` |
+| `PG_BIN_DIR` | release package backup (`scripts/backup/pg-backup.mjs`) | Optional: folder holding `pg_dump`; `npm run db:backup` does not need it since 6 Nov 2026 |
 
 Not in `.env`: `ELEVATE_BASE_PATH` is declared by each `next.config.ts` and inlined at build (D-113). `ELEVATE_RELEASE_STANDALONE` is set only by `release:package`. `ELEVATE_PG_DATA` is for tests only. `SMOKE_EMAIL` and `SMOKE_PASSWORD` are read only by a package's `bin/smoke.mjs`.
 
@@ -135,7 +137,7 @@ Not in `.env`: `ELEVATE_BASE_PATH` is declared by each `next.config.ts` and inli
 ## 6. Commands
 | Command | What it does |
 |---|---|
-| `npm run dev` / `dev:all` | The three workspaces with hot reload (webpack; Turbopack is blocked on the office PCs); starts or reuses the local database |
+| `npm run dev` / `dev:all` | The three workspaces with hot reload (webpack; Turbopack is blocked on the office PCs); starts or reuses the local database. While a migration waits it starts no app and prints `npm run db:migrate` and the same command again (it never migrates by itself); `npm run office` does the same |
 | `npm run dev:business` / `dev:academic` / `dev:marketing` / `dev:platform` | One app (:3000 / :3001 / :3002 / :3003). `dev:ops` was removed |
 | `npm run build` | Production build of the four apps |
 | `npm run typecheck` | `tsc --noEmit` in every workspace + scripts |
@@ -144,6 +146,7 @@ Not in `.env`: `ELEVATE_BASE_PATH` is declared by each `next.config.ts` and inli
 | `npm test` / `test:watch` | vitest, all projects |
 | `npm run secret-scan` | Fails on credential-like text or non-ignored `.env` files |
 | `npm run validate` | typecheck + lint + test + secret-scan |
+| `npm run test:e2e` | Playwright + axe browser checks against apps that are already running (`e2e/README.md`); not part of `validate` |
 | `npm run db:start` / `db:stop` | Local PostgreSQL (embedded-postgres). After a crash, `db:start` removes a stale `postmaster.pid` when nothing listens on the port |
 | `npm run db:generate` | drizzle-kit migration from all schema files (the `ops` schema spans five, D-029) (wave 3 / Integration) |
 | `npm run db:migrate` | Apply migrations; refuses a non-local database unless given `-- --allow-non-local` (a package uses `db/migrate.mjs`) |
@@ -151,9 +154,10 @@ Not in `.env`: `ELEVATE_BASE_PATH` is declared by each `next.config.ts` and inli
 | `npm run release:package` | Build the four apps into one installable folder and archive (`docs/RELEASE.md`). Leaves a standalone build in `.next`: run `office:build` before `office` |
 | `npm run db:seed-demo-accounts` | Development only: the demo sign-ins with `LOCAL_DEMO_PASSWORD`, after `db:seed` (safe to repeat) |
 | `npm run db:clear-samples` | Before real use: delete every sample row and switch the demo sign-ins off |
-| `npm run db:reset` | Dev only: drop Elevate schemas, migrate, seed (refuses non-local URLs) |
+| `npm run db:reset` | Dev only: drop Elevate schemas, migrate, seed (refuses non-local URLs; a `?host=` or `?hostaddr=` in `DATABASE_URL` counts as not local for every `db:*` command) |
 | `npm run db:check` | Read-only check of the local database: live schema = code schema, all migrations applied, valid indexes and constraints, sample-data rules (D-036) |
-| `npm run db:backup` | `pg_dump` wrapper (needs PostgreSQL client tools) |
+| `npm run db:backup` | Copy of every table to `.data/backups/<date_time>/` (one NDJSON file per table, file bytes as base64, a manifest with row counts, sha256 and migrations); no `pg_dump` needed (D-024) |
+| `npm run db:restore -- <folder> [--replace]` | Load a backup back, in one transaction. Refuses a database not on this computer, another migration level, a changed file, or a non-empty database without `--replace` (which first saves the current data) |
 | `npm run docs:permissions` | Regenerate the permission matrix in `docs/SECURITY_AND_PERMISSIONS.md` (`-- --check` to verify) |
 
 ## 7. Running modules alone and integrated
@@ -165,7 +169,7 @@ Not in `.env`: `ELEVATE_BASE_PATH` is declared by each `next.config.ts` and inli
 - **Production-like:** `npm run build`, then `npm run start -w @elevate/platform` (and `-w @elevate/<module>-os`). With `NODE_ENV=production` the cookie is `Secure` (fine on `localhost`, HTTPS required elsewhere).
 
 ## 8. Database, migrations and seed data
-- Schemas: `core` (shared, Foundation) and `marketing`, `academic`, `ops` — one file each in `packages/database/src/schema/`, owned by the module team. Design: `DATABASE_DESIGN.md`; columns: `docs/DATA_DICTIONARY.md`.
+- Schemas: `core` (shared, Foundation) and `marketing`, `academic`, `ops`, in `packages/database/src/schema/` (`core.ts`, then several `marketing*`, `academic*` and `ops*` files per module), owned by the module team. Design: `DATABASE_DESIGN.md`; columns: `docs/DATA_DICTIONARY.md`.
 - Tests never need migrations: `createTestDb()` builds the live schema in in-memory PGlite.
 - Migrations are central: **module teams do not run `db:generate`** during wave 2; wave 3 generates the baseline. Process, rollback and the backup-before-destructive rule: `docs/DATABASE_MIGRATION_PLAN.md`; backups/restore: `infrastructure/database/README.md`.
 - Seeds are insert-only for anything staff can edit (D-116) and **fictional** (D-016), apart from the owner-supplied staff and reference data: 10 users (one per role except the finance-authorised user; `hr-manager@example.test` added 23 Oct), 8 staff, 13 provisional departments from the legacy model, 5 programmes. Modules add seeds in `apps/<module>/seed/index.ts`.
@@ -202,7 +206,8 @@ Not in `.env`: `ELEVATE_BASE_PATH` is declared by each `next.config.ts` and inli
 | `INTEGRATION_CONTRACT.md` | Identities, IDs, ownership, permissions, API, events, summaries, versioning, failure behaviour |
 | `DATABASE_DESIGN.md` | Schemas, conventions, core tables |
 | `IMPLEMENTATION_STATUS.md` | What is built and the evidence |
-| `docs/DECISIONS.md` | Decision log (D-001 … D-132) |
+| `docs/DECISIONS.md` | Decision log (D-001 … D-156) |
+| `THIRD_PARTY_NOTICES.md` | Outside work used, with licences (D-136) |
 | `docs/RELEASE.md` | The release package: build, contents, install, what it does not do, go-live blockers |
 | `docs/CASELETS.md` | The master register of use cases and their first-package results |
 | `docs/WORKSPACES.md` | The three role workspaces: URLs, dev commands, demo sign-ins, sign-in and access rules, role × workspace matrix |

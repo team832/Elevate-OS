@@ -1,4 +1,4 @@
-/** Session cookie shared by all four zones (same host through the platform rewrites, D-004). */
+/** Staff session cookie shared by all four apps: cookies ignore the port (D-072). The portal has its own (`PORTAL_COOKIE`, D-150). */
 export const SESSION_COOKIE = 'elevate_session';
 
 export interface CookieOptions {

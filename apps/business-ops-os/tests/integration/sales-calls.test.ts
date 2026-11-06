@@ -4,12 +4,14 @@
  * that equal their drill-down rows.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { authedRequest, buildRequest, callRoute, setupTestDatabase } from '@elevate/testing';
 import type { IsoDate } from '@elevate/shared-types';
-import { auditEvents, opsFollowUps, opsLeadActivities } from '@elevate/database';
+import { auditEvents, notifications, opsFollowUps, opsLeadActivities } from '@elevate/database';
 import { leadsRoutes as R } from '../../src/leads';
+import { runFollowUpReminders } from '../../src/server/follow-ups';
 import { leadFunnel, leadFunnelRows, NOT_STAGED } from '../../src/server/lead-funnel';
+import { createLead, getLead, listLeads } from '../../src/server/leads';
 import { ensureSystemLeadStages } from '../../src/server/lead-stages';
 import { isoDaysFromNow, phone, setupReference, staffUser, type StaffUser } from './fixtures';
 
@@ -169,6 +171,54 @@ it('GET /leads/calls: employees see calls on their own leads; filters apply', as
   expect((await list(employee, '?direction=inbound')).every((c) => c.direction === 'inbound')).toBe(
     true,
   );
+});
+
+it('an overdue first-contact follow-up of the case flags and reminds a counsellor, never Marketing, who cannot see it (C4-3)', async () => {
+  const counsellor = await staffUser(ctx.db, ['admissions_counsellor'], { name: 'Sample Counsellor' });
+  const marketingLead = await newLead(employee);
+  const counsellorLead = (
+    await createLead(ctx.db, counsellor, {
+      studentName: 'Sample Counsellor Lead',
+      studentPhone: phone(),
+      interestMode: 'undecided',
+      sourceCode: 'UNKNOWN',
+    })
+  ).lead.id;
+  const where = inArray(opsFollowUps.leadId, [marketingLead, counsellorLead] as never[]);
+  await ctx.db.update(opsFollowUps).set({ dueDate: day(-2) }).where(where);
+  const overdue = async (user: StaffUser, id: string) =>
+    (await listLeads(ctx.db, user, { flag: 'overdue' })).some((l) => l.id === id);
+  expect(await overdue(employee, marketingLead)).toBe(false);
+  expect(await overdue(manager, marketingLead)).toBe(false);
+  expect(await overdue(counsellor, counsellorLead)).toBe(true);
+  await runFollowUpReminders(ctx.db);
+  const followUps = await ctx.db.select({ id: opsFollowUps.id }).from(opsFollowUps).where(where);
+  const told = await ctx.db
+    .select({ userId: notifications.userId })
+    .from(notifications)
+    .where(inArray(notifications.entityId, followUps.map((f) => f.id)));
+  expect(told).toEqual([{ userId: counsellor.id }]);
+});
+
+it('a successful call keeps its next follow-up open, even one that was for first contact (REV-2 I-1)', async () => {
+  const leadId = await newLead(employee);
+  const json = { leadId, kind: 'first_contact', dueDate: day(1) };
+  expect((await post(R['follow-ups'].POST, employee, json)).status).toBe(201);
+  const res = await logCall(employee, leadId, { nextFollowUpOn: day(5) });
+  const [next] = await ctx.db
+    .select()
+    .from(opsFollowUps)
+    .where(eq(opsFollowUps.id, res.data!.followUp!.id as never));
+  expect(next).toMatchObject({ status: 'open', dueDate: day(5) });
+});
+
+it('Marketing sees no follow-up of the case, in the lead’s follow-ups or its history (REV-2 I-2)', async () => {
+  const leadId = await newLead(employee);
+  expect((await logCall(employee, leadId, { nextFollowUpOn: day(2) })).status).toBe(201);
+  const view = await getLead(ctx.db, employee, leadId);
+  expect(view.followUps.map((f) => f.admissionId)).toEqual([null]);
+  const audits = view.history.filter((h) => h.entityType === 'follow_up');
+  expect(audits.map((h) => h.action)).toEqual(['followup.created']);
 });
 
 describe('lead funnel', () => {

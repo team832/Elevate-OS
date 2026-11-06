@@ -13,7 +13,7 @@ import { RecordTable } from '../../../ui/record-table';
 import { DetailTable, Segment } from '../../../ui/sections';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Approvals' };
+export const metadata = { title: 'Fee approvals' };
 
 type Params = Record<string, string | undefined>;
 const BASE = '/ops/operations/approvals';
@@ -56,7 +56,7 @@ export default async function ApprovalsInboxPage({
   return (
     <Frame access={access} active="approvals">
       <PageHeader
-        title="Approvals waiting for you"
+        title="Fee approvals"
         description="Fee changes you may decide. Someone else decides your own requests and the agreements you made."
         tabs={<FeesNav current="approvals" user={access.user} />}
       />

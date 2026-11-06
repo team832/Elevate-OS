@@ -17,10 +17,15 @@ import {
   type Database,
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
-import { ConflictError, ValidationError } from '@elevate/shared-contracts';
+import {
+  ConflictError,
+  InvalidStateTransitionError,
+  ValidationError,
+} from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import { istToday, type IsoDate } from '../domain/dates';
 import { factsMissingReasons, isEodFacts, isImportedReport, type EodFacts } from '../domain/eod';
+import { EOD_EDITABLE as EDITABLE, EOD_SENT_BACK } from '../domain/staff-tasks';
 import {
   KIND_LABELS,
   periodLabel,
@@ -37,6 +42,7 @@ import { ownStaffId } from './staff-tasks';
 import { notifyHosted } from './task-links';
 import {
   canReviewReport,
+  filingRefusal,
   manager,
   periodOfRow,
   readerOf,
@@ -53,9 +59,7 @@ export {
   reportSettings,
 } from './eod-report-access';
 
-type Row = typeof reports.$inferSelect;
 export const audit = opsAudit('eod_report');
-const EDITABLE: readonly Row['status'][] = ['draft', 'revision_requested'];
 
 /**
  * A report with its versions, review trail and names. `checkSource` rebuilds the facts to flag
@@ -153,10 +157,11 @@ export async function reportContext(db: Database, actor: Actor, period: Period) 
   await accessScope(db, actor, 'ops:tasks:read');
   const staffId = await staffIdForUser(db, actor.id);
   if (!staffId) return null;
-  const [[row], recipient, facts] = await Promise.all([
+  const [[row], recipient, facts, settings] = await Promise.all([
     db.select({ id: reports.id }).from(reports).where(samePeriod(staffId, period)),
     resolveRecipient(db, staffId),
     collectFacts(db, staffId, period),
+    reportSettings(db),
   ]);
   const report = row ? await getReport(db, actor, row.id) : null;
   const sent = report?.current?.snapshot;
@@ -167,6 +172,8 @@ export async function reportContext(db: Database, actor: Actor, period: Period) 
     },
     recipient,
     facts,
+    /** Why a first filing is refused now (F4-11), else null. */
+    filingClosed: report && report.status !== 'draft' ? null : filingRefusal(period, settings),
   };
 }
 export const eodContext = (db: Database, actor: Actor, day: string) =>
@@ -184,11 +191,9 @@ export async function saveDraft(
 ) {
   await accessScope(db, actor, 'ops:tasks:write');
   const staffId = await ownStaffId(db, actor);
-  const period = periodOf(
-    input.periodKind,
-    input.reportDate as IsoDate,
-    (await reportSettings(db)).weekStart,
-  );
+  const settings = await reportSettings(db);
+  const period = periodOf(input.periodKind, input.reportDate as IsoDate, settings.weekStart);
+  const closed = filingRefusal(period, settings);
   if (period.start > istToday(new Date()))
     throw fieldError('reportDate', 'A report can be for the current or an earlier period only.');
   const facts = await collectFacts(db, staffId, period);
@@ -203,6 +208,7 @@ export async function saveDraft(
       throw new ConflictError(
         'This report was submitted and cannot be changed. Your manager can ask for a revision.',
       );
+    if (closed && (!cur || cur.status === 'draft')) throw new InvalidStateTransitionError(closed);
     if (cur && input.version !== undefined && cur.version !== input.version)
       throw new ConflictError(
         'This report was changed in another tab or window. Reload the page to see the latest version.',
@@ -276,6 +282,9 @@ export async function submitReport(
       .orderBy(desc(versions.version))
       .limit(1);
     if (!EDITABLE.includes(row.status)) return { ...row, submittedVersion: last!, replayed: true };
+    // A report sent back may always be resubmitted; only a first filing has a window (F4-11).
+    const closed = row.status === 'draft' && filingRefusal(period, settings);
+    if (closed) throw new InvalidStateTransitionError(closed);
     if (body.expectedVersion !== undefined && body.expectedVersion !== row.version)
       throw new ConflictError(
         'This report was changed in another tab or window. Reload the page and check it before submitting.',
@@ -312,13 +321,14 @@ export async function submitReport(
           })),
         },
       );
+    // Sent back (changes or more detail): link the request this version answers.
     const [request] =
-      row.status === 'revision_requested'
+      row.status !== 'draft'
         ? await tx
             .select({ id: reviewEvents.id })
             .from(reviewEvents)
             .where(
-              and(eq(reviewEvents.reportId, row.id), eq(reviewEvents.kind, 'revision_requested')),
+              and(eq(reviewEvents.reportId, row.id), inArray(reviewEvents.kind, EOD_SENT_BACK)),
             )
             .orderBy(desc(reviewEvents.createdAt))
             .limit(1)

@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { OPS_EMPLOYMENT_STATUSES } from '@elevate/database';
 import { isoDateSchema } from '@elevate/shared-contracts';
+import { PORTAL_ROLE_KEYS } from '@elevate/authentication';
 import { ROLE_KEYS } from '@elevate/shared-types';
 import { EMPLOYMENT_TYPES } from '../domain';
 
@@ -17,7 +18,10 @@ export const directoryQuery = z.object({
   department: z.uuid().optional(),
   manager: z.uuid().optional(),
   branch: z.uuid().optional(),
-  role: z.enum(ROLE_KEYS).optional(),
+  role: z
+    .enum(ROLE_KEYS)
+    .refine((r) => !PORTAL_ROLE_KEYS.includes(r), { error: 'Not a staff role.' })
+    .optional(),
   employment: z.enum(OPS_EMPLOYMENT_STATUSES).optional(),
   status: z.enum(['active', 'on_leave', 'inactive']).optional(),
   page: z.coerce.number().int().min(1).max(10_000).default(1),

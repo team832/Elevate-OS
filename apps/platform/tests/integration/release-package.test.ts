@@ -16,6 +16,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const REPO = path.resolve(import.meta.dirname, '../../../..');
@@ -141,7 +142,7 @@ describe('a package that can be made', () => {
     const lines = readFileSync(path.join(pkg, '.env.production.example'), 'utf8').split('\n');
     expect(lines.filter((l) => l && !l.startsWith('#') && !l.endsWith('='))).toEqual([]);
     const readme = readFileSync(path.join(pkg, 'README-RUN.md'), 'utf8');
-    for (const words of ['sign in without Google', 'admission cannot be confirmed', 'uploads and downloads refuse', 'pg_dump'])
+    for (const words of ['sign in without Google', 'admission cannot be confirmed', 'Migration 0019 is waiting', 'pg_dump'])
       expect(readme).toContain(words);
     expect(readme).toContain(URLS.PLATFORM_URL);
     expect(readme).not.toMatch(/\{\{|\bdeployed\b/i);
@@ -184,9 +185,20 @@ describe('a package that can be made', () => {
       ['Google is not set', {}, 'Real staff cannot sign in without Google', true],
       ['Google is set', { GOOGLE_CLIENT_ID: 'x', GOOGLE_CLIENT_SECRET: 'y' }, 'Real staff cannot sign in without Google', false],
       ['always', {}, 'A real admission cannot be confirmed yet', true],
-      ['always', {}, 'File uploads and downloads refuse until storage is chosen', true],
+      // D-135: files are kept in the database; only an unapplied 0019 stands in the way.
+      ['never', {}, 'until storage is chosen', false],
+      ['the database cannot be read', {}, 'Migration 0019 is waiting on this database', false],
     ])('says which blockers apply: %s', (_when, env, title, shown) => {
       expect(preflight(env).stdout.includes(title)).toBe(shown);
+    });
+
+    it('shows the 0019 blocker when preflight finds 0019 waiting on the database', async () => {
+      const { BLOCKERS } = (await import(
+        pathToFileURL(path.join(REPO, 'scripts/release/runtime/blockers.mjs')).href
+      )) as { BLOCKERS: { title: string; applies: (facts: object) => boolean }[] };
+      const blocker = BLOCKERS.find((b) => b.title === 'Migration 0019 is waiting on this database')!;
+      for (const pending0019 of [true, false])
+        expect(blocker.applies({ env: {}, db: { pending0019 }, pgDump: true })).toBe(pending0019);
     });
 
     it('fails when a package file was changed', () => {

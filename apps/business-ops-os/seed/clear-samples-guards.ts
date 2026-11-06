@@ -11,6 +11,9 @@ import type { Database } from '@elevate/database';
 import { recordAudit } from '@elevate/server-kit';
 
 const IN = (set: string) => `IN (SELECT id FROM ${set})`;
+/** Flagged, or of a made-up staff member who has no login (deleted with them); demo logins' rows stay. */
+export const BY_SAMPLE_STAFF = `is_sample OR staff_id ${IN('s_staff')}`;
+export const SAMPLE_PAYSLIPS = `run_id IN (SELECT id FROM ops.payroll_runs WHERE is_sample) OR staff_id ${IN('s_staff')}`;
 
 /** Raised before anything is deleted; `problems` are the lines to show. */
 export class ClearSamplesRefused extends Error {
@@ -67,6 +70,20 @@ const PRECHECKS: readonly string[] = [
    FROM ops.hr_requests r
    WHERE NOT r.is_sample AND (r.sender_staff_id ${IN('s_staff')} OR r.recipient_staff_id ${IN('s_staff')}
      OR EXISTS (SELECT 1 FROM ops.hr_request_events e WHERE e.request_id = r.id AND e.forwarded_to_staff_id ${IN('s_staff')}))`,
+  // A rule needs one counsellor; emptying a real one would delete a real record.
+  `SELECT 'Lead sharing rule for ' || coalesce(p.name, 'all other programmes') || ' shares leads only with sample staff; add a real counsellor or delete the rule first.' AS problem
+   FROM ops.lead_assignment_rules r LEFT JOIN core.programmes p ON p.id = r.programme_id
+   WHERE NOT r.is_sample AND r.counsellor_staff_ids <@ ARRAY(SELECT id FROM s_sample_staff)`,
+  `SELECT 'Homework "' || h.title || '" is real but set for sample batch ' || b.code || '; delete it or mark it as sample first.' AS problem
+   FROM academic.homework h JOIN academic.batches b ON b.id = h.batch_id
+   WHERE b.id ${IN('s_academic_batches')} AND h.id NOT ${IN('s_homework')}`,
+  `SELECT 'Payslip of ' || m.full_name || ' for ' || to_char(r.month, 'Mon YYYY')
+     || ' uses a sample salary structure or recovers a sample advance; remove that from the payroll first.' AS problem
+   FROM ops.payslips p JOIN ops.payroll_runs r ON r.id = p.run_id JOIN core.staff_members m ON m.id = p.staff_id
+   WHERE NOT (${SAMPLE_PAYSLIPS})
+     AND (p.structure_id IN (SELECT id FROM ops.salary_structures WHERE ${BY_SAMPLE_STAFF})
+       OR EXISTS (SELECT 1 FROM ops.payslip_lines l WHERE l.payslip_id = p.id
+         AND l.advance_id IN (SELECT id FROM ops.salary_advances WHERE ${BY_SAMPLE_STAFF})))`,
 ];
 
 /** Optional links of real rows to sample rows: [plain line, table, UPDATE … RETURNING id]. */
@@ -100,6 +117,21 @@ const REAL_LINKS: readonly [string, string, string][] = [
     'academic.timetable_patterns',
     `UPDATE academic.timetable_patterns SET room_id = NULL
      WHERE room_id ${IN('s_rooms')} AND batch_id NOT ${IN('s_academic_batches')} RETURNING id`,
+  ],
+  [
+    'real test venue(s) from sample rooms',
+    'academic.assessments',
+    `UPDATE academic.assessments SET venue_room_id = NULL
+     WHERE venue_room_id ${IN('s_rooms')} AND id NOT ${IN('s_assessments')} RETURNING id`,
+  ],
+  [
+    'real lead sharing rule(s) from sample counsellors',
+    'ops.lead_assignment_rules',
+    `UPDATE ops.lead_assignment_rules SET
+       counsellor_staff_ids = ARRAY(SELECT s FROM unnest(counsellor_staff_ids) WITH ORDINALITY u(s, n)
+         WHERE s NOT ${IN('s_sample_staff')} ORDER BY n),
+       last_assigned_staff_id = CASE WHEN last_assigned_staff_id ${IN('s_sample_staff')} THEN NULL ELSE last_assigned_staff_id END
+     WHERE NOT is_sample AND counsellor_staff_ids && ARRAY(SELECT id FROM s_sample_staff) RETURNING id`,
   ],
   [
     'real calendar item(s) from sample ideas, campaigns or tasks',

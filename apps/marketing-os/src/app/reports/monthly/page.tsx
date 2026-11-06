@@ -22,7 +22,6 @@ import { NO_SPEND_DATA, monthlySnapshotFor } from '../../../server/monthly-repor
 import { listCampaigns } from '../../../server/groups';
 import { campaignFilter, myStaffId } from '../../../server/scope';
 import { MarketingPage, Section, param, type SearchParams } from '../../../ui/shell';
-import { PrintButton } from './print-button';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Monthly marketing report' };
@@ -98,7 +97,6 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
                   <Button type="submit" variant="secondary">
                     Show report
                   </Button>
-                  <PrintButton />
                 </form>
                 <Card
                   title={`${name?.name ?? 'Staff member'}, ${label}`}

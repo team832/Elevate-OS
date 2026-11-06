@@ -1,17 +1,40 @@
 /** zod schemas for staff attendance (owner brief 23 Oct 2026 §12). */
 import { z } from 'zod';
 import { isoDateSchema } from '@elevate/shared-contracts';
-import { OPS_WEEKDAYS } from '@elevate/database';
+import { OPS_LEAVE_ADJUSTMENT_KINDS, OPS_WEEKDAYS } from '@elevate/database';
 import {
   ATTENDANCE_STATUSES,
   MAX_PUNCH_CSV_CHARS,
   REQUESTABLE_STATUSES,
   SHOWN_STATUSES,
 } from '../domain/attendance';
-import { LEAVE_STATUSES } from '../domain/leave';
+import { ROLE_KEYS } from '@elevate/shared-types';
+import { HALF_DAY_ONE_DAY, LEAVE_DAY_PARTS, LEAVE_STATUSES } from '../domain/leave';
 
 const text = (max: number) => z.string().trim().max(max);
 const note = (max = 1000) => text(max).nullish();
+/** Half-day leave (F4-12): one day only, so the database check never has to say no. */
+const dayPart = z
+  .enum(LEAVE_DAY_PARTS)
+  .nullish()
+  .transform((v) => v ?? null);
+const leaveDates = (
+  b: { fromDate: string; toDate: string; dayPart: string | null },
+  ctx: z.RefinementCtx,
+) => {
+  if (b.toDate < b.fromDate)
+    ctx.addIssue({
+      code: 'custom',
+      path: ['toDate'],
+      message: 'The last day cannot be before the first day',
+    });
+  else if (b.dayPart && b.fromDate !== b.toDate)
+    ctx.addIssue({ code: 'custom', path: ['dayPart'], message: HALF_DAY_ONE_DAY });
+};
+/** Whole or half days, as the database keeps them. */
+const halfDays = z.coerce
+  .number()
+  .refine((n) => Number.isInteger(n * 2), 'Use whole or half days, such as 1 or 1.5');
 /** A form's `YYYY-MM-DDTHH:MM` is IST; a full ISO instant keeps its offset. */
 const instant = z.union([
   z
@@ -49,7 +72,13 @@ export const punchBody = z.object({
 export const decisionBody = z.object({
   staffId: z.uuid(),
   workDate: isoDateSchema,
-  status: z.enum(ATTENDANCE_STATUSES),
+  // Leave only through a leave record, under the setting "Who approves leave"; stored rows stay readable.
+  status: z
+    .enum(ATTENDANCE_STATUSES)
+    .exclude(
+      ['on_leave'],
+      'A day decision cannot set On leave. Record the leave under Holidays and recorded leave.',
+    ),
   note: text(1000).min(3, 'Say why (at least 3 characters)'),
 });
 
@@ -60,11 +89,9 @@ export const leaveBody = z
     toDate: isoDateSchema,
     kind: text(80).min(1, 'Required'),
     reason: note(),
+    dayPart,
   })
-  .refine((b) => b.toDate >= b.fromDate, {
-    path: ['toDate'],
-    message: 'The last day cannot be before the first day',
-  });
+  .superRefine(leaveDates);
 
 /** No staff id: you only ever apply for yourself. */
 export const leaveApplicationBody = z
@@ -73,12 +100,53 @@ export const leaveApplicationBody = z
     fromDate: isoDateSchema,
     toDate: isoDateSchema,
     reason: text(1000).min(3, 'Say why you need leave (at least 3 characters)'),
+    dayPart,
   })
   .strict()
-  .refine((b) => b.toDate >= b.fromDate, {
-    path: ['toDate'],
-    message: 'The last day cannot be before the first day',
+  .superRefine(leaveDates);
+
+/** Leave allowances (F4-12): one person, or everyone with a role in HR's reach. */
+export const allowanceBody = z
+  .object({
+    leaveType: text(40).min(1, 'Choose a leave type'),
+    yearStart: isoDateSchema,
+    days: halfDays.pipe(z.number().min(0, 'At least 0 days').max(366, 'At most 366 days')),
+    staffId: z.uuid().optional(),
+    role: z.enum(ROLE_KEYS).optional(),
+  })
+  .strict()
+  .refine((b) => Boolean(b.staffId) !== Boolean(b.role), {
+    path: ['staffId'],
+    message: 'Choose one staff member or one role',
   });
+
+export const adjustmentBody = z
+  .object({
+    staffId: z.uuid(),
+    leaveType: text(40).min(1, 'Choose a leave type'),
+    yearStart: isoDateSchema,
+    kind: z.enum(OPS_LEAVE_ADJUSTMENT_KINDS),
+    days: halfDays.pipe(
+      z
+        .number()
+        .min(-366, 'At most 366 days')
+        .max(366, 'At most 366 days')
+        .refine((n) => n !== 0, 'Enter the days to add, or a minus number to take off'),
+    ),
+    reason: text(1000).min(3, 'Say why (at least 3 characters)'),
+  })
+  .strict()
+  .refine((b) => b.kind !== 'carry_forward' || b.days > 0, {
+    path: ['days'],
+    message: 'Days carried forward are more than 0',
+  });
+
+export const allowanceListQuery = z.object({
+  yearStart: isoDateSchema.optional(),
+  q: text(100).optional(),
+  department: z.uuid().optional(),
+  who: z.enum(['teachers', 'other']).optional(),
+});
 
 const version = z.coerce.number().int().min(1);
 

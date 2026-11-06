@@ -24,11 +24,7 @@ import {
   type AttachmentOwnerKind,
   type OwnerRule,
 } from './attachment-access';
-import {
-  STORAGE_NOT_SET_UP,
-  attachmentStorage,
-  type AttachmentStorage,
-} from './adapters/attachment-storage';
+import { attachmentStorage, type AttachmentStorage } from './adapters/attachment-storage';
 import { notFound, type Actor } from './context';
 import { fieldError, opsAudit } from './ops-common';
 
@@ -63,13 +59,24 @@ const rightsOn = (db: Database, user: Actor, kind: AttachmentOwnerKind, ownerId:
   };
 };
 
-const TASK_KINDS: readonly AttachmentOwnerKind[] = ['task', 'task_submission', 'task_update'];
+const FROZEN_KINDS: readonly AttachmentOwnerKind[] = [
+  'task',
+  'task_submission',
+  'task_update',
+  'leave_application',
+];
 /** Question papers and answer keys: each upload is a new version; unreleased ones open only for writers. */
 const RELEASED_KINDS: readonly string[] = ['assessment_paper', 'assessment_key'];
 const released = (r: { releasedAt: Date | null }) => !!r.releasedAt && r.releasedAt <= new Date();
-/** X3: the files of a finished or cancelled task stay with it. */
+/** X3: the files of a finished or cancelled task, or a decided leave application, stay with it. */
 const frozen = async (db: Database, kind: AttachmentOwnerKind, ownerId: string) =>
-  TASK_KINDS.includes(kind) && !!(await ATTACHMENT_ACCESS[kind].closed?.(db, ownerId));
+  FROZEN_KINDS.includes(kind) && !!(await ATTACHMENT_ACCESS[kind].closed?.(db, ownerId));
+
+/** Why the record takes no new files; asked again under the lock, as a decision may land in between. */
+const refuseClosed = async (db: Database, kind: AttachmentOwnerKind, ownerId: string) => {
+  const closed = await ATTACHMENT_ACCESS[kind].closed?.(db, ownerId);
+  if (closed) throw new ConflictError(closed);
+};
 
 /** 404 when the caller cannot see the record; 403 when they see it but may not do `mode`. */
 export async function assertAttachmentAccess(
@@ -163,10 +170,8 @@ export async function uploadAttachment(
   requestId?: string,
 ): Promise<{ id: string; duplicate: boolean }> {
   await assertAttachmentAccess(db, user, input.ownerKind, input.ownerId, 'write');
-  const closed = await ATTACHMENT_ACCESS[input.ownerKind].closed?.(db, input.ownerId);
-  if (closed) throw new ConflictError(closed);
-  const storage = attachmentStorage();
-  if (!storage) throw new ConflictError(STORAGE_NOT_SET_UP);
+  await refuseClosed(db, input.ownerKind, input.ownerId);
+  const storage = attachmentStorage(db);
   const name = cleanFileName(input.name);
   if (RELEASED_KINDS.includes(input.ownerKind) && !/\.pdf$/i.test(name))
     throw fieldError('file', 'Upload question papers and answer keys as PDF files.');
@@ -181,6 +186,7 @@ export async function uploadAttachment(
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${`ops.attachments:${input.ownerId}`}))`,
       );
+      await refuseClosed(tx, input.ownerKind, input.ownerId);
       const dup = await first(
         tx
           .select({ id: opsAttachments.id })
@@ -239,11 +245,12 @@ export async function uploadAttachment(
   }
 }
 
-/** Downloads of these are audited: raw feedback and staff-private files. */
+/** Downloads of these are audited: raw feedback, staff-private files and leave letters (medical). */
 const AUDITED_DOWNLOADS: readonly AttachmentOwnerKind[] = [
   'feedback_import',
   'feedback_evidence',
   'staff_private',
+  'leave_application',
 ];
 
 /** A live file the caller may read, with its bytes; 404 otherwise. */
@@ -275,8 +282,7 @@ export async function attachmentDownload(db: Database, user: Actor, id: string) 
       )))
   )
     notFound('File');
-  const storage = attachmentStorage();
-  if (!storage) throw new ConflictError(STORAGE_NOT_SET_UP);
+  const storage = attachmentStorage(db);
   const bytes = await storage.get(row.storageKey).catch(() => notFound('File'));
   if (AUDITED_DOWNLOADS.includes(row.ownerKind))
     await audit(db, user, row.id, 'attachment.downloaded', {
@@ -307,7 +313,11 @@ export async function deleteAttachment(
     if (row.ownerKind === 'task_submission')
       throw new ConflictError('Files on a submitted version stay with it.');
     if (await frozen(tx, row.ownerKind, row.ownerId))
-      throw new ConflictError('This task is finished or cancelled, so its files stay with it.');
+      throw new ConflictError(
+        row.ownerKind === 'leave_application'
+          ? 'This leave application has been decided or cancelled, so its files stay with it.'
+          : 'This task is finished or cancelled, so its files stay with it.',
+      );
     const mayDelete =
       (row.uploadedByUserId === user.id && (await may('write'))) || (await may('manage'));
     if (!mayDelete)

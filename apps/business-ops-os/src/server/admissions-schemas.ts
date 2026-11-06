@@ -4,12 +4,11 @@
  * contact preferences, admissions report. Kept apart from ./schemas.ts (shared).
  */
 import { z } from 'zod';
-import { isoDateSchema } from '@elevate/shared-contracts';
+import { isoDateSchema, optText } from '@elevate/shared-contracts';
 import { ADMISSION_STATUSES } from '../domain';
 import { FEE_DIRECTIONS, FEE_METHODS, FEE_RECORD_KINDS } from '../domain/fees';
 import { DIRECTORY_STATES } from '../domain/students';
 
-const optText = (max: number) => z.string().trim().max(max).nullish();
 const reasonCode = z
   .string()
   .trim()

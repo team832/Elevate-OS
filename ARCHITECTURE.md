@@ -28,21 +28,22 @@ Since 22 Oct 2026 (D-072) the three module apps are the three **role workspaces*
 - **One identity, one cookie.** Browsers do not separate cookies by port, so the single HttpOnly `elevate_session` cookie (SameSite=Lax, 7-day absolute expiry, Secure in production) signs a person in to every workspace their roles grant; signing out anywhere revokes the server session for all. Roles are read from the database on every request.
 - **Membership.** A person belongs to a workspace when a stored role grants `<workspace>:module:access` (`workspacesFor`, `packages/authorization/src/workspaces.ts`). `requirePageAccess(…, { workspace })` sends non-members to their own workspace before any data loads; `defineRoute` refuses `/ops`, `/academic`, `/marketing` API paths to non-members with 403. After sign-in `resolveLanding` keeps a member where they signed in, else opens the remembered workspace (`core.users.preferred_workspace`), else the only one, else the chooser `<base>/workspaces`.
 - **CSRF.** Other localhost ports share the cookie, so every state-changing request must come from its own origin or a configured app origin (`isAllowedRequestOrigin`), and JSON bodies need the exact `application/json` media type. No CORS headers are sent.
-- **Shared code (D-073).** Business Ops exports two entries, `./work` (tasks, EOD, meetings) and `./leads` (leads, follow-ups); Academic OS imports `./work`, Marketing OS imports both, and each re-exports the same route handlers under its own base path. ESLint (`SHARED_ENTRIES` in `eslint.config.mjs`) allows exactly these imports; all other app→app imports stay blocked.
+- **Shared code (D-073).** Business Ops exports two entries, `./work` (tasks, EOD and work reports, meetings, staff attendance and leave, requests through HR, teacher feedback, attachments, AI report drafts, notifications) and `./leads` (leads, follow-ups); Academic OS imports `./work`, Marketing OS imports both, and each re-exports the same route handlers and screen bodies under its own base path. Both entries re-export files from Business Ops' `src/app/` (route handlers, `*-body.tsx`, `_components/`), so those files are shared API, not thin page code. ESLint (`SHARED_ENTRIES` in `eslint.config.mjs`) allows exactly these imports between module apps.
+- **Platform composes in-process.** The platform app imports the modules' `./server` (and `./domain`, `./seed`) entries and calls their services directly with the signed-in user (its home overview: `apps/platform/src/server/overview-adapter.ts`), not through the internal HTTP summaries (`INTEGRATION_CONTRACT.md` §10).
 - Guide for people and roles: `docs/WORKSPACES.md`.
 
 ## 2. Packages (dependency order)
 | Package | Depends on | Role |
 |---|---|---|
 | `@elevate/shared-types` | — | Branded IDs, `ModuleKey`, `MODULES`, `ROLE_KEYS`, `FeatureStatus`, `Result`, Asia/Kolkata date helpers |
-| `@elevate/configuration` | zod | `loadEnv(subset)`, `ENV_FIELDS`, `ConfigurationError`, `createLogger`; `/node`: `loadRootEnv`, `findRepoRoot` |
+| `@elevate/configuration` | zod | `loadEnv(subset)`, `ENV_FIELDS`, `ConfigurationError`, `createLogger`; `/node`: `loadRootEnv`, `findRepoRoot`; `/next-config`: `zoneConfig()`, the one `next.config` of all four apps; `/security-headers`; `/workspaces`: `appOrigin()`, origin checks |
 | `@elevate/shared-contracts` | shared-types, zod | Entities, API envelope + `AppError`s, HTTP helpers, events (define/registry/enrolment), summary contracts; module-owned files `src/modules/*.ts` |
-| `@elevate/database` | configuration, shared-types, drizzle-orm, pg, pglite | Schema (4 files), client factory, `insertAuditEvent`, PG error helpers; `/seed`, `/migrate`, `/testing` |
+| `@elevate/database` | configuration, shared-types, drizzle-orm, pg, pglite | Schema (`src/schema/*.ts`: `core.ts` plus several files per module, `marketing*`, `academic*`, `ops*`), client factory, `insertAuditEvent`, PG error helpers; `/schema`, `/seed`, `/migrate`, `/testing` |
 | `@elevate/authorization` | shared-contracts, shared-types | Roles, per-module permission files, `can`/`requirePermission`/`scopeFor`/`scopedValue`/`modulesFor`, matrix renderer |
-| `@elevate/authentication` | database, configuration, shared-contracts, authorization | scrypt, sessions, cookie, throttle, login/logout handler factories; `/next`: `getCurrentUser` |
-| `@elevate/server-kit` | all of the above | `defineRoute`, `withTransaction`, `recordAudit`, approvals, outbox, internal routes, idempotency, health; `/next`: `requirePageAccess` |
+| `@elevate/authentication` | database, configuration, shared-contracts, authorization | scrypt, sessions, cookie, sign-in throttle shared in `core.login_attempts`, login/logout handler factories; `/next`: `getCurrentUser` |
+| `@elevate/server-kit` | all of the above | `defineRoute` (ids lower-cased on input, D-137), `withTransaction`, `recordAudit`, approvals, outbox, internal routes, idempotency, health; `/next`: `requirePageAccess`; `/ai`: AI draft providers |
 | `@elevate/notifications` | database, configuration | `notify`, list/mark-read, channel adapters (mock email) |
-| `@elevate/shared-ui` | shared-contracts, shared-types, react | Server-component UI kit + `styles.css` tokens |
+| `@elevate/shared-ui` | shared-contracts, shared-types, react | Server-component UI kit + `styles.css` tokens; `/chart-math` |
 | `@elevate/testing` | database, authentication | `setupTestDatabase`, `createTestUser`, `authedRequest`, `callRoute` |
 
 Packages are consumed as TypeScript source (`exports` → `src/*.ts`): no build step; Next.js transpiles them (`transpilePackages`), vitest and tsx run them directly.
@@ -50,19 +51,20 @@ Packages are consumed as TypeScript source (`exports` → `src/*.ts`): no build 
 ## 3. Module app layout (BUILD_PLAN)
 ```
 apps/<module>/
-  src/app/        Next.js routes & pages (thin: call server/, render ui/)
+  src/app/        Next.js routes & pages (call server/, render ui/; in Business Ops also the
+                  route handlers and screen bodies shared through ./work and ./leads)
   src/domain/     pure logic — no I/O, no framework (ESLint-enforced)
-  src/server/     services, repositories, adapters, auth handlers
+  src/server/     services (Drizzle queries in the service itself; there is no repository layer), adapters, auth handlers
   src/ui/         module components
   seed/index.ts   `seeds` for npm run db:seed
   tests/unit, tests/integration
 ```
-Request path for a write: `route.ts (defineRoute: session → permission → zod)` → `server/service.ts (withTransaction: domain rules → repository writes → recordAudit → publishEvent/notify)` → envelope.
+Request path for a write: `route.ts (defineRoute: session → permission → zod)` → `server/service.ts (withTransaction: domain rules → writes → recordAudit → publishEvent/notify)` → envelope. Marketing also has server actions (`apps/marketing-os/src/app/actions/*.ts`, `'use server'`) that skip `defineRoute`: each re-reads the session on the server and its service re-checks the permission.
 
 ## 4. Cross-cutting rules
 - **Security:** server-side permission checks everywhere (D-008); session details in `docs/SECURITY_AND_PERMISSIONS.md`.
-- **Integration:** commands via the transactional outbox; read-only summaries via internal HTTP with "missing ≠ zero" (D-011, `INTEGRATION_CONTRACT.md`).
-- **Boundaries:** ESLint blocks module→module imports (except the two Business Ops entries of D-073), package→app imports, impure domain code and test helpers in app code (D-023).
+- **Integration:** commands via the transactional outbox; read-only summaries via internal HTTP with "missing ≠ zero" (D-011, `INTEGRATION_CONTRACT.md`); a few internal write routes called after commit (the teacher-leave cover of D-134). The platform app is the exception: it calls module services in-process (§1).
+- **Boundaries:** ESLint blocks module→module imports (except the two Business Ops entries of D-073), package→app imports, impure domain code and test helpers in app code (D-023). Test files and the platform app have rules of their own; `eslint.config.mjs` is the source for exactly what each may import.
 - **External systems:** adapters with mock defaults and honest connection status (D-014).
 - **Observability:** one JSON log line per request (`requestId`, method, path, status, ms, userId); `x-request-id` on every response; audit trail in `core.audit_events`.
 - **Configuration:** one root `.env`, validated per app subset (D-021).

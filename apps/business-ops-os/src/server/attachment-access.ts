@@ -10,6 +10,7 @@ import {
   type OPS_ATTACHMENT_OWNER_KINDS,
   opsAttendanceCorrections,
   opsEodReports,
+  opsLeaveApplications,
   opsStaffTasks,
   opsTaskSubmissions,
   opsTaskUpdates,
@@ -17,11 +18,17 @@ import {
   type Database,
 } from '@elevate/database';
 import { isAppError } from '@elevate/shared-contracts';
+import { mayApproveLeave } from '../domain/leave';
+import { EOD_EDITABLE, type EodStatus } from '../domain/staff-tasks';
+import { coverPrincipals } from './approval-cover';
 import { accessScope, scopeCovers, staffIdForUser, type Actor } from './context';
 import { assessmentFileAccess } from './assessment-file-access';
+import { manage } from './attendance-actions';
 import { readerOf } from './eod-reports';
 import { feedbackEvidenceRule, feedbackImportRule } from './feedback-access';
 import { hrRequestFileAccess } from './hr-requests-read';
+import { canDecideLeave } from './leave-applications';
+import { loadSettings } from './settings';
 import { loadTaskFor, mayLogWork } from './task-store';
 
 export type AttachmentOwnerKind = (typeof OPS_ATTACHMENT_OWNER_KINDS)[number];
@@ -55,6 +62,24 @@ const orNull = <T>(p: Promise<T>): Promise<T | null> =>
 const task = (db: Database, user: Actor, id: string | undefined, write: boolean) =>
   id ? orNull(loadTaskFor(db, user, id, write)) : Promise.resolve(null);
 
+/**
+ * The status `closed` reads, FOR SHARE: inside the upload's transaction a decision being made (its
+ * path locks this row for update) is waited for and then seen, so no file lands after it (M4).
+ */
+async function statusOf<T extends PgTable & { id: PgColumn; status: PgColumn }>(
+  db: Database,
+  table: T,
+  id: string,
+) {
+  const [row] = await db
+    .select({ status: table.status })
+    .from(table as PgTable)
+    .where(eq(table.id, id))
+    .limit(1)
+    .for('share');
+  return row?.status as string | undefined;
+}
+
 const taskRule = {
   canRead: async (db: Database, user: Actor, id?: string) => !!(await task(db, user, id, false)),
   /** The rule for logging work (task-updates.ts): anyone but a mere reviewer, or the backup. */
@@ -68,15 +93,8 @@ const taskRule = {
     return !!t && t.roles.some((r) => r === 'manager' || r === 'admin');
   },
   closed: async (db: Database, id?: string) => {
-    const t = id
-      ? await first(
-          db
-            .select({ status: opsStaffTasks.status })
-            .from(opsStaffTasks)
-            .where(eq(opsStaffTasks.id, id as never)),
-        )
-      : undefined;
-    return t?.status === 'done' || t?.status === 'cancelled'
+    const status = id ? await statusOf(db, opsStaffTasks, id) : undefined;
+    return status === 'done' || status === 'cancelled'
       ? 'This task is finished or cancelled, so no files can be added. Reopen it first.'
       : null;
   },
@@ -150,6 +168,34 @@ const report = (db: Database, id: string) =>
       .limit(1),
   );
 
+const leave = (db: Database, id: string) =>
+  first(
+    db
+      .select({ staffId: opsLeaveApplications.staffId })
+      .from(opsLeaveApplications)
+      .where(eq(opsLeaveApplications.id, id))
+      .limit(1),
+  );
+/**
+ * A leave letter or certificate is as private as the leave reason (domain/leave.ts): the applicant
+ * adds and reads it; whoever may decide the application reads it, by the deciding rule: a leave
+ * approver (hr.leave_approver) inside HR's staff scope, or their cover today (F4-10) with the
+ * approver's reach, never on the approver's own application.
+ */
+const leaveFiles: AccessFn = async (db, user, id) => {
+  const a = await leave(db, id);
+  const mine = !!a && a.staffId === (await staffIdForUser(db, user.id));
+  if (!a || mine || !(await canDecideLeave(db, user))) return { canRead: mine, canWrite: mine };
+  // manage refuses outside the person's reach (404) and their own record (403).
+  const reaches = async (p: Actor) =>
+    (await orNull(manage(db, p, a.staffId).then(() => true))) === true;
+  const who = (await loadSettings(db))['hr.leave_approver'].value.who;
+  let approver = mayApproveLeave(user.roles, who) && (await reaches(user));
+  for (const p of approver ? [] : await coverPrincipals(db, user.id, 'leave'))
+    approver ||= await reaches(p);
+  return { canRead: approver, canWrite: false };
+};
+
 export const ATTACHMENT_ACCESS: Record<AttachmentOwnerKind, OwnerRule> = {
   task: taskRule,
   task_submission: {
@@ -180,7 +226,7 @@ export const ATTACHMENT_ACCESS: Record<AttachmentOwnerKind, OwnerRule> = {
     canManage: async (db, user, id) =>
       can(user, 'ops:attendance:manage') && !!(await correction(db, id)),
     closed: async (db, id) =>
-      (await correction(db, id))?.status === 'pending'
+      (await statusOf(db, opsAttendanceCorrections, id)) === 'pending'
         ? null
         : 'This correction request has been decided, so no files can be added.',
   },
@@ -196,7 +242,7 @@ export const ATTACHMENT_ACCESS: Record<AttachmentOwnerKind, OwnerRule> = {
       return !!r && r.staffId === (await staffIdForUser(db, user.id));
     },
     closed: async (db, id) =>
-      ['draft', 'revision_requested'].includes((await report(db, id))?.status ?? '')
+      EOD_EDITABLE.includes((await statusOf(db, opsEodReports, id)) as EodStatus)
         ? null
         : 'This report has been submitted. Files can be added while it is a draft or when changes are requested.',
   },
@@ -205,4 +251,11 @@ export const ATTACHMENT_ACCESS: Record<AttachmentOwnerKind, OwnerRule> = {
   assessment_paper: byAccess(assessmentFileAccess('assessment_paper')),
   assessment_key: byAccess(assessmentFileAccess('assessment_key')),
   score_import: byAccess(assessmentFileAccess('score_import')),
+  leave_application: {
+    ...byAccess(leaveFiles),
+    closed: async (db, id) =>
+      (await statusOf(db, opsLeaveApplications, id)) === 'pending'
+        ? null
+        : 'This leave application has been decided or cancelled, so no files can be added.',
+  },
 };

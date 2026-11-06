@@ -53,7 +53,7 @@ export function HrRequestsBody(props: BodyProps) {
   return (
     <>
       <PageHeader
-        title="Requests through HR"
+        title="Requests to HR"
         description={<RequestRoute user={props.user} />}
         actions={
           <ButtonLink

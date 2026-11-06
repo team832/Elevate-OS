@@ -1,5 +1,5 @@
-import { beforeAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { and, eq, sql } from 'drizzle-orm';
 import {
   authedRequest,
   buildRequest,
@@ -27,6 +27,20 @@ import { POST as dismissFlag } from '../../src/app/api/v1/leads/duplicates/[id]/
 import { e164, phone, setupReference, staffUser, uniqueEmail, type StaffUser } from './fixtures';
 
 const ctx = setupTestDatabase();
+/** The other request of a staged race: it saves its lead when this one asks for a lead code. */
+const race = vi.hoisted(() => ({ other: null as null | ((tx: never) => Promise<unknown>) }));
+vi.mock('../../src/server/context', async (real) => {
+  const mod = await real<typeof import('../../src/server/context')>();
+  return {
+    ...mod,
+    nextCode: async (...a: Parameters<typeof mod.nextCode>) => {
+      const other = a[1] === 'lead' ? race.other : null;
+      race.other = null;
+      await other?.(a[0] as never);
+      return mod.nextCode(...a);
+    },
+  };
+});
 let manager: StaffUser;
 let counsellor: StaffUser;
 let otherCounsellor: StaffUser;
@@ -450,15 +464,23 @@ describe('own scope, assignment and contact', () => {
     expect(await assignment()).toBe('accepted');
   });
 
-  it('BR-OPS-4: an unanswered call changes nothing; a two-way contact moves new → contacted once', async () => {
+  it('BR-OPS-4: an unanswered call changes nothing; a two-way contact moves new → contacted once and closes the first-contact follow-up', async () => {
     const lead = await newLead(counsellor);
     const id = lead.data!.lead.id;
+    const firstContact = async () =>
+      (
+        await ctx.db
+          .select()
+          .from(opsFollowUps)
+          .where(and(eq(opsFollowUps.leadId, id as never), eq(opsFollowUps.kind, 'first_contact')))
+      )[0]!;
     const miss = await callRoute<{ successful: boolean }>(
       activity,
       post(counsellor, '/x', { kind: 'call', outcome: 'no_answer' }),
       { id },
     );
     expect(miss.data?.successful).toBe(false);
+    expect((await firstContact()).status).toBe('open');
     const hit = await callRoute<{ admissionsMovedToContacted: string[] }>(
       activity,
       post(counsellor, '/x', { kind: 'call', outcome: 'connected_two_way' }),
@@ -466,6 +488,18 @@ describe('own scope, assignment and contact', () => {
     );
     expect(hit.status).toBe(201);
     expect(hit.data?.admissionsMovedToContacted).toEqual([lead.data!.admission.id]);
+    const done = await firstContact();
+    expect(done).toMatchObject({
+      status: 'done',
+      outcome: 'First successful contact (call)',
+      completedBy: counsellor.id,
+    });
+    expect(
+      await ctx.db.$count(
+        auditEvents,
+        and(eq(auditEvents.entityId, done.id), eq(auditEvents.action, 'followup.completed')),
+      ),
+    ).toBe(1);
     const again = await callRoute<{ admissionsMovedToContacted: string[] }>(
       activity,
       post(counsellor, '/x', { kind: 'whatsapp', outcome: 'replied' }),
@@ -562,5 +596,39 @@ describe('merge review (explicit, audited)', () => {
       .from(opsDuplicateFlags)
       .where(eq(opsDuplicateFlags.leadId, sid as never));
     expect(flags[0]?.status).toBe('merged');
+  });
+});
+
+describe('duplicate check under races and volume', () => {
+  it('a lead another request saved while this one waited for the code lock gives 409, not a second lead (C4-1)', async () => {
+    const raw = phone();
+    // PGlite runs one transaction at a time, so the race is staged inside the lock request.
+    race.other = (tx: typeof ctx.db) =>
+      tx.insert(opsLeads).values({
+        code: 'LEAD-700000',
+        studentName: 'Sample Parallel Lead',
+        studentPhone: e164(raw),
+        firstReceivedAt: new Date(),
+        isSample: true,
+        createdBy: counsellor.id,
+      });
+    expect((await newLead(counsellor, { studentPhone: raw })).status).toBe(409);
+    expect(await ctx.db.$count(opsLeads, eq(opsLeads.studentPhone, e164(raw)))).toBe(1);
+  });
+
+  it('an exact phone match is found past 2,000 leads with a school (C4-2)', async () => {
+    await ctx.db.execute(sql`
+      insert into ops.leads (code, student_name, student_email, previous_school, first_received_at, is_sample, created_by)
+      select 'LEAD-' || (900000 + g), 'Sample School Lead ' || g, 'sample.school.' || g || '@example.test',
+             'Sample Public School', now(), true, ${manager.id}
+      from generate_series(1, 2001) g`);
+    const raw = phone();
+    expect((await newLead(counsellor, { studentPhone: raw })).status).toBe(201);
+    const dup = await newLead(counsellor, {
+      studentPhone: raw,
+      studentName: 'Another Name',
+      previousSchool: 'Sample Public School',
+    });
+    expect(dup.status).toBe(409);
   });
 });

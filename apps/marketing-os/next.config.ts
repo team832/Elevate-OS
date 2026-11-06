@@ -1,71 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import { parseEnv } from 'node:util';
-import type { NextConfig } from 'next';
-import { securityHeaders } from '@elevate/configuration/security-headers';
-import { appOrigin } from '@elevate/configuration/workspaces';
+import { zoneConfig } from '@elevate/configuration/next-config';
 
-/** Walk up from the app directory to the workspace root (the package.json with "workspaces"). */
-function findRepoRoot(start: string): string {
-  let dir = start;
-  for (;;) {
-    const pkg = path.join(dir, 'package.json');
-    if (existsSync(pkg) && 'workspaces' in JSON.parse(readFileSync(pkg, 'utf8'))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return start;
-    dir = parent;
-  }
-}
-
-const repoRoot = findRepoRoot(process.cwd());
-// All apps read the ONE root .env; values already in the environment win.
-// (@next/env cannot be used here: Next has already loaded the app directory and caches that result.)
-const rootEnvFile = path.join(repoRoot, '.env');
-if (existsSync(rootEnvFile)) {
-  for (const [key, value] of Object.entries(parseEnv(readFileSync(rootEnvFile, 'utf8')))) {
-    if (process.env[key] === undefined && value !== undefined) process.env[key] = value;
-  }
-}
-
-/** The browser-facing platform origin (D-004), for Server Actions arriving through its rewrites. */
-const platformHost = new URL(appOrigin('platform')).host;
-
-const nextConfig: NextConfig = {
-  /** Marketing OS lives under /marketing: on its own workspace origin (D-072) and behind the platform's rewrite. */
+/** Marketing OS lives under /marketing. */
+export default zoneConfig({
   basePath: '/marketing',
   env: { ELEVATE_BASE_PATH: '/marketing' },
-  // Only `npm run release:package` sets this; dev, office and next start keep the normal output.
-  ...(process.env.ELEVATE_RELEASE_STANDALONE ? { output: 'standalone' as const } : {}),
-  // The workspace origin's root opens the workspace (outside the basePath, so basePath: false).
-  async redirects() {
-    return [{ source: '/', destination: '/marketing', basePath: false, permanent: false }];
-  },
-  reactStrictMode: true,
-  poweredByHeader: false,
-  // Static security headers on every response; the per-request CSP is set in src/proxy.ts.
-  async headers() {
-    return [{ source: '/:path*', headers: securityHeaders() }];
-  },
-  turbopack: { root: repoRoot },
-  outputFileTracingRoot: repoRoot,
-  transpilePackages: [
-    '@elevate/authentication',
-    '@elevate/authorization',
-    '@elevate/configuration',
-    '@elevate/database',
-    '@elevate/notifications',
-    '@elevate/server-kit',
-    '@elevate/shared-contracts',
-    '@elevate/shared-types',
-    '@elevate/shared-ui',
-    // Shared task/EOD (and, in Marketing, lead) screens from Business Ops' entry points (D-073).
-    '@elevate/business-ops-os',
-  ],
-  serverExternalPackages: ['@electric-sql/pglite', 'pg'],
-  experimental: {
-    // Metrics CSV exports are posted to a server action; allow up to 5 MB.
-    serverActions: { allowedOrigins: [platformHost], bodySizeLimit: '5mb' },
-  },
-};
-
-export default nextConfig;
+  // Shared task/EOD and lead screens from Business Ops' entry points (D-073).
+  transpilePackages: ['@elevate/business-ops-os'],
+  // Metrics CSV exports are posted to a server action; allow up to 5 MB.
+  experimental: { serverActions: { bodySizeLimit: '5mb' } },
+});

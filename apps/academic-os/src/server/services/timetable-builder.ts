@@ -89,7 +89,7 @@ export async function buildDraftTimetable(db: Database, actor: Actor, input: Bui
       classMinutes: ctx.classLengthByBatch[batch.id]?.minutes ?? null,
       subjects,
       roomIds: rooms.map((r) => r.id),
-      centre: { ...ctx, existing: [...ctx.existing, ...held] },
+      centre: { ...ctx, existing: [...ctx.existing, ...ctx.tests, ...held] },
     });
     result.notes.push(...calendar.notes);
     if (held.length) result.notes.push('Times held by draft patterns of other batches were avoided.');

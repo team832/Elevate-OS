@@ -14,7 +14,9 @@ import { samplePlaceholderSeeds } from './sample-placeholders';
 import { sampleStaffSeeds } from './sample-staff';
 import { sampleTeamWorkSeeds } from './sample-team-work';
 import { sampleWorkSeeds } from './sample-work';
+import { staffChecklistTemplateSeeds } from './staff-checklist-templates';
 import { sampleSeeds } from './samples';
+import { websiteFormSeeds } from './website-form';
 
 export { ClearSamplesRefused, clearSamples } from './clear-samples';
 export { seedActor, seedSampleLifecycle } from './samples';
@@ -25,11 +27,14 @@ export { seedFillAttendance } from './fill-attendance';
 export { seedFillPeople } from './fill-people';
 export { seedFillTasks } from './fill-tasks';
 export { seedFillWork } from './fill-work';
+export { OWNER_SUPPLIED_STAFF } from './teachers'; // for tests; only the reference seed writes them
 
 export const seeds: readonly SeedDefinition[] = [
   ...referenceSeeds,
+  ...websiteFormSeeds,
   ...samplePlaceholderSeeds,
   ...onboardingTemplateSeeds,
+  ...staffChecklistTemplateSeeds,
   ...sampleSeeds,
   ...sampleStaffSeeds,
   ...sampleWorkSeeds,

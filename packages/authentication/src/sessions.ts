@@ -1,8 +1,14 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { and, eq, gt, isNull, lt, or, sql } from 'drizzle-orm';
+import { loadEnvKeys } from '@elevate/configuration';
 import { sessions, userRoles, users, type Database } from '@elevate/database';
 import { isRoleKey, type RoleKey, type SessionId, type UserId } from '@elevate/shared-types';
 import { isAllowedEmail } from './email-domain';
+
+/** SESSION_SECRET from the environment (validated, read lazily). */
+export function getSessionSecret(): string {
+  return loadEnvKeys(['SESSION_SECRET'], process.env, 'authentication').SESSION_SECRET;
+}
 
 /** Default session lifetime: 7 days (absolute; not extended by activity). */
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -83,6 +89,8 @@ export async function validateSession(
   token: string | null | undefined,
   secret: string,
   now: Date = new Date(),
+  /** Which logins this caller accepts: staff by default; the portal passes `isPortalEmail` (F4-13). */
+  acceptEmail: (email: string) => boolean = isAllowedEmail,
 ): Promise<AuthenticatedUser | null> {
   if (!token || token.length > 200) return null;
   const tokenHash = hashSessionToken(token, secret);
@@ -106,7 +114,7 @@ export async function validateSession(
   if (row.revokedAt !== null) return null;
   if (row.expiresAt.getTime() <= now.getTime()) return null;
   if (row.status !== 'active') return null;
-  if (!isAllowedEmail(row.email)) return null; // D-030: a non-organisation account never has a live session
+  if (!acceptEmail(row.email)) return null; // D-030: a non-organisation account never has a live staff session
 
   if (now.getTime() - row.lastSeenAt.getTime() > LAST_SEEN_REFRESH_MS) {
     await db.update(sessions).set({ lastSeenAt: now }).where(eq(sessions.id, row.sessionId));

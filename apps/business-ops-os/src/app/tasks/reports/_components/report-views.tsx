@@ -2,10 +2,12 @@ import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import { Alert, EmptyState, StatusBadge } from '@elevate/shared-ui';
 import { factsMissingReasons, isEodFacts } from '../../../../domain/eod';
+import { EOD_EDITABLE } from '../../../../domain/staff-tasks';
 import { aiBlocked } from '../../../../server/ai-drafts';
 import { NARRATIVE_FIELDS, type Period } from '../../../../domain/work-report';
 import { eodSummaryText, factSections } from '../../../../server/eod-export';
 import { getReport, reportContext, type EodReportView } from '../../../../server/eod-reports';
+import { REVIEW_LABELS } from '../../../../server/eod-review';
 import { NO_STAFF_RECORD } from '../../../../server/staff-tasks';
 import { openableTaskIds } from '../../../../server/task-access';
 import { ActionForm } from '../../../../ui/action-form';
@@ -76,12 +78,17 @@ export async function ReportEditor({
   });
   if (!r.ok) return r.view;
   if (!r.data) return <EmptyState title="No report to show" description={NO_STAFF_RECORD} />;
-  const { report, recipient, facts, ai, openable } = r.data;
+  const { report, recipient, facts, ai, openable, filingClosed } = r.data;
   const editable =
     can(user, 'ops:tasks:write') &&
-    (!report || ['draft', 'revision_requested'].includes(report.status));
+    !filingClosed &&
+    (!report || EOD_EDITABLE.includes(report.status));
   const missing = factsMissingReasons(facts);
-  const request = report?.trail.find((t) => t.kind === 'revision_requested');
+  // Sent back (changes or more detail, F4-11): the reviewer's latest note for the author.
+  const request =
+    report && report.status !== 'draft' && EOD_EDITABLE.includes(report.status)
+      ? report.trail.find((t) => t.kind === report.status)
+      : undefined;
   const nextVersion = (report?.currentVersion ?? 0) + 1;
   const summary = report?.current ? eodSummaryText(report) : null;
   return (
@@ -105,9 +112,14 @@ export async function ReportEditor({
           />
         </Segment>
       ) : null}
-      {request && report?.status === 'revision_requested' ? (
-        <Alert tone="warning" title="Changes requested">
-          {request.text} Change your notes or the tasks, then submit version {nextVersion}.
+      {request ? (
+        <Alert tone="warning" title={REVIEW_LABELS[request.kind]}>
+          {request.text} Update your notes or the tasks, then submit version {nextVersion}.
+        </Alert>
+      ) : null}
+      {filingClosed ? (
+        <Alert tone="warning" title="Filing closed">
+          {filingClosed}
         </Alert>
       ) : null}
       {report?.sourceChanged ? (
@@ -119,9 +131,15 @@ export async function ReportEditor({
       <p className="el-field-hint">
         {editable
           ? `Facts as of ${fmtDateTime(facts.asOf)}, rebuilt from your records each time you save. To correct a fact, update the task, the Academic record or your attendance.`
-          : 'Showing the submitted version, as sent.'}
+          : report?.current
+            ? 'Showing the submitted version, as sent.'
+            : `Facts as of ${fmtDateTime(facts.asOf)}.`}
       </p>
-      <WorkReportFacts f={editable ? facts : report!.facts} base={base} openable={openable} />
+      <WorkReportFacts
+        f={editable || !report ? facts : report.facts}
+        base={base}
+        openable={openable}
+      />
       {editable ? (
         <Segment title="Your words" description="Only these parts are yours to write.">
           <AiDraft
@@ -155,7 +173,7 @@ export async function ReportEditor({
       {editable ? (
         <Segment
           title="Submit"
-          description="Submitting freezes this version. Your manager can mark it reviewed or request changes."
+          description="Submitting freezes this version. Your manager can mark it reviewed, request changes or ask for more detail."
         >
           <DetailTable
             rows={[
@@ -234,6 +252,7 @@ const REQUESTS = [
     'What needs clarifying',
   ],
   ['revision_requested', 'Request changes', 'Request changes', 'What to change'],
+  ['more_detail_requested', 'Ask for more detail', 'Ask for more detail', 'What more you need'],
 ] as const;
 
 /** The reviewer's pane for one report of any kind (`?open=<id>`); getReport checks access (404). */
@@ -319,20 +338,20 @@ export async function ReportPane({
                   successText="Marked reviewed."
                 />
               ) : null}
-              {REQUESTS.filter(([kind]) => open || kind !== 'revision_requested').map(
-                ([kind, title, label, field]) => (
-                  <Segment key={kind} title={title} level={3}>
-                    <ActionForm
-                      action={`${API}/${rep.id}/review`}
-                      submitLabel={label}
-                      variant="secondary"
-                      extra={{ kind }}
-                      resetOnSuccess
-                      fields={[{ name: 'text', label: field, type: 'textarea', required: true }]}
-                    />
-                  </Segment>
-                ),
-              )}
+              {REQUESTS.filter(
+                ([kind]) => open || kind === 'comment' || kind === 'clarification_requested',
+              ).map(([kind, title, label, field]) => (
+                <Segment key={kind} title={title} level={3}>
+                  <ActionForm
+                    action={`${API}/${rep.id}/review`}
+                    submitLabel={label}
+                    variant="secondary"
+                    extra={{ kind }}
+                    resetOnSuccess
+                    fields={[{ name: 'text', label: field, type: 'textarea', required: true }]}
+                  />
+                </Segment>
+              ))}
               {can(user, 'ops:tasks:write') ? (
                 <Segment
                   title="Create a follow-up task"

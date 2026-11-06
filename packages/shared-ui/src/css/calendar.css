@@ -1,0 +1,242 @@
+/* F4-08 calendar. Phones: a list of the days that hold something, each under its full date.
+ * Print and from 720px: the Monday-first month grid. Today carries the orange pill (position). */
+.el-cal {
+  display: grid;
+  gap: var(--el-space-3);
+}
+.el-cal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--el-space-3) var(--el-space-4);
+}
+.el-cal-head h2 {
+  margin: 0;
+  margin-right: auto;
+  font-family: var(--el-font-display);
+  font-size: var(--el-text-title);
+}
+.el-cal-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--el-space-2) var(--el-space-4);
+}
+.el-cal-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--el-accent-text);
+}
+.el-cal-empty {
+  margin: 0;
+  color: var(--el-text-muted);
+}
+.el-cal-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+.el-cal-grid thead {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.el-cal-grid,
+.el-cal-grid tbody,
+.el-cal-grid tr,
+.el-cal-grid td {
+  display: block;
+}
+.el-cal-grid td[data-empty],
+.el-cal-pad {
+  display: none;
+}
+.el-cal-grid td {
+  padding: var(--el-space-3) var(--el-space-4);
+  margin-bottom: var(--el-space-2);
+  background: var(--el-surface);
+  border: 1px solid var(--el-border);
+  border-radius: var(--el-radius-sm);
+}
+.el-cal-date {
+  margin: 0 0 var(--el-space-2);
+  font-size: var(--el-text-md);
+}
+.el-cal-dnum {
+  display: none;
+}
+.el-cal-grid ul {
+  display: grid;
+  gap: var(--el-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.el-cal-item {
+  display: block;
+  padding: var(--el-space-1) var(--el-space-2);
+  font-size: var(--el-text-sm);
+  color: var(--el-text);
+  background: var(--el-well);
+  border-radius: var(--el-radius-sm);
+  overflow-wrap: anywhere;
+}
+a.el-cal-item {
+  min-height: 44px;
+  text-decoration: none;
+}
+a.el-cal-item:hover {
+  background: var(--el-surface-muted);
+}
+a.el-cal-item:focus-visible {
+  outline: 2px solid var(--el-focus);
+  outline-offset: 1px;
+}
+.el-cal-kind {
+  display: inline-block;
+  padding: 0 var(--el-space-2);
+  font-size: var(--el-text-xs);
+  font-weight: 600;
+  border-radius: var(--el-radius-pill);
+  color: var(--el-neutral-fg);
+  background: var(--el-neutral-bg);
+}
+[data-kind='class'] .el-cal-kind,
+[data-kind='meeting'] .el-cal-kind,
+[data-kind='demo'] .el-cal-kind {
+  color: var(--el-info-fg);
+  background: var(--el-info-bg);
+}
+[data-kind='test'] .el-cal-kind,
+[data-kind='task'] .el-cal-kind {
+  color: var(--el-warning-fg);
+  background: var(--el-warning-bg);
+}
+.el-cal-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--el-text-muted);
+}
+.el-cal-item .el-badge-sample {
+  margin-left: var(--el-space-1);
+}
+
+@media print, (min-width: 720px) {
+  .el-cal-grid {
+    display: table;
+    table-layout: fixed;
+    background: var(--el-surface);
+    border-radius: var(--el-radius);
+    box-shadow: var(--el-shadow);
+    overflow: hidden;
+  }
+  .el-cal-grid thead {
+    display: table-header-group;
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+  .el-cal-grid tbody {
+    display: table-row-group;
+  }
+  .el-cal-grid tr {
+    display: table-row;
+  }
+  .el-cal-grid th {
+    padding: var(--el-space-2);
+    font-size: var(--el-text-xs);
+    font-weight: 600;
+    text-align: left;
+    color: var(--el-text-muted);
+    border-bottom: 1px solid var(--el-border);
+  }
+  .el-cal-grid abbr {
+    text-decoration: none;
+  }
+  .el-cal-grid td,
+  .el-cal-grid td[data-empty],
+  .el-cal-pad {
+    display: table-cell;
+    position: relative;
+    height: 7rem;
+    margin: 0;
+    padding: var(--el-space-2);
+    vertical-align: top;
+    border: 0;
+    border-radius: 0;
+    border-right: 1px solid var(--el-border);
+    border-bottom: 1px solid var(--el-border);
+  }
+  .el-cal-grid td:last-child {
+    border-right: 0;
+  }
+  .el-cal-pad {
+    background: var(--el-well);
+  }
+  .el-cal-date {
+    font-size: var(--el-text-sm);
+    font-weight: 600;
+  }
+  .el-cal-dnum {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.75rem;
+    height: 1.75rem;
+    border-radius: var(--el-radius-pill);
+  }
+  .el-cal-dlong {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .el-cal-grid td[aria-current='date'] .el-cal-dnum {
+    color: var(--el-accent-contrast);
+    background: var(--el-accent);
+  }
+  .el-cal-item {
+    padding: 2px var(--el-space-1);
+    font-size: var(--el-text-xs);
+  }
+  a.el-cal-item {
+    min-height: 0;
+  }
+  .el-cal-kind {
+    display: block;
+    width: fit-content;
+  }
+}
+
+@media print {
+  .el-cal-nav {
+    display: none;
+  }
+  .el-cal-grid {
+    box-shadow: none;
+    border: 1px solid var(--el-border);
+    font-size: 8pt;
+  }
+  .el-cal-grid td,
+  .el-cal-grid td[data-empty],
+  .el-cal-pad {
+    height: 2.4cm;
+  }
+  .el-cal-grid tr {
+    break-inside: avoid;
+  }
+  .el-cal-item,
+  .el-cal-kind {
+    padding: 0;
+    background: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a.el-cal-item {
+    transition: background var(--el-dur) var(--el-ease);
+  }
+}

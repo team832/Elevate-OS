@@ -25,6 +25,7 @@ import { listHref, Pager, SearchPanel, type FilterField } from '../../../ui/list
 import { ActionForm } from '../../../ui/action-form';
 import { RecordModal } from '../../../ui/record-modal';
 import { RecordTable } from '../../../ui/record-table';
+import { ExportLink } from '../../../ui/export-link';
 import { DetailTable, Segment } from '../../../ui/sections';
 import { StudentFeesSection } from '../../../ui/student-fees-section';
 import {
@@ -344,6 +345,7 @@ export async function StudentListSection({
         empty={empty}
       />
       <Pager basePath={basePath} params={params} page={page} pageSize={PAGE_SIZE} total={total} />
+      <ExportLink list="students" params={{ ...query, limit: undefined, cursor: undefined }} />
     </>
   );
 }
@@ -441,7 +443,7 @@ export async function StudentQuickView({
                     {d.openReadmissionRef ? (
                       <p role="status">
                         Readmission already open: {d.openReadmissionRef}. Continue it under
-                        Admission applications.
+                        Applications.
                       </p>
                     ) : null}
                     {d.readmitProgrammes ? (

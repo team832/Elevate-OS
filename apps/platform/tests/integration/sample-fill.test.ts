@@ -10,6 +10,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { checkPassword, hashPassword, type AuthenticatedUser } from '@elevate/authentication';
 import {
+  academicAssessments,
   academicBatches,
   academicClassRecords,
   academicClassSessions,
@@ -57,25 +58,27 @@ import { seeds as academicSeeds } from '@elevate/academic-os/seed';
 import {
   ClearSamplesRefused,
   clearSamples,
+  OWNER_SUPPLIED_STAFF,
   seeds as opsSeeds,
 } from '@elevate/business-ops-os/seed';
 import { seeds as marketingSeeds } from '@elevate/marketing-os/seed';
 import { seeds as platformSeeds } from '../../seed';
 import { referenceSeedList } from '../../../../scripts/release/reference-seeds';
-import { OWNER_SUPPLIED_STAFF } from '../../../business-ops-os/seed/teachers';
 import {
-  deriveDays,
   attendanceStaff,
+  deriveDays,
+  hrQueue,
+  hrRequestListQuery,
   listRange,
-} from '../../../business-ops-os/src/server/attendance';
-import { myFeedback } from '../../../business-ops-os/src/server/feedback-teacher';
-import { hrRequestListQuery } from '../../../business-ops-os/src/server/hr-requests-schemas';
-import { hrQueue } from '../../../business-ops-os/src/server/hr-requests-read';
-import { loadSettings } from '../../../business-ops-os/src/server/settings';
-import { listTeachers as listOpsTeachers } from '../../../business-ops-os/src/server/teachers';
-import { teacherDay } from '../../../academic-os/src/server/services/my-day';
-import { previewPattern } from '../../../academic-os/src/server/services/patterns';
+  listTeachers as listOpsTeachers,
+  loadSettings,
+  myFeedback,
+} from '@elevate/business-ops-os/server';
+import { previewPattern, teacherDay } from '@elevate/academic-os/server';
 
+// The website-form system user and lead source (business-ops-os src/server/website-form.ts; outside this test's import boundary).
+const WEBSITE_FORM_USER_EMAIL = 'website-form@elevateeducation.in';
+const WEBSITE_FORM_SOURCE = 'WEBSITE_FORM';
 const ctx = setupTestDatabase();
 const db = () => ctx.db as Database;
 const context = { seedUserPassword: 'test-only-seed-password', hashPassword, log: () => {} };
@@ -292,8 +295,9 @@ describe('people and attendance', () => {
     ['ops.staff_private_details', 'emergency_contact_name'],
   ])('%s.%s holds normal two-word names only', async (table, column) => {
     const wrong = await rows(
-      `SELECT ${column} AS name FROM ${table} WHERE ${column} !~ '^[A-Z][a-z]+ [A-Z][a-z]+$'
-         OR ${column} ~* '(sample|demo|test|mock|fictional|teacher|manager|parent|student)'`,
+      `SELECT ${column} AS name FROM ${table} WHERE (${column} !~ '^[A-Z][a-z]+ [A-Z][a-z]+$'
+         OR ${column} ~* '(sample|demo|test|mock|fictional|teacher|manager|parent|student)')
+         ${table === 'core.users' ? `AND email <> '${WEBSITE_FORM_USER_EMAIL}'` : ''}`, // a system user, not a person
     );
     expect(wrong).toEqual([]);
     expect(await rows(`SELECT 1 FROM ${table} LIMIT 1`)).toHaveLength(1);
@@ -492,6 +496,22 @@ describe('the demo teacher’s login', () => {
   });
 });
 
+describe('sample tests and classes', () => {
+  it('no sample class overlaps a sample test of its batch (ruling 6 Nov 2026)', async () => {
+    const clashes = await rows(`
+      select a.code, s.date, s.start_time from academic.assessments a
+      join (select id, batch_id from academic.assessments union select assessment_id, batch_id from academic.assessment_batches) eb on eb.id = a.id
+      join academic.class_sessions s on s.batch_id = eb.batch_id and s.date = a.scheduled_date and s.status in ('scheduled', 'held')
+      where a.status <> 'cancelled' and a.duration_minutes is not null
+        and s.start_time::time < a.start_time::time + make_interval(mins => a.duration_minutes)
+        and a.start_time::time < s.start_time::time + make_interval(mins => s.duration_minutes)`);
+    expect(clashes.map((c) => `${c.code} ${c.date} ${c.start_time}`)).toEqual([]);
+    expect(
+      await db().$count(academicAssessments, eq(academicAssessments.isSample, true)),
+    ).toBeGreaterThan(0);
+  });
+});
+
 describe('db:clear-samples after the fill', () => {
   it('removes the fill, puts the Schar setting back to unset and keeps real rows', async () => {
     const hr = await userOf('hr-manager@example.test');
@@ -652,14 +672,21 @@ describe('db:clear-samples after the fill', () => {
   it('every surviving login and staff record reads as removed, and none can sign in', async () => {
     const logins = await db().select().from(users);
     expect(logins.length).toBeGreaterThan(20);
+    // The website-form system user and its lead source are reference data: kept, still switched off.
+    const system = logins.find((u) => u.email === WEBSITE_FORM_USER_EMAIL);
+    expect(system).toMatchObject({ status: 'disabled', passwordHash: null });
     expect(
       logins.filter(
         (u) =>
-          !u.displayName.startsWith('Removed sample login ') ||
-          u.status !== 'disabled' ||
-          u.passwordHash !== null,
+          u !== system &&
+          (!u.displayName.startsWith('Removed sample login ') ||
+            u.status !== 'disabled' ||
+            u.passwordHash !== null),
       ),
     ).toEqual([]);
+    expect(
+      await rows(`SELECT 1 FROM ops.lead_sources WHERE code = '${WEBSITE_FORM_SOURCE}'`),
+    ).toHaveLength(1);
     expect(
       await checkPassword(db(), 'hr-manager@example.test', context.seedUserPassword),
     ).toBeNull();

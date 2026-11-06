@@ -13,6 +13,7 @@ import {
   academicAssessments,
   academicAttempts,
   academicBatchPlacements,
+  academicBatches,
   academicEnrolments,
   academicStudents,
   type Database,
@@ -44,12 +45,14 @@ import { audit, type Actor } from '../context';
 const R = academicAssessmentRoster;
 export type AssessmentRow = typeof academicAssessments.$inferSelect;
 
-/** Eligible batches, primary first (an assessment without batch rows is legacy: its batch only). */
+/** Eligible batches, primary first, then by batch code (an assessment without batch rows is legacy: its batch only). */
 export async function eligibleBatchIds(db: Database, a: AssessmentRow): Promise<BatchId[]> {
   const rows = await db
     .select({ id: academicAssessmentBatches.batchId })
     .from(academicAssessmentBatches)
-    .where(eq(academicAssessmentBatches.assessmentId, a.id));
+    .innerJoin(academicBatches, eq(academicBatches.id, academicAssessmentBatches.batchId))
+    .where(eq(academicAssessmentBatches.assessmentId, a.id))
+    .orderBy(asc(academicBatches.code));
   return [a.batchId, ...rows.map((r) => r.id).filter((id) => id !== a.batchId)];
 }
 

@@ -561,3 +561,86 @@ No new API route. The annual tuition figures and drill-down (owner brief §22) a
 - **Settings:** `PUT settings/{key}` and `PUT hr/settings/{key}` are unchanged; the screens post through `SettingFields` (D-130). `hr.leave_types`, `hr.leave_approver` are new, Proposed, with no seed row.
 - **Pages:** `/ops/hr/attendance?tab=leave` (status tabs, Approve and Reject, per-person history) and `?who=`; `<base>/my-attendance?view=leave|requests`; the staff record's Leave tab.
 - **Grants:** no new key. Director gains own `ops:attendance:request` (`PROPOSED-GRANTS-2026-10-31`).
+
+# Routes added or changed on 6 Nov 2026 (D-133 … D-153; on no package; no browser check)
+New permissions and grants come with migration `0020` and are Proposed. Every setting named here is Proposed, off or not set unless stated. The rules behind these routes are in `ALGORITHMS.md` "Added on 6 Nov 2026"; this section gives only the contract. CSV downloads use `csvResponse` (UTF-8 BOM, formula-safe cells) and are audited with filters and row counts, never contents.
+
+## Fees, receipts, certificates, admit cards (D-138 … D-141)
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/ops/api/v1/fees/{id}/receipt?size=a4\|a5` | `ops:fees:read` (record's scope) | Receipt PDF of one payment. Each print counts; the second and later say "Duplicate"; a reversed or voided payment's receipt says "Cancelled" (D-138) |
+| POST | `/ops/api/v1/fees/{id}/receipt` | `ops:fees:record` (own scope), `Idempotency-Key` optional | Body `{}`. "Issue receipt" for a payment recorded without one: 201 new, 200 the receipt it already has. 409 "Only a payment gets a receipt." or "This payment was reversed or voided: no receipt is issued." (D-138) |
+| (changed) | every route that records a received payment (`POST /admissions/{id}/fees`, `/fees`, `/fee-plans/{id}/entries`) | as before | Issues the receipt in the same transaction; response unchanged (D-138) |
+| GET | `/ops/api/v1/fees/defaulters?programme&counsellor&band` | `ops:fees:read` (own scope) | Overdue fees as CSV; audited `fees.defaulters_exported` (D-141) |
+| GET | `/ops/api/v1/certificates?type&status` | `ops:students:read` (own scope) | Certificate register as CSV; audited `certificates.exported`; over 5,000 rows 409 "Narrow the filters" (D-139) |
+| POST | `/ops/api/v1/certificates` | `ops:certificates:issue` (new; Proposed operations manager, director), `Idempotency-Key` optional | `{ admissionId, type }` → 201 register row. 409 while `certificates.types` is not approved ("The certificate wording is not approved yet…") or when the record lacks a value the wording names; 400 unknown type or no student record (D-139) |
+| GET | `/ops/api/v1/certificates/{id}` | `ops:students:read` (own scope, else 403) | Certificate PDF; the second print says "Duplicate" (D-139) |
+| POST | `/ops/api/v1/certificates/{id}` | `ops:certificates:issue` | `{ reason }` (5–500): revoke; the row stays with who, when and why. 409 already revoked (D-139) |
+| GET | `/ops/api/v1/assessments/{id}/admit-cards?batchId` | `ops:assessments:manage` | Admit cards PDF, two per A4, for the test or one batch, read from Academic (`academic.admit_cards` v1). 409 "This test is cancelled: no admit cards are printed." With `tests.admit_card_block_defaulters` on, students with an overdue instalment get no card and are listed instead; that needs `ops:fees:read` (403) (D-140) |
+| POST | `/ops/api/v1/assessments/{id}/admit-cards` | `ops:assessments:manage` | `{ action: "roll_numbers" }` or `{ action: "venue", venue: <room id>\|"online"\|"not_set", instructions? }`; written in Academic as you through its internal route (D-140) |
+
+Pages: `/ops/fees/defaulters` (Overdue fees), `/ops/certificates` (register; issue from the student record).
+
+## Students: absences and portal access (D-143, D-150)
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/ops/api/v1/students/absences?from&to` | `ops:student_private:read` (counsellors: own cases) | Absent students as CSV. Default the last 7 days (IST), at most 92; 400 otherwise. Reads Academic's internal `absences` route (D-143) |
+| POST | `/ops/api/v1/students/absences` | `ops:guardians:write` | `{ studentId, outcome: reached\|no_answer\|wrong_number\|will_attend, note? }` → 201 call row; audited (D-143) |
+| GET | `/ops/api/v1/students/{id}/portal-access` | `ops:student_private:read` | The student's portal logins (kind, login name, on or off, live code expiry), the consent text and whether it is approved (D-150) |
+| POST | `/ops/api/v1/students/{id}/portal-access` | `ops:guardians:write` (Proposed reuse, owner question), `Idempotency-Key` optional | `{ kind: student\|guardian, guardianId?, joinUserId? (a sibling's guardian login), consentGuardianId?, consentGivenOn?, consentConfirmed? }` → 201 `{ id, login }`, no code yet. 409: consent wording not approved (a minor or no date of birth), guardian access to an adult off, a live login of that kind exists, two dates of birth on the enquiries (D-150) |
+| POST | `/ops/api/v1/portal-access/{id}/code` | `ops:guardians:write`; never idempotent (a replay would store the code) | New one-time setup code (8 characters, 7 days; the old code stops) → 201 `{ login, code, expiresAt, name, studentName, kind, portalUrl }`. 409 while switched off. Needs scope over every child of the login (D-150) |
+| PATCH | `/ops/api/v1/portal-access/{id}` | `ops:guardians:write` | `{ enabled }`. Off ends its sessions and live code. On is refused (409) for an archived guardian, a live clash, or an adult while `portal.guardian_access_to_adults` is off (D-150) |
+
+Page: `/ops/students/absences` (Absent students; says so when Academic cannot be read). Archiving a guardian switches their portal login off in the same transaction.
+
+## HR, leave, cover, payroll, jobs (D-133, D-134, D-146 … D-149, D-151)
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| PUT | `/ops/api/v1/jobs/{job}` | `ops:jobs:run` | `{ value: { enabled, everyMinutes }, note? }`: switch background runs on or off and set how often; audited; the value stays Proposed (D-133) |
+| POST | `/ops/api/v1/jobs/fee-reminders` (new job) | `ops:jobs:run` | In-app reminders to the case's counsellor and every finance officer on the days of `fees.reminders`; families are never messaged (D-141) |
+| POST | `/ops/api/v1/attendance/leave/{id}/send-to-academic` | `ops:attendance:manage` + `hr.leave_approver`, HR scope, never your own | "Send to Academic again": sends the leave's current state; 409 when Academic OS does not answer (D-134) |
+| (changed) | `POST /attendance/leave`, `POST /attendance/leave/{id}`, leave-application decide and cancel | as before | After the commit, a teacher's approved, recorded or cancelled leave is sent to Academic (D-134). `POST /attendance/leave` no longer takes `Idempotency-Key` (a repeat over approved leave is 409). A cover's decision records `onBehalfOf` (D-147) |
+| (changed) | `POST /attendance/leave`, `POST /attendance/leave-applications` | as before | `dayPart?: first_half\|second_half`, one day only (400 otherwise) (D-149). A day decision may not set `on_leave` (400) |
+| GET | `/ops/api/v1/attendance/leave-allowances?yearStart&q&department&who` | `ops:attendance:read` (HR's staff scope; own scope = yourself) | Balances per person and type for one leave year (D-149) |
+| POST | `/ops/api/v1/attendance/leave-allowances` | `ops:attendance:manage`, `Idempotency-Key` optional | `{ leaveType, yearStart, days (half steps, 0–366), staffId \| role }`: one person or everyone with a role in HR's reach, never yourself; refused for a type without a balance; audited (D-149) |
+| POST | `/ops/api/v1/attendance/leave-adjustments` | `ops:attendance:manage`, `Idempotency-Key` optional | `{ staffId, leaveType, yearStart, kind: carry_forward\|adjustment, days (half steps, ±366, not 0; carry > 0), reason }` → 201. Carry forward once a year, within the cap and what was left; needs an allowance; never yourself; the audit keeps no reason (D-149) |
+| GET, POST | `/ops/api/v1/approval-cover` | `ops:module:access` | GET: covers you gave and hold. POST `{ coverStaffId, fromDate, toDate, note? }` → 201. 403 when you approve nothing; 400 yourself, a person the setting `hr.approval_cover` does not allow, a start in the past, more than a year; 409 an overlapping cover of yours (D-147) |
+| POST | `/ops/api/v1/approval-cover/{id}/revoke` | `ops:module:access` | The approver, or the cover stepping down, ends it early; the row stays. 409 already ended (D-147) |
+| POST | `/ops/api/v1/hr/checklist-templates` | `ops:hr_settings:manage` | `{ event: joining\|leaving, items }` (one item per line) → 201 the next template version (D-146) |
+| POST | `/ops/api/v1/hr/checklists` | `ops:staff:manage`, `Idempotency-Key` optional | `{ staffId, event }` → 201 that person's checklist from the active template (D-146) |
+| POST | `/ops/api/v1/hr/checklist-items/{id}` | `ops:staff:manage` | `{ status: pending\|done\|not_applicable, note? }`; done and not applicable record who and when (D-146) |
+| POST | `/ops/api/v1/hr/assets` | `ops:staff:manage`, `Idempotency-Key` optional | `{ staffId, assetType, tag?, description?, issuedOn, conditionNote? }` → 201. 409 when the tag is out with someone (D-146) |
+| POST | `/ops/api/v1/hr/assets/{id}/return` | `ops:staff:manage` | `{ returnedOn, conditionNote? }` (D-146) |
+| GET | `/ops/api/v1/hr/staff-records/{assets\|checklists}` | `ops:hr:read` | The page's list with its filters as CSV, at most 5,000 rows; audited (D-146) |
+| (changed) | `POST /eod-reports/{id}/review` | `ops:tasks:read` (the report's reviewer or an EOD reviewer) | New `kind: more_detail_requested`, `text` required: the report goes back to its author, who resubmits a new version. 409 unless the report is submitted (D-148) |
+| POST | `/ops/api/v1/payroll/components` | `ops:payroll:manage` (new; Proposed HR manager, director), `Idempotency-Key` optional | `{ code, name, kind: earning\|deduction }` (D-151) |
+| PATCH | `/ops/api/v1/payroll/components/{id}` | `ops:payroll:manage` | `{ status: active\|retired }` (D-151) |
+| POST | `/ops/api/v1/payroll/structures` | `ops:payroll:manage`, `Idempotency-Key` optional | `{ staffId, effectiveFrom (a 1st), note?, lines: { <componentId>: rupees } }`: a new structure row per change, history kept (D-151) |
+| POST | `/ops/api/v1/payroll/advances` | `ops:payroll:manage`, `Idempotency-Key` optional | `{ staffId, amount, monthlyInstalment (≤ amount), givenOn, recoverFrom (a 1st), reason, reference? }` (D-151) |
+| POST | `/ops/api/v1/payroll/advances/{id}` | `ops:payroll:manage` | `{ reason }`: cancel; no further recovery (D-151) |
+| POST | `/ops/api/v1/payroll/runs` | `ops:payroll:manage` | `{ month: YYYY-MM }`: a draft from structures, loss-of-pay leave and advances; one run per month (D-151) |
+| POST | `/ops/api/v1/payroll/runs/{id}` | `ops:payroll:manage` (`rebuild`, `submit`, `return`) or `ops:payroll:approve` (new; Proposed director) (`approve`) | `{ action }`. 403 "You started or submitted this payroll…" or "You wrote a line in this payroll or set a salary it uses…"; 409 locked once approved, wrong state, no payslips, or `submit` with nobody left to approve ("Nobody else can approve this payroll…") (D-151) |
+| POST | `/ops/api/v1/payroll/runs/{id}/lines` | `ops:payroll:manage`, `Idempotency-Key` optional | `{ staffId, kind, source: one_off\|adjustment, label, amount, note }`; draft only (D-151) |
+| DELETE | `/ops/api/v1/payroll/lines/{id}` | `ops:payroll:manage` | Removes a hand-made line from a draft (D-151) |
+| POST | `/ops/api/v1/payroll/payslips/{id}` | `ops:payroll:manage` | `{ paidOn, paidMode: bank_transfer\|upi\|cash\|cheque\|other, paidReference? }`; only on an approved run (D-151) |
+| GET | `/ops/api/v1/payroll/runs/{id}/download?format=pdf\|csv` | `ops:payroll:manage` or `ops:payroll:approve` | Every payslip of the run; audited without amounts (D-151) |
+| GET | `<base>/api/v1/payslips/{id}/pdf` | `ops:payslips:read` (new; Proposed every staff role, own scope), `ops:payroll:manage` or `ops:payroll:approve` | Your own payslip once its run is approved, or any for payroll holders; anything else 404; audited. Mounted in Academic and Marketing (`workRoutes`) (D-151) |
+
+Pages: `/ops/approval-cover`, `/ops/hr/checklists`, `/ops/hr/assets`, `/ops/hr/payroll`, `/ops/hr/payroll/{id}`, `/ops/my-payslips`; HR attendance gains a Leave allowances tab. Salaries never appear in audit payloads, notices or logs.
+
+## Leads: website form and sharing (D-152, D-153)
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/ops/api/v1/website-enquiries` | `public`, `crossSite` | HTML form post (`name, phone, email?, programme?, city?, message?, consent=on`; the hidden `website` field must be empty; 16 KB). The Origin must be Elevate's own or exactly one in `leads.website_form.allowed_origins`; a missing Origin is refused too: 403 before any lookup. Otherwise always 303 to `/ops/enquire?sent=1`, sent before any save work starts; the save runs after the reply and only when `leads.website_form.enabled` is on and its consent wording approved (D-152) |
+| GET | `/ops/api/v1/lead-sharing` | `ops:leads:assign` | The sharing rules as CSV (D-153) |
+| POST | `/ops/api/v1/lead-sharing` | `ops:leads:assign` | `{ programmeCode? (empty = the default rule), mode: round_robin\|fewest_open, counsellors: [staffId] (1–50, once each), dailyCap? (1–500) }` → 201; replaces that programme's rule (D-153) |
+| DELETE | `/ops/api/v1/lead-sharing/{id}` | `ops:leads:assign` | Removes a rule (D-153) |
+
+Pages: `/ops/enquire` (the public form the website links to), `/ops/leads/sharing`. Both lead-sharing routes are mounted in Marketing.
+
+## Downloads, calendar, follow-ups (6 Nov 2026)
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `<base>/api/v1/exports/{list}?<the page's filters>` | any of `ops:students:read`, `ops:leads:read`, `ops:fees:read`, `ops:hr:read`, `ops:organisation:read`, `ops:tasks:read`, `ops:attendance:read`; each list re-checks its page's permission and scope | `list`: `students`, `leads`, `collections`, `outstanding`, `staff`, `tasks`, `attendance` (`month=YYYY-MM[&mine=1]`), `leave-allowances`. Every matching row as CSV; contact fields never exported; over 5,000 rows 400 "Narrow the filters…". Mounted in Academic and Marketing (`workRoutes`) |
+
+Pages: `/ops/calendar` (month and week; tests from Academic's internal list, up to 1,000 per view and month, then "first N of M", D-145), `/ops/follow-ups`. Every page prints (shared Print button, A4 print styles).

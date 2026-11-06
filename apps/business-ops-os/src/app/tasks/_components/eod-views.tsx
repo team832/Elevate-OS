@@ -12,6 +12,7 @@ export const EOD_TONES: Record<EodReportView['status'], Tone> = {
   submitted: 'info',
   revision_requested: 'warning',
   acknowledged: 'success',
+  more_detail_requested: 'warning',
 };
 
 export const EodStatus = ({ r }: { r: Pick<EodReportView, 'status' | 'late'> }) => (

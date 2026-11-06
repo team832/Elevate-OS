@@ -28,14 +28,8 @@ import {
 import { MODULES } from '@elevate/shared-types';
 import { parseCookieHeader, serializeCookie, sessionCookieOptions } from './cookies';
 import { ORGANISATION_EMAIL_DOMAIN, isAllowedEmail } from './email-domain';
-import {
-  clientIp,
-  getSessionSecret,
-  landingFor,
-  openSession,
-  withQuery,
-  type AuthHandlerOptions,
-} from './login';
+import { clientIp, landingFor, openSession, withQuery, type AuthHandlerOptions } from './login';
+import { getSessionSecret } from './sessions';
 import { LoginThrottle } from './throttle';
 
 const log = createLogger({ component: 'authentication.google' });
@@ -289,7 +283,7 @@ export interface GoogleHandlerOptions extends AuthHandlerOptions, GoogleDeps {
  */
 export function createGoogleSignInHandlers(options: GoogleHandlerOptions) {
   const google = createGoogleOidc(options);
-  const ipThrottle = options.ipThrottle ?? new LoginThrottle({ maxFailures: 50 });
+  const ipThrottle = options.ipThrottle ?? new LoginThrottle('google-ip');
   const getConfig = options.getConfig ?? (() => googleConfig());
   const getSecret = options.getSecret ?? getSessionSecret;
   const nowS = () => Math.floor((options.now ?? Date.now)() / 1000);
@@ -359,11 +353,10 @@ export function createGoogleSignInHandlers(options: GoogleHandlerOptions) {
     }
     const code = params.get('code');
     if (!code) return refuse('google_failed', 'no code');
-    if (ipThrottle.retryAfterMs(ip) > 0) return refuse('locked', 'ip throttled');
-
+    const db = (options.getDb ?? getDb)();
     try {
+      if ((await ipThrottle.retryAfterMs(db, ip)) > 0) return refuse('locked', 'ip throttled');
       const identity = await google.identify(config, code, saved);
-      const db = (options.getDb ?? getDb)();
       const user = await findOrCreateUser(db, identity, options.module, requestId);
       if (user.status !== 'active') return refuse('google_disabled', 'account disabled');
       const { cookie } = await openSession(db, request, {
@@ -384,12 +377,14 @@ export function createGoogleSignInHandlers(options: GoogleHandlerOptions) {
         ['set-cookie', cookie],
       ]);
     } catch (error) {
-      if (error instanceof GoogleSignInError) {
-        ipThrottle.recordFailure(ip);
-        return refuse(`google_${error.code}`, error.reason);
-      }
-      log.error('google sign-in error', { requestId, error });
-      return toLogin('unavailable', next, { 'set-cookie': clear });
+      const unavailable = (cause: unknown) => {
+        log.error('google sign-in error', { requestId, error: cause });
+        return toLogin('unavailable', next, { 'set-cookie': clear });
+      };
+      if (!(error instanceof GoogleSignInError)) return unavailable(error);
+      return ipThrottle
+        .recordFailure(db, ip)
+        .then(() => refuse(`google_${error.code}`, error.reason), unavailable);
     }
   }
 

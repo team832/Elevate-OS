@@ -16,7 +16,8 @@ import { isAllowedActionOrigin } from '@elevate/configuration/workspaces';
  *   the module apps enforce their own access.
  */
 const SESSION_COOKIE = 'elevate_session';
-const PUBLIC_PATHS = ['/login'];
+// The portal has its own sign-in and cookie (F4-13); its pages check the portal session themselves.
+const PUBLIC_PATHS = ['/login', '/portal'];
 
 export function proxy(request: NextRequest) {
   if (request.method === 'POST' && !isAllowedActionOrigin(request))

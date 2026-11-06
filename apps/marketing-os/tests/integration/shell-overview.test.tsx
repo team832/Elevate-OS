@@ -539,10 +539,10 @@ describe('screens: campaign page and Personal Settings', () => {
   });
 });
 
-describe('My Day', () => {
-  it('calendar items due: the count equals the calendar list its link opens, overdue included', async () => {
+describe('My day', () => {
+  it('calendar items due: the count equals the calendar list its link opens, overdue included however late', async () => {
     const day = 86_400_000;
-    for (const offset of [-2, 1, 30])
+    for (const offset of [-40, -2, 1, 30])
       await ctx.db.insert(marketingCalendarItems).values({
         title: `Sample Ravi item ${offset}`,
         itemType: 'article',
@@ -550,15 +550,17 @@ describe('My Day', () => {
         originalPlannedAt: new Date(Date.now() + offset * day),
         ownerStaffId: ravi.staffId as never,
         createdBy: manager.id,
+        // A scheduled item left past its date (C4-5) stays on My day.
+        ...(offset === -40 ? { status: 'scheduled' as const, approvedAt: new Date(), approvedBy: manager.id } : {}),
       });
     const html = await render(MyDayPage(sp()), ravi);
     const m =
       /<h2>Calendar items due \((\d+)\)<\/h2>[\s\S]*?<a href="([^"]+)">Open in the calendar/.exec(
         html,
       );
-    expect(Number(m![1])).toBe(2);
+    expect(Number(m![1])).toBe(3);
     const url = new URL(m![2]!.replaceAll('&amp;', '&'), 'http://localhost');
     const list = await render(CalendarPage(sp(Object.fromEntries(url.searchParams))), ravi);
-    expect(captionCount(list, 'calendar item')).toBe(2);
+    expect(captionCount(list, 'calendar item')).toBe(3);
   });
 });

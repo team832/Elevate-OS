@@ -29,6 +29,7 @@ import {
   ForbiddenError,
   InvalidStateTransitionError,
   isoDateSchema,
+  optText,
 } from '@elevate/shared-contracts';
 import { checkFeeStructureChange } from '../domain/fee-plans';
 import {
@@ -50,7 +51,6 @@ import { feeStatementFor } from './fee-statement';
 import {
   amountFields,
   issuesError,
-  optText,
   paiseOf,
   present,
   recordFeeEntry,
@@ -70,7 +70,7 @@ export async function listAdmissionFees(db: Database, actor: Actor, admissionId:
   const rows = await recordsOf(db, admission.id);
   const names = await namesOf(
     db,
-    rows.flatMap((r) => [r.recordedBy, r.verifiedBy, r.voidedBy]),
+    rows.flatMap((r) => [r.recordedBy, r.verifiedBy, r.voidedBy, r.onBehalfOf]),
   );
   const settings = await loadSettings(db);
   return {
@@ -150,7 +150,7 @@ export async function feeRecordAction(
     let patch: Partial<typeof opsFeeRecords.$inferInsert>;
     if (input.action === 'verify') {
       const check = canVerifyFee(
-        { status: before.status, recordedBy: before.recordedBy },
+        { status: before.status, recordedBy: before.recordedBy, onBehalfOf: before.onBehalfOf },
         actor.id,
       );
       if (!check.ok) {
@@ -235,7 +235,7 @@ export async function listFeeRecords(
   const page = rows.slice(0, query.limit);
   const names = await namesOf(
     db,
-    page.flatMap((r) => [r.fee.recordedBy, r.fee.verifiedBy, r.fee.voidedBy]),
+    page.flatMap((r) => [r.fee.recordedBy, r.fee.verifiedBy, r.fee.voidedBy, r.fee.onBehalfOf]),
   );
   return {
     items: page.map((r) => ({

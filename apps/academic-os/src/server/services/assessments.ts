@@ -31,6 +31,8 @@ import { assessmentInScope, audit, getBatchOrThrow, resolveScope, type Actor } f
 import { publicationState } from './assessment-publish';
 import { eligibleBatchIds, rosterFromResponses, rosterMarked, rosterTally } from './assessment-roster';
 import { assertAssessmentInScope, markBatchesInScope } from './assessment-scope';
+import { refuseAssessmentClash } from './results';
+import { lockTimetable } from './timetable';
 import type { answerKeyBody, attemptsBody, createAssessmentBody, scoringBody, sectionBody } from '../schemas';
 
 export const dbMark = (v: string | null | undefined) => (v === null || v === undefined ? null : toNumericString(parseMarks(v)!));
@@ -118,6 +120,7 @@ export function sectionValues(assessmentId: AcademicAssessmentId, sections: z.ou
 
 export async function createAssessment(db: Database, actor: Actor, input: z.output<typeof createAssessmentBody>) {
   return withTransaction(db, async (tx) => {
+    await lockTimetable(tx); // before any row: the order every timetable write uses
     const batch = await getBatchOrThrow(tx, input.batchId);
     if (input.subjectId) {
       const [subject] = await tx.select().from(academicSubjects).where(eq(academicSubjects.id, input.subjectId as never));
@@ -148,6 +151,7 @@ export async function createAssessment(db: Database, actor: Actor, input: z.outp
         createdByUserId: actor.user.id,
       })
       .returning();
+    await refuseAssessmentClash(tx, row!);
     if (input.sections.length > 0) await tx.insert(academicAssessmentSections).values(sectionValues(row!.id, input.sections));
     await audit(tx, actor, { action: 'assessment.created', entityType: 'assessment', entityId: row!.id, after: row, metadata: { sections: input.sections.length } });
     return row!;
@@ -263,7 +267,7 @@ export async function upsertAttempts(db: Database, actor: Actor, id: string, inp
     if (!assessment) throw new NotFoundError('Assessment not found.');
     if (assessment.status === 'cancelled') throw new InvalidStateTransitionError('The assessment is cancelled.');
     // One writer: after finalisation only the finalise mirror writes attempts of a roster-managed test.
-    if (assessment.rosterSnapshotAt && assessment.status === 'finalised') throw new InvalidStateTransitionError('Results are final: correct marks in Tests and Mock Tests, with a reason.');
+    if (assessment.rosterSnapshotAt && assessment.status === 'finalised') throw new InvalidStateTransitionError('Results are final: correct marks in Tests and mock tests, with a reason.');
     let rows: { studentId: string; status: 'submitted' | 'absent'; keyVersion: number | null; responses: Record<string, (string | null)[]> | null }[];
     if (input.csv !== undefined) {
       const parsed = parseResponsesCsv(input.csv);

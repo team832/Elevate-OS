@@ -4,12 +4,12 @@
  * createTestDb), every journal migration is applied, indexes and constraints are valid, and
  * sample rows follow D-036 (@example.test emails, phones only from the fake block). Refuses non-local URLs.
  */
-import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import { isLocalDatabaseUrl, loadEnv } from '@elevate/configuration';
 import { loadRootEnv } from '@elevate/configuration/node';
 import { FAKE_PHONE_PATTERN } from '@elevate/database/seed';
 import { createTestDb } from '@elevate/database/testing';
+import { pendingMigrations } from './migration-status.ts';
 
 loadRootEnv();
 const env = loadEnv('database');
@@ -52,12 +52,8 @@ const [{ server_version: version }] = (await q('show server_version')) as [
   { server_version: string },
 ];
 check('server is PostgreSQL 18', version.startsWith('18'), version);
-const journal = JSON.parse(readFileSync('packages/database/migrations/meta/_journal.json', 'utf8'))
-  .entries.length;
-const [{ n: applied }] = (await q('select count(*)::int n from drizzle.__drizzle_migrations')) as [
-  { n: number },
-];
-check('every journal migration is applied', applied === journal, `${applied}/${journal}`);
+const waiting = await pendingMigrations(live);
+check('every journal migration is applied', !waiting.length, `waiting: ${waiting.join(', ')}`);
 await same(
   'tables match code',
   `select table_schema, table_name from information_schema.tables where table_schema in ${SCHEMAS} and table_type='BASE TABLE' order by 1,2`,
@@ -84,8 +80,8 @@ await none(
   `select 1 from pg_constraint c join pg_namespace n on n.oid=c.connamespace where not convalidated and n.nspname in ${SCHEMAS}`,
 );
 await none(
-  'user emails are @example.test or @elevateeducation.in',
-  `select 1 from core.users where email !~ '@(example\\.test|elevateeducation\\.in)$'`,
+  'user emails are @example.test, @elevateeducation.in or portal logins (@portal.invalid)',
+  `select 1 from core.users where email !~ '@(example\\.test|elevateeducation\\.in|portal\\.invalid)$'`,
 );
 
 const columns = (await q(

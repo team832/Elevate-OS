@@ -7,8 +7,7 @@
 import { cookies } from 'next/headers';
 import { getDb } from '@elevate/database';
 import { SESSION_COOKIE } from './cookies';
-import { getSessionSecret } from './login';
-import { validateSession, type AuthenticatedUser } from './sessions';
+import { getSessionSecret, validateSession, type AuthenticatedUser } from './sessions';
 
 /** The signed-in user for the current request, or null. */
 export async function getCurrentUser(): Promise<AuthenticatedUser | null> {

@@ -1,7 +1,7 @@
 /** HR attendance: the "Schedules" and "Holidays and recorded leave" tabs. */
 import { StatusBadge } from '@elevate/shared-ui';
 import { OPS_WEEKDAYS, type OpsWeeklyPattern } from '@elevate/database';
-import { LEAVE_WHY_HIDDEN } from '../../../../domain/leave';
+import { LEAVE_WHY_HIDDEN, leaveRange, RESEND_TO_ACADEMIC } from '../../../../domain/leave';
 import { DECISION_STATE_LABELS, type DecisionState } from '../../../../domain/policies';
 import type { AttendanceSetup } from '../../../../server/attendance-lists';
 import { ActionForm, type FieldSpec } from '../../../../ui/action-form';
@@ -9,6 +9,7 @@ import { decisionTone, fmtDate } from '../../../../ui/format';
 import { RecordTable } from '../../../../ui/record-table';
 import { Segment } from '../../../../ui/sections';
 import { API, BASE } from './days';
+import { HALF_DAY_FIELD } from './leave';
 
 type Schedule = AttendanceSetup['schedules'][number];
 const DAY_NAMES = {
@@ -160,11 +161,17 @@ export function CalendarTab({
   setup,
   canManage,
   canDecideHolidays,
+  resendFor = new Set(),
+  types = [],
 }: {
   setup: AttendanceSetup;
+  /** Setting hr.leave_types: recorded leave of a listed type counts against its balance (F4-12). */
+  types?: readonly string[];
   canManage: boolean;
   /** ops:hr_settings:manage: approve or remove holidays. */
   canDecideHolidays: boolean;
+  /** Staff whose leave a leave approver may send to Academic again (teachers, D-134). */
+  resendFor?: ReadonlySet<string>;
 }) {
   type Holiday = AttendanceSetup['holidays'][number];
   type Leave = AttendanceSetup['leave'][number];
@@ -264,7 +271,7 @@ export function CalendarTab({
             {
               key: 'dates',
               header: 'Dates',
-              render: (l) => `${fmtDate(l.fromDate)} to ${fmtDate(l.toDate)}`,
+              render: (l) => leaveRange(l.fromDate, l.toDate, l.dayPart),
             },
             { key: 'kind', header: 'Kind', render: (l) => l.kind },
             {
@@ -291,22 +298,35 @@ export function CalendarTab({
                   {
                     key: 'act',
                     header: 'Action',
-                    render: (l: Leave) =>
-                      l.status === 'approved' ? (
-                        <details>
-                          <summary>Cancel leave</summary>
+                    render: (l: Leave) => (
+                      <>
+                        {l.status === 'approved' ? (
+                          <details>
+                            <summary>Cancel leave</summary>
+                            <ActionForm
+                              action={`${API}/leave/${l.id}`}
+                              submitLabel="Cancel this leave"
+                              successText="Leave cancelled."
+                              labelSuffix={` — ${l.staffName}`}
+                              variant="danger"
+                              fields={[
+                                { name: 'reason', label: 'Why', type: 'textarea', required: true },
+                              ]}
+                            />
+                          </details>
+                        ) : null}
+                        {resendFor.has(l.staffId) ? (
                           <ActionForm
-                            action={`${API}/leave/${l.id}`}
-                            submitLabel="Cancel this leave"
-                            successText="Leave cancelled."
+                            action={`${API}/leave/${l.id}/send-to-academic`}
+                            submitLabel={RESEND_TO_ACADEMIC}
+                            successText="Sent. Academic OS now has this leave as it stands."
                             labelSuffix={` — ${l.staffName}`}
-                            variant="danger"
-                            fields={[
-                              { name: 'reason', label: 'Why', type: 'textarea', required: true },
-                            ]}
+                            variant="secondary"
+                            compact
                           />
-                        </details>
-                      ) : null,
+                        ) : null}
+                      </>
+                    ),
                   },
                 ]
               : []),
@@ -338,11 +358,14 @@ export function CalendarTab({
               },
               { name: 'fromDate', label: 'First day', type: 'date', required: true },
               { name: 'toDate', label: 'Last day', type: 'date', required: true },
+              HALF_DAY_FIELD,
               {
                 name: 'kind',
-                label: 'Kind of leave',
+                label: 'Type of leave',
+                type: 'select',
                 required: true,
-                hint: 'In your own words, e.g. Casual leave.',
+                options: types.map((t) => ({ value: t, label: t })),
+                hint: 'Counts against that type’s balance, where an allowance is set.',
               },
               { name: 'reason', label: 'Reason (optional)', type: 'textarea' },
             ]}

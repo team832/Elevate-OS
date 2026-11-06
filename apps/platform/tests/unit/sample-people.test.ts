@@ -19,7 +19,7 @@ import {
   TEACHER_STAFF,
 } from '@elevate/database/seed';
 import { normalisePhone } from '@elevate/shared-contracts';
-import { OWNER_SUPPLIED_STAFF } from '../../../business-ops-os/seed/teachers';
+import { OWNER_SUPPLIED_STAFF } from '@elevate/business-ops-os/seed';
 
 const names = everySampleName();
 const realWords = OWNER_SUPPLIED_STAFF.flatMap((t) => t.fullName.split(' ')).filter(

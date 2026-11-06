@@ -5,13 +5,13 @@
  * screen states (loading via <Suspense>, empty, error, success).
  */
 import { Suspense, type ReactNode } from 'react';
-import { can, scopeFor, type Permission } from '@elevate/authorization';
+import { can, scopeFor, type Principal } from '@elevate/authorization';
 import { getDb } from '@elevate/database';
-import { countUnread } from '@elevate/notifications';
 import { toAppError } from '@elevate/server-kit';
 import {
   currentRequestId,
-  requirePageAccess,
+  pageGate,
+  unreadFor,
   workspaceHrefs,
   type PageAccess,
 } from '@elevate/server-kit/next';
@@ -19,22 +19,24 @@ import { AppShell, ButtonLink, ErrorState, LoadingState, type Crumb } from '@ele
 import { MODULE } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
 import { searchable } from '../server/search';
+import type { AnyOf } from './admissions-nav';
 import { SearchShortcut } from './global-search';
+import { PAGE_NEEDS } from './open-link';
 
 /**
- * [key, label, href, permission, page keys (Frame `active`) that light this item up, needs the
- * permission at `all` scope (own-scope holders, e.g. staff reading their own attendance, do not
- * get the HR list)].
+ * [key, label, href, permission (or a list, any one enough), page keys (Frame `active`) that light
+ * this item up, needs the permission at `all` scope (own-scope holders, e.g. staff reading their
+ * own attendance, do not get the HR list)].
  */
 type NavRow = [
   key: string,
   label: string,
   href: string,
-  permission: Permission,
+  permission: AnyOf,
   also?: string[],
   allScope?: boolean,
 ];
-const section = (group: string | undefined, rows: NavRow[]) =>
+const section = (group: string, rows: NavRow[]) =>
   rows.map(([key, label, href, permission, also = [], allScope = false]) => ({
     key,
     label,
@@ -46,95 +48,117 @@ const section = (group: string | undefined, rows: NavRow[]) =>
   }));
 
 /**
- * Module navigation (sidebar, owner brief 22 Oct 2026 §5): one item per area, each shown only
- * with its permission. Pages inside an area (Leads, Applications, Approvals, Staff directory,
- * Report inbox…) are reached from that area's tabs and light up its item. Settings is the link
- * at the bottom of the sidebar.
+ * Module navigation (site map, Blueprint step 3, 6 Nov 2026): grouped like the work, each item
+ * shown with the permission its page checks (PAGE_NEEDS where the body needs more than the gate),
+ * so nobody is sent to an empty or refused page.
+ * Area tabs (ui/admissions-nav.tsx) reach the pages without an item (the admissions dashboard,
+ * All staff, Sales calls, Lead stages…) and light up their item. Settings is the link at the foot.
  */
 export const NAV = [
-  ...section(undefined, [['home', 'Overview', '/ops', 'ops:module:access']]),
-  // Personal rows (own scope is enough): your own records, not the HR lists.
-  ...section('My work', [
-    ['my-attendance', 'My attendance', '/ops/my-attendance', 'ops:attendance:read'],
-    ['my-reports', 'My reports', '/ops/my-reports', 'ops:tasks:read'],
-    ['hr-requests', 'Requests through HR', '/ops/hr-requests', 'ops:hr_requests:create'], // HR-REQ
+  ...section('Today', [
+    ['home', 'Overview', '/ops', 'ops:module:access'],
+    ['calendar', 'Calendar', '/ops/calendar', 'ops:module:access'],
   ]),
   ...section('Admissions', [
+    ['leads', 'Leads', '/ops/leads', 'ops:leads:read'],
+    ['follow-ups', 'Follow-ups', '/ops/follow-ups', 'ops:leads:read'],
+    ['admissions', 'Demos', '/ops/admissions', 'ops:leads:read'],
+    // The admission record (/ops/admissions/[id]) is where a confirmed application goes on.
     [
-      'overview',
-      'Admissions',
-      '/ops/admissions/overview',
+      'applications',
+      'Applications',
+      '/ops/admissions/applications',
       'ops:admissions:read',
-      ['applications', 'leads', 'meetings'],
+      ['admission-record'],
     ],
-    ['admissions', 'Demo Students', '/ops/admissions', 'ops:leads:read'],
+    ['meetings', 'Counselling and events', '/ops/meetings', 'ops:appointments:read'],
   ]),
   ...section('Students', [
-    ['students', 'Active Students', '/ops/students', 'ops:students:read'],
-    ['past', 'Past Students', '/ops/students/past', 'ops:students:read'],
+    ['students', 'Active students', '/ops/students', 'ops:students:read'],
+    ['past', 'Past students', '/ops/students/past', 'ops:students:read'],
+    ['absences', 'Absent students', '/ops/students/absences', 'ops:student_private:read'],
+    ['certificates', 'Certificates', '/ops/certificates', 'ops:students:read'],
   ]),
-  ...section('Money', [
-    ['fees', 'Fees and Collections', '/ops/fees', 'ops:fees:read', ['approvals']],
+  ...section('Fees', [
+    ['fees', 'Fee structure', '/ops/fees', 'ops:fees:read'],
+    ['fees-collections', 'Collections', '/ops/fees/collections', 'ops:fees:read'],
+    ['fees-outstanding', 'Outstanding instalments', '/ops/fees/outstanding', 'ops:fees:read'],
+    ['fees-defaulters', 'Overdue fees', '/ops/fees/defaulters', 'ops:fees:read'],
+    [
+      'approvals',
+      'Fee approvals',
+      '/ops/operations/approvals',
+      PAGE_NEEDS['/ops/operations/approvals']!,
+    ],
   ]),
-  ...section('Teaching and work', [
+  ...section('Teaching', [
     ['teachers', 'Teachers', '/ops/teachers', 'ops:teachers:read', ['staff']],
-    ['academic-summary', 'Academic Summary', '/ops/academic-summary', 'ops:dashboard:read'],
-    ['tests', 'Tests and Mock Tests', '/ops/tests', 'ops:assessments:read'], // TESTS-OPS
+    ['tests', 'Tests and mock tests', '/ops/tests', 'ops:assessments:read'], // TESTS-OPS
+  ]),
+  // HR (brief 23 Oct 2026 §6): each area page passes its key as Frame `active`.
+  ...section('Team (HR)', [
+    ['hr', 'HR overview', '/ops/hr', 'ops:hr:read'],
+    ['hr-staff', 'Staff directory', '/ops/hr/staff', 'ops:hr:read'],
+    ['hr-checklists', 'Joining and leaving', '/ops/hr/checklists', 'ops:hr:read', ['hr-assets']],
+    [
+      'hr-assignments',
+      'Teaching assignments',
+      '/ops/hr/assignments',
+      'ops:teaching_assignments:read',
+    ],
+    [
+      'hr-attendance',
+      'Attendance and leave',
+      '/ops/hr/attendance',
+      'ops:attendance:read',
+      [],
+      true,
+    ],
+    ['hr-payroll', 'Payroll', '/ops/hr/payroll', PAGE_NEEDS['/ops/hr/payroll']!],
+    ['hr-review', 'Task review', '/ops/hr/review', 'ops:tasks:review', ['hr-tasks']],
+    ['hr-requests-queue', 'Requests from staff', '/ops/hr/requests', 'ops:hr_requests:read'], // HR-REQ
+    ['hr-reports', 'Work reports', '/ops/hr/reports', 'ops:work_reports:read'],
+    [
+      'hr-feedback',
+      'Student feedback about teachers',
+      '/ops/hr/feedback',
+      'ops:teacher_feedback:read',
+    ],
+    ['hr-settings', 'HR settings', '/ops/hr/settings', 'ops:hr_settings:manage'],
+  ]),
+  ...section('Reports', [
+    ['reports', 'Reports', '/ops/reports', PAGE_NEEDS['/ops/reports']!],
+    ['academic-summary', 'Academic summary', '/ops/academic-summary', 'ops:dashboard:read'],
+    ['marketing-summary', 'Marketing summary', '/ops/marketing-summary', 'ops:dashboard:read'],
+  ]),
+  // Personal rows (own scope is enough): your own records, not the HR lists.
+  ...section('My work', [
     [
       'tasks',
-      'Tasks and EOD Reports',
+      'Tasks and EOD reports',
       '/ops/tasks',
       'ops:tasks:read',
       ['tasks-inbox', 'tasks-reports', 'tasks-imports'],
     ],
-  ]),
-  // HR (brief 23 Oct 2026 §6): each area page passes its key as Frame `active`.
-  ...section('HR', [
-    ['hr', 'HR Overview', '/ops/hr', 'ops:hr:read'],
-    ['hr-staff', 'Staff Directory', '/ops/hr/staff', 'ops:hr:read'],
-    [
-      'hr-assignments',
-      'Teaching Assignments',
-      '/ops/hr/assignments',
-      'ops:teaching_assignments:read',
-    ],
-    ['hr-attendance', 'Attendance', '/ops/hr/attendance', 'ops:attendance:read', [], true],
-    ['hr-tasks', 'Tasks', '/ops/hr/tasks', 'ops:tasks:review'],
-    ['hr-review', 'Submission Review', '/ops/hr/review', 'ops:tasks:review'],
-    ['hr-requests-queue', 'Staff Requests', '/ops/hr/requests', 'ops:hr_requests:read'], // HR-REQ
-    ['hr-reports', 'Work Reports', '/ops/hr/reports', 'ops:work_reports:read'],
-    [
-      'hr-feedback',
-      'Student Feedback about Teachers',
-      '/ops/hr/feedback',
-      'ops:teacher_feedback:read',
-    ],
-    ['hr-settings', 'HR Settings', '/ops/hr/settings', 'ops:hr_settings:manage'],
-  ]),
-  ...section('Insight', [
-    ['marketing-summary', 'Marketing Summary', '/ops/marketing-summary', 'ops:dashboard:read'],
-    ['reports', 'Reports', '/ops/reports', 'ops:module:access'],
+    ['my-attendance', 'My attendance and leave', '/ops/my-attendance', 'ops:attendance:read'],
+    ['my-payslips', 'My payslips', '/ops/my-payslips', 'ops:payslips:read'],
+    ['my-reports', 'My reports', '/ops/my-reports', 'ops:tasks:read'],
+    ['hr-requests', 'Requests to HR', '/ops/hr-requests', 'ops:hr_requests:create'], // HR-REQ
+    ['approval-cover', 'Approval cover', '/ops/approval-cover', PAGE_NEEDS['/ops/approval-cover']!],
   ]),
 ];
 
-/** Unread in-app notifications for the user; null (indicator hidden) when unknown. */
-async function unreadFor(access: PageAccess): Promise<number | null> {
-  if (!can(access.user, 'platform:notifications:read')) return null;
-  try {
-    return await countUnread(getDb(), access.user.id);
-  } catch {
-    return null;
-  }
-}
+/** Rail items this user may open, `active` lit (hiding is presentation; pages re-check). */
+export const navFor = (user: Principal, active = '') =>
+  NAV.filter((n) =>
+    [n.permission].flat().some((p) => (n.allScope ? scopeFor(user, p) === 'all' : can(user, p))),
+  ).map((n) => ({ href: n.href, label: n.label, group: n.group, active: n.keys.has(active) }));
 
-export function gate(permission: Permission, returnTo: string): Promise<PageAccess> {
-  return requirePageAccess(permission, {
-    loginPath: MODULE_PATHS.login,
-    returnTo,
-    basePath: MODULE.basePath,
-    workspace: MODULE.key,
-  });
-}
+export const gate = pageGate({
+  loginPath: MODULE_PATHS.login,
+  basePath: MODULE.basePath,
+  workspace: MODULE.key,
+});
 
 export async function Frame({
   access,
@@ -150,14 +174,6 @@ export async function Frame({
 }) {
   const user = access.user;
   const canSearch = searchable(user);
-  const nav = NAV.filter((n) =>
-    n.allScope ? scopeFor(user, n.permission) === 'all' : can(user, n.permission),
-  ).map((n) => ({
-    href: n.href,
-    label: n.label,
-    group: n.group,
-    active: n.keys.has(active),
-  }));
   const settingsPage = active === 'settings' && can(user, 'ops:settings:read');
   const breadcrumbs: Crumb[] | undefined = settingsPage
     ? [
@@ -172,7 +188,7 @@ export async function Frame({
       moduleHrefs={workspaceHrefs()}
       current="ops"
       logoutAction={MODULE_PATHS.logoutApi}
-      nav={nav}
+      nav={navFor(user, active)}
       breadcrumbs={breadcrumbs}
       search={
         canSearch
@@ -189,7 +205,7 @@ export async function Frame({
       settings={
         can(user, 'ops:settings:read') ? { href: '/ops/settings', active: settingsPage } : undefined
       }
-      unreadNotifications={await unreadFor(access)}
+      unreadNotifications={await unreadFor(user)}
     >
       {canSearch ? <SearchShortcut inputId="el-search-ops" /> : null}
       {access.status === 'forbidden' ? (

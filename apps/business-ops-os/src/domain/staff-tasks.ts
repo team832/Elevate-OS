@@ -49,7 +49,17 @@ export const TASK_EVENT_KINDS = [
   'collaborator_added',
   'delivered',
 ] as const;
-export const EOD_STATUSES = ['draft', 'submitted', 'revision_requested', 'acknowledged'] as const;
+export const EOD_STATUSES = [
+  'draft',
+  'submitted',
+  'revision_requested',
+  'acknowledged',
+  'more_detail_requested',
+] as const;
+/** Sent back to the author to edit and resubmit: changes or (F4-11) more detail requested. */
+export const EOD_SENT_BACK = ['revision_requested', 'more_detail_requested'] as const;
+/** The author may edit and (re)submit. */
+export const EOD_EDITABLE: readonly EodStatus[] = ['draft', ...EOD_SENT_BACK];
 export const EOD_REVIEW_EVENT_KINDS = [
   'viewed',
   'comment',
@@ -57,6 +67,7 @@ export const EOD_REVIEW_EVENT_KINDS = [
   'revision_requested',
   'acknowledged',
   'follow_up_task_created',
+  'more_detail_requested',
 ] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];

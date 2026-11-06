@@ -206,6 +206,7 @@ export async function deriveDays(
       s.id,
       dates.map((date) => {
         const decision = decisionOf.get(`${s.id}:${date}`);
+        const leave = (leaveOf.get(s.id) ?? []).find((l) => l.fromDate <= date && l.toDate >= date);
         return deriveDay(
           {
             date,
@@ -214,7 +215,8 @@ export async function deriveDays(
             holiday: holidayOn(date, ['approved', 'locked']),
             proposedHoliday: holidayOn(date, ['proposed']),
             finished: date < today,
-            onLeave: (leaveOf.get(s.id) ?? []).some((l) => l.fromDate <= date && l.toDate >= date),
+            onLeave: Boolean(leave),
+            leavePart: leave?.dayPart,
             punches: byDay.get(date) ?? [],
             decision: decision ? { status: decision.status, note: decision.note } : null,
           },
@@ -235,7 +237,7 @@ export function listRange(query: { from?: string; to?: string }, today = istToda
 }
 
 /** Staff ids the actor may read, after the URL's narrowing; another person's id (own) → 404. */
-async function readableStaff(
+export async function readableStaff(
   db: Database,
   actor: Actor,
   query: {

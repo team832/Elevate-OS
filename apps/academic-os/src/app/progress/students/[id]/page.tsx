@@ -11,6 +11,7 @@ import {
   fmtDay,
 } from '@elevate/shared-ui';
 import type { PageAccess } from '@elevate/server-kit/next';
+import { scorePercent } from '../../../../domain';
 import { getStudentProgress, listStaff, todayIst } from '../../../../server';
 import { MODULE_PATHS } from '../../../../server/paths';
 import { ApiForm } from '../../../../ui/api-form';
@@ -29,8 +30,6 @@ const TRIGGERS = [
   'overdue_catch_up',
   'other',
 ].map((v) => ({ value: v, label: v.replace(/_/g, ' ') }));
-const pct = (total: string | null, max: string) =>
-  total === null || Number(max) <= 0 ? null : Math.round((Number(total) / Number(max)) * 1000) / 10;
 
 export default async function StudentProgressPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -172,7 +171,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
                     key: 'pct',
                     header: '%',
                     numeric: true,
-                    render: (r) => pct(r.total, r.max) ?? '—',
+                    render: (r) => scorePercent(r.total, r.max) ?? '—',
                   },
                   ...(p.showRank
                     ? [

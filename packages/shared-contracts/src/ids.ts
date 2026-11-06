@@ -61,6 +61,9 @@ export const isoDateTimeSchema = z.iso
   .datetime({ offset: true })
   .transform((v) => v as IsoDateTime);
 
+/** Optional trimmed text of at most `max` characters; `null` and a missing field pass. */
+export const optText = (max: number) => z.string().trim().max(max).nullish();
+
 /**
  * Programme code from `core.programmes.code` — upper-case letters, digits and
  * underscores (e.g. `CLAT`, `COMMERCE_11_12`). Not an enum, because Academic OS

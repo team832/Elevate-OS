@@ -17,6 +17,7 @@ import {
 } from '../../../domain/fees';
 import { getAdmission } from '../../../server/admissions';
 import { listAdmissionFees } from '../../../server/fees';
+import { receiptsOf } from '../../../server/receipts';
 import { formOptions } from '../../../server/options';
 import { ActionForm } from '../../../ui/action-form';
 import { AdmissionsNav } from '../../../ui/admissions-nav';
@@ -29,6 +30,7 @@ import {
 } from '../../../ui/format';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { OpenLink, openHref } from '../../../ui/open-link';
+import { ReceiptCell } from '../../../ui/receipt-cell';
 import { RecordTable } from '../../../ui/record-table';
 import { DetailTable, Segment, noStaffHint } from '../../../ui/sections';
 import { StudentFeesSection } from '../../../ui/student-fees-section';
@@ -43,7 +45,7 @@ export default async function AdmissionPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const access = await gate('ops:admissions:read', `/ops/admissions/${id}`);
   return (
-    <Frame access={access} active="admissions">
+    <Frame access={access} active="admission-record">
       <Section>
         <Detail user={access.user} id={id} />
       </Section>
@@ -52,12 +54,18 @@ export default async function AdmissionPage({ params }: { params: Promise<{ id: 
 }
 
 async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
-  const r = await load(async (db) => ({
-    d: await getAdmission(db, user, id),
-    options: await formOptions(db),
-    fees: can(user, 'ops:fees:read') ? await listAdmissionFees(db, user, id) : null,
-  }));
-  const tabs = <AdmissionsNav current="demos" user={user} />;
+  const r = await load(async (db) => {
+    const d = await getAdmission(db, user, id);
+    const options = await formOptions(db);
+    const fees = can(user, 'ops:fees:read') ? await listAdmissionFees(db, user, id) : null;
+    return {
+      d,
+      options,
+      fees,
+      receipts: await receiptsOf(db, fees?.records.map((f) => f.id) ?? []),
+    };
+  });
+  const tabs = <AdmissionsNav current="applications" user={user} />;
   if (!r.ok)
     return (
       <>
@@ -65,7 +73,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         {r.view}
       </>
     );
-  const { d, options, fees } = r.data;
+  const { d, options, fees, receipts } = r.data;
   const a = d.admission;
   const api = `/ops/api/v1/admissions/${a.id}`;
   const write = can(user, 'ops:admissions:write');
@@ -84,13 +92,8 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
           </>
         }
         description={
-          <OpenLink
-            user={user}
-            href="/ops/admissions"
-            fallback={<a href="/ops/admissions/overview">Back to admissions</a>}
-          >
-            Back to demo students
-          </OpenLink>
+          // Same gate as this record (ops:admissions:read), so the link always opens.
+          <a href="/ops/admissions/applications">Back to applications</a>
         }
         tabs={tabs}
       />
@@ -306,7 +309,7 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
         <Segment id="fee-agreement" title="Fee-agreement approval">
           <p>
             Each version of the annual fee agreement is approved on its own, from the student&apos;s
-            Fees tab or the Approvals inbox (the requester never approves their own request).{' '}
+            Fees tab or Fee approvals (the requester never approves their own request).{' '}
             {profile ? (
               <OpenLink
                 user={user}
@@ -324,7 +327,11 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             ) : (
               'The student record is created at conversion.'
             )}{' '}
-            · <a href="/ops/operations/approvals">Approvals inbox</a>
+            {openHref(user, '/ops/operations/approvals') ? (
+              <>
+                · <a href="/ops/operations/approvals">Fee approvals</a>
+              </>
+            ) : null}
           </p>
           {d.discountRequest ? (
             <p>
@@ -395,6 +402,17 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
                     [f.receiptReference, f.pricingReference, f.method ? humanise(f.method) : null]
                       .filter(Boolean)
                       .join(' · '),
+                },
+                {
+                  key: 'receipt',
+                  header: 'Receipt',
+                  render: (f) => (
+                    <ReceiptCell
+                      entry={f}
+                      receipt={receipts.get(f.id)}
+                      canIssue={can(user, 'ops:fees:record') && f.status !== 'voided'}
+                    />
+                  ),
                 },
                 {
                   key: 'status',
@@ -638,10 +656,10 @@ async function Detail({ user, id }: { user: AuthenticatedUser; id: string }) {
             empty={
               <EmptyState
                 title="No demo booked"
-                description="Book the demo classes from Demo students."
+                description="Book the demo classes from Demos."
                 action={
                   <OpenLink user={user} href="/ops/admissions" fallback={null}>
-                    Open demo students
+                    Open demos
                   </OpenLink>
                 }
               />

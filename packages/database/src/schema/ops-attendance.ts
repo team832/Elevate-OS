@@ -22,7 +22,9 @@ import {
 import { branches, type CoreBranchId } from './core';
 import {
   createdAt,
+  dayCount,
   filled,
+  halfDays,
   inList,
   instant,
   isoDate,
@@ -46,6 +48,9 @@ export const OPS_LEAVE_APPLICATION_STATUSES = [
   'rejected',
   'cancelled',
 ] as const;
+/** Half-day leave (F4-12): a one-day application or record may cover one half; null = whole days. */
+export const OPS_LEAVE_DAY_PARTS = ['first_half', 'second_half'] as const;
+export const OPS_LEAVE_ADJUSTMENT_KINDS = ['carry_forward', 'adjustment'] as const;
 export const OPS_PUNCH_DIRECTIONS = ['in', 'out'] as const;
 export const OPS_PUNCH_SOURCES = ['manual', 'import'] as const;
 export const OPS_ATTENDANCE_IMPORT_STATUSES = ['preview', 'committed'] as const;
@@ -62,6 +67,9 @@ export const OPS_ATTENDANCE_BASES = ['computed', 'hr_decision'] as const;
 export const OPS_CORRECTION_STATUSES = ['pending', 'approved', 'rejected'] as const;
 
 const sha256Check = (column: AnyPgColumn) => sql`${column} ~ '^[0-9a-f]{64}$'`;
+const dayPart = () => text('day_part', { enum: OPS_LEAVE_DAY_PARTS });
+const dayPartCheck = (part: AnyPgColumn, from: AnyPgColumn, to: AnyPgColumn) =>
+  sql`${part} IS NULL OR (${part} IN ${inList(OPS_LEAVE_DAY_PARTS)} AND ${from} = ${to})`;
 
 /** A weekly working pattern; staff without one follow the single default schedule. */
 export const opsWorkSchedules = ops.table(
@@ -126,6 +134,7 @@ export const opsLeaveRecords = ops.table(
     status: text('status', { enum: OPS_LEAVE_STATUSES }).notNull().default('approved'),
     approvedBy: userRef('approved_by').notNull(),
     reason: text('reason'),
+    dayPart: dayPart(),
     isSample: boolean('is_sample').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -134,6 +143,7 @@ export const opsLeaveRecords = ops.table(
     index('leave_records_staff_from_idx').on(t.staffId, t.fromDate),
     check('leave_records_status_check', sql`${t.status} IN ${inList(OPS_LEAVE_STATUSES)}`),
     check('leave_records_dates_check', sql`${t.toDate} >= ${t.fromDate}`),
+    check('leave_records_day_part_check', dayPartCheck(t.dayPart, t.fromDate, t.toDate)),
     check('leave_records_kind_check', filled(t.kind)),
   ],
 );
@@ -167,6 +177,9 @@ export const opsLeaveApplications = ops.table(
     }),
     /** Rises with every change: a decision made on an older copy is refused. */
     version: integer('version').notNull().default(1),
+    dayPart: dayPart(),
+    /** Approval cover (F4-10): the approver the decider acted for. */
+    onBehalfOf: userRef('on_behalf_of'),
     isSample: boolean('is_sample').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -183,6 +196,11 @@ export const opsLeaveApplications = ops.table(
     check('leave_applications_kind_check', filled(t.kind)),
     check('leave_applications_reason_check', filled(t.reason)),
     check('leave_applications_version_check', sql`${t.version} >= 1`),
+    check('leave_applications_day_part_check', dayPartCheck(t.dayPart, t.fromDate, t.toDate)),
+    check(
+      'leave_applications_on_behalf_check',
+      sql`${t.onBehalfOf} IS NULL OR (${t.decidedBy} IS NOT NULL AND ${t.onBehalfOf} <> ${t.decidedBy})`,
+    ),
     check(
       'leave_applications_decided_check',
       sql`(${t.decidedAt} IS NULL) = (${t.decidedBy} IS NULL) AND (${t.status} <> 'pending' OR ${t.decidedAt} IS NULL) AND (${t.status} NOT IN ('approved', 'rejected') OR ${t.decidedAt} IS NOT NULL) AND (${t.status} <> 'rejected' OR ${filled(t.decisionNote)})`,
@@ -194,6 +212,65 @@ export const opsLeaveApplications = ops.table(
     check(
       'leave_applications_record_check',
       sql`(${t.status} <> 'approved' OR ${t.leaveRecordId} IS NOT NULL) AND (${t.status} NOT IN ('pending', 'rejected') OR ${t.leaveRecordId} IS NULL)`,
+    ),
+  ],
+);
+
+const leaveYear = () => ({
+  staffId: staffRefRestrict('staff_id').notNull(),
+  /** The type as named in setting hr.leave_types. */
+  leaveType: text('leave_type').notNull(),
+  /** First day of the leave year (setting, Proposed April–March), e.g. 2026-04-01. */
+  yearStart: isoDate('year_start').notNull(),
+});
+
+/**
+ * Yearly leave allowance per staff member and type (F4-12). No row = "No allowance set": no
+ * balance is shown or enforced. Balance = days + Σ leave_adjustments.days − approved leave in the
+ * year (a half day = 0.5); Unpaid never uses a balance.
+ */
+export const opsLeaveAllowances = ops.table(
+  'leave_allowances',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...leaveYear(),
+    days: dayCount('days').notNull(),
+    createdBy: userRef('created_by').notNull(),
+    updatedBy: userRef('updated_by'),
+    isSample: boolean('is_sample').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('leave_allowances_year_key').on(t.staffId, t.leaveType, t.yearStart),
+    check('leave_allowances_type_check', filled(t.leaveType)),
+    check('leave_allowances_days_check', sql`${t.days} BETWEEN 0 AND 366 AND ${halfDays(t.days)}`),
+  ],
+);
+
+/** Days added to or taken off a leave year: one carry-forward (> 0) and any HR adjustments. */
+export const opsLeaveAdjustments = ops.table(
+  'leave_adjustments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...leaveYear(),
+    kind: text('kind', { enum: OPS_LEAVE_ADJUSTMENT_KINDS }).notNull(),
+    days: dayCount('days').notNull(),
+    reason: text('reason').notNull(),
+    createdBy: userRef('created_by').notNull(),
+    isSample: boolean('is_sample').notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('leave_adjustments_year_idx').on(t.staffId, t.yearStart),
+    uniqueIndex('leave_adjustments_one_carry_key')
+      .on(t.staffId, t.leaveType, t.yearStart)
+      .where(sql`${t.kind} = 'carry_forward'`),
+    check('leave_adjustments_kind_check', sql`${t.kind} IN ${inList(OPS_LEAVE_ADJUSTMENT_KINDS)}`),
+    check('leave_adjustments_text_check', sql`${filled(t.leaveType)} AND ${filled(t.reason)}`),
+    check(
+      'leave_adjustments_days_check',
+      sql`${t.days} <> 0 AND abs(${t.days}) <= 366 AND ${halfDays(t.days)} AND (${t.kind} <> 'carry_forward' OR ${t.days} > 0)`,
     ),
   ],
 );

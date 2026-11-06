@@ -115,7 +115,7 @@ export function deriveHandoffView(h: HandoffInput): HandoffViewResult {
       label: 'Processed by Academic OS — reply not yet applied',
       tone: 'info',
       detail:
-        'An operations manager applies the answer: Overview, Background jobs, "Apply Academic replies".',
+        'An operations manager applies the answer: Overview, Background jobs, "Apply Academic replies". It applies by itself once that job is switched on in Settings, Background jobs.',
     };
   }
   if (h.handoffStatus === 'rejected')

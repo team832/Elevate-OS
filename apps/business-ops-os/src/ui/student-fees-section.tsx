@@ -9,64 +9,41 @@
  * instalment bar and its table; then registration and demo fees; then the payment history.
  * Every figure is manually recorded, never a verified payment.
  */
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
 import type { StudentIdentityId } from '@elevate/shared-types';
-import { Alert, EmptyState, StatusBadge } from '@elevate/shared-ui';
+import { EmptyState } from '@elevate/shared-ui';
 import { istToday } from '../domain';
-import { INSTALMENT_STATUS_LABELS, type InstalmentStatus } from '../domain/fee-plans';
 import {
   effectiveRecords,
   FEE_BALANCE_LABELS,
   FEE_CHARGE_LABELS,
   FEE_KIND_LABELS,
-  FEE_METHODS,
   type FeeSummary,
 } from '../domain/fees';
+import { activeCoverFor } from '../server/approval-cover';
 import { studentFeePlans } from '../server/fees';
+import { receiptsOf } from '../server/receipts';
 import { ActionForm, type FieldSpec } from './action-form';
-import { StatCard } from './charts';
 import { fmtDate, fmtDateTime, fmtPaise, humanise } from './format';
 import { load } from './frame';
-import { options } from './list-controls';
+import { ReceiptCell } from './receipt-cell';
 import { RecordTable } from './record-table';
 import { DetailTable, Segment } from './sections';
+import { Agreement, TITLE } from './student-fees-agreement';
+import {
+  API,
+  Correct,
+  CreateAgreement,
+  paymentFields,
+  type Entry,
+  type Level,
+  type View,
+} from './student-fees-forms';
 import '../app/fees/fees.css';
 
-type View = Awaited<ReturnType<typeof studentFeePlans>>;
-type PlanView = View['plans'][number];
-type Entry = View['otherCharges'][number];
-type Level = 2 | 3;
-
-const TITLE = 'Fees';
-const TONE: Record<InstalmentStatus, 'success' | 'info' | 'danger' | 'warning' | 'neutral'> = {
-  paid: 'success',
-  waived_adjusted: 'success',
-  part_paid: 'info',
-  overdue: 'danger',
-  unpaid: 'neutral',
-};
-const API = '/ops/api/v1';
-const paymentFields: FieldSpec[] = [
-  {
-    name: 'amountRupees',
-    label: 'Amount (₹)',
-    type: 'money',
-    required: true,
-    hint: 'e.g. 25000 or 25,000.50',
-  },
-  { name: 'paymentDate', label: 'Date the money moved', type: 'date', required: true },
-  { name: 'receiptReference', label: 'Receipt or transaction reference' },
-  { name: 'method', label: 'Method', type: 'select', options: options(FEE_METHODS) },
-];
-
-/** Due date with its state in words: overdue vs not yet due; no date is never overdue. */
-function dueText(dueDate: string | null, remainingPaise: number, today: string) {
-  if (!dueDate) return 'No due date entered';
-  if (remainingPaise <= 0) return fmtDate(dueDate);
-  return dueDate < today ? `${fmtDate(dueDate)} (overdue)` : `${fmtDate(dueDate)} (not yet due)`;
-}
+type Receipts = Awaited<ReturnType<typeof receiptsOf>>;
 
 export async function StudentFeesSection({
   studentId,
@@ -87,7 +64,11 @@ export async function StudentFeesSection({
         <p className="el-field-hint">Fee details are restricted to roles with fee access.</p>
       </Segment>
     );
-  const r = await load((db) => studentFeePlans(db, user, studentId));
+  const r = await load(async (db) => {
+    const v = await studentFeePlans(db, user, studentId);
+    const ids = [...v.plans.flatMap((p) => p.ledger), ...v.otherCharges].map((e) => e.id);
+    return { ...v, receipts: await receiptsOf(db, ids) };
+  });
   if (!r.ok)
     return (
       <Segment title={TITLE} level={level}>
@@ -99,6 +80,11 @@ export async function StudentFeesSection({
   // Accepted agreements are changed or closed only by approvers; deciding is never by their maker.
   const approver = !readOnly && can(user, 'ops:admissions:approve') ? user.id : null;
   const requester = !readOnly && can(user, 'ops:admissions:write');
+  // Approval cover (F4-10): a recorder covering a fee approver today posts reductions for them.
+  const covered =
+    record && !approver ? await load((db) => activeCoverFor(db, user.id, 'fee_approval')) : null;
+  const cover =
+    covered?.ok && covered.data.length ? { self: user.id, approvers: covered.data } : null;
   const today = istToday(new Date());
   const open = view.plans.some((p) => p.plan.status !== 'closed');
   return (
@@ -113,6 +99,7 @@ export async function StudentFeesSection({
               p={p}
               record={record}
               approver={approver}
+              cover={cover}
               requester={requester}
               level={level}
               today={today}
@@ -134,13 +121,23 @@ export async function StudentFeesSection({
         <CreateAgreement studentId={studentId} admissions={view.admissions} />
       ) : null}
       <OtherCharges view={view} record={record} level={level} />
-      <History view={view} record={record} level={level} />
+      <History view={view} record={record} level={level} receipts={view.receipts} />
     </>
   );
 }
 
 /** Every ledger, newest agreement first as served, then the separate charges; versions last. */
-function History({ view, record, level }: { view: View; record: boolean; level: Level }) {
+function History({
+  view,
+  record,
+  level,
+  receipts,
+}: {
+  view: View;
+  record: boolean;
+  level: Level;
+  receipts: Receipts;
+}) {
   if (!view.plans.length && !view.otherCharges.length) return null;
   return (
     <Segment
@@ -157,6 +154,7 @@ function History({ view, record, level }: { view: View; record: boolean; level: 
               caption={`Tuition, ${p.plan.academicYear ?? 'year not recorded'}`}
               rows={p.ledger}
               record={record}
+              receipts={receipts}
             />
           ))}
         {view.otherCharges.length ? (
@@ -164,6 +162,7 @@ function History({ view, record, level }: { view: View; record: boolean; level: 
             caption="Registration, demo and other entries"
             rows={view.otherCharges}
             record={record}
+            receipts={receipts}
             category
           />
         ) : null}
@@ -201,316 +200,18 @@ function History({ view, record, level }: { view: View; record: boolean; level: 
   );
 }
 
-function Agreement({
-  p,
-  record,
-  approver,
-  requester,
-  level,
-  today,
-}: {
-  p: PlanView;
-  record: boolean;
-  /** The signed-in user's id when they may approve fee arrangements, else null. */
-  approver: string | null;
-  /** May ask for the fee-arrangement approval of a draft. */
-  requester: boolean;
-  level: Level;
-  today: string;
-}) {
-  const { plan, totals, reconciliation, nextDue: next } = p;
-  const base = `${API}/fee-plans/${plan.id}`;
-  const change = record && (plan.status === 'draft' || (plan.status === 'active' && approver));
-  // Closed only because a newer version was drafted: it stands until that one is activated.
-  const replaced = p.inForce && plan.status !== 'active';
-  const pending = p.pendingApproval;
-  const decide =
-    pending && approver && approver !== plan.createdBy && approver !== pending.requestedBy;
-  return (
-    <Segment
-      title={`${TITLE}: annual agreement ${plan.academicYear ?? '(year not recorded)'}`}
-      level={level}
-      description={`${plan.label}. Manually recorded, not verified payments.`}
-      meta={
-        <>
-          <StatusBadge tone={TONE[p.status]}>{INSTALMENT_STATUS_LABELS[p.status]}</StatusBadge>{' '}
-          <StatusBadge tone={p.inForce ? 'success' : 'neutral'}>
-            {p.proposedChange
-              ? 'Proposed change'
-              : plan.status === 'draft'
-                ? 'Draft'
-                : p.inForce
-                  ? 'Active'
-                  : 'Closed'}
-          </StatusBadge>{' '}
-          Version {plan.version}
-        </>
-      }
-    >
-      <div className="el-stack">
-        {replaced ? (
-          <Alert title="These figures stand">
-            A proposed change to this agreement is not in force until it is approved and activated.
-            Record money here meanwhile.
-          </Alert>
-        ) : null}
-        {p.proposedChange ? (
-          <p className="el-field-hint">
-            Not in force. These are the figures if this change is approved and activated.
-          </p>
-        ) : null}
-        <ul className="el-grid ops-kpis" aria-label="Fee figures">
-          <li>
-            <StatCard label="Annual tuition" value={fmtPaise(totals.totalPaise)} />
-          </li>
-          <li>
-            <StatCard
-              label="Collected"
-              value={fmtPaise(totals.netPaidPaise)}
-              note="Payments less refunds"
-            />
-          </li>
-          <li>
-            <StatCard
-              label={plan.status === 'draft' ? 'Outstanding if activated' : 'Outstanding'}
-              value={fmtPaise(totals.outstandingPaise)}
-            />
-          </li>
-          <li>
-            <StatCard
-              label="Next due"
-              value={
-                next
-                  ? fmtPaise(next.remainingPaise)
-                  : p.aboveInstalmentsPaise > 0
-                    ? fmtPaise(p.aboveInstalmentsPaise)
-                    : 'Nothing due'
-              }
-              note={
-                next
-                  ? dueText(next.instalment.dueDate, next.remainingPaise, today)
-                  : p.aboveInstalmentsPaise > 0
-                    ? 'Debit adjustments, no due date'
-                    : undefined
-              }
-            />
-          </li>
-          {totals.creditPaise > 0 ? (
-            <li>
-              <StatCard
-                label="Credit"
-                value={fmtPaise(totals.creditPaise)}
-                note="Recorded above what is owed; refund it or carry it over"
-              />
-            </li>
-          ) : null}
-        </ul>
-        <InstalmentBar p={p} today={today} />
-        {reconciliation.reconciled ? null : (
-          <Alert tone="warning" title="The agreement and its ledger do not agree">
-            <ul>
-              {reconciliation.issues.map((i) => (
-                <li key={i}>{i}</li>
-              ))}
-            </ul>
-          </Alert>
-        )}
-        <RecordTable
-          caption="Instalments (payments go to the instalment they name, otherwise oldest due first)"
-          rows={p.instalments}
-          rowKey={(i) => i.instalment.id}
-          empty="No instalments on this agreement."
-          columns={[
-            { key: 'n', header: '#', render: (i) => i.instalment.sequence, numeric: true },
-            {
-              key: 'due',
-              header: 'Due',
-              render: (i) => dueText(i.instalment.dueDate, i.remainingPaise, today),
-            },
-            {
-              key: 'amount',
-              header: 'Amount',
-              render: (i) => fmtPaise(i.instalment.amountPaise),
-              numeric: true,
-            },
-            { key: 'paid', header: 'Paid', render: (i) => fmtPaise(i.paidPaise), numeric: true },
-            {
-              key: 'adjusted',
-              header: 'Waived or adjusted',
-              render: (i) => fmtPaise(i.adjustedPaise),
-              numeric: true,
-            },
-            {
-              key: 'remaining',
-              header: 'Remaining',
-              render: (i) => fmtPaise(i.remainingPaise),
-              numeric: true,
-            },
-            {
-              key: 'status',
-              header: 'State',
-              render: (i) => (
-                <StatusBadge tone={TONE[i.status]}>
-                  {INSTALMENT_STATUS_LABELS[i.status]}
-                </StatusBadge>
-              ),
-            },
-          ]}
-        />
-        <DetailTable
-          caption="Agreement"
-          rows={[
-            {
-              label: 'Discounts, waivers and adjustments (apart from tuition)',
-              value: fmtPaise(totals.reductionsPaise),
-            },
-            p.aboveInstalmentsPaise > 0 && {
-              label: 'Owed above the instalments (debit adjustments)',
-              value: fmtPaise(p.aboveInstalmentsPaise),
-            },
-            { label: 'Refunded', value: fmtPaise(totals.refundedPaise) },
-            { label: 'Pricing reference', value: plan.pricingReference ?? 'Not given' },
-            {
-              label: 'Approval',
-              value: plan.approvedAt
-                ? `Approved by ${p.approvedByName ?? 'an approver'}, ${fmtDateTime(plan.approvedAt)}`
-                : 'Draft: a different approver approves this version, then it is activated',
-            },
-          ]}
-        />
-        {record && p.canActivate ? (
-          <ActionForm
-            action={base}
-            submitLabel="Activate agreement"
-            extra={{ action: 'activate' }}
-            compact
-          />
-        ) : null}
-        {plan.status === 'draft' && !pending && !p.canActivate && requester ? (
-          <ActionForm
-            action={`${base}/approval-request`}
-            submitLabel="Request approval of this agreement"
-            compact
-          />
-        ) : null}
-        {plan.status === 'draft' && pending ? (
-          <p className="el-field-hint">Approval requested; a different approver decides it.</p>
-        ) : null}
-        {decide ? (
-          <details>
-            <summary>Decide the approval request for this version</summary>
-            <ActionForm
-              action={`${base}/decision`}
-              submitLabel="Approve"
-              extra={{ decision: 'approved' }}
-              compact
-            />
-            <ActionForm
-              action={`${base}/decision`}
-              submitLabel="Reject"
-              variant="danger"
-              extra={{ decision: 'rejected' }}
-              fields={[{ name: 'comment', label: 'Reason', type: 'textarea', required: true }]}
-            />
-          </details>
-        ) : null}
-        {record && p.inForce ? (
-          <EntryForm
-            action={`${base}/entries`}
-            p={p}
-            reduce={approver !== null && approver !== plan.createdBy}
-          />
-        ) : null}
-        {change ? (
-          <>
-            <details>
-              <summary>Change the agreement (new version)</summary>
-              <ActionForm
-                action={base}
-                submitLabel="Save new version"
-                extra={{ action: 'adjust' }}
-                fields={[
-                  {
-                    name: 'totalRupees',
-                    label: 'Annual tuition (₹)',
-                    type: 'money',
-                    required: true,
-                    defaultValue: String(plan.totalPaise / 100),
-                  },
-                  ...dueDateFields(
-                    [...p.instalments]
-                      .sort((a, b) => a.instalment.sequence - b.instalment.sequence)
-                      .map((i) => i.instalment.dueDate),
-                  ),
-                  {
-                    name: 'reason',
-                    label: 'Reason',
-                    type: 'textarea',
-                    required: true,
-                    hint: 'At least 10 characters. An active agreement needs the fee-approval permission; receipts are never changed.',
-                  },
-                ]}
-              />
-            </details>
-            <details>
-              <summary>Close this agreement</summary>
-              <ActionForm
-                action={base}
-                submitLabel="Close agreement"
-                variant="danger"
-                extra={{ action: 'close' }}
-                fields={[{ name: 'reason', label: 'Reason', type: 'textarea', required: true }]}
-              />
-            </details>
-          </>
-        ) : null}
-      </div>
-    </Segment>
-  );
-}
-
-/** Three segments sized by amount, each filled by what was applied; the state is written out. */
-function InstalmentBar({ p, today }: { p: PlanView; today: string }) {
-  const bySequence = [...p.instalments].sort(
-    (a, b) => a.instalment.sequence - b.instalment.sequence,
-  );
-  const total = bySequence.reduce((n, i) => n + i.instalment.amountPaise, 0);
-  return (
-    <ol className="ops-fees-bar" aria-label="Instalments: share, amount, due date and state">
-      {bySequence.map((i) => (
-        <li
-          key={i.instalment.id}
-          style={{ '--ops-fees-share': i.instalment.amountPaise } as CSSProperties}
-        >
-          <span className="el-hbar-track" aria-hidden="true">
-            <span
-              className="el-hbar-fill"
-              style={{ width: `${(100 * i.allocatedPaise) / i.instalment.amountPaise}%` }}
-            />
-          </span>
-          <span className="el-field-hint">
-            Instalment {i.instalment.sequence}
-            {total ? ` · ${Math.round((100 * i.instalment.amountPaise) / total)} %` : ''}
-          </span>
-          <span className="ops-fees-amount">{fmtPaise(i.instalment.amountPaise)}</span>
-          <span>{dueText(i.instalment.dueDate, i.remainingPaise, today)}</span>
-          <StatusBadge tone={TONE[i.status]}>{INSTALMENT_STATUS_LABELS[i.status]}</StatusBadge>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 /** A ledger table; live rows offer refund (payments) and reverse when the user may record. */
 function Ledger({
   caption,
   rows,
   record,
+  receipts,
   category,
 }: {
   caption: string;
   rows: readonly Entry[];
   record: boolean;
+  receipts: Receipts;
   category?: boolean;
 }) {
   const live = new Set(effectiveRecords(rows).map((r) => r.id));
@@ -563,6 +264,17 @@ function Ledger({
         { key: 'method', header: 'Method', render: (r) => (r.method ? humanise(r.method) : '—') },
         { key: 'receipt', header: 'Receipt ref.', render: (r) => r.receiptReference ?? '—' },
         {
+          key: 'receiptPdf',
+          header: 'Receipt',
+          render: (r) => (
+            <ReceiptCell
+              entry={r}
+              receipt={receipts.get(r.id)}
+              canIssue={record && live.has(r.id)}
+            />
+          ),
+        },
+        {
           key: 'by',
           header: 'Recorded by',
           render: (r) => `${r.recordedByName ?? '—'}, ${fmtDateTime(r.recordedAt)}`,
@@ -579,162 +291,6 @@ function Ledger({
           : []),
       ]}
     />
-  );
-}
-
-function Correct({ r }: { r: Entry }) {
-  const action = `${API}/fees/${r.id}`;
-  return (
-    <details>
-      <summary>{r.kind === 'received' ? 'Refund or reverse' : 'Reverse'}</summary>
-      {r.kind === 'received' ? (
-        <ActionForm
-          action={action}
-          submitLabel="Record refund"
-          amountLabel="Record {amount} refund"
-          extra={{ action: 'refund' }}
-          fields={[...paymentFields, { name: 'notes', label: 'Notes', type: 'textarea' }]}
-        />
-      ) : null}
-      <ActionForm
-        action={action}
-        submitLabel="Reverse entry"
-        variant="danger"
-        extra={{ action: 'reverse' }}
-        fields={[
-          {
-            name: 'reason',
-            label: 'Why it was wrong',
-            type: 'textarea',
-            required: true,
-            hint: 'The entry stays visible; a linked reversal cancels it.',
-          },
-        ]}
-      />
-    </details>
-  );
-}
-
-/** One date per instalment of the 50/25/25 split (D-039), prefilled when changing an agreement. */
-const dueDateFields = (current: readonly (string | null)[] = [null, null, null]) =>
-  current.map((dueDate, n): FieldSpec => ({
-    name: `dueDates.${n}`,
-    label: `Instalment ${n + 1} due date`,
-    type: 'date',
-    required: true,
-    defaultValue: dueDate ?? undefined,
-  }));
-
-/** `reduce`: may post discounts, waivers and credits (approver, not the agreement's maker; proposed O2). */
-function EntryForm({ action, p, reduce }: { action: string; p: PlanView; reduce: boolean }) {
-  return (
-    <details>
-      <summary>
-        {reduce
-          ? 'Record a payment, discount, waiver or adjustment'
-          : 'Record a payment or adjustment'}
-      </summary>
-      <p className="el-field-hint">
-        Still owed on this agreement: {fmtPaise(p.totals.outstandingPaise)}. A larger payment is
-        accepted and shows as credit; a larger discount, waiver or credit is refused.
-      </p>
-      <ActionForm
-        action={action}
-        submitLabel="Record entry"
-        amountLabel="Record {amount} entry"
-        fields={[
-          {
-            name: 'kind',
-            label: 'Entry',
-            type: 'select',
-            required: true,
-            defaultValue: 'received',
-            options: (reduce
-              ? (['received', 'discount', 'waiver', 'adjustment'] as const)
-              : (['received', 'adjustment'] as const)
-            ).map((k) => ({
-              value: k,
-              label: FEE_KIND_LABELS[k],
-            })),
-          },
-          { ...paymentFields[0]! },
-          {
-            name: 'direction',
-            label: 'Adjustment direction',
-            type: 'select',
-            options: [
-              { value: 'credit', label: 'Credit (lowers what is owed)' },
-              { value: 'debit', label: 'Debit (raises what is owed)' },
-            ],
-            hint: reduce
-              ? 'Adjustments only.'
-              : 'Adjustments only. A credit needs an approver who did not make the agreement (a demo fee credit excepted).',
-          },
-          {
-            name: 'instalmentId',
-            label: 'Instalment it pays',
-            type: 'select',
-            options: p.instalments.map((i) => ({
-              value: i.instalment.id,
-              label: `#${i.instalment.sequence}, ${fmtPaise(i.instalment.amountPaise)}`,
-            })),
-            hint: 'Leave empty to apply it to the oldest due instalment.',
-          },
-          { ...paymentFields[1]!, required: false, hint: 'Payments only.' },
-          ...paymentFields.slice(2),
-          {
-            name: 'notes',
-            label: 'Reason / notes',
-            type: 'textarea',
-            hint: 'Required for discounts and waivers.',
-          },
-        ]}
-      />
-    </details>
-  );
-}
-
-function CreateAgreement({
-  studentId,
-  admissions,
-}: {
-  studentId: string;
-  admissions: readonly { id: string; code: string }[];
-}) {
-  return (
-    <details>
-      <summary>Create the annual fee agreement</summary>
-      <ActionForm
-        action={`${API}/fee-plans`}
-        submitLabel="Create agreement"
-        extra={{ studentId }}
-        fields={[
-          {
-            name: 'admissionId',
-            label: 'Admission',
-            type: 'select',
-            required: true,
-            options: admissions.map((a) => ({ value: a.id, label: a.code })),
-            hint: 'One agreement covers every programme of the student for the year.',
-          },
-          { name: 'label', label: 'Agreement name', required: true, hint: 'e.g. Class 12 + CLAT' },
-          { name: 'academicYear', label: 'Academic year', required: true, hint: 'e.g. 2026-27' },
-          {
-            name: 'totalRupees',
-            label: 'Annual tuition (₹)',
-            type: 'money',
-            required: true,
-            hint: 'Split 50 % / 25 % / 25 %; any remaining paise go to the last instalment.',
-          },
-          ...dueDateFields(),
-          {
-            name: 'pricingReference',
-            label: 'Approved pricing reference',
-            hint: 'No fee schedule is approved yet.',
-          },
-        ]}
-      />
-    </details>
   );
 }
 

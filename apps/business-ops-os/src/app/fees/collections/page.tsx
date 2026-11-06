@@ -17,6 +17,7 @@ import { Frame, gate, load, Section } from '../../../ui/frame';
 import { Pager } from '../../../ui/list-controls';
 import { openHref } from '../../../ui/open-link';
 import { RecordTable } from '../../../ui/record-table';
+import { ExportLink } from '../../../ui/export-link';
 import { paymentNote } from '../_components/owing-dialog';
 import { RangeFilter } from '../../_components/range-filter';
 
@@ -31,7 +32,7 @@ export default async function CollectionsPage({ searchParams }: { searchParams: 
   const access = await gate('ops:fees:read', BASE);
   const sp = await searchParams;
   return (
-    <Frame access={access} active="fees">
+    <Frame access={access} active="fees-collections">
       <PageHeader
         title="Collections"
         description={`Payments and refunds with a payment date in the period, for the students you may see. ${paymentNote(access.user)}`}
@@ -142,6 +143,7 @@ async function Collections({ user, sp }: { user: AuthenticatedUser; sp: Params }
         ]}
       />
       <Pager basePath={BASE} params={params} page={d.page} pageSize={d.pageSize} total={d.total} />
+      <ExportLink list="collections" params={params} />
     </div>
   );
 }

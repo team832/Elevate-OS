@@ -24,7 +24,7 @@ import type { Params } from '../../tasks/_components/task-common';
 import { HrRequestModal } from './request-modal';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Staff requests' };
+export const metadata = { title: 'Requests from staff' };
 
 const BASE = '/ops/hr/requests';
 const EMPTY: Record<HrQueueTab, [title: string, description: string]> = {
@@ -50,7 +50,7 @@ export default async function HrRequestsQueuePage({
   return (
     <Frame access={access} active="hr-requests-queue">
       <PageHeader
-        title="Staff requests"
+        title="Requests from staff"
         description="Requests staff sent through HR. Review each one, then forward it, answer it or decline it. Nothing is sent outside Elevate OS."
       />
       <Section label="Loading requests…">

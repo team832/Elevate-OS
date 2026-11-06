@@ -1,10 +1,9 @@
 /** Request schemas for KYC documents, sibling links and the onboarding checklist (owner brief §8). */
 import { z } from 'zod';
 import { OPS_KYC_SUBJECTS, OPS_STUDENT_STAGES } from '@elevate/database';
-import { isoDateSchema } from '@elevate/shared-contracts';
+import { isoDateSchema, optText } from '@elevate/shared-contracts';
 import { MATERIAL_MOVES, ONBOARDING_ITEM_KINDS, ONBOARDING_STATUSES } from '../domain/onboarding';
 
-const optText = (max: number) => z.string().trim().max(max).nullish();
 const needsNote = (path: string, message: string) => ({ error: message, path: [path] });
 
 /** POST /students/{id}/kyc — the masked-reference rule is checked in the service (field error). */

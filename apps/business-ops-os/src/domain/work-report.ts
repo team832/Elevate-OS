@@ -4,7 +4,7 @@
  * rate; A-REP-3 reviewer turnaround (kept apart from the employee's timeliness). No figure ranks
  * staff (R13): every result is per person, never a combined score.
  */
-import { addDays, istInstant, weekdayOf, windowLabel, type IsoDate } from './dates';
+import { addDays, istInstant, istToday, weekdayOf, windowLabel, type IsoDate } from './dates';
 import { deadlineInstant } from './staff-tasks';
 
 export const PERIOD_KINDS = ['day', 'week', 'month'] as const;
@@ -19,6 +19,7 @@ export const REPORT_STATUS_LABELS = {
   submitted: 'Submitted',
   acknowledged: 'Reviewed',
   revision_requested: 'Changes requested',
+  more_detail_requested: 'More detail requested',
 } as const;
 export type ReportStatus = keyof typeof REPORT_STATUS_LABELS;
 
@@ -84,6 +85,26 @@ export function reportDeadline(p: Period, s: DeadlineSettings): Date | null {
     return istInstant(addDays(p.end, shift), s.week.time);
   }
   return s.month ? istInstant(addDays(p.end, s.month.dayOfNextMonth), s.month.time) : null;
+}
+
+/**
+ * F4-11: the last moment a day report may first be filed, `days` after its deadline (none set:
+ * after the day ends); null = no limit, or not a day report. IST has no daylight saving.
+ */
+export const filingClosesAt = (p: Period, deadline: Date | null, days: number | null) =>
+  p.kind === 'day' && days !== null
+    ? new Date(+(deadline ?? periodEndsAt(p)) + days * 86_400_000)
+    : null;
+
+/** F4-11: the report day whose `time` (IST) deadline falls within the next `minutes`, else null. */
+export function reminderDay(now: Date, time: string, minutes: number): IsoDate | null {
+  const until = new Date(+now + minutes * 60_000);
+  return (
+    [istToday(now), istToday(until)].find((d) => {
+      const at = istInstant(d, time);
+      return at > now && at <= until;
+    }) ?? null
+  );
 }
 
 export type Standing = ReportStatus | 'missing' | 'not_started' | 'not_expected' | 'no_schedule';

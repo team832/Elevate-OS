@@ -51,7 +51,7 @@ async function Body({ access, id }: { access: PageAccess; id: string }) {
         )}
         {a.rosterManaged ? (
           <Alert tone="info" title="Roster from Business Operations">
-            This test was scheduled in Tests and Mock Tests. Saving a score records a verified mark for a present student. To change a verified mark, or any mark once results are final, {canCorrect ? 'use Correct mark and give a reason.' : 'ask the academic coordinator: the change needs a reason.'}
+            This test was scheduled in Tests and mock tests. Saving a score records a verified mark for a present student. To change a verified mark, or any mark once results are final, {canCorrect ? 'use Correct mark and give a reason.' : 'ask the academic coordinator: the change needs a reason.'}
           </Alert>
         ) : null}
         {a.status === 'finalised' && !a.rosterManaged ? (

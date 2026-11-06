@@ -14,6 +14,16 @@ let ctx: Awaited<ReturnType<typeof setup>>;
 const id: Record<string, string> = {};
 const REVIEW_KEY = '7a1c0b52-1f3e-4c55-9d1a-0c2b3a4d5e6f';
 const DEMO_SESSION = '8b2d1c63-2a4f-4d66-8e2b-1d3c4b5e6f70';
+const LEAVE = '3e5a7c91-4b2d-4f8e-a6c0-9d1b2c3e4f50';
+const OTHER_LEAVE = '6f8b0d24-5c3e-4a9f-b7d1-0e2c3d4f5a61';
+const unavailability = (o: Row = {}): Row => ({
+  staff_id: ctx.ids.staff,
+  from_date: '2026-11-03',
+  to_date: '2026-11-04',
+  reason: 'Sample reason',
+  entered_by_user_id: ctx.ids.user,
+  ...o,
+});
 
 beforeAll(async () => {
   ctx = await setup();
@@ -57,6 +67,10 @@ beforeAll(async () => {
   await ins('academic.teacher_reviews', review());
   await ins('academic.session_demo_attendees', demoAttendee());
   await ins('academic.session_teachers', sessionTeacher());
+  await ins(
+    'academic.teacher_unavailability',
+    unavailability({ source: 'hr_leave', ops_leave_record_id: LEAVE }),
+  );
 });
 afterAll(() => ctx.t.close());
 
@@ -231,22 +245,21 @@ describe('timetable, delivery and session teachers', () => {
           'ok',
         ],
       }),
-      variants(
-        'teacher unavailability',
-        'academic.teacher_unavailability',
-        (o) => ({
-          staff_id: ctx.ids.staff,
-          from_date: '2026-11-03',
-          to_date: '2026-11-04',
-          reason: 'Sample reason',
-          entered_by_user_id: ctx.ids.user,
-          ...o,
-        }),
-        {
-          ok: [{}, 'ok'],
-          reversed: [{ to_date: '2026-11-01' }, 'teacher_unavailability_dates_order'],
-        },
-      ),
+      variants('teacher unavailability', 'academic.teacher_unavailability', unavailability, {
+        ok: [{}, 'ok'],
+        reversed: [{ to_date: '2026-11-01' }, 'teacher_unavailability_dates_order'],
+        'from HR leave (D-134)': [{ source: 'hr_leave', ops_leave_record_id: OTHER_LEAVE }, 'ok'],
+        'HR leave without its record': [{ source: 'hr_leave' }, 'teacher_unavailability_source_check'],
+        'coordinator record naming a leave': [
+          { ops_leave_record_id: OTHER_LEAVE },
+          'teacher_unavailability_source_check',
+        ],
+        'unknown source': [{ source: 'bogus' }, 'teacher_unavailability_source_check'],
+        'same HR leave twice': [
+          { source: 'hr_leave', ops_leave_record_id: LEAVE },
+          'teacher_unavailability_ops_leave_record_key',
+        ],
+      }),
     ],
   );
 });

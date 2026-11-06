@@ -133,8 +133,9 @@ export async function acceptLead(db: Database, actor: Actor, leadId: string, req
 
 /**
  * Log a contact attempt (OPS-006). A successful two-way contact sets
- * `first_successful_contact_at` once and moves every `new` admission of the lead
- * to `contacted` (BR-OPS-4); unanswered attempts change nothing.
+ * `first_successful_contact_at` once, moves every `new` admission of the lead
+ * to `contacted` (BR-OPS-4) and completes its open first-contact follow-ups, the lead's and the
+ * cases'; unanswered attempts change nothing.
  */
 export async function logActivity(
   db: Database,
@@ -186,16 +187,6 @@ export async function logActivity(
         createdBy: actor.id,
       })
       .returning();
-    const followUp = input.nextFollowUpOn
-      ? await scheduleCallFollowUp(
-          tx,
-          actor,
-          lead,
-          staffId,
-          { dueDate: input.nextFollowUpOn, title: clean(input.nextAction) },
-          requestId,
-        )
-      : null;
     const successful = SUCCESSFUL_OUTCOMES.has(input.outcome) && input.kind !== 'note';
     const moved: string[] = [];
     if (successful) {
@@ -222,7 +213,49 @@ export async function logActivity(
         });
         moved.push(a.id);
       }
+      const firstContact = await tx
+        .select()
+        .from(opsFollowUps)
+        .where(
+          and(
+            eq(opsFollowUps.leadId, lead.id),
+            eq(opsFollowUps.kind, 'first_contact'),
+            eq(opsFollowUps.status, 'open'),
+          ),
+        )
+        .for('update');
+      for (const before of firstContact) {
+        const [after] = await tx
+          .update(opsFollowUps)
+          .set({
+            status: 'done',
+            outcome: `First successful contact (${input.kind})`,
+            completedAt: new Date(),
+            completedBy: actor.id,
+          })
+          .where(eq(opsFollowUps.id, before.id))
+          .returning();
+        await opsAudit('follow_up')(
+          tx,
+          actor,
+          before.id,
+          'followup.completed',
+          { before, after, metadata: { leadId: lead.id } },
+          requestId,
+        );
+      }
     }
+    // After the first-contact close: a first-contact follow-up moved to the next date stays open.
+    const followUp = input.nextFollowUpOn
+      ? await scheduleCallFollowUp(
+          tx,
+          actor,
+          lead,
+          staffId,
+          { dueDate: input.nextFollowUpOn, title: clean(input.nextAction) },
+          requestId,
+        )
+      : null;
     await opsAudit('lead_activity')(
       tx,
       actor,

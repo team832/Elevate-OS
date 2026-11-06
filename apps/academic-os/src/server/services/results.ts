@@ -38,13 +38,13 @@ import {
 } from '../../domain';
 import { assertBatchInScope, assessmentInScope, audit, getBatchOrThrow, resolveScope, type Actor } from '../context';
 import type { scheduleCheckBody } from '../schemas';
-import { mirrorRosterToAttempts, sectionsAndKey } from './assessment-roster';
+import { eligibleBatchIds, mirrorRosterToAttempts, sectionsAndKey, type AssessmentRow } from './assessment-roster';
 import { republishIfCurrent } from './assessment-publish';
 import { assertAssessmentInScope, markStudentIds } from './assessment-scope';
 import { getAssessmentOrThrow, populationIds } from './assessments';
 import { currentPlanForBatch } from './curriculum';
 import { getSetting } from './settings';
-import { batchClassesBetween, datedExclusionsFor } from './timetable';
+import { batchClassesBetween, datedExclusionsFor, datedTests, placementsBetween } from './timetable';
 
 /** Rank and percentile are shown only when setting progress.show_rank_percentile is approved with show = true. */
 export async function rankVisible(db: Database): Promise<boolean> {
@@ -228,7 +228,7 @@ export async function publishResults(db: Database, actor: Actor, assessmentId: s
     const [a] = await tx.select().from(academicAssessments).where(eq(academicAssessments.id, assessmentId as never)).for('update');
     if (!a) throw new NotFoundError('Assessment not found.');
     if (a.status !== 'finalised') throw new InvalidStateTransitionError('Finalise the results before publishing them.');
-    if (a.rosterSnapshotAt) throw new InvalidStateTransitionError('This assessment has a roster: publish it from Tests and Mock Tests in Business Operations (publication versions and ranking scope).');
+    if (a.rosterSnapshotAt) throw new InvalidStateTransitionError('This assessment has a roster: publish it from Tests and mock tests in Business Operations (publication versions and ranking scope).');
     if (a.publishedAt) throw new ConflictError('These results are already published; a regrade publishes its new result version automatically.');
     const [row] = await tx.update(academicAssessments).set({ publishedAt: new Date(), publishedByUserId: actor.user.id }).where(eq(academicAssessments.id, a.id)).returning();
     await audit(tx, actor, { action: 'assessment.published', entityType: 'assessment', entityId: a.id, before: { publishedAt: null }, after: { publishedAt: row!.publishedAt } });
@@ -297,7 +297,7 @@ export async function getAssessmentAnalysis(db: Database, actor: Actor, assessme
 
 /**
  * Check assessment dates for a batch: either the given candidates, or every
- * not-cancelled assessment of the batch that has a date. Blackouts = the
+ * not-cancelled dated assessment the batch is eligible for. Blackouts = the
  * batch's target exam date (with its status) + exam_blackout exclusions
  * (dated or windows) + dated holiday/school-exam closures.
  */
@@ -305,10 +305,6 @@ export async function checkAssessmentScheduleFor(db: Database, actor: Actor, inp
   const scope = await resolveScope(db, actor, 'academic:assessments:read');
   assertBatchInScope(scope, input.batchId);
   const batch = await getBatchOrThrow(db, input.batchId);
-  const existing = await db
-    .select()
-    .from(academicAssessments)
-    .where(and(eq(academicAssessments.batchId, batch.id), ne(academicAssessments.status, 'cancelled')));
   const plan = await currentPlanForBatch(db, batch);
   const items = plan ? await db.select({ chapterId: academicPlanItems.chapterId, plannedDate: academicPlanItems.plannedDate }).from(academicPlanItems).where(eq(academicPlanItems.planId, plan.id)) : [];
   const completionOf = (chapterIds: readonly string[]) => {
@@ -316,15 +312,38 @@ export async function checkAssessmentScheduleFor(db: Database, actor: Actor, inp
     return dates.length > 0 ? dates.sort().at(-1)! : null;
   };
   const candidates: AssessmentCandidate[] = input.candidates
-    ? input.candidates.map((c) => ({ id: c.id, label: c.label, date: c.date, startTime: c.startTime ?? null, durationMinutes: c.durationMinutes ?? null, discussionDate: c.discussionDate ?? null, prerequisiteCompletion: completionOf(c.chapterIds) }))
-    : existing
-        .filter((a) => a.scheduledDate)
-        .map((a) => ({ id: a.id, label: a.code, date: a.scheduledDate!, startTime: a.startTime, durationMinutes: a.durationMinutes, discussionDate: null, prerequisiteCompletion: completionOf(a.chapterIds) }));
-  const others = input.candidates
-    ? existing.filter((a) => a.scheduledDate).map((a) => ({ id: a.id, label: a.code, date: a.scheduledDate!, startTime: a.startTime, durationMinutes: a.durationMinutes }))
-    : [];
-  const dates = candidates.flatMap((c) => [c.date, c.discussionDate ?? c.date]).sort();
-  const classes = dates.length ? await batchClassesBetween(db, batch.id, dates[0]!, dates.at(-1)!) : [];
+    ? input.candidates.map((c) => ({ id: c.id, label: c.label, date: c.date, startTime: c.startTime ?? null, durationMinutes: c.durationMinutes ?? null, discussionDate: c.discussionDate ?? null, prerequisiteCompletion: completionOf(c.chapterIds), batchIds: [batch.id] }))
+    : (await datedTests(db, { batchIds: [batch.id] })).map(({ a, batchIds }) => candidateOf(a, batchIds, completionOf(a.chapterIds)));
+  return { batch: { id: batch.id, code: batch.code }, ...(await scheduleCheck(db, batch, candidates)) };
+}
+
+/**
+ * Ruling 6 Nov 2026: a test may not overlap a class or another test of its batches or of a student's other batch
+ * (as classes may not overlap a test); blackouts, the minimum gap and prerequisites stay warnings (owner question open).
+ * The caller holds the timetable lock, taken before any row lock.
+ */
+export async function refuseAssessmentClash(tx: Database, a: AssessmentRow) {
+  if (a.status === 'cancelled' || !a.scheduledDate) return;
+  const check = await scheduleCheck(tx, await getBatchOrThrow(tx, a.batchId), [candidateOf(a, await eligibleBatchIds(tx, a), null)]);
+  const hard = check.hard.filter((c) => c.code === 'CLASS_CLASH' || c.code === 'ASSESSMENT_CLASH');
+  if (hard.length) throw new ConflictError(`${a.code} clashes with the timetable, so nothing was saved. ${hard.map((c) => c.message).join(' ')}`, { details: { hard } });
+}
+
+const candidateOf = (a: AssessmentRow, batchIds: string[], prerequisiteCompletion: string | null): AssessmentCandidate => ({ id: a.id, label: a.code, date: a.scheduledDate!, startTime: a.startTime, durationMinutes: a.durationMinutes, discussionDate: null, prerequisiteCompletion, batchIds });
+
+/** Each candidate against the classes and other dated tests of every batch sharing a student with its batches on its date; `batch` gives the blackouts. */
+async function scheduleCheck(db: Database, batch: Awaited<ReturnType<typeof getBatchOrThrow>>, given: AssessmentCandidate[]) {
+  const dates = given.flatMap((c) => [c.date, c.discussionDate ?? c.date]).sort();
+  const placements = dates.length ? await placementsBetween(db, dates[0]!, dates.at(-1)!) : [];
+  const candidates = given.map((c) => {
+    const on = placements.filter((p) => p.from <= c.date && (p.to === null || p.to >= c.date));
+    const students = new Set(on.filter((p) => c.batchIds!.includes(p.batchId)).map((p) => p.studentId));
+    return { ...c, ownBatchIds: c.batchIds, batchIds: [...new Set([...c.batchIds!, ...on.filter((p) => students.has(p.studentId)).map((p) => p.batchId)])] };
+  });
+  const batchIds = [...new Set(candidates.flatMap((c) => c.batchIds))];
+  const own = new Set(given.map((c) => c.id));
+  const others = batchIds.length ? (await datedTests(db, { batchIds })).filter(({ a }) => !own.has(a.id)).map(({ a, batchIds: ids }) => candidateOf(a, ids, null)) : [];
+  const classes = dates.length ? await batchClassesBetween(db, batchIds, dates[0]!, dates.at(-1)!) : [];
   const exclusions = await datedExclusionsFor(db, batch.id);
   const blackouts: BlackoutWindow[] = [];
   if (batch.targetExamDate) {
@@ -343,11 +362,11 @@ export async function checkAssessmentScheduleFor(db: Database, actor: Actor, inp
   const result = checkAssessmentSchedule({
     candidates,
     otherAssessments: others,
-    classes: classes.map((c) => ({ id: c.id, label: `Class ${fmtDay(c.date)} ${fmtClock(c.startTime)}`, date: c.date, startTime: c.startTime, durationMinutes: c.durationMinutes })),
+    classes: classes.map((c) => ({ id: c.id, label: `Class ${fmtDay(c.date)} ${fmtClock(c.startTime)}`, date: c.date, startTime: c.startTime, durationMinutes: c.durationMinutes, batchIds: [c.batchId], testSession: c.sessionType === 'test' })),
     blackouts,
     minGap: gap.value.minDays > 0 ? gap.value : null,
   });
-  return { batch: { id: batch.id, code: batch.code }, blackouts, minGap: { ...gap.value, status: gap.status }, checked: candidates.length, ...result };
+  return { blackouts, minGap: { ...gap.value, status: gap.status }, checked: candidates.length, ...result };
 }
 
 /** Assessments of a batch in a window (progress, catch-up). */

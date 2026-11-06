@@ -7,6 +7,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { and, eq, inArray } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import { auditEvents, notifications, opsLeaveApplications, opsLeaveRecords } from '@elevate/database';
+import { academicHrLeaveBody, academicHrLeaveV1Schema } from '@elevate/shared-contracts';
 import {
   authedRequest,
   buildRequest,
@@ -18,6 +19,7 @@ import {
 import { addDays, istToday } from '../../src/domain/dates';
 import { POST as recordRoute } from '../../src/app/api/v1/attendance/leave/route';
 import { POST as cancelRecordRoute } from '../../src/app/api/v1/attendance/leave/[id]/route';
+import { POST as resendRoute } from '../../src/app/api/v1/attendance/leave/[id]/send-to-academic/route';
 import { POST as cancelRoute } from '../../src/app/api/v1/attendance/leave-applications/[id]/cancel/route';
 import { POST as decideRoute } from '../../src/app/api/v1/attendance/leave-applications/[id]/route';
 import { GET as listRoute, POST as applyRoute } from '../../src/app/api/v1/attendance/leave-applications/route';
@@ -218,6 +220,70 @@ describe('overlapping dates', () => {
     const same = form();
     const results = await Promise.all([apply(w.office, same), apply(w.office, same)]);
     expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+  });
+});
+
+describe('leave HR records directly', () => {
+  const record = (u: TestUser, json: Record<string, unknown>) =>
+    callRoute<{ id: string }>(
+      recordRoute,
+      authedRequest(u, '/ops/api/v1/attendance/leave', {
+        method: 'POST',
+        json: { staffId: w.teacher2.staffId, kind: 'Casual', ...json },
+      }),
+    );
+
+  it('never overlaps approved leave, recorded or applied for (C3-1)', async () => {
+    const span = days(2);
+    const mid = addDays(span.fromDate, 1);
+    const recorded = await record(w.hr, span);
+    expect(recorded.status).toBe(201);
+    expect((await record(w.hr2, span)).status).toBe(409);
+    expect((await record(w.hr2, { fromDate: mid, toDate: addDays(mid, 5) })).status).toBe(409);
+    const refused = await apply(w.teacher2, form({ fromDate: mid, toDate: mid }));
+    expect(refused.status).toBe(409);
+    expect(refused.error!.message).toMatch(/already recorded/);
+    // Applied first: HR decides the application instead of recording over it (REV-1 D7).
+    const later = days(2);
+    const a = await pending(w.teacher2, { fromDate: later.toDate, toDate: later.toDate });
+    const over = await record(w.hr, later);
+    expect(over.status).toBe(409);
+    expect(over.error!.message).toMatch(/pending leave application .*Decide it instead/);
+    expect((await approve(w.hr2, a)).status).toBe(200);
+    const b = await row((await approved(w.teacher2, w.hr)).id);
+    expect((await record(w.hr2, { fromDate: b.fromDate, toDate: b.toDate })).status).toBe(409);
+    // Cancelled leave frees its days.
+    const id = recorded.data!.id;
+    await callRoute(
+      cancelRecordRoute,
+      authedRequest(w.hr, `/ops/api/v1/attendance/leave/${id}`, {
+        method: 'POST',
+        json: { reason: 'Entered in error' },
+      }),
+      { id },
+    );
+    expect((await record(w.hr2, span)).status).toBe(201);
+  });
+
+  it('two at the same moment make one (C3-1)', async () => {
+    const same = { staffId: w.office.staffId, ...days() };
+    const results = await Promise.all([record(w.hr, same), record(w.hr2, same)]);
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+  });
+
+  it('only a role in "Who approves leave" records it (C3-4)', async () => {
+    const set = (who: string[]) =>
+      updateHrSetting(ctx.db, w.opsMgr, { key: 'hr.leave_approver', value: { who } });
+    await set(['hr_manager']);
+    try {
+      const before = await ctx.db.$count(opsLeaveRecords);
+      const r = await record(w.opsMgr, { staffId: w.finance.staffId, ...days() });
+      expect(r.status).toBe(403);
+      expect(r.error!.message).toMatch(/Who approves leave/);
+      expect(await ctx.db.$count(opsLeaveRecords)).toBe(before);
+    } finally {
+      await set(['hr_manager', 'operations_manager']);
+    }
   });
 });
 
@@ -513,49 +579,68 @@ describe('notices', () => {
   });
 });
 
-describe("a teacher's classes (flag only)", () => {
-  const activity = (planned: number | null, reason = 'No teaching assignments') =>
-    vi.fn(async (url: string) =>
-      Response.json({
-        data: {
-          contract: 'academic.teacher_activity',
-          version: 1,
-          generatedAt: new Date().toISOString(),
-          staffId: new URL(url).pathname.split('/').at(-2),
-          window: { from: today, to: today },
-          assignments: [],
-          sessions: Object.fromEntries(
-            ['planned', 'delivered', 'cancelled', 'substituted'].map((k) => [
-              k,
-              planned === null
-                ? { status: 'missing', value: null, reason, definition: 'Sample', window: { from: today, to: today }, unit: 'count' }
-                : { status: 'ok', value: k === 'planned' ? planned : 0, definition: 'Sample', window: { from: today, to: today }, unit: 'count' },
-            ]),
-          ),
-          logsPending: { status: 'ok', value: 0, definition: 'Sample', window: { from: today, to: today }, unit: 'count' },
-          attendancePending: { status: 'ok', value: 0, definition: 'Sample', window: { from: today, to: today }, unit: 'count' },
-          markingPending: { status: 'ok', value: 0, definition: 'Sample', window: { from: today, to: today }, unit: 'count' },
-          reviews: {
-            submitted: { status: 'ok', value: 0, definition: 'Sample', window: { from: today, to: today }, unit: 'count' },
-            draft: { status: 'ok', value: 0, definition: 'Sample', window: { from: today, to: today }, unit: 'count' },
-          },
-          unavailability: [],
-        },
+describe("a teacher's classes need cover (D-134)", () => {
+  /** Academic's hr-leave route as the shared contract says; the request must match it too. */
+  const academic = (classes: number) =>
+    vi.fn(async (_url: string, init: RequestInit) => {
+      const body = academicHrLeaveBody.parse(JSON.parse(String(init.body)));
+      return Response.json({
+        data: academicHrLeaveV1Schema.parse({
+          recordId: crypto.randomUUID(),
+          active: body.status === 'approved',
+          classes,
+        }),
+      });
+    });
+  const calls = (fetch: ReturnType<typeof academic>) =>
+    fetch.mock.calls.map(([url, init]) => ({
+      url: String(url),
+      body: JSON.parse(String(init.body)) as Record<string, unknown>,
+      acting: (init.headers as Record<string, string>)['x-elevate-acting-user'],
+    }));
+  const told = async (kind: string, leaveRecordId: string) =>
+    (await notices(kind)).filter((n) => n.entityId === leaveRecordId);
+  const recordDirectly = (u: TestUser, json: Record<string, unknown>) =>
+    callRoute<{ id: string }>(
+      recordRoute,
+      authedRequest(u, '/ops/api/v1/attendance/leave', {
+        method: 'POST',
+        json: { kind: 'Casual', ...json },
       }),
     );
-  const flags = async (id: string) =>
-    (await notices('leave.classes_flagged')).filter((n) => n.entityId === id);
+  const cancelDirectly = (u: TestUser, id: string) =>
+    callRoute(
+      cancelRecordRoute,
+      authedRequest(u, `/ops/api/v1/attendance/leave/${id}`, {
+        method: 'POST',
+        json: { reason: 'Plans changed' },
+      }),
+      { id },
+    );
 
-  it('classes in those dates: the coordinator is told how many; nothing about why, nothing reassigned', async () => {
-    const fetch = activity(3);
+  it('approving: Academic gets ids and dates only; the coordinator is told how many classes need cover', async () => {
+    const fetch = academic(3);
     vi.stubGlobal('fetch', fetch);
     const a = await approved(w.teacher, w.hr, { kind: 'Sick', reason: 'Private medical reason' });
-    expect(String(fetch.mock.calls[0]![0])).toContain(`/teachers/${w.teacher.staffId}/activity?from=`);
-    const [n, ...rest] = await flags(a.id);
+    const app = await row(a.id);
+    expect(calls(fetch)).toEqual([
+      {
+        url: expect.stringContaining('/academic/api/internal/v1/teacher-unavailability/hr-leave'),
+        body: {
+          opsLeaveRecordId: a.leaveRecordId,
+          staffId: w.teacher.staffId,
+          fromDate: app.fromDate,
+          toDate: app.toDate,
+          status: 'approved',
+        },
+        acting: w.hr.id,
+      },
+    ]);
+    const [n, ...rest] = await told('leave.classes_flagged', a.leaveRecordId!);
     expect(rest).toEqual([]);
     expect(n!.userId).toBe(coordinator.id);
-    expect(n!.title).toContain('3 classes');
     expect(n!.title).toContain('Sample Teacher One');
+    expect(n!.title).toContain('3 classes need cover');
     expect(n!.link).toBe(`/academic/teachers/${w.teacher.staffId}`);
     expect(`${n!.title} ${n!.body}`).not.toMatch(/Sick|medical/);
     expect(n!.body).toMatch(/Nothing was reassigned/);
@@ -563,46 +648,107 @@ describe("a teacher's classes (flag only)", () => {
     expect(can(coordinator, 'academic:assignments:read')).toBe(true); // that page's gate
   });
 
-  it('Academic cannot be reached: the approval stands and the coordinator is asked to check', async () => {
-    const a = await approved(w.teacher, w.hr);
-    expect(a.status).toBe('approved');
-    const [n] = await flags(a.id);
-    expect(n!.title).toContain('check their classes');
-    expect(n!.body).toMatch(/did not give a count/);
-  });
-
-  it('Academic answers with no count: missing is not zero, so the coordinator is asked to check', async () => {
-    vi.stubGlobal('fetch', activity(null, 'Sample source not ready'));
-    const a = await approved(w.teacher, w.hr);
-    const [n] = await flags(a.id);
-    expect(n!.title).toContain('check their classes');
-    expect(n!.body).toMatch(/did not give a count/);
-  });
-
   it.each([
-    ['a count of 0', 0],
-    ['Academic saying no teaching assignments', null],
-  ])('no classes planned (%s): no notice', async (_, planned) => {
-    vi.stubGlobal('fetch', activity(planned));
+    ['cancelling the application', (r: Row) => cancel(w.hr, r.id, { version: r.version, reason: 'Plans changed' })],
+    ['cancelling its leave record', (r: Row) => cancelDirectly(w.hr, r.leaveRecordId!)],
+  ])('%s: Academic withdraws the cover and the coordinator is told', async (_label, cancelIt) => {
     const a = await approved(w.teacher, w.hr);
-    expect(await flags(a.id)).toEqual([]);
+    const fetch = academic(2);
+    vi.stubGlobal('fetch', fetch);
+    expect((await cancelIt(a)).status).toBe(200);
+    expect(calls(fetch).map((c) => c.body)).toEqual([
+      expect.objectContaining({ opsLeaveRecordId: a.leaveRecordId, status: 'cancelled' }),
+    ]);
+    const [n] = await told('leave.classes_unflagged', a.leaveRecordId!);
+    expect(n!.userId).toBe(coordinator.id);
+    expect(n!.title).toMatch(/was cancelled/);
+    expect(n!.body).toMatch(/no longer need cover/);
   });
 
-  it('leave wholly in the past is not checked; someone who does not teach is not checked', async () => {
-    const fetch = activity(2);
+  it('leave HR records directly: the same, both ways', async () => {
+    const fetch = academic(1);
     vi.stubGlobal('fetch', fetch);
+    const r = await recordDirectly(w.hr, { staffId: w.teacher2.staffId, ...days() });
+    expect(r.status).toBe(201);
+    expect((await cancelDirectly(w.hr, r.data!.id)).status).toBe(200);
+    expect(calls(fetch).map((c) => [c.body.opsLeaveRecordId, c.body.status])).toEqual([
+      [r.data!.id, 'approved'],
+      [r.data!.id, 'cancelled'],
+    ]);
+    expect((await told('leave.classes_flagged', r.data!.id))[0]!.title).toContain('1 class needs cover');
+    expect(await told('leave.classes_unflagged', r.data!.id)).toHaveLength(1);
+  });
+
+  const down = (error: Error) =>
+    vi.stubGlobal('fetch', vi.fn(async () => { throw error; }));
+  const timedOut = Object.assign(new Error('The operation timed out'), { name: 'TimeoutError' });
+
+  it('Academic cannot be reached: the leave stands; coordinators and HR are asked to check, naming the resend', async () => {
+    const a = await approved(w.teacher, w.hr);
+    expect((await ctx.db.select().from(opsLeaveRecords).where(eq(opsLeaveRecords.id, a.leaveRecordId!)))[0]!.status).toBe('approved');
+    const sent = await told('leave.classes_check', a.leaveRecordId!);
+    expect(sent.map((n) => n.userId).sort()).toEqual([coordinator.id, w.hr.id].sort());
+    for (const n of sent) {
+      expect(n.title).toContain('check their classes');
+      expect(n.body).toMatch(/could not be reached; check their classes, or use Send to Academic again/);
+    }
+    expect(sent.find((n) => n.userId === w.hr.id)!.link).toBe('/ops/hr/attendance?tab=calendar');
+    // Back up for the cancel, which frees nothing there: after an earlier check, coordinators still hear of it.
+    vi.stubGlobal('fetch', academic(0));
+    expect((await cancel(w.hr, a.id, { version: a.version, reason: 'Plans changed' })).status).toBe(200);
+    expect((await told('leave.classes_unflagged', a.leaveRecordId!)).map((n) => n.userId)).toEqual([coordinator.id]);
+  });
+
+  it('Academic did not answer in time: the notice says so (REV-4 M3)', async () => {
+    down(timedOut);
+    const a = await approved(w.teacher, w.hr);
+    const [n] = await told('leave.classes_check', a.leaveRecordId!);
+    expect(n!.body).toMatch(/did not answer in time; check their classes, or use Send to Academic again/);
+  });
+
+  it('"Send to Academic again" re-sends the current state; approvers only; a failure is said plainly (REV-4 I-1)', async () => {
+    const a = await approved(w.teacher, w.hr);
+    const id = a.leaveRecordId!;
+    const resend = (u: TestUser) =>
+      callRoute<{ active: boolean; classes: number }>(
+        resendRoute,
+        authedRequest(u, `/ops/api/v1/attendance/leave/${id}/send-to-academic`, { method: 'POST' }),
+        { id },
+      );
+    expect((await resend(w.teacher)).status).toBe(403);
+    await updateHrSetting(ctx.db, w.opsMgr, { key: 'hr.leave_approver', value: { who: ['hr_manager'] } });
+    try {
+      expect((await resend(w.opsMgr)).status).toBe(403);
+    } finally {
+      await updateHrSetting(ctx.db, w.opsMgr, { key: 'hr.leave_approver', value: { who: ['hr_manager', 'operations_manager'] } });
+    }
+    down(timedOut);
+    const failed = await resend(w.hr2);
+    expect(failed.status).toBe(409);
+    expect(failed.error!.message).toMatch(/did not answer in time/);
+    const fetch = academic(2);
+    vi.stubGlobal('fetch', fetch);
+    const ok = await resend(w.hr2);
+    expect(ok.data).toMatchObject({ active: true, classes: 2 });
+    expect(calls(fetch).map((c) => [c.body.opsLeaveRecordId, c.body.status, c.acting])).toEqual([[id, 'approved', w.hr2.id]]);
+    expect((await cancel(w.hr, a.id, { version: a.version, reason: 'Plans changed' })).status).toBe(200);
+    expect((await resend(w.hr2)).status).toBe(200);
+    expect(calls(fetch).at(-1)!.body.status).toBe('cancelled');
+  });
+
+  it('no classes in those dates, or leave wholly past: no notice; everyone is sent, Academic decides who teaches (REV-4 M2)', async () => {
+    const fetch = academic(0);
+    vi.stubGlobal('fetch', fetch);
+    const none = await approved(w.teacher, w.hr);
     const past = await approved(w.teacher, w.hr, { fromDate: D2, toDate: D2, kind: 'Sick' });
     const office = await approved(w.office, w.hr);
-    expect(fetch).not.toHaveBeenCalled();
-    expect(await flags(past.id)).toEqual([]);
-    expect(await flags(office.id)).toEqual([]);
-  });
-
-  it('leave running into the future counts classes from today', async () => {
-    const fetch = activity(1);
-    vi.stubGlobal('fetch', fetch);
-    await approved(w.teacher2, w.hr, { fromDate: addDays(today, -40), toDate: addDays(today, 2), kind: 'Sick' });
-    expect(String(fetch.mock.calls[0]![0])).toContain(`from=${today}&to=${addDays(today, 2)}`);
+    down(new TypeError('fetch failed'));
+    const pastDown = await approved(w.teacher2, w.hr, { fromDate: D1, toDate: D1, kind: 'Sick' });
+    const officeDown = await approved(w.office, w.hr);
+    for (const a of [none, past, office, pastDown, officeDown])
+      for (const kind of ['leave.classes_flagged', 'leave.classes_check'])
+        expect(await told(kind, a.leaveRecordId!)).toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 });
 

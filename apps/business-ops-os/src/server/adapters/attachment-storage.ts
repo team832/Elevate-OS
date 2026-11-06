@@ -1,22 +1,23 @@
 /**
- * Where uploaded files are kept (R6, D-014). Outside production: a local folder (ATTACHMENTS_DIR,
- * default `<repo>/.data/attachments`, git-ignored). In production: not configured until the
- * owner picks a storage provider, so uploads and downloads are refused instead of pretending.
- * Keys are random UUIDs made by the server, never the user's file name.
+ * Where uploaded files are kept (R6). In production, the owner's office mode included: in the
+ * database, table ops.attachment_files (D-135, free). Outside production: a local folder
+ * (ATTACHMENTS_DIR, default `<repo>/.data/attachments`, git-ignored), so files made while
+ * developing stay readable. Keys are random UUIDs made by the server, never the user's file name.
  */
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import { findRepoRoot } from '@elevate/configuration/node';
+import { opsAttachmentFiles, type Database } from '@elevate/database';
 
 export interface AttachmentStorage {
   readonly name: string;
+  /** Fails when the key is already used. */
   put(key: string, bytes: Uint8Array): Promise<void>;
+  /** Fails when nothing is stored under the key. */
   get(key: string): Promise<Uint8Array>;
   delete(key: string): Promise<void>;
 }
-
-export const STORAGE_NOT_SET_UP =
-  'File storage is not set up yet, so files cannot be uploaded or downloaded. Ask the administrator to choose where files are kept.';
 
 const KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -36,10 +37,35 @@ function localDisk(dir: string): AttachmentStorage {
   };
 }
 
-/** The storage in use, or null when none is configured. */
-export function attachmentStorage(env: NodeJS.ProcessEnv = process.env): AttachmentStorage | null {
-  if (env.NODE_ENV === 'production') return null;
+/** A duplicate key breaks the primary key, as `wx` refuses an existing file. */
+function database(db: Database): AttachmentStorage {
+  const byKey = (key: string) => eq(opsAttachmentFiles.key, key);
+  return {
+    name: 'Database',
+    async put(key, bytes) {
+      await db.insert(opsAttachmentFiles).values({ key, bytes, sizeBytes: bytes.length });
+    },
+    async get(key) {
+      const [row] = await db
+        .select({ bytes: opsAttachmentFiles.bytes })
+        .from(opsAttachmentFiles)
+        .where(byKey(key))
+        .limit(1);
+      if (!row) throw new Error('No attachment stored under this key');
+      return row.bytes;
+    },
+    async delete(key) {
+      await db.delete(opsAttachmentFiles).where(byKey(key));
+    },
+  };
+}
+
+export function attachmentStorage(
+  db: Database,
+  env: NodeJS.ProcessEnv = process.env,
+): AttachmentStorage {
+  if (env.NODE_ENV === 'production') return database(db);
   const root = findRepoRoot();
   const dir = env.ATTACHMENTS_DIR || (root && path.join(root, '.data', 'attachments'));
-  return dir ? localDisk(dir) : null;
+  return dir ? localDisk(dir) : database(db);
 }

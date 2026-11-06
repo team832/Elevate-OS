@@ -6,6 +6,7 @@
  * root .env (defaults 3000 / 3001 / 3002 / 3003). The local PostgreSQL server is the only shared
  * dependency: if nothing listens on the DATABASE_URL port it is started once here (and stopped
  * with Ctrl+C); if it already runs (npm run db:start, or another dev command) it is reused.
+ * While a migration is waiting no app starts: it says to run npm run db:migrate, then this command again.
  *
  * Office Wi-Fi mode (D-110): `npm run office` (after `npm run office:build`) runs the built apps
  * with `next start` on every network address, and points the four app URLs at this computer's
@@ -19,7 +20,9 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
+import pg from 'pg';
 import { APP_URL_DEFAULTS, APP_URL_VARS } from '../../packages/configuration/src/workspaces.ts';
+import { pendingMigrations } from './migration-status.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const envFile = path.join(repoRoot, '.env');
@@ -106,16 +109,48 @@ Stop it:  taskkill /PID <the last number on that line> /F`);
   process.exit(1);
 }
 
+/** Migrations `npm run db:migrate` would apply, or undefined when the database cannot be asked. */
+async function pendingAt(url) {
+  const client = new pg.Client({ connectionString: url, connectionTimeoutMillis: 5000 });
+  try {
+    await client.connect();
+    return await pendingMigrations(client).finally(() => client.end());
+  } catch {
+    return undefined;
+  }
+}
+
 const db = new URL(process.env.DATABASE_URL ?? 'pglite://memory');
+let pending;
 if (/^postgres(ql)?:$/.test(db.protocol) && ['localhost', '127.0.0.1'].includes(db.hostname)) {
   const port = Number(db.port || 5432);
-  if (await listening('127.0.0.1', port)) console.log(`dev — reusing the database already running on port ${port}.`);
+  const reused = await listening('127.0.0.1', port);
+  if (reused) console.log(`dev — reusing the database already running on port ${port}.`);
   else run('database', [path.join(repoRoot, 'scripts/development/db-server.mjs'), '--stop-with-pipe'], repoRoot, 'pipe');
+  // A database started just now needs some seconds (more on its first run) before it answers.
+  for (let tries = reused ? 1 : 120; tries > 0 && !stopping && !(pending = await pendingAt(process.env.DATABASE_URL)); tries--)
+    await new Promise((resolve) => setTimeout(resolve, 500));
+}
+// The apps need every migration (a missing table makes every sign-in fail); never apply them from here.
+if (pending?.length) {
+  const again = process.env.npm_lifecycle_script?.includes('dev.mjs')
+    ? `npm run ${process.env.npm_lifecycle_event}`
+    : `node scripts/development/dev.mjs ${process.argv.slice(2).join(' ')}`;
+  const n = pending.length;
+  process.exitCode = 1;
+  // Printed on exit, so it stays the last thing on screen after a database started here has stopped.
+  process.on('exit', () =>
+    console.error(`${office ? 'office' : 'dev'} — ${n} database update${n === 1 ? ' is' : 's are'} waiting, so the apps were not started (signing in would fail without them).
+Run these two commands, one after the other:
+  npm run db:migrate
+  ${again}`),
+  );
+  stop();
 }
 
 // Turbopack's native binary is blocked by Windows Application Control on the office PCs, so dev uses webpack.
 const nextBin = path.join(repoRoot, 'node_modules/next/dist/bin/next');
-for (const name of names) {
+for (const name of stopping ? [] : names) {
   const [key, dir] = APPS[name];
   const url = new URL(process.env[APP_URL_VARS[key]] || APP_URL_DEFAULTS[key]);
   const port = portOf(name);

@@ -94,3 +94,174 @@ describe('0007 backfill', () => {
     expect(demos.rows).toEqual([{ planned_day_count: 3 }]);
   });
 });
+
+describe('0019 keeps existing availability records', () => {
+  const pg = new PGlite();
+  const at0019 = entries.findIndex((e) => e.tag.startsWith('0019_'));
+  let record = '';
+  beforeAll(async () => {
+    for (const { tag } of entries.slice(0, at0019)) await apply(pg, tag);
+    const { user, staff } = await seedBase(pg);
+    record = await insert(pg, 'academic.teacher_unavailability', {
+      staff_id: staff,
+      from_date: '2026-11-03',
+      to_date: '2026-11-04',
+      reason: 'Sample reason',
+      entered_by_user_id: user,
+    });
+    await apply(pg, entries[at0019]!.tag);
+  });
+  afterAll(() => pg.close());
+
+  it('marks them as coordinator records with no HR leave', async () => {
+    const rows = await pg.query(
+      `SELECT source, ops_leave_record_id FROM academic.teacher_unavailability WHERE id = $1`,
+      [record],
+    );
+    expect(rows.rows).toEqual([{ source: 'coordinator', ops_leave_record_id: null }]);
+  });
+});
+
+describe('0020 keeps existing rows (rehearsal on top of 0019)', () => {
+  const pg = new PGlite();
+  const at0020 = entries.findIndex((e) => e.tag.startsWith('0020_'));
+  beforeAll(async () => {
+    for (const { tag } of entries.slice(0, at0020)) await apply(pg, tag);
+    const { user, user2, staff, student, lead, admission } = await seedBase(pg);
+    const add = (table: string, row: Record<string, unknown>) => insert(pg, table, row);
+    const leave = {
+      staff_id: staff,
+      kind: 'Casual',
+      from_date: '2026-11-03',
+      to_date: '2026-11-04',
+    };
+    const record = await add('ops.leave_records', { ...leave, approved_by: user2 });
+    const application = { ...leave, reason: 'Family function', applied_by: user };
+    await add('ops.leave_applications', application);
+    await add('ops.leave_applications', {
+      ...application,
+      status: 'approved',
+      decided_by: user2,
+      decided_at: NOW,
+      leave_record_id: record,
+    });
+    const report = await add('ops.eod_reports', {
+      staff_id: staff,
+      period_start: '2026-11-05',
+      period_end: '2026-11-05',
+      report_date: '2026-11-05',
+      snapshot: '{}',
+      status: 'revision_requested',
+      submitted_at: NOW,
+      created_by: user,
+    });
+    await add('ops.eod_review_events', {
+      report_id: report,
+      kind: 'revision_requested',
+      actor_user_id: user2,
+      text: 'Add the calls',
+    });
+    await add('ops.fee_records', {
+      code: 'FEE-000001',
+      admission_id: admission,
+      lead_id: lead,
+      kind: 'received',
+      amount_paise: 100_000,
+      recorded_by: user,
+    });
+    const plan = await add('ops.fee_plans', {
+      admission_id: admission,
+      student_id: student,
+      label: 'Sample plan',
+      total_paise: 100_000,
+      created_by: user,
+    });
+    await add('ops.fee_instalments', {
+      plan_id: plan,
+      sequence: 1,
+      due_date: '2026-11-01',
+      amount_paise: 100_000,
+    });
+    await add('ops.lead_sources', { code: 'SAMPLE_WALK_IN', label: 'Sample walk-in' });
+    await add('ops.enquiries', {
+      lead_id: lead,
+      received_at: NOW,
+      source_code: 'SAMPLE_WALK_IN',
+      created_by: user,
+    });
+    const request = await add('ops.hr_requests', {
+      sender_staff_id: staff,
+      category: 'Leave',
+      subject: 'Sample',
+      message: 'Sample message',
+      created_by: user,
+    });
+    await add('ops.hr_request_events', {
+      request_id: request,
+      kind: 'note',
+      actor_user_id: user2,
+      body: 'Seen',
+    });
+    const programme = await add('core.programmes', { code: 'SAMPLE_P', name: 'Sample' });
+    const course = await add('academic.courses', {
+      programme_id: programme,
+      code: 'SAMPLE-C',
+      family_code: 'SAMPLE',
+      name: 'Sample course',
+    });
+    const batch = await add('academic.batches', {
+      course_id: course,
+      programme_id: programme,
+      code: 'SB1',
+      name: 'Sample B1',
+      is_sample: true,
+    });
+    const academicStudent = await add('academic.students', { code: 'S1', full_name: 'Sample One' });
+    const assessment = await add('academic.assessments', {
+      code: 'SAMPLE-M1',
+      title: 'Sample mock',
+      kind: 'full_mock',
+      batch_id: batch,
+    });
+    await add('academic.assessment_roster', {
+      assessment_id: assessment,
+      student_id: academicStudent,
+      batch_id: batch,
+      display_name_snapshot: 'Sample One',
+    });
+    await apply(pg, entries[at0020]!.tag);
+  });
+  afterAll(() => pg.close());
+
+  it.each([
+    [
+      'SELECT day_part, on_behalf_of FROM ops.leave_applications',
+      [
+        { day_part: null, on_behalf_of: null },
+        { day_part: null, on_behalf_of: null },
+      ],
+    ],
+    ['SELECT day_part FROM ops.leave_records', [{ day_part: null }]],
+    ['SELECT status FROM ops.eod_reports', [{ status: 'revision_requested' }]],
+    ['SELECT on_behalf_of FROM ops.fee_records', [{ on_behalf_of: null }]],
+    [
+      'SELECT consent_text_version, consent_at FROM ops.enquiries',
+      [{ consent_text_version: null, consent_at: null }],
+    ],
+    ['SELECT on_behalf_of FROM ops.hr_request_events', [{ on_behalf_of: null }]],
+    [
+      'SELECT venue_room_id, venue_online, admit_card_instructions FROM academic.assessments',
+      [{ venue_room_id: null, venue_online: false, admit_card_instructions: null }],
+    ],
+    ['SELECT roll_number FROM academic.assessment_roster', [{ roll_number: null }]],
+    ['SELECT count(*)::int AS n FROM pg_constraint WHERE NOT convalidated', [{ n: 0 }]],
+  ])('%s', async (query, expected) => {
+    expect((await pg.query(query)).rows).toEqual(expected);
+  });
+
+  it('accepts a portal login afterwards (F4-13)', async () => {
+    await expect(
+      insert(pg, 'core.users', { email: 'k7m2p9qx@portal.invalid', display_name: 'Sample portal' }),
+    ).resolves.toBeTypeOf('string');
+  });
+});

@@ -6,3 +6,4 @@ export * from './login';
 export * from './email-domain';
 export * from './google';
 export * from './reauth';
+export * from './portal';

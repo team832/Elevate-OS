@@ -21,6 +21,7 @@ import * as eodReportPdf from './app/api/v1/eod-reports/[id]/pdf/route';
 import * as eodReportReview from './app/api/v1/eod-reports/[id]/review/route';
 import * as eodReportSubmit from './app/api/v1/eod-reports/[id]/submit/route';
 import * as eodReports from './app/api/v1/eod-reports/route';
+import * as exportsList from './app/api/v1/exports/[list]/route'; // EXPORT
 import * as feedbackMine from './app/api/v1/feedback/mine/route'; // FB
 import * as feedbackMineOne from './app/api/v1/feedback/mine/[id]/route'; // FB
 import * as hrRequest from './app/api/v1/hr-requests/[id]/route'; // HR-REQ
@@ -28,6 +29,7 @@ import * as hrRequestAction from './app/api/v1/hr-requests/[id]/[action]/route';
 import * as hrRequests from './app/api/v1/hr-requests/route'; // HR-REQ
 import * as notifications from './app/api/v1/notifications/route';
 import * as notificationOpen from './app/notifications/[id]/open/route'; // NOTIFY
+import * as payslipPdf from './app/api/v1/payslips/[id]/pdf/route'; // F4-14
 import * as staffTask from './app/api/v1/staff-tasks/[id]/route';
 import * as staffTaskAction from './app/api/v1/staff-tasks/[id]/[action]/route';
 import * as staffTaskChecklist from './app/api/v1/staff-tasks/[id]/checklist/route';
@@ -40,6 +42,7 @@ import * as taskReports from './app/api/v1/task-reports/route';
 
 export { MeetingsBody } from './app/meetings/meetings-body';
 export { MyAttendanceBody } from './app/my-attendance/my-attendance-body'; // ATT
+export { MyPayslipsBody } from './app/my-payslips/my-payslips-body'; // F4-14
 export { NotificationsBody } from './app/notifications/notifications-body';
 export { DueWork, MyReminderPreview } from './ui/task-notices'; // NOTIFY
 export { TaskBody, TasksBody, type BodyProps } from './app/tasks/_components/bodies';
@@ -82,6 +85,7 @@ export const workRoutes = {
   'eod-reports/[id]/review': eodReportReview,
   'eod-reports/[id]/submit': eodReportSubmit,
   'task-reports': taskReports,
+  'exports/[list]': exportsList, // EXPORT: spreadsheet downloads (My attendance, tasks, leads)
   notifications,
   attachments, // ATTACH
   'attachments/[id]': attachment, // ATTACH
@@ -95,6 +99,7 @@ export const workRoutes = {
   'hr-requests': hrRequests, // HR-REQ
   'hr-requests/[id]': hrRequest, // HR-REQ
   'hr-requests/[id]/[action]': hrRequestAction, // HR-REQ
+  'payslips/[id]/pdf': payslipPdf, // F4-14: your own payslip
 };
 
 export interface NavRow {

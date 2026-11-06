@@ -118,6 +118,8 @@ export const academicAssessmentRoster = academic.table(
     /** Exact total, numeric(10,4) like every academic mark (domain/marks.ts units). */
     score: numeric('score', { precision: 10, scale: 4 }),
     rank: integer('rank'),
+    /** Admit-card roll number (F4-03): given once, in order of batch then name; never reused. */
+    rollNumber: integer('roll_number'),
     /** Optimistic lock for markers and imports (stale → 409). */
     version: integer('version').notNull().default(1),
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
@@ -134,6 +136,13 @@ export const academicAssessmentRoster = academic.table(
   },
   (t) => [
     uniqueIndex('assessment_roster_student_key').on(t.assessmentId, t.studentId),
+    uniqueIndex('assessment_roster_roll_number_key')
+      .on(t.assessmentId, t.rollNumber)
+      .where(sql`${t.rollNumber} IS NOT NULL`),
+    check(
+      'assessment_roster_roll_number_check',
+      sql`${t.rollNumber} IS NULL OR ${t.rollNumber} >= 1`,
+    ),
     index('assessment_roster_student_idx').on(t.studentId),
     check(
       'assessment_roster_attendance_check',

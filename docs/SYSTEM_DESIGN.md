@@ -5,23 +5,23 @@ How Elevate OS behaves at runtime. Structure: `ARCHITECTURE.md`. Contracts: `INT
 ## 1. Request lifecycle
 
 ### Page request (server component)
-1. Browser → `http://<platform>/academic/batches`.
-2. Platform `proxy.ts` is skipped for module zones (matcher); the rewrite forwards to `ACADEMIC_OS_URL/academic/batches` with the original cookies.
+1. Browser → `http://localhost:3001/academic/batches`, the workspace's own origin (D-072). The platform's rewrite of `/academic/*` to `ACADEMIC_OS_URL` still works but is optional.
+2. The module's `proxy.ts` refuses a POST from another site, sets the Content-Security-Policy with a fresh nonce and passes the request on.
 3. The Academic page calls `requirePageAccess('academic:batches:read', { loginPath: '/academic/login', returnTo: '/academic/batches', basePath: '/academic' })`:
    - no/invalid session → 307 to `/academic/login?next=%2Facademic%2Fbatches` (basePath handled, D-022);
    - session without permission → `{ status: 'forbidden' }` → page renders `ErrorState`, no data queried;
    - allowed → page loads data through `src/server` services, scoped with `scopedValue` for `own` grants.
-4. HTML streams back through the platform.
+4. HTML streams back from the workspace (or through the platform when the rewrite is used).
 
 For platform pages, `proxy.ts` first redirects requests with **no** `elevate_session` cookie to `/login?next=…` and stamps `x-request-id`; the page then validates the session for real.
 
 ### API request (route handler)
-`defineRoute` (server-kit): request id (incoming `x-request-id` or a new UUID) → session from cookie (`validateSession`: HMAC lookup, expiry, revocation, user active) → permission → params → query → JSON body → handler → `{ data }` / `{ error }` → one structured log line. Optional `Idempotency-Key` runs the handler and the key reservation in one transaction.
+`defineRoute` (server-kit): request id (incoming `x-request-id` or a new UUID) → session from cookie (`validateSession`: HMAC lookup, expiry, revocation, user active) → workspace membership (D-113) → permission → params → query → JSON body (UUID-shaped strings lower-cased first, D-137) → handler → `{ data }` / `{ error }` → one structured log line. Optional `Idempotency-Key` runs the handler and the key reservation in one transaction.
 
 ### Sign-in
-`POST /api/v1/auth/login` (or `/<zone>/api/v1/auth/login`): throttle check → `checkPassword` (scrypt; dummy hash for unknown emails) → transaction { insert session (token hash), update `last_login_at`, audit `auth.login` } → `Set-Cookie: elevate_session=…` → JSON envelope or 303 to the safe `next`. Sign-out revokes the session, audits `auth.logout`, clears the cookie.
+`POST /api/v1/auth/login` (or `/<zone>/api/v1/auth/login`): throttle check (counts in `core.login_attempts`, shared by every app and process since 6 Nov 2026; keys stored only as HMAC-SHA256) → `checkPassword` (scrypt; dummy hash for unknown emails) → transaction { insert session (token hash), update `last_login_at`, audit `auth.login` } → `Set-Cookie: elevate_session=…` → JSON envelope or 303 to the safe `next`. Sign-out revokes the session, audits `auth.logout`, clears the cookie.
 
-Google sign-in (D-030, optional): every zone's login page links to `PLATFORM_URL/api/v1/auth/google/start?next=…` → signed 10-minute state cookie → Google → `/api/v1/auth/google/callback` on the platform: state check → code exchange (PKCE) → ID-token verification (JWKS, claims, `hd`) → find or create the user (no roles) → the same session transaction as the password login → 303 to `next`. The session cookie is set on the platform host, which serves every zone (D-004).
+Google sign-in (D-030, optional): every zone's login page links to `PLATFORM_URL/api/v1/auth/google/start?next=…` → signed 10-minute state cookie → Google → `/api/v1/auth/google/callback` on the platform: state check → code exchange (PKCE) → ID-token verification (JWKS, claims, `hd`) → find or create the user (no roles) → the same session transaction as the password login → 303 to `next`. The session cookie is host `localhost`, path `/`; browsers do not separate cookies by port, so it reaches every workspace (D-072).
 
 ## 2. State changes inside a module
 ```ts
@@ -39,6 +39,8 @@ Everything commits or nothing does.
 ## 3. Cross-module flows
 - **Commands** (admission → enrolment): producer writes `core.integration_events` in its transaction; the consumer runs `processEvents` (one transaction per event, guarded by the unique `core.event_deliveries` row) and replies with its own event. Failures retry; repeated failure → `dead`.
 - **Read-only summaries** (dashboards): `fetchInternal()` → `GET /<zone>/api/internal/v1/summary` (bearer token + caller header; the optional per-module tokens of `INTERNAL_SERVICE_TOKENS` bind the caller to its token, D-077) → validated contract or `unavailable`. Never zeros in place of missing data.
+- **Internal writes after commit**: Business Ops tells Academic about a teacher's approved or cancelled leave through `POST /academic/api/internal/v1/teacher-unavailability/hr-leave`, after its own transaction commits (D-134). If Academic does not answer, the leave stands and coordinators are asked to check.
+- **Platform overview**: the platform app calls the modules' services in-process with the signed-in user (`apps/platform/src/server/overview-adapter.ts`); a failed source still reads "unavailable", never 0.
 - **Approvals**: any module can open/decide approvals on its own subjects through the shared service; history is preserved in `core.approvals` and audited.
 
 ## 4. Environments
@@ -49,7 +51,7 @@ Everything commits or nothing does.
 | Production | Managed PostgreSQL ≥ 17 | Four Next.js servers behind HTTPS; only the platform public | **Proposed** (`infrastructure/deployment/README.md`) |
 
 ## 5. Background work
-There is no scheduler yet. Outbox consumers run when a module calls `processEvents`: from "Process intake" in Academic and the Background jobs panel on the Ops Overview (D-117). A periodic runner (cron route protected by `INTERNAL_SERVICE_TOKEN`, or a small worker process) is a wave-3 integration item; until then nothing claims automatic delivery.
+Since 6 Nov 2026 (D-133) each Business Operations server process runs a background runner (`apps/business-ops-os/src/instrumentation.ts` → `src/server/job-runner.ts`). About once a minute it runs each switched-on job whose time slot has started, once per slot across processes (a claim in `core.idempotency_keys`), as the person who switched it on, with a 10-minute limit. Every job is **off** until someone with `ops:jobs:run` switches it on in Settings → Background jobs; the buttons there still run a job at once. Academic's enrolment intake has no runner: a coordinator presses "Process intake". Nothing claims automatic delivery while a job is off.
 
 ## 6. Failure handling
 | Failure | Behaviour |

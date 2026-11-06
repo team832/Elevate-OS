@@ -7,8 +7,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { ImportReview, type ReviewRowView } from '../../src/app/tests/_components/import-review';
 import { ScoreUpload } from '../../src/app/tests/_components/score-upload';
-import { Papers, Publications } from '../../src/app/tests/_components/test-panels';
-import { testDetail } from '../integration/tests-ops-fixtures';
+import { Papers, Publications, Roster } from '../../src/app/tests/_components/test-panels';
+import { BATCH_A, BATCH_B, student, testDetail } from '../integration/tests-ops-fixtures';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh() {}, push() {} }) }));
 
@@ -138,6 +138,18 @@ describe('test page panels', () => {
     expect(out).toContain('Withdrawn');
     expect(out).toContain('Re-scored: answer key corrected');
     expect(out).not.toContain('Publish results');
+  });
+
+  it('the roster says, per batch, how many marks are not entered and who marks them (C2-8)', () => {
+    const d = testDetail({ evaluator: { staffId: BATCH_A as never, name: 'Sample Evaluator' } }, [
+      student(1),
+      student(2, { attendance: 'present' }),
+      student(3, { attendance: 'absent' }),
+      student(4, { batchId: BATCH_B as never, batchCode: 'SAMPLE-IPM-B', attendance: 'present', marksState: 'verified', score: '5' }),
+    ]);
+    const out = renderToStaticMarkup(<Roster d={d} manage={false} addable={[]} />);
+    expect(out).toContain('SAMPLE-IPM-A: 2 not entered · Sample Evaluator');
+    expect(out).toContain('SAMPLE-IPM-B: all entered · Sample Evaluator');
   });
 
   it('a replaced paper version says which version replaced it', () => {

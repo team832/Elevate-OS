@@ -1,11 +1,10 @@
 /** zod schemas for student feedback about teachers (brief 23 Oct 2026 §15). */
 import { z } from 'zod';
-import { isoDateSchema } from '@elevate/shared-contracts';
+import { isoDateSchema, optText } from '@elevate/shared-contracts';
 import { OPS_DEVELOPMENT_ACTION_STATUSES } from '@elevate/database';
 import { MAX_FEEDBACK_CSV_CHARS } from '../domain/feedback-import';
 
 const text = (max: number) => z.string().trim().max(max);
-const optText = (max = 4000) => text(max).nullish();
 
 /** Structured entry by HR; `batch` is a value from the teacher's batch options. */
 export const feedbackEntryBody = z
@@ -85,9 +84,9 @@ export const summaryBody = z
 export const summaryPatchBody = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('edit'),
-    strengths: optText(),
-    areasToImprove: optText(),
-    summaryText: optText(),
+    strengths: optText(4000),
+    areasToImprove: optText(4000),
+    summaryText: optText(4000),
     eligiblePopulation: z.int().min(0).nullish(),
   }),
   z.object({ action: z.literal('approve') }),

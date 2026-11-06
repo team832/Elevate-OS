@@ -201,6 +201,7 @@ export async function workReportList(db: Database, actor: Actor, q: WorkReportLi
     submitted: eq(reports.status, 'submitted'),
     revision_requested: eq(reports.status, 'revision_requested'),
     acknowledged: eq(reports.status, 'acknowledged'),
+    more_detail_requested: eq(reports.status, 'more_detail_requested'),
   };
   const where = and(people, q.standing ? standing[q.standing] : undefined);
   const joined = <T extends PgSelect>(qb: T) =>

@@ -1,0 +1,9 @@
+/* /ops/enquire: the consent text runs several lines, so its box sits at the first line. */
+.el-enquire-consent {
+  align-items: flex-start;
+  margin-block: var(--el-space-3);
+}
+.el-enquire-consent input {
+  flex: none;
+  margin-top: 0.125rem;
+}

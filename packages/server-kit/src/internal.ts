@@ -11,7 +11,7 @@ import {
   type SourceResult,
 } from '@elevate/shared-contracts';
 import { isModuleKey, type ModuleKey } from '@elevate/shared-types';
-import type { NextRouteContext, RouteHandler } from './define-route';
+import { UUID_RE, canonicalIds, type NextRouteContext, type RouteHandler } from './define-route';
 import { toAppError, zodIssues } from './errors';
 
 /**
@@ -27,7 +27,6 @@ import { toAppError, zodIssues } from './errors';
 export const CALLER_HEADER = 'x-elevate-caller';
 /** Write routes: the signed-in user the calling server acts for (recorded in the audit trail). */
 export const ACTING_USER_HEADER = 'x-elevate-acting-user';
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type ModuleTokens = Partial<Record<ModuleKey, string>>;
 
@@ -148,7 +147,7 @@ export function defineInternalRoute<
       const url = new URL(request.url);
       let query: unknown;
       if (spec.query) {
-        const parsed = spec.query.safeParse(Object.fromEntries(url.searchParams));
+        const parsed = spec.query.safeParse(canonicalIds(Object.fromEntries(url.searchParams)));
         if (!parsed.success)
           throw new ValidationError('The query string is not valid.', {
             details: zodIssues(parsed.error, 'query'),
@@ -157,7 +156,7 @@ export function defineInternalRoute<
       }
       let params: unknown;
       if (spec.params) {
-        const parsed = spec.params.safeParse((await context?.params) ?? {});
+        const parsed = spec.params.safeParse(canonicalIds((await context?.params) ?? {}));
         if (!parsed.success)
           throw new ValidationError('The URL is not valid.', {
             details: zodIssues(parsed.error, 'params'),
@@ -167,7 +166,7 @@ export function defineInternalRoute<
       let body: unknown;
       let actingUserId: string | null = null;
       if (spec.body) {
-        actingUserId = request.headers.get(ACTING_USER_HEADER);
+        actingUserId = canonicalIds(request.headers.get(ACTING_USER_HEADER));
         if (!actingUserId || !UUID_RE.test(actingUserId))
           throw new ValidationError(
             `Write routes need the ${ACTING_USER_HEADER} header (a user id).`,
@@ -180,7 +179,7 @@ export function defineInternalRoute<
         const raw: unknown = await request.json().catch(() => {
           throw new ValidationError('The request body is not valid JSON.');
         });
-        const parsed = spec.body.safeParse(raw);
+        const parsed = spec.body.safeParse(canonicalIds(raw));
         if (!parsed.success)
           throw new ValidationError('The request body is not valid.', {
             details: zodIssues(parsed.error, 'body'),

@@ -907,4 +907,47 @@ a.el-journey-body:focus-visible {
     color: #000 !important;
     box-shadow: none !important;
   }
+  .el-card,
+  .el-stat,
+  .el-metric {
+    border: 1px solid var(--el-border);
+  }
+  /* Controls do nothing on paper; the "Showing 26–50 of 112" beside the page links stays. */
+  button,
+  .el-button,
+  .el-tablist,
+  .el-card-actions,
+  .el-form-actions,
+  nav[aria-label='Pages'] a {
+    display: none !important;
+  }
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+  .el-table-wrap {
+    overflow: visible;
+  }
+  .el-table {
+    font-size: 9pt;
+  }
+  .el-table th {
+    min-width: 0;
+  }
+  .el-table thead {
+    display: table-header-group;
+  }
+  .el-table tr {
+    break-inside: avoid;
+  }
+  /* Bars are backgrounds, which browsers drop on paper unless told; the data prints as its table. */
+  .el-chart {
+    print-color-adjust: exact;
+  }
+  .el-chart-table::details-content {
+    content-visibility: visible;
+  }
+  .el-chart-table > summary {
+    display: none;
+  }
 }

@@ -3,17 +3,30 @@
  * found by its `key`, which never changes: renaming the label or deactivating a stage never
  * rewrites history, and reports read `lead_stage_history` by key. System stages (seeded) cannot
  * be removed. The admissions pipeline (ops.admissions.status) is separate and stays authoritative
- * for conversion. Part of the `ops` Postgres schema, split across ops*.ts; same rules as ops.ts.
+ * for conversion. Also the automatic lead-sharing rules (F4-16). Part of the `ops` Postgres
+ * schema, split across ops*.ts; same rules as ops.ts.
  */
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, integer, text, uuid } from 'drizzle-orm/pg-core';
-import type { LeadId } from '@elevate/shared-types';
-import { createdAt, filled, inList, instant, ops, updatedAt, userRef } from './ops-columns';
+import { boolean, check, index, integer, text, unique, uuid } from 'drizzle-orm/pg-core';
+import type { LeadId, ProgrammeId, StaffMemberId } from '@elevate/shared-types';
+import { programmes } from './core';
+import {
+  createdAt,
+  filled,
+  inList,
+  instant,
+  ops,
+  staffRef,
+  updatedAt,
+  userRef,
+} from './ops-columns';
 // Cycle on purpose (ops.leads.stage_key → lead_stages.key): lazy FK callbacks only.
 import { opsLeads } from './ops';
 
 /** won = converted; parked = nurture / duplicate / do not contact; lost needs a reason. */
 export const OPS_LEAD_STAGE_KINDS = ['open', 'won', 'lost', 'parked'] as const;
+/** How a rule picks the counsellor (setting default Proposed: round robin). */
+export const OPS_LEAD_ASSIGNMENT_MODES = ['round_robin', 'fewest_open'] as const;
 /** Seeded later as system stages, in this order. */
 export const OPS_SYSTEM_LEAD_STAGES = [
   'new',
@@ -77,5 +90,42 @@ export const opsLeadStageHistory = ops.table(
     index('lead_stage_history_to_idx').on(t.toKey, t.changedAt),
     check('lead_stage_history_changed_check', sql`${t.fromKey} IS DISTINCT FROM ${t.toKey}`),
     check('lead_stage_history_reason_check', sql`${t.reason} IS NULL OR ${filled(t.reason)}`),
+  ],
+);
+
+/**
+ * Automatic lead sharing (F4-16): one rule per programme and one default (programme null) for new
+ * leads without an owner. Round robin = the counsellor after `last_assigned_staff_id` in
+ * `counsellor_staff_ids` order (lock the rule row FOR UPDATE while choosing). `daily_cap` null = no
+ * cap. Staff ids are plain array items: the service skips anyone not active.
+ */
+export const opsLeadAssignmentRules = ops.table(
+  'lead_assignment_rules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    programmeId: uuid('programme_id')
+      .references(() => programmes.id, { onDelete: 'restrict' })
+      .$type<ProgrammeId>(),
+    mode: text('mode', { enum: OPS_LEAD_ASSIGNMENT_MODES }).notNull().default('round_robin'),
+    counsellorStaffIds: uuid('counsellor_staff_ids').array().notNull().$type<StaffMemberId[]>(),
+    dailyCap: integer('daily_cap'),
+    lastAssignedStaffId: staffRef('last_assigned_staff_id'),
+    createdBy: userRef('created_by').notNull(),
+    updatedBy: userRef('updated_by'),
+    isSample: boolean('is_sample').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('lead_assignment_rules_programme_key').on(t.programmeId).nullsNotDistinct(),
+    check(
+      'lead_assignment_rules_mode_check',
+      sql`${t.mode} IN ${inList(OPS_LEAD_ASSIGNMENT_MODES)}`,
+    ),
+    check(
+      'lead_assignment_rules_counsellors_check',
+      sql`cardinality(${t.counsellorStaffIds}) BETWEEN 1 AND 50 AND array_position(${t.counsellorStaffIds}, NULL) IS NULL`,
+    ),
+    check('lead_assignment_rules_cap_check', sql`${t.dailyCap} IS NULL OR ${t.dailyCap} >= 1`),
   ],
 );

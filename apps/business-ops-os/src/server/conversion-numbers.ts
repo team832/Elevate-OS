@@ -2,7 +2,7 @@
  * Admission numbers (D-037, D-040): the final confirmation's number from the locked counter, and
  * a legacy admission's number given by hand. Re-exported by conversion.ts.
  */
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { can } from '@elevate/authorization';
 import {
   opsAdmissionNumberChanges,
@@ -22,28 +22,31 @@ import {
   checkManualNumber,
   counterScopeKey,
   formatAdmissionNumber,
+  normaliseAdmissionNumber,
   type AdmissionNumberFormat,
 } from '../domain/admission-numbers';
 import { lockAccessible } from './admissions';
 import { accessScope, type Actor } from './context';
 import { fieldError, opsAudit } from './ops-common';
 import type { AdmissionRow } from './pipeline';
+import { loadSettings } from './settings';
 
 export const isUniqueViolation = (e: unknown): boolean => {
   const err = e as { code?: string; cause?: { code?: string } };
   return err?.code === '23505' || err?.cause?.code === '23505';
 };
 
+/** Taken in any written form: digit-only numbers match without their leading zeros (C1-6). */
 async function numberTaken(tx: Database, value: string, exceptId?: AdmissionId) {
+  const n = opsAdmissions.admissionNumber;
+  // shortcut: scans admissions (no index on this form); add an expression index if they reach ~100k.
+  const same = /^\d+$/.test(value)
+    ? sql`(${n} ~ '^[0-9]+$' AND ltrim(${n}, '0') = ltrim(${value}, '0'))`
+    : eq(n, value);
   const [row] = await tx
     .select({ id: opsAdmissions.id })
     .from(opsAdmissions)
-    .where(
-      and(
-        eq(opsAdmissions.admissionNumber, value),
-        exceptId ? ne(opsAdmissions.id, exceptId) : undefined,
-      ),
-    )
+    .where(and(same, exceptId ? ne(opsAdmissions.id, exceptId) : undefined))
     .limit(1);
   return Boolean(row);
 }
@@ -173,7 +176,12 @@ export async function overrideAdmissionNumber(
       throw new InvalidStateTransitionError(
         'Admission numbers are given at final confirmation. Only a legacy admission without a number can be given one by hand.',
       );
-    await setAdmissionNumber(tx, actor, admission, check.number, 'manual', check.reason, requestId);
-    return { id: admission.id, admissionNumber: check.number };
+    // Stored in the counter's form, so the unique index also stops "42" beside "042".
+    const value = normaliseAdmissionNumber(
+      check.number,
+      (await loadSettings(tx))['admissions.number.format'].value.width,
+    );
+    await setAdmissionNumber(tx, actor, admission, value, 'manual', check.reason, requestId);
+    return { id: admission.id, admissionNumber: value };
   });
 }

@@ -1,6 +1,11 @@
 /** zod inputs for the demo-students routes (docs/parts/admissions-demos.md §API). */
 import { z } from 'zod';
-import { isoDateSchema, isoDateTimeSchema, programmeCodeSchema } from '@elevate/shared-contracts';
+import {
+  isoDateSchema,
+  isoDateTimeSchema,
+  optText,
+  programmeCodeSchema,
+} from '@elevate/shared-contracts';
 import { ADMISSION_STATUSES } from '../domain';
 import {
   CHECKLIST_STATUSES,
@@ -11,7 +16,6 @@ import {
 } from '../domain/demos';
 import { contactFields } from './schemas';
 
-const optText = (max: number) => z.string().trim().max(max).nullish();
 /** Domain rules decide when a reason is required, so their message is the one shown. */
 const reason = optText(1000);
 /** Filter forms submit "" for "Any". */

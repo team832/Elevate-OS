@@ -8,6 +8,7 @@ import { load, Section } from '../../../ui/frame';
 import { listHref, Pager } from '../../../ui/list-controls';
 import { RecordTable } from '../../../ui/record-table';
 import type { BodyProps } from '../_components/bodies';
+import { EOD_TONES } from '../_components/eod-views';
 import type { Params } from '../_components/task-common';
 import { ReportEditor } from './_components/report-views';
 
@@ -16,10 +17,7 @@ export const STANDING_TONES: Record<Standing, Tone> = {
   not_started: 'neutral',
   not_expected: 'neutral',
   no_schedule: 'neutral',
-  draft: 'neutral',
-  submitted: 'info',
-  revision_requested: 'warning',
-  acknowledged: 'success',
+  ...EOD_TONES,
 };
 
 export const StandingBadge = ({ standing, late }: { standing: Standing; late: boolean }) => (

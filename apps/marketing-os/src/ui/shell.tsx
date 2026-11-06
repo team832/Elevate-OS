@@ -6,10 +6,8 @@
 import { Suspense, type ReactNode } from 'react';
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can, type Permission, type Principal } from '@elevate/authorization';
-import { getDb } from '@elevate/database';
-import { countUnread } from '@elevate/notifications';
 import { toAppError } from '@elevate/server-kit';
-import { requirePageAccess, workspaceHrefs } from '@elevate/server-kit/next';
+import { requirePageAccess, unreadFor, workspaceHrefs } from '@elevate/server-kit/next';
 import { isAppError } from '@elevate/shared-contracts';
 import {
   Alert,
@@ -33,77 +31,96 @@ type NavEntry = {
   permission: Permission;
   /** `team` = managers, director, auditor (all campaigns); `own` = marketing employees. Omitted = both. */
   audience?: 'team' | 'own';
+  group?: string;
 };
 
+const inGroup = (group: string, entries: NavEntry[]) => entries.map((e) => ({ ...e, group }));
+
 /**
- * Sidebar = the brief's Marketing OS list (23 Oct 2026 §9), in that order, for managers and
- * marketing employees alike; employees get their own-scope pages. Every item is also filtered
- * by its permission; pages re-check on the server.
+ * Sidebar = the site map (Blueprint step 3, 6 Nov 2026), grouped, for managers and marketing
+ * employees alike; employees get their own-scope pages. Every item is also filtered by its
+ * permission; pages re-check on the server. Settings is the link at the foot of the sidebar.
  */
 export const NAV: readonly NavEntry[] = [
-  // Employees land on My Day; the module-wide Overview is for managers.
-  {
-    key: 'overview',
-    label: 'Overview',
-    path: '',
-    permission: 'marketing:module:access',
-    audience: 'team',
-  },
-  { key: 'my-day', label: 'My Day', path: 'my-day', permission: 'marketing:module:access' },
+  ...inGroup('Today', [
+    // Employees land on My day; the module-wide Overview is for managers.
+    {
+      key: 'overview',
+      label: 'Overview',
+      path: '',
+      permission: 'marketing:module:access',
+      audience: 'team',
+    },
+    { key: 'my-day', label: 'My day', path: 'my-day', permission: 'marketing:module:access' },
+  ]),
   // Leads, follow-ups, tasks and work reports are Business Ops screens mounted from its shared entries.
-  { key: 'leads', label: 'Leads', path: 'leads', permission: 'ops:leads:read' },
-  {
-    key: 'follow-ups',
-    label: 'Sales Calls and Follow-ups',
-    path: 'sales-calls',
-    permission: 'ops:leads:read',
-  },
-  {
-    key: 'campaigns',
-    label: 'Campaigns',
-    path: 'campaigns',
-    permission: 'marketing:campaigns:read',
-  },
-  {
-    key: 'calendar',
-    label: 'Marketing Calendar',
-    path: 'calendar',
-    permission: 'marketing:calendar:read',
-  },
-  { key: 'ideas', label: 'Ideas', path: 'ideas', permission: 'marketing:ideas:read' },
-  {
-    key: 'deliverables',
-    label: 'Content and Deliverables',
-    path: 'deliverables',
-    permission: 'marketing:module:access',
-  },
-  {
-    key: 'optimisation',
-    label: 'SEO / AIO / GEO',
-    path: 'optimisation',
-    permission: 'marketing:optimisation:read',
-  },
-  { key: 'targets', label: 'Targets', path: 'targets', permission: 'marketing:targets:read' },
-  { key: 'tasks', label: 'My Tasks', path: 'tasks', permission: 'ops:tasks:read' },
-  { key: 'my-reports', label: 'My Work Updates', path: 'my-reports', permission: 'ops:tasks:read' },
-  {
-    key: 'reports',
-    label: 'Reports',
-    path: 'metrics/weekly',
-    permission: 'marketing:metrics:read',
-  },
-  {
-    key: 'hr-requests',
-    label: 'HR Requests',
-    path: 'hr-requests',
-    permission: 'ops:hr_requests:create',
-  },
-  {
-    key: 'personal-settings',
-    label: 'Personal Settings',
-    path: 'settings/personal',
-    permission: 'marketing:module:access',
-  },
+  ...inGroup('Leads', [
+    { key: 'leads', label: 'Leads', path: 'leads', permission: 'ops:leads:read' },
+    {
+      key: 'follow-ups',
+      label: 'Calls and follow-ups',
+      path: 'sales-calls',
+      permission: 'ops:leads:read',
+    },
+  ]),
+  ...inGroup('Plan and make', [
+    {
+      key: 'campaigns',
+      label: 'Campaigns',
+      path: 'campaigns',
+      permission: 'marketing:campaigns:read',
+    },
+    {
+      key: 'calendar',
+      label: 'Marketing calendar',
+      path: 'calendar',
+      permission: 'marketing:calendar:read',
+    },
+    { key: 'ideas', label: 'Ideas', path: 'ideas', permission: 'marketing:ideas:read' },
+    {
+      key: 'deliverables',
+      label: 'Content and deliverables',
+      path: 'deliverables',
+      permission: 'marketing:module:access',
+    },
+  ]),
+  ...inGroup('Results', [
+    {
+      key: 'optimisation',
+      label: 'SEO / AIO / GEO',
+      path: 'optimisation',
+      permission: 'marketing:optimisation:read',
+    },
+    { key: 'targets', label: 'Targets', path: 'targets', permission: 'marketing:targets:read' },
+    {
+      key: 'reports',
+      label: 'Reports',
+      path: 'metrics/weekly',
+      permission: 'marketing:metrics:read',
+    },
+  ]),
+  ...inGroup('My work', [
+    { key: 'tasks', label: 'My tasks', path: 'tasks', permission: 'ops:tasks:read' },
+    {
+      key: 'my-attendance',
+      label: 'My attendance and leave',
+      path: 'my-attendance',
+      permission: 'ops:attendance:read',
+    },
+    {
+      key: 'my-payslips',
+      label: 'My payslips',
+      path: 'my-payslips',
+      permission: 'ops:payslips:read',
+    },
+    { key: 'my-reports', label: 'My reports', path: 'my-reports', permission: 'ops:tasks:read' },
+    {
+      key: 'hr-requests',
+      label: 'Requests to HR',
+      path: 'hr-requests',
+      permission: 'ops:hr_requests:create',
+    },
+  ]),
 ];
 
 /** Pages without their own sidebar item light up the item they belong to. */
@@ -111,7 +128,8 @@ const PARENT: Partial<Record<string, string>> = {
   'my-campaigns': 'campaigns',
   'team-review': 'tasks',
   eod: 'my-reports',
-  'my-attendance': 'my-day',
+  content: 'deliverables',
+  'personal-settings': 'settings',
 };
 
 /** Area tabs under the page title, by nav key (pages that are not in the sidebar live here). */
@@ -119,6 +137,7 @@ const TABS: Partial<Record<string, readonly Omit<NavEntry, 'key'>[]>> = {
   leads: [
     { label: 'Leads', path: 'leads', permission: 'ops:leads:read' },
     { label: 'Lead stages', path: 'leads/stages', permission: 'ops:leads:read' },
+    { label: 'Lead sharing', path: 'leads/sharing', permission: 'ops:leads:assign' },
   ],
   'follow-ups': [
     { label: 'Sales calls', path: 'sales-calls', permission: 'ops:leads:read' },
@@ -133,6 +152,14 @@ const TABS: Partial<Record<string, readonly Omit<NavEntry, 'key'>[]>> = {
     { label: 'Weekly report', path: 'metrics/weekly', permission: 'marketing:metrics:read' },
     { label: 'Metrics import', path: 'metrics/import', permission: 'marketing:metrics:read' },
     { label: 'Monthly report', path: 'reports/monthly', permission: 'marketing:reports:read' },
+  ],
+  settings: [
+    { label: 'Rules and settings', path: 'settings', permission: 'marketing:module:access' },
+    {
+      label: 'Personal settings',
+      path: 'settings/personal',
+      permission: 'marketing:module:access',
+    },
   ],
 };
 
@@ -150,6 +177,7 @@ export function navFor(user: Principal, active: string): NavItem[] {
   ).map((n) => ({
     href: modulePath(n.path),
     label: n.label,
+    group: n.group,
     active: n.key === (PARENT[active] ?? active),
   }));
 }
@@ -162,18 +190,8 @@ export function tabsFor(user: Principal, active: string): [string, string][] {
   ]);
 }
 
-/** "Rules & settings" is reached from the Settings link at the bottom of the sidebar. */
-const SETTINGS = { key: 'settings', label: 'Rules & settings', path: 'settings' };
-
-/** Unread in-app notifications for the top bar; null (hidden) when unknown. */
-async function unreadFor(user: AuthenticatedUser): Promise<number | null> {
-  if (!can(user, 'platform:notifications:read')) return null;
-  try {
-    return await countUnread(getDb(), user.id);
-  } catch {
-    return null;
-  }
-}
+/** Settings (Rules and settings, Personal settings) is the link at the bottom of the sidebar. */
+const SETTINGS = { key: 'settings', path: 'settings' };
 
 export type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -208,12 +226,13 @@ export async function MarketingPage(props: MarketingPageProps) {
   const user = access.user;
   const nav = navFor(user, props.active);
   const tabs = tabsFor(user, props.active);
-  const currentTab = tabs.find(
-    ([href]) => props.path === href || props.path.startsWith(`${href}/`),
-  );
+  // The exact tab first: Settings › Personal settings also starts with the Settings path.
+  const currentTab =
+    tabs.find(([href]) => props.path === href) ??
+    tabs.find(([href]) => props.path.startsWith(`${href}/`));
   const notice = props.searchParams ? param(props.searchParams, 'notice') : undefined;
   const error = props.searchParams ? param(props.searchParams, 'error') : undefined;
-  const onSettings = props.active === SETTINGS.key;
+  const onSettings = (PARENT[props.active] ?? props.active) === SETTINGS.key;
   return (
     <AppShell
       user={user}
@@ -226,7 +245,7 @@ export async function MarketingPage(props: MarketingPageProps) {
         onSettings
           ? [
               { label: 'Marketing OS', href: MODULE.basePath },
-              { label: SETTINGS.label, href: modulePath(SETTINGS.path) },
+              { label: props.title ?? 'Settings', href: props.path },
             ]
           : undefined
       }

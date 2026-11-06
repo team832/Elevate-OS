@@ -29,15 +29,8 @@ const OUTCOMES: Record<Outcome, string> = {
   not_submitted: 'Not submitted',
 };
 
-export function csvResponse(csv: string, filename: string): Response {
-  return new Response(csv, {
-    headers: {
-      'content-type': 'text/csv; charset=utf-8',
-      'content-disposition': `attachment; filename="${filename.replace(/[^\w.-]/g, '_')}"`,
-      'cache-control': 'no-store',
-    },
-  });
-}
+/** Moved to server-kit (one CSV response for every app); kept here for the routes that import it. */
+export { csvResponse } from '@elevate/server-kit';
 
 /** The version to export: `n`, else the latest submitted one, else the draft. */
 function pick(r: EodReportView, n?: number) {

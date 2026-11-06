@@ -204,13 +204,13 @@ describe('Calendar drill-downs', () => {
             }
           : {}),
       });
-    await plan('Sample drill A', '2026-11-03', 'planned');
-    await plan('Sample drill B', '2026-11-09', 'submitted');
-    await plan('Sample drill C', '2026-11-05', 'published');
-    await plan('Sample drill D', '2026-11-10', 'planned');
+    await plan('Sample drill A', '2025-03-03', 'planned');
+    await plan('Sample drill B', '2025-03-09', 'submitted');
+    await plan('Sample drill C', '2025-03-05', 'published');
+    await plan('Sample drill D', '2025-03-10', 'planned');
     const counts = await calendarCounts(
       ctx.db,
-      { from: new Date('2026-11-03T00:00:00+05:30'), to: new Date('2026-11-10T00:00:00+05:30') },
+      { from: new Date('2025-03-03T00:00:00+05:30'), to: new Date('2025-03-10T00:00:00+05:30') },
       anika.staffId,
     );
     expect(counts).toEqual({ due: 2, awaitingReview: 1 });
@@ -219,7 +219,7 @@ describe('Calendar drill-downs', () => {
       const html = await render(CalendarPage(sp(params)), manager);
       return (html.match(/data-label="Title"/g) ?? []).length;
     };
-    const period = { from: '2026-11-03', to: '2026-11-09', owner: anika.staffId };
+    const period = { from: '2025-03-03', to: '2025-03-09', owner: anika.staffId };
     expect(await rows({ ...period, due: true })).toBe(counts.due);
     expect(await rows({ ...period, status: 'submitted' })).toBe(counts.awaitingReview);
     const [course] = await ctx.db
@@ -232,7 +232,7 @@ describe('Calendar drill-downs', () => {
       .where(eq(marketingCalendarItems.title, 'Sample drill A'));
     const byCourse = await calendarCounts(
       ctx.db,
-      { from: new Date('2026-11-03T00:00:00+05:30'), to: new Date('2026-11-10T00:00:00+05:30') },
+      { from: new Date('2025-03-03T00:00:00+05:30'), to: new Date('2025-03-10T00:00:00+05:30') },
       anika.staffId,
       undefined,
       course!.id,

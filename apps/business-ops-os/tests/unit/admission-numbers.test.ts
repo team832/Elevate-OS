@@ -3,6 +3,7 @@ import {
   checkManualNumber,
   counterScopeKey,
   formatAdmissionNumber,
+  normaliseAdmissionNumber,
 } from '../../src/domain/admission-numbers';
 import { SETTING_DEFINITIONS } from '../../src/domain';
 
@@ -29,6 +30,17 @@ describe('admission number format (A-STU-1)', () => {
 
   it.each([0, -1, 1.5])('refuses sequence %d', (seq) => {
     expect(() => formatAdmissionNumber(DEFAULT, seq, 2026)).toThrow();
+  });
+
+  it.each([
+    ['42', 3, '042'],
+    ['0042', 3, '042'],
+    ['042', 3, '042'],
+    ['1000', 3, '1000'],
+    ['7', 5, '00007'],
+    ['MAN-042', 3, 'MAN-042'],
+  ])('C1-6: %s at width %i is the number %s', (value, width, expected) => {
+    expect(normaliseAdmissionNumber(value, width)).toBe(expected);
   });
 });
 

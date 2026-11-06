@@ -3,6 +3,7 @@ import { MODULES, type ModuleKey } from '@elevate/shared-types';
 import { BrandLogo } from './brand';
 import { Icon, type IconName } from './icons';
 import { NotificationToaster } from './notify';
+import { PrintButton, PrintHeader, PrintedByName } from './print-button';
 import { ShellFrame } from './shell-client';
 
 export interface ShellUser {
@@ -436,7 +437,7 @@ export function AppShell(props: AppShellProps) {
       {typeof props.unreadNotifications === 'number' && base ? (
         <NotificationToaster base={base} unread={props.unreadNotifications} />
       ) : null}
-      {props.children}
+      <PrintedByName name={props.user.displayName}>{props.children}</PrintedByName>
     </ShellFrame>
   );
 }
@@ -447,6 +448,7 @@ export function PageHeader({
   actions,
   meta,
   tabs,
+  print = true,
 }: {
   title: string;
   description?: ReactNode;
@@ -455,9 +457,12 @@ export function PageHeader({
   meta?: ReactNode;
   /** Area navigation shown under the header (e.g. <AdmissionsNav />). */
   tabs?: ReactNode;
+  /** The Print button after the actions (owner, 6 Nov 2026: every page prints). False where printing makes no sense. */
+  print?: boolean;
 }) {
   return (
     <div className="el-page-header">
+      <PrintHeader title={title} renderedAt={new Date().toISOString()} />
       <div className="el-page-head">
         <div className="el-page-titles">
           <div className="el-page-titlerow">
@@ -466,7 +471,12 @@ export function PageHeader({
           </div>
           {description ? <p className="el-page-description">{description}</p> : null}
         </div>
-        {actions ? <div className="el-page-actions">{actions}</div> : null}
+        {actions || print ? (
+          <div className="el-page-actions">
+            {actions}
+            {print ? <PrintButton /> : null}
+          </div>
+        ) : null}
       </div>
       {tabs ?? null}
     </div>

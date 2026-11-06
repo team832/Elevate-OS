@@ -7,6 +7,7 @@
  * Counts from Ops' own complete tables are `ok`, and a real 0 shows as 0.
  */
 import { metric, type Metric } from '@elevate/shared-contracts';
+import { inWindow, meta, pct } from './admissions-kpis-overview';
 import { addDays, daysBetween, istToday, windowLabel, type IsoDate } from './dates';
 
 export interface KpiWindow {
@@ -14,13 +15,6 @@ export interface KpiWindow {
   to: IsoDate;
 }
 
-const pct = (num: number, den: number) => Math.round((num / den) * 1000) / 10;
-const inWindow = (d: IsoDate, w: KpiWindow) => d >= w.from && d <= w.to;
-const meta = (definition: string, w: KpiWindow, unit: Metric['unit'], label?: string) => ({
-  definition,
-  window: { from: w.from, to: w.to, label: label ?? windowLabel(w.from, w.to) },
-  unit,
-});
 /** Point-in-time metadata: the window is today (IST). */
 const asOfMeta = (definition: string, asOf: Date, unit: Metric['unit']) => {
   const today = istToday(asOf);

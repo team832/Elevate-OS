@@ -7,7 +7,15 @@
  * file: it is never listed in SCHEMA_MODULES or drizzle.config.ts and exports no tables.
  */
 import { sql } from 'drizzle-orm';
-import { date, pgSchema, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  date,
+  numeric,
+  pgSchema,
+  timestamp,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
 import type { StaffMemberId, StudentIdentityId, UserId } from '@elevate/shared-types';
 import { staffMembers, students, users } from './core';
 
@@ -51,6 +59,15 @@ export const OPS_DECISION_STATES = [
   'pending_verification',
   'superseded',
 ] as const;
+
+/** Integer paise (INR); amounts carry a `> 0` CHECK. */
+export const paise = (name: string) => bigint(name, { mode: 'number' });
+/** Day count in half-day steps (leave, loss of pay): exact numeric(5,1). */
+export const dayCount = (name: string) => numeric(name, { precision: 5, scale: 1, mode: 'number' });
+/** CHECK fragment: a whole or half number of days. */
+export const halfDays = (column: AnyPgColumn) => sql`${column} * 2 = trunc(${column} * 2)`;
+/** CHECK fragment: a lower snake-case key (template items, codes). */
+export const keyFormat = (column: AnyPgColumn) => sql`${column} ~ '^[a-z][a-z0-9_]{1,59}$'`;
 
 /** CHECK fragment: the text column holds something other than blanks. */
 export const filled = (column: AnyPgColumn) => sql`length(trim(coalesce(${column}, ''))) > 0`;

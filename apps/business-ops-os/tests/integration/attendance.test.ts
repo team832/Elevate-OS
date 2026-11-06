@@ -23,7 +23,11 @@ import { POST as holidayRoute } from '../../src/app/api/v1/attendance/holidays/r
 import { POST as leaveRoute } from '../../src/app/api/v1/attendance/leave/route';
 import { POST as cancelLeaveRoute } from '../../src/app/api/v1/attendance/leave/[id]/route';
 import { POST as holidayDecisionRoute } from '../../src/app/api/v1/attendance/holidays/[id]/route';
-import { GET as correctionsList } from '../../src/app/api/v1/attendance/corrections/route';
+import {
+  GET as correctionsList,
+  POST as correctionRoute,
+} from '../../src/app/api/v1/attendance/corrections/route';
+import { POST as correctionDecideRoute } from '../../src/app/api/v1/attendance/corrections/[id]/route';
 import { attendanceSummary } from '../../src/server/attendance-hr';
 import { stubAcademic } from './academic-stub';
 import { at, attendanceWorld, D1, D2, D3, get, PATTERN, post } from './attendance-fixture';
@@ -238,7 +242,7 @@ describe('punches and HR decisions', () => {
       staffId: w.hr2.staffId,
       fromDate: D1,
       toDate: D2,
-      kind: 'Sample casual leave',
+      kind: 'Casual',
     });
     expect(leave.status).toBe(201);
     expect(await w.day(w.hr2.staffId, D1)).toMatchObject({ status: 'on_leave' });
@@ -252,6 +256,72 @@ describe('punches and HR decisions', () => {
     expect(await w.day(w.hr2.staffId, D1)).toMatchObject({ status: 'unmarked' });
     const [audit] = await ctx.db.select().from(auditEvents).where(eq(auditEvents.entityId, id));
     expect(audit).toBeDefined();
+  });
+
+  it('a decision cannot set On leave: leave is recorded, under "Who approves leave" (C3-4)', async () => {
+    const r = await post(decisionRoute, w.hr, '/decisions', {
+      staffId: w.teacher2.staffId,
+      workDate: D1,
+      status: 'on_leave',
+      note: 'Sample note',
+    });
+    expect(r.status).toBe(400);
+    expect(await w.day(w.teacher2.staffId, D1)).toMatchObject({ basis: 'computed' });
+  });
+
+  it('approved leave replaces an earlier HR Absent; cancelling the leave brings it back (C3-2)', async () => {
+    const s = await staffUser(ctx.db, ['admissions_counsellor'], { name: 'Sample Leave Taker' });
+    const absent = await post(decisionRoute, w.hr, '/decisions', {
+      staffId: s.staffId,
+      workDate: D1,
+      status: 'absent',
+      note: 'Did not come in',
+    });
+    expect(absent.status).toBe(200);
+    const leave = await post(leaveRoute, w.hr, '/leave', {
+      staffId: s.staffId,
+      fromDate: D1,
+      toDate: D1,
+      kind: 'Sick',
+    });
+    expect(leave.status).toBe(201);
+    expect(await w.day(s.staffId, D1)).toMatchObject({ status: 'on_leave', basis: 'computed' });
+    expect(await attendanceSummary(ctx.db, s.staffId, D1, D1)).toMatchObject({
+      leave: 1,
+      confirmedAbsences: 0,
+    });
+    const id = leave.data!.id;
+    const cancel = await post(
+      cancelLeaveRoute,
+      w.hr,
+      `/leave/${id}`,
+      { reason: 'Entered in error' },
+      { id },
+    );
+    expect(cancel.status).toBe(200);
+    expect(await w.day(s.staffId, D1)).toMatchObject({ status: 'absent', basis: 'hr_decision' });
+  });
+
+  it('on approved leave, an HR Absent and an approved Absent correction are refused (REV-1 D4)', async () => {
+    const s = await staffUser(ctx.db, ['admissions_counsellor'], { name: 'Sample Leave Taker Two' });
+    const leave = { staffId: s.staffId, fromDate: D2, toDate: D2, kind: 'Sick' };
+    expect((await post(leaveRoute, w.hr, '/leave', leave)).status).toBe(201);
+    const day = { staffId: s.staffId, workDate: D2, note: 'Did not come in' };
+    const absent = await post(decisionRoute, w.hr, '/decisions', { ...day, status: 'absent' });
+    expect(absent.status).toBe(409);
+    expect(absent.error!.message).toMatch(/approved leave.*Cancel the leave first/);
+    const asked = await post(correctionRoute, s, '/corrections', {
+      workDate: D2,
+      requestedStatus: 'absent',
+      reason: 'I was not in that day',
+    });
+    expect(asked.status).toBe(201);
+    const id = asked.data!.id;
+    const approve = await post(correctionDecideRoute, w.hr, `/corrections/${id}`, { decision: 'approved' }, { id });
+    expect(approve.status).toBe(409);
+    expect(await w.day(s.staffId, D2)).toMatchObject({ status: 'on_leave', basis: 'computed' });
+    // Present over leave stays HR's call until the owner decides (C3-3).
+    expect((await post(decisionRoute, w.hr, '/decisions', { ...day, status: 'present' })).status).toBe(200);
   });
 
   it('assignSchedule: a weekly-off-only schedule makes the day weekly off', async () => {

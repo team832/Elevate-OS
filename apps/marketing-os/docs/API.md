@@ -158,3 +158,13 @@ Pages: `/marketing/calendar` (+ `/new`, `/:id`), `/marketing/optimisation` (+ `/
 - A contributor no longer sees the Assign form; Assign is a staff picker, not a typed user id. Only active Marketing & Growth staff can be chosen (RVB-008).
 - `/marketing/deliverables?content=<state>#my-content`: the My Day tile opens only your content in that state (RVB-010). Any other value shows all your content.
 - Unknown paths under `/marketing/api/` answer a JSON 404, or 403 cross-site (`src/app/api/[...unknown]/route.ts`, D-124). A form posted to a path the proxy skips is refused too (RVA-008).
+
+## Added on 6 Nov 2026 (mounted from Business Operations; same handlers and permissions as `apps/business-ops-os/docs/API.md`, "Routes added or changed on 6 Nov 2026"; on no package)
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET, POST | `/marketing/api/v1/lead-sharing` | `ops:leads:assign` | Sharing rules as CSV; save a programme's rule or the default (`leadsRoutes`, D-153) |
+| DELETE | `/marketing/api/v1/lead-sharing/{id}` | `ops:leads:assign` | Remove a rule (D-153) |
+| GET | `/marketing/api/v1/exports/{list}` | any list's page permission; each list re-checks its own | Spreadsheet downloads, e.g. My attendance and leave, tasks, leads (`workRoutes`) |
+| GET | `/marketing/api/v1/payslips/{id}/pdf` | `ops:payslips:read`, `ops:payroll:manage` or `ops:payroll:approve` | Your own payslip once its run is approved (`workRoutes`, D-151) |
+
+Pages: `/marketing/leads/sharing` (gated `ops:leads:assign`), `/marketing/my-payslips` (gated `ops:payslips:read`).

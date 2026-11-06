@@ -16,7 +16,8 @@ import { NotFoundError } from '@elevate/shared-contracts';
 import type { StaffMemberId, UserId } from '@elevate/shared-types';
 import type { IsoDate } from '../domain/dates';
 import { isImportedReport } from '../domain/eod';
-import type { Period } from '../domain/work-report';
+import { filingClosesAt, periodLabel, reportDeadline, type Period } from '../domain/work-report';
+import { fmtDateTime, plural } from '../ui/format';
 import { accessScope, managedStaffIds, notFound, staffIdForUser, type Actor } from './context';
 import { inHrReach } from './hr-scope';
 import { loadSettings } from './settings';
@@ -34,7 +35,17 @@ export async function reportSettings(db: Database) {
       month: s['reports.monthly_deadline'].value.deadline,
     },
     external: s['eod.external_delivery'].value.channel,
+    filingWindowDays: s['eod.late_filing_window'].value.days,
   };
+}
+type ReportSettings = Awaited<ReturnType<typeof reportSettings>>;
+
+/** F4-11: why a first filing for this period is refused now (its late window has closed), else null. */
+export function filingRefusal(p: Period, s: ReportSettings, now = new Date()) {
+  const closes = filingClosesAt(p, reportDeadline(p, s.deadlines), s.filingWindowDays);
+  return closes && now > closes
+    ? `Reports can be filed up to ${plural(s.filingWindowDays!, 'day')} after the deadline. Filing for ${periodLabel(p)} closed at ${fmtDateTime(closes)}.`
+    : null;
 }
 
 /** The deadline frozen on a submitted version: null = none was set; undefined = not stored (older version). */
@@ -145,7 +156,10 @@ export async function readerOf(db: Database, actor: Actor, row: Row) {
 /** Of these reports, the ones the reader may open: one sent to another manager stays listed on a period report, unlinked. */
 export async function openableReportIds(db: Database, actor: Actor, ids: readonly string[]) {
   const rows = ids.length
-    ? await db.select().from(reports).where(inArray(reports.id, [...ids] as never[]))
+    ? await db
+        .select()
+        .from(reports)
+        .where(inArray(reports.id, [...ids] as never[]))
     : [];
   const open = new Set<string>();
   for (const row of rows)

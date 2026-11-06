@@ -25,6 +25,7 @@ import {
 import type { StaffMemberId, UserId } from '@elevate/shared-types';
 import {
   decideHrRequest,
+  HR_REQUEST_RULES,
   isEditable,
   recipientKeyLabel,
   type HrRequestAction,
@@ -334,6 +335,8 @@ export async function hrRequestAction(
       requestId: before.id,
       kind: d.event,
       actorUserId: actor.id,
+      // Approval cover (F4-10): HR's steps taken for the approver covered.
+      onBehalfOf: HR_REQUEST_RULES[action].who === 'hr' ? v.onBehalfOf : null,
       // Only HR writes HR notes; anything else sent as one is dropped.
       hrNote: !v.roles.includes('hr') ? null : action === 'note' ? text : (body.hrNote ?? null),
       body: action === 'note' ? null : (body.body ?? null),
@@ -344,7 +347,7 @@ export async function hrRequestAction(
       set = { submittedAt: now };
     }
     if (action === 'forward') {
-      const to = await forwardTarget(tx, actor, before, body.toStaffId);
+      const to = await forwardTarget(tx, v.as, before, body.toStaffId);
       Object.assign(event, { forwardedToStaffId: to.id, visibleToRecipient: true });
     }
     if (action === 'respond') event.visibleToRecipient = true;
@@ -368,7 +371,7 @@ export async function hrRequestAction(
       actor,
       id,
       `hr_request.${action}`,
-      { before, after, metadata: { event: d.event } },
+      { before, after, metadata: { event: d.event, onBehalfOf: event.onBehalfOf } },
       requestId,
     );
     await notifyFor(tx, actor, action, after!, event);

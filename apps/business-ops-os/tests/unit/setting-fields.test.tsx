@@ -280,7 +280,9 @@ describe('rows, through the real blank draft', () => {
     departmentCodes: 'SAMPLE_NEW',
     mandatory: 'aadhaar',
     sharesPercent: '10',
+    reminderDays: '30',
     types: 'Sample leave',
+    template: 'This certifies that {student} is a sample.',
   };
   const typeInto = (s: FieldShape, d: Draft, name: string): Draft =>
     s.kind === 'group'

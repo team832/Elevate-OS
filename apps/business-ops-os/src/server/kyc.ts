@@ -35,6 +35,11 @@ export const KYC_ACTIONS = [
   'kyc.document_verified',
   'kyc.document_rejected',
   'sibling.linked',
+  // Portal access on the student record (F4-13); the setup code itself is never audited.
+  'portal.access_given',
+  'portal.code_issued',
+  'portal.access_enabled',
+  'portal.access_disabled',
 ] as const;
 
 const audit = opsAudit('student');

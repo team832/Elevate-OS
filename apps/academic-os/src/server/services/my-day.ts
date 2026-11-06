@@ -6,7 +6,7 @@
  * log (R12). Every teacher gets the same view, filled from their own assignments (brief
  * 23 Oct 2026 §7); staff attendance lives in HR (My attendance), never inferred from classes.
  */
-import { and, asc, count, eq, gte, inArray, isNull, notExists, or } from 'drizzle-orm';
+import { and, asc, count, eq, gte, inArray, isNull, lt, lte, notExists, or } from 'drizzle-orm';
 import {
   academicAssessments,
   academicAttendance,
@@ -21,7 +21,7 @@ import {
 } from '@elevate/database';
 import { can } from '@elevate/authorization';
 import { addDays, type BatchId, type IsoDate } from '@elevate/shared-types';
-import { parseClock } from '../../domain';
+import { formatClock, parseClock } from '../../domain';
 import { resolveScope, studentIdsInScope, todayIst, type Actor } from '../context';
 import { listAssignmentsFor } from './assignments';
 import { countAssessments, teacherAssessments } from './teacher-assessment-counts';
@@ -160,7 +160,10 @@ export async function coordinatorOverview(db: Database, actor: Actor, now = new 
         notExists(db.select({ id: academicBatchPlacements.id }).from(academicBatchPlacements).where(and(eq(academicBatchPlacements.enrolmentId, academicEnrolments.id), or(isNull(academicBatchPlacements.endDate), gte(academicBatchPlacements.endDate, today))))),
       ),
     );
-  const [{ marking } = { marking: 0 }] = await db.select({ marking: count() }).from(academicAssessments).where(eq(academicAssessments.status, 'conducted'));
+  // Conducted, or scheduled and started: an earlier day, or today once its start time has passed (IST; untimed = the day).
+  const A = academicAssessments;
+  const started = or(lt(A.scheduledDate, today), and(eq(A.scheduledDate, today), or(isNull(A.startTime), lte(A.startTime, formatClock(nowMin)))));
+  const [{ marking } = { marking: 0 }] = await db.select({ marking: count() }).from(A).where(or(eq(A.status, 'conducted'), and(eq(A.status, 'scheduled'), started)));
   // Planned vs taught chapters per active batch (A3's coverage read: first-teaching logs only, never mastery).
   const coverage = [];
   for (const b of (await listBatches(db, actor)).filter((x) => x.status === 'active')) {

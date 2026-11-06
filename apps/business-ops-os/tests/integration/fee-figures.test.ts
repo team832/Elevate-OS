@@ -3,7 +3,7 @@
  * screen, paper and record that says what a student owes gives the same amount. Each scenario has
  * its own counsellor, so the reader's own scope isolates it on the lists. Fictional data only.
  */
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { opsAdmissions, opsExitRecords, opsLeads, type opsApplications } from '@elevate/database';
@@ -23,7 +23,12 @@ import { liveSnapshot, paidOf } from '../../src/server/applications-state';
 import { buildAdmissionsOverview } from '../../src/server/admissions-overview';
 import { listCollections, listOutstanding } from '../../src/server/fee-collections';
 import { feeYear } from '../../src/server/fee-year';
-import { feeStatusForStudents, listAdmissionFees, studentFeePlans } from '../../src/server/fees';
+import {
+  feeStatusForStudents,
+  listAdmissionFees,
+  recordFeeEntry,
+  studentFeePlans,
+} from '../../src/server/fees';
 import { loadSettings } from '../../src/server/settings';
 import { getStudent } from '../../src/server/student-profile';
 import { StudentFeesSection } from '../../src/ui/student-fees-section';
@@ -485,6 +490,37 @@ describe('a reduction never makes a credit nobody paid (HMO-007, Proposed)', () 
     const body = { ...reg, kind: 'waiver', amountPaise: 5_000_01, notes: 'Test reason' };
     expect((await callRoute(charge, post(finance, body))).status).toBe(400);
   });
+
+  it('a registration waiver on another case of the student is bound by what is owed there too (C1-1)', async () => {
+    const s = await newStudent();
+    const sibling = await caseOf(db(), manager.id, s.sid, 'enrolled', { programme: 'CLASS_12' });
+    const reg = (admissionId: string, body: object) =>
+      callRoute(charge, post(finance, { admissionId, chargeCategory: 'registration', ...body }));
+    await accepted(reg(s.admission.id, { kind: 'due' }));
+    const waive = (admissionId: string, amountPaise: number) =>
+      reg(admissionId, { kind: 'waiver', amountPaise, notes: 'Test reason' });
+    expect((await waive(sibling.id, 50_000_00)).status).toBe(400);
+    await accepted(waive(sibling.id, 5_000_00));
+    expect((await waive(s.admission.id, 1)).status).toBe(400);
+  });
+});
+
+describe('two cases of one student at once (C1-2)', () => {
+  // PGlite runs one transaction at a time, so a Promise.all race cannot fail here: prove the lock.
+  it('recording an entry locks the student row, so the once-per-student checks queue', async () => {
+    const s = await newStudent();
+    const locked = await withTransaction(db(), async (tx) => {
+      await recordFeeEntry(tx, finance, s.admission, {
+        kind: 'due',
+        chargeCategory: 'registration',
+      });
+      const res = (await tx.execute(
+        sql`SELECT xmax = pg_current_xact_id()::xid AS locked FROM core.students WHERE id = ${s.sid}`,
+      )) as { rows: { locked: boolean }[] };
+      return res.rows[0]?.locked;
+    });
+    expect(locked).toBe(true);
+  });
 });
 
 describe('a refund cannot predate its payment (HMO-012, Proposed)', () => {
@@ -661,6 +697,29 @@ describe('the same payment twice (HUS-008, API-008, Proposed)', () => {
     const made = await accepted(entry(finance, s, first));
     await reverse(made.data!.id);
     expect((await entry(finance, s, first)).status).toBe(201);
+  });
+
+  it('the same refund again after a reload is refused; another receipt is a second refund (C1-5)', async () => {
+    const s = await newStudent();
+    const p = await pay(s, 10_000_00);
+    const refund = (receiptReference: string) =>
+      callRoute(
+        feeAction,
+        post(finance, {
+          action: 'refund',
+          amountPaise: 1_000_00,
+          paymentDate: today,
+          receiptReference,
+        }),
+        { id: p.data!.id },
+      );
+    await accepted(refund('TEST-FIG-RFD'));
+    const again = await refund('test-fig-rfd');
+    expect(again.status).toBe(400);
+    expect(again.error?.message).toMatch(
+      /^This refund is already recorded \(.+\)\. A second refund needs its own receipt reference\.$/,
+    );
+    await accepted(refund('TEST-FIG-RFD-2'));
   });
 
   it('three at once: one row, whatever the keys', async () => {

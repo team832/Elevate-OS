@@ -35,8 +35,8 @@ export async function BookDemo({
     return (
       <EmptyState
         title="No student is ready for a demo"
-        description="A demo is booked after counselling. Book the session from the lead's admission case; once it is held, open it under Events and counselling and use Record outcome, then come back."
-        action={<a href="/ops/meetings">Open Events and counselling</a>}
+        description="A demo is booked after counselling. Book the session from the lead's admission case; once it is held, open it under Counselling and events and use Record outcome, then come back."
+        action={<a href="/ops/meetings">Open Counselling and events</a>}
       />
     );
   /** Slot `k` of day `day`: the first class is required, the second optional (dropped if blank). */
@@ -79,12 +79,12 @@ export async function BookDemo({
           A demo is booked after counselling, and only when no demo is open.{' '}
           <a href={`/ops/leads/${leadId}`}>Open the lead</a> to book the session from its admission
           case; once held, record its outcome under{' '}
-          <a href="/ops/meetings">Events and counselling</a>. Or choose another student below.
+          <a href="/ops/meetings">Counselling and events</a>. Or choose another student below.
         </Alert>
       ) : null}
       <p className="el-field-hint">
         Only counselled students without an open demo are listed. Missing someone? Record their
-        counselling outcome under <a href="/ops/meetings">Events and counselling</a>.
+        counselling outcome under <a href="/ops/meetings">Counselling and events</a>.
       </p>
       <p className="el-field-hint">
         {count.value.count} demo days, each on its own date with one

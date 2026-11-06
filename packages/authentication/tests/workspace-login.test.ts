@@ -54,7 +54,7 @@ const handler = (module: ModuleKey) =>
     defaultRedirect: module === 'platform' ? '/' : `/${module}`,
     getDb: () => db,
     getSecret: () => SECRET,
-    throttle: new LoginThrottle({ maxFailures: 100 }),
+    throttle: new LoginThrottle('login', 100),
   });
 
 const formPost = (url: string, fields: Record<string, string>, origin?: string) =>

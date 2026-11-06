@@ -53,7 +53,7 @@ export function SalesCallsBody({
         description={
           <>
             {CALL_NOTE} Next steps live in{' '}
-            <a href={base === '/ops' ? '/ops#my-follow-ups' : `${base}/follow-ups`}>Follow-ups</a>.
+            <a href={`${base}/follow-ups`}>Follow-ups</a>.
           </>
         }
         actions={

@@ -39,6 +39,8 @@ export const OPS_EOD_STATUSES = [
   'submitted',
   'revision_requested',
   'acknowledged',
+  // F4-11 "Ask for more detail": back to the author to edit and resubmit, like revision_requested.
+  'more_detail_requested',
 ] as const;
 /** Report period (ruling R7): one table for EOD, weekly and monthly work reports. */
 export const OPS_REPORT_PERIOD_KINDS = ['day', 'week', 'month'] as const;
@@ -49,6 +51,7 @@ export const OPS_EOD_REVIEW_EVENT_KINDS = [
   'revision_requested',
   'acknowledged',
   'follow_up_task_created',
+  'more_detail_requested',
 ] as const;
 
 /** Employee-written parts of a submitted version. */
@@ -180,7 +183,7 @@ export const opsEodReviewEvents = ops.table(
     check('eod_review_events_kind_check', sql`${t.kind} IN ${inList(OPS_EOD_REVIEW_EVENT_KINDS)}`),
     check(
       'eod_review_events_text_check',
-      sql`${t.kind} NOT IN ('comment', 'clarification_requested', 'revision_requested') OR length(trim(coalesce(${t.text}, ''))) > 0`,
+      sql`${t.kind} NOT IN ('comment', 'clarification_requested', 'revision_requested', 'more_detail_requested') OR length(trim(coalesce(${t.text}, ''))) > 0`,
     ),
     check(
       'eod_review_events_task_check',

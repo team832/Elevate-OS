@@ -34,14 +34,36 @@ export function Roster({
       (a.rank ?? Infinity) - (b.rank ?? Infinity) ||
       a.displayName.localeCompare(b.displayName),
   );
+  // Academic's marker: the evaluator, else the responsible teacher.
+  const marker = t.evaluator?.name ?? t.responsibleTeacher?.name ?? 'no marking teacher named';
+  const notEntered = (batchId: string) =>
+    d.roster.filter(
+      (r) =>
+        r.batchId === batchId &&
+        !r.removedAt &&
+        r.marksState === 'not_entered' &&
+        (r.attendance === 'present' || r.attendance === 'unmarked'),
+    ).length;
   return (
     <Segment
       title="Roster and marks"
       flush
       description={
-        t.rosterSnapshotAt
-          ? `Taken ${fmtDateTime(t.rosterSnapshotAt)} from the eligible batches; later batch changes do not alter it. Missing marks are not absence.`
-          : undefined
+        t.rosterSnapshotAt ? (
+          <>
+            Taken {fmtDateTime(t.rosterSnapshotAt)} from the eligible batches; later batch changes
+            do not alter it. Missing marks are not absence.
+            {t.batches.map((b) => {
+              const n = notEntered(b.batchId);
+              return (
+                <span key={b.batchId}>
+                  <br />
+                  {`${b.code}: ${n ? `${n} not entered` : 'all entered'} · ${marker}`}
+                </span>
+              );
+            })}
+          </>
+        ) : undefined
       }
     >
       {t.rosterSnapshotAt ? (

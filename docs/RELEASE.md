@@ -82,8 +82,8 @@ Over an existing database: back up, stop the apps, preflight, migrate, start, sm
 ## What it does not do
 
 - No HTTPS, no hosting, no domain.
-- No scheduler. Every background job runs when someone presses its button (D-117).
-- No file storage: uploads and downloads refuse in production (`STORAGE_NOT_SET_UP`). Marks by hand, publishing and attendance import still work.
+- Background jobs are off until someone switches each one on in Settings → Background jobs (D-133); until then they run only from their buttons.
+- Uploaded files are kept in the database (`ops.attachment_files`, D-135), so the database must have migration `0019`; preflight names it as a blocker while it is missing.
 - No email, publishing or metrics: stand-ins only.
 - No monitoring: logs go to `logs/<app>.log`.
 - No backup or restore of its own (see Backup below).
@@ -92,23 +92,22 @@ Over an existing database: back up, stop the apps, preflight, migrate, start, sm
 
 No package can fix these. Preflight lists the ones that apply.
 
-| Blocker | Where it stands on 31 Oct 2026 |
+| Blocker | Where it stands on 31 Oct 2026 (rows marked 6 Nov updated then) |
 |---|---|
 | Sign-in for real people | New accounts have no password and no screen sets one. Production needs Google configured, or nobody can sign in, including the first administrator (owner decision D-041) |
 | Password reset | Not built |
 | Admission confirmation | Asks for the approver's password. A Google-only person has none, and the step refuses. No real admission can be confirmed in production yet (D-041) |
-| File storage | Refused in production until the owner picks a provider. Feedback import keeps no source copy |
+| File storage | In the database since 6 Nov 2026 (D-135); needs migration `0019`. The JSON backup does not handle file bytes well and has no restore |
 | Addresses and topology | See "Addresses are built in" below |
 | HTTPS | Needs a proxy. The Secure cookie follows `PLATFORM_URL` |
-| Scheduler | None. Since 31 Oct the jobs have buttons on the Business Operations Overview, for the operations manager only |
-| Sign-in limits | Counted per app and lost at restart. See "Sign-in limits" below |
+| Scheduler | Built 6 Nov 2026 (D-133). Every job is off until someone with `ops:jobs:run` switches it on in Settings → Background jobs; how often each runs is Proposed. Not yet seen running under `next start` |
+| Sign-in limits | Shared by every app and kept across restarts since 6 Nov 2026 (`core.login_attempts`, migration `0019`). See "Sign-in limits" below |
 | Backup and restore | `pg_dump` needed; no restore has ever been tried |
-| Clean-up | Sessions ended over 30 days ago and expired form keys go when the `housekeeping` button is pressed. The audit trail and event history still grow without limit |
+| Clean-up | Sessions ended over 30 days ago, expired form keys and expired failed-sign-in counts go when the `housekeeping` job runs (button, or the runner once switched on). The audit trail and event history still grow without limit |
 | Monitoring | None |
 | External channels | Email, publishing and metrics are stand-ins |
 | Owner approvals | Grants marked Proposed, the open questions in `HANDOFF.md`, DPDP guardian consent |
-| 0017 on the owner's computer | Status unknown. It freezes once applied. See `HANDOFF.md` steps |
-| 0018 on the owner's computer | Not applied. New on 31 Oct; a package built from `d741b5b` or later carries 19 migrations. See `HANDOFF.md` step 10 |
+| 0017, 0018, 0019 on the owner's computer | Applied 6 Nov 2026 after a JSON backup; `db:check` 22/22. All three are frozen. A package carries 20 migrations; the next schema change is `0020` |
 | A workspace stopped, through the Platform port | A bare 500 (RVD-010, Low). Matters only if staff use the Platform's rewrite instead of the workspace's own port |
 
 Done since the spec of 30 Oct: reference data on a new database (`db/seed-reference.mjs`); an exit reaching Academic (the `enrolment-exits` button, D-115).
@@ -130,10 +129,10 @@ The apps trust `x-forwarded-for`, because a proxy is expected to set it. With no
 
 ## Sign-in limits
 
-- Counted separately in each of the four apps and forgotten at restart.
+- Counted once for all four apps in `core.login_attempts` and kept across restarts (6 Nov 2026). The raw email or address is never stored, only an HMAC-SHA256 of it with `SESSION_SECRET`; without `SESSION_SECRET` every sign-in is refused.
 - Lock for 15 minutes after 5 failures per email and address, 20 per email, 50 per address.
 - 60 wrong passwords at once: 5 checked, 55 refused.
-- The per-email limit means anyone can lock a person out of one app for 15 minutes.
+- The per-email limit means anyone can lock a person out of every workspace for 15 minutes.
 - Attempts count while in flight, so more than 5 simultaneous correct sign-ins for one person from one address can see a brief 429.
 
 ## Forty people at the same instant

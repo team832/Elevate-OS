@@ -6,12 +6,14 @@ import { and, eq } from 'drizzle-orm';
 import { authedRequest, callRoute, setupTestDatabase } from '@elevate/testing';
 import {
   auditEvents,
+  opsAttachmentFiles,
   opsAttachments,
   opsAttendanceCorrections,
   departments,
   opsEodReports,
   opsEodReportVersions,
   opsHrRequests,
+  opsLeaveApplications,
   opsStaffTasks,
   opsTaskCollaborators,
   staffMembers,
@@ -28,7 +30,14 @@ import {
   DELETE as deleteRoute,
   GET as downloadRoute,
 } from '../../src/app/api/v1/attachments/[id]/route';
-import { ATTACHMENT_ACCESS, listAttachments, uploadAttachment } from '../../src/server/attachments';
+import { attachmentStorage } from '../../src/server/adapters/attachment-storage';
+import {
+  ATTACHMENT_ACCESS,
+  attachmentDownload,
+  listAttachments,
+  uploadAttachment,
+} from '../../src/server/attachments';
+import { updateHrSetting } from '../../src/server/hr-settings';
 import { taskAction } from '../../src/server/task-actions';
 import { submissionHistory } from '../../src/server/task-submissions';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
@@ -157,6 +166,7 @@ beforeAll(async () => {
     .returning();
   const test = crypto.randomUUID(); // an Academic assessment id (no Ops row)
   Object.assign(owners, {
+    leave_application: await newLeave(owner),
     hr_request: request!.id,
     assessment_paper: test,
     assessment_key: test,
@@ -171,6 +181,26 @@ beforeAll(async () => {
     staff_private: owner.staffId,
   });
 });
+
+const newLeave = async (
+  who: StaffUser,
+  values: Partial<typeof opsLeaveApplications.$inferInsert> = {},
+) =>
+  (
+    await ctx.db
+      .insert(opsLeaveApplications)
+      .values({
+        staffId: who.staffId,
+        kind: 'Sick',
+        fromDate: today,
+        toDate: today,
+        reason: 'Sample fever',
+        appliedBy: who.id,
+        isSample: true,
+        ...values,
+      })
+      .returning()
+  )[0]!.id;
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -252,6 +282,12 @@ const MATRIX: [Kind, Record<Actor, [read: boolean, write: boolean]>][] = [
   [
     'hr_request',
     { owner: [R, !R], colleague: [!R, !R], manager: [!R, !R], hr: [R, R], teacher: [!R, !R] },
+  ],
+  // Owner decision 6 Nov 2026: a leave letter is as private as the leave reason. The applicant adds
+  // while pending; the leave approver (HR here) reads; nobody else, the applicant's manager included.
+  [
+    'leave_application',
+    { owner: [R, R], colleague: [!R, !R], manager: [!R, !R], hr: [R, !R], teacher: [!R, !R] },
   ],
   // Papers and keys: ops:assessments:read (the coordinator) reads, manage adds; score files: manage only.
   ...(['assessment_paper', 'assessment_key'] as const).map(
@@ -418,26 +454,6 @@ describe('attachments: upload, download, delete', () => {
       purpose: 'deliverable',
     });
     expect(sub.status).toBe(403);
-  });
-
-  it('when storage is not configured, upload is refused honestly and nothing is recorded', async () => {
-    const before = await ctx.db.select().from(opsAttachments);
-    // The service directly: a production NODE_ENV would also change the session cookie name.
-    vi.stubEnv('NODE_ENV', 'production');
-    const refused = uploadAttachment(ctx.db, people.owner, {
-      ownerKind: 'task',
-      ownerId: owners.task,
-      purpose: 'reference',
-      name: 'late.pdf',
-      mime: 'application/pdf',
-      dataBase64: b64(Buffer.concat([PDF, Buffer.from('n')])),
-    });
-    await expect(refused).rejects.toMatchObject({
-      status: 409,
-      message: expect.stringMatching(/^File storage is not set up yet/),
-    });
-    vi.stubEnv('NODE_ENV', 'test');
-    expect(await ctx.db.select().from(opsAttachments)).toHaveLength(before.length);
   });
 });
 
@@ -633,5 +649,126 @@ describe('attachments: the owning module decides (review round 1)', () => {
           )
         ).status,
       ).toBe(403);
+  });
+});
+
+describe('attachments: leave letters and certificates (owner decision 6 Nov 2026)', () => {
+  const evidence = (id: string, tag: string) => ({
+    ownerKind: 'leave_application',
+    ownerId: id,
+    purpose: 'evidence',
+    dataBase64: b64(Buffer.concat([PDF, Buffer.from(tag)])),
+  });
+  const decide = (id: string) =>
+    ctx.db
+      .update(opsLeaveApplications)
+      .set({
+        status: 'rejected',
+        decidedBy: people.hr.id,
+        decidedAt: new Date(),
+        decisionNote: 'Sample note',
+      })
+      .where(eq(opsLeaveApplications.id, id));
+  const approvers = (who: string[]) =>
+    updateHrSetting(ctx.db, people.hr, { key: 'hr.leave_approver', value: { who } });
+
+  it('HR reads only while its role approves leave (setting hr.leave_approver)', async () => {
+    const id = await newLeave(people.owner);
+    await approvers(['operations_manager']);
+    try {
+      expect(await ATTACHMENT_ACCESS.leave_application.canRead(ctx.db, people.hr, id)).toBe(false);
+    } finally {
+      await approvers(['hr_manager', 'operations_manager']);
+    }
+    expect(await ATTACHMENT_ACCESS.leave_application.canRead(ctx.db, people.hr, id)).toBe(true);
+  });
+
+  it('the applicant adds while pending and the approver downloads; once decided the files stay', async () => {
+    const id = await newLeave(people.owner);
+    const up = await upload('owner', evidence(id, 'leave-1'));
+    expect(up.status).toBe(201);
+    expect((await download('hr', up.data!.id)).status).toBe(200);
+    for (const who of ['manager', 'teacher', 'colleague'] as const)
+      expect((await download(who, up.data!.id)).status, who).toBe(404);
+    // M6: each read is audited, with ids only: no reason, file name or content.
+    const seen = await ctx.db
+      .select()
+      .from(auditEvents)
+      .where(
+        and(eq(auditEvents.entityId, up.data!.id), eq(auditEvents.action, 'attachment.downloaded')),
+      );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.actorUserId).toBe(people.hr.id);
+    expect(JSON.stringify(seen)).not.toMatch(/Sample fever|answer-key|PDF-1\.7|leave-1/);
+    expect((await upload('hr', evidence(id, 'leave-hr'))).status).toBe(403);
+    await decide(id);
+    expect((await upload('owner', evidence(id, 'leave-2'))).status).toBe(409);
+    expect((await remove('owner', up.data!.id)).status).toBe(409);
+    expect(
+      (await listAttachments(ctx.db, people.owner, 'leave_application', id)).map(
+        (f) => f.canDelete,
+      ),
+    ).toEqual([false]);
+  });
+
+  it('M4: a decision made after the first look still stops the upload, checked again under the lock', async () => {
+    const id = await newLeave(people.owner);
+    await decide(id);
+    const closed = vi
+      .spyOn(ATTACHMENT_ACCESS.leave_application, 'closed')
+      .mockResolvedValueOnce(null); // the first look, before the decision
+    const stored = readdirSync(dir).length;
+    const res = await upload('owner', evidence(id, 'leave-race'));
+    expect(closed).toHaveBeenCalledTimes(2);
+    closed.mockRestore();
+    expect(res.status).toBe(409);
+    expect(readdirSync(dir).length).toBe(stored);
+    expect(await listAttachments(ctx.db, people.owner, 'leave_application', id)).toEqual([]);
+  });
+});
+
+describe('attachments: kept in the database in production (D-135)', () => {
+  const store = () => attachmentStorage(ctx.db, { NODE_ENV: 'production' });
+  const stored = async (key: string) =>
+    (await ctx.db.select().from(opsAttachmentFiles).where(eq(opsAttachmentFiles.key, key)))[0];
+
+  it('production uses the database; outside it the local folder', () => {
+    expect(store().name).toBe('Database');
+    expect(attachmentStorage(ctx.db, { NODE_ENV: 'test', ATTACHMENTS_DIR: dir }).name).toBe(
+      'Local folder (development)',
+    );
+  });
+
+  it('put records the size; get returns the bytes; a used key is refused; delete removes the row', async () => {
+    const key = crypto.randomUUID();
+    await store().put(key, PDF);
+    expect((await stored(key))!.sizeBytes).toBe(PDF.length);
+    expect(Buffer.from(await store().get(key)).equals(PDF)).toBe(true);
+    await expect(store().put(key, Buffer.from('other'))).rejects.toThrow();
+    await store().delete(key);
+    expect(await stored(key)).toBeUndefined();
+    await expect(store().get(key)).rejects.toThrow();
+  });
+
+  it('an upload in production goes to the database and downloads from there', async () => {
+    const bytes = Buffer.concat([PDF, Buffer.from('in-db')]);
+    // The service directly: a production NODE_ENV would also change the session cookie name.
+    vi.stubEnv('NODE_ENV', 'production');
+    try {
+      const { id } = await uploadAttachment(ctx.db, people.owner, {
+        ownerKind: 'task',
+        ownerId: owners.task,
+        purpose: 'reference',
+        name: 'office.pdf',
+        mime: 'application/pdf',
+        dataBase64: b64(bytes),
+      });
+      const { row, bytes: back } = await attachmentDownload(ctx.db, people.owner, id);
+      expect((await stored(row.storageKey))!.sizeBytes).toBe(bytes.length);
+      expect(readdirSync(dir)).not.toContain(row.storageKey);
+      expect(Buffer.from(back).equals(bytes)).toBe(true);
+    } finally {
+      vi.stubEnv('NODE_ENV', 'test');
+    }
   });
 });

@@ -8,13 +8,18 @@
  * - Seat checks run after locking the batch row (SELECT … FOR UPDATE), so two allocations
  *   cannot both take the last seat. Demo attendees are REPORTED beside the seat count (setting
  *   `demo.attendees_count_toward_capacity`), never enforced here.
- * - Clash check: none of the student's other open placements may have a live session that
- *   overlaps one of the new batch's sessions on/after the start date. Only sessions that
- *   already exist are checked.
+ * - Clash check: none of the student's other open placements may have a live session or dated
+ *   test that overlaps one of the new batch's sessions or tests on/after the start date. Only
+ *   sessions and tests that already exist are checked.
+ * - A transfer (one student, or several in one transaction: F4-07) also moves the student's
+ *   untouched rows on future roster-managed tests (`refreshFutureRosters`).
+ * - Lock order, everywhere in this file: the target batch row first, then enrolment rows (a bulk
+ *   move: in id order), so two coordinators moving the same students cannot deadlock.
  * Every change needs `academic:enrolments:decide` (coordinator) and is audited.
  */
-import { and, asc, count, eq, gte, inArray, isNull, lte, ne, or } from 'drizzle-orm';
+import { and, asc, count, eq, gte, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import {
+  academicAssessmentRoster as R,
   academicBatchPlacements,
   academicBatches,
   academicChapters,
@@ -29,19 +34,21 @@ import {
 } from '@elevate/database';
 import { can } from '@elevate/authorization';
 import { withTransaction } from '@elevate/server-kit';
-import { ConflictError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
+import { AppError, ConflictError, NotFoundError, ValidationError } from '@elevate/shared-contracts';
 import { fmtDay, type BatchId, type EnrolmentId, type StudentId, type UserId } from '@elevate/shared-types';
 import type { z } from 'zod';
 import { enrolmentView, findSessionClashes, isBatchFull, transferEndDate } from '../../domain/placements';
 import { assertBatchInScope, audit, resolveScope, todayIst, type Actor } from '../context';
-import type { PLACEMENT_VIEWS, allocateBody, endEnrolmentBody, transferBody } from '../schemas-placements';
+import type { PLACEMENT_VIEWS, allocateBody, bulkTransferBody, endEnrolmentBody, transferBody } from '../schemas-placements';
 import { getBatchCoverage } from './curriculum';
 import { getSetting } from './settings';
+import { datedTests } from './timetable';
 import { fmtClock } from '../../domain/time';
 
 const pl = academicBatchPlacements;
 type Batch = typeof academicBatches.$inferSelect;
 type Enrolment = typeof academicEnrolments.$inferSelect;
+const MOVED_PREFIX = 'Moved to ';
 const holdsSeatFrom = (from: string) => or(isNull(pl.endDate), gte(pl.endDate, from));
 
 /** Lock the batch row for the seat check (same pattern as manual enrolment) and require it to be open. */
@@ -69,15 +76,24 @@ export async function clashMessages(tx: Database, enrolment: Enrolment, batch: B
   const others = placements.filter((o) => !(o.batchId === batch.id && o.endDate));
   if (others.length === 0) return [];
   const s = academicClassSessions;
-  const sessions = await tx
+  const batchIds = [batch.id, ...others.map((o) => o.batchId)];
+  const classes = await tx
     .select({ id: s.id, batchId: s.batchId, date: s.date, startTime: s.startTime, durationMinutes: s.durationMinutes, status: s.status })
     .from(s)
-    .where(and(inArray(s.batchId, [batch.id, ...others.map((o) => o.batchId)]), gte(s.date, from)));
+    .where(and(inArray(s.batchId, batchIds), gte(s.date, from)));
+  // A dated test takes the student's time like a class: one entry per batch it covers.
+  const tests = await datedTests(tx, { from, batchIds });
+  const testCode = new Map(tests.map(({ a }) => [a.id as string, a.code]));
+  const sessions = [
+    ...classes,
+    ...tests.flatMap(({ a, batchIds: covered }) => covered.map((batchId) => ({ id: a.id as string, batchId, date: a.scheduledDate!, startTime: a.startTime ?? '', durationMinutes: a.durationMinutes ?? 0, status: 'scheduled' }))),
+  ];
   const existing = sessions.filter((x) => others.some((o) => o.batchId === x.batchId && x.date >= o.startDate && (!o.endDate || x.date <= o.endDate)));
-  const code = (batchId: string) => others.find((o) => o.batchId === batchId)?.batchCode ?? batchId;
-  return findSessionClashes(existing, sessions.filter((x) => x.batchId === batch.id), from).map(
-    (c) => `${fmtDay(c.date)}: ${batch.code} at ${fmtClock(c.incoming.startTime)} overlaps ${code(c.existing.batchId)} at ${fmtClock(c.existing.startTime)}`,
-  );
+  const name = (x: { id: string; batchId: string }) =>
+    testCode.has(x.id) ? `test ${testCode.get(x.id)}` : x.batchId === batch.id ? batch.code : (others.find((o) => o.batchId === x.batchId)?.batchCode ?? x.batchId);
+  return findSessionClashes(existing, sessions.filter((x) => x.batchId === batch.id), from)
+    .filter((c) => c.existing.id !== c.incoming.id) // one test covering both batches is sat once
+    .map((c) => `${fmtDay(c.date)}: ${name(c.incoming)} at ${fmtClock(c.incoming.startTime)} overlaps ${name(c.existing)} at ${fmtClock(c.existing.startTime)}`);
 }
 
 /** Open a placement (seats checked on the locked batch, clashes optional), mirror it on enrolments.batch_id, audit it. */
@@ -130,9 +146,9 @@ function assertFits(enrolment: Enrolment, batch: Batch) {
 export async function allocatePlacement(db: Database, actor: Actor, input: z.output<typeof allocateBody>, now = new Date()) {
   await resolveScope(db, actor, 'academic:enrolments:decide');
   return withTransaction(db, async (tx) => {
+    const batch = await lockOpenBatch(tx, input.batchId);
     const { enrolment, open } = await lockEnrolment(tx, input.enrolmentId);
     if (open) throw new ConflictError('This enrolment already has a batch. Use Transfer to move it.');
-    const batch = await lockOpenBatch(tx, input.batchId);
     assertFits(enrolment, batch);
     const today = todayIst(now);
     const startDate = input.startDate ?? (enrolment.startDate && enrolment.startDate > today ? enrolment.startDate : today);
@@ -161,32 +177,106 @@ export async function proposedCatchUp(db: Database, actor: Actor, fromBatchId: s
   return { status: 'proposed' as const, chapters, note: 'Taught in the new batch but not yet in the old one. The coordinator decides any catch-up; nothing has been assigned.' };
 }
 
+/**
+ * Future roster-managed tests follow a transfer: an untouched row (attendance unmarked, no marks)
+ * with the old batch moves to the new batch where the test covers it, else it is removed with the
+ * reason; a test of the new batch gains the student, or gets back a row an earlier move removed.
+ * Rows with attendance or marks are history. A row removed by hand stays removed: its test code is
+ * returned so the result can say "kept off".
+ */
+async function refreshFutureRosters(tx: Database, actor: Actor, enrolment: Enrolment, fromBatchId: string, to: Batch, from: string, reason: string): Promise<string[]> {
+  const keptOff: string[] = [];
+  const tests = (await datedTests(tx, { from, batchIds: [fromBatchId, to.id] })).filter(({ a }) => a.rosterSnapshotAt);
+  if (tests.length === 0) return keptOff;
+  const rows = await tx.select().from(R).where(and(eq(R.studentId, enrolment.studentId), inArray(R.assessmentId, tests.map(({ a }) => a.id))));
+  const [student] = await tx.select({ fullName: academicStudents.fullName }).from(academicStudents).where(eq(academicStudents.id, enrolment.studentId));
+  // The row has no "removed by" column, so this exact prefix is the move path's marker.
+  const note = `${MOVED_PREFIX}${to.code} on ${fmtDay(from)}: ${reason}`;
+  const metadata = { studentId: enrolment.studentId, reason: note };
+  for (const { a, batchIds } of tests) {
+    const row = rows.find((r) => r.assessmentId === a.id);
+    const covers = batchIds.includes(to.id);
+    if (covers && row?.removedAt && !row.removedReason?.startsWith(MOVED_PREFIX)) {
+      keptOff.push(a.code);
+    } else if (covers && (!row || row.removedAt)) {
+      const values = { batchId: to.id, addedReason: note };
+      const admissionNumberSnapshot = rows.find((r) => r.admissionNumberSnapshot)?.admissionNumberSnapshot ?? null;
+      const [after] = row
+        ? await tx.update(R).set({ ...values, removedAt: null, removedReason: null, version: sql`${R.version} + 1` }).where(eq(R.id, row.id)).returning()
+        : await tx.insert(R).values({ ...values, assessmentId: a.id, studentId: enrolment.studentId, displayNameSnapshot: student!.fullName, admissionNumberSnapshot, isSample: a.isSample }).returning();
+      await audit(tx, actor, { action: row ? 'roster.restored' : 'roster.added', entityType: 'assessment', entityId: a.id, before: row ?? null, after, metadata });
+    } else if (row && !row.removedAt && row.batchId === fromBatchId && row.attendance === 'unmarked' && row.marksState === 'not_entered') {
+      const change = covers ? { batchId: to.id } : { removedAt: new Date(), removedReason: note, rank: null };
+      const [after] = await tx.update(R).set({ ...change, version: sql`${R.version} + 1` }).where(eq(R.id, row.id)).returning();
+      await audit(tx, actor, { action: covers ? 'roster.moved' : 'roster.removed', entityType: 'assessment', entityId: a.id, before: row, after, metadata });
+    }
+  }
+  return keptOff;
+}
+
+/** The one transfer, inside the caller's transaction (single and bulk). `fromBatchId` refuses a student who has left that batch. */
+async function transferInTx(tx: Database, actor: Actor, input: z.output<typeof transferBody> & { fromBatchId?: string }) {
+  const batch = await lockOpenBatch(tx, input.toBatchId); // lock order: batch, then enrolment (file header)
+  const { enrolment, open } = await lockEnrolment(tx, input.enrolmentId);
+  if (!open) throw new ValidationError('This enrolment has no batch yet. Allocate it instead.');
+  if (input.fromBatchId && open.batchId !== input.fromBatchId) throw new ConflictError('The student is no longer in this batch.');
+  if (open.batchId === input.toBatchId) throw new ValidationError('The student is already in this batch.');
+  const endDate = transferEndDate(input.effectiveDate);
+  if (endDate < open.startDate) throw new ValidationError(`The transfer date must be after ${fmtDay(open.startDate)}, when the current placement started.`);
+  assertFits(enrolment, batch);
+  const [ended] = await tx.update(pl).set({ endDate, endedByUserId: actor.user.id, endedReason: input.reason }).where(eq(pl.id, open.id)).returning();
+  await audit(tx, actor, { action: 'placement.ended', entityType: 'batch_placement', entityId: open.id, before: open, after: ended, metadata: { enrolmentId: enrolment.id, transferTo: batch.id } });
+  const placement = await startPlacement(tx, actor, {
+    enrolment,
+    batch,
+    startDate: input.effectiveDate,
+    reason: input.reason,
+    transferFromPlacementId: open.id,
+    placedByUserId: actor.user.id,
+    checkClash: true,
+    action: 'placement.transferred',
+  });
+  const keptOff = await refreshFutureRosters(tx, actor, enrolment, open.batchId, batch, input.effectiveDate, input.reason);
+  return { ended: ended!, placement, keptOff };
+}
+
 /** Move an enrolment to another batch of the same course from `effectiveDate`. */
 export async function transferPlacement(db: Database, actor: Actor, input: z.output<typeof transferBody>) {
   await resolveScope(db, actor, 'academic:enrolments:decide');
-  const result = await withTransaction(db, async (tx) => {
-    const { enrolment, open } = await lockEnrolment(tx, input.enrolmentId);
-    if (!open) throw new ValidationError('This enrolment has no batch yet. Allocate it instead.');
-    if (open.batchId === input.toBatchId) throw new ValidationError('The student is already in this batch.');
-    const endDate = transferEndDate(input.effectiveDate);
-    if (endDate < open.startDate) throw new ValidationError(`The transfer date must be after ${fmtDay(open.startDate)}, when the current placement started.`);
-    const batch = await lockOpenBatch(tx, input.toBatchId);
-    assertFits(enrolment, batch);
-    const [ended] = await tx.update(pl).set({ endDate, endedByUserId: actor.user.id, endedReason: input.reason }).where(eq(pl.id, open.id)).returning();
-    await audit(tx, actor, { action: 'placement.ended', entityType: 'batch_placement', entityId: open.id, before: open, after: ended, metadata: { enrolmentId: enrolment.id, transferTo: batch.id } });
-    const placement = await startPlacement(tx, actor, {
-      enrolment,
-      batch,
-      startDate: input.effectiveDate,
-      reason: input.reason,
-      transferFromPlacementId: open.id,
-      placedByUserId: actor.user.id,
-      checkClash: true,
-      action: 'placement.transferred',
-    });
-    return { ended: ended!, placement };
-  });
+  const result = await withTransaction(db, (tx) => transferInTx(tx, actor, input));
   return { ...result, catchUp: await proposedCatchUp(db, actor, result.ended.batchId, result.placement.batchId) };
+}
+
+/** F4-07: move several students of one batch in ONE transaction; any refusal saves nothing and names each student with the reason. */
+export async function bulkTransferPlacements(db: Database, actor: Actor, input: z.output<typeof bulkTransferBody>) {
+  await resolveScope(db, actor, 'academic:enrolments:decide');
+  const { enrolmentIds, ...rest } = input;
+  const ids = [...new Set(enrolmentIds)].sort(); // id order: the lock order the file header names
+  const moved = await withTransaction(db, async (tx) => {
+    await lockOpenBatch(tx, input.toBatchId);
+    const named = await tx
+      .select({ id: academicEnrolments.id, name: academicStudents.fullName })
+      .from(academicEnrolments)
+      .innerJoin(academicStudents, eq(academicStudents.id, academicEnrolments.studentId))
+      .where(inArray(academicEnrolments.id, ids as EnrolmentId[]));
+    const names = new Map(named.map((r) => [r.id as string, r.name]));
+    const done = [];
+    const failed: { enrolmentId: string; message: string }[] = [];
+    for (const enrolmentId of ids) {
+      const studentName = names.get(enrolmentId) ?? 'Unknown enrolment';
+      try {
+        done.push({ enrolmentId, studentName, ...(await transferInTx(tx, actor, { ...rest, enrolmentId })) });
+      } catch (e) {
+        if (!(e instanceof AppError)) throw e;
+        const why = Array.isArray(e.details) ? e.details.map((d: { message?: string }) => d.message).filter(Boolean) : [];
+        failed.push({ enrolmentId, message: `${studentName}: ${[e.message, ...why].join(' ')}` });
+      }
+    }
+    // Throwing rolls back the students already moved in this transaction.
+    if (failed.length) throw new ConflictError(`Nothing was saved: ${failed.length} of ${ids.length} students cannot move.`, { details: failed });
+    return done;
+  });
+  return { moved, catchUp: await proposedCatchUp(db, actor, input.fromBatchId, input.toBatchId) };
 }
 
 /** Complete or withdraw ONE enrolment and end its open placement; other enrolments are not touched. */

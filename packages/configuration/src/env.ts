@@ -213,11 +213,17 @@ export function loadEnv<S extends EnvSubset>(
   return loadEnvKeys(ENV_SUBSETS[subset] as readonly EnvKey[], env, subset) as EnvFor<S>;
 }
 
-/** True when `DATABASE_URL` points at this machine or an in-process PGlite. */
+/**
+ * True when `DATABASE_URL` points at this machine or an in-process PGlite. A `?host=` (node-postgres)
+ * or `?hostaddr=` (libpq) parameter overrides the address, so such a URL never counts as local.
+ * scripts/backup/json-backup.ts repeats this rule (it runs under plain node).
+ */
 export function isLocalDatabaseUrl(databaseUrl: string): boolean {
   if (databaseUrl.startsWith('pglite://')) return true;
   try {
-    const host = new URL(databaseUrl).hostname;
+    const url = new URL(databaseUrl);
+    if (url.searchParams.has('host') || url.searchParams.has('hostaddr')) return false;
+    const host = url.hostname;
     return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
   } catch {
     return false;

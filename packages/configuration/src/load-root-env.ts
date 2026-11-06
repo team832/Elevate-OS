@@ -25,9 +25,9 @@ export function findRepoRoot(start: string = process.cwd()): string | undefined 
 }
 
 /**
- * Load `<repo root>/.env` into `process.env` for scripts (Next.js apps load it
- * through `@next/env` in next.config.ts). Variables that are already set are
- * never overwritten. Returns the file path loaded, or undefined.
+ * Load `<repo root>/.env` into `process.env`, for scripts and for the Next.js
+ * apps (through zoneConfig() in next-config.ts). Variables that are already set
+ * are never overwritten. Returns the file path loaded, or undefined.
  */
 export function loadRootEnv(start?: string): string | undefined {
   const root = findRepoRoot(start);

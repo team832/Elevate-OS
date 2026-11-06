@@ -14,7 +14,7 @@ Passwords, sessions and the shared `elevate_session` cookie (D-008).
 - Lifetime: 7 days absolute (`SESSION_TTL_MS`), not extended by activity. Rotating `SESSION_SECRET` signs everyone out.
 
 ## Cookie (`src/cookies.ts`)
-`elevate_session`: `HttpOnly; SameSite=Lax; Path=/; Max-Age=604800`, plus `Secure` when `NODE_ENV=production`. Same host for all zones through the platform rewrites, so one sign-in covers every module. Note that the Secure flag means production must be served over HTTPS (`next start` locally is plain HTTP: browsers accept Secure cookies on `localhost`, other hostnames will not).
+`elevate_session`: `HttpOnly; SameSite=Lax; Path=/; Max-Age=604800`, plus `Secure` when `NODE_ENV=production`. Browsers do not separate cookies by port, so one sign-in on `localhost` covers every workspace (D-072). Note that the Secure flag means production must be served over HTTPS (`next start` locally is plain HTTP: browsers accept Secure cookies on `localhost`, other hostnames will not).
 
 ## Route handlers (`src/login.ts`)
 - `createLoginHandler({ module, loginPath, defaultRedirect })` — POST; JSON body `{ email, password, next? }` → `{ data: { user, expiresAt } }` + Set-Cookie; HTML form → 303 to the safe relative `next` (or back to `loginPath?error=invalid|missing|locked|unavailable`). Generic error text; login audited (`auth.login`).
@@ -32,7 +32,7 @@ Passwords, sessions and the shared `elevate_session` cookie (D-008).
 ## Next.js (`@elevate/authentication/next`)
 `getCurrentUser()` reads the cookie with `next/headers`. For page redirects use `requirePageAccess` / `requireUser` from `@elevate/server-kit/next` (basePath-aware).
 
-## Throttling — known limitation
-`LoginThrottle` (in memory, per process): 5 failures per (email, IP) in 15 min → 15 min lock (429 `RATE_LIMITED`); 50 failures per IP → lock. It resets on restart and is not shared between apps or replicas. Before any internet exposure add a shared (DB- or proxy-level) limiter — see `docs/SECURITY_AND_PERMISSIONS.md`.
+## Throttling (`src/throttle.ts`)
+`new LoginThrottle(bucket)` keeps one row per key in `core.login_attempts` (migration `0019`, 6 Nov 2026), shared by every app and process and kept across restarts. Buckets and failures allowed in 15 minutes: `login` 5 (email and address), `login-ip` 50, `login-email` 20, `google-ip` 50, `reauth` 5; then a 15-minute lock (429 `RATE_LIMITED`). Each failure is one atomic upsert; the key is stored only as `HMAC-SHA256(SESSION_SECRET, "<bucket>|<key>")`, so a missing `SESSION_SECRET` refuses sign-in. Methods (all async, take `db`): `retryAfterMs`, `recordFailure` (false when the attempt raced past the limit: the caller undoes it and refuses), `undo`, `reset`. `purgeExpiredLoginAttempts(db)` is run by the Business Operations housekeeping job. The per-address buckets trust `x-forwarded-for` (see `docs/SECURITY_AND_PERMISSIONS.md`).
 
-Tests: `tests/password.test.ts`, `tests/sessions.test.ts`, `tests/email-domain.test.ts`, `tests/google.test.ts`.
+Tests: `tests/password.test.ts`, `tests/sessions.test.ts`, `tests/email-domain.test.ts`, `tests/google.test.ts`, `tests/throttle.test.ts`.

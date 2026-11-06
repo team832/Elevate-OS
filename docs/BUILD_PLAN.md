@@ -22,9 +22,9 @@ Parallel agents must not edit files they do not own. If a change is needed in a 
 |---|---|
 | root config (`package.json`, `tsconfig.base.json`, eslint, prettier, vitest) | Foundation (wave 1), then Integration (wave 3) |
 | `packages/**` except the module schema files below | Foundation, then Integration |
-| `packages/database/src/schema/marketing.ts` | Marketing |
-| `packages/database/src/schema/academic.ts` | Academic |
-| `packages/database/src/schema/ops.ts` | Business Ops |
+| `packages/database/src/schema/marketing*.ts` | Marketing |
+| `packages/database/src/schema/academic*.ts` | Academic |
+| `packages/database/src/schema/ops*.ts` | Business Ops |
 | `packages/shared-contracts/src/modules/marketing.ts` | Marketing |
 | `packages/shared-contracts/src/modules/academic.ts` | Academic |
 | `packages/shared-contracts/src/modules/ops.ts` | Business Ops |
@@ -36,7 +36,7 @@ Parallel agents must not edit files they do not own. If a change is needed in a 
 | `docs/EXISTING_PROJECT_AUDIT.md`, `docs/PRODUCT_REQUIREMENTS.md` | Audit |
 | `IMPLEMENTATION_STATUS.md` | Each agent edits only its own section |
 
-**Migrations:** module agents do **not** run `drizzle-kit generate`. Tests build the schema in memory with the test helper from `@elevate/database/testing`. Wave 3 generates the single baseline migration from all schema files.
+**Migrations:** module agents do **not** run `drizzle-kit generate`. Tests build the schema in memory with the test helper from `@elevate/database/testing`. Wave 3 generates the single baseline migration from all schema files. Since then one reviewed migration per change, written by one owner of the schema at a time; `0000`–`0019` are applied on the owner's computer (6 Nov 2026) and frozen.
 
 ## Module internal layout (all three modules follow it)
 
@@ -51,8 +51,9 @@ apps/<module>/
   docs/TEST_PLAN.md         what is tested where
   docs/INTEGRATION_REQUESTS.md   requests to other owners
   src/domain/               pure deterministic logic — no I/O, no framework imports
-  src/server/               services (transactions, permission checks, audit), repositories, adapters
-  src/app/                  Next.js App Router pages and route handlers (thin)
+  src/server/               services (transactions, permission checks, audit, Drizzle queries; no separate repository layer), adapters
+  src/app/                  Next.js App Router pages and route handlers (thin; Business Ops also keeps here the
+                            handlers and screen bodies it shares through ./work and ./leads, D-073)
   src/ui/                   module React components
   tests/unit/               domain tests
   tests/integration/        service + route tests on in-memory PGlite

@@ -2,7 +2,8 @@
  * Task reminder job and due-work panel (owner brief 23 Oct 2026 §8). Windows and the personal
  * preference rule: domain/task-notices.ts. Each reminder claims its window in ops.task_reminders
  * (unique; ON CONFLICT DO NOTHING) before notifying, so running the job twice sends nothing
- * twice. In-app only: nothing leaves Elevate OS.
+ * twice. Also sends the end-of-day report reminder (F4-11, eod-reminders.ts). In-app only:
+ * nothing leaves Elevate OS.
  */
 import { and, asc, eq, inArray, isNotNull, isNull, lte, min, or, sql } from 'drizzle-orm';
 import {
@@ -20,6 +21,7 @@ import { istToday } from '../domain/dates';
 import { deadlineText, WORK_STATUSES, type TaskStatus } from '../domain/staff-tasks';
 import { dueState, remindersDue, type ReminderKind } from '../domain/task-notices';
 import { accessScope, actingFor, staffIdForUser, type Actor } from './context';
+import { remindEodDeadline } from './eod-reminders';
 import { loadSettings } from './settings';
 import { isGroup } from './task-list';
 import { linkFor } from './task-links';
@@ -99,6 +101,7 @@ export async function runTaskReminders(
         sent[rem.kind] += 1;
       }
     }
+    const eodReminders = await remindEodDeadline(tx, now);
     await recordAudit(tx, {
       actorType: options.actor ? 'user' : 'system',
       actorUserId: options.actor?.id ?? null,
@@ -106,10 +109,10 @@ export async function runTaskReminders(
       action: 'job.task_reminders',
       entityType: 'job',
       entityId: 'task-reminders',
-      after: { sent, considered: rows.length, settings: s },
+      after: { sent, considered: rows.length, eodReminders, settings: s },
       requestId: options.requestId,
     });
-    return { sent, considered: rows.length };
+    return { sent, considered: rows.length, eodReminders };
   });
 }
 

@@ -1,10 +1,76 @@
 # Elevate OS — handoff
 
-_Last updated 31 Oct 2026 (debug pass, structure, release package, later fix rounds, leave applications, full sample data). Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
+_Last updated 6 Nov 2026, evening (the 16 features built and reviewed; one database update waiting for you). Earlier on 6 Nov: structure pass, gaps closed, background jobs, files in the database, menus. Before that 31 Oct 2026 (debug pass, release package, leave applications, full sample data). Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
 
 ## For the owner (plain language)
 
 **What it is.** Elevate OS is the internal system your staff sign in to. Since 22 Oct 2026 it has three **workspaces**, one per kind of work, each at its own address: Business Operations (enquiries, demos, admissions, students, fees, staff tasks), Academic (teachers and coordinators) and Marketing. A fourth address holds Users & roles. Only `@elevateeducation.in` accounts can use it (D-030).
+
+### Status report — 6 Nov 2026, evening (your 16 features are built)
+
+```
+What's live now: nothing on the internet; nothing is deployed. On your computer the apps will
+  not start until you apply one database update (step 12 below, about five minutes).
+What I did:
+- Built all 16 features you chose: fee receipts, certificates, admit cards, a list of overdue
+  fees with reminders to staff, homework, a list of absent students to call, moving several
+  students to another batch at once, a calendar, joining and leaving checklists with ID cards
+  and devices, a stand-in for approvers who are away, an end-of-day report deadline, leave
+  balances and half days, a login for students and parents, payroll with payslips, an enquiry
+  form for your website, and sharing new leads among counsellors.
+- Every page can now be printed, and lists can be downloaded as spreadsheets.
+- Everything new starts switched off or waiting for your approval. No family sees or receives
+  anything until you say so. Certificates, the website form and logins for students under 18
+  stay closed until you approve their wording.
+- Fresh reviewers checked all of it; every problem they found was fixed, including one where
+  clearing the sample records would have deleted real records made by the demo logins.
+- Backups no longer need extra software, and a backup can now be put back.
+What I need from you: one thing: apply the database update (step 12 below). Then, when you
+  have time, the 51 questions under "Decisions waiting for you" (each has a safe choice today).
+What's next:
+- Fix what the final run of automatic checks found (3 of 6,809 failed: an out-of-date menu
+  check, the old name "Business Ops" on the lead-sharing page, a background-job timing check;
+  and one warning from the secret check). The apps themselves build without errors.
+- Open every new screen in a browser (none has been opened yet).
+Placeholders still to replace: the placeholders list, plus the wording of certificates, the
+  portal consent and the website consent (Q9, Q41, Q46).
+```
+
+**Not checked yet (6 Nov 2026, evening).** No new screen has been opened in a browser, and the new browser checks have never run. The apps build from this code, but the built apps have not been started and walked through. "Two people at the same moment" cases were tested on a test database that handles one request at a time; only a few (receipts, lead sharing, leave approvals, sign-in limits) were also tried on a real database. The final full run of the automatic checks: 6,806 of 6,809 passed (details in `IMPLEMENTATION_STATUS.md`, "6 Nov 2026").
+
+### Status report — 6 Nov 2026, morning (structure, gaps closed, background jobs, files, your 16 features)
+
+```
+What's live now: nothing on the internet; nothing is deployed. On your computer, the same four
+  addresses once you start them. Your database is up to date: you applied the three waiting
+  updates today and the check passed 22 of 22.
+What I did:
+- Background jobs can now run by themselves: sending exits to Academic, reminders, Academic
+  replies, demo attendance and clearing old sign-ins. Every one is switched off until you or the
+  operations manager switch it on in Settings, under "Background jobs", and choose how often.
+- When HR approves or records a teacher's leave, that teacher's classes on those days now show
+  in Academic as needing cover, and the coordinators are told. Cancelling the leave takes them off
+  again. Staff can attach a letter or a medical certificate to a leave application.
+- Uploaded files are now kept inside your database, at no cost, so uploads also work in office
+  mode. This has not been tried in office mode yet.
+- Gaps found by comparing Elevate with other school and coaching software are fixed: fee waivers
+  counted across cases, a refund entered twice, admission number "42" next to "042", leave on top
+  of leave, a lead typed twice at the same moment, first-contact follow-ups stuck as overdue.
+  A serious hole is closed: with a hand-made request that wrote their own record's code in
+  capital letters, an HR manager could approve their own leave. No screen did this.
+- The menus in all three workspaces are grouped by kind of work, and each person sees only the
+  items whose page has something for them. Wrong-password limits now count across all four apps
+  and survive a restart.
+- The 16 features you chose are written down as decisions and are being built. None is ready yet.
+What I need from you: nothing today. When you have time, the questions marked "New 6 Nov" in
+  "Decisions waiting for you", first how often each background job should run.
+What's next:
+- Finish the 16 features and the tidying, then one full check of everything together, a fresh
+  package, and a look at every new screen in a browser (none has been opened in a browser yet).
+Placeholders still to replace: the placeholders list (one row replaced today: how often the jobs run).
+```
+
+**Not checked yet (6 Nov 2026).** No new screen has been opened in a browser. The new browser checks have never run. Some "two people at the same moment" cases were tested on a test database that handles one request at a time, so they are shown to be guarded, not proven under load. The whole set of automatic checks has not been run together, and no package has been built from this work.
 
 ### Status report — 31 Oct 2026 (debug pass, structure, installable package)
 
@@ -62,7 +128,7 @@ Placeholders still to replace: 26 (the placeholders list says what each one is).
 - **Not checked by anyone yet:** a real Google sign-in, a real phone on your Wi-Fi, restoring a backup, any server other than this PC, and your own database, which I do not touch.
 - **Speed figures** come from sample data on a busy PC. Forty people opening the Overview at the same instant still wait: about 9 seconds at the first measure and about 16.5 seconds on a later run while other checks kept the PC 34 to 54% busy (it was about a minute). That later figure is not shown to be a slowdown in the system, and not shown not to be.
 - **Open by design until you choose a host:** until a secure front door (a proxy) is in place, someone can fake the network address recorded for their session.
-- **In the office mode of step 10, file uploads are refused,** the same as online: test papers and keys, score imports and task files. Choosing file storage fixes this. Marks by hand and publishing still work.
+- **File uploads in office mode:** until 6 Nov they were refused there. Since 6 Nov files are kept in the database (D-135), so they should work in office mode too; that has not been tried yet.
 - **How I read your brief:** "this one" means Elevate OS, and "different teacher, different workspace" means each teacher has their own view inside one Academic workspace. Tell me if you meant something else.
 
 ### Known limits (31 Oct 2026)
@@ -87,7 +153,7 @@ We know about these and have left them for now. The first one needs your help.
 - Two or three wide tables need sideways scrolling inside the table on a desktop screen: Marketing's weekly report, Today's classes and a test's Roster and marks. The page itself does not scroll sideways. More tables do this on a tablet, and Academic's reports do on a phone.
 - Settings now have real fields. Three things are still typed into a box of technical text: the "Schar" recipient setting (the box says how), a test's scoring sections and onboarding templates.
 
-**In office mode (step 10.7).** File uploads are refused, and so are sign-ins ending `@example.test`, so Pooja, Rohit and Sample Schar cannot sign in there. The other demo sign-ins work.
+**In office mode (step 10.7).** Sign-ins ending `@example.test` are refused, so Pooja and Rohit cannot sign in there. The other demo sign-ins work, Schar Mathur's included. Since 6 Nov uploaded files are kept in the database there (not yet tried).
 
 **Small things left as they are.** No figure is wrong in any of these.
 - Printing a student's report page before a report exists prints the "Make a report" form on page 2 after a nearly blank page 1. There is no Print button on that page; only Ctrl+P reaches it.
@@ -307,11 +373,22 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 
 ### Steps only you can do
 
-Do step 10 first. The numbered steps after it are kept from earlier dates; each says whether it is already done.
+Do step 12 first. The other numbered steps are kept from earlier dates; each says whether it is already done.
 
-**10. Bring your computer up to date (31 Oct 2026). Do these in order, on your own computer.** Only you can do this, because it changes your database and I do not touch it. "Type" means: in the Claude Code chat, type the line as shown, starting with `!`. If any step shows an error, stop and send the developer the last lines.
+**12. Bring your database up to date for the 16 new features (6 Nov 2026, not done yet).** Only you can do this, because it changes the database on your computer and I do not touch it. Until you do, `npm run office` and `npm run dev` do not start the apps: they say one database update is waiting and show the commands below. The update only adds new tables and columns; it changes no stored record. It was tried first on a throwaway copy of the database with records like yours, and it went through cleanly. "Type" means: in the Claude Code chat, type the line as shown, starting with `!`. If any step shows an error, stop and send the developer the last lines; nothing is half-applied.
 1. **Start the database.** Open a terminal in the `elevate-os` folder, run `npm run db:start` and leave it open.
-2. **Take a backup.** Type `! node .data/json-backup.mjs`. It makes a copy of every table on this computer (not in git). It ends with the number of tables and rows, then "Pre-check OK". (`npm run db:backup` will not work here: `pg_dump` is not installed.)
+2. **Take a backup.** Type `! npm run db:backup`. It copies every table into a new folder under `.data/backups` on this computer (not in git). It ends with "saved", the number of tables and rows, and the folder name. The backup holds personal data and password hashes: keep it on this computer and never share it.
+3. **Apply the update.** Type `! npm run db:migrate`. It should say "21 migration file(s) ... applied or already up to date".
+4. **Check the database.** Type `! npm run db:check`. It should end with all checks passed.
+5. **Start as usual.** `npm run office:build` (a few minutes; the code changed), then `npm run office`.
+
+Everything new starts switched off or unapproved. Nothing reaches families until you answer the questions under "Decisions waiting for you" (Q1 to Q4 switch things on).
+
+If you ever need to go back to a backup: stop the apps, then type `! npm run db:restore -- .data/backups/<folder name>`. It refuses, changing nothing, if the backup was taken before an update the database now has, or if the database is not empty (add ` --replace` at the end to replace what is there; it saves the current data first). Ask the developer before doing this.
+
+**10. Bring your computer up to date (31 Oct 2026). Done on your computer on 6 Nov 2026:** backup (160 tables, 6,668 rows), then the updates `0017`, `0018` and `0019` applied, then the check passed 22 of 22. The steps are kept for another computer; there the check now ends `22/22`, and `0019` (files, the shared sign-in limit, teacher leave cover) is applied with the others. **Do these in order, on your own computer.** Only you can do this, because it changes your database and I do not touch it. "Type" means: in the Claude Code chat, type the line as shown, starting with `!`. If any step shows an error, stop and send the developer the last lines.
+1. **Start the database.** Open a terminal in the `elevate-os` folder, run `npm run db:start` and leave it open.
+2. **Take a backup.** Type `! npm run db:backup` (since 6 Nov 2026; it needs no extra tools). It makes a copy of every table on this computer (not in git) and ends with "saved" and the number of tables and rows.
 3. **Check the notification links before the update.** The update adds a rule that no stored link may hold a control character (an invisible character that can break a link). This command only reads. Type:
 
    ```
@@ -336,7 +413,9 @@ Do step 10 first. The numbered steps after it are kept from earlier dates; each 
 
    Measured on sample data on a busy PC. Checked on 31 Oct on a scratch database: `npm run office` with a real sign-in and a Hindi PDF, 32 of 32 checks passed. Not tried from a real phone.
 
-   Two things change in office mode. File uploads are refused (see "What this does not mean" above), so if you need to upload a test paper, score sheet or task file before choosing storage, use `npm run dev:all` for that. Sample sign-ins ending `@example.test` are refused; `business@`, `hr@`, `teacher@` and `marketing@elevateeducation.in` still work.
+   Two things change in office mode. Uploaded files are kept in the database (since 6 Nov; a file uploaded in development mode stays in the local folder and is not found in office mode). Sample sign-ins ending `@example.test` are refused; `business@`, `hr@`, `teacher@` and `marketing@elevateeducation.in` still work.
+
+   Since 6 Nov, if a database update is waiting, `npm run office` and `npm run dev` do not start the apps: they say how many updates wait and print the two commands to type (`npm run db:migrate`, then the same start command again).
 8. **Replace the AI keys, if you have not yet.** Do step 8a, then stop and start `npm run office` again.
 
 **11. Leftovers that need a person.**
@@ -438,22 +517,117 @@ If any step shows an error, stop and send the developer the last lines; nothing 
 
 ### Decisions waiting for you
 
-Until you answer, the system uses the safe choice shown and marks it "Proposed". The newest questions come first, most important at the top of the list.
+Until you answer, the system uses the safe choice shown and marks it "Proposed". The newest questions come first, most important at the top of the list. Real use still waits first on "New 31 Oct: 1. Stops real use" (how staff sign in and confirm admissions).
+
+#### New 6 Nov: your questions, in one list
+
+Every answer below is yours to give; nothing waits on it except where it says "stays closed". Until you answer, the system uses the safe choice shown, marked "Proposed" on the Settings screen. To answer, tell the developer the number and your choice (for example "Q7: yes, print the GSTIN").
+
+**Switching things on (all off today)**
+
+| # | Question | Safe choice used today |
+|---|---|---|
+| Q1 | How often should each background job run, and may it be switched on? Each runs as the person who switched it on | All off. If switched on: Academic replies every 15 minutes, demo attendance every 30, exits, follow-up reminders and task reminders every 60, clearing old sign-ins and fee reminders once a day (D-133, D-141) |
+| Q2 | When should the student and parent portal open? | Closed. Staff can already give access and print setup slips (D-150) |
+| Q3 | Switch on the website enquiry form? | Off; it also stays closed until you approve its consent wording (Q46) (D-152) |
+| Q4 | Switch on automatic sharing of new leads among counsellors? | Off: new leads with no owner stay unassigned (D-153) |
+
+**Fees, receipts, certificates and admit cards**
+
+| # | Question | Safe choice used today |
+|---|---|---|
+| Q5 | Receipt number format | `ER/2026-27/000001`, a new series each April (D-138) |
+| Q6 | Does a receipt's year follow the payment date or the day the receipt is printed? | The payment date |
+| Q7 | Should receipts show the institute's GSTIN? | Yes: the institute line prints address, phone, email and GSTIN |
+| Q8 | Receipts given to families carry the line "Manually recorded — not a verified payment transaction. The accounts system remains the record." Keep it? | Kept |
+| Q9 | Certificate types and their wording (course completion and bonafide drafted) | **No certificate can be issued until you approve the wording** (D-139) |
+| Q10 | The instructions printed on admit cards | The drafted text: bring the card and a photo ID, arrive 15 minutes early, no phones, watches or notes |
+| Q11 | Should a student with an overdue fee get an admit card? | Yes, every student on the list gets one (D-140) |
+| Q12 | On which days should staff be reminded of an unpaid instalment? | 3 days before, on the day, 7 and 15 days after; counsellor and finance only, never families; the job is off (D-141) |
+| Q13 | A hand-typed admission number "77" is saved and printed as "077", so "77" and "077" can never both exist. Is the padding acceptable? | Padded to the format's width |
+
+**Leave and attendance**
+
+| # | Question | Safe choice used today |
+|---|---|---|
+| Q14 | How many days of each leave type does each person get a year? | None set, so no balance is shown or checked ("No allowance set") (D-149) |
+| Q15 | When does the leave year start, how many unused days carry over, and is applying for more than the balance refused or only flagged? | April; 0 days carry over; flagged, and HR decides |
+| Q16 | Count leave in calendar days or working days? | Calendar days |
+| Q17 | Which leave types never use a balance? | Unpaid |
+| Q18 | Half-day leave: should only that half's classes need cover? That needs a time that splits the day | Every class that day is listed as needing cover, and the notice says so |
+| Q19 | Someone on half-day leave who did not come for the other half: can HR mark that half absent? | No: HR cannot mark a leave day absent; the day shows half-day leave |
+| Q20 | A day with approved leave and an HR "present" or "half day" mark: which counts? | HR's present or half day wins; check-ins alone do not, and an HR "absent" never does |
+| Q21 | Leave that HR recorded directly can be cancelled by anyone who manages attendance, although recording it needs the leave-approver setting. Should cancelling need it too? | Anyone who manages attendance |
+| Q22 | When HR approves a teacher's leave and Academic cannot be reached, only the approver can press "Send to Academic again" — even while away with a cover named. Acceptable? | As built: the approver gets the notice, the cover gets a copy |
+| Q23 | Who may be named as cover for an approver who is away? | Active staff with the role operations manager, HR manager or finance officer (D-147) |
+| Q24 | Joining and leaving checklist items | Joining: ID card, keys, devices, induction, policies. Leaving: ID card, keys and devices returned, handover, final settlement (D-146) |
+
+**Payroll**
+
+| # | Question | Safe choice used today |
+|---|---|---|
+| Q25 | Which earnings and deductions make up a salary (basic, allowances, PF, TDS …)? | None set: HR adds them. No tax or PF is worked out unless added as a line (D-151) |
+| Q26 | Loss of pay: which days, and how much per day? | Approved unpaid leave days (half day 0.5); one day = monthly gross ÷ days in that month |
+| Q27 | Pay for part of a month (someone joining or leaving mid-month) | The full month for anyone on the payroll that month; HR corrects it with a one-off line |
+| Q28 | Should HR see only the salaries of the departments HR manages? | HR and the director see every salary |
+| Q29 | Who prepares and who approves payroll? | HR manager and director prepare; the director approves (D-151) |
+| Q30 | May a director both prepare and approve? | Never the same run: whoever wrote any part of a run cannot approve it. With only one director, a run they prepared cannot be approved: the system asks you to name another approver |
+| Q31 | May someone approve a run that contains their own payslip? | Yes, if they did not write any part of it |
+| Q32 | Should the auditor see salaries, and should a platform administrator have "My payslips"? | Neither |
+
+**End-of-day reports**
+
+| # | Question | Safe choice used today |
+|---|---|---|
+| Q33 | Deadline, late window and reminder for the end-of-day report | 20:00 IST, up to 2 days late, a reminder 60 minutes before (from the task-reminder job, off) (D-148). Before 6 Nov there was no deadline, so from now a report counts as missing after 20:00 |
+| Q34 | Remind only people who have a working day scheduled? Should weekly and monthly reports have a late window too? | Only people with a scheduled working day; weekly and monthly reports have no window |
+
+**Academic**
+
+| # | Question | Safe choice used today |
+|---|---|---|
+| Q35 | Does homework handed in late count as done? | Yes (D-142) |
+| Q36 | Scheduling a test on a holiday, or closer to another test than the minimum gap: refuse, or warn? | Warn. A clash with a class of the same batch, teacher or student is refused (D-156) |
+| Q37 | A test's evaluator who teaches a class at the same time is not refused (tests carry no teacher). Should it be? | Not refused |
+| Q38 | Moving students to next year's batch works only within the same course, and the enrolment's academic year stays. Acceptable? | As built (D-144) |
+| Q39 | Should the attendance register list only classes marked as held? | Only held classes (D-155) |
+| Q40 | Should a teacher whose assignment ended still download past months' registers? | No |
+
+**Student and parent portal**
+
+| # | Question | Safe choice used today |
+|---|---|---|
+| Q41 | The consent wording a parent agrees to before a student under 18 gets a login (best checked by a lawyer, DPDP Act 2023) | Drafted, not approved, so **no student under 18 can get portal access yet** (D-150) |
+| Q42 | May parents have a login for a student aged 18 or over? | No |
+| Q43 | Who may give portal access? | Whoever may edit a student's guardians |
+| Q44 | How long does a portal sign-in last? | 7 days, as for staff |
+| Q45 | To stop guessing from many addresses, the portal locks **every family** out of sign-in for 15 minutes after 500 failed sign-ins (200 failed setups) from all addresses together. Acceptable numbers? | As built |
+
+**Website form and leads**
+
+| # | Question | Safe choice used today |
+|---|---|---|
+| Q46 | The consent wording on the website form, and may a student under 18 send it alone? | Drafted, not approved, so **the form stays closed** (D-152) |
+| Q47 | Which website may send enquiries into Elevate OS? | None: only Elevate's own form page `/ops/enquire`, which your website can link to |
+| Q48 | Above 300 enquiries in 15 minutes from all addresses together, the form quietly drops new ones for 15 minutes (protection against a flood). Acceptable? | As built |
+| Q49 | Lead sharing: which counsellors, in turn or to whoever has the fewest open leads, and a daily limit? | Off; in turn; no daily limit (D-153) |
+| Q50 | A new lead's first-contact reminder belongs to its case. When Marketing owns the lead, its owner cannot open cases, so the reminder reaches nobody. Who should get it? | Reaches nobody; counted as "unreachable" so it is visible |
+| Q51 | "All staff" (Business Operations) and "Staff directory" (HR) list the same people with different permissions. Merge them? | Two lists, as before |
+
+**A tip, not a question:** opening a downloaded spreadsheet by double-clicking it in Excel drops leading zeros (for example "077" shows as 77). Use Excel's Data → From Text/CSV instead.
 
 #### New 31 Oct: 1. Stops real use (answer these first)
 
 | Question | Safe choice used today |
 |---|---|
 | How do real staff sign in, and how do they confirm an admission? New accounts have no password, no screen sets or resets one, and confirming an admission asks for a password. Either signing in with Google again counts for confirming (D-041), or a set-password screen gets built | Sign-in needs Google. Confirming refuses anyone with no password, so no real admission can be confirmed yet |
-| Where should uploaded files be kept? This covers test papers and answer keys, score imports and task files | Refused with a plain message in office mode and online. Marks by hand and publishing still work |
-| Who runs the background jobs, and how often? An exit or a corrected name reaches Academic only when someone presses the button. The same goes for reminders, Academic replies and demo attendance | Buttons on the Business Operations Overview, operations manager only. Pressing one twice is safe |
 
 #### New 31 Oct: 2. Going live and the first install
 
 | Question | Safe choice used today |
 |---|---|
 | Going live: one address with one port per app is the only shape that works today. Any other shape needs more work (see the release notes). Is that shape acceptable? | One address, four ports |
-| Wrong-password limits are counted separately in each app and forgotten at restart, and 20 wrong tries on someone's email lock that person out of one app for 15 minutes. Acceptable until you have a host? | As built |
+| Wrong-password limits are now shared by all four apps and kept across a restart (6 Nov). So 20 wrong tries on someone's email lock that person out of every workspace for 15 minutes. Acceptable until you have a host? | As built |
 | On a first install, load the 8 real staff and their assignments? Their names ship inside the package either way, so keep it private | Not loaded |
 | Load the old marketing history (59 ideas, 36 placements)? | Not loaded |
 | Load the two planning batches, the draft syllabus courses and the website-stated prices? | Loaded, labelled |
@@ -500,7 +674,7 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | On exit: cancel open catch-up tasks and remove untouched later test rows, and keep rows that hold marks? | As stated |
 | A transferred or "other inactive" exit ends as "withdrawn" in Academic. Separate statuses need another database update. Is "withdrawn" enough? | Withdrawn in Academic; the true outcome stays in Business Operations and the audit history |
 | A coordinator ending an enrolment in Academic does not tell Business Operations. Should it? | Not told |
-| "On hold" in Business Operations does not pause Academic, and leave HR records directly does not flag anything there. Should they? | No link. An approved leave application does tell coordinators (see Teachers, HR and tasks) |
+| "On hold" in Business Operations does not pause Academic. Should it? (The leave half of this question was answered on 6 Nov, D-134.) | No link |
 | When a teacher leaves, should assignments end and tasks move automatically? | No. Their manager, operations managers and coordinators are told what they held |
 | After a student's name is corrected: reprint the acknowledgement and ID card, or leave them as issued? | Left as issued (Proposed); the case page says so. An application form already generated or signed must be redone |
 | When a case is lost or merged, should its demo classes be cancelled automatically? | A person closes them and the page warns; the slot stays held until then |
@@ -536,9 +710,7 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | Leave dates more than a year back or ahead, or one application over a year, are refused to catch a mistyped year. Should that limit stay? | It stays, with no setting to change it |
 | An auditor can read leave lists but cannot apply for leave, while every other staff role, the director included, can. Should an auditor be able to apply? | No (Proposed) |
 | With only one operations manager, outside the departments HR looks after, their own leave application reaches nobody, because nobody decides their own. What should happen? | It waits, and nobody is told |
-| When a teacher's leave is approved, coordinators get only a count of planned classes, and no notice if it is later cancelled. Is that enough? | Count only, nothing reassigned, not told of a cancellation |
 | May the director and auditor read why someone is on leave? It can be medical | No (Proposed). They see the type, dates and status; only the person and those who manage attendance read the reason |
-| HR can record leave directly, with no application, and this skips the check for overlapping dates. Should that check apply? | No check on direct records |
 | Must a new task have details and an expected result? | Neither is required |
 | On HR Attendance, should the Who filter start on everyone, teachers or other staff? | Everyone |
 
@@ -586,7 +758,6 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | **New 24 Oct (requests).** Which staff record is Schar? (D-096) | The sample records name a fictional Sample Schar. On a database with no samples, or after clearing them, it is not set and requests for Schar wait in HR's queue |
 | **New 24 Oct (leads).** Does an admission that was later withdrawn, transferred or completed still count as a conversion? (D-105) | Yes, with a flag (Proposed). Cancelled before enrolment and lost never count |
 | **New 24 Oct (reminders).** Task reminders: once 24 hours before the due time, every 24 hours while overdue, every 4 hours until a new task is acknowledged? (D-108) | As stated (Proposed) |
-| **New 24 Oct (reminders).** There is no automatic timer yet, so task reminders and follow-up reminders go out only when someone starts them, and only the operations manager may start them. Who should run them, and how often? | Run by hand by the operations manager. Answered together with "Who runs the background jobs" above |
 | **New 24 Oct (requests).** May HR pass a request to staff outside the departments it looks after? | No, except to the person the request was meant for; the operations manager may pass it to anyone |
 | **New 24 Oct (marketing).** Should monthly marketing reports go to HR (as the brief says) or to the employee's reporting manager? (D-109) | Reporting manager |
 | **New 24 Oct (tests).** When a teacher types scores, are they verified at once, or "imported" until someone else checks them? | Verified at once (as built). The same question as in "Marks and tests" above |
@@ -612,7 +783,6 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | **New 23 Oct (Marketing).** Marketing employees cannot assign people to content (only the marketing manager can), and they still see the weekly figures of every social account | As stated (Proposed) |
 | **New 23 Oct (staff).** Nikunj Bindal: is CA Foundation Accounting (course `CAF-ACC-SEP27`) right as "waiting for a batch"? This was my pick; on 21 Oct no assignment was made (D-082) | Recorded as waiting, opens nothing |
 | **New 23 Oct (staff).** The sign-in `soma@…`: which Soma is it — "Soma" (CLAT Current Affairs) or "Soma Tiwari" (Economics)? The other session made a ruling; please confirm it | As ruled in the other session |
-| **New 23 Oct (files).** Where should uploaded files be kept once the system is on the internet? Until you choose, uploads work only on this computer (D-085) | Uploads refused online. Answered together with "Where should uploaded files be kept" above |
 | **New 23 Oct (samples).** The fictional sample teacher is also the main Quant teacher on the real IPMAT April 2027 batch, beside Satish. Run `npm run db:clear-samples` before real use (step 4.5) | Sample stays until you clear samples |
 | **New 23 Oct.** Is the new light look right? Open each workspace on your own screen and phone (D-074) | As built; the dark look is kept as a backup |
 | **New 23 Oct.** Users & roles still has an "Overview" page for signed-in people, left from before the workspaces. Keep it, or delete it and keep only Users & roles? | Kept |
@@ -620,7 +790,7 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | **New 23 Oct.** Teacher review boxes: is 1,500 characters each the right limit? | 1,500 (Proposed); older reviews up to 4,000 still open |
 | **New 23 Oct.** Should Business Operations see campaign results from Marketing? | No |
 | **New 23 Oct.** May the marketing manager see the contact details of every lead, or only the leads Marketing brought in? (D-073) | Every lead (Proposed) |
-| **New 23 Oct.** Will another system ever send leads into Elevate OS (a website form, a CRM, Meta lead ads)? The unfinished Marketing-to-Business-Operations lead connection was retired (D-075) | No connection; leads are typed in or worked on the shared lead list |
+| **New 23 Oct.** Will another system ever send leads into Elevate OS (a CRM, Meta lead ads)? The website form was built on 6 Nov (D-152; off until you switch it on and approve its wording, Q3 and Q46). The unfinished Marketing-to-Business-Operations lead connection was retired (D-075) | No connection; leads are typed in or worked on the shared lead list |
 | **New 23 Oct.** Who may generate and read the new internal teacher report, and should the auditor see it? | Operations manager and director (Proposed); the auditor cannot |
 | **New 22 Oct (workspaces).** Who opens which workspace: teachers only Academic; academic coordinators Academic and Business Operations; marketing staff only Marketing, with leads, lead contact details and their own tasks (D-073)? | As stated (Proposed) |
 | **New 22 Oct.** Should Marketing see Events and Webinars? It needs a new permission that covers only events, because today's meeting permission also covers private counselling | Hidden in Marketing |
@@ -649,7 +819,7 @@ Until you answer, the system uses the safe choice shown and marks it "Proposed".
 | Must staff give a reason for every unfinished task when they send the end-of-day report? | No |
 | Who may cancel work that someone else assigned? | The person who created the task, or the operations manager |
 | When a task needs a review but no reviewer is named, who reviews it? | Only the operations manager can approve it |
-| Is there a time by which the end-of-day report must be sent? | No deadline (open) |
+| Is there a time by which the end-of-day report must be sent? | Built 6 Nov (D-148): Proposed 20:00 IST (Q33) |
 | If Academic cannot be reached, may counsellors mark demo attendance for a class that is linked to an Academic class? | No; they wait until Academic is back |
 | Should staff with nobody reporting to them see the report "Inbox"? | Shown to managers and to everyone who may review reports |
 | Who should see the Reports item in the tasks menu? | Everyone who can open Tasks (they see only tasks they may see) |
@@ -667,9 +837,9 @@ Decided by you on 24 Oct 2026 (D-110): no OpenAI; free AI services Groq, then Ge
 
 New on 24 Oct 2026 (D-111): **Build draft timetable** in Academic (Timetable → Patterns; drafts only, you publish), an AI-drafted **Overall comment** on the progress and teacher reports, the monthly marketing report draft now uses the marketing figures, and **Write an AI summary** on a student's Overview. Admission documents got no AI: every field is personal or your fixed legal text. Questions for you: (1) a standard school day (for example 09:00–17:00) to prefill the timetable form? (2) a daily AI limit per person in Academic too? (3) may the AI-drafted comment on the PTM report go to parents, or internal only? (4) a generated report's comment cannot be edited; a new report is needed. Is that acceptable?
 
-Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), a new layout (D-054, D-059; the dark look itself was replaced on 22 Oct, D-074), teacher reviews written in Academic (D-058), demo attendance marked by the teacher in Academic (D-060), sample staff named "Sample …" with `@example.test` sign-ins (D-061). On 23 Oct 2026: HR back inside Business Operations, including staff attendance (D-080, D-086; answers the old staff-attendance question OD-026), teachers see approved feedback summaries in Academic (D-088), the charcoal sidebar (D-081), your staff answers on Soma, Satish and Nikunj (D-082), directors make student reports (D-079), AI drafting with the model you chose (D-092). Later on 23 Oct 2026: tests are one record in Academic run from Business Operations (D-094), score sheets as CSV or PDF only (D-095), Schar as a setting (D-096), "business administrator" = operations manager (D-097), task comments by HR and the reviewer only (D-098), AI reading of PDF score sheets with your tick each time (D-099). On 31 Oct 2026: leave applications, with the HR manager approving and Casual, Sick, Earned and Unpaid leave, both settings HR can change and no balances counted (D-126; answers the old leave question OD-026), and mock data everywhere, with a fictional Sample Schar (D-127).
+Already decided by you on 21 Oct 2026 and built: registration ₹5,000 (D-044), demo ₹1,000 (D-045), the declaration and terms from your paper form, version 2 (D-046), Nikunj Bindal teaches Accounts (D-047), address and GSTIN as on the form (D-048), public email `team@elevateeducation.in` on documents (D-049), daily tasks and EOD reports (D-052), a new layout (D-054, D-059; the dark look itself was replaced on 22 Oct, D-074), teacher reviews written in Academic (D-058), demo attendance marked by the teacher in Academic (D-060), sample staff named "Sample …" with `@example.test` sign-ins (D-061). On 23 Oct 2026: HR back inside Business Operations, including staff attendance (D-080, D-086; answers the old staff-attendance question OD-026), teachers see approved feedback summaries in Academic (D-088), the charcoal sidebar (D-081), your staff answers on Soma, Satish and Nikunj (D-082), directors make student reports (D-079), AI drafting with the model you chose (D-092). Later on 23 Oct 2026: tests are one record in Academic run from Business Operations (D-094), score sheets as CSV or PDF only (D-095), Schar as a setting (D-096), "business administrator" = operations manager (D-097), task comments by HR and the reviewer only (D-098), AI reading of PDF score sheets with your tick each time (D-099). On 31 Oct 2026: leave applications, with the HR manager approving and Casual, Sick, Earned and Unpaid leave, both settings HR can change and no balances counted (D-126; answers the old leave question OD-026), and mock data everywhere, with a fictional Sample Schar (D-127). On 6 Nov 2026: background jobs that run by themselves, each off until switched on, running as the person who switched it on (D-133; how often is still yours to confirm); approved or recorded teacher leave puts classes on the needs-cover list (D-134); uploaded files kept in the database, free (D-135); only free licences for outside code, ideas only from copyleft projects (D-136); all 16 features of D-138 … D-153 (built the same day, every number Proposed); and every page printable with spreadsheet downloads (D-155).
 
-**What is not connected yet.** Email and text messages, event invitations, the social-media publishing tool, a biometric device and a CRM are "pretend" connections or not connected at all; file uploads work only on this computer until you choose where files are kept online (D-085): they record what would happen and never claim it happened. Hindi (Devanagari) now prints correctly in every PDF, with two limits: copying or searching Hindi from a PDF can give the letters in the wrong order, and Tamil, emoji and rare Devanagari letters still print as "?" with a note at the foot of the page (no warning appears when such a name is typed).
+**What is not connected yet.** Email and text messages, event invitations, the social-media publishing tool, a biometric device and a CRM are "pretend" connections or not connected at all; they record what would happen and never claim it happened. Uploaded files are kept in your database since 6 Nov 2026 (D-135). Hindi (Devanagari) now prints correctly in every PDF, with two limits: copying or searching Hindi from a PDF can give the letters in the wrong order, and Tamil, emoji and rare Devanagari letters still print as "?" with a note at the foot of the page (no warning appears when such a name is typed).
 
 **Security.** Every page checks who is signed in and what they may see. Most students are minors, so phone numbers, addresses and documents are shown only to staff with the private-data permission, and every contact search is logged. Passwords and keys stay in a private settings file (`.env`) that is never uploaded.
 
@@ -772,13 +942,18 @@ Checks (24 Oct 2026, run by the coordinator): typecheck PASS; lint PASS (0 warni
 | Student folio PDF in two kinds (PTM / internal, D-078) | Implemented and tested (sample PDFs looked at; the screen was not opened in a browser) | `docs/DECISIONS.md` D-078 |
 | Security headers and CSP with per-request nonces (all four apps) | Implemented, Tested (unit test + production smoke, §6) | §5 below |
 | Deployment, hosting, domain, monitoring, backups schedule | **Not built** (Proposed only) | `infrastructure/deployment/README.md` |
-| Password reset / change screen, shared login rate limit, outbox scheduler, Google re-authentication for confirmation | **Not built** | `infrastructure/deployment/README.md`; `C:\OPENBOT\Elevate-Not-Working` |
+| Password reset / change screen, Google re-authentication for confirmation, a runner for Academic's intake | **Not built** | `infrastructure/deployment/README.md`; `C:\OPENBOT\Elevate-Not-Working` |
+| Shared sign-in limit, background runner for the seven Business Operations jobs (D-133, D-141) | Implemented, Tested (agent runs, 6 Nov 2026); every job off until switched on | `IMPLEMENTATION_STATUS.md` "6 Nov 2026" |
 | Migrations `0015_hr_staff_workspaces`, `0016_milestone_hr_marketing_tests` | **Applied on the owner's computer** 23 Oct (`db:check` 19/19; frozen) | `packages/database/migrations/` |
 | Milestone 23–24 Oct (D-094 … D-109): Tests and Mock Tests, score import, ranks and publication, requests through HR, lead stages and calls, Marketing calendar / ideas plan / SEO-AIO-GEO / targets / monthly report, reminders and pop-ups, annual fee chart, sample data | Implemented, Tested (rules and API); grants **Proposed**; browser pass pending | "Milestone 23–24 Oct 2026" above; `IMPLEMENTATION_STATUS.md` |
 | Debug pass 26 Oct and 30–31 Oct (D-112 … D-125): exit reaches Academic, workspace membership enforced on data connections, one fee statement, insert-only seeds, jobs panel, Hindi PDFs, release package | Implemented; tested on the first, second and third packages; final re-test GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held) | `IMPLEMENTATION_STATUS.md` "Debug pass", `docs/RELEASE.md`, `docs/CASELETS.md` |
-| Migration `0017` (seven indexes, link rule) | Written and tested; **status on the owner's computer unknown** (step 10) | `docs/DATABASE_MIGRATION_PLAN.md` |
+| Migration `0017` (seven indexes, link rule) | **Applied on the owner's computer** 6 Nov 2026 (`db:check` 22/22; frozen) | `docs/DATABASE_MIGRATION_PLAN.md` |
 | Work after commit `a1f6ec7` (D-126 … D-131): leave applications, mock data everywhere, honest words with Academic stopped, settings as real fields, fee positions grouped once, the owner's two inspection lists | Implemented; automated tests in source; on no package yet; final re-test GitHub check passed on commit 426837d: typecheck, lint, 299 test files (5,667 tests), secret scan, four builds. Final package (11,060 files, 311.4 MB) on the made-up data: 22 of 22 data checks, smoke 25 of 25, walk across 15 working logins with 1,560 direct and 1,814 crawled pages: 0 denied pages opened, 0 server errors. Full register, money by hand, races and browser checks last ran on the package before the made-up data (268 pass, 2 fail since fixed, 3 held) | `IMPLEMENTATION_STATUS.md` "Debug pass", `docs/DECISIONS.md` |
-| Migration `0018` (leave applications, two indexes) | Written and tested; **not applied on the owner's computer** (step 10) | `docs/DATABASE_MIGRATION_PLAN.md` |
+| Migration `0018` (leave applications, two indexes) | **Applied on the owner's computer** 6 Nov 2026 (`db:check` 22/22; frozen) | `docs/DATABASE_MIGRATION_PLAN.md` |
+| Migration `0019` (file store, shared sign-in limit, teacher leave cover) | **Applied on the owner's computer** 6 Nov 2026 after a JSON backup (`db:check` 22/22; frozen; D-135). Next is `0020` | `docs/DATABASE_MIGRATION_PLAN.md` |
+| 6 Nov 2026 (D-133 … D-137): background jobs, teacher leave cover, files in the database, ids in any case, grouped menus, the fee, leave and lead gaps, one `next.config`, Playwright and axe checks | Implemented; reviewed and tested in agent runs, except where `IMPLEMENTATION_STATUS.md` "6 Nov 2026" says otherwise; on no package; no browser check | `IMPLEMENTATION_STATUS.md` "6 Nov 2026", `docs/DECISIONS.md` |
+| The 16 features of D-138 … D-153 (receipts, certificates, admit cards, overdue fees, homework, absent students, batch moves, calendar, joining and leaving, approval cover, EOD deadline, leave balances, portal, payroll, website form, lead sharing), print on every page and spreadsheet downloads (D-155), tests and classes refusing each other's time (D-156) | Implemented, Tested (automated tests, 6 Nov 2026); reviewed; every new setting Proposed and off; **no browser pass**; need migration `0020` | `IMPLEMENTATION_STATUS.md` "6 Nov 2026", `docs/DECISIONS.md` |
+| Migration `0020` (23 tables and new columns for the 16 features, D-154) | Written and reviewed (apply-safe on a throwaway PostgreSQL 18.4); **not applied on the owner's computer** (step 12) | `docs/DATABASE_MIGRATION_PLAN.md` |
 | Business facts (fees per programme, staff, holidays, targets) | **Missing — owner** | `PLACEHOLDERS.md`; OD-001…OD-048 in `docs/EXISTING_PROJECT_AUDIT.md` §9 |
 
 Status words follow D-013: Proposed → Approved → Implemented → Tested → Deployed. Nothing is Deployed.
@@ -828,7 +1003,7 @@ Two settings are compiled in at **build** time, so set them before `npm run buil
 
 ## 5. Security headers (what was added 20 Oct 2026)
 
-- **Static headers** come from `packages/configuration/src/security-headers.ts` → `securityHeaders()`, used by each app's `next.config.ts` `headers()`:
+- **Static headers** come from `packages/configuration/src/security-headers.ts` → `securityHeaders()`, used by `zoneConfig()` (`packages/configuration/src/next-config.ts`, since 6 Nov 2026), which every app's `next.config.ts` calls:
   - `X-Content-Type-Options: nosniff`
   - `X-Frame-Options: DENY`
   - `Referrer-Policy: strict-origin-when-cross-origin`
@@ -858,6 +1033,8 @@ Two settings are compiled in at **build** time, so set them before `npm run buil
 - HSTS has no `includeSubDomains` yet. Add it once the owner confirms that no `elevateeducation.in` subdomain is HTTP-only.
 
 ## 6. Verification results
+
+**Latest, 6 Nov 2026 (snapshot final-1, coordinator):** typecheck exit 0; lint exit 0; vitest 350 files, 6,809 tests: **3 failed**, 6,806 passed (`business-ops-os/tests/integration/hr-pages.test.tsx` menu list, `business-ops-os/tests/integration/background-jobs.test.tsx` a second run in one slot, `shared-ui/tests/components.test.tsx` "Business Ops" in `lead-sharing-body.tsx`); secret scan **1 finding** (`scripts/backup/json-backup.ts:258`); `npm run office:build` exit 0 (251 s). No package and no browser pass on this code. Generated docs up to date (`docs:permissions -- --check`, `docs:data-dictionary -- --check`). Details: `IMPLEMENTATION_STATUS.md` "6 Nov 2026". The 31 Oct results below are for the code of that date.
 
 Run by the security agent on 20 Oct 2026 (Windows 11, Node 24.19.0):
 
@@ -961,12 +1138,11 @@ Business content is data, so it is entered on the screens, not in code. For exam
 Limitations:
 - No password reset or change screen.
 - Google-only accounts cannot confirm admissions (D-041).
-- The login throttle is per process.
-- There is no outbox scheduler; the intake is run by hand.
+- Background jobs run by themselves only once switched on (D-133); Academic's intake is still run by hand.
 - Module services often `select()` whole module rows. None are secret, but §6.6 prefers named columns, so that is a follow-up.
 - Error and 404 pages use an `h2` with no `h1`.
 - Since 31 Oct signed-in screens are browser-checked against the CSP (§6). The first pass found one block, on the student report's print stylesheet; fixed in source.
-- Teacher unavailability in Academic is a planning note, not HR leave.
+- Teacher unavailability in Academic is a planning note, except the records made from approved HR leave (D-134).
 - Academic reports print from the browser and download as CSV; Academic makes no PDFs.
 - Not built: topics below chapter level, homework submissions, teaching-log reminders, bulk task changes, file uploads for evidence (links only).
 - Students who left or finished before 21 Oct 2026 have no batch history, so their attendance shows "Not recorded — no batch history before 21 Oct 2026".
@@ -982,14 +1158,15 @@ Limitations:
 
 Next three improvements, in priority order:
 1. **Go-live basics.** The owner chooses hosting. Then build HTTPS, CI deploy, error monitoring, an uptime check and a tested backup and restore (§15.1).
-2. **Account safety.** Password reset, a shared login rate limit (by IP and account), and account-admin screens.
-3. **Release QA.** axe, keyboard and Lighthouse passes on every template, signed-in, with a real `@elevateeducation.in` test user. Then narrow whole-row `select()` calls to the fields each screen needs.
+2. **Account safety.** Password reset and account-admin screens (the shared login limit was built on 6 Nov 2026).
+3. **Release QA.** Run the new Playwright and axe checks (`e2e/`), then keyboard and Lighthouse passes on every template, signed-in, with a real `@elevateeducation.in` test user. Then narrow whole-row `select()` calls to the fields each screen needs.
 
 ## 11. Licences
 
 - **Logo:** `apps/*/public/brand/elevate-logo.png` and `favicon.ico` belong to the owner (Elevate Education).
 - **Fonts:** screens use the computer's own font for text and Bricolage Grotesque for titles and figures (SIL Open Font License 1.1; `packages/shared-ui/fonts/OFL-BricolageGrotesque.txt`, D-074). PDFs embed Noto Sans 2.015 Regular and Bold (SIL Open Font License 1.1; licence file `apps/business-ops-os/assets/fonts/OFL.txt`, D-042) and Noto Sans Devanagari 2.007 Regular and Bold (OFL; `OFL-NotoSansDevanagari.txt`, D-118).
 - **PDF library:** `pdf-lib` 1.17.1 and `@pdf-lib/fontkit` 1.1.1 (MIT), owner-approved 21 Oct 2026.
+- **Browser-check tools and ideas from other projects (6 Nov 2026):** `THIRD_PARTY_NOTICES.md` (Playwright, Apache-2.0; axe, MPL-2.0 unmodified; ideas only from better-auth, Documenso, frappe, Gibbon, OpenEduCat; D-136).
 - **No third-party images.**
 - **npm dependencies:** all come from the public npm registry, and the project itself is `UNLICENSED` (private). A census of installed packages on 20 Oct 2026 found:
   - MIT 204, Apache-2.0 24, ISC 19, BSD-2-Clause 6, BSD-3-Clause 3, MPL-2.0 2, 0BSD 1, BlueOak-1.0.0 1, CC-BY-4.0 1 (data).

@@ -2,9 +2,9 @@
 
 ## 1. Tools
 - **vitest 5.0.5**, one project per workspace (`packages/*/vitest.config.ts`, `apps/*/vitest.config.ts`) using the shared preset `vitest.shared.ts` (node environment, `tests/**/*.test.ts(x)`, test-only env values such as `SESSION_SECRET=test-only-…`, `LOG_LEVEL=error`).
-- **PGlite** in memory via `createTestDb()` / `setupTestDatabase()` — real PostgreSQL 17 semantics (constraints, transactions, `gen_random_uuid()`, jsonb) with the full current schema from all four schema files (D-025).
+- **PGlite** in memory via `createTestDb()` / `setupTestDatabase()` — real PostgreSQL 17 semantics (constraints, transactions, `gen_random_uuid()`, jsonb) with the full current schema from every schema file (D-025).
 - Route handlers are called directly with `Request` objects (`authedRequest`, `callRoute`) — no server needed.
-- **Playwright E2E is deferred** (D-007) until screens stabilise. Instead, screens are checked by `renderToStaticMarkup` contract tests and a scripted real-browser pass (§3).
+- **Playwright 1.64.1 + axe 4.14.0** (since 6 Nov 2026, D-136; ends the deferral of D-007): `e2e/` holds 12 browser checks in the installed Chrome against apps that are already running (`e2e/README.md`). They are not part of `validate`, have no CI job, and had not been run against running apps when written. Screens are also checked by `renderToStaticMarkup` contract tests and the scripted real-browser passes (§3).
 
 ## 2. Commands
 | Command | Runs |
@@ -14,6 +14,7 @@
 | `npm run test:watch` | Watch mode |
 | `npm run validate` | typecheck + lint + test + secret scan |
 | `npm run db:check` | Read-only check of the local live database (see §3) |
+| `npm run test:e2e` | Playwright + axe browser checks (`e2e/`); needs the four apps running and `LOCAL_DEMO_PASSWORD` (without it every check is skipped) |
 
 ## 3. Layers
 | Layer | Where | What | Database |
@@ -27,6 +28,7 @@
 | Live database | `npm run db:check` (`scripts/development/db-check.ts`) | Read-only, local URLs only: live schema ≡ `createTestDb()`, every migration applied, no invalid indexes or constraints, sample rows follow D-036 | the owner's local PostgreSQL |
 | Screen contract | `packages/shared-ui/tests/components.test.tsx`, `apps/<m>/tests/unit/screens.test.tsx` | `renderToStaticMarkup` of components and screen parts: labels, aria, empty states, missing ≠ 0, SAMPLE DATA badge, ₹ grouping, masked phones, escaping | none |
 | Real browser (manual run) | headless Chrome over the DevTools protocol; not in `validate` | Every static page and the sample detail pages at 1440 and 390 px: console errors, horizontal scroll, one h1, labelled controls, named buttons, image alt, duplicate ids, `href="#"`, skip link, visible first-Tab focus, text contrast. Last run 22 Oct 2026 (`IMPLEMENTATION_STATUS.md`). On a PC where Windows blocks Next's native compiler, start the apps with `npm run dev -w <app> -- --webpack` | local dev database |
+| Browser (Playwright + axe) | `e2e/landing.spec.ts`, `e2e/access.spec.ts`; `npm run test:e2e`; not in `validate` | Each workspace home for its main role at 1440 and 390 px: one h1, no error panel, no serious or critical axe violation (WCAG 2.0 to 2.2, A and AA); who can open what, each refusal next to a control | the running apps' database |
 | Cross-module (wave 3) | Integration wave | e.g. publish `ops.admission.enrolment_requested` → Academic consumer → reply → Ops consumer, importing modules' `./server` entry points | PGlite |
 
 ## 4. Writing a module integration test

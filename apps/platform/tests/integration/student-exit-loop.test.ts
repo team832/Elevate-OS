@@ -46,7 +46,7 @@ beforeAll(async () => {
   await runSeeds(ctx.db, [...coreSeeds, ...opsSeeds, ...platformSeeds], { seedUserPassword: 'test-only-seed-password', hashPassword, log: () => {} });
   manager = await createTestUser(ctx.db, { roles: ['operations_manager'] });
   manager2 = await createTestUser(ctx.db, { roles: ['operations_manager'] });
-});
+}, 600_000);
 
 describe('the sample set', () => {
   it('its exits reached Academic through the real consumer; nothing failed', async () => {

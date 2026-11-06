@@ -47,6 +47,10 @@ let outsider: TestUser;
 
 beforeAll(async () => {
   await setupReference(ctx.db);
+  // Report days are in Sept 2026: no late filing window here (F4-11: eod-more-detail.test.tsx).
+  await ctx.db
+    .insert(opsSettings)
+    .values({ key: 'eod.late_filing_window', value: { days: null }, decisionState: 'proposed' });
   manager = await staffUser(ctx.db, ['operations_manager'], { name: 'Sample Ops Manager' });
   director = await staffUser(ctx.db, ['director'], { name: 'Sample Director' });
   lead = await staffUser(ctx.db, ['admissions_counsellor'], { name: 'Sample Lead' });

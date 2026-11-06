@@ -21,10 +21,10 @@ import {
   staffMembers,
   type Database,
 } from '@elevate/database';
-import { NotFoundError, academicTeacherActivityV1Schema, metric, type AcademicTeacherActivityV1 } from '@elevate/shared-contracts';
+import { NotFoundError, academicTeacherActivityV1Schema, metric, type AcademicTeacherActivityV1, type Metric } from '@elevate/shared-contracts';
 import { addDays, type IsoDate, type StaffMemberId } from '@elevate/shared-types';
 import { assignmentPhase } from '../../domain/placements';
-import { ownScope, resolveScope, todayIst, type Actor } from '../context';
+import { ownScope, resolveScope, todayIst, type Actor, type OwnScope } from '../context';
 import { listAssignmentsFor, type AssignmentRow } from './assignments';
 import { LOOKBACK_DAYS, sessionWork } from './my-day';
 import { countAssessments, teacherAssessments } from './teacher-assessment-counts';
@@ -114,14 +114,15 @@ export async function teacherActivity(db: Database, staffId: string, window: { f
   const today = todayIst(now);
   const work = await sessionWork(db, sessions.filter((s) => s.part === 'delivered' || (s.part === 'planned' && s.date <= today)));
   const assignments = (await assignmentsOf(db, [staffId])).filter((a) => a.status !== 'pending'); // pending rows have no batch and no work yet
-  const activeBatchIds = [...new Set(assignments.filter((a) => isCurrent(a, today)).map((a) => a.batchId!))];
-  const marking = activeBatchIds.length ? (await db.select({ id: academicAssessments.id }).from(academicAssessments).where(and(inArray(academicAssessments.batchId, activeBatchIds), eq(academicAssessments.status, 'conducted')))).length : 0;
+  const scope = await ownScope(db, staff.id, today);
+  const marking = await teacherAssessments(db, scope, { today }); // not windowed: the backlog now
   const reviews = await db.select({ status: academicTeacherReviews.status, submittedAt: academicTeacherReviews.submittedAt }).from(academicTeacherReviews).where(eq(academicTeacherReviews.authorStaffId, staffId as StaffMemberId));
   const inWindow = (d: Date | null) => d !== null && todayIst(d) >= window.from && todayIst(d) <= window.to;
   // Non-teaching staff (an Ops EOD reader): nothing was there to measure, so the figures are missing, never 0.
   const teaching = sessions.length > 0 || assignments.some((a) => (a.startDate ?? '') <= window.to && (a.endDate ?? '9999') >= window.from);
   const meta = (definition: string) => ({ definition, window, unit: 'count' as const });
   const m = (value: number, definition: string, measured = teaching) => (measured ? metric.ok(value, meta(definition)) : metric.missing('No teaching assignments', meta(definition)));
+  const counted: Counted = (n, definition) => (n !== null && teaching ? metric.ok(n, meta(definition)) : metric.missing(n !== null ? 'No teaching assignments' : 'No teaching assignment open today', meta(definition)));
   const unavailability = await db
     .select({ from: academicTeacherUnavailability.fromDate, to: academicTeacherUnavailability.toDate })
     .from(academicTeacherUnavailability)
@@ -141,21 +142,24 @@ export async function teacherActivity(db: Database, staffId: string, window: { f
     },
     logsPending: m([...work.values()].filter((w) => !w.logSubmitted).length, 'Delivered or past classes of this teacher without a submitted class record.'),
     attendancePending: m([...work.values()].filter((w) => w.attendanceMissing > 0).length, 'Delivered or past classes with at least one placed student not marked.'),
-    markingPending: m(marking, 'Assessments conducted but not yet finalised in batches this teacher is assigned to (current, not windowed).'),
+    markingPending: counted(marking && countAssessments(marking).awaitingMarking, 'Assessments awaiting this teacher’s marking, by the Awaiting marking rule, over every date (current, not windowed).'),
     reviews: {
       submitted: m(reviews.filter((r) => r.status === 'submitted' && inWindow(r.submittedAt)).length, 'Teacher reviews submitted in the window.', true),
       draft: m(reviews.filter((r) => r.status === 'draft').length, 'Teacher reviews still in draft now (private to the author).', true),
     },
     unavailability,
     topicsCovered: await topicsCovered(db, staffId, window),
-    assessments: { ...(await assessmentWork(db, staff.userId, window, teaching)), ...(await assessmentCounts(db, staff.id, window, today, teaching)) },
+    assessments: { ...(await assessmentWork(db, staff.userId, window, teaching)), ...(await assessmentCounts(db, scope, window, today, counted)) },
   });
 }
 
+/** An assessment count; null (no assignment open today) or no teaching = missing, never 0. */
+type Counted = (n: number | null, definition: string) => Metric;
+
 const SCOPE_NOTE = 'Not cancelled, dated in the window or not yet dated, in a batch and subject of an assignment open today, with this teacher responsible, evaluator, or neither named.';
-/** Brief §21 counts from the same rows as the teacher's My day (teacher-assessment-counts.ts). No teaching = missing, never 0. */
-async function assessmentCounts(db: Database, staffId: StaffMemberId, window: { from: string; to: string }, today: string, teaching: boolean) {
-  const rows = await teacherAssessments(db, await ownScope(db, staffId, today), { window, today });
+/** Brief §21 counts from the same rows as the teacher's My day (teacher-assessment-counts.ts). */
+async function assessmentCounts(db: Database, scope: OwnScope, window: { from: string; to: string }, today: string, counted: Counted) {
+  const rows = await teacherAssessments(db, scope, { window, today });
   const counts = rows && countAssessments(rows);
   const defs = {
     assigned: `Assessments assigned to this teacher. ${SCOPE_NOTE}`,
@@ -163,8 +167,7 @@ async function assessmentCounts(db: Database, staffId: StaffMemberId, window: { 
     awaitingMarking: 'Of those this teacher marks (as evaluator, else responsible teacher): held, with a roster row unmarked or not verified (assessments without a roster: conducted, not finalised).',
     published: 'Of those, with results published (final or provisional).',
   } as const;
-  const meta = (definition: string) => ({ definition, window, unit: 'count' as const });
-  return Object.fromEntries(Object.entries(defs).map(([k, d]) => [k, counts && teaching ? metric.ok(counts[k as keyof typeof defs], meta(d)) : metric.missing(counts ? 'No teaching assignments' : 'No teaching assignment open today', meta(d))]));
+  return Object.fromEntries(Object.entries(defs).map(([k, d]) => [k, counted(counts && counts[k as keyof typeof defs], d)]));
 }
 
 /** Chapters of this teacher's verified class records whose class date is in the window, with the number of classes. */

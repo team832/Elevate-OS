@@ -41,7 +41,7 @@ const GROUPS: Record<
     badge: caseBadge,
   },
   demos: {
-    title: 'Demo students',
+    title: 'Demos',
     status: 'Demo outcome',
     href: (h) => `/ops/admissions?open=${h.id}`,
     badge: (s) => <Badge value={s} />,

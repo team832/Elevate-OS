@@ -78,8 +78,10 @@ const openDuplicate = (also: SQL) =>
   sql`from ops.duplicate_flags d where d.status = 'open' and (d.lead_id = ${opsLeads.id} or d.matched_lead_id = ${opsLeads.id}) and ${also}`;
 
 /** Each flag as SQL, so a tile or filter can count it over every lead, not over a page of rows. */
-function leadFlags(now: Date): Record<LeadFlag, SQL<boolean>> {
+function leadFlags(now: Date, actor: Actor): Record<LeadFlag, SQL<boolean>> {
   const today = istToday(now);
+  // A case's follow-ups are the case's (D-073): without case access they make nothing due.
+  const seen = can(actor, 'ops:admissions:read') ? sql`true` : sql`f.admission_id is null`;
   const weekStart = istInstant(istWeekContaining(today).from).toISOString();
   return {
     new_this_week: sql`${opsLeads.firstReceivedAt} >= ${weekStart}`,
@@ -87,8 +89,8 @@ function leadFlags(now: Date): Record<LeadFlag, SQL<boolean>> {
     awaiting_contact: sql`(${opsLeads.firstSuccessfulContactAt} is null and (${currentCase.id} is null or ${hasOpenCase}))`,
     unassigned: sql`${opsLeads.ownerStaffId} is null`,
     handoff_pending: sql`(${opsLeads.ownerStaffId} is not null and ${opsLeads.acceptedAt} is null)`,
-    overdue: openFollowUp(sql`f.due_date < ${today}`),
-    due_today: openFollowUp(sql`f.due_date = ${today}`),
+    overdue: openFollowUp(sql`f.due_date < ${today} and ${seen}`),
+    due_today: openFollowUp(sql`f.due_date = ${today} and ${seen}`),
     missing_next_action: sql`(${hasOpenCase} and not ${openFollowUp(sql`true`)})`,
     duplicate: sql`exists (select 1 ${openDuplicate(sql`true`)})`,
   };
@@ -151,7 +153,7 @@ export async function listLeads(
 ) {
   const scope = leadScope(db, await accessScope(db, actor, 'ops:leads:read'));
   if (!scope) return [];
-  const flags = leadFlags(now);
+  const flags = leadFlags(now, actor);
   const rows = await db
     .select({
       lead: opsLeads,
@@ -222,7 +224,7 @@ export async function leadCounts(
         })
         .from(opsLeads)
         .leftJoin(currentCase, isCurrentCase)
-        .where(leadWhere(scope, filters, leadFlags(now)))
+        .where(leadWhere(scope, filters, leadFlags(now, actor)))
         .groupBy(currentCase.status)
     : [];
   return {
@@ -411,6 +413,10 @@ async function leadHistory(db: Database, leadIds: LeadId[], all: boolean) {
           inArray(sql`${auditEvents.metadata}->>'leadId'`, leadIds),
         ),
         all ? undefined : inArray(auditEvents.entityType, LEAD_RECORDS),
+        // A case's follow-up is the case's (D-073), its audit rows too.
+        all
+          ? undefined
+          : sql`not (${auditEvents.entityType} = 'follow_up' and coalesce(${auditEvents.after}->>'admissionId', ${auditEvents.before}->>'admissionId') is not null)`,
       ),
     )
     .orderBy(desc(auditEvents.at), desc(auditEvents.id))

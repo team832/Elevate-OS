@@ -60,6 +60,8 @@ const SIZES = {
   card: { w: 242.65, h: 153.07, margin: 10, top: 10, bottom: 10, body: 7 },
   /** A4 at paper-form density (the owner's 3-sheet admission form). */
   'a4-dense': { w: 595.28, h: 841.89, margin: 40, top: 66, bottom: 52, body: 8.5, tight: true },
+  /** A5 portrait (the half-sheet fee receipt, F4-01). */
+  a5: { w: 419.53, h: 595.28, margin: 32, top: 72, bottom: 52, body: 8.5 },
 };
 export const LEAD = 1.35;
 export const PAD = 4;

@@ -12,6 +12,7 @@ import {
   opsContactPreferences,
   opsGuardians,
   opsLeads,
+  portalAccounts,
   students,
   type Database,
 } from '@elevate/database';
@@ -31,6 +32,7 @@ import {
   type Actor,
 } from './context';
 import { fieldError, opsAudit } from './ops-common';
+import { switchOffPortalAccounts } from './portal-switch-off';
 import type { GuardianInput, GuardianPatch } from './students-schemas';
 
 type Owners = readonly (string | null)[];
@@ -279,6 +281,15 @@ export async function updateGuardian(
       })
       .where(eq(opsGuardians.id, before.id))
       .returning();
+    // F4-13: an archived guardian's portal login loses this child at once (sessions end).
+    if (archived && !before.archivedAt)
+      await switchOffPortalAccounts(
+        tx,
+        actor,
+        eq(portalAccounts.guardianId, before.id),
+        requestId,
+        'guardian archived',
+      );
     await opsAudit('student')(
       tx,
       actor,

@@ -3,7 +3,7 @@ import { MODULE } from '../../domain';
 import { AcademicShell, gate } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Requests through HR' };
+export const metadata = { title: 'Requests to HR' };
 
 /** Requests sent through HR and what HR forwarded to you (brief §6, D-073); Ops' one implementation. */
 export default async function HrRequestsPage({

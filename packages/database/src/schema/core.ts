@@ -7,6 +7,7 @@
  *
  * Write rules (D-005, D-010):
  * - users / sessions / user_roles: only @elevate/authentication and platform admin routes.
+ * - login_attempts: only @elevate/authentication.
  * - departments / staff_members: only Business Ops OS (steward).
  * - programmes: only Academic OS (steward).
  * - approvals / audit_events / integration_events / event_deliveries / idempotency_keys:
@@ -84,10 +85,11 @@ export const users = core.table(
     uniqueIndex('users_email_key').on(t.email),
     check('users_email_lowercase', sql`${t.email} = lower(${t.email})`),
     // D-030: only organisation accounts; @example.test is the fictional seed/test domain,
-    // refused at sign-in in production by @elevate/authentication.
+    // refused at sign-in in production by @elevate/authentication. A student or guardian portal
+    // login (F4-13) is `<login>@portal.invalid`: not an address, refused by every staff way in.
     check(
       'users_email_domain',
-      sql`${t.email} ~ '^[^@[:space:]]+@(elevateeducation\\.in|example\\.test)$'`,
+      sql`${t.email} ~ '^[^@[:space:]]+@(elevateeducation\\.in|example\\.test|portal\\.invalid)$'`,
     ),
     check('users_status_check', sql`${t.status} IN ('active', 'disabled')`),
     check(
@@ -472,5 +474,134 @@ export const idempotencyKeys = core.table(
   (t) => [
     unique('idempotency_keys_scope_user_key').on(t.scope, t.key, t.userId).nullsNotDistinct(),
     index('idempotency_keys_expires_idx').on(t.expiresAt),
+  ],
+);
+
+// --- sign-in attempt limit shared by every app and process (owner step 4, 0019) -----------------
+
+/**
+ * One counter per throttle key (same rules as LoginThrottle in @elevate/authentication).
+ * `key_hash` = HMAC-SHA256 (SESSION_SECRET) hex of `<bucket>|<raw key>`, so no email, IP or user
+ * id is stored.
+ * `expires_at` = when the row stops mattering (at or after the window end and the lock end);
+ * housekeeping deletes rows past it.
+ */
+export const loginAttempts = core.table(
+  'login_attempts',
+  {
+    keyHash: text('key_hash').primaryKey(),
+    failures: integer('failures').notNull(),
+    windowStartedAt: timestamp('window_started_at', { withTimezone: true }).notNull(),
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    index('login_attempts_expires_idx').on(t.expiresAt),
+    check('login_attempts_key_check', sql`${t.keyHash} ~ '^[0-9a-f]{64}$'`),
+    check('login_attempts_failures_check', sql`${t.failures} >= 0`),
+    // Housekeeping must never delete a row that still holds a lock.
+    check(
+      'login_attempts_expiry_check',
+      sql`${t.lockedUntil} IS NULL OR ${t.expiresAt} >= ${t.lockedUntil}`,
+    ),
+  ],
+);
+
+// --- student and parent portal (F4-13, 0020) -----------------------------------------------
+
+export type CorePortalAccountId = Brand<string, 'CorePortalAccountId'>;
+export const CORE_PORTAL_ACCOUNT_KINDS = ['student', 'guardian'] as const;
+
+const userId = (name: string) =>
+  uuid(name)
+    .references(() => users.id, { onDelete: 'restrict' })
+    .$type<UserId>();
+
+/**
+ * Which student a portal login may see: one row per (login, student). A `student` login sees only
+ * itself; a `guardian` login has one row per child, naming that child's Ops guardian row
+ * (`guardian_id`, a plain id: core never points into a module). Made by staff from the student
+ * record. `consent_*` = a guardian's consent for a minor (who, when, which text version), all or
+ * nothing. Disabled, never deleted.
+ */
+export const portalAccounts = core.table(
+  'portal_accounts',
+  {
+    id: uuid('id').primaryKey().defaultRandom().$type<CorePortalAccountId>(),
+    userId: userId('user_id').notNull(),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'restrict' })
+      .$type<StudentIdentityId>(),
+    kind: text('kind', { enum: CORE_PORTAL_ACCOUNT_KINDS }).notNull(),
+    /** ops.guardians.id of a guardian login. */
+    guardianId: uuid('guardian_id'),
+    /** ops.guardians.id of the guardian who consented. */
+    consentGuardianId: uuid('consent_guardian_id'),
+    consentTextVersion: text('consent_text_version'),
+    consentGivenAt: timestamp('consent_given_at', { withTimezone: true }),
+    consentRecordedBy: userId('consent_recorded_by'),
+    createdBy: userId('created_by').notNull(),
+    createdAt: createdAt(),
+    disabledAt: timestamp('disabled_at', { withTimezone: true }),
+    disabledBy: userId('disabled_by'),
+  },
+  (t) => [
+    uniqueIndex('portal_accounts_user_student_key').on(t.userId, t.studentId),
+    // A student login is one person; a student has one live student login.
+    uniqueIndex('portal_accounts_one_student_user_key')
+      .on(t.userId)
+      .where(sql`${t.kind} = 'student'`),
+    uniqueIndex('portal_accounts_live_student_key')
+      .on(t.studentId)
+      .where(sql`${t.kind} = 'student' AND ${t.disabledAt} IS NULL`),
+    uniqueIndex('portal_accounts_live_guardian_key')
+      .on(t.guardianId)
+      .where(sql`${t.guardianId} IS NOT NULL AND ${t.disabledAt} IS NULL`),
+    index('portal_accounts_student_idx').on(t.studentId),
+    check('portal_accounts_kind_check', sql`${t.kind} IN ('student', 'guardian')`),
+    check(
+      'portal_accounts_guardian_check',
+      sql`(${t.kind} = 'guardian') = (${t.guardianId} IS NOT NULL)`,
+    ),
+    check(
+      'portal_accounts_consent_check',
+      sql`num_nonnulls(${t.consentGuardianId}, ${t.consentTextVersion}, ${t.consentGivenAt}, ${t.consentRecordedBy}) IN (0, 4) AND length(trim(coalesce(${t.consentTextVersion}, 'x'))) > 0`,
+    ),
+    check(
+      'portal_accounts_disabled_check',
+      sql`(${t.disabledAt} IS NULL) = (${t.disabledBy} IS NULL)`,
+    ),
+  ],
+);
+
+/**
+ * One-time setup code of a portal login: only HMAC-SHA256(SESSION_SECRET, "portal-setup|" + code)
+ * is kept, unique so the typed code alone finds its row. Used once (`used_at`) or revoked when a
+ * new one is issued: at most one live code per login. Expiry is checked on use.
+ */
+export const portalSetupCodes = core.table(
+  'portal_setup_codes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' })
+      .$type<UserId>(),
+    codeHash: text('code_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdBy: userId('created_by').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('portal_setup_codes_hash_key').on(t.codeHash),
+    uniqueIndex('portal_setup_codes_one_live_key')
+      .on(t.userId)
+      .where(sql`${t.usedAt} IS NULL AND ${t.revokedAt} IS NULL`),
+    check('portal_setup_codes_hash_check', sql`${t.codeHash} ~ '^[0-9a-f]{64}$'`),
+    check('portal_setup_codes_expiry_check', sql`${t.expiresAt} > ${t.createdAt}`),
+    check('portal_setup_codes_closed_check', sql`num_nonnulls(${t.usedAt}, ${t.revokedAt}) <= 1`),
   ],
 );

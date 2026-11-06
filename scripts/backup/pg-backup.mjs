@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * PostgreSQL backup — `npm run db:backup`.
+ * pg_dump backup for a server that has the PostgreSQL client tools (the release package ships it,
+ * docs/RELEASE.md). On this computer `npm run db:backup` is json-backup.ts instead (no pg_dump, D-024).
  *
  * Wraps `pg_dump --format=custom` for the Elevate schemas (core, marketing,
  * academic, ops, drizzle) of DATABASE_URL and writes

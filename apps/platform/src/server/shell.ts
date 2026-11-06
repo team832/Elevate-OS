@@ -5,9 +5,7 @@
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { getDb } from '@elevate/database';
-import { countUnread } from '@elevate/notifications';
-import { workspaceHrefs } from '@elevate/server-kit/next';
+import { unreadFor, workspaceHrefs } from '@elevate/server-kit/next';
 import type { AppShellProps } from '@elevate/shared-ui';
 import { PLATFORM_PATHS } from '../lib/shell';
 
@@ -40,14 +38,6 @@ export async function platformShell(
   active: 'overview' | 'users',
 ): Promise<Extras> {
   const canUsers = can(user, 'platform:users:read');
-  let unread: number | null = null;
-  if (can(user, 'platform:notifications:read')) {
-    try {
-      unread = await countUnread(getDb(), user.id);
-    } catch {
-      unread = null;
-    }
-  }
   return {
     nav: [
       ...(canUsers
@@ -56,7 +46,7 @@ export async function platformShell(
     ],
     search: searchFor(user),
     settings: canUsers ? { href: PLATFORM_PATHS.users } : undefined,
-    unreadNotifications: unread,
+    unreadNotifications: await unreadFor(user),
     moduleHrefs: workspaceHrefs(),
   };
 }

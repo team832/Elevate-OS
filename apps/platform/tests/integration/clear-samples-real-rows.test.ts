@@ -39,14 +39,10 @@ import {
 } from '@elevate/business-ops-os/seed';
 import { seeds as marketingSeeds } from '@elevate/marketing-os/seed';
 import { seeds as platformSeeds } from '../../seed';
-import { createHrRequest } from '../../../business-ops-os/src/server/hr-requests';
-import { createTask } from '../../../business-ops-os/src/server/task-create';
-import { createContentItem } from '../../../marketing-os/src/server/content';
-import { createTarget } from '../../../marketing-os/src/server/targets';
-import {
-  createAssessmentInternal,
-  internalActor,
-} from '../../../academic-os/src/server/services/assessment-ops';
+import { createHrRequest } from '@elevate/business-ops-os/server';
+import { createTask } from '@elevate/business-ops-os/work';
+import { createContentItem, createTarget } from '@elevate/marketing-os/server';
+import { createAssessmentInternal, internalActor } from '@elevate/academic-os/server';
 
 const ctx = setupTestDatabase();
 const db = () => ctx.db as Database;

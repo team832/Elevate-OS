@@ -53,29 +53,39 @@ import {
 import { clearSamples, seeds as opsSeeds } from '@elevate/business-ops-os/seed';
 import { seeds as marketingSeeds } from '@elevate/marketing-os/seed';
 import { seeds as platformSeeds } from '../../seed';
-import { feeYear } from '../../../business-ops-os/src/server/fee-year';
-import { listTasks } from '../../../business-ops-os/src/server/task-list';
-import { taskListQuery } from '../../../business-ops-os/src/server/staff-tasks-schemas';
-import { createLead, listLeads } from '../../../business-ops-os/src/server/leads';
-import { createTask } from '../../../business-ops-os/src/server/task-create';
-import { createHrRequest } from '../../../business-ops-os/src/server/hr-requests';
-import { createCampaign } from '../../../marketing-os/src/server/groups';
-import { addCampaignMember } from '../../../marketing-os/src/server/campaign-members';
-import { createCalendarItem } from '../../../marketing-os/src/server/calendar';
 import {
+  buildAdmissionsFunnel,
+  buildAdmissionsOverview,
+  createHrRequest,
+  createLead,
+  demoListQuery,
+  feeYear,
+  hrAttendanceCounts,
+  hrTabCounts,
+  hrTaskCounts,
+  listDemos,
+  periodReport,
+} from '@elevate/business-ops-os/server';
+import { listLeads } from '@elevate/business-ops-os/leads';
+import { createTask, listTasks, taskListQuery } from '@elevate/business-ops-os/work';
+import {
+  addCampaignMember,
   addObservation,
+  createCalendarItem,
+  createCampaign,
   createOptimisationItem,
-} from '../../../marketing-os/src/server/optimisation';
-import { createTarget } from '../../../marketing-os/src/server/targets';
+  createTarget,
+  listCalendarItems,
+  loadOverview,
+  targetDrilldown,
+} from '@elevate/marketing-os/server';
+import { istMidnightUtc } from '@elevate/marketing-os/domain';
 import {
   createAssessmentInternal,
+  demoAttendanceFeed,
   internalActor,
   snapshotRosterInternal,
-} from '../../../academic-os/src/server/services/assessment-ops';
-import { loadOverview } from '../../../marketing-os/src/server/dashboard-overview';
-import { listCalendarItems } from '../../../marketing-os/src/server/calendar-queries';
-import { targetDrilldown } from '../../../marketing-os/src/server/targets';
-import { istMidnightUtc } from '../../../marketing-os/src/domain';
+} from '@elevate/academic-os/server';
 import { addDays, toIsoDate } from '@elevate/shared-types';
 import AdmissionsOverviewPage from '../../../business-ops-os/src/app/admissions/overview/page';
 import ApplicationsPage from '../../../business-ops-os/src/app/admissions/applications/page';
@@ -86,14 +96,6 @@ import StudentsPage from '../../../business-ops-os/src/app/students/page';
 import TasksPage from '../../../business-ops-os/src/app/tasks/page';
 import { OverviewBlocks } from '../../../business-ops-os/src/app/_components/overview-blocks';
 import { POPULATIONS } from '../../../business-ops-os/src/app/reports/_components/admissions-charts';
-import { hrAttendanceCounts } from '../../../business-ops-os/src/server/attendance-hr';
-import { buildAdmissionsFunnel } from '../../../business-ops-os/src/server/reports/admissions-funnel';
-import { buildAdmissionsOverview } from '../../../business-ops-os/src/server/admissions-overview';
-import { listDemos } from '../../../business-ops-os/src/server/demos';
-import { demoListQuery } from '../../../business-ops-os/src/server/demos-schemas';
-import { demoAttendanceFeed } from '../../../academic-os/src/server/services/demo-attendees';
-import { hrTabCounts, hrTaskCounts } from '../../../business-ops-os/src/server/staff-tasks-hr';
-import { periodReport } from '../../../business-ops-os/src/server/task-period-report';
 
 // Pages check access through Next's request context; here the gate lets the test's user in.
 const access = vi.hoisted(() => ({ user: null as unknown }));

@@ -1,5 +1,5 @@
 /** Batch profile tabs: details (Overview), Students (placements) and Teachers (assignment history). Server components. */
-import { Alert, Card, DataTable, EmptyState, SourceBadge, fmtDay } from '@elevate/shared-ui';
+import { Alert, ButtonLink, Card, DataTable, EmptyState, SourceBadge, fmtDay } from '@elevate/shared-ui';
 import type { getBatch, listBatchPlacements, listStaff } from '../server';
 import { MODULE_PATHS } from '../server/paths';
 import { assignmentPhase } from '../domain/placements';
@@ -99,10 +99,15 @@ export function BatchStudents({ batch, placements, canDecide }: { batch: Batch; 
           ]}
         />
         {canDecide && open.length > 0 ? (
-          <details open={finished}>
-            <summary>Complete enrolments</summary>
-            <EndEnrolmentForm idPrefix="complete" options={open.map((p) => ({ value: p.enrolmentId, label: p.studentName }))} defaultEndDate={todayIst()} />
-          </details>
+          <>
+            <div>
+              <ButtonLink href={`${MODULE_PATHS.batch(batch.id)}/move`}>Move students</ButtonLink>
+            </div>
+            <details open={finished}>
+              <summary>Complete enrolments</summary>
+              <EndEnrolmentForm idPrefix="complete" options={open.map((p) => ({ value: p.enrolmentId, label: p.studentName }))} defaultEndDate={todayIst()} />
+            </details>
+          </>
         ) : null}
       </div>
     </Card>

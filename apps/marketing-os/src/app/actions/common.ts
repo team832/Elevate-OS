@@ -5,6 +5,7 @@
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { getDb, type Database } from '@elevate/database';
 import { headers } from 'next/headers';
+import { canonicalIds } from '@elevate/server-kit';
 import { actionRedirect, getCurrentUser } from '@elevate/server-kit/next';
 import { isAppError } from '@elevate/shared-contracts';
 import { MODULE, modulePath } from '../../domain';
@@ -12,11 +13,13 @@ import { MODULE_PATHS } from '../../server/paths';
 
 export function str(form: FormData, key: string): string | undefined {
   const v = form.get(key);
-  return typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
+  return typeof v === 'string' && v.trim() !== '' ? canonicalIds(v.trim()) : undefined;
 }
 
 export function strs(form: FormData, key: string): string[] {
-  return form.getAll(key).filter((v): v is string => typeof v === 'string' && v.trim() !== '');
+  return canonicalIds(
+    form.getAll(key).filter((v): v is string => typeof v === 'string' && v.trim() !== ''),
+  );
 }
 
 /** Turn a thrown error into a short, user-facing sentence (details for brand blocks and conflicts). */

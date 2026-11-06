@@ -78,7 +78,7 @@ export const opsPermissionList = [
   },
   {
     key: 'ops:jobs:run',
-    description: 'Run Ops jobs by hand: follow-up reminders and enrolment-reply processing.',
+    description: 'Run Ops jobs now and switch their background runs on or off (D-133).',
   },
   // --- admissions administration (OPS-070…) -------------------------------------------------
   {
@@ -296,7 +296,7 @@ export const opsPermissionList = [
   {
     key: 'ops:assessments:read',
     description:
-      'Read Tests and Mock Tests: tests, rosters, papers, score imports and results (the Academic record).',
+      'Read Tests and mock tests: tests, rosters, papers, score imports and results (the Academic record).',
   },
   {
     key: 'ops:assessments:manage',
@@ -307,6 +307,21 @@ export const opsPermissionList = [
     key: 'ops:assessments:publish',
     description: 'Publish or correct a test’s results and ranks after the completeness checks.',
   },
+  // --- wave 4 (FEATURES-W4, 6 Nov 2026) PROPOSED-GRANTS-2026-11-06 ----------------------------
+  {
+    key: 'ops:certificates:issue',
+    description: 'Issue, reprint and revoke student certificates (course completion, bonafide …).',
+  },
+  {
+    key: 'ops:payroll:manage',
+    description:
+      'Prepare payroll: salary components and structures, advances, monthly runs, payslips, marking paid.',
+  },
+  {
+    key: 'ops:payroll:approve',
+    description: 'Approve a monthly payroll run you neither created nor submitted.',
+  },
+  { key: 'ops:payslips:read', description: 'Read payslips (own = your own, under My work).' },
 ] as const satisfies readonly PermissionDefinition[];
 
 export type OpsPermission = (typeof opsPermissionList)[number]['key'];
@@ -320,6 +335,7 @@ const PRIVATE_READS: readonly OpsPermission[] = [
   'ops:staff_private:read',
   'ops:teacher_feedback:read',
   'ops:hr_requests:read',
+  'ops:payslips:read',
 ];
 const reads = keys.filter(
   (k) => (k.endsWith(':read') || k.endsWith(':access')) && !PRIVATE_READS.includes(k),
@@ -329,6 +345,12 @@ const reads = keys.filter(
 const RETIRED: readonly OpsPermission[] = ['ops:feedback:write', 'ops:feedback:manage'];
 /** Held by hr_manager alone (PROPOSED-GRANTS-2026-10-23). */
 const HR_ONLY: readonly OpsPermission[] = ['ops:staff_private:read', 'ops:staff_private:manage'];
+/** Salaries: not part of the operations manager's every-key grant (PROPOSED-GRANTS-2026-11-06). */
+const PAYROLL: readonly OpsPermission[] = [
+  'ops:payroll:manage',
+  'ops:payroll:approve',
+  'ops:payslips:read',
+];
 
 const own = (permission: OpsPermission) => ({ permission, scope: 'own' as const });
 const ownTasks = [own('ops:tasks:read'), own('ops:tasks:write')];
@@ -336,12 +358,17 @@ const ownTasks = [own('ops:tasks:read'), own('ops:tasks:write')];
 const ownAttendance = [own('ops:attendance:read'), own('ops:attendance:request')];
 /** Send requests through HR and answer what HR forwards (PROPOSED-GRANTS-2026-10-23b). */
 const ownHrRequests = own('ops:hr_requests:create');
+/** A staff member's own payslips (PROPOSED-GRANTS-2026-11-06; auditor none, owner question). */
+const ownPayslips = own('ops:payslips:read');
 
 export const opsPermissions = definePermissions<OpsPermission>({
   module: 'ops',
   permissions: opsPermissionList,
   grants: {
-    operations_manager: keys.filter((k) => !RETIRED.includes(k) && !HR_ONLY.includes(k)),
+    operations_manager: [
+      ...keys.filter((k) => !RETIRED.includes(k) && !HR_ONLY.includes(k) && !PAYROLL.includes(k)),
+      ownPayslips,
+    ],
     // PROPOSED-GRANTS-2026-10-23 (the whole role).
     hr_manager: [
       'ops:module:access',
@@ -367,6 +394,8 @@ export const opsPermissions = definePermissions<OpsPermission>({
       'ops:hr_settings:manage',
       'ops:hr_requests:read', // PROPOSED-GRANTS-2026-10-23b
       'ops:hr_requests:manage', // PROPOSED-GRANTS-2026-10-23b
+      'ops:payroll:manage', // PROPOSED-GRANTS-2026-11-06
+      ownPayslips,
     ],
     admissions_counsellor: [
       'ops:module:access',
@@ -392,6 +421,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       ...ownTasks,
       ...ownAttendance,
       ownHrRequests,
+      ownPayslips,
     ],
     // ops:admissions:confirm holders are PROPOSED (brief §1: "who may finalize admissions"; D-041).
     director: [
@@ -405,7 +435,11 @@ export const opsPermissions = definePermissions<OpsPermission>({
       'ops:eod:review',
       own('ops:tasks:review'), // PROPOSED-GRANTS-2026-10-23
       ownHrRequests,
+      ownPayslips,
       own('ops:attendance:request'), // PROPOSED-GRANTS-2026-10-31: every staff member applies for leave
+      'ops:certificates:issue', // PROPOSED-GRANTS-2026-11-06
+      'ops:payroll:manage', // PROPOSED-GRANTS-2026-11-06
+      'ops:payroll:approve', // PROPOSED-GRANTS-2026-11-06
     ],
 
     auditor: reads,
@@ -422,6 +456,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       ...ownTasks,
       ...ownAttendance,
       ownHrRequests,
+      ownPayslips,
       own('ops:tasks:review'), // PROPOSED-GRANTS-2026-10-23
     ],
     teacher: [
@@ -429,6 +464,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       ...ownTasks,
       ...ownAttendance,
       ownHrRequests,
+      ownPayslips,
       own('ops:teacher_feedback_summaries:read'), // PROPOSED-GRANTS-2026-10-23
     ],
     // PROPOSED (owner to confirm, D-073): Marketing OS works leads, sources and follow-ups on the
@@ -443,6 +479,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       ...ownTasks,
       ...ownAttendance,
       ownHrRequests,
+      ownPayslips,
       own('ops:tasks:review'), // PROPOSED-GRANTS-2026-10-23: their team's work
     ],
     marketing_contributor: [
@@ -452,6 +489,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       ...ownTasks,
       ...ownAttendance,
       ownHrRequests,
+      ownPayslips,
     ],
     finance_officer: [
       'ops:module:access',
@@ -461,6 +499,7 @@ export const opsPermissions = definePermissions<OpsPermission>({
       ...ownTasks,
       ...ownAttendance,
       ownHrRequests,
+      ownPayslips,
     ],
   },
 });

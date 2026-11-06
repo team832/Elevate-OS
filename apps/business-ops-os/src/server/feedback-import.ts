@@ -167,7 +167,7 @@ export async function previewImport(
     // The same file sent twice at once: the unique sha256 index decides (M6).
     throw isUniqueViolation(e) ? alreadyUploaded() : e;
   });
-  // The source copy is kept apart from the rows; storage not set up does not lose the preview.
+  // The source copy is kept apart from the rows: if it cannot be stored, the preview is not lost.
   const sourceFile = await uploadAttachment(db, actor, {
     ownerKind: 'feedback_import',
     ownerId: created.id,

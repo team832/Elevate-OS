@@ -743,10 +743,43 @@ a.el-notify:hover {
     animation: none;
   }
 }
+/* Every page prints (owner, 6 Nov 2026): the page itself, full width, ink on white, under a line
+ * saying what it is, when (IST) and by whom (PageHeader's PrintHeader). */
+.el-print-header {
+  display: none;
+}
 @media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  :root {
+    --el-bg: #fff;
+    --el-well: #fff;
+    --el-surface: #fff;
+    --el-surface-muted: #fff;
+    --el-overlay: #fff;
+    --el-text: #000;
+    --el-text-muted: #333;
+    --el-accent-text: #000;
+    --el-border: #999;
+    --el-border-strong: #555;
+    --el-control-border: #555;
+    --el-shadow: none;
+    --el-shadow-raised: none;
+    --el-shadow-overlay: none;
+    --el-shadow-inset: none;
+    --el-shadow-button: none;
+    --el-glass-bg: #fff;
+    --el-glass-blur: none;
+  }
   .el-sidebar,
   .el-topbar,
-  .el-sidebar-backdrop {
+  .el-sidebar-backdrop,
+  .el-skip-link,
+  .el-subnav,
+  .el-page-actions,
+  .el-toasts {
     display: none !important;
   }
   .el-shell {
@@ -755,5 +788,16 @@ a.el-notify:hover {
   }
   body {
     background: #fff;
+  }
+  .el-main {
+    max-width: none;
+    padding: 0;
+  }
+  .el-print-header {
+    display: block;
+    margin: 0 0 var(--el-space-3);
+    padding-bottom: var(--el-space-1);
+    border-bottom: 1px solid var(--el-border);
+    font-size: var(--el-text-xs);
   }
 }

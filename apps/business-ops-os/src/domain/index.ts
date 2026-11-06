@@ -24,3 +24,4 @@ export * from './registers';
 export * from './admissions-kpis';
 export * from './fees';
 export * from './students';
+export { feeStatement } from './fee-statement';

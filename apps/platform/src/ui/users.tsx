@@ -1,5 +1,6 @@
 /** Pieces shared by the Users & roles pages (server components). */
-import { ROLE_KEYS, ROLES, type RoleKey } from '@elevate/authorization';
+import { STAFF_ROLE_KEYS } from '@elevate/authentication';
+import { ROLES, type RoleKey } from '@elevate/authorization';
 import { StatusBadge } from '@elevate/shared-ui';
 
 const when = new Intl.DateTimeFormat('en-IN', {
@@ -50,7 +51,7 @@ export function RoleChecklist({
     <fieldset className="el-fieldset" disabled={disabled}>
       <legend>Roles</legend>
       <ul className="ur-roles">
-        {ROLE_KEYS.map((key) => (
+        {STAFF_ROLE_KEYS.map((key) => (
           <li key={key}>
             <label className="el-checkbox">
               <input

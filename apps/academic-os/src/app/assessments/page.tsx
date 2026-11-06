@@ -12,7 +12,7 @@ import type { PageAccess } from '@elevate/server-kit/next';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Assessments' };
+export const metadata: Metadata = { title: 'Tests and mock tests' };
 
 const KINDS = wordOptions(['chapter_test', 'sectional', 'full_mock', 'practice']);
 
@@ -54,9 +54,9 @@ async function Body({ access, batchId, mine }: { access: PageAccess; batchId?: s
   return (
     <>
       <PageHeader
-        title="Assessments"
-        description={mine && data.ok && data.data.filtered ? `${MINE_LABELS[mine]}: the assessments your home page counts.` : 'Tests and mocks, each scored by its own rules. Unknown values stay unknown until entered.'}
-        actions={batchId ? <a href={MODULE_PATHS.assessments}>Show all batches</a> : mine ? <a href={MODULE_PATHS.assessments}>Show all assessments</a> : undefined}
+        title="Tests and mock tests"
+        description={mine && data.ok && data.data.filtered ? `${MINE_LABELS[mine]}: the tests your home page counts.` : 'Tests and mocks, each scored by its own rules. Unknown values stay unknown until entered.'}
+        actions={batchId ? <a href={MODULE_PATHS.assessments}>Show all batches</a> : mine ? <a href={MODULE_PATHS.assessments}>Show all tests</a> : undefined}
       />
       {!data.ok ? (
         <LoadError error={data.error} />

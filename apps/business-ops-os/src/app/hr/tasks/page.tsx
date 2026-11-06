@@ -17,6 +17,7 @@ import { listTasks, type TaskListRow } from '../../../server/staff-tasks';
 import { HR_TASK_TABS, hrTabCounts } from '../../../server/staff-tasks-hr';
 import { taskListQuery } from '../../../server/staff-tasks-schemas';
 import { ActionForm } from '../../../ui/action-form';
+import { TaskReviewNav } from '../../../ui/admissions-nav';
 import { TaskBriefAssist } from '../../../ui/ai-draft';
 import { Frame, gate, load, Section } from '../../../ui/frame';
 import { listHref, Pager, SearchPanel } from '../../../ui/list-controls';
@@ -49,6 +50,7 @@ export default async function HrTasksPage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Tasks"
         description="Work HR assigns to teachers and marketing staff, and where each task stands."
+        tabs={<TaskReviewNav current="tasks" user={access.user} />}
         actions={
           <ButtonLink variant="primary" href={listHref(BASE, sp, { new: '1', open: undefined })}>
             Assign a task

@@ -1,11 +1,8 @@
 /** Request bodies: acknowledging Academic teacher reviews and reviewed student reports. */
 import { z } from 'zod';
 import { OPS_REPORT_AUDIENCES } from '@elevate/database';
-import { isoDateSchema } from '@elevate/shared-contracts';
+import { isoDateSchema, optText } from '@elevate/shared-contracts';
 import { REPORT_SECTIONS } from '../domain/student-report';
-
-const text = (max: number) => z.string().trim().max(max);
-const optText = (max: number) => text(max).nullish();
 
 /** Ops acknowledges one submitted review version and may add its own follow-up (never edits it). */
 export const reviewAckBody = z

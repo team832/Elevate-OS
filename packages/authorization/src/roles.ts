@@ -56,6 +56,16 @@ export const ROLES: Readonly<Record<RoleKey, { label: string; description: strin
     description:
       'Runs HR in Business Operations for teachers and marketing staff: staff records and private details, attendance, task assignment and review, work reports, student feedback about teachers. Grants are Proposed.',
   },
+  student: {
+    label: 'Student (portal)',
+    description:
+      'Portal login of one student: reads their own attendance, published results, homework, fees and timetable. Never opens a staff workspace.',
+  },
+  guardian: {
+    label: 'Parent or guardian (portal)',
+    description:
+      'Portal login of a parent or guardian: reads the same pages for their linked children only. Never opens a staff workspace.',
+  },
 };
 
 /** Actions considered read-only. The auditor role may only hold these. */

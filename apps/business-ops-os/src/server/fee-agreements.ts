@@ -39,6 +39,7 @@ import {
   ForbiddenError,
   InvalidStateTransitionError,
   isoDateSchema,
+  optText,
   ValidationError,
 } from '@elevate/shared-contracts';
 import type { AdmissionId, StudentIdentityId } from '@elevate/shared-types';
@@ -53,17 +54,10 @@ import {
 import { acceptedVersions } from '../domain/fee-year';
 import { chargeSummary, FEE_DIRECTIONS, FEE_METHODS, MANUAL_FEE_DISCLAIMER } from '../domain/fees';
 import { lockAccessible, namesOf, ownAdmissionFilter, readinessOf } from './admissions';
+import { activeCoverFor } from './approval-cover';
 import { feeAgreementPolicy } from './approval-policies';
 import { accessScope, clean, type Actor } from './context';
-import {
-  amountFields,
-  asLike,
-  issuesError,
-  optText,
-  paiseOf,
-  present,
-  recordFee,
-} from './fee-ledger';
+import { amountFields, asLike, issuesError, paiseOf, present, recordFee } from './fee-ledger';
 import { groupBy, inOrder, opsAudit, rowById } from './ops-common';
 import { loadSettings } from './settings';
 
@@ -584,7 +578,13 @@ export async function recordPlanEntry(
     input.kind === 'discount' ||
     input.kind === 'waiver' ||
     (input.kind === 'adjustment' && input.direction === 'credit' && !input.demoId);
-  if (lowers && (!can(actor, 'ops:admissions:approve') || plan.createdBy === actor.id))
+  const approves = can(actor, 'ops:admissions:approve');
+  // Approval cover (F4-10): posted for an approver covered today, who did not make the agreement either.
+  const onBehalfOf =
+    lowers && !approves
+      ? (await activeCoverFor(db, actor.id, 'fee_approval')).find((a) => a !== plan.createdBy)
+      : undefined;
+  if (lowers && (!(approves || onBehalfOf) || plan.createdBy === actor.id))
     throw new ForbiddenError(
       'A discount, waiver or credit on an agreement needs the fee-approval permission and someone other than the agreement’s maker.',
     );
@@ -594,7 +594,7 @@ export async function recordPlanEntry(
     db,
     actor,
     plan.admissionId,
-    { ...input, chargeCategory: 'tuition', planId: plan.id },
+    { ...input, chargeCategory: 'tuition', planId: plan.id, onBehalfOf },
     requestId,
   );
 }
@@ -733,9 +733,9 @@ export async function studentFeePlans(
     ...detailed.flatMap((d) => [
       d.plan.approvedBy,
       ...d.versions.map((v) => v.createdBy),
-      ...d.ledger.map((r) => r.recordedBy),
+      ...d.ledger.flatMap((r) => [r.recordedBy, r.onBehalfOf]),
     ]),
-    ...other.map((r) => r.recordedBy),
+    ...other.flatMap((r) => [r.recordedBy, r.onBehalfOf]),
   ]);
   return {
     plans: detailed.map((d) => ({

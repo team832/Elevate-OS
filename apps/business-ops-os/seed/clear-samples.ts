@@ -10,8 +10,8 @@
  * Sample = `ops.leads.is_sample`, `core.students.is_sample`, `ops.fee_structures.is_sample`,
  * `is_sample` tasks, EOD reports and import batches, Academic `is_sample` batches (with their
  * sessions, logs and teachers), students, placements, demo attendees and reviews, `is_sample`
- * attachments and those of sample tasks, submissions, updates, corrections and reports (rows only:
- * files on disk stay; shortcut: delete them too once the storage adapter offers it), leave and leave applications, attendance punches/imports/days/corrections,
+ * attachments and those on any sample record (rows, and bytes kept in the database; shortcut: files
+ * in the development folder stay, as a rolled-back clear could not bring them back), leave and leave applications, attendance punches/imports/days/corrections,
  * student feedback about teachers with its imports, summaries and development actions, or a staff
  * member whose `ops.staff_profiles.is_sample` is set and who has no login. Everything
  * that hangs off those rows is deleted with them (including Academic's student and enrolment
@@ -24,12 +24,24 @@
  * record is emptied (logged and audited), and a real record that needs a sample one stops the
  * command before anything changes (./clear-samples-guards.ts). Rows deleted are sample records and
  * the rows that belong to them (their history, members, roster, placements).
+ * Wave 4 (6 Nov 2026): receipts and certificates go with their sample payment or student, and their
+ * sample.* number series with them (real series are never reset); homework, absence calls, portal access (its
+ * logins switched off), payroll, leave allowances, checklists and assets go when flagged or under a
+ * sample parent (for staff: a made-up one without a login; a demo login's real rows stay), approval
+ * cover only when flagged. Payroll components, checklist templates, the website-form user and the
+ * WEBSITE_FORM lead source are reference data and stay.
  */
 import { sql } from 'drizzle-orm';
 import type { Database } from '@elevate/database';
 import { sampleRowsSql } from '@elevate/database/seed';
 import { withTransaction } from '@elevate/server-kit';
-import { RELATED_SET, refuseRequiredLinks, unlinkRealRows } from './clear-samples-guards';
+import {
+  BY_SAMPLE_STAFF,
+  RELATED_SET,
+  refuseRequiredLinks,
+  SAMPLE_PAYSLIPS,
+  unlinkRealRows,
+} from './clear-samples-guards';
 
 export { ClearSamplesRefused } from './clear-samples-guards';
 
@@ -52,6 +64,9 @@ const OLD_ROWS = {
 
 /** Temporary id sets, built once: [name, SELECT]. */
 const SETS: readonly [string, string][] = [
+  // Every made-up staff member, with or without a login (demo logins and their staff stay; s_staff
+  // below are the ones deleted). Only for rows that are about the person, never for a real record.
+  ['s_sample_staff', `SELECT staff_id AS id FROM ops.staff_profiles WHERE is_sample`],
   [
     's_leads',
     `SELECT id FROM ops.leads WHERE is_sample
@@ -82,6 +97,16 @@ const SETS: readonly [string, string][] = [
     `SELECT id FROM ops.fee_plans WHERE admission_id IN (SELECT id FROM s_admissions) OR student_id IN (SELECT id FROM s_students)`,
   ],
   [
+    's_fee_records',
+    `SELECT id FROM ops.fee_records WHERE admission_id IN (SELECT id FROM s_admissions)
+       OR lead_id IN (SELECT id FROM s_leads) OR plan_id IN (SELECT id FROM s_plans)`,
+  ],
+  // Portal logins of sample students (a guardian login keeps its other children's accounts).
+  [
+    's_portal_users',
+    `SELECT DISTINCT user_id AS id FROM core.portal_accounts WHERE student_id IN (SELECT id FROM s_students)`,
+  ],
+  [
     's_academic_students',
     `SELECT id FROM academic.students WHERE source_admission_id IN (SELECT id FROM s_admissions) OR is_sample
        OR (email LIKE ${OLD_ADDRESS} AND full_name LIKE ${OLD_STUDENT})`,
@@ -110,6 +135,11 @@ const SETS: readonly [string, string][] = [
      WHERE p.is_sample AND m.user_id IS NULL`,
   ],
   ['s_hr_requests', `SELECT id FROM ops.hr_requests WHERE is_sample`],
+  [
+    's_homework',
+    // A real homework on a sample batch stops the clear (guards).
+    `SELECT id FROM academic.homework WHERE is_sample OR teacher_staff_id IN (SELECT id FROM s_staff)`,
+  ],
   [
     's_schedules',
     `${sampleRowsSql('ops.work_schedules')} UNION SELECT id FROM ops.work_schedules WHERE ${OLD_ROWS.schedules}`,
@@ -145,22 +175,34 @@ const SETS: readonly [string, string][] = [
 ];
 
 const IN = (set: string) => `IN (SELECT id FROM ${set})`;
+/** A sample student's portal logins left with no live account (accounts of real children keep theirs). */
+const PORTAL_LEFT = (userId: string) =>
+  `${userId} ${IN('s_portal_users')} AND NOT EXISTS (SELECT 1 FROM core.portal_accounts a WHERE a.user_id = ${userId} AND a.disabled_at IS NULL)`;
+
+/** Files on sample records: flagged, or on a sample parent of any owner kind (one condition for rows and bytes). */
+const SAMPLE_FILES = `is_sample
+       OR (owner_kind = 'task' AND owner_id ${IN('s_tasks')})
+       OR (owner_kind = 'task_submission' AND owner_id IN (SELECT id FROM ops.task_submissions WHERE task_id ${IN('s_tasks')}))
+       OR (owner_kind = 'task_update' AND owner_id IN (SELECT id FROM ops.task_updates WHERE task_id ${IN('s_tasks')}))
+       OR (owner_kind = 'attendance_correction' AND owner_id IN (SELECT id FROM ops.attendance_corrections WHERE is_sample OR staff_id ${IN('s_staff')}))
+       OR (owner_kind = 'leave_application' AND owner_id IN (SELECT id FROM ops.leave_applications WHERE is_sample OR staff_id ${IN('s_staff')}))
+       OR (owner_kind = 'work_report' AND owner_id ${IN('s_eods')})
+       OR (owner_kind = 'hr_request' AND owner_id ${IN('s_hr_requests')})
+       OR (owner_kind = 'feedback_import' AND owner_id ${IN('s_feedback_imports')})
+       OR (owner_kind = 'feedback_evidence' AND owner_id IN (SELECT id FROM ops.student_teacher_feedback WHERE is_sample OR student_id ${IN('s_students')} OR teacher_staff_id ${IN('s_staff')} OR import_id ${IN('s_feedback_imports')}))
+       OR (owner_kind = 'staff_private' AND owner_id ${IN('s_sample_staff')})
+       OR (owner_kind IN ('assessment_paper', 'assessment_key', 'score_import') AND owner_id ${IN('s_assessments')})`;
 
 /** Deletes in foreign-key-safe order: [label, statement]. */
 const DELETES: readonly [string, string][] = [
   // HR samples (brief 23 Oct 2026): attachments, attendance and leave, and a sample staff
   // member's own department/manager history and task collaborations.
+  // The bytes first (D-135, kept in the database in production): they are found through the rows.
   [
-    'ops.attachments',
-    `DELETE FROM ops.attachments WHERE is_sample
-       OR (owner_kind = 'task' AND owner_id ${IN('s_tasks')})
-       OR (owner_kind = 'task_submission' AND owner_id IN (SELECT id FROM ops.task_submissions WHERE task_id ${IN('s_tasks')}))
-       OR (owner_kind = 'task_update' AND owner_id IN (SELECT id FROM ops.task_updates WHERE task_id ${IN('s_tasks')}))
-       OR (owner_kind = 'attendance_correction' AND owner_id IN (SELECT id FROM ops.attendance_corrections WHERE is_sample OR staff_id ${IN('s_staff')}))
-       OR (owner_kind = 'work_report' AND owner_id ${IN('s_eods')})
-       OR (owner_kind = 'hr_request' AND owner_id ${IN('s_hr_requests')})
-       OR (owner_kind IN ('assessment_paper', 'assessment_key', 'score_import') AND owner_id ${IN('s_assessments')})`,
+    'ops.attachment_files',
+    `DELETE FROM ops.attachment_files WHERE key::text IN (SELECT storage_key FROM ops.attachments WHERE ${SAMPLE_FILES})`,
   ],
+  ['ops.attachments', `DELETE FROM ops.attachments WHERE ${SAMPLE_FILES}`],
   // Requests through HR (brief 23 Oct 2026 §6): events first; before tasks (linked_task_id).
   [
     'ops.hr_request_events',
@@ -206,7 +248,10 @@ const DELETES: readonly [string, string][] = [
     `DELETE FROM marketing.publishing_records WHERE placement_id ${IN('s_placements')}`,
   ],
   ['marketing.placements', `DELETE FROM marketing.placements WHERE id ${IN('s_placements')}`],
-  ['marketing.placement_groups', `DELETE FROM marketing.placement_groups WHERE id ${IN('s_groups')}`],
+  [
+    'marketing.placement_groups',
+    `DELETE FROM marketing.placement_groups WHERE id ${IN('s_groups')}`,
+  ],
   [
     'marketing.content_comments',
     `DELETE FROM marketing.content_comments WHERE content_item_id ${IN('s_content')}`,
@@ -250,6 +295,37 @@ const DELETES: readonly [string, string][] = [
     `ops.${t}`,
     `DELETE FROM ops.${t} WHERE is_sample OR staff_id ${IN('s_staff')}`,
   ]),
+  // Payroll (F4-14): flagged rows and those of deleted staff, then sample runs; a real payslip using a
+  // sample structure or advance stops the clear (guards). Payroll components are reference data.
+  [
+    'ops.payslip_lines',
+    `DELETE FROM ops.payslip_lines WHERE payslip_id IN (SELECT id FROM ops.payslips WHERE ${SAMPLE_PAYSLIPS})`,
+  ],
+  ['ops.payslips', `DELETE FROM ops.payslips WHERE ${SAMPLE_PAYSLIPS}`],
+  [
+    'ops.salary_structure_lines',
+    `DELETE FROM ops.salary_structure_lines WHERE structure_id IN (SELECT id FROM ops.salary_structures WHERE ${BY_SAMPLE_STAFF})`,
+  ],
+  [
+    'ops.staff_checklist_items',
+    `DELETE FROM ops.staff_checklist_items WHERE checklist_id IN (SELECT id FROM ops.staff_checklists WHERE ${BY_SAMPLE_STAFF})`,
+  ],
+  // Checklist templates stay (reference data, F4-09).
+  ...(
+    [
+      'salary_structures',
+      'salary_advances',
+      'staff_checklists',
+      'staff_assets',
+      'leave_allowances',
+      'leave_adjustments',
+    ] as const
+  ).map((t): [string, string] => [`ops.${t}`, `DELETE FROM ops.${t} WHERE ${BY_SAMPLE_STAFF}`]),
+  ['ops.payroll_runs', `DELETE FROM ops.payroll_runs WHERE is_sample`],
+  // Logins are never deleted, so a real cover naming a demo login stays.
+  ['ops.approval_delegations', `DELETE FROM ops.approval_delegations WHERE is_sample`],
+  // Real rules lost their sample counsellors in clear-samples-guards.ts.
+  ['ops.lead_assignment_rules', `DELETE FROM ops.lead_assignment_rules WHERE is_sample`],
   [
     'ops.attendance_punches (import)',
     `DELETE FROM ops.attendance_punches WHERE import_id IN (SELECT id FROM ops.attendance_imports WHERE is_sample)`,
@@ -267,19 +343,19 @@ const DELETES: readonly [string, string][] = [
   ['ops.holidays', `DELETE FROM ops.holidays WHERE id ${IN('s_holidays')}`],
   [
     'ops.staff_private_details',
-    `DELETE FROM ops.staff_private_details WHERE staff_id IN (SELECT staff_id FROM ops.staff_profiles WHERE is_sample)`,
+    `DELETE FROM ops.staff_private_details WHERE staff_id ${IN('s_sample_staff')}`,
   ],
   // The made-up Schar leaves the setting (only they: another person chosen on screen stays).
   [
     'ops.settings (Schar)',
     `DELETE FROM ops.settings WHERE key = 'hr.request_recipients'
        AND (SELECT count(*) FROM jsonb_object_keys(value)) = 1
-       AND value->>'schar' IN (SELECT staff_id::text FROM ops.staff_profiles WHERE is_sample)`,
+       AND value->>'schar' IN (SELECT id::text FROM s_sample_staff)`,
   ],
   [
     'ops.settings (Schar unset)',
     `UPDATE ops.settings SET value = jsonb_set(value, '{schar}', 'null')
-     WHERE key = 'hr.request_recipients' AND value->>'schar' IN (SELECT staff_id::text FROM ops.staff_profiles WHERE is_sample)`,
+     WHERE key = 'hr.request_recipients' AND value->>'schar' IN (SELECT id::text FROM s_sample_staff)`,
   ],
   // Sample task-tracker work (seed/sample-work.ts) and fixture imports.
   [
@@ -303,7 +379,10 @@ const DELETES: readonly [string, string][] = [
     `DELETE FROM ops.${t} WHERE task_id ${IN('s_tasks')}`,
   ]),
   ['ops.staff_tasks', `DELETE FROM ops.staff_tasks WHERE id ${IN('s_tasks')}`],
-  ['core.user_preferences', `DELETE FROM core.user_preferences WHERE user_id ${IN('s_preferences')}`],
+  [
+    'core.user_preferences',
+    `DELETE FROM core.user_preferences WHERE user_id ${IN('s_preferences')}`,
+  ],
   // Only values the seed stored and nobody has changed since (a real login's change stays).
   [
     'academic.settings',
@@ -340,10 +419,8 @@ const DELETES: readonly [string, string][] = [
     'ops.checklist_entries',
     `DELETE FROM ops.checklist_entries WHERE subject_id ${IN('s_demos')} OR subject_id ${IN('s_admissions')}`,
   ],
-  [
-    'ops.fee_records',
-    `DELETE FROM ops.fee_records WHERE admission_id ${IN('s_admissions')} OR lead_id ${IN('s_leads')} OR plan_id ${IN('s_plans')}`,
-  ],
+  ['ops.fee_receipts', `DELETE FROM ops.fee_receipts WHERE fee_record_id ${IN('s_fee_records')}`],
+  ['ops.fee_records', `DELETE FROM ops.fee_records WHERE id ${IN('s_fee_records')}`],
   ['ops.fee_instalments', `DELETE FROM ops.fee_instalments WHERE plan_id ${IN('s_plans')}`],
   ['ops.fee_plans', `DELETE FROM ops.fee_plans WHERE id ${IN('s_plans')}`],
   [
@@ -435,13 +512,18 @@ const DELETES: readonly [string, string][] = [
   ]),
   // Academic sample teaching (apps/academic-os/seed/samples.ts, fill-teaching.ts). A real student's
   // row in a sample session or batch is not deleted: its foreign key rolls the whole command back.
+  [
+    'academic.homework_marks',
+    `DELETE FROM academic.homework_marks WHERE homework_id ${IN('s_homework')} OR student_id ${IN('s_academic_students')}`,
+  ],
+  ['academic.homework', `DELETE FROM academic.homework WHERE id ${IN('s_homework')}`],
   ...(['catchup_tasks', 'interventions'] as const).map((t): [string, string] => [
     `academic.${t}`,
     `DELETE FROM academic.${t} WHERE student_id ${IN('s_academic_students')}`,
   ]),
   [
     'academic.teacher_unavailability',
-    `DELETE FROM academic.teacher_unavailability WHERE staff_id IN (SELECT staff_id FROM ops.staff_profiles WHERE is_sample)`,
+    `DELETE FROM academic.teacher_unavailability WHERE staff_id ${IN('s_sample_staff')}`,
   ],
   [
     'academic.teacher_reviews',
@@ -495,7 +577,7 @@ const DELETES: readonly [string, string][] = [
   // sample data even though the login stays; assignments of sample batches cascade below.
   [
     'academic.teacher_assignments',
-    `DELETE FROM academic.teacher_assignments WHERE staff_member_id IN (SELECT staff_id FROM ops.staff_profiles WHERE is_sample)`,
+    `DELETE FROM academic.teacher_assignments WHERE staff_member_id ${IN('s_sample_staff')}`,
   ],
   // Teacher assignments and calendar rules of a batch go with it (ON DELETE CASCADE).
   ['academic.batches', `DELETE FROM academic.batches WHERE id ${IN('s_academic_batches')}`],
@@ -533,6 +615,25 @@ const DELETES: readonly [string, string][] = [
     'ops.teacher_feedback_imports',
     `DELETE FROM ops.teacher_feedback_imports WHERE id ${IN('s_feedback_imports')}`,
   ],
+  ...(['absence_calls', 'certificates'] as const).map((t): [string, string] => [
+    `ops.${t}`,
+    `DELETE FROM ops.${t} WHERE student_id ${IN('s_students')}`,
+  ]),
+  // Portal access (F4-13): a sample student's accounts; a login left with no live account loses its
+  // setup codes and sessions and is switched off (kept, like other sample logins).
+  ['core.portal_accounts', `DELETE FROM core.portal_accounts WHERE student_id ${IN('s_students')}`],
+  [
+    'core.portal_setup_codes',
+    `DELETE FROM core.portal_setup_codes c WHERE ${PORTAL_LEFT('c.user_id')}`,
+  ],
+  [
+    'core.sessions (portal, ended)',
+    `UPDATE core.sessions s SET revoked_at = now() WHERE s.revoked_at IS NULL AND ${PORTAL_LEFT('s.user_id')}`,
+  ],
+  [
+    'core.users (portal, switched off)',
+    `UPDATE core.users u SET status = 'disabled' WHERE u.status <> 'disabled' AND ${PORTAL_LEFT('u.id')}`,
+  ],
   ['core.students', `DELETE FROM core.students WHERE id ${IN('s_students')}`],
   ['ops.leads', `DELETE FROM ops.leads WHERE id ${IN('s_leads')}`],
   [
@@ -553,6 +654,9 @@ const DELETES: readonly [string, string][] = [
     'ops.admission_number_counters',
     `DELETE FROM ops.admission_number_counters WHERE NOT EXISTS (SELECT 1 FROM ops.admissions WHERE admission_number IS NOT NULL)`,
   ],
+  // Sample receipts and certificates are numbered in their own series (FX-DOCS); real series hold only
+  // real documents and are never reset.
+  ['ops.document_counters', `DELETE FROM ops.document_counters WHERE series LIKE 'sample.%'`],
 ];
 
 /** Self-references that would block a delete inside the same set. */
@@ -576,7 +680,7 @@ const UNLINK = [
   `UPDATE ops.kyc_documents SET superseded_by_id = id WHERE superseded_by_id IS NOT NULL AND student_id ${IN('s_students')}`,
   `UPDATE ops.fee_plans SET supersedes_plan_id = NULL, version = 1 WHERE id ${IN('s_plans')}`,
   `UPDATE ops.admissions SET application_id = NULL WHERE id ${IN('s_admissions')}`,
-  `UPDATE ops.fee_records SET reverses_record_id = NULL WHERE admission_id ${IN('s_admissions')} OR lead_id ${IN('s_leads')}`,
+  `UPDATE ops.fee_records SET reverses_record_id = NULL WHERE id ${IN('s_fee_records')}`,
 ];
 
 const affected = (r: unknown) =>

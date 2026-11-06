@@ -12,7 +12,7 @@ import {
   fmtDay,
 } from '@elevate/shared-ui';
 import { addDays, isIsoDate, type IsoDate } from '@elevate/shared-types';
-import { assignmentOptions, listBatches, teacherProfile, todayIst, UNAVAILABILITY_LABEL } from '../../../server';
+import { assignmentOptions, listBatches, teacherProfile, todayIst, unavailabilityLabel } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
 import { ApiForm } from '../../../ui/api-form';
 import { AssignmentForms, AssignmentTable } from '../../../ui/assignments';
@@ -147,7 +147,7 @@ export default async function TeacherPage({
         </Card>
         <Card
           title="Availability records"
-          description={`${UNAVAILABILITY_LABEL}. A record flags this teacher's classes for the coordinator; nobody is substituted automatically.`}
+          description="A record flags this teacher's classes for the coordinator: one entered here, or approved HR leave sent by Business Ops OS. Nobody is substituted automatically."
         >
           <DataTable
             compact
@@ -156,7 +156,8 @@ export default async function TeacherPage({
             empty={<EmptyState title="No availability records" />}
             columns={[
               { key: 'dates', header: 'Dates', render: (u) => `${fmtDay(u.fromDate)} to ${fmtDay(u.toDate)}` },
-              { key: 'reason', header: 'Reason', render: (u) => u.reason },
+              { key: 'kind', header: 'Record', render: (u) => unavailabilityLabel(u.source) },
+              { key: 'reason', header: 'Reason', render: (u) => (u.source === 'hr_leave' ? 'Kept by HR' : u.reason) },
               {
                 key: 'state',
                 header: 'State',
@@ -171,7 +172,9 @@ export default async function TeacherPage({
                 key: 'go',
                 header: '',
                 render: (u) =>
-                  canManage && !u.cancelledAt ? (
+                  u.source === 'hr_leave' && !u.cancelledAt ? (
+                    'HR cancels this leave in Business Ops OS'
+                  ) : canManage && !u.cancelledAt ? (
                     <details>
                       <summary>Withdraw</summary>
                       <ApiForm

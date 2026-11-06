@@ -7,6 +7,7 @@ import {
   httpUrlSchema,
   isoDateSchema,
   isoDateTimeSchema,
+  optText,
   programmeCodeSchema,
 } from '@elevate/shared-contracts';
 import { OPS_STUDENT_STAGES } from '@elevate/database';
@@ -22,7 +23,6 @@ import { EVENT_POPULATIONS } from '../domain/policies';
 import { MODERATION_ACTIONS } from '../domain/feedback';
 
 const text = (max = 500) => z.string().trim().max(max);
-const optText = (max = 500) => text(max).nullish();
 const required = (max = 1000) => text(max).min(1, 'Required');
 const optUuid = z.uuid().nullish();
 const page = z.coerce.number().int().min(1).default(1);

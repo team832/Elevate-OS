@@ -27,11 +27,6 @@ export const BLOCKERS = [
     applies: always,
   },
   {
-    title: 'File uploads and downloads refuse until storage is chosen',
-    why: 'This covers task files, score imports of any format, and test papers and keys. Feedback import still runs but keeps no copy of the source file. Attendance CSV import is not affected. The owner has to choose a storage provider.',
-    applies: always,
-  },
-  {
     title: 'Reference data is not loaded',
     why: 'Without it nobody can create a lead, a demo or a course. Run: node db/seed-reference.mjs --confirm-database <name>',
     applies: ({ db }) => db !== null && !db.hasProgrammes,
@@ -45,6 +40,11 @@ export const BLOCKERS = [
     title: 'Migration 0017 is waiting on this database',
     why: 'Back up first. It adds seven indexes and refuses notification links that hold a control character. Once applied it can never be changed.',
     applies: ({ db }) => Boolean(db?.pending0017 && db.hasNotifications),
+  },
+  {
+    title: 'Migration 0019 is waiting on this database',
+    why: 'Uploaded files are kept in the database (decision D-135). Until 0019 is applied, signing in fails (the shared sign-in limit needs it) and uploading a file fails: task files, leave letters, score imports, test papers and keys, and the copy of a feedback import. Back up first.',
+    applies: ({ db }) => Boolean(db?.pending0019),
   },
   {
     title: 'One computer address with one port per app is the only arrangement that works',

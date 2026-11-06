@@ -46,7 +46,8 @@ import {
   type AssessmentRow,
 } from './assessment-roster';
 import { dbMark, sectionValues } from './assessments';
-import { finaliseLocked, rescoreLocked } from './results';
+import { finaliseLocked, refuseAssessmentClash, rescoreLocked } from './results';
+import { lockTimetable } from './timetable';
 
 type Fields = z.output<typeof updateAssessmentInternalBody>;
 
@@ -179,6 +180,7 @@ export async function createAssessmentInternal(
   body: z.output<typeof createAssessmentInternalBody>,
 ) {
   return withTransaction(db, async (tx) => {
+    await lockTimetable(tx); // before any row: the order every timetable write uses
     const [dupe] = await tx
       .select({ id: academicAssessments.id })
       .from(academicAssessments)
@@ -198,6 +200,7 @@ export async function createAssessmentInternal(
       })
       .returning();
     await replaceBatchesAndSections(tx, row!.id, body);
+    await refuseAssessmentClash(tx, row!);
     await audit(tx, actor, {
       action: 'assessment.created',
       entityType: 'assessment',
@@ -217,6 +220,7 @@ export async function updateAssessmentInternal(
   body: Fields,
 ) {
   return withTransaction(db, async (tx) => {
+    await lockTimetable(tx); // before the test row lock, like every timetable write
     const a = await lock(tx, id);
     if (a.status === 'finalised' || a.status === 'cancelled')
       throw new InvalidStateTransitionError(
@@ -256,6 +260,8 @@ export async function updateAssessmentInternal(
       .where(eq(academicAssessments.id, a.id))
       .returning();
     await replaceBatchesAndSections(tx, a.id, body);
+    const moved = body.batchIds || (['scheduledDate', 'startTime', 'durationMinutes'] as const).some((k) => row![k] !== a[k]);
+    if (moved) await refuseAssessmentClash(tx, row!);
     await audit(tx, actor, {
       action: status === 'cancelled' ? 'assessment.cancelled' : 'assessment.updated',
       entityType: 'assessment',

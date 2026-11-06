@@ -20,6 +20,7 @@ import { ConflictError,
   InvalidStateTransitionError,
   ValidationError,
   withTransaction, containsPattern } from '@elevate/server-kit';
+import { optText } from '@elevate/shared-contracts';
 import {
   COURSE_PREFIXES,
   EXAM_PREFIXES,
@@ -43,26 +44,24 @@ import { myStaffId, teamWide } from './scope';
 
 export type IdeaRow = typeof marketingIdeas.$inferSelect;
 
-const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
-
 export const ideaFieldsSchema = z.object({
   title: z.string().trim().min(3).max(300),
-  pillar: optionalText(80),
-  series: optionalText(120),
-  objective: optionalText(1000),
-  audience: optionalText(500),
-  brief: optionalText(5000),
+  pillar: optText(80),
+  series: optText(120),
+  objective: optText(1000),
+  audience: optText(500),
+  brief: optText(5000),
   /** Where the idea came from (WhatsApp note, competitor scan, comment …). */
-  source: optionalText(300),
-  masterAsset: optionalText(200),
-  notes: optionalText(2000),
+  source: optText(300),
+  masterAsset: optText(200),
+  notes: optText(2000),
   scope: z.enum(IDEA_SCOPES).optional(),
   scopePrefixes: z.array(z.enum(EXAM_PREFIXES)).max(4).optional(),
   // Ideas board (brief §13); `audience` is the target audience.
-  problemNeed: optionalText(2000),
-  hypothesis: optionalText(2000),
+  problemNeed: optText(2000),
+  hypothesis: optText(2000),
   effort: z.enum(EFFORT_SIZES).nullish(),
-  expectedOutcome: optionalText(1000),
+  expectedOutcome: optText(1000),
   proposedFormat: z.enum(CALENDAR_ITEM_TYPES).nullish(),
   proposedChannel: z.enum(CHANNELS).nullish(),
   programmeId: z.uuid().nullish(),

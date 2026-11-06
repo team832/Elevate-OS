@@ -5,7 +5,7 @@
  */
 import type { AuthenticatedUser } from '@elevate/authentication';
 import { can } from '@elevate/authorization';
-import { StatusBadge, type Tone } from '@elevate/shared-ui';
+import { SampleBadge as SampleDataBadge, StatusBadge, type Tone } from '@elevate/shared-ui';
 import {
   APPOINTMENT_TYPE_LABELS,
   canMoveAppointment,
@@ -50,7 +50,7 @@ export function ApptStatus({ status }: { status: AppointmentStatus }) {
 }
 
 export const SampleBadge = ({ show }: { show: boolean | null }) =>
-  show ? <span className="el-badge el-badge-sample">SAMPLE DATA</span> : null;
+  show ? <SampleDataBadge /> : null;
 
 export const modeText = (mode: string, location?: string | null) =>
   mode === 'offline'

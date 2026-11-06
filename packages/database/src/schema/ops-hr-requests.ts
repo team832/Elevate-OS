@@ -132,6 +132,8 @@ export const opsHrRequestEvents = ops.table(
       .$type<OpsHrRequestId>(),
     kind: text('kind', { enum: OPS_HR_REQUEST_EVENT_KINDS }).notNull(),
     actorUserId: userRef('actor_user_id').notNull(),
+    /** Approval cover (F4-10): the HR person the actor acted for. */
+    onBehalfOf: userRef('on_behalf_of'),
     hrNote: text('hr_note'),
     forwardedToStaffId: staffRefRestrict('forwarded_to_staff_id'),
     visibleToRecipient: boolean('visible_to_recipient').notNull().default(false),
@@ -151,6 +153,10 @@ export const opsHrRequestEvents = ops.table(
     check(
       'hr_request_events_body_check',
       sql`${t.kind} NOT IN ('forwarded', 'declined', 'recipient_responded', 'response_relayed') OR ${filled(t.body)}`,
+    ),
+    check(
+      'hr_request_events_on_behalf_check',
+      sql`${t.onBehalfOf} IS NULL OR ${t.onBehalfOf} <> ${t.actorUserId}`,
     ),
     check(
       'hr_request_events_note_check',

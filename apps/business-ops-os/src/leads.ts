@@ -23,6 +23,8 @@ import * as leadMerge from './app/api/v1/leads/[id]/merge/route';
 import * as leadCheckDuplicates from './app/api/v1/leads/check-duplicates/route';
 import * as leadDuplicate from './app/api/v1/leads/duplicates/[id]/route';
 import * as leadDuplicates from './app/api/v1/leads/duplicates/route';
+import * as leadSharingRule from './app/api/v1/lead-sharing/[id]/route';
+import * as leadSharing from './app/api/v1/lead-sharing/route';
 import * as leads from './app/api/v1/leads/route';
 import type { NavRow } from './work';
 
@@ -32,6 +34,7 @@ export { followUpDaySummary } from './server/follow-ups';
 // MKT-LEADS (brief §11): call log, lead stages, funnel (one query for figures and drill-down).
 export { SalesCallsBody, salesCallsPath } from './app/leads/sales-calls-body';
 export { LeadStagesBody } from './app/leads/lead-stages-body';
+export { LeadSharingBody } from './app/leads/lead-sharing-body'; // F4-16
 export {
   leadFunnel,
   leadFunnelRows,
@@ -72,6 +75,8 @@ export const leadsRoutes = {
   'lead-sources': leadSources,
   'follow-ups': followUps,
   'follow-ups/[id]': followUp,
+  'lead-sharing': leadSharing, // F4-16
+  'lead-sharing/[id]': leadSharingRule,
 };
 
 export const leadsNav = (base: string): NavRow[] => [

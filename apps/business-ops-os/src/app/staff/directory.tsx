@@ -3,10 +3,9 @@
  * organisation directory (`/ops/staff`, everyone). Filters, search and page live in the URL and
  * run on the server; 25 a page.
  */
-import type { AuthenticatedUser } from '@elevate/authentication';
+import { STAFF_ROLE_KEYS, type AuthenticatedUser } from '@elevate/authentication';
 import { can, ROLES } from '@elevate/authorization';
 import { OPS_EMPLOYMENT_STATUSES } from '@elevate/database';
-import { ROLE_KEYS } from '@elevate/shared-types';
 import { ListEmpty, StatusBadge } from '@elevate/shared-ui';
 import { EMPLOYMENT_TYPES } from '../../domain';
 import { formOptions } from '../../server/options';
@@ -17,6 +16,7 @@ import { load } from '../../ui/frame';
 import { listHref, options, Pager, SearchPanel } from '../../ui/list-controls';
 import { FormModal } from '../../ui/record-modal';
 import { RecordTable } from '../../ui/record-table';
+import { ExportLink } from '../../ui/export-link';
 import { Segment } from '../../ui/sections';
 
 export type Params = Record<string, string | undefined>;
@@ -76,7 +76,7 @@ export async function Directory({
           select(
             'role',
             'Role',
-            ROLE_KEYS.map((k) => ({ value: k, label: ROLES[k].label })),
+            STAFF_ROLE_KEYS.map((k) => ({ value: k, label: ROLES[k].label })),
           ),
           select('employment', 'Employment', options(OPS_EMPLOYMENT_STATUSES)),
           select('status', 'Record status', options(['active', 'on_leave', 'inactive'])),
@@ -135,6 +135,10 @@ export async function Directory({
         ]}
       />
       <Pager basePath={base} params={sp} page={d.page} pageSize={d.pageSize} total={d.total} />
+      <ExportLink
+        list="staff"
+        params={{ ...sp, view, page: undefined, open: undefined, act: undefined, new: undefined }}
+      />
       {view === 'organisation' ? (
         <Segment
           title="Departments"

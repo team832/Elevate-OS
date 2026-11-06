@@ -116,24 +116,35 @@ export async function duplicateCandidates(
       inArray(opsLeads.studentEmail, emails),
       inArray(opsLeads.guardianEmail, emails),
     );
-  if (previousSchool) conditions.push(isNotNull(opsLeads.previousSchool));
-  if (conditions.length === 0) return [];
-  const where = [isNull(opsLeads.mergedIntoLeadId), or(...conditions) as SQL];
-  if (excludeLeadId) where.push(ne(opsLeads.id, excludeLeadId as LeadId));
-  return db
-    .select({
-      id: opsLeads.id,
-      code: opsLeads.code,
-      studentName: opsLeads.studentName,
-      studentPhone: opsLeads.studentPhone,
-      studentEmail: opsLeads.studentEmail,
-      guardianPhone: opsLeads.guardianPhone,
-      guardianEmail: opsLeads.guardianEmail,
-      previousSchool: opsLeads.previousSchool,
-    })
-    .from(opsLeads)
-    .where(and(...where))
+  const leads = (match: SQL) =>
+    db
+      .select({
+        id: opsLeads.id,
+        code: opsLeads.code,
+        studentName: opsLeads.studentName,
+        studentPhone: opsLeads.studentPhone,
+        studentEmail: opsLeads.studentEmail,
+        guardianPhone: opsLeads.guardianPhone,
+        guardianEmail: opsLeads.guardianEmail,
+        previousSchool: opsLeads.previousSchool,
+      })
+      .from(opsLeads)
+      .where(
+        and(
+          isNull(opsLeads.mergedIntoLeadId),
+          excludeLeadId ? ne(opsLeads.id, excludeLeadId as LeadId) : undefined,
+          match,
+        ),
+      );
+  // Every shared contact, unlimited: an exact match is never cut off by the school search below.
+  const byContact = conditions.length ? await leads(or(...conditions) as SQL) : [];
+  if (!previousSchool) return byContact;
+  // shortcut: name-and-school matches look at the newest 2,000 leads with a school; match the school in SQL if that grows.
+  const bySchool = await leads(isNotNull(opsLeads.previousSchool))
+    .orderBy(desc(opsLeads.firstReceivedAt))
     .limit(2000);
+  const seen = new Set(byContact.map((r) => r.id));
+  return [...byContact, ...bySchool.filter((r) => !seen.has(r.id))];
 }
 
 /**

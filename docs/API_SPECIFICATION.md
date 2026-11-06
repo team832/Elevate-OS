@@ -64,6 +64,15 @@ All JSON; errors are the standard envelope. Nobody may change their own roles or
 ### Pages
 `/login` (public), `/` (home; `platform:module:access`; the placeholder `/dashboard` page and `platform:dashboard:read` were removed on 22 Oct 2026, D-077), `/admin/users` and `/admin/users/[id]` (Users & roles; `platform:users:read`, changes need the permissions above).
 
+### Student and parent portal (6 Nov 2026, D-150; on no package; no browser check)
+Its own cookie `elevate_portal` (HttpOnly, 7 days, as staff sessions), never the staff cookie. Logins are `<login>@portal.invalid` with role `student` or `guardian` only; staff sign-in refuses that domain, and a signed-in staff user who opens `/portal` is sent to `/`. While the Ops setting `portal.enabled` is off (Proposed), pages say "not open yet", sign-in and setup refuse (`error=closed`) and files are 404. All three forms check the origin like other forms (cross-site 403) and answer 303.
+- `POST /api/v1/portal/login` — public form `login`, `password`, `next` (a `/portal` path, else `/portal`) → 303 `next` + the portal cookie; audited `auth.login` with `method: portal`. Refusals 303 `/portal/login?error=missing|invalid|locked|closed|unavailable`. A login with no live linked student is refused like a wrong password. Limits (`core.login_attempts`, portal buckets only, Proposed): 5 per login and address, 50 per address, 20 per login, 500 for every portal sign-in together.
+- `POST /api/v1/portal/setup` — public form `login`, `code`, `password`, `confirm` → 303 `/portal/login?done=1`; the one-time code (8 characters, 7 days, stored as an HMAC) works once; audited `portal.setup_completed`. Refusals 303 `/portal/setup?error=missing|short|mismatch|invalid|locked|closed|unavailable`. Limits: 5 per login, 50 per address, 200 for every setup together.
+- `POST /api/v1/portal/logout` — form; ends the portal session only → 303 `/portal/login`.
+- `GET /api/v1/portal/receipts/{feeRecordId}` — a receipt PDF of a payment of one of the login's live linked students; any other id, or the portal off, 404; no portal session 401. Not counted as a print.
+- Pages (read-only, each for one live linked student; any other student id 404): `/portal` (choose a child), `/portal/attendance`, `/portal/tests` (published results only; ranks only where the publication shows them), `/portal/homework`, `/portal/fees` (agreement, instalments, paid, due, receipts), `/portal/timetable`; `/portal/login`, `/portal/setup`. A guardian link needs its Ops guardian row not archived and, while `portal.guardian_access_to_adults` is off (Proposed), a student under 18 or with no date of birth on record; checked on every request.
+- Accounts and setup codes are made by staff in Business Operations (`/ops/api/v1/students/{id}/portal-access`, `apps/business-ops-os/docs/API.md`).
+
 ## 3. Endpoints every module skeleton provides
 | Method | Path | Access | Notes |
 |---|---|---|---|

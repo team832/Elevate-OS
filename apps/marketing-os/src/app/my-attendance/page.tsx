@@ -4,7 +4,7 @@ import { MODULE, modulePath } from '../../domain';
 import { MarketingPage } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'My attendance' };
+export const metadata: Metadata = { title: 'My attendance and leave' };
 
 /** Your own staff attendance, kept by HR (brief §12, §16, D-073). */
 export default async function MyAttendancePage({

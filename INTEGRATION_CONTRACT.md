@@ -5,7 +5,7 @@ The rules every module (Marketing OS, Academic OS, Business Ops OS) and the plat
 ## 1. Identities
 - **One user identity** for everyone: `core.users` (`UserId`). Sign-in, sessions and roles are platform services (`@elevate/authentication`, `@elevate/authorization`). Modules never create their own user/login tables.
 - **Staff** (`core.staff_members`, `StaffMemberId`) are people in the organisation; a staff member may or may not have a login (`user_id` nullable, unique). Business Ops stewards staff and departments.
-- **Students and leads are not users.** A lead (`LeadId`) is owned by Business Ops; a student (`StudentId`) by Academic OS. Neither signs in (parent/student portals are out of scope, D-015).
+- **Students and leads are not users.** A lead (`LeadId`) is owned by Business Ops; a student (`StudentId`) by Academic OS. Neither signs in (parent/student portals are out of scope, D-015; a read-only portal was approved on 6 Nov 2026, D-150, and is not built).
 - The signed-in user inside any server code is an `AuthenticatedUser` `{ id, email, displayName, roles, sessionId }`, which is also an authorization `Principal`.
 
 ## 2. ID rules (D-009)
@@ -89,7 +89,7 @@ Published in the exit transaction. `idempotencyKey = enrolmentKeys.closed(exitRe
 ### `ops.student.renamed` v1 — producer `ops`, consumer `academic` (31 Oct 2026, D-115)
 `{ coreStudentId, fullName, renamedAt, renamedByUserId }`. `idempotencyKey = enrolmentKeys.renamed(coreStudentId, renamedAt)` = `student-renamed:<id>:<at>`. Taken by the same consumer. Academic owns its copy of the name from confirmation onward, so it learns of a correction here.
 
-**Running it:** the Ops job `enrolment-exits` ("Send exits to Academic", `ops:jobs:run`) calls `POST /academic/api/internal/v1/enrolment-exits/run` (caller `ops`). Nothing runs it by itself: until someone presses the button, Academic stays active and the Ops profile says it is waiting.
+**Running it:** the Ops job `enrolment-exits` ("Send exits to Academic", `ops:jobs:run`) calls `POST /academic/api/internal/v1/enrolment-exits/run` (caller `ops`). It runs when someone presses Run now, or by itself once someone switches the job on in Settings → Background jobs (D-133; off by default). Until it runs, Academic stays active and the Ops profile says it is waiting.
 
 ### Handoff sequence
 1. Ops (one transaction): admission → `enrolment_requested`; `publishEvent(tx, enrolment_requested)`; `recordAudit`.
@@ -98,7 +98,7 @@ Published in the exit transaction. `idempotencyKey = enrolmentKeys.closed(exitRe
 4. Exactly-once effect: `core.event_deliveries` is unique per (event, consumer); a crashed handler rolls back and is retried; after `maxAttempts` the delivery is `dead` and needs a human.
 5. Until a reply arrives the admission shows "awaiting Academic OS" — never "enrolled".
 
-**Who runs consumers:** each consumer module calls `processEvents` from a route its UI triggers: "Process intake" in Academic, and the Background jobs panel on the Ops Overview (D-117). A scheduler is still an open owner question.
+**Who runs consumers:** each consumer module calls `processEvents` from a route its UI triggers: "Process intake" in Academic, and the Ops jobs (D-117), which since 6 Nov 2026 also run by themselves once switched on (D-133; every job off by default). Academic's intake has no runner.
 
 ## 7. Summary contracts (D-011.2 — read-only HTTP)
 Endpoint `GET /<zone>/api/internal/v1/summary?from=YYYY-MM-DD&to=YYYY-MM-DD`, built with `defineInternalRoute`, returning:
@@ -113,13 +113,15 @@ Teacher workspace contracts (21 Oct 2026, `packages/shared-contracts/src/summari
 | Route | Caller | Contract | Content |
 |---|---|---|---|
 | `GET /academic/api/internal/v1/reviews?coreStudentId=\|authorStaffId=&from&to` | `ops` | `AcademicStudentReviewsV1` (`academicStudentReviewsV1Schema`) | `contract: 'academic.student_reviews'`, `version: 1`, `generatedAt`, `student` (null when queried by author), `reviews[] { reviewKey, version, coreStudentId, academicStudentId, studentName, status: submitted \| withdrawn, superseded, authorStaffId, authorName, subjectName, reviewType, sessionDate, opsDemoSessionId, periodFrom, periodTo, strengths, areasForSupport, attendanceEvidence, homeworkEvidence, academicConcerns, suggestedAction, followUpOn, visibility: internal \| shareable, submittedAt, withdrawnAt, sourcePath }`. One of the two ids is required; `from`/`to` filter the IST submission date; at most 1,000 rows. Drafts are never returned; a withdrawn version keeps its marker and `withdrawnAt` but its text fields and `followUpOn` are null; `superseded` = a later submitted version exists. |
-| `GET /academic/api/internal/v1/teachers/{staffId}/activity?from&to` | `ops` | `AcademicTeacherActivityV1` | assignments (batch, subject, role, dates), sessions planned / delivered / cancelled / substituted, logs, attendance and marking pending, reviews submitted / draft, Academic unavailability ranges (not HR leave). Default window the last 30 days (IST), at most one year. Counts only: no payroll, HR attendance or ratings. |
+| `GET /academic/api/internal/v1/teachers/{staffId}/activity?from&to` | `ops` | `AcademicTeacherActivityV1` | assignments (batch, subject, role, dates), sessions planned / delivered / cancelled / substituted, logs, attendance and marking pending, reviews submitted / draft, Academic unavailability ranges (since 6 Nov 2026 these include the records made from approved HR leave, D-134; no leave type or reason). Default window the last 30 days (IST), at most one year. Counts only: no payroll, HR attendance or ratings. |
 | `GET /academic/api/internal/v1/demo-attendance?ids=` | `ops` | `AcademicDemoAttendanceV1` | up to 200 Ops demo-session ids (comma-separated); `items[] { opsDemoSessionId, academicSessionId, status: not_recorded \| present \| absent \| late \| excused, recordedAt, teacherStaffIds, teacherNames }` for linked classes only. |
 | `GET /ops/api/internal/v1/demo-sessions?date=YYYY-MM-DD` | `academic` | `OpsDemoSessionsForDayV1` | `items[] { demoSessionId, coreStudentId, displayName, dayNumber, subject, startsAt, isSample }`; minimal fields so a coordinator can add a demo student to a class. |
 
 Rules for these contracts: Ops checks the user's own permission (`ops:feedback:read`, own = students they counsel) **before** calling the reviews route and filters what it shows by scope and `visibility` (family-audience reports use `shareable` reviews only); Ops never edits a review and records its acknowledgement in `ops.review_acknowledgements` (keyed by review key and version). Academic serves internal routes to the module, not to a user, so the calling module is responsible for the user check.
 
 `GET /academic/api/internal/v1/teaching-assignments` takes `programmeCode` since 31 Oct 2026 (shortcut: first 100 assignments). Internal routes are not reachable through the platform's rewrites (404, HAT-004).
+
+Internal write (6 Nov 2026, D-134): `POST /academic/api/internal/v1/teacher-unavailability/hr-leave` (caller `ops`, `defineInternalWriteRoute`). Body `academicHrLeaveBody` `{ opsLeaveRecordId, staffId, fromDate, toDate, status: approved | cancelled }` (strict; the last day not before the first; never the leave type or reason). Reply `academicHrLeaveV1Schema` `{ recordId | null, active, classes }`: the teacher's scheduled classes from today in those dates that need cover through this record. One record per leave record (`ON CONFLICT (ops_leave_record_id) DO NOTHING`); a cancel withdraws it once. Ops calls it after its own commit with a 5-second limit; when it fails the leave stands and coordinators are asked to check.
 
 Retired event (D-075, 22 Oct 2026): `marketing.lead.handed_off` v1 was declared by Business Ops and never produced by Marketing; its contract, consumer (`ops.lead-intake`), routes and permission are gone, and the table `ops.lead_handoff_receipts` stays. Since D-073 Marketing works on the shared lead service, so no lead crosses by event.
 
@@ -152,4 +154,4 @@ Every metric is `{ status: 'ok' | 'estimated' | 'missing', value: number | null,
 - Shared packages never import apps.
 - `apps/*/src/domain/**` is pure (no Next/React, database, server-kit, Node I/O).
 - Application code never imports `@elevate/testing` / `@elevate/database/testing`.
-- Modules publish `./domain`, `./server`, `./seed` entry points for the platform app and wave-3 integration tests only.
+- Modules publish `./domain`, `./server`, `./seed` entry points for the platform app and wave-3 integration tests only. The platform app composes the modules in-process through them: its home overview calls Business Ops, Academic and Marketing services directly with the signed-in user (`apps/platform/src/server/overview-adapter.ts`), not through §7's internal HTTP routes. A failed source still shows as unavailable, never 0.

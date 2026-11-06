@@ -42,8 +42,7 @@ import { seeds as opsSeeds } from '@elevate/business-ops-os/seed';
 import { seeds as marketingSeeds } from '@elevate/marketing-os/seed';
 import { seeds as platformSeeds } from '../../seed';
 import { referenceSeedList } from '../../../../scripts/release/reference-seeds';
-import { updateStaff } from '../../../business-ops-os/src/server/organisation';
-import { updateTeacher } from '../../../business-ops-os/src/server/teachers';
+import { updateStaff, updateTeacher } from '@elevate/business-ops-os/server';
 
 const ctx = setupTestDatabase();
 const db = () => ctx.db as Database;

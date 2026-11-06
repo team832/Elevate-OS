@@ -20,7 +20,6 @@ import { Frame, gate, load, Section } from '../../../../ui/frame';
 import { RecordTable } from '../../../../ui/record-table';
 import { DetailTable, Segment } from '../../../../ui/sections';
 import { AcademicEvidenceView } from '../../_components/academic-sections';
-import { PrintButton } from '../../_components/print-button';
 import { ReportList, REPORT_STATUS_TONES } from '../../_components/report-list';
 
 export const dynamic = 'force-dynamic';
@@ -198,9 +197,9 @@ async function Report({
             {s && !blocked ? (
               <a href={`/ops/api/v1/students/${id}/report/${e.referenceCode}/pdf`}>Download PDF</a>
             ) : null}
-            {blocked ? null : <PrintButton />}
           </span>
         }
+        print={!blocked}
       />
       <div className="el-stack">
         {notice ? (

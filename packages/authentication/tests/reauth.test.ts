@@ -1,8 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { users, type Database } from '@elevate/database';
 import { createTestDb, type TestDatabase } from '@elevate/database/testing';
 import type { UserId } from '@elevate/shared-types';
+import { verifyPassword } from '../src/password';
 import { hashPassword, verifyCurrentUserPassword } from '../src/index';
+
+vi.mock('../src/password', async (real) => {
+  const actual = await real<typeof import('../src/password')>();
+  return { ...actual, verifyPassword: vi.fn(actual.verifyPassword) };
+});
 
 const PASSWORD = 'test-only-reauth-password-1';
 let t: TestDatabase;
@@ -67,6 +73,16 @@ describe('verifyCurrentUserPassword (D-041)', () => {
     const next = await verifyCurrentUserPassword(db, id, PASSWORD);
     expect(next).toMatchObject({ ok: false, reason: 'locked' });
     expect(next.ok === false && next.retryAfterMs).toBeGreaterThan(0);
+  });
+
+  it('a burst of guesses is counted first: past the limit none reaches the password check', async () => {
+    const id = await user();
+    vi.mocked(verifyPassword).mockClear();
+    const guesses = [...Array<string>(19).fill('test-only-wrong'), PASSWORD];
+    const results = await Promise.all(guesses.map((p) => verifyCurrentUserPassword(db, id, p)));
+    expect(verifyPassword).toHaveBeenCalledTimes(5);
+    expect(results.at(-1)).toMatchObject({ ok: false, reason: 'locked' });
+    expect(results.filter((r) => r.ok)).toEqual([]);
   });
 
   it('a success resets the failure count', async () => {

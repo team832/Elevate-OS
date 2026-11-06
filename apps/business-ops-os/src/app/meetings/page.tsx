@@ -37,7 +37,7 @@ import {
 import { audienceFields, EVENT_ACTS, EventActModal, MessageBadge } from './event-view';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Events and counselling' };
+export const metadata = { title: 'Counselling and events' };
 
 type Params = Record<string, string | undefined>;
 const BASE = '/ops/meetings';
@@ -68,7 +68,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Pro
   return (
     <Frame access={access} active="meetings">
       <PageHeader
-        title="Events and counselling"
+        title="Counselling and events"
         description="Counselling, parent-teacher meetings, events and webinars. Times are IST; scheduling sends nothing."
         actions={
           can(access.user, 'ops:appointments:manage') ? (

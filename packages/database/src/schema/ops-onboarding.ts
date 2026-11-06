@@ -23,7 +23,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { AdmissionId, Brand } from '@elevate/shared-types';
 import { ops, opsAdmissions, OPS_STUDENT_STAGES } from './ops';
-import { createdAt, inList, instant, isoDate, staffRef, userRef } from './ops-columns';
+import { createdAt, inList, instant, isoDate, keyFormat, staffRef, userRef } from './ops-columns';
 
 export type OpsOnboardingTemplateId = Brand<string, 'OpsOnboardingTemplateId'>;
 export type OpsOnboardingItemId = Brand<string, 'OpsOnboardingItemId'>;
@@ -54,7 +54,6 @@ const admissionRef = () =>
     .notNull()
     .references(() => opsAdmissions.id, { onDelete: 'restrict' })
     .$type<AdmissionId>();
-const keyFormat = (c: unknown) => sql`${c} ~ '^[a-z][a-z0-9_]{1,59}$'`;
 
 /** A versioned onboarding checklist template for programme codes and, optionally, a class/category. */
 export const opsOnboardingTemplates = ops.table(

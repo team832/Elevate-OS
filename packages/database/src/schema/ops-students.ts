@@ -26,9 +26,19 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import type { AdmissionId, BatchId, Brand, LeadId } from '@elevate/shared-types';
+import type { AdmissionId, BatchId, Brand, LeadId, ProgrammeId } from '@elevate/shared-types';
+import { programmes } from './core';
 import { ops, opsAdmissions, opsLeads, OPS_GUARDIAN_RELATIONSHIPS } from './ops';
-import { createdAt, inList, instant, isoDate, studentRef, updatedAt, userRef } from './ops-columns';
+import {
+  createdAt,
+  filled,
+  inList,
+  instant,
+  isoDate,
+  studentRef,
+  updatedAt,
+  userRef,
+} from './ops-columns';
 
 export type OpsAdmissionNumberChangeId = Brand<string, 'OpsAdmissionNumberChangeId'>;
 export type OpsExitRecordId = Brand<string, 'OpsExitRecordId'>;
@@ -56,6 +66,13 @@ export const OPS_KYC_SUBJECTS = ['student', 'guardian'] as const;
 export const OPS_KYC_VERIFICATION = ['unverified', 'verified', 'rejected'] as const;
 export const OPS_REPORT_AUDIENCES = ['internal', 'guardian', 'student', 'admin_dossier'] as const;
 export const OPS_REPORT_STATUSES = ['draft', 'reviewed', 'final'] as const;
+export const OPS_CERTIFICATE_STATUSES = ['issued', 'revoked'] as const;
+export const OPS_ABSENCE_CALL_OUTCOMES = [
+  'reached',
+  'no_answer',
+  'wrong_number',
+  'will_attend',
+] as const;
 
 const admissionRef = () =>
   uuid('admission_id')
@@ -383,5 +400,69 @@ export const opsStudentSiblings = ops.table(
     uniqueIndex('student_siblings_pair_key').on(t.studentId, t.siblingStudentId),
     index('student_siblings_sibling_idx').on(t.siblingStudentId),
     check('student_siblings_ordered', sql`${t.studentId} < ${t.siblingStudentId}`),
+  ],
+);
+
+/**
+ * Certificate register (F4-02): one row per certificate issued, numbered from series
+ * `certificate.<type>/<financial year>` (ops.document_counters). `body` is the wording as printed,
+ * so a reprint (same number, "Duplicate" when print_count > 1) never changes when the template
+ * does. Types and template text are settings (Proposed). Revoked with a reason, never deleted.
+ */
+export const opsCertificates = ops.table(
+  'certificates',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Setting key of the type, e.g. course_completion, bonafide. */
+    certificateType: text('certificate_type').notNull(),
+    certificateNumber: text('certificate_number').notNull(),
+    financialYear: text('financial_year').notNull(),
+    sequence: integer('sequence').notNull(),
+    studentId: studentRef().notNull(),
+    programmeId: uuid('programme_id')
+      .references(() => programmes.id, { onDelete: 'restrict' })
+      .$type<ProgrammeId>(),
+    /** Academic OS batch named on the certificate (plain id, no FK across modules). */
+    batchId: uuid('batch_id').$type<BatchId>(),
+    issueDate: isoDate('issue_date').notNull(),
+    body: text('body').notNull(),
+    status: text('status', { enum: OPS_CERTIFICATE_STATUSES }).notNull().default('issued'),
+    issuedBy: userRef('issued_by').notNull(),
+    issuedAt: instant('issued_at').notNull().defaultNow(),
+    printCount: integer('print_count').notNull().default(0),
+    revokedBy: userRef('revoked_by'),
+    revokedAt: instant('revoked_at'),
+    revokeReason: text('revoke_reason'),
+  },
+  (t) => [
+    uniqueIndex('certificates_number_key').on(t.certificateNumber),
+    uniqueIndex('certificates_sequence_key').on(t.certificateType, t.financialYear, t.sequence),
+    index('certificates_student_idx').on(t.studentId, t.issueDate),
+    check('certificates_type_format', sql`${t.certificateType} ~ '^[a-z][a-z0-9_]{1,39}$'`),
+    check('certificates_text_check', sql`${filled(t.certificateNumber)} AND ${filled(t.body)}`),
+    check('certificates_year_format', sql`${t.financialYear} ~ '^[0-9]{4}-[0-9]{2}$'`),
+    check('certificates_counts_check', sql`${t.sequence} >= 1 AND ${t.printCount} >= 0`),
+    check('certificates_status_check', sql`${t.status} IN ${inList(OPS_CERTIFICATE_STATUSES)}`),
+    check(
+      'certificates_revoked_check',
+      sql`(${t.status} = 'revoked') = (${t.revokedAt} IS NOT NULL) AND (${t.revokedAt} IS NULL) = (${t.revokedBy} IS NULL) AND (${t.status} <> 'revoked' OR ${filled(t.revokeReason)})`,
+    ),
+  ],
+);
+
+/** A call to a student's family about absences (F4-06); the absences come from Academic. */
+export const opsAbsenceCalls = ops.table(
+  'absence_calls',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    studentId: studentRef().notNull(),
+    outcome: text('outcome', { enum: OPS_ABSENCE_CALL_OUTCOMES }).notNull(),
+    note: text('note'),
+    calledAt: instant('called_at').notNull().defaultNow(),
+    calledBy: userRef('called_by').notNull(),
+  },
+  (t) => [
+    index('absence_calls_student_idx').on(t.studentId, t.calledAt),
+    check('absence_calls_outcome_check', sql`${t.outcome} IN ${inList(OPS_ABSENCE_CALL_OUTCOMES)}`),
   ],
 );

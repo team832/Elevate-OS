@@ -6,6 +6,10 @@
 import { formatMarks, type MarkUnits } from './marks';
 import type { ResultState } from './scoring';
 
+/** A score as a percentage of its maximum (one decimal); null without a score or a maximum. */
+export const scorePercent = (total: string | null, max: string) =>
+  total === null || Number(max) <= 0 ? null : Math.round((Number(total) / Number(max)) * 1000) / 10;
+
 export interface AnalysisRow {
   state: ResultState;
   totalUnits: MarkUnits | null;

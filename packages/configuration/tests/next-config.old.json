@@ -1,0 +1,644 @@
+{
+  "business-ops-os release": {
+    "basePath": "/ops",
+    "env": {
+      "ELEVATE_BASE_PATH": "/ops"
+    },
+    "output": "standalone",
+    "reactStrictMode": true,
+    "poweredByHeader": false,
+    "turbopack": {
+      "root": "<repo>"
+    },
+    "outputFileTracingRoot": "<repo>",
+    "transpilePackages": [
+      "@elevate/authentication",
+      "@elevate/authorization",
+      "@elevate/configuration",
+      "@elevate/database",
+      "@elevate/notifications",
+      "@elevate/server-kit",
+      "@elevate/shared-contracts",
+      "@elevate/shared-types",
+      "@elevate/shared-ui"
+    ],
+    "serverExternalPackages": ["@electric-sql/pglite", "pg"],
+    "experimental": {
+      "serverActions": {
+        "allowedOrigins": ["platform.test:4003"]
+      }
+    },
+    "headers": [
+      {
+        "source": "/:path*",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/",
+        "destination": "/ops",
+        "basePath": false,
+        "permanent": false
+      }
+    ]
+  },
+  "business-ops-os": {
+    "basePath": "/ops",
+    "env": {
+      "ELEVATE_BASE_PATH": "/ops"
+    },
+    "reactStrictMode": true,
+    "poweredByHeader": false,
+    "turbopack": {
+      "root": "<repo>"
+    },
+    "outputFileTracingRoot": "<repo>",
+    "transpilePackages": [
+      "@elevate/authentication",
+      "@elevate/authorization",
+      "@elevate/configuration",
+      "@elevate/database",
+      "@elevate/notifications",
+      "@elevate/server-kit",
+      "@elevate/shared-contracts",
+      "@elevate/shared-types",
+      "@elevate/shared-ui"
+    ],
+    "serverExternalPackages": ["@electric-sql/pglite", "pg"],
+    "experimental": {
+      "serverActions": {
+        "allowedOrigins": ["platform.test:4003"]
+      }
+    },
+    "headers": [
+      {
+        "source": "/:path*",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/",
+        "destination": "/ops",
+        "basePath": false,
+        "permanent": false
+      }
+    ]
+  },
+  "academic-os release": {
+    "basePath": "/academic",
+    "env": {
+      "ELEVATE_BASE_PATH": "/academic"
+    },
+    "output": "standalone",
+    "reactStrictMode": true,
+    "poweredByHeader": false,
+    "turbopack": {
+      "root": "<repo>"
+    },
+    "outputFileTracingRoot": "<repo>",
+    "transpilePackages": [
+      "@elevate/authentication",
+      "@elevate/authorization",
+      "@elevate/business-ops-os",
+      "@elevate/configuration",
+      "@elevate/database",
+      "@elevate/notifications",
+      "@elevate/server-kit",
+      "@elevate/shared-contracts",
+      "@elevate/shared-types",
+      "@elevate/shared-ui"
+    ],
+    "serverExternalPackages": ["@electric-sql/pglite", "pg"],
+    "experimental": {
+      "serverActions": {
+        "allowedOrigins": ["platform.test:4003"]
+      }
+    },
+    "headers": [
+      {
+        "source": "/:path*",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/",
+        "destination": "/academic",
+        "basePath": false,
+        "permanent": false
+      }
+    ]
+  },
+  "academic-os": {
+    "basePath": "/academic",
+    "env": {
+      "ELEVATE_BASE_PATH": "/academic"
+    },
+    "reactStrictMode": true,
+    "poweredByHeader": false,
+    "turbopack": {
+      "root": "<repo>"
+    },
+    "outputFileTracingRoot": "<repo>",
+    "transpilePackages": [
+      "@elevate/authentication",
+      "@elevate/authorization",
+      "@elevate/business-ops-os",
+      "@elevate/configuration",
+      "@elevate/database",
+      "@elevate/notifications",
+      "@elevate/server-kit",
+      "@elevate/shared-contracts",
+      "@elevate/shared-types",
+      "@elevate/shared-ui"
+    ],
+    "serverExternalPackages": ["@electric-sql/pglite", "pg"],
+    "experimental": {
+      "serverActions": {
+        "allowedOrigins": ["platform.test:4003"]
+      }
+    },
+    "headers": [
+      {
+        "source": "/:path*",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/",
+        "destination": "/academic",
+        "basePath": false,
+        "permanent": false
+      }
+    ]
+  },
+  "marketing-os release": {
+    "basePath": "/marketing",
+    "env": {
+      "ELEVATE_BASE_PATH": "/marketing"
+    },
+    "output": "standalone",
+    "reactStrictMode": true,
+    "poweredByHeader": false,
+    "turbopack": {
+      "root": "<repo>"
+    },
+    "outputFileTracingRoot": "<repo>",
+    "transpilePackages": [
+      "@elevate/authentication",
+      "@elevate/authorization",
+      "@elevate/business-ops-os",
+      "@elevate/configuration",
+      "@elevate/database",
+      "@elevate/notifications",
+      "@elevate/server-kit",
+      "@elevate/shared-contracts",
+      "@elevate/shared-types",
+      "@elevate/shared-ui"
+    ],
+    "serverExternalPackages": ["@electric-sql/pglite", "pg"],
+    "experimental": {
+      "serverActions": {
+        "allowedOrigins": ["platform.test:4003"],
+        "bodySizeLimit": "5mb"
+      }
+    },
+    "headers": [
+      {
+        "source": "/:path*",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/",
+        "destination": "/marketing",
+        "basePath": false,
+        "permanent": false
+      }
+    ]
+  },
+  "marketing-os": {
+    "basePath": "/marketing",
+    "env": {
+      "ELEVATE_BASE_PATH": "/marketing"
+    },
+    "reactStrictMode": true,
+    "poweredByHeader": false,
+    "turbopack": {
+      "root": "<repo>"
+    },
+    "outputFileTracingRoot": "<repo>",
+    "transpilePackages": [
+      "@elevate/authentication",
+      "@elevate/authorization",
+      "@elevate/business-ops-os",
+      "@elevate/configuration",
+      "@elevate/database",
+      "@elevate/notifications",
+      "@elevate/server-kit",
+      "@elevate/shared-contracts",
+      "@elevate/shared-types",
+      "@elevate/shared-ui"
+    ],
+    "serverExternalPackages": ["@electric-sql/pglite", "pg"],
+    "experimental": {
+      "serverActions": {
+        "allowedOrigins": ["platform.test:4003"],
+        "bodySizeLimit": "5mb"
+      }
+    },
+    "headers": [
+      {
+        "source": "/:path*",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/",
+        "destination": "/marketing",
+        "basePath": false,
+        "permanent": false
+      }
+    ]
+  },
+  "platform release": {
+    "env": {
+      "ELEVATE_BASE_PATH": ""
+    },
+    "output": "standalone",
+    "reactStrictMode": true,
+    "poweredByHeader": false,
+    "turbopack": {
+      "root": "<repo>"
+    },
+    "outputFileTracingRoot": "<repo>",
+    "transpilePackages": [
+      "@elevate/academic-os",
+      "@elevate/authentication",
+      "@elevate/authorization",
+      "@elevate/business-ops-os",
+      "@elevate/configuration",
+      "@elevate/database",
+      "@elevate/marketing-os",
+      "@elevate/notifications",
+      "@elevate/server-kit",
+      "@elevate/shared-contracts",
+      "@elevate/shared-types",
+      "@elevate/shared-ui"
+    ],
+    "serverExternalPackages": ["@electric-sql/pglite", "pg"],
+    "headers": [
+      {
+        "source": "/((?!marketing(?:/|$)|academic(?:/|$)|ops(?:/|$)).*)",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      },
+      {
+        "source": "/:zone(marketing|academic|ops)/api/internal/:rest*",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/marketing",
+        "destination": "http://marketing.test:4002/marketing"
+      },
+      {
+        "source": "/marketing/:path((?!api/internal(?:/|$)).+)",
+        "destination": "http://marketing.test:4002/marketing/:path"
+      },
+      {
+        "source": "/academic",
+        "destination": "http://academic.test:4001/academic"
+      },
+      {
+        "source": "/academic/:path((?!api/internal(?:/|$)).+)",
+        "destination": "http://academic.test:4001/academic/:path"
+      },
+      {
+        "source": "/ops",
+        "destination": "http://ops.test:4000/ops"
+      },
+      {
+        "source": "/ops/:path((?!api/internal(?:/|$)).+)",
+        "destination": "http://ops.test:4000/ops/:path"
+      }
+    ]
+  },
+  "platform": {
+    "env": {
+      "ELEVATE_BASE_PATH": ""
+    },
+    "reactStrictMode": true,
+    "poweredByHeader": false,
+    "turbopack": {
+      "root": "<repo>"
+    },
+    "outputFileTracingRoot": "<repo>",
+    "transpilePackages": [
+      "@elevate/academic-os",
+      "@elevate/authentication",
+      "@elevate/authorization",
+      "@elevate/business-ops-os",
+      "@elevate/configuration",
+      "@elevate/database",
+      "@elevate/marketing-os",
+      "@elevate/notifications",
+      "@elevate/server-kit",
+      "@elevate/shared-contracts",
+      "@elevate/shared-types",
+      "@elevate/shared-ui"
+    ],
+    "serverExternalPackages": ["@electric-sql/pglite", "pg"],
+    "headers": [
+      {
+        "source": "/((?!marketing(?:/|$)|academic(?:/|$)|ops(?:/|$)).*)",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      },
+      {
+        "source": "/:zone(marketing|academic|ops)/api/internal/:rest*",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/marketing",
+        "destination": "http://marketing.test:4002/marketing"
+      },
+      {
+        "source": "/marketing/:path((?!api/internal(?:/|$)).+)",
+        "destination": "http://marketing.test:4002/marketing/:path"
+      },
+      {
+        "source": "/academic",
+        "destination": "http://academic.test:4001/academic"
+      },
+      {
+        "source": "/academic/:path((?!api/internal(?:/|$)).+)",
+        "destination": "http://academic.test:4001/academic/:path"
+      },
+      {
+        "source": "/ops",
+        "destination": "http://ops.test:4000/ops"
+      },
+      {
+        "source": "/ops/:path((?!api/internal(?:/|$)).+)",
+        "destination": "http://ops.test:4000/ops/:path"
+      }
+    ]
+  }
+}

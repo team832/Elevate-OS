@@ -29,7 +29,7 @@ import {
 } from '../src/server/services/assessment-ops';
 import { finaliseAssessment } from '../src/server/services/results';
 import { sampleAnchorDate } from './samples';
-import { writeTests, type SampleTest, type TestOptions } from './sample-tests';
+import { atFreeStart, writeTests, type SampleTest, type TestOptions } from './sample-tests';
 
 const test = (
   code: string,
@@ -135,15 +135,16 @@ async function keyTests(db: Database) {
       .select({ id: academicSubjects.id })
       .from(academicSubjects)
       .where(and(eq(academicSubjects.courseId, batch.courseId), eq(academicSubjects.code, k.subject)));
-    const a = await createAssessment(db, actor, {
+    const scheduledDate = addDays(today, k.day);
+    const a = await atFreeStart([k.batch], scheduledDate, 30, (startTime) => createAssessment(db, actor, {
       code: k.code,
       title: k.title,
       kind: 'practice',
       batchId: batch.id,
       subjectId: subject?.id,
       chapterIds: [],
-      scheduledDate: addDays(today, k.day),
-      startTime: '11:00',
+      scheduledDate,
+      startTime,
       durationMinutes: 30,
       discussionMinutes: 15,
       patternRef: 'Twelve questions, four marks each, one mark off for a wrong answer',
@@ -164,7 +165,7 @@ async function keyTests(db: Database) {
           capMarks: null,
         },
       ],
-    } as never);
+    } as never));
     await db.update(academicAssessments).set({ isSample: true }).where(eq(academicAssessments.id, a.id));
     const key = [...k.answers];
     await addAnswerKey(db, actor, a.id, {

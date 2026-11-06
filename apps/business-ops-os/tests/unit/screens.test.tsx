@@ -233,8 +233,12 @@ describe('admissions pieces', () => {
   });
 
   it.each([
-    ['counsellor', ['Overview', 'Demo students', 'Active students'], ['Settings']],
-    ['teacher', ['Events and counselling'], ['Demo students', 'Applications', 'Settings']],
+    [
+      'counsellor',
+      ['Admissions overview', 'Leads', 'Follow-ups', 'Demos', 'Active students'],
+      ['Settings'],
+    ],
+    ['teacher', ['Counselling and events'], ['Demos', 'Applications', 'Settings']],
   ])('admissions tabs for a %s show only permitted areas', (role, shown, hidden) => {
     const out = html(
       <AdmissionsNav
@@ -651,6 +655,17 @@ describe('a link that opens "No access" for this person is not shown (CHK-014)',
     ['academic_coordinator', '/ops/students/abc', true],
     ['auditor', '/ops/hr', true],
     ['finance_officer', '#today-classes', true],
+    // Pages whose body is empty without more than the gate (PAGE_NEEDS): Fee approvals, Reports.
+    ['finance_officer', '/ops/operations/approvals', false],
+    ['director', '/ops/operations/approvals', true],
+    ['hr_manager', '/ops/reports', false],
+    ['finance_officer', '/ops/reports', true],
+    // Payroll for its preparers and approvers; Approval cover for approvers and fee recorders.
+    ['hr_manager', '/ops/hr/payroll', true],
+    ['operations_manager', '/ops/hr/payroll', false],
+    ['finance_officer', '/ops/approval-cover', true],
+    ['auditor', '/ops/approval-cover', false],
+    ['academic_coordinator', '/ops/approval-cover', false],
   ])('%s, %s opens: %s', (role, href, opens) => {
     expect(openHref(as(role), href)).toBe(opens ? href : undefined);
   });

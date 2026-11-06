@@ -7,6 +7,7 @@
  */
 import { addDays, istInstant, toIsoDate, weekdayOf, type IsoDate } from './dates';
 import { parseCsv } from './feedback-import';
+import type { LeaveDayPart } from './leave';
 
 export const ATTENDANCE_STATUSES = [
   'present',
@@ -60,6 +61,8 @@ export interface DayInput {
   /** The day is over (before today IST): a missing check-out can no longer be "still at work". */
   finished?: boolean;
   onLeave: boolean;
+  /** Half-day leave (F4-12): which half; null or absent = the whole day. */
+  leavePart?: LeaveDayPart | null;
   /** Punches attributed to this day (see punchesByDay). */
   punches: readonly Punch[];
   decision?: { status: AttendanceStatus; note: string | null } | null;
@@ -79,6 +82,8 @@ export interface DerivedDay {
   /** Minutes after the scheduled start, once past the grace; null = no start or no check-in. */
   lateMinutes: number | null;
   missingCheckout: boolean;
+  /** On leave for this half only (the day shows "Half day leave"). */
+  leavePart?: LeaveDayPart | null;
 }
 
 const HOUR = 3_600_000;
@@ -109,11 +114,14 @@ export function deriveDay(input: DayInput, rules: DayRules): DerivedDay {
     // A short day is HR's call too, never an automatic absence.
     return worked >= rules.halfDayHours ? 'half_day' : 'unmarked';
   })();
+  // Approved leave beats an HR "Absent" (the row stays; cancelling the leave brings it back).
+  // Present or Half day over leave still wins: which should is an owner question (C3-3).
+  const decision = input.onLeave && input.decision?.status === 'absent' ? null : input.decision;
   return {
     date: input.date,
-    status: input.decision?.status ?? computed,
-    basis: input.decision ? 'hr_decision' : 'computed',
-    note: input.decision?.note ?? null,
+    status: decision?.status ?? computed,
+    basis: decision ? 'hr_decision' : 'computed',
+    note: decision?.note ?? null,
     scheduled: hours === undefined ? null : hours !== null,
     holiday: input.holiday,
     proposedHoliday: !input.holiday && Boolean(input.proposedHoliday),
@@ -121,6 +129,7 @@ export function deriveDay(input: DayInput, rules: DayRules): DerivedDay {
     lastOut: last === null ? null : new Date(last),
     lateMinutes: late === null || input.holiday ? null : late > grace ? late : 0,
     missingCheckout: first !== null && last === null,
+    leavePart: input.onLeave ? (input.leavePart ?? null) : null,
   };
 }
 
@@ -164,7 +173,10 @@ export interface AttendanceSummary {
   scheduledWorkdays: number | null;
   present: number;
   halfDays: number;
+  /** Days on leave, half days included. */
   leave: number;
+  /** Of `leave`, the days on leave for one half only (F4-12). */
+  halfDayLeave: number;
   holidays: number;
   confirmedAbsences: number;
   unmarked: number;
@@ -176,15 +188,20 @@ export interface AttendanceSummary {
 export const isNoScheduleDay = (d: Pick<DerivedDay, 'status' | 'scheduled' | 'basis'>) =>
   d.status === 'unmarked' && d.scheduled === null && d.basis !== 'hr_decision';
 
-/** What a day's row says and the status filter offers: a stored status, or "No schedule", which is never stored. */
-export const SHOWN_STATUSES = [...ATTENDANCE_STATUSES, 'no_schedule'] as const;
+const isHalfDayLeave = (d: Pick<DerivedDay, 'status' | 'leavePart'>) =>
+  d.status === 'on_leave' && Boolean(d.leavePart);
+
+/** What a day's row says and the status filter offers: a stored status, or one never stored ("No schedule", "Half day leave"). */
+export const SHOWN_STATUSES = [...ATTENDANCE_STATUSES, 'half_day_leave', 'no_schedule'] as const;
 export type ShownStatus = (typeof SHOWN_STATUSES)[number];
 export const SHOWN_STATUS_LABELS: Record<ShownStatus, string> = {
   ...ATTENDANCE_STATUS_LABELS,
+  half_day_leave: 'Half day leave',
   no_schedule: 'No schedule',
 };
-export const shownStatus = (d: Pick<DerivedDay, 'status' | 'scheduled' | 'basis'>): ShownStatus =>
-  isNoScheduleDay(d) ? 'no_schedule' : d.status;
+export const shownStatus = (
+  d: Pick<DerivedDay, 'status' | 'scheduled' | 'basis' | 'leavePart'>,
+): ShownStatus => (isNoScheduleDay(d) ? 'no_schedule' : isHalfDayLeave(d) ? 'half_day_leave' : d.status);
 
 /** Brief §14 attendance figures. Counts only; never a score or a ranking (R13). */
 export function summariseDays(days: readonly DerivedDay[]): AttendanceSummary {
@@ -197,6 +214,7 @@ export function summariseDays(days: readonly DerivedDay[]): AttendanceSummary {
     present: n((d) => d.status === 'present'),
     halfDays: n((d) => d.status === 'half_day'),
     leave: n((d) => d.status === 'on_leave'),
+    halfDayLeave: n(isHalfDayLeave),
     holidays: n((d) => d.status === 'holiday'),
     confirmedAbsences: n((d) => d.status === 'absent'),
     unmarked: n((d) => d.status === 'unmarked' && !isNoScheduleDay(d)),
@@ -218,7 +236,7 @@ export function monthTotalsText(t: ReturnType<typeof monthTotals>) {
   const counted = [
     `${t.present} present`,
     of(t.halfDays, 'half day'),
-    `${t.leave} on leave`,
+    `${t.leave} on leave${t.halfDayLeave ? ` (${t.halfDayLeave === 1 ? '1 of them a half day' : `${t.halfDayLeave} of them half days`})` : ''}`,
     ...(known || t.unmarked ? [`${t.unmarked} unmarked`] : []),
     `${of(t.confirmedAbsences, 'absence', 'absences')} confirmed by HR`,
   ];

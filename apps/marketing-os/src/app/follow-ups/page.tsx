@@ -22,7 +22,7 @@ export default async function FollowUpsPage({
           searchParams={sp}
           tabs={
             <Subnav
-              label="Sales calls and follow-ups"
+              label="Calls and follow-ups"
               items={tabsFor(user, 'follow-ups')}
               current={modulePath('follow-ups')}
             />

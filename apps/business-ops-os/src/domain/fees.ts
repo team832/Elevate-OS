@@ -312,7 +312,8 @@ const receiptKey = (r: { receiptReference?: string | null }) =>
  * Proposed (HUS-008, API-008, owner to confirm): a payment with the receipt, amount, date, charge
  * and instalment of one already counted is the same payment again (a reloaded form or a second
  * press; an Idempotency-Key only covers a retry of one press). One receipt split over two
- * instalments, or a correction after a reversal, still goes through.
+ * instalments, or a correction after a reversal, still goes through. A refund is matched the same
+ * way, on the payment it returns (C1-5).
  */
 export function duplicatePaymentIssue(
   input: {
@@ -322,23 +323,26 @@ export function duplicatePaymentIssue(
     receiptReference?: string | null;
     instalmentId?: string | null;
     chargeCategory?: string | null;
+    reversesRecordId?: string | null;
   },
   existing: readonly FeeRecordLike[],
 ): FeeIssue | null {
-  if (input.kind !== 'received' || !receiptKey(input)) return null;
+  if ((input.kind !== 'received' && input.kind !== 'refund') || !receiptKey(input)) return null;
   const same = effectiveRecords(existing).find(
     (r) =>
-      r.kind === 'received' &&
+      r.kind === input.kind &&
+      (r.reversesRecordId ?? null) === (input.reversesRecordId ?? null) &&
       receiptKey(r) === receiptKey(input) &&
       r.amountPaise === input.amountPaise &&
       r.paymentDate === input.paymentDate &&
       (r.instalmentId ?? null) === (input.instalmentId ?? null) &&
       (r.chargeCategory ?? 'tuition') === (input.chargeCategory ?? 'tuition'),
   );
+  const noun = input.kind === 'refund' ? 'refund' : 'payment';
   return same
     ? {
         path: 'receiptReference',
-        message: `This payment is already recorded${same.code ? ` (${same.code})` : ''}. A second payment needs its own receipt reference.`,
+        message: `This ${noun} is already recorded${same.code ? ` (${same.code})` : ''}. A second ${noun} needs its own receipt reference.`,
       }
     : null;
 }
@@ -420,7 +424,8 @@ export const FEE_BALANCE_LABELS: Record<FeeBalanceState, string> = {
 
 /** May `actorUserId` mark this record as checked? Never the person who recorded it. */
 export function canVerifyFee(
-  record: { status: FeeRecordStatus; recordedBy: string },
+  /** `onBehalfOf`: the approver a cover posted it for (F4-10) counts as its maker too. */
+  record: { status: FeeRecordStatus; recordedBy: string; onBehalfOf?: string | null },
   actorUserId: string,
 ): { ok: true } | { ok: false; code: 'SELF' | 'STATE'; message: string } {
   if (record.status !== 'recorded')
@@ -430,6 +435,12 @@ export function canVerifyFee(
       ok: false,
       code: 'SELF',
       message: 'You recorded this entry; a different person must check it.',
+    };
+  if (record.onBehalfOf === actorUserId)
+    return {
+      ok: false,
+      code: 'SELF',
+      message: 'This entry was posted on your behalf; a different person must check it.',
     };
   return { ok: true };
 }

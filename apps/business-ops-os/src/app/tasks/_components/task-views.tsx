@@ -12,6 +12,7 @@ import { TASK_DUE_FILTERS } from '../../../server/staff-tasks-schemas';
 import { load } from '../../../ui/frame';
 import { listHref, Pager, SearchPanel } from '../../../ui/list-controls';
 import { RecordTable } from '../../../ui/record-table';
+import { ExportLink } from '../../../ui/export-link';
 import { DUE_OPTIONS, scopedStaff } from './log-task';
 import { AckBadge } from './task-detail';
 import {
@@ -222,6 +223,7 @@ export async function AllTasks({
           pageSize={list.pageSize}
           total={list.total}
         />
+        <ExportLink list="tasks" base={base} params={{ ...filters, page: undefined }} />
       </Tabs>
       {sp.open ? <TaskModal user={user} id={sp.open} sp={sp} base={base} /> : null}
     </div>

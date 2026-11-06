@@ -1,9 +1,12 @@
 // ESLint flat config for the whole monorepo (`npm run lint`).
 // Besides code quality it ENFORCES the module boundaries of D-005/D-011:
-//   - a module app never imports another module app;
+//   - a module app never imports another module app (Academic and Marketing, tests too, reach
+//     Business Ops only through ./work and ./leads);
+//   - the platform app reaches a module only through its package.json "exports" entries;
 //   - shared packages never import apps;
 //   - a module's src/domain stays pure (no I/O, no framework);
 //   - application code never imports test helpers.
+import { readFileSync } from 'node:fs';
 import js from '@eslint/js';
 import nextPlugin from '@next/eslint-plugin-next';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -31,16 +34,20 @@ const crossModule = (selfDir) =>
     .filter(([dir]) => dir !== selfDir && !(SHARED_ENTRIES[selfDir] && dir === 'business-ops-os'))
     .flatMap(([dir, pkg]) => [pkg, `${pkg}/*`, `**/${dir}/**`, `**/${dir}`]);
 
-/** Everything that names business-ops-os except the allowed entry points. */
+/** Every import that names module `dir` except `@elevate/<dir>/<entry>`; `extra` re-allows more. */
+const entryOnly = (dir, entries, extra = '') => ({
+  regex: `^(?!${MODULE_APPS[dir]}/(${entries.join('|')})$${extra}).*${dir}(/|$)`,
+  message: `Module boundary (D-011.3): only ${MODULE_APPS[dir]}/{${entries.join(',')}} may be imported here.`,
+});
+
 const sharedEntryPattern = (selfDir) =>
-  SHARED_ENTRIES[selfDir]
-    ? [
-        {
-          regex: `^(?!@elevate/business-ops-os/(${SHARED_ENTRIES[selfDir].join('|')})$).*business-ops-os(/|$)`,
-          message: `Module boundary (D-011.3, D-073): only @elevate/business-ops-os/{${SHARED_ENTRIES[selfDir].join(',')}} may be imported here.`,
-        },
-      ]
-    : [];
+  SHARED_ENTRIES[selfDir] ? [entryOnly('business-ops-os', SHARED_ENTRIES[selfDir])] : [];
+
+/** The entries a module declares in its package.json "exports" (e.g. "./server" → "server"). */
+const declaredEntries = (dir) =>
+  Object.keys(
+    JSON.parse(readFileSync(new URL(`./apps/${dir}/package.json`, import.meta.url))).exports,
+  ).map((key) => key.slice(2));
 
 const BOUNDARY_MESSAGE =
   'Module boundary (D-011.3): never import another module. Use @elevate/shared-contracts (events, summaries) or an API.';
@@ -123,11 +130,47 @@ const moduleConfigs = Object.keys(MODULE_APPS).flatMap((dir) => [
     rules: {
       'no-restricted-imports': [
         'error',
-        { patterns: [{ group: crossModule(dir), message: BOUNDARY_MESSAGE }] },
+        {
+          patterns: [
+            { group: crossModule(dir), message: BOUNDARY_MESSAGE },
+            ...sharedEntryPattern(dir),
+          ],
+        },
       ],
     },
   },
 ]);
+
+/**
+ * The platform app reaches the three modules only through their declared entries. Its tests may
+ * also name a module's src/app/ file: a page or route handler they render or call has no entry.
+ */
+const platformBoundary = (extra, ...more) => [
+  'error',
+  {
+    patterns: [
+      ...Object.keys(MODULE_APPS).map((dir) => entryOnly(dir, declaredEntries(dir), extra)),
+      ...more,
+    ],
+  },
+];
+const platformConfigs = [
+  {
+    name: 'boundaries/platform',
+    files: ['apps/platform/src/**/*.{ts,tsx}', 'apps/platform/seed/**/*.ts'],
+    rules: {
+      'no-restricted-imports': platformBoundary('', {
+        group: TEST_ONLY,
+        message: 'Test helpers belong in tests/ only.',
+      }),
+    },
+  },
+  {
+    name: 'boundaries/platform/tests',
+    files: ['apps/platform/tests/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-imports': platformBoundary('|.*/src/app/') },
+  },
+];
 
 export default tseslint.config(
   {
@@ -212,6 +255,7 @@ export default tseslint.config(
     },
   },
   ...moduleConfigs,
+  ...platformConfigs,
   {
     name: 'scripts',
     files: ['scripts/**/*.{js,mjs,ts}', '*.config.{js,mjs,ts}', 'packages/*/drizzle.config.ts'],

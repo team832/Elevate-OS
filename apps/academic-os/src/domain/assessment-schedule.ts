@@ -2,8 +2,8 @@
  * Assessment scheduling constraints (ACD-012, ACD-016, ACD-024, ACD-026) — pure.
  *
  * For each candidate assessment (test day + optional discussion day) it reports:
- *   HARD  CLASS_CLASH        overlaps a class of the same batch (times known)
- *   HARD  ASSESSMENT_CLASH   overlaps another assessment of the batch (times known)
+ *   HARD  CLASS_CLASH        overlaps a class of a batch it shares (times known)
+ *   HARD  ASSESSMENT_CLASH   overlaps another assessment of a batch it shares (times known)
  *   HARD  BLACKOUT           test or discussion day inside a blackout window
  *                            (exam date, mock phase, closure) — `unverified`
  *                            is carried through so a provisional exam date stays flagged
@@ -21,9 +21,17 @@ export interface ScheduledItem {
   date: string;
   startTime: string | null;
   durationMinutes: number | null;
+  /** Batches it involves. Given on both sides, only items sharing a batch clash or count for the gap. */
+  batchIds?: readonly string[];
+  /** A test-type class: it holds the room and invigilator for a test of its own batch, so it never clashes with one. */
+  testSession?: boolean;
 }
 
+const shareBatch = (a: ScheduledItem, b: ScheduledItem) => !a.batchIds || !b.batchIds || a.batchIds.some((id) => b.batchIds!.includes(id));
+
 export interface AssessmentCandidate extends ScheduledItem {
+  /** The test's own eligible batches when `batchIds` also holds batches that only share a student. Default `batchIds`. */
+  ownBatchIds?: readonly string[];
   /** Discussion day (e.g. the Sunday after a Saturday test); null = none. */
   discussionDate: string | null;
   /** Latest planned completion date of the prerequisite lessons; null = unknown. */
@@ -46,9 +54,9 @@ export interface GapRule {
 
 export interface AssessmentScheduleInput {
   candidates: readonly AssessmentCandidate[];
-  /** Other assessments of the same batch already scheduled (not the candidates themselves). */
+  /** Other assessments already scheduled (not the candidates themselves). */
   otherAssessments: readonly ScheduledItem[];
-  /** Classes of the same batch (scheduled or held). */
+  /** Classes (scheduled or held). */
   classes: readonly ScheduledItem[];
   blackouts: readonly BlackoutWindow[];
   minGap: GapRule | null;
@@ -104,7 +112,8 @@ export function checkAssessmentSchedule(input: AssessmentScheduleInput): Assessm
     // Clashes with classes and other assessments on the same day.
     const sameDay = (items: readonly ScheduledItem[], code: 'CLASS_CLASH' | 'ASSESSMENT_CLASH') => {
       for (const other of items) {
-        if (other.id === cand.id || other.date !== cand.date) continue;
+        if (other.id === cand.id || other.date !== cand.date || !shareBatch(cand, other)) continue;
+        if (other.testSession && (cand.ownBatchIds ?? cand.batchIds)?.some((b) => other.batchIds?.includes(b))) continue;
         const theirs = span(other);
         if (mine && theirs) {
           if (intervalsOverlap(mine.start, mine.end, theirs.start, theirs.end)) {
@@ -152,7 +161,7 @@ export function checkAssessmentSchedule(input: AssessmentScheduleInput): Assessm
       const severity = input.minGap.enforcement === 'hard' ? 'hard' : 'preference';
       const others = [...everyOther, ...input.candidates.filter((c) => c.id > cand.id)];
       for (const other of others) {
-        if (!isIsoDate(other.date)) continue;
+        if (!isIsoDate(other.date) || !shareBatch(cand, other)) continue;
         const gap = Math.abs(daysBetween(cand.date as IsoDate, other.date as IsoDate));
         if (gap < input.minGap.minDays) {
           push({ code: 'MIN_GAP', severity, candidateId: cand.id, otherId: other.id, date: cand.date, message: `${cand.label} is ${gap} day(s) from ${other.label}; the minimum gap is ${input.minGap.minDays} (${input.minGap.enforcement}).` });

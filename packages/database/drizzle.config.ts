@@ -36,6 +36,8 @@ export default defineConfig({
     './src/schema/ops-hr-requests.ts',
     './src/schema/ops-score-imports.ts',
     './src/schema/ops-lead-stages.ts',
+    './src/schema/ops-hr-records.ts',
+    './src/schema/ops-payroll.ts',
   ],
   out: './migrations',
   schemaFilter: ['core', 'marketing', 'academic', 'ops'],

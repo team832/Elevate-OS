@@ -32,19 +32,28 @@ import type {
   Brand,
   EnrolmentId,
   StaffMemberId,
+  StudentId,
   StudentIdentityId,
   UserId,
 } from '@elevate/shared-types';
 import { ACADEMIC_TEACHER_ROLES, academic, createdAt, inList, updatedAt } from './academic-columns';
 import {
   academicBatches,
+  academicClassRecords,
   academicClassSessions,
   academicEnrolments,
   academicRooms,
+  academicStudents,
+  type AcademicClassRecordId,
   type AcademicRoomId,
   type AcademicSessionId,
 } from './academic';
-import { academicSubjects, type AcademicSubjectId } from './academic-curriculum';
+import {
+  academicChapters,
+  academicSubjects,
+  type AcademicChapterId,
+  type AcademicSubjectId,
+} from './academic-curriculum';
 import { staffMembers, students as coreStudents, users } from './core';
 
 export type AcademicPlacementId = Brand<string, 'AcademicPlacementId'>;
@@ -62,6 +71,15 @@ export const ACADEMIC_DEMO_ATTENDANCE_STATUSES = [
   'late',
   'excused',
 ] as const;
+/** Homework marks (F4-05); no row = not marked yet, never "not submitted". */
+export const ACADEMIC_HOMEWORK_STATUSES = [
+  'submitted',
+  'late',
+  'not_submitted',
+  'excused',
+] as const;
+/** Who made an availability record: a coordinator, or an approved HR leave (D-134). */
+export const ACADEMIC_UNAVAILABILITY_SOURCES = ['coordinator', 'hr_leave'] as const;
 
 const userRef = (name: string) =>
   uuid(name)
@@ -216,7 +234,11 @@ export const academicSessionTeachers = academic.table(
   ],
 );
 
-/** Academic availability record (not HR leave, R2): flags affected classes for the coordinator. */
+/**
+ * Academic availability record (R2): flags affected classes for the coordinator. Entered by a
+ * coordinator, or made from an approved HR leave (D-134): `ops_leave_record_id` is that Ops leave
+ * record (plain UUID, no FK across modules), unique so a retried call cannot add a second one.
+ */
 export const academicTeacherUnavailability = academic.table(
   'teacher_unavailability',
   {
@@ -229,9 +251,20 @@ export const academicTeacherUnavailability = academic.table(
     createdAt: createdAt(),
     cancelledAt: instant('cancelled_at'),
     cancelledByUserId: userRef('cancelled_by_user_id'),
+    source: text('source', { enum: ACADEMIC_UNAVAILABILITY_SOURCES })
+      .notNull()
+      .default('coordinator'),
+    opsLeaveRecordId: uuid('ops_leave_record_id'),
   },
   (t) => [
     index('teacher_unavailability_staff_from_idx').on(t.staffId, t.fromDate),
+    uniqueIndex('teacher_unavailability_ops_leave_record_key')
+      .on(t.opsLeaveRecordId)
+      .where(sql`${t.opsLeaveRecordId} IS NOT NULL`),
+    check(
+      'teacher_unavailability_source_check',
+      sql`${t.source} IN (${inList(ACADEMIC_UNAVAILABILITY_SOURCES)}) AND (${t.source} = 'hr_leave') = (${t.opsLeaveRecordId} IS NOT NULL)`,
+    ),
     check('teacher_unavailability_dates_order', sql`${t.toDate} >= ${t.fromDate}`),
     check(
       'teacher_unavailability_cancel_pair',
@@ -283,6 +316,80 @@ export const academicSessionDemoAttendees = academic.table(
     check(
       'session_demo_attendees_recorded_has_actor',
       sql`${t.status} = 'not_recorded' OR (${t.recordedByUserId} IS NOT NULL AND ${t.recordedAt} IS NOT NULL)`,
+    ),
+  ],
+);
+
+/**
+ * Homework a teacher sets for a batch (F4-05), optionally for a subject / chapter and copied from a
+ * teaching log's homework text (`class_record_id`). Teacher scope = `teacher_staff_id`'s batches.
+ * Cancelled with a reason, never deleted.
+ */
+export const academicHomework = academic.table(
+  'homework',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    batchId: uuid('batch_id')
+      .notNull()
+      .references(() => academicBatches.id, { onDelete: 'restrict' })
+      .$type<BatchId>(),
+    subjectId: uuid('subject_id')
+      .references(() => academicSubjects.id, { onDelete: 'restrict' })
+      .$type<AcademicSubjectId>(),
+    chapterId: uuid('chapter_id')
+      .references(() => academicChapters.id, { onDelete: 'restrict' })
+      .$type<AcademicChapterId>(),
+    classRecordId: uuid('class_record_id')
+      .references(() => academicClassRecords.id, { onDelete: 'restrict' })
+      .$type<AcademicClassRecordId>(),
+    title: text('title').notNull(),
+    instructions: text('instructions'),
+    setOn: isoDate('set_on').notNull(),
+    dueOn: isoDate('due_on').notNull(),
+    teacherStaffId: staffRef('teacher_staff_id').notNull(),
+    createdByUserId: userRef('created_by_user_id').notNull(),
+    cancelledAt: instant('cancelled_at'),
+    cancelledByUserId: userRef('cancelled_by_user_id'),
+    cancelReason: text('cancel_reason'),
+    isSample: boolean('is_sample').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('homework_batch_due_idx').on(t.batchId, t.dueOn),
+    index('homework_teacher_due_idx').on(t.teacherStaffId, t.dueOn),
+    check('homework_title_check', sql`length(trim(${t.title})) > 0`),
+    check('homework_dates_order', sql`${t.dueOn} >= ${t.setOn}`),
+    check(
+      'homework_cancel_check',
+      sql`num_nonnulls(${t.cancelledAt}, ${t.cancelledByUserId}, ${t.cancelReason}) IN (0, 3) AND length(trim(coalesce(${t.cancelReason}, 'x'))) > 0`,
+    ),
+  ],
+);
+
+/** One student's mark on one homework; changed in place (audited), one row per pair. */
+export const academicHomeworkMarks = academic.table(
+  'homework_marks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    homeworkId: uuid('homework_id')
+      .notNull()
+      .references(() => academicHomework.id, { onDelete: 'restrict' }),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => academicStudents.id, { onDelete: 'restrict' })
+      .$type<StudentId>(),
+    status: text('status', { enum: ACADEMIC_HOMEWORK_STATUSES }).notNull(),
+    remark: text('remark'),
+    markedByUserId: userRef('marked_by_user_id').notNull(),
+    markedAt: instant('marked_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('homework_marks_student_key').on(t.homeworkId, t.studentId),
+    index('homework_marks_student_idx').on(t.studentId),
+    check(
+      'homework_marks_status_check',
+      sql`${t.status} IN (${inList(ACADEMIC_HOMEWORK_STATUSES)})`,
     ),
   ],
 );

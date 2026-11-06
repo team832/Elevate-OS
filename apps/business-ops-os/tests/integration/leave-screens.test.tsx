@@ -3,17 +3,20 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { prerender } from 'react-dom/static';
 import { createTestUser, setupTestDatabase } from '@elevate/testing';
+import { opsAttachments } from '@elevate/database';
 import { addDays, istToday } from '../../src/domain/dates';
 import { CalendarTab } from '../../src/app/hr/attendance/_components/setup';
-import { LeaveTab } from '../../src/app/hr/attendance/_components/leave';
+import { leaveFiles, LeaveTab } from '../../src/app/hr/attendance/_components/leave';
+import { statusOptions } from '../../src/app/hr/attendance/_components/shared';
 import { attendanceSetup } from '../../src/server/attendance-lists';
 import {
   applyForLeave,
   canDecideLeave,
   decideLeave,
   listLeaveApplications,
+  teachingStaff,
 } from '../../src/server/leave-applications';
-import { LEAVE_WHY_HIDDEN } from '../../src/domain/leave';
+import { LEAVE_WHY_HIDDEN, RESEND_TO_ACADEMIC } from '../../src/domain/leave';
 import { MyAttendanceBody } from '../../src/work';
 import { setupReference, staffUser, type StaffUser } from './fixtures';
 
@@ -33,6 +36,7 @@ let hr2: StaffUser;
 let teacher: StaffUser;
 let other: StaffUser;
 let auditor: StaffUser;
+let letter: string;
 
 beforeAll(async () => {
   vi.stubGlobal(
@@ -54,6 +58,24 @@ beforeAll(async () => {
   await decideLeave(ctx.db, hr, no.id, { decision: 'rejected', note: 'Mock test that week', version: 1 });
   await applyForLeave(ctx.db, other, form(5, 'Someone else reason'));
   await applyForLeave(ctx.db, hr2, form(5, 'HR lead own reason'));
+  const pending = await listLeaveApplications(ctx.db, teacher, { status: 'pending' });
+  // Only the record of the file: rendering needs no stored bytes.
+  const [file] = await ctx.db
+    .insert(opsAttachments)
+    .values({
+      ownerKind: 'leave_application',
+      ownerId: pending.items[0]!.id,
+      purpose: 'evidence',
+      originalName: 'sample-medical-certificate.pdf',
+      mime: 'application/pdf',
+      sizeBytes: 2048,
+      sha256: 'b'.repeat(64),
+      storageKey: crypto.randomUUID(),
+      uploadedByUserId: teacher.id,
+      isSample: true,
+    })
+    .returning();
+  letter = file!.id;
 });
 
 const my = (user: StaffUser, params: Record<string, string> = {}, base = '/academic') =>
@@ -74,10 +96,22 @@ describe('My attendance', () => {
     expect(out).toContain('Mock test that week');
     for (const label of ['Pending', 'Approved', 'Rejected']) expect(out).toContain(`>${label}<`);
     expect(out).not.toContain('Someone else reason');
-    expect(out).not.toMatch(/balance|entitle/i);
+    // F4-12: a balance per type, and words (never 0) where HR has set no allowance.
+    expect(out).toContain('Leave balance, ');
+    expect(out).toContain('No allowance set');
+    expect(out).toContain('Does not use a balance');
+    expect(out).toContain('Half day (optional)');
     expect(out).toContain('To cancel approved leave, ask HR');
     expect(out).toContain('Cancel application');
     expect(out).not.toContain('Your days in');
+  });
+
+  it('a pending application takes a leave letter or certificate; its files download in your workspace', async () => {
+    const out = await my(teacher, { view: 'leave' });
+    expect(out).toContain('Attach a letter or certificate');
+    expect(out.match(/type="file"/g)).toHaveLength(1); // the pending row only
+    expect(out).toContain(`href="/academic/api/v1/attachments/${letter}"`);
+    expect(out).toContain('sample-medical-certificate.pdf');
   });
 
   it('nothing applied for: says so', async () => {
@@ -96,18 +130,23 @@ describe('My attendance', () => {
 });
 
 describe('HR: Leave applications tab', () => {
-  const tab = async (user: StaffUser, params: Record<string, string | undefined>) =>
-    html(
+  /** As the page loads it: files only for someone who decides leave. */
+  const tab = async (user: StaffUser, params: Record<string, string | undefined>) => {
+    const list = await listLeaveApplications(ctx.db, user, {
+      status: params.status === 'all' ? undefined : ((params.status as never) ?? 'pending'),
+      staffId: params.staffId,
+    });
+    const canDecide = await canDecideLeave(ctx.db, user);
+    return html(
       <LeaveTab
-        list={await listLeaveApplications(ctx.db, user, {
-          status: params.status === 'all' ? undefined : ((params.status as never) ?? 'pending'),
-          staffId: params.staffId,
-        })}
+        list={list}
         params={{ tab: 'leave', ...params }}
-        canDecide={await canDecideLeave(ctx.db, user)}
+        canDecide={canDecide}
         ownStaffId={user.staffId}
+        files={canDecide ? await leaveFiles(ctx.db, user, '/ops/api/v1', list.items) : undefined}
       />,
     );
+  };
 
   it('tabs count the lists; Approve and Reject on the waiting rows, with a reason box', async () => {
     const out = await tab(hr, {});
@@ -121,6 +160,19 @@ describe('HR: Leave applications tab', () => {
     expect(out).toContain('Reject application');
     expect(out).toContain('Why (shown to the employee)');
     expect(out).toContain(`/ops/hr/attendance?tab=leave&amp;status=all&amp;staffId=${teacher.staffId}`);
+  });
+
+  it("HR, who decides leave, gets each application's files with download links; a reader who does not decide gets none", async () => {
+    const out = await tab(hr, {});
+    expect(out).toContain('>Files<');
+    expect(out).toContain(`href="/ops/api/v1/attachments/${letter}"`);
+    const read = await tab(auditor, {});
+    expect(read).not.toContain('sample-medical-certificate.pdf');
+    expect(read).not.toContain('>Files<');
+  });
+
+  it('HR cannot set a day to On leave: leave comes from a leave record', () => {
+    expect(statusOptions.map((o) => o.value)).not.toContain('on_leave');
   });
 
   it('your own row offers no decision', async () => {
@@ -157,6 +209,17 @@ describe('HR: Leave applications tab', () => {
     for (const reason of ['Sister wedding', 'Exam duty', 'Long weekend']) expect(out).toContain(reason);
     expect(out).not.toContain('Someone else reason');
     expect(out).toContain('Show everyone');
+  });
+
+  it("a teacher's leave offers Send to Academic again to a leave approver (D-134)", async () => {
+    const setup = await attendanceSetup(ctx.db, hr);
+    const teachers = await teachingStaff(ctx.db, setup.leave.map((l) => l.staffId));
+    expect(teachers.has(teacher.staffId)).toBe(true);
+    expect(teachers.has(hr.staffId)).toBe(false);
+    const tabFor = (resendFor?: ReadonlySet<string>) =>
+      html(<CalendarTab setup={setup} canManage canDecideHolidays={false} resendFor={resendFor} />);
+    expect(await tabFor(teachers)).toContain(RESEND_TO_ACADEMIC);
+    expect(await tabFor()).not.toContain(RESEND_TO_ACADEMIC);
   });
 
   it('Record approved leave stays for HR entering leave, and points to the new tab', async () => {

@@ -2,14 +2,13 @@
  * zod schemas for daily tasks (owner decision 21 Oct 2026).
  */
 import { z } from 'zod';
-import { isoDateSchema } from '@elevate/shared-contracts';
+import { isoDateSchema, optText } from '@elevate/shared-contracts';
 import { istToday } from '../domain/dates';
 import { OPS_TASK_RELATED_KINDS, OPS_TASK_VISIBILITIES } from '@elevate/database';
 import { TASK_PRIORITIES, TASK_RECURRENCES, TASK_STATUSES } from '../domain/staff-tasks';
 import { TASK_ACTIONS, type TaskAction } from '../domain/task-lifecycle';
 
 const text = (max: number) => z.string().trim().max(max);
-const optText = (max: number) => text(max).nullish();
 const optUuid = z.uuid().nullish();
 /** IST time of day, `HH:MM`. */
 const dueTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:00)?$/, 'Use a time like 14:30');
@@ -26,7 +25,7 @@ const expectedVersion = z.coerce.number().int().min(1);
 /** `{ [staffId]: true|false }` from checkbox fields named `<field>.<staffId>` → the ticked ids. */
 const checked = z
   .union([z.array(z.uuid()), z.record(z.uuid(), z.boolean())])
-  .transform((v) => (Array.isArray(v) ? v : Object.keys(v).filter((k) => v[k])))
+  .transform((v) => (Array.isArray(v) ? v : Object.keys(v).filter((k) => v[k]).map((k) => k.toLowerCase())))
   .pipe(z.array(z.uuid()).max(50));
 const lines = z
   .union([z.string(), z.array(z.string())])

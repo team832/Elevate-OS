@@ -29,6 +29,7 @@ import {
   type Database,
 } from '@elevate/database';
 import { PEOPLE } from '@elevate/database/seed';
+import { ConflictError } from '@elevate/shared-contracts';
 import type { SessionId } from '@elevate/shared-types';
 import { addDays } from '@elevate/shared-types';
 import {
@@ -41,6 +42,8 @@ import {
 import { getAssessmentDetail } from '../src/server/services/assessment-views';
 import { allocatePlacement } from '../src/server/services/placements';
 import { finaliseAssessment } from '../src/server/services/results';
+import { formatClock, intervalsOverlap, isoWeekday, parseClock } from '../src/domain/time';
+import { WEEK } from './fill-timetable';
 import { sampleAnchorDate } from './samples';
 
 export { getAssessmentDetail };
@@ -277,6 +280,33 @@ export async function seedDemoTeacherTests(db: Database, opts: TestOptions) {
   return missing.length ? writeTests(db, missing, opts) : null;
 }
 
+// The usual 10:00 first, then every half hour from 07:00.
+const STARTS = [...new Set(['10:00', ...Array.from({ length: 28 }, (_, i) => formatClock(7 * 60 + 30 * i))])];
+const busyOnGrid = (batchCodes: readonly string[], date: string, start: string, minutes: number) => {
+  const from = parseClock(start)!;
+  return WEEK.some(([b, , , weekday, time]) => {
+    const at = parseClock(time)!;
+    return batchCodes.includes(b) && weekday === isoWeekday(date) && intervalsOverlap(from, from + minutes, at, at + (b.startsWith('IPMAT') ? 75 : 60));
+  });
+};
+/**
+ * Sample tests obey the clash rule (ruling 6 Nov 2026): the first start that misses the weekly sample
+ * grid (fill-timetable writes it later) and that the create does not refuse (classes already saved,
+ * other tests, shared students).
+ */
+export async function atFreeStart<T>(batchCodes: readonly string[], date: string, minutes: number, create: (startTime: string) => Promise<T>) {
+  let refused: unknown = new Error(`No free start for ${batchCodes.join(', ')} on ${date}.`);
+  for (const start of STARTS.filter((s) => !busyOnGrid(batchCodes, date, s, minutes))) {
+    try {
+      return await create(start);
+    } catch (e) {
+      if (!(e instanceof ConflictError && /clashes with the timetable/.test(e.message))) throw e;
+      refused = e;
+    }
+  }
+  throw refused;
+}
+
 export async function writeTests(db: Database, list: readonly SampleTest[], opts: TestOptions) {
   const uid = await userId(db, opts.actorEmail);
   if (!uid) return null;
@@ -310,15 +340,16 @@ export async function writeTests(db: Database, list: readonly SampleTest[], opts
       .from(staffMembers)
       .leftJoin(users, eq(users.id, staffMembers.userId))
       .where(t.teacher.includes('@') ? eq(users.email, t.teacher) : eq(staffMembers.fullName, t.teacher));
-    const id = await createAssessmentInternal(db, actor, {
+    const scheduledDate = addDays(today, t.day);
+    const id = await atFreeStart(t.batches, scheduledDate, 120, (startTime) => createAssessmentInternal(db, actor, {
       code: t.code,
       title: t.title,
       kind: t.kind,
       academicYear,
       batchIds: batchIds as never,
       subjectId: subject?.id ?? null,
-      scheduledDate: addDays(today, t.day),
-      startTime: '10:00',
+      scheduledDate,
+      startTime,
       durationMinutes: 120,
       responsibleTeacherStaffId: (staff?.id ?? null) as never,
       evaluatorStaffId: (staff?.id ?? null) as never,
@@ -330,7 +361,7 @@ export async function writeTests(db: Database, list: readonly SampleTest[], opts
             marksUnattempted: '0',
           }
         : { maxMarks: t.rule.maxMarks }),
-    });
+    }));
     ids.set(t.code, id);
     // No route may set the sample flag; the roster copies it at the snapshot.
     await db

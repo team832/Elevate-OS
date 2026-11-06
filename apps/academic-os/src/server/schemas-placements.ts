@@ -16,6 +16,12 @@ export const transferBody = z
   .object({ enrolmentId: z.uuid(), toBatchId: z.uuid(), effectiveDate: isoDateSchema, reason })
   .strict();
 
+/** F4-07: several students of one batch, same target, date and reason as a single transfer. */
+export const bulkTransferBody = transferBody
+  .omit({ enrolmentId: true })
+  .extend({ fromBatchId: z.uuid(), enrolmentIds: z.array(z.uuid()).min(1, { error: 'Choose at least one student.' }).max(500) })
+  .strict();
+
 export const endEnrolmentBody = z
   .object({
     enrolmentId: z.uuid(),

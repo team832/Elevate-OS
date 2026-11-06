@@ -15,6 +15,11 @@ export const platformPermissionList = [
     description: 'Read approval requests and history across modules.',
   },
   { key: 'platform:notifications:read', description: 'Read and mark own in-app notifications.' },
+  {
+    key: 'platform:portal:access',
+    description:
+      'Open the student and parent portal: only the students linked to this login (F4-13).',
+  },
 ] as const satisfies readonly PermissionDefinition[];
 
 export type PlatformPermission = (typeof platformPermissionList)[number]['key'];
@@ -79,5 +84,8 @@ export const platformPermissions = definePermissions<PlatformPermission>({
       'platform:module:access',
       { permission: 'platform:notifications:read', scope: 'own' },
     ],
+    // F4-13, Proposed: the portal and nothing else (no platform:module:access, no workspace).
+    student: [{ permission: 'platform:portal:access', scope: 'own' }],
+    guardian: [{ permission: 'platform:portal:access', scope: 'own' }],
   },
 });

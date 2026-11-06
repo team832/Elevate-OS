@@ -4,6 +4,7 @@ import { getDb } from '@elevate/database';
 import { ButtonLink, Card, PageHeader, fmtDay } from '@elevate/shared-ui';
 import { checkAssessmentScheduleFor, getAssessment, getAssessmentAnalysis, getResults, validateAssessment } from '../../../server';
 import { MODULE_PATHS } from '../../../server/paths';
+import { AdmitCardSettings } from '../../../ui/admit-card-settings';
 import { ApiButton, ApiForm } from '../../../ui/api-form';
 import { AnalysisSection, ResultsSection, ScoringSection, ValidationSection } from '../../../ui/assessment-sections';
 import { StateBadge, fmtDateTime, words } from '../../../ui/badges';
@@ -11,7 +12,7 @@ import { ConflictList } from '../../../ui/conflicts';
 import { AcademicShell, LoadError, actorFor, gate, load } from '../../../ui/shell';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Assessment' };
+export const metadata: Metadata = { title: 'Test' };
 
 const SECTIONS_EXAMPLE = JSON.stringify(
   [
@@ -56,17 +57,18 @@ export default async function AssessmentPage({ params, searchParams }: { params:
         title={`${a.code} — ${a.title}`}
         meta={<><StateBadge state={a.status} /> {publication !== 'not_published' ? <StateBadge state={publication} /> : a.status === 'finalised' ? <StateBadge state="not published" /> : null}</>}
         description={`${words(a.kind)} · batch ${a.batchCode} · ${fmtDay(a.scheduledDate, 'not scheduled')} · ${a.durationMinutes === null ? 'duration unknown' : `${a.durationMinutes} min`}`}
-        actions={<>{canMark ? <ButtonLink variant="primary" href={MODULE_PATHS.marks(a.id)}>Enter marks</ButtonLink> : null}<ButtonLink href={MODULE_PATHS.assessments}>All assessments</ButtonLink></>}
+        actions={<>{canMark ? <ButtonLink variant="primary" href={MODULE_PATHS.marks(a.id)}>Enter marks</ButtonLink> : null}<ButtonLink href={MODULE_PATHS.assessments}>All tests</ButtonLink></>}
       />
       <div className="el-stack">
         <ScoringSection a={a} />
         {a.roster ? (
-          <Card title="Roster" description="Run from Business Operations (Tests and Mock Tests). The roster was fixed from the selected batches when it was taken; later batch changes do not alter it.">
+          <Card title="Roster" description="Run from Business Operations (Tests and mock tests). The roster was fixed from the selected batches when it was taken; later batch changes do not alter it.">
             <p>
               {a.roster.counts.active} students{a.roster.counts.removed ? ` (${a.roster.counts.removed} removed, with reasons)` : ''}. Attendance: {a.roster.counts.present} present, {a.roster.counts.absent} absent, {a.roster.counts.excused} excused, {a.roster.counts.unmarked} not marked. Marks: {a.roster.counts.verified} verified, {a.roster.counts.imported} imported for review, {a.roster.counts.notEntered} not entered.
             </p>
           </Card>
         ) : null}
+        {a.roster && canWrite ? <AdmitCardSettings id={a.id} action={api('admit-cards')} /> : null}
         {canWrite && a.status !== 'finalised' ? (
           <Card title="Configure scoring" description="Sections cannot be restructured once responses exist. Marks are exact decimals (max 4 places).">
             <ApiForm

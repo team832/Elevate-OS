@@ -12,7 +12,7 @@ import { RecordTable } from '../../ui/record-table';
 import { NoticeStates } from '../../ui/task-notices';
 import type { BodyProps } from '../tasks/_components/bodies';
 import '../ops.css';
-import { inboxPage, inboxQuery } from './inbox';
+import { inboxPage, inboxQuery } from '../../server/notification-inbox';
 
 type Row = Awaited<ReturnType<typeof inboxPage>>['items'][number];
 

@@ -59,12 +59,15 @@ describe('loadEnv', () => {
 });
 
 describe('isLocalDatabaseUrl', () => {
-  it('accepts localhost and PGlite, rejects remote hosts', () => {
-    expect(isLocalDatabaseUrl('postgres://u:p@127.0.0.1:54320/elevate')).toBe(true);
-    expect(isLocalDatabaseUrl('postgres://u:p@localhost/elevate')).toBe(true);
-    expect(isLocalDatabaseUrl('pglite://memory')).toBe(true);
-    expect(isLocalDatabaseUrl('postgres://u:p@db.example.com/elevate')).toBe(false);
-  });
+  it.each([
+    ['postgres://u:p@localhost/elevate', true],
+    ['postgres://u:p@127.0.0.1:54320/elevate', true],
+    ['pglite://memory', true],
+    // node-postgres connects to ?host= instead of the address; libpq also reads ?hostaddr=.
+    ['postgres://u:p@localhost:5432/elevate?host=db.example.com', false],
+    ['postgres://u:p@127.0.0.1:54320/elevate?hostaddr=203.0.113.5', false],
+    ['postgres://u:p@db.example.com/elevate', false],
+  ])('%s is local: %s', (url, local) => expect(isLocalDatabaseUrl(url)).toBe(local));
 });
 
 describe('BOOTSTRAP_OWNER_EMAILS', () => {

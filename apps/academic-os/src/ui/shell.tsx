@@ -12,18 +12,18 @@ import {
   type Permission,
   type WorkspaceKey,
 } from '@elevate/authorization';
-import { getDb } from '@elevate/database';
-import { countUnread } from '@elevate/notifications';
-import { requirePageAccess, workspaceHrefs, type PageAccess } from '@elevate/server-kit/next';
+import { pageGate, unreadFor, workspaceHrefs, type PageAccess } from '@elevate/server-kit/next';
 import { toAppError } from '@elevate/server-kit';
 import { workNav } from '@elevate/business-ops-os/work';
 import { AppShell, ButtonLink, ErrorState, LoadingState } from '@elevate/shared-ui';
-import { MODULE } from '../domain';
+import { MODULE, modulePath } from '../domain';
 import { MODULE_PATHS } from '../server/paths';
 import type { Actor } from '../server/context';
 
 export type Section =
   | 'home'
+  | 'calendar'
+  | 'homework'
   | 'curriculum'
   | 'batches'
   | 'timetable'
@@ -41,6 +41,7 @@ export type Section =
   | 'reports'
   | 'settings'
   | 'my-attendance'
+  | 'my-payslips'
   | 'my-reports'
   | 'my-feedback'
   | 'hr-requests'
@@ -52,7 +53,8 @@ const MINE = 'My work';
 const COORDINATION = 'Coordination';
 
 /**
- * Teacher order (brief 23 Oct 2026 §7). My tasks comes from the shared Ops entry (its EOD report,
+ * Site map (Blueprint step 3, 6 Nov 2026): Today, Teaching, Coordination, My work; teacher order
+ * from the brief of 23 Oct 2026 §7. My tasks comes from the shared Ops entry (its EOD report,
  * Inbox and Reports are tabs inside Tasks); My attendance, My reports and Feedback and development
  * are HR bodies mounted here (R11). Not listed: "Resources" (no teaching-material store).
  */
@@ -76,6 +78,13 @@ const NAV: {
     label: 'My meetings',
     href: MODULE_PATHS.meetings,
     permission: 'ops:appointments:read',
+    group: 'Today',
+  },
+  {
+    key: 'calendar',
+    label: 'Calendar',
+    href: modulePath('calendar'),
+    permission: 'academic:module:access',
     group: 'Today',
   },
   {
@@ -103,16 +112,16 @@ const NAV: {
     group: WORK,
   },
   {
-    key: 'curriculum',
-    label: 'Curriculum',
-    href: MODULE_PATHS.curriculum,
-    permission: 'academic:courses:read',
-    group: WORK,
-  },
-  {
     key: 'teaching',
     label: 'Teaching logs',
     href: MODULE_PATHS.teaching,
+    permission: 'academic:classes:read',
+    group: WORK,
+  },
+  {
+    key: 'homework',
+    label: 'Homework',
+    href: modulePath('homework'),
     permission: 'academic:classes:read',
     group: WORK,
   },
@@ -125,7 +134,7 @@ const NAV: {
   },
   {
     key: 'assessments',
-    label: 'Assessments',
+    label: 'Tests and mock tests',
     href: MODULE_PATHS.assessments,
     permission: 'academic:assessments:read',
     group: WORK,
@@ -137,36 +146,12 @@ const NAV: {
     permission: 'academic:reviews:read',
     group: WORK,
   },
-  ...workNav(MODULE.basePath).flatMap((r) =>
-    r.key === 'tasks' ? [{ ...r, key: 'tasks' as const, group: MINE }] : [],
-  ),
   {
-    key: 'my-attendance',
-    label: 'My attendance',
-    href: MODULE_PATHS.myAttendance,
-    permission: 'ops:attendance:read',
-    group: MINE,
-  },
-  {
-    key: 'my-reports',
-    label: 'My reports',
-    href: MODULE_PATHS.myReports,
-    permission: 'ops:tasks:read',
-    group: MINE,
-  },
-  {
-    key: 'my-feedback',
-    label: 'Feedback and development',
-    href: MODULE_PATHS.myFeedback,
-    permission: 'ops:teacher_feedback_summaries:read',
-    group: MINE,
-  },
-  {
-    key: 'hr-requests',
-    label: 'Requests through HR',
-    href: MODULE_PATHS.hrRequests,
-    permission: 'ops:hr_requests:create',
-    group: MINE,
+    key: 'curriculum',
+    label: 'Curriculum',
+    href: MODULE_PATHS.curriculum,
+    permission: 'academic:courses:read',
+    group: WORK,
   },
   {
     key: 'teachers',
@@ -209,6 +194,44 @@ const NAV: {
     href: MODULE_PATHS.settings,
     permission: 'academic:settings:manage',
     group: COORDINATION,
+  },
+  ...workNav(MODULE.basePath).flatMap((r) =>
+    r.key === 'tasks' ? [{ ...r, key: 'tasks' as const, group: MINE }] : [],
+  ),
+  {
+    key: 'my-attendance',
+    label: 'My attendance and leave',
+    href: MODULE_PATHS.myAttendance,
+    permission: 'ops:attendance:read',
+    group: MINE,
+  },
+  {
+    key: 'my-payslips',
+    label: 'My payslips',
+    href: modulePath('my-payslips'),
+    permission: 'ops:payslips:read',
+    group: MINE,
+  },
+  {
+    key: 'my-reports',
+    label: 'My reports',
+    href: MODULE_PATHS.myReports,
+    permission: 'ops:tasks:read',
+    group: MINE,
+  },
+  {
+    key: 'my-feedback',
+    label: 'Feedback and development',
+    href: MODULE_PATHS.myFeedback,
+    permission: 'ops:teacher_feedback_summaries:read',
+    group: MINE,
+  },
+  {
+    key: 'hr-requests',
+    label: 'Requests to HR',
+    href: MODULE_PATHS.hrRequests,
+    permission: 'ops:hr_requests:create',
+    group: MINE,
   },
 ];
 
@@ -256,27 +279,14 @@ export const CURRICULUM_TABS = [
 ] as const;
 
 /** requirePageAccess with the module's login path and basePath (browser paths, D-022). */
-export function gate(permission: Permission, returnTo: string): Promise<PageAccess> {
-  return requirePageAccess(permission, {
-    loginPath: MODULE_PATHS.login,
-    returnTo,
-    basePath: MODULE.basePath,
-    workspace: MODULE.key,
-  });
-}
+export const gate = pageGate({
+  loginPath: MODULE_PATHS.login,
+  basePath: MODULE.basePath,
+  workspace: MODULE.key,
+});
 
 export function actorFor(user: AuthenticatedUser): Actor {
   return { user };
-}
-
-/** Unread in-app notifications for the top bar; null (hidden) when unknown. */
-async function unreadFor(access: PageAccess): Promise<number | null> {
-  if (!can(access.user, 'platform:notifications:read')) return null;
-  try {
-    return await countUnread(getDb(), access.user.id);
-  } catch {
-    return null;
-  }
 }
 
 /** Children render inside <Suspense> (fallback: loading). Call gate() before rendering this so the 307 is real (D-022). */
@@ -305,7 +315,7 @@ export async function AcademicShell({
           ? { action: MODULE_PATHS.students, label: 'Search students' }
           : undefined
       }
-      unreadNotifications={await unreadFor(access)}
+      unreadNotifications={await unreadFor(user)}
     >
       {access.status === 'forbidden' ? (
         <ErrorState

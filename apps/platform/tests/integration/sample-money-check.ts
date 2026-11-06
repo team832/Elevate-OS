@@ -14,7 +14,7 @@ import {
   students,
   type Database,
 } from '@elevate/database';
-import { feeStatement } from '../../../business-ops-os/src/domain/fee-statement';
+import { feeStatement } from '@elevate/business-ops-os/domain';
 import { getStudent, plansWithLedger } from '@elevate/business-ops-os/server';
 
 type Row = typeof opsFeeRecords.$inferSelect;

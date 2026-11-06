@@ -36,6 +36,20 @@ describe('checkTimetable', () => {
     expect(r.notes[0]).toMatch(/workload cap is not configured/);
   });
 
+  it.each([
+    ['coordinator', /academic unavailability record .*\(not HR leave\)/],
+    ['hr_leave', /approved HR leave/],
+  ] as const)('an unavailable teacher (%s row) is a hard clash that says where it came from', (source, message) => {
+    const r = checkTimetable({
+      sessions: [s({ id: 'a', teacherStaffId: 'T1' })],
+      exclusions: [],
+      classLengthByBatch: len75,
+      workloadCap: null,
+      unavailability: [{ staffId: 'T1', from: '2027-04-05', to: '2027-04-05', source }],
+    });
+    expect(r.hard).toEqual([expect.objectContaining({ code: 'TEACHER_UNAVAILABLE', message: expect.stringMatching(message) })]);
+  });
+
   const WORKLOAD = /workload/i;
   it.each([
     ['no cap', { workloadCap: null, classLengthByBatch: len75 }, [WORKLOAD], [/^class length$/]],

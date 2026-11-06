@@ -14,7 +14,9 @@ import { alias } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import {
   assertAllowedEmail,
+  isPortalEmail,
   loadRoles,
+  PORTAL_ROLE_KEYS,
   revokeAllSessionsForUser,
   type AuthenticatedUser,
 } from '@elevate/authentication';
@@ -30,7 +32,11 @@ export const USER_SORTS = ['name', 'email', 'created', 'last_sign_in'] as const;
 export const NO_ROLES = 'none';
 
 const roleList = z
-  .array(z.enum(ROLE_KEYS))
+  .array(
+    z.enum(ROLE_KEYS).refine((r) => !PORTAL_ROLE_KEYS.includes(r), {
+      error: 'Student and parent logins are given only from the student record (Portal access).',
+    }),
+  )
   .max(ROLE_KEYS.length)
   .transform((r) => [...new Set(r)].sort());
 
@@ -172,7 +178,7 @@ async function lockForChange(tx: Database, id: UserId) {
     .where(and(eq(userRoles.role, 'platform_admin'), eq(users.status, 'active')))
     .for('update');
   const [target] = await tx
-    .select({ id: users.id, status: users.status })
+    .select({ id: users.id, status: users.status, email: users.email })
     .from(users)
     .where(eq(users.id, id))
     .for('update');
@@ -225,6 +231,10 @@ export async function setUserRoles(
   notSelf(user, id, 'change your own roles');
   return withTransaction(db, async (tx) => {
     const { target, lastAdmin } = await lockForChange(tx, id);
+    if (isPortalEmail(target.email))
+      throw new ConflictError(
+        'This is a student or parent portal login. Its access is managed from the student record.',
+      );
     const before = await loadRoles(tx, id);
     const added = roles.filter((r) => !before.includes(r));
     const removed = before.filter((r) => !roles.includes(r));

@@ -1,6 +1,7 @@
 /**
  * OWNER: Business Ops OS — uploaded files (owner brief 23 Oct 2026 §8–§15, ruling R6). Metadata
- * only; the bytes sit in the storage adapter under `storage_key`. Access is decided by the parent
+ * in `attachments`; the bytes sit in the storage adapter under `storage_key` (the database
+ * adapter keeps them in `attachment_files`, D-135). Access is decided by the parent
  * record (`owner_kind` + `owner_id`, no FK: parents live in several tables), re-checked on every
  * download. Part of the `ops` Postgres schema, split across ops*.ts; same rules as ops.ts.
  */
@@ -8,6 +9,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  customType,
   index,
   integer,
   text,
@@ -27,6 +29,8 @@ export const OPS_ATTACHMENT_0016_OWNER_KINDS = [
   'assessment_key',
   'score_import',
 ] as const;
+/** Added in 0019: a leave letter or medical certificate on a leave application (owner, 6 Nov 2026). */
+export const OPS_ATTACHMENT_0019_OWNER_KINDS = ['leave_application'] as const;
 export const OPS_ATTACHMENT_OWNER_KINDS = [
   'task',
   'task_submission',
@@ -37,6 +41,7 @@ export const OPS_ATTACHMENT_OWNER_KINDS = [
   'work_report',
   'staff_private',
   ...OPS_ATTACHMENT_0016_OWNER_KINDS,
+  ...OPS_ATTACHMENT_0019_OWNER_KINDS,
 ] as const;
 export const OPS_ATTACHMENT_PURPOSES = [
   'reference',
@@ -106,5 +111,28 @@ export const opsAttachments = ops.table(
     ),
     check('attachments_mime_check', filled(t.mime)),
     check('attachments_storage_key_check', filled(t.storageKey)),
+  ],
+);
+
+const bytea = customType<{ data: Uint8Array }>({ dataType: () => 'bytea' });
+
+/**
+ * The bytes of uploaded files when they are kept in the database (D-135): one row per storage key
+ * (`attachments.storage_key`, a server-made UUID). No FK: the bytes are written before the
+ * metadata row (see AttachmentStorage).
+ */
+export const opsAttachmentFiles = ops.table(
+  'attachment_files',
+  {
+    key: uuid('key').primaryKey(),
+    bytes: bytea('bytes').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check(
+      'attachment_files_size_check',
+      sql`${t.sizeBytes} BETWEEN 1 AND ${sql.raw(String(OPS_ATTACHMENT_MAX_BYTES))} AND ${t.sizeBytes} = octet_length(${t.bytes})`,
+    ),
   ],
 );

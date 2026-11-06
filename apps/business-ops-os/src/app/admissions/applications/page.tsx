@@ -49,7 +49,7 @@ export default async function ApplicationsPage({
   return (
     <Frame access={access} active="applications">
       <PageHeader
-        title="Admission applications"
+        title="Applications"
         description="An application never admits anyone: only an approver's password-confirmed approval does."
         tabs={<AdmissionsNav current="applications" user={access.user} />}
       />
@@ -206,7 +206,7 @@ async function List({ user, params }: { user: AuthenticatedUser; params: Params 
                 <a href={BASE}>Clear filters</a>
               ) : (
                 <OpenLink user={user} href="/ops/admissions" fallback={null}>
-                  Open demo students
+                  Open demos
                 </OpenLink>
               )
             }

@@ -17,12 +17,25 @@ const as = (...roles: RoleKey[]) => ({
 
 describe('a workspace permission implies membership of it (HAT-001: server actions have no route gate)', () => {
   // D-073: Business Ops services these roles use from the workspace they do belong to.
-  const OWN_WORK = ['ops:attendance:read', 'ops:attendance:request', 'ops:hr_requests:create', 'ops:tasks:read', 'ops:tasks:write'];
+  const OWN_WORK = [
+    'ops:attendance:read',
+    'ops:attendance:request',
+    'ops:hr_requests:create',
+    'ops:payslips:read',
+    'ops:tasks:read',
+    'ops:tasks:write',
+  ];
   const LEADS = ['ops:lead_contacts:read', 'ops:leads:read', 'ops:leads:write'];
   const HOSTED: Partial<Record<RoleKey, string[]>> = {
     teacher: [...OWN_WORK, 'ops:appointments:read', 'ops:teacher_feedback_summaries:read'],
     marketing_contributor: [...OWN_WORK, ...LEADS],
-    marketing_manager: [...OWN_WORK, ...LEADS, 'ops:leads:assign', 'ops:leads:merge', 'ops:tasks:review'],
+    marketing_manager: [
+      ...OWN_WORK,
+      ...LEADS,
+      'ops:leads:assign',
+      'ops:leads:merge',
+      'ops:tasks:review',
+    ],
   };
 
   it.each(ROLE_KEYS)('%s', (role) => {
@@ -46,6 +59,8 @@ describe('workspacesFor (D-072: membership = a stored role granting <workspace>:
     [['teacher'], ['academic']],
     [['academic_coordinator'], ['ops', 'academic']],
     [['platform_admin'], []],
+    [['student'], []], // F4-13: the portal is no workspace
+    [['guardian'], []],
     [['director'], ['ops', 'academic', 'marketing']],
     [
       ['marketing_manager', 'operations_manager'],

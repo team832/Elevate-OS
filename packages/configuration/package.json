@@ -6,6 +6,7 @@
   "description": "zod-validated environment loader with per-app subsets; fails loudly listing every missing or invalid variable.",
   "exports": {
     ".": "./src/index.ts",
+    "./next-config": "./src/next-config.ts",
     "./node": "./src/load-root-env.ts",
     "./security-headers": "./src/security-headers.ts",
     "./workspaces": "./src/workspaces.ts"

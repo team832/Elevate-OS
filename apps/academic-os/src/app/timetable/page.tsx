@@ -28,7 +28,6 @@ import { ApiForm } from '../../ui/api-form';
 import { StateBadge, fmtClock, wordOptions, words } from '../../ui/badges';
 import { ConflictList } from '../../ui/conflicts';
 import { Filter } from '../../ui/filters';
-import { PrintButton } from '../../ui/print-button';
 import { AcademicShell, LoadError, TIMETABLE_TABS, actorFor, gate, load, sectionLabel } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
@@ -109,7 +108,6 @@ async function Body({ access, searchParams }: { access: PageAccess; searchParams
       <PageHeader
         title={sectionLabel(access.user, 'timetable')}
         description={`${week ? 'Week' : 'Agenda'} from ${fmtDay(from)} to ${fmtDay(to)} (IST). Clashes block scheduling; preferences only warn. Delivered means a teacher marked the class delivered.`}
-        actions={<PrintButton label="Print timetable" />}
         tabs={
           <Subnav
             label="Timetable views"

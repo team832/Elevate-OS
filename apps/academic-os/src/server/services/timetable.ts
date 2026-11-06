@@ -4,8 +4,10 @@
  * conflicts); preferences are returned as warnings. Nothing is auto-fixed.
  * Every write takes the timetable lock so concurrent changes cannot both pass the check.
  */
-import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import {
+  academicAssessmentBatches,
+  academicAssessments,
   academicBatchPlacements,
   academicBatches,
   academicCalendarExclusions,
@@ -128,15 +130,17 @@ export async function conflictContext(db: Database, from: string, to: string) {
     .where(and(gte(academicClassSessions.date, from), lte(academicClassSessions.date, to), inArray(academicClassSessions.status, ['scheduled', 'held'])));
   const teachers = await teachersBySession(db, rows);
   const unavailability = await db
-    .select({ staffId: academicTeacherUnavailability.staffId, from: academicTeacherUnavailability.fromDate, to: academicTeacherUnavailability.toDate })
+    .select({ staffId: academicTeacherUnavailability.staffId, from: academicTeacherUnavailability.fromDate, to: academicTeacherUnavailability.toDate, source: academicTeacherUnavailability.source })
     .from(academicTeacherUnavailability)
     .where(and(isNull(academicTeacherUnavailability.cancelledAt), lte(academicTeacherUnavailability.fromDate, to), gte(academicTeacherUnavailability.toDate, from)));
   const endedTeachers = (await db.select({ id: staffMembers.id }).from(staffMembers).where(eq(staffMembers.status, 'inactive'))).map((r) => r.id as string);
-  const placements = await db
-    .select({ studentId: academicEnrolments.studentId, batchId: academicBatchPlacements.batchId, from: academicBatchPlacements.startDate, to: academicBatchPlacements.endDate })
-    .from(academicBatchPlacements)
-    .innerJoin(academicEnrolments, eq(academicEnrolments.id, academicBatchPlacements.enrolmentId))
-    .where(and(lte(academicBatchPlacements.startDate, to), or(isNull(academicBatchPlacements.endDate), gte(academicBatchPlacements.endDate, from))));
+  const placements = await placementsBetween(db, from, to);
+  // A dated, timed test holds each eligible batch (no teacher), so batch and student overlaps fire.
+  const tests = (await datedTests(db, { from, to })).flatMap(({ a, batchIds }) =>
+    a.startTime && a.durationMinutes
+      ? batchIds.map((batchId): TimetableSession => ({ id: `test:${a.id}:${batchId}`, batchId, teacherStaffId: null, roomId: null, date: a.scheduledDate!, startTime: a.startTime!, durationMinutes: a.durationMinutes!, status: 'scheduled', sessionType: 'test', teacherStaffIds: [], testLabel: `${a.title} (${a.code})` }))
+      : [],
+  );
   const exclusions = await db
     .select()
     .from(academicCalendarExclusions)
@@ -153,6 +157,8 @@ export async function conflictContext(db: Database, from: string, to: string) {
   const cap = await getSetting(db, 'timetable.teacher_workload_cap');
   return {
     existing: rows.map((r) => toTimetableSession(r, teachers.get(r.id))),
+    /** Never in a check's focus: a test's own holiday or clash with another test is the assessment check's. */
+    tests,
     unavailability,
     endedTeachers,
     placements,
@@ -167,7 +173,7 @@ export type ConflictContext = Awaited<ReturnType<typeof conflictContext>>;
 export function checkAgainst(ctx: ConflictContext, candidates: readonly TimetableSession[], focus: readonly string[] = candidates.map((c) => c.id)) {
   const replaced = new Set(candidates.map((c) => c.id));
   return checkTimetable({
-    sessions: [...ctx.existing.filter((s) => !replaced.has(s.id)), ...candidates],
+    sessions: [...ctx.existing.filter((s) => !replaced.has(s.id)), ...ctx.tests, ...candidates],
     exclusions: ctx.exclusions,
     classLengthByBatch: ctx.classLengthByBatch,
     workloadCap: ctx.workloadCap,
@@ -327,12 +333,47 @@ export async function rescheduleSession(db: Database, actor: Actor, sessionId: s
   });
 }
 
-/** Sessions of a batch on given dates (for assessment clash checks). */
-export async function batchClassesBetween(db: Database, batchId: string, from: string, to: string) {
+/** Sessions of the batches on given dates (for assessment clash checks). */
+export async function batchClassesBetween(db: Database, batchIds: readonly string[], from: string, to: string) {
   return db
     .select()
     .from(academicClassSessions)
-    .where(and(eq(academicClassSessions.batchId, batchId as BatchId), gte(academicClassSessions.date, from), lte(academicClassSessions.date, to), inArray(academicClassSessions.status, ['scheduled', 'held'])));
+    .where(and(inArray(academicClassSessions.batchId, batchIds as BatchId[]), gte(academicClassSessions.date, from), lte(academicClassSessions.date, to), inArray(academicClassSessions.status, ['scheduled', 'held'])));
+}
+
+/** Effective-dated placements overlapping from–to (`to` null = open). */
+export const placementsBetween = (db: Database, from: string, to: string) =>
+  db
+    .select({ studentId: academicEnrolments.studentId, batchId: academicBatchPlacements.batchId, from: academicBatchPlacements.startDate, to: academicBatchPlacements.endDate })
+    .from(academicBatchPlacements)
+    .innerJoin(academicEnrolments, eq(academicEnrolments.id, academicBatchPlacements.enrolmentId))
+    .where(and(lte(academicBatchPlacements.startDate, to), or(isNull(academicBatchPlacements.endDate), gte(academicBatchPlacements.endDate, from))));
+
+const A = academicAssessments;
+const AB = academicAssessmentBatches;
+/** Not-cancelled dated tests (optionally dated from–to, or covering one of `batchIds`), each with its eligible batches, primary first. */
+export async function datedTests(db: Database, f: { from?: string; to?: string; batchIds?: readonly string[] }) {
+  const ids = f.batchIds as BatchId[] | undefined;
+  const rows = await db
+    .select({ a: A, extra: AB.batchId })
+    .from(A)
+    .leftJoin(AB, eq(AB.assessmentId, A.id))
+    .where(
+      and(
+        ne(A.status, 'cancelled'),
+        isNotNull(A.scheduledDate),
+        f.from ? gte(A.scheduledDate, f.from) : undefined,
+        f.to ? lte(A.scheduledDate, f.to) : undefined,
+        ids ? or(inArray(A.batchId, ids), inArray(A.id, db.select({ id: AB.assessmentId }).from(AB).where(inArray(AB.batchId, ids)))) : undefined,
+      ),
+    );
+  const out = new Map<string, { a: typeof A.$inferSelect; batchIds: string[] }>();
+  for (const { a, extra } of rows) {
+    const t = out.get(a.id) ?? { a, batchIds: [a.batchId as string] };
+    if (extra && !t.batchIds.includes(extra)) t.batchIds.push(extra);
+    out.set(a.id, t);
+  }
+  return [...out.values()];
 }
 
 export async function datedExclusionsFor(db: Database, batchId: string) {

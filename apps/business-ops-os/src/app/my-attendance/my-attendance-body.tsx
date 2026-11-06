@@ -20,12 +20,20 @@ import { listCorrections } from '../../server/attendance-corrections';
 import { correctionListQuery, leaveListQuery } from '../../server/attendance-schemas';
 import { staffIdForUser } from '../../server/context';
 import { leaveTypes, listLeaveApplications } from '../../server/leave-applications';
+import { readBalances } from '../../server/leave-balances';
 import { ActionForm } from '../../ui/action-form';
+import { ExportLink } from '../../ui/export-link';
 import { fmtDate, fmtMonth } from '../../ui/format';
 import { load, Section } from '../../ui/frame';
 import { listHref, Pager } from '../../ui/list-controls';
 import { Segment } from '../../ui/sections';
-import { ApplyForLeave, LeaveTable, myLeaveAction } from '../hr/attendance/_components/leave';
+import { BalanceList, balanceTitle } from '../hr/attendance/_components/allowances';
+import {
+  ApplyForLeave,
+  leaveFiles,
+  LeaveTable,
+  myLeaveAction,
+} from '../hr/attendance/_components/leave';
 import {
   AttendanceBadge,
   CorrectionsTable,
@@ -56,6 +64,10 @@ async function MyAttendance({ user, base, searchParams }: BodyProps) {
     const staffId = await staffIdForUser(db, user.id);
     if (!staffId) return null;
     const { staff, day } = await attendanceDay(db, user, staffId, today);
+    const leave = await listLeaveApplications(db, user, {
+      staffId,
+      page: leaveListQuery.safeParse({ page: searchParams.page }).data?.page,
+    });
     return {
       day,
       holidays: await upcomingHolidays(db, staff.branchId, today),
@@ -64,16 +76,18 @@ async function MyAttendance({ user, base, searchParams }: BodyProps) {
         staffId,
         page: correctionListQuery.safeParse({ page: searchParams.page }).data?.page,
       }),
-      leave: await listLeaveApplications(db, user, {
-        staffId,
-        page: leaveListQuery.safeParse({ page: searchParams.page }).data?.page,
-      }),
+      leave,
+      files:
+        searchParams.view === 'leave'
+          ? await leaveFiles(db, user, `${base}/api/v1`, leave.items)
+          : undefined,
       types: await leaveTypes(db),
+      balances: searchParams.view === 'leave' ? await readBalances(db, user, staffId) : null,
     };
   });
   const header = (
     <PageHeader
-      title="My attendance"
+      title="My attendance and leave"
       description="Your status today, your month so far, how to apply for leave, and how to ask HR to correct a day."
     />
   );
@@ -94,7 +108,7 @@ async function MyAttendance({ user, base, searchParams }: BodyProps) {
         />
       </>
     );
-  const { day, holidays, days, requests, leave, types } = result.data;
+  const { day, holidays, days, requests, leave, files, types, balances } = result.data;
   const totals = monthTotals(days.items);
   const noSchedule = totals.scheduledWorkdays === null;
   const page = `${base}/my-attendance`;
@@ -121,7 +135,12 @@ async function MyAttendance({ user, base, searchParams }: BodyProps) {
           title={`Today, ${fmtDate(today)}`}
           meta={
             day ? (
-              <AttendanceBadge status={day.status} basis={day.basis} scheduled={day.scheduled} />
+              <AttendanceBadge
+                status={day.status}
+                basis={day.basis}
+                scheduled={day.scheduled}
+                leavePart={day.leavePart}
+              />
             ) : null
           }
           actions={
@@ -174,6 +193,12 @@ async function MyAttendance({ user, base, searchParams }: BodyProps) {
         }
       >
         <p>{monthTotalsText(totals)}</p>
+        <ExportLink
+          base={base}
+          list="attendance"
+          params={{ month, mine: '1' }}
+          label="Download attendance (spreadsheet)"
+        />
         <details className="el-explain">
           <summary>How these totals are worked out</summary>
           <p>
@@ -214,11 +239,21 @@ async function MyAttendance({ user, base, searchParams }: BodyProps) {
           </div>
         ) : view === 'leave' ? (
           <div className="el-stack">
+            {balances ? (
+              <Segment
+                id="balance"
+                title={balanceTitle(balances)}
+                description="Leave HR has approved this leave year, counted against the allowance HR set. A pending application is not counted until it is approved."
+                flush
+              >
+                <BalanceList data={balances} />
+              </Segment>
+            ) : null}
             {canApply ? (
               <Segment
                 id="apply"
                 title="Apply for leave"
-                description="HR approves or rejects it and you get a notification. Leave already taken can be applied for afterwards."
+                description="HR approves or rejects it and you get a notification. Leave already taken can be applied for afterwards. To add a leave letter or medical certificate, apply first, then attach it to the application below."
               >
                 <ApplyForLeave base={base} types={types} />
               </Segment>
@@ -230,6 +265,7 @@ async function MyAttendance({ user, base, searchParams }: BodyProps) {
             <Segment title="My leave applications" flush>
               <LeaveTable
                 rows={leave.items}
+                files={files}
                 actions={(r) => myLeaveAction(base, r)}
                 empty="You have not applied for leave."
               />

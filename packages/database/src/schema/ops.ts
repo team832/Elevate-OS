@@ -395,6 +395,9 @@ export const opsEnquiries = ops.table(
     notes: text('notes'),
     /** Lead this enquiry originally belonged to, when it was moved by a merge. */
     mergedFromLeadId: uuid('merged_from_lead_id').$type<LeadId>(),
+    /** Website form (F4-15): version of the consent text the person ticked, and when. */
+    consentTextVersion: text('consent_text_version'),
+    consentAt: instant('consent_at'),
     createdBy: userRef('created_by').notNull(),
     createdAt: createdAt(),
   },
@@ -402,6 +405,10 @@ export const opsEnquiries = ops.table(
     index('enquiries_lead_idx').on(t.leadId),
     index('enquiries_received_idx').on(t.receivedAt),
     check('enquiries_interest_mode_check', sql`${t.interestMode} IN ${inList(OPS_INTEREST_MODES)}`),
+    check(
+      'enquiries_consent_check',
+      sql`(${t.consentTextVersion} IS NULL) = (${t.consentAt} IS NULL) AND length(trim(coalesce(${t.consentTextVersion}, 'x'))) > 0`,
+    ),
   ],
 );
 

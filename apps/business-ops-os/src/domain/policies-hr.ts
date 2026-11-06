@@ -19,6 +19,18 @@ export const FEEDBACK_TEACHER_VISIBILITY = [
   'approved_summaries_and_comments',
   'nothing',
 ] as const;
+/** Staff roles setting hr.approval_cover may name (portal, admin and auditor logins never cover). */
+export const COVER_ROLES = [
+  'operations_manager',
+  'hr_manager',
+  'finance_officer',
+  'director',
+  'academic_coordinator',
+  'admissions_counsellor',
+  'teacher',
+  'marketing_manager',
+  'marketing_contributor',
+] as const;
 export const PEER_DISCUSSION_MODES = ['hr_and_reviewer_only', 'allowed'] as const;
 export const TASK_REOPENERS = [
   'reviewer',
@@ -32,15 +44,12 @@ export const hrSettingSchemas = {
   'tasks.completion_without_reviewer': z
     .object({ closedBy: z.enum(['owner', 'manager']) })
     .strict(),
-  /** EOD submission deadline, IST `HH:MM`; null = none (brief 2 §9: no invented deadline). */
-  'eod.submission_deadline': z
-    .object({
-      time: z
-        .string()
-        .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-        .nullable(),
-    })
-    .strict(),
+  /** EOD submission deadline, IST `HH:MM`; null = none (F4-11: Proposed 20:00). */
+  'eod.submission_deadline': z.object({ time: hhmm.nullable() }).strict(),
+  /** F4-11: days after the deadline a day report may still be filed first; null = no limit. */
+  'eod.late_filing_window': z.object({ days: z.int().min(0).max(30).nullable() }).strict(),
+  /** F4-11: minutes before the deadline the task-reminders job reminds; null = no reminder. */
+  'eod.deadline_reminder': z.object({ minutesBefore: z.int().min(5).max(720).nullable() }).strict(),
   /** Which earlier EOD reports a manager may read (ruling R3; brief 2 §17). */
   'eod.manager_history': z
     .object({ scope: z.enum(['submitted_to_manager', 'current_team_all']) })
@@ -52,12 +61,14 @@ export const hrSettingSchemas = {
   'hr.staff_scope_departments': z
     .object({ departmentCodes: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{1,39}$/)).max(40) })
     .strict(),
-  /** The names staff choose from when they apply for leave. No balances (owner decision 2026-10-31). */
+  /** The names staff choose from when they apply for leave; balances per type in policies-leave.ts. */
   'hr.leave_types': z
     .object({ types: z.array(z.string().trim().min(1).max(40)).min(1).max(20) })
     .strict(),
   /** Roles that approve leave, each within its usual reach of staff. */
   'hr.leave_approver': z.object({ who: z.array(z.enum(LEAVE_APPROVERS)).min(1) }).strict(),
+  /** Roles whose holders may be named as approval cover while an approver is away (F4-10). */
+  'hr.approval_cover': z.object({ roles: z.array(z.enum(COVER_ROLES)).min(1) }).strict(),
   'hr.attendance.late_grace_minutes': z.object({ minutes: z.int().min(0).max(240) }).strict(),
   'hr.attendance.half_day_hours': z.object({ hours }).strict(),
   'hr.attendance.full_day_hours': z.object({ hours }).strict(),
@@ -135,11 +146,31 @@ export const HR_SETTING_DEFINITIONS: DefinitionsFor<typeof hrSettingSchemas> = {
   'eod.submission_deadline': {
     label: 'End-of-day report deadline',
     description:
-      'Time (IST) by which the day’s report should be submitted. Not set: no deadline is shown or enforced, and a late or missing report is never treated as absence.',
-    defaultValue: { time: null },
-    defaultState: 'open',
-    source: 'owner brief 2 2026-10-21 §9 ("no invented fixed deadline").',
-    ownerDecision: 'Owner to decide whether there is a deadline',
+      'Time (IST) by which the day’s report should be submitted; one sent later shows "Submitted later". Not set: no deadline is shown, and the day’s end counts instead. A late or missing report is never treated as absence.',
+    defaultValue: { time: '20:00' },
+    defaultState: 'proposed',
+    source: 'owner request 2026-11-06 (F4-11: deadline 20:00 IST).',
+    ownerDecision: 'F4-11: owner to confirm the deadline',
+    editable: true,
+  },
+  'eod.late_filing_window': {
+    label: 'Late filing window for end-of-day reports',
+    description:
+      'Days after the deadline (or, with no deadline, after the day ends) in which a day’s report can still be filed. After that the report is refused and the person is told when the window closed. A report sent back for changes or more detail can always be resubmitted. Not set: no limit.',
+    defaultValue: { days: 2 },
+    defaultState: 'proposed',
+    source: 'owner request 2026-11-06 (F4-11: late filing window 2 days).',
+    ownerDecision: 'F4-11: owner to confirm the window',
+    editable: true,
+  },
+  'eod.deadline_reminder': {
+    label: 'End-of-day report reminder',
+    description:
+      'Minutes before the deadline at which the "Send task reminders" job reminds, inside Elevate OS, each active person with a scheduled workday (HR attendance) whose report for the day is not yet submitted. Once a day per person; nothing is sent while that job is off. Not set: no reminder.',
+    defaultValue: { minutesBefore: 60 },
+    defaultState: 'proposed',
+    source: 'owner request 2026-11-06 (F4-11: reminder 60 minutes before).',
+    ownerDecision: 'F4-11: owner to confirm the reminder time',
     editable: true,
   },
   'eod.manager_history': {
@@ -175,7 +206,7 @@ export const HR_SETTING_DEFINITIONS: DefinitionsFor<typeof hrSettingSchemas> = {
   'hr.leave_types': {
     label: 'Leave types',
     description:
-      'What staff choose from when they apply for leave. Renaming one does not change applications already made. There are no leave balances.',
+      'What staff choose from when they apply for leave. Renaming one does not change applications already made, and a renamed type starts with no allowance (HR attendance, Leave allowances).',
     defaultValue: { types: ['Casual', 'Sick', 'Earned', 'Unpaid'] },
     defaultState: 'proposed',
     source: 'owner decision 2026-10-31 (leave applications; no balances, entitlements or accrual).',
@@ -185,11 +216,21 @@ export const HR_SETTING_DEFINITIONS: DefinitionsFor<typeof hrSettingSchemas> = {
   'hr.leave_approver': {
     label: 'Who approves leave',
     description:
-      'Roles that approve or reject leave applications and are told about new ones. An HR manager reaches the staff HR manages (setting "Staff HR manages"); an operations manager reaches everyone. Nobody decides their own.',
+      'Roles that approve or reject leave applications, are told about new ones, and record leave directly. An HR manager reaches the staff HR manages (setting "Staff HR manages"); an operations manager reaches everyone. Nobody decides their own.',
     defaultValue: { who: ['hr_manager', 'operations_manager'] },
     defaultState: 'proposed',
     source: 'owner decision 2026-10-31 (the HR manager approves; operations manager as HR today).',
     ownerDecision: 'Owner to confirm who approves leave',
+    editable: true,
+  },
+  'hr.approval_cover': {
+    label: 'Who may be named as approval cover',
+    description:
+      'While someone who approves leave, handles requests to HR or approves fee discounts and waivers is away, they may name an active staff member with one of these roles to decide those items for them, on dates they choose. The cover still needs their own access to the page; decisions are recorded on behalf of the approver.',
+    defaultValue: { roles: ['operations_manager', 'hr_manager', 'finance_officer'] },
+    defaultState: 'proposed',
+    source: 'FEATURES-W4 F4-10 (6 Nov 2026): active staff with an Ops or HR role.',
+    ownerDecision: 'Owner to confirm who may be named as cover',
     editable: true,
   },
   'hr.attendance.late_grace_minutes': {

@@ -3,7 +3,7 @@ import { MODULE } from '../../domain';
 import { AcademicShell, gate } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'My attendance' };
+export const metadata = { title: 'My attendance and leave' };
 
 /** Your own staff attendance, kept by HR (brief §12, D-073); separate from student attendance and classes taught. */
 export default async function MyAttendancePage({

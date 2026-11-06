@@ -20,6 +20,8 @@ import {
   type WorkspaceKey,
 } from '@elevate/authorization';
 import { appOrigin } from '@elevate/configuration/workspaces';
+import { getDb } from '@elevate/database';
+import { countUnread } from '@elevate/notifications';
 import { MODULE_KEYS, MODULES, type ModuleKey } from '@elevate/shared-types';
 import { toAppPath } from './paths';
 
@@ -78,6 +80,22 @@ export async function requirePageAccess(
   return can(user, permission)
     ? { status: 'allowed', user, modules }
     : { status: 'forbidden', user, modules };
+}
+
+/** A module app's `gate(permission, returnTo)`: `requirePageAccess` with its fixed options. */
+export const pageGate =
+  (app: Omit<PageAccessOptions, 'returnTo'>) =>
+  (permission: Permission, returnTo: string): Promise<PageAccess> =>
+    requirePageAccess(permission, { ...app, returnTo });
+
+/** Unread in-app notifications for the top bar; null (indicator hidden) when not allowed or unknown. */
+export async function unreadFor(user: AuthenticatedUser): Promise<number | null> {
+  if (!can(user, 'platform:notifications:read')) return null;
+  try {
+    return await countUnread(getDb(), user.id);
+  } catch {
+    return null;
+  }
 }
 
 /**

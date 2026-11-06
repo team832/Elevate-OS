@@ -24,7 +24,7 @@ import {
   periodOf,
   reviewTurnaround,
 } from '../domain/work-report';
-import { deadlineInstant, isOverdue } from '../domain/staff-tasks';
+import { deadlineInstant, EOD_EDITABLE, EOD_SENT_BACK, isOverdue } from '../domain/staff-tasks';
 import { accessScope, managedStaffIds, staffIdForUser, type Actor } from './context';
 import { attendanceStaff, deriveDays } from './attendance';
 import { taskHistory } from './eod-facts';
@@ -267,7 +267,7 @@ export async function periodReport(
       detail: e.reason,
     })),
   ].filter((d, i, all) => all.findIndex((x) => x.taskId === d.taskId && x.what === d.what) === i);
-  const pending = eodRows.filter((r) => r.status === 'revision_requested');
+  const pending = eodRows.filter((r) => r.status !== 'draft' && EOD_EDITABLE.includes(r.status));
   const requests = pending.length
     ? await db
         .select({ reportId: reviewEvents.reportId, at: max(reviewEvents.createdAt) })
@@ -278,7 +278,7 @@ export async function periodReport(
               reviewEvents.reportId,
               pending.map((r) => r.id),
             ),
-            eq(reviewEvents.kind, 'revision_requested'),
+            inArray(reviewEvents.kind, EOD_SENT_BACK),
           ),
         )
         .groupBy(reviewEvents.reportId)

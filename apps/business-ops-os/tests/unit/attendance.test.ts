@@ -8,6 +8,7 @@ import {
   isNoScheduleDay,
   monthTotals,
   monthTotalsText,
+  shownStatus,
   summariseDays,
   type DayInput,
   type Punch,
@@ -153,6 +154,20 @@ describe('deriveDay', () => {
     }
     expect(after.firstIn).toEqual(ist(MON, '09:00')); // raw facts still shown
   });
+
+  // C3-2: leave approved after HR said Absent replaces it; Present or Half day vs leave is C3-3 (owner).
+  it.each([
+    ['absent', 'on_leave', 'computed', 1],
+    ['present', 'present', 'hr_decision', 0],
+    ['half_day', 'half_day', 'hr_decision', 0],
+  ] as const)('approved leave over an HR "%s" shows %s', (decided, status, basis, leave) => {
+    const d = deriveDay(
+      day({ onLeave: true, decision: { status: decided, note: 'Sample' } }),
+      RULES,
+    );
+    expect(d).toMatchObject({ status, basis });
+    expect(monthTotals([d])).toMatchObject({ leave, confirmedAbsences: 0 });
+  });
 });
 
 describe('punchesByDay', () => {
@@ -199,6 +214,7 @@ describe('summariseDays and reviewReasons', () => {
       present: 1,
       halfDays: 1,
       leave: 1,
+      halfDayLeave: 0,
       holidays: 1,
       confirmedAbsences: 1,
       unmarked: 1,
@@ -343,8 +359,32 @@ describe('month totals', () => {
       [{}, {}, { punches: FULL }, { onLeave: true }, { holiday: true }, { date: SUN }],
       '4 working days so far: 1 present, 0 half days, 1 on leave, 2 unmarked, 0 absences confirmed by HR. Also 1 holiday and 1 weekly off.',
     ],
+    [
+      'a half day of leave is a day on leave, and says so',
+      [{ onLeave: true, leavePart: 'first_half' }, { onLeave: true }, { punches: FULL }],
+      '3 working days so far: 1 present, 0 half days, 2 on leave (1 of them a half day), 0 unmarked, 0 absences confirmed by HR.',
+    ],
     ['one day with no schedule', [{ pattern: null }], 'Working days: cannot tell without a work schedule: 0 present, 0 half days, 0 on leave, 0 absences confirmed by HR. 1 day with no schedule is left out of these totals.'],
   ] as [string, Partial<DayInput>[], string][])('%s', (_, inputs, text) => {
     expect(monthTotalsText(monthTotals(inputs.map((i) => deriveDay(day(i), RULES))))).toBe(text);
+  });
+});
+
+// F4-12: half-day leave shows as "Half day leave" and counts once, among the days on leave.
+describe('half-day leave', () => {
+  it.each([
+    ['first half, no punches', { onLeave: true, leavePart: 'first_half' }, 'on_leave', 'first_half', 'half_day_leave'],
+    ['second half, worked the morning', { onLeave: true, leavePart: 'second_half', punches: [p('09:00', 'in'), p('13:00', 'out')] }, 'on_leave', 'second_half', 'half_day_leave'],
+    ['whole day', { onLeave: true }, 'on_leave', null, 'on_leave'],
+    ['a day part without leave means nothing', { leavePart: 'first_half' }, 'unmarked', null, 'unmarked'],
+    ['HR "Present" still wins (C3-3)', { onLeave: true, leavePart: 'first_half', decision: { status: 'present', note: 'Sample' } }, 'present', 'first_half', 'present'],
+  ] as const)('%s', (_, over, status, leavePart, shown) => {
+    const d = deriveDay(day(over as Partial<DayInput>), RULES);
+    expect(d).toMatchObject({ status, leavePart });
+    expect(shownStatus(d)).toBe(shown);
+    expect(summariseDays([d])).toMatchObject({
+      leave: status === 'on_leave' ? 1 : 0,
+      halfDayLeave: shown === 'half_day_leave' ? 1 : 0,
+    });
   });
 });

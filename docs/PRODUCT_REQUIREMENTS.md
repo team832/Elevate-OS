@@ -53,7 +53,8 @@ The legacy "Accounts Officer" role has no D-008 equivalent. Whether one is neede
 
 ### 1.3 In scope and out of scope
 - **In scope:** identity and sessions, roles and permissions, audit, approvals, notifications (in-app), the integration outbox and summaries, the programme catalogue and staff directory as core tables, the legacy import framework, consent records, adapter status.
-- **Out of scope (D-015, narrowed by D-028 on 19 Oct 2026: HR records, recruitment, staff attendance, leave and compensation records are now in scope, see `apps/business-ops-os/requirements/REQUIREMENTS.md` OPS-030 to OPS-079):** payroll runs, biometric device integration, HRIS and legal employment records, parent or student portals, the public website, AI content generation, and staff leave (pending OD-026).
+- **Brought into scope by the owner:** HR records, recruitment, staff attendance, leave and compensation records (D-028, 19 Oct 2026; `apps/business-ops-os/requirements/REQUIREMENTS.md` OPS-030 to OPS-079); staff leave applications (D-126, answers OD-026); on 6 Nov 2026 leave balances and half days (D-149), payroll runs and payslips (D-151), a read-only student and parent portal (D-150) and a website enquiry form (D-152).
+- **Still out of scope (D-015):** statutory PF, ESI and TDS calculation (only as owner-defined payroll components), biometric device integration, HRIS and legal employment records, the public website itself, and AI content generation.
 
 ### 1.4 Functional requirements
 

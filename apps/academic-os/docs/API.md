@@ -281,3 +281,29 @@ Pages: `/academic/hr-requests`.
 - `/academic/enrolments`: tab counts and the total cover every enrolment, rows stop at 2,000 with words on the page (RVD-002). `/academic/reviews/new`: the student picker says when it stops at 1,000 (RVD-007).
 - Every record page reached with a stale or wrong id has a heading, a reason and a back link, not a bare "Not found".
 - `/academic/settings` edits through `SettingFields` (D-130). `PUT settings/{key}` is unchanged.
+
+## 13. Added on 6 Nov 2026 (D-134, D-140, D-142 … D-145, D-151; on no package; no browser check)
+Rules: `ALGORITHMS.md` "Added on 6 Nov 2026". CSV downloads use `csvResponse` and are audited with counts only.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET, POST | `/academic/api/v1/homework?batchId&from&to[&format=csv]` | GET `academic:classes:read`; POST `academic:classes:record` | GET: homework with counts (teachers: batches they teach; list stops at 500 and says "first 500 of N"; the CSV has every row). POST `{ batchId, title, subjectId?, chapterId?, classRecordId? (teaching-log entry it was copied from), setOn, dueOn (≥ setOn), instructions?, teacherStaffId? (coordinators only) }` → 201; a batch outside a teacher's scope is 404 (D-142) |
+| GET | `/academic/api/v1/homework/{id}[?format=csv]` | `academic:classes:read` | One homework with its students and marks (`null` = not marked yet); out of scope 404 (D-142) |
+| PUT | `/academic/api/v1/homework/{id}/marks` | `academic:classes:record` | `{ marks: [{ studentId, status: submitted\|late\|not_submitted\|excused, remark? }] }` (1–500, each student once); students left out stay as they are. 409 once cancelled (D-142) |
+| POST | `/academic/api/v1/homework/{id}/cancel` | `academic:classes:record` | `{ reason }`: kept, never deleted; marks can no longer change (D-142) |
+| GET | `/academic/api/v1/homework/completion?batchId&from&to[&format=csv]` | `academic:classes:read` | Completion by batch and by teacher over every homework due in the window (default the last 30 days, IST; cancelled left out; no cap) (D-142) |
+| POST | `/academic/api/v1/placements/bulk-transfer` | `academic:enrolments:decide` | `{ fromBatchId, toBatchId, effectiveDate, reason, enrolmentIds (1–500) }`: all or none in one transaction. → `{ moved: [{ enrolmentId, studentName, ended, placement, keptOff }], catchUp }`. 409 "Nothing was saved: N of M students cannot move." with `details: [{ enrolmentId, message }]` (D-144) |
+| (changed) | `POST /placements/transfer` | as before | Also moves the student's untouched rows on future roster-managed tests; answers `keptOff` (test codes whose row was removed by hand and stays off) (D-144) |
+| POST | `/academic/api/v1/assessments/{id}/admit-cards` | `academic:assessments:write` | `{ action: "roll_numbers" }` or `{ action: "venue", venue: <room id>\|"online"\|"not_set", instructions? }`. 409 "Take the roster first…" or "This test is cancelled." (D-140) |
+| GET | `/academic/api/v1/attendance-register?batchId&month=YYYY-MM` | `academic:attendance:read` (teacher scope as the attendance report) | One batch's month as CSV: P, L, PT, A, E; blank = not recorded (never counted absent); NP = not placed that day; delivered classes only |
+| GET | `/academic/api/v1/exports/{list}`, `/academic/api/v1/payslips/{id}/pdf` | as in Business Operations | Mounted from `workRoutes` (`apps/business-ops-os/docs/API.md` "Routes added or changed on 6 Nov 2026") (D-151) |
+| GET | `/academic/api/internal/v1/absences?from&to` | internal, caller `ops` | `academic.absences` v1: one row per class mark `absent` (not late, excused, partial or unmarked) on a class in the window that was not cancelled or rescheduled; no names or contacts; at most 92 days (D-143) |
+| GET, POST | `/academic/api/internal/v1/assessments/{id}/admit-cards` | internal, caller `ops` (POST is a write route: acting user audited) | GET `academic.admit_cards` v1 (test, venue, instructions, roster with roll numbers). POST takes the same body as the coordinators' route (D-140) |
+| POST | `/academic/api/internal/v1/teacher-unavailability/hr-leave` | internal write, caller `ops` | `{ opsLeaveRecordId, staffId, fromDate, toDate, status: approved\|cancelled }`: one availability record per Ops leave record (`source = hr_leave`); repeats change nothing; a cancel that arrives first is stored cancelled. No leave type or reason is sent (D-134) |
+
+**Changed behaviour (no new route).**
+- Test writes (create, or an edit that moves its date or time; also the Business Operations test routes through the internal API) take the timetable lock first and refuse (409 "<code> clashes with the timetable, so nothing was saved.") a test that overlaps a class or another test of its batches, or of another batch that shares a student. Class writes refuse a class over such a test, and the message names the test. A test-type class of the same batch at its own test time is not a clash, in either order. Holiday, minimum gap and prerequisite stay warnings (owner question).
+- A coordinator cannot withdraw an availability record that came from HR leave (409: HR cancels the leave in Business Operations).
+- `GET /academic/api/internal/v1/assessments` is read by the Business Operations calendar with `from` and `to`, up to 10 pages of 100 per view (D-145).
+
+Pages: `/academic/calendar` (D-145), `/academic/homework` (+ `/new`, `/{id}`, `/completion`), `/academic/batches/{id}/move` (bulk move; select all, confirm, printable result), `/academic/my-payslips`. Every page prints.

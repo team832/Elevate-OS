@@ -2,7 +2,7 @@ import { Frame, gate } from '../../ui/frame';
 import { HrRequestsBody } from './hr-requests-body';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Requests through HR' };
+export const metadata = { title: 'Requests to HR' };
 
 export default async function HrRequestsPage({
   searchParams,

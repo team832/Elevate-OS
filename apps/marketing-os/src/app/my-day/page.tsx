@@ -23,7 +23,7 @@ import { PersonalTiles } from '../../ui/overview';
 import { MarketingPage, Section, type SearchParams } from '../../ui/shell';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'My Day' };
+export const metadata: Metadata = { title: 'My day' };
 
 export default async function MyDayPage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -31,7 +31,7 @@ export default async function MyDayPage({ searchParams }: { searchParams: Search
       permission="marketing:module:access"
       path={modulePath('my-day')}
       active="my-day"
-      title="My Day"
+      title="My day"
       description="Your tasks, calendar items, follow-ups and end-of-day report for today (IST)."
       actions={<a href={modulePath('my-attendance')}>My attendance</a>}
       searchParams={await searchParams}
@@ -54,8 +54,8 @@ async function MyDay({ user }: { user: AuthenticatedUser }) {
       ? listTasks(db, user, taskListQuery.parse({ staffId, ...q }), LIST).then((r) => r.rows)
       : Promise.resolve([]);
   const leadsOk = can(user, 'ops:leads:read');
-  // The last 30 days (late items) to 7 days ahead; the calendar link opens the same window.
-  const window = { from: addDays(toIsoDate(), -30), to: addDays(toIsoDate(), 7) };
+  // Open items up to 7 days ahead, however late: a missed date stays here until it is resolved.
+  const to = addDays(toIsoDate(), 7);
   const toContactFilter = {
     ownerStaffId: staffId ?? undefined,
     anyFlag: ['awaiting_contact', 'overdue', 'due_today'] as const,
@@ -68,8 +68,7 @@ async function MyDay({ user }: { user: AuthenticatedUser }) {
       tasks({ status: 'in_review' }),
       staffId && can(user, 'marketing:calendar:read')
         ? listCalendarItems(db, {
-            from: istMidnightUtc(window.from),
-            to: istMidnightUtc(addDays(window.to, 1)),
+            to: istMidnightUtc(addDays(to, 1)),
             ownerStaffId: staffId,
             due: true,
           })
@@ -78,6 +77,10 @@ async function MyDay({ user }: { user: AuthenticatedUser }) {
       leadsOk && staffId ? leadCounts(db, user, toContactFilter) : null,
     ]);
   const now = new Date();
+  // The link opens the same items: from the oldest one's day. shortcut: the calendar list spans
+  // at most 366 days, so an item later than that shows here only; page the list if that happens.
+  const oldest = calendar?.[0]?.plannedAt;
+  const window = { from: oldest ? toIsoDate(oldest) : toIsoDate(), to };
   const states = CONTENT_STATES.filter((s) => s !== 'archived');
   return (
     <div className="el-stack">
@@ -104,7 +107,7 @@ async function MyDay({ user }: { user: AuthenticatedUser }) {
       {calendar ? (
         <Card
           title={`Calendar items due (${calendar.length})`}
-          description="Calendar items you own, not yet published or cancelled, planned in the last 30 days or the next 7 (IST)."
+          description="Calendar items you own, not yet published or cancelled, planned up to 7 days ahead or for an earlier date, however late (IST)."
           actions={
             <a href={calendarListHref({ ...window, owner: staffId ?? undefined, due: true })}>
               Open in the calendar
@@ -118,7 +121,7 @@ async function MyDay({ user }: { user: AuthenticatedUser }) {
             empty={
               <EmptyState
                 title="Nothing of yours is due"
-                description="Plan an item on the Marketing Calendar, or pick up an approved idea."
+                description="Plan an item on the Marketing calendar, or pick up an approved idea."
               />
             }
             columns={[

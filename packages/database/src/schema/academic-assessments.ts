@@ -25,7 +25,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { BatchId, Brand, StaffMemberId, StudentId, UserId } from '@elevate/shared-types';
 import { academic, createdAt, inList, updatedAt } from './academic-columns';
-import { academicBatches, academicStudents } from './academic';
+import { academicBatches, academicRooms, academicStudents, type AcademicRoomId } from './academic';
 import { academicSubjects, type AcademicSubjectId } from './academic-curriculum';
 import { staffMembers, users } from './core';
 
@@ -112,6 +112,13 @@ export const academicAssessments = academic.table(
     maxMarks: marks('max_marks'),
     /** Set when the roster was snapshotted: from then on academic.assessment_roster is the population. */
     rosterSnapshotAt: timestamp('roster_snapshot_at', { withTimezone: true }),
+    /** Admit cards (F4-03): the room, or online; neither = "Venue not set". */
+    venueRoomId: uuid('venue_room_id')
+      .references(() => academicRooms.id, { onDelete: 'restrict' })
+      .$type<AcademicRoomId>(),
+    venueOnline: boolean('venue_online').notNull().default(false),
+    /** Admit-card instructions for this test; null = the default text (setting, Proposed). */
+    admitCardInstructions: text('admit_card_instructions'),
     isSample: boolean('is_sample').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -140,6 +147,7 @@ export const academicAssessments = academic.table(
       'assessments_minutes_positive',
       sql`(${t.durationMinutes} IS NULL OR ${t.durationMinutes} > 0) AND (${t.discussionMinutes} IS NULL OR ${t.discussionMinutes} >= 0)`,
     ),
+    check('assessments_venue_check', sql`NOT (${t.venueOnline} AND ${t.venueRoomId} IS NOT NULL)`),
     check(
       'assessments_start_time_format',
       sql`${t.startTime} IS NULL OR ${t.startTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,

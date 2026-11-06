@@ -1,5 +1,10 @@
 import { defineRoute } from '@elevate/server-kit';
-import { inboxPage, inboxQuery, markRead, markReadBody } from '../../../notifications/inbox';
+import {
+  inboxPage,
+  inboxQuery,
+  markRead,
+  markReadBody,
+} from '../../../../server/notification-inbox';
 
 export const dynamic = 'force-dynamic';
 

@@ -69,7 +69,7 @@ beforeAll(async () => {
 describe('HR queue', () => {
   it('tabs with counts from the same query and the "Recipient not set up" badge', async () => {
     const page = await html(hr, <HrQueuePage {...sp()} />);
-    expect(page).toContain('Staff requests');
+    expect(page).toContain('Requests from staff');
     for (const label of ['New', 'In review', 'Forwarded', 'Closed']) expect(page).toContain(label);
     expect(page).toMatch(/New[\s\S]*?1/);
     expect(page).toContain('Sample for Schar');

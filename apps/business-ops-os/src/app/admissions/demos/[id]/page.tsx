@@ -42,7 +42,7 @@ async function Record({ user, id }: { user: AuthenticatedUser; id: string }) {
       <PageHeader
         title={d.studentName}
         meta={<DemoMeta d={d} />}
-        description={<a href="/ops/admissions">Back to demo students</a>}
+        description={<a href="/ops/admissions">Back to demos</a>}
         actions={
           <DemoActions d={d} user={user} convertHref={`/ops/admissions/demos/${id}/convert`} />
         }

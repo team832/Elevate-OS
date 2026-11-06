@@ -6,13 +6,16 @@
  * employment exits the profile, makes the staff record inactive and disables the login with
  * its sessions; tasks, attendance, logs and reviews stay as they were.
  */
-import { and, eq, exists, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNull, or, sql } from 'drizzle-orm';
 import { loadRoles, revokeAllSessionsForUser } from '@elevate/authentication';
 import {
   branches,
   departments,
+  opsFollowUps,
   opsHrRequestEvents,
   opsHrRequests,
+  opsLeads,
+  opsLeadStages,
   opsStaffDepartments,
   opsStaffManagerHistory,
   opsStaffPrivateDetails,
@@ -41,6 +44,7 @@ import type {
   privateDetailsBody,
 } from './hr-schemas';
 import { scopedStaff } from './hr-staff';
+import { leaverOpenRecords } from './hr-staff-records';
 import { fieldError, notifyOthers, opsAudit, rowById } from './ops-common';
 import { assertManager } from './organisation';
 import { linkOr } from './task-links';
@@ -355,15 +359,37 @@ async function tellWhoCanAct(
       ),
     ),
   );
+  // Open lead: not merged, at no stage yet or at an open one (not converted, lost or parked).
+  const leads = await tx.$count(
+    opsLeads,
+    and(
+      eq(opsLeads.ownerStaffId, staff.id as StaffMemberId),
+      isNull(opsLeads.mergedIntoLeadId),
+      or(
+        isNull(opsLeads.stageKey),
+        inArray(
+          opsLeads.stageKey,
+          tx.select({ key: opsLeadStages.key }).from(opsLeadStages).where(eq(opsLeadStages.kind, 'open')),
+        ),
+      ),
+    ),
+  );
+  const followUps = await tx.$count(
+    opsFollowUps,
+    and(eq(opsFollowUps.ownerStaffId, staff.id as StaffMemberId), eq(opsFollowUps.status, 'open')),
+  );
   const of = (n: number, what: string) => (n ? `${n} ${what}${n === 1 ? '' : 's'}` : null);
   const held = [
     of(tasks, 'open task'),
     of(forwarded, 'request forwarded to them'),
+    of(leads, 'open lead'),
+    of(followUps, 'open follow-up'),
     teaching === null
       ? 'teaching assignments that could not be read (Academic OS did not answer)'
       : teaching.length
         ? `${of(teaching.length, 'teaching assignment')}: ${teaching.join('; ')}`
         : null,
+    ...(await leaverOpenRecords(tx, staff.id)), // F4-09: unreturned assets, open leaving items
   ].filter(Boolean);
   if (!held.length) return;
   const input = {

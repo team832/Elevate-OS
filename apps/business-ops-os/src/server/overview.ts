@@ -4,8 +4,9 @@
  * the figure. A block that fails is `{ ok: false }` on its own; Academic and Marketing come from
  * their summary contracts and say "source unavailable", never 0. Aggregates only.
  */
+import { count } from 'drizzle-orm';
 import { can, type Permission } from '@elevate/authorization';
-import type { Database } from '@elevate/database';
+import { opsLeads, staffMembers, type Database } from '@elevate/database';
 import { addDays, daysBetween, isIsoDate, istToday, type IsoDate, type KpiWindow } from '../domain';
 import { reviewsAuthored } from './academic-reviews';
 import { marksReader } from './academic-summary';
@@ -154,3 +155,12 @@ export async function buildOverview(
   };
 }
 export type Overview = Awaited<ReturnType<typeof buildOverview>>;
+
+/** Staff and lead counts behind the Overview's first-jobs list on a new system (HUS-015). */
+export async function firstJobCounts(db: Database) {
+  const [[staff], [leads]] = await Promise.all([
+    db.select({ n: count() }).from(staffMembers),
+    db.select({ n: count() }).from(opsLeads),
+  ]);
+  return { staff: staff?.n ?? 0, leads: leads?.n ?? 0 };
+}

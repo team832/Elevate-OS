@@ -16,13 +16,15 @@ import {
   opsFeeInstalments,
   opsFeePlans,
   opsFeeRecords,
+  opsLeads,
+  students,
   type Database,
   type OpsFeeInstalmentId,
   type OpsFeePlanId,
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
 import { ValidationError } from '@elevate/shared-contracts';
-import type { AdmissionId, StudentIdentityId } from '@elevate/shared-types';
+import type { AdmissionId, StudentIdentityId, UserId } from '@elevate/shared-types';
 import { istToday } from '../domain';
 import { planTotals, versionChain } from '../domain/fee-plans';
 import { acceptedVersions } from '../domain/fee-year';
@@ -44,6 +46,7 @@ import {
 import { lockAccessible } from './admissions';
 import { accessScope, clean, nextCode, type Actor } from './context';
 import { opsAudit } from './ops-common';
+import { issueReceiptInTx } from './receipts';
 import { loadSettings } from './settings';
 
 export type FeeRecordRow = typeof opsFeeRecords.$inferSelect;
@@ -61,9 +64,12 @@ export async function recordsOf(db: Database, admissionId: string) {
 
 /** The record DTO: user names and the "manually recorded" marker. */
 export function present(r: FeeRecordRow, names: Map<string, string>) {
+  const by = names.get(r.recordedBy) ?? null;
   return {
     ...r,
-    recordedByName: names.get(r.recordedBy) ?? null,
+    // Approval cover (F4-10): every screen showing who recorded it says for whom.
+    recordedByName:
+      by && r.onBehalfOf ? `${by} on behalf of ${names.get(r.onBehalfOf) ?? 'an approver'}` : by,
     verifiedByName: r.verifiedBy ? (names.get(r.verifiedBy) ?? null) : null,
     voidedByName: r.voidedBy ? (names.get(r.voidedBy) ?? null) : null,
     manuallyRecorded: true as const,
@@ -76,7 +82,6 @@ export function issuesError(issues: readonly FeeIssue[]) {
   });
 }
 
-export const optText = (max: number) => z.string().trim().max(max).nullish();
 /** Amount as integer paise or rupee text (parsed without floating point). */
 export const amountFields = {
   amountPaise: z.int().nullish(),
@@ -149,6 +154,8 @@ export interface FeeEntryInput {
   planId?: string | null;
   instalmentId?: string | null;
   reversesRecordId?: string | null;
+  /** Approval cover (F4-10): the approver a cover posts a reduction for; set by the server only. */
+  onBehalfOf?: UserId | null;
 }
 
 /** An instalment is recorded through its agreement, which must be this admission's and in force. */
@@ -271,6 +278,21 @@ export async function recordFeeEntry(
   requestId?: string,
   now: Date = new Date(),
 ) {
+  // Lock the student (C1-2): the once-per-student and cross-case checks below are then serial.
+  // The lead's KEY SHARE (the fee row's FK takes it anyway) comes first, as in a rename (lead →
+  // student), so the two never wait on each other in a cycle (REV-1 D2).
+  if (admission.studentId) {
+    await tx
+      .select({ id: opsLeads.id })
+      .from(opsLeads)
+      .where(eq(opsLeads.id, admission.leadId as never))
+      .for('key share');
+    await tx
+      .select({ id: students.id })
+      .from(students)
+      .where(eq(students.id, admission.studentId))
+      .for('update');
+  }
   const settings = await loadSettings(tx);
   const existing = await recordsOf(tx, admission.id);
   const target = existing.find((r) => r.id === input.reversesRecordId);
@@ -323,17 +345,24 @@ export async function recordFeeEntry(
       issues.push(...(await planLinkIssues(tx, admission.id, entry)));
   }
   if (issues.length) throw issuesError(issues);
-  if (!target) {
-    const facts = { ...entry, amountPaise: amount!, chargeCategory: category };
-    // A demo credit is real money already paid: its bound is the demo fee (categoryIssues).
-    const refused =
-      lowersOwed(entry) && !entry.demoId
-        ? reductionAboveOwedIssue(facts, await owedOn(tx, entry, category, existing))
-        : entry.kind === 'received'
-          ? duplicatePaymentIssue(facts, asLike(await studentRows(tx, admission)))
-          : null;
-    if (refused) throw issuesError([refused]);
-  }
+  const facts = { ...entry, amountPaise: amount!, chargeCategory: category };
+  // A demo credit is real money already paid: its bound is the demo fee (categoryIssues).
+  // Registration is charged once per student, so what is owed on it spans their cases (C1-1).
+  const refused =
+    !target && lowersOwed(entry) && !entry.demoId
+      ? reductionAboveOwedIssue(
+          facts,
+          await owedOn(
+            tx,
+            entry,
+            category,
+            category === 'registration' ? await studentRows(tx, admission) : existing,
+          ),
+        )
+      : entry.kind === 'received' || entry.kind === 'refund'
+        ? duplicatePaymentIssue(facts, asLike(await studentRows(tx, admission)))
+        : null;
+  if (refused) throw issuesError([refused]);
   const [row] = await tx
     .insert(opsFeeRecords)
     .values({
@@ -357,6 +386,7 @@ export async function recordFeeEntry(
       notes: clean(entry.notes),
       recordedBy: actor.id,
       recordedAt: now,
+      onBehalfOf: entry.onBehalfOf ?? null,
     })
     .returning();
   if (!row) throw new Error('fee record insert returned no row');
@@ -382,6 +412,7 @@ export async function recordFeeEntry(
     },
     requestId,
   );
+  if (!target && row.kind === 'received') await issueReceiptInTx(tx, actor, row, now, requestId); // F4-01
   return { ...row, manuallyRecorded: true as const, disclaimer: MANUAL_FEE_DISCLAIMER };
 }
 
