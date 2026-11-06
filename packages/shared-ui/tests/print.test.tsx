@@ -96,6 +96,8 @@ describe('print stylesheet', () => {
     [/thead \{\s*display: table-header-group;/],
     [/tr \{\s*break-inside: avoid;/],
     [/\.el-table-wrap \{\s*overflow: visible;/],
+    // The pager's box goes; its "Showing x–y of z" text stays.
+    [/nav\[aria-label='Pages'\] \{\s*display: contents;/],
     [/\.el-chart-table::details-content \{\s*content-visibility: visible;/],
     [/a \{\s*color: inherit !important;\s*text-decoration: none !important;/],
   ])('paper rule %s', (rule) => {

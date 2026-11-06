@@ -330,7 +330,15 @@ describe('tables and sections', () => {
       '<td data-label="Due"><div>Today<small>hint</small><button>Mark done</button></div></td>',
     );
     expect(table(25)).toContain('class="el-table-wrap"');
-    expect(table(26)).toContain('class="el-table-wrap el-table-well"');
+    expect(table(26)).toContain(
+      '<div class="el-table-wrap el-table-well" role="region" aria-label="Table" tabindex="0">',
+    );
+    // Row links are tab stops already, so the box does not add one of its own.
+    expect(
+      html(
+        <RecordTable columns={columns} rows={[row(1)]} rowKey={(r) => r.id} rowHref={() => '/x'} />,
+      ),
+    ).toContain('<div class="el-table-wrap"><table');
     expect(table(1, [{ key: 'go', header: '', render: () => 'Open' }])).toContain(
       '<th scope="col"><span class="el-visually-hidden">Actions</span></th>',
     );

@@ -7,7 +7,13 @@
  * Columns use the shared-ui `Column<T>` type, so DataTable columns move over unchanged.
  */
 import { isValidElement, type ReactNode } from 'react';
-import { ActionsHeader, SampleBadge, tableWrapClass, type Column } from '@elevate/shared-ui';
+import {
+  ActionsHeader,
+  SampleBadge,
+  scrollRegion,
+  tableWrapClass,
+  type Column,
+} from '@elevate/shared-ui';
 import { RowLinks } from './row-links';
 
 export interface RecordTableProps<T> {
@@ -110,9 +116,12 @@ export function RecordTable<T>({
     </table>
   );
   const wrap = tableWrapClass(pageScroll ? 0 : rows.length);
+  // Row links are tab stops already; without them the box itself takes one, so it can scroll.
   return rowHref ? (
     <RowLinks className={wrap}>{table}</RowLinks>
   ) : (
-    <div className={wrap}>{table}</div>
+    <div className={wrap} {...scrollRegion(caption)}>
+      {table}
+    </div>
   );
 }

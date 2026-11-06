@@ -2,7 +2,8 @@
  * F4-08 calendar: a month or a week of calendar days (Monday first) holding items from the pages
  * that own them. A day is a `YYYY-MM-DD` in IST; an instant lands on its IST day with its IST time.
  * Each item says its kind in words and links to its record (plain text when it has none). On
- * phones it is a list of the days that hold something; on paper and wide screens the month grid.
+ * phones it is a list of the days that hold something; on paper and wide screens the month grid,
+ * where a busy day shows its first few items and "+M more" (a link to its week).
  */
 import {
   addDays,
@@ -67,6 +68,8 @@ export function calendarRange(query: { view?: string; date?: string }, today: Is
   return { view, date, from, to, days, prev, next };
 }
 
+/** Items a month cell shows before "+M more" (its week shows them all); phones list every one. */
+const MONTH_CAP = 4;
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const MONTH = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const LONG_DAY = new Intl.DateTimeFormat('en-IN', { weekday: 'long', timeZone: 'UTC' });
@@ -196,12 +199,20 @@ export function Calendar({
                     </h3>
                     {list.length ? (
                       <ul>
-                        {list.map((item) => (
-                          <li key={item.kind + item.id}>
+                        {list.map((item, n) => (
+                          <li
+                            key={item.kind + item.id}
+                            className={!week && n >= MONTH_CAP ? 'el-cal-over' : undefined}
+                          >
                             <Item item={item} />
                           </li>
                         ))}
                       </ul>
+                    ) : null}
+                    {!week && list.length > MONTH_CAP ? (
+                      <a className="el-cal-more" href={href({ view: 'week', date: day })}>
+                        {`+${list.length - MONTH_CAP} more`}
+                      </a>
                     ) : null}
                   </td>
                 );

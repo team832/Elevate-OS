@@ -29,6 +29,8 @@
 }
 .el-chart-table > summary {
   width: fit-content;
+  min-height: 1.5rem; /* 24px target, WCAG 2.2 2.5.8 */
+  align-content: center;
   color: var(--el-text-muted);
   font-size: var(--el-text-sm);
   text-decoration: underline;
@@ -115,6 +117,11 @@
 }
 .el-hbar-label {
   overflow-wrap: anywhere;
+}
+.el-hbar-label > a {
+  display: inline-block;
+  min-height: 1.5rem; /* 24px target, WCAG 2.2 2.5.8 */
+  align-content: center;
 }
 .el-hbar-track {
   height: 0.875rem;

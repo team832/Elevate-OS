@@ -536,6 +536,24 @@ describe('DataTable', () => {
     expect(render(<DataTable columns={cols} rows={rows} rowKey={(r) => r.name} />)).toContain(cls);
   });
 
+  it.each([
+    [{ caption: 'Students' }, 'Students'],
+    [{ label: 'Fee rules' }, 'Fee rules'],
+    [{}, 'Name, Fee'],
+    [{ columns: [{ key: 'name', header: <b>Name</b> }] }, 'Table'],
+  ])('its scroll box is a named region a keyboard can reach (%j)', (props, name) => {
+    expect(
+      render(
+        <DataTable
+          columns={cols}
+          rows={[{ name: 'A', fee: 1 }]}
+          rowKey={(r) => r.name}
+          {...props}
+        />,
+      ),
+    ).toContain(`<div class="el-table-wrap" role="region" aria-label="${name}" tabindex="0">`);
+  });
+
   it('a phone card holds one element per value, or its grid would break a mixed cell apart', () => {
     const mixed = { key: 'name', header: 'Name', render: () => <><b>A</b> and <i>B</i></> };
     expect(render(<DataTable compact columns={[mixed]} rows={[{}]} rowKey={() => 'r'} />)).toContain(
@@ -770,6 +788,17 @@ describe('an empty list says the true thing (HUS-016)', () => {
     const out = render(<ListEmpty noun="leads" params={params} first="Add the first lead." />);
     expect(out).toContain(title);
     expect(out).toContain(text);
+  });
+});
+
+describe('small text controls are at least 24px tall (WCAG 2.2 AA 2.5.8 target size)', () => {
+  it.each([
+    ['components.css', '.el-explain > summary'],
+    ['charts.css', '.el-chart-table > summary'],
+    ['charts.css', '.el-hbar-label > a'],
+  ])('%s: %s', (file, selector) => {
+    const css = readFileSync(new URL(`../src/css/${file}`, import.meta.url), 'utf8');
+    expect(css.split(`\n${selector} {`)[1]?.split('}')[0]).toMatch(/min-height: 1\.5rem;/);
   });
 });
 

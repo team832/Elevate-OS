@@ -69,6 +69,14 @@ export interface DataTableProps<T> {
 export const tableWrapClass = (rows: number) =>
   rows > 25 ? 'el-table-wrap el-table-well' : 'el-table-wrap';
 
+/** A table's scroll box is a named region in the tab order, so a keyboard can scroll it too. */
+export const scrollRegion = (name: ReactNode) =>
+  ({
+    role: 'region',
+    'aria-label': typeof name === 'string' && name ? name : 'Table',
+    tabIndex: 0,
+  }) as const;
+
 export function DataTable<T>({
   columns,
   rows,
@@ -91,7 +99,10 @@ export function DataTable<T>({
       .filter((h) => h && typeof h === 'string')
       .join(', ');
   return (
-    <div className={tableWrapClass(rows.length)}>
+    <div
+      className={tableWrapClass(rows.length)}
+      {...scrollRegion(typeof caption === 'string' ? caption : name)}
+    >
       <table className={compact ? 'el-table el-table-compact' : 'el-table'}>
         {caption ? (
           <caption>{caption}</caption>

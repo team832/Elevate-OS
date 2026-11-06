@@ -9,10 +9,10 @@ const HR = `${HOME.ops}/hr`;
 // Who can open what: each refusal sits next to a control that must open the same page.
 const CASES = [
   {
-    name: 'control: the business administrator opens Fees',
+    name: 'control: the business administrator opens Fee structure',
     email: DEMO.business,
     url: FEES,
-    h1: 'Fees',
+    h1: 'Fee structure',
   },
   // No ops:module:access: Ops sends a teacher to their own workspace without showing the page (D-072).
   {

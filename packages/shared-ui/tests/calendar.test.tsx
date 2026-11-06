@@ -185,6 +185,24 @@ describe('Calendar', () => {
     expect(cal([])).not.toContain('Showing the first');
   });
 
+  it('a month day shows four items and links "+M more" to its week; the week shows them all', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => ({
+      id: `t${i}`,
+      kind: 'task' as const,
+      title: `Task ${i}`,
+      start: '2026-11-06',
+    }));
+    const day = cell(cal(ten), '2026-11-06');
+    expect(day.match(/<li>/g)).toHaveLength(4);
+    expect(day.match(/<li class="el-cal-over">/g)).toHaveLength(6);
+    expect(day).toContain(
+      '<a class="el-cal-more" href="/ops/calendar?view=week&amp;date=2026-11-06">+6 more</a>',
+    );
+    const week = cal(ten, { view: 'week', date: '2026-11-06' });
+    expect(week.match(/<li>/g)).toHaveLength(10);
+    expect(week).not.toMatch(/el-cal-over|el-cal-more/);
+  });
+
   it('a week is one row of seven days', () => {
     const html = cal([], { view: 'week', date: '2026-11-06' });
     expect(html).toContain('<h2 id="el-cal-title">Week of 2 Nov 2026</h2>');
@@ -200,6 +218,13 @@ describe('calendar stylesheet', () => {
   it('phones get a day list (only days with items); print and wide screens the month grid', () => {
     expect(css).toMatch(/\.el-cal-grid td\[data-empty\],\s*\.el-cal-pad \{\s*display: none;/);
     expect(css).toContain('@media print, (min-width: 720px) {');
+  });
+
+  it('phones list every item; the month grid and paper hide the rest behind "+M more"', () => {
+    const [phone, grid] = css.split('@media print, (min-width: 720px) {');
+    expect(phone).toMatch(/\.el-cal-more \{\s*display: none;/);
+    expect(grid).toMatch(/\.el-cal-over \{\s*display: none;/);
+    expect(grid).toMatch(/\.el-cal-more \{\s*display: inline-block;/);
   });
 
   it('prints without the navigation, using tokens only', () => {

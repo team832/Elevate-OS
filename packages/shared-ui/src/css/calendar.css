@@ -66,6 +66,10 @@
 .el-cal-dnum {
   display: none;
 }
+/* Phones list every item of a day, so the grid's "+M more" link is not needed there. */
+.el-cal-more {
+  display: none;
+}
 .el-cal-grid ul {
   display: grid;
   gap: var(--el-space-1);
@@ -208,6 +212,17 @@ a.el-cal-item:focus-visible {
   .el-cal-kind {
     display: block;
     width: fit-content;
+  }
+  /* A busy day keeps the month a month: its first items, then "+M more" to its week. */
+  .el-cal-over {
+    display: none;
+  }
+  .el-cal-more {
+    display: inline-block;
+    min-height: 1.5rem; /* 24px target, WCAG 2.2 2.5.8 */
+    align-content: center;
+    margin-top: var(--el-space-1);
+    font-size: var(--el-text-xs);
   }
 }
 

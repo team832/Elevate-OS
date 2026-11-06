@@ -779,6 +779,8 @@ a.el-journey-body:focus-visible {
 /* "How this list is defined": an explanation behind a text link, not a button. */
 .el-explain > summary {
   width: fit-content;
+  min-height: 1.5rem; /* 24px target, WCAG 2.2 2.5.8 */
+  align-content: center;
   color: var(--el-text-muted);
   font-size: var(--el-text-sm);
   text-decoration: underline;
@@ -920,6 +922,10 @@ a.el-journey-body:focus-visible {
   .el-form-actions,
   nav[aria-label='Pages'] a {
     display: none !important;
+  }
+  /* The pager prints as its count alone, not as a navigation box. */
+  nav[aria-label='Pages'] {
+    display: contents;
   }
   a {
     color: inherit !important;
