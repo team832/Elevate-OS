@@ -32,6 +32,7 @@ import {
 } from '@elevate/testing';
 import { createSession, validatePortalSession } from '@elevate/authentication';
 import { updateGuardian } from '../../src/server/guardians';
+import { isAdultStudent } from '../../src/server/portal-access';
 import {
   GET as readAccess,
   POST as giveAccess,
@@ -431,5 +432,29 @@ describe('review round 2 (FR-D)', () => {
     expect(live).toEqual([]);
     // Once off, a slip is refused inside its transaction.
     expect((await slip(counsellor, data!.id)).status).toBe(409);
+  });
+});
+
+describe('review round 3', () => {
+  it('two different dates of birth fail closed: guardian logins hide the child; staff are told to correct it', async () => {
+    await guardiansOfAdults(false);
+    const s = await student('2012-01-01');
+    expect(await isAdultStudent(ctx.db, s.id)).toBe(false); // one date: a minor
+    const c = await pendingCase(counsellor);
+    await ctx.db
+      .update(opsAdmissions)
+      .set({ studentId: s.id as never })
+      .where(eq(opsAdmissions.id, c.admissionId as never));
+    await ctx.db
+      .update(opsLeads)
+      .set({ dateOfBirth: '2000-01-01' as never })
+      .where(eq(opsLeads.id, c.leadId as never));
+    expect(await isAdultStudent(ctx.db, s.id)).toBe(true); // cannot confirm a minor
+    const read = await callRoute<{ dobConflict: boolean }>(
+      readAccess,
+      authedRequest(counsellor, '/x'),
+      { id: s.id },
+    );
+    expect(read.data!.dobConflict).toBe(true);
   });
 });

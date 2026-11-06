@@ -101,7 +101,7 @@ Contract change: `ops.admission.enrolment_requested` v1 gained the optional `exi
 
 ## Jobs
 
-All idempotent; there is no scheduler yet (IR-OPS-02). Each is also exported from `@elevate/business-ops-os/server`.
+All idempotent. Since 6 Nov 2026 (D-133) a background runner can also run each one on a schedule once it is switched on in Settings → Background jobs (`PUT /ops/api/v1/jobs/{job}`, `ops:jobs:run`; every job off by default); seven jobs incl. `task-reminders` (also the EOD deadline reminder) and `fee-reminders`. See skill `elevate-jobs`. Each is also exported from `@elevate/business-ops-os/server`.
 
 | Job | Route | Permission |
 |---|---|---|

@@ -70,16 +70,22 @@ async function dateOfBirth(db: Database, studentId: string) {
 }
 
 /** Under 18 on `today`, or no date of birth recorded. */
-async function isMinor(db: Database, studentId: string, today: string) {
-  const age = ageOn(await dateOfBirth(db, studentId), today as never);
+const minorOn = (dob: string | null, today: string) => {
+  const age = ageOn(dob, today as never);
   return age === null || age < 18;
-}
+};
+const isMinor = async (db: Database, studentId: string, today: string) =>
+  minorOn(await dateOfBirth(db, studentId), today);
 
-/** For the portal (no permission check): one recorded date of birth makes the student 18 or over today. */
+/**
+ * For the portal's guardian re-check (no permission check): true when the one recorded date of
+ * birth makes the student 18 or over, and also when two different dates are recorded (fail closed:
+ * a minor cannot be confirmed, so a guardian login stops showing the child until staff correct it).
+ */
 export const isAdultStudent = (db: Database, studentId: string, now = new Date()) =>
-  isMinor(db, studentId, istToday(now)).then(
-    (minor) => !minor,
-    () => false,
+  dateOfBirth(db, studentId).then(
+    (dob) => !minorOn(dob, istToday(now)),
+    () => true,
   );
 
 const ADULT_GUARDIAN_OFF =
@@ -131,9 +137,13 @@ export async function portalAccessFor(
   now = new Date(),
 ) {
   await identityAccess(db, actor, studentId, 'ops:student_private:read');
-  const [settings, minor, guardians, joinable, accounts] = await inOrder([
+  const [settings, birth, guardians, joinable, accounts] = await inOrder([
     () => loadSettings(db),
-    () => isMinor(db, studentId, istToday(now)).catch(() => true),
+    () =>
+      dateOfBirth(db, studentId).then(
+        (dob) => ({ dob }),
+        () => null, // two different dates: refused when giving access, hidden from guardians
+      ),
     liveGuardians(db, studentId),
     () => joinableLogins(db, studentId),
     db
@@ -170,7 +180,8 @@ export async function portalAccessFor(
     enabled: settings['portal.enabled'].value.enabled,
     consent: { ...consent.value, approved: consent.decisionState === 'approved' },
     guardianAccessToAdults: settings['portal.guardian_access_to_adults'].value.allowed,
-    minor,
+    minor: birth ? minorOn(birth.dob, istToday(now)) : true,
+    dobConflict: birth === null,
     guardians,
     joinable,
     accounts: accounts.map(({ a, email, name, password, guardian }) => {

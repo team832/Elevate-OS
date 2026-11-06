@@ -613,6 +613,12 @@ Every answer below is yours to give; nothing waits on it except where it says "s
 | Q49 | Lead sharing: which counsellors, in turn or to whoever has the fewest open leads, and a daily limit? | Off; in turn; no daily limit (D-153) |
 | Q50 | A new lead's first-contact reminder belongs to its case. When Marketing owns the lead, its owner cannot open cases, so the reminder reaches nobody. Who should get it? | Reaches nobody; counted as "unreachable" so it is visible |
 | Q51 | "All staff" (Business Operations) and "Staff directory" (HR) list the same people with different permissions. Merge them? | Two lists, as before |
+| Q52 | A family withdraws and comes back: reopen the same application, or start from a new enquiry? | Start from a new enquiry |
+| Q53 | May an application be withdrawn while its fee agreement is still open? | Allowed (fees are non-refundable) |
+| Q54 | May finance alone waive the ₹5,000 registration fee or the ₹1,000 demo fee? | Yes, as today |
+| Q55 | Show batch rank and overall rank together on results? | One rank per publication |
+| Q56 | Should task reminders skip people who are on approved leave? | Reminders still go to them |
+| Q57 | Who takes over a leaver's open leads and follow-ups? | Nobody automatically; the hand-over notice lists them |
 
 **A tip, not a question:** opening a downloaded spreadsheet by double-clicking it in Excel drops leading zeros (for example "077" shows as 77). Use Excel's Data → From Text/CSV instead.
 

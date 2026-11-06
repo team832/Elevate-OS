@@ -116,6 +116,13 @@ export async function PortalAccessSegment({
           give access and print slips now; signing in starts when it is switched on.
         </Alert>
       )}
+      {p.dobConflict ? (
+        <Alert tone="warning">
+          Two different dates of birth are recorded on this student’s enquiries. Correct the date of
+          birth on the enquiries: until then no portal access can be given, and guardian logins do
+          not show this student while “Guardian logins for students aged 18 or over” is off.
+        </Alert>
+      ) : null}
       {!p.minor && !p.guardianAccessToAdults ? (
         <Alert tone="info">
           This student is 18 or over. Only the student can get a portal login: guardian logins for
