@@ -16,7 +16,7 @@
     "db:generate": "drizzle-kit generate --config drizzle.config.ts"
   },
   "dependencies": {
-    "@electric-sql/pglite": "0.5.10",
+    "@electric-sql/pglite": "0.5.15",
     "@elevate/configuration": "0.1.0",
     "@elevate/shared-types": "0.1.0",
     "drizzle-orm": "0.45.4",
