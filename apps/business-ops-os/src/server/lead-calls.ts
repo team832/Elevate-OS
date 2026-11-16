@@ -3,7 +3,21 @@
  * make from their own phone; nothing is dialled or recorded by the app. Logging goes through
  * logActivity (./leads-actions.ts); this file lists calls and keeps the next follow-up.
  */
-import { and, asc, count, desc, eq, gte, ilike, isNull, lt, lte, or, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { containsPattern } from '@elevate/server-kit';
 import {
   opsFollowUps,
@@ -112,7 +126,10 @@ export async function callOutcomeCounts(
   actor: Actor,
   filters: CallFilters & { cutoff: Date },
 ) {
-  const scope = leadScope(db, await accessScope(db, actor, 'ops:leads:read'));
+  const access = await accessScope(db, actor, 'ops:leads:read');
+  // Your own calls stay yours after the lead is handed on (counts only, as lead-metrics credits).
+  const self = access.scope === 'own' && !!access.staffId && filters.staffId === access.staffId;
+  const scope = self ? sql`true` : leadScope(db, access);
   if (!scope) return [];
   return db
     .select({ outcome: opsLeadActivities.outcome, n: count() })

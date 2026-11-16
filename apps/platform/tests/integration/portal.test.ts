@@ -26,6 +26,7 @@ import {
 import {
   academicClassSessions,
   academicSettings,
+  auditEvents,
   academicStudents,
   programmes,
   staffMembers,
@@ -500,6 +501,18 @@ describe('receipt files', () => {
       for (const token of [ashaLogin.token, parent.token])
         expect((await get(token, id)).status).toBe(404);
     expect(receipts.rendered).toEqual([]);
+    // Each family download is audited (who, which payment, which student); refusals write nothing.
+    const audited = await ctx.db
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.action, 'portal.receipt_downloaded'));
+    expect(audited).toMatchObject([
+      {
+        actorUserId: ashaLogin.id,
+        entityId: '00000000-0000-4000-8000-00000000000a',
+        metadata: { studentId: asha },
+      },
+    ]);
     expect((await get(undefined, '00000000-0000-4000-8000-00000000000a')).status).toBe(401);
     expect((await get(staffToken, '00000000-0000-4000-8000-00000000000a')).status).toBe(401);
   });

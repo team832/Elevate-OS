@@ -16,7 +16,7 @@ import {
   type Database,
 } from '@elevate/database';
 import { withTransaction } from '@elevate/server-kit';
-import { ConflictError } from '@elevate/shared-contracts';
+import { ConflictError, ForbiddenError } from '@elevate/shared-contracts';
 import type { StaffMemberId } from '@elevate/shared-types';
 import { parsePunchCsv, type PunchCsvRow } from '../domain/attendance';
 import { fmtDateTime } from '../ui/format';
@@ -53,7 +53,7 @@ export async function previewPunchImport(
     throw new ConflictError(
       `This file was already imported on ${fmtDateTime(seen.committedAt)} (${seen.sourceLabel}).`,
     );
-  if (seen) return seen; // the same file again before commit: the same preview
+  if (seen) return visibleImport(db, actor, seen); // the same file again before commit: the same preview
   const parsed = parsePunchCsv(body.content);
   if (!parsed.ok) throw fieldError('content', parsed.error);
   const codes = [...new Set(parsed.rows.map((r) => r.staffCode).filter(Boolean))];
@@ -169,8 +169,12 @@ export async function commitPunchImport(
     );
     if (imp.status === 'committed') throw new ConflictError('This import is already committed.');
     let added = 0;
-    // Rows about the committer, or outside their HR scope, are never stored (counted as skipped).
+    // Rows about the committer, or outside their HR scope, are never stored; committing without them would close the file for good.
     const rows = valid.filter((r) => r.staffId !== self && reach.has(r.staffId!));
+    if (rows.length < valid.length)
+      throw new ForbiddenError(
+        `${valid.length - rows.length} of these rows are about you or staff outside the departments you manage. Ask whoever uploaded the file, or another HR person, to add it.`,
+      );
     for (const r of rows) {
       const stored = await tx
         .insert(opsAttendancePunches)
@@ -224,5 +228,19 @@ export async function listPunchImports(db: Database, actor: Actor) {
 
 export async function getPunchImport(db: Database, actor: Actor, id: string) {
   await accessScope(db, actor, 'ops:attendance:manage');
-  return rowById(db, opsAttendanceImports, id, 'Import');
+  return visibleImport(db, actor, await rowById(db, opsAttendanceImports, id, 'Import'));
+}
+
+/** A colleague's import as `actor` may see it: rows about staff outside their HR scope left out. */
+async function visibleImport(
+  db: Database,
+  actor: Actor,
+  imp: typeof opsAttendanceImports.$inferSelect,
+): Promise<typeof opsAttendanceImports.$inferSelect> {
+  const rows = imp.rows as ImportRow[];
+  const ids = rows.flatMap((r) => (r.staffId ? [r.staffId] : []));
+  const reach = new Set(
+    (ids.length ? await hrAttendanceStaff(db, actor, { ids }) : []).map((s) => s.id as string),
+  );
+  return { ...imp, rows: rows.filter((r) => !r.staffId || reach.has(r.staffId)) };
 }

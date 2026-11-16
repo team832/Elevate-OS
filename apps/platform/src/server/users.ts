@@ -165,6 +165,14 @@ function notSelf(user: AuthenticatedUser, id: UserId, what: string) {
   if (user.id === id) throw new ForbiddenError(`You cannot ${what}. Ask another administrator.`);
 }
 
+/** A portal login is never a staff account: its roles and email are not edited here. */
+function notPortal(email: string) {
+  if (isPortalEmail(email))
+    throw new ConflictError(
+      'This is a student or parent portal login. Its access is managed from the student record.',
+    );
+}
+
 /**
  * Lock the active platform administrators' rows, then the target's. Always in
  * this order, so two administrators acting on each other at once queue instead
@@ -231,10 +239,7 @@ export async function setUserRoles(
   notSelf(user, id, 'change your own roles');
   return withTransaction(db, async (tx) => {
     const { target, lastAdmin } = await lockForChange(tx, id);
-    if (isPortalEmail(target.email))
-      throw new ConflictError(
-        'This is a student or parent portal login. Its access is managed from the student record.',
-      );
+    notPortal(target.email);
     const before = await loadRoles(tx, id);
     const added = roles.filter((r) => !before.includes(r));
     const removed = before.filter((r) => !roles.includes(r));
@@ -314,6 +319,7 @@ export async function changeUserEmail(
       .where(eq(users.id, id))
       .for('update');
     if (!target) throw new NotFoundError('There is no account with this id.');
+    notPortal(target.email);
     if (target.email === email) return { id, email, sessionsRevoked: 0 };
     const [taken] = await tx.select({ id: users.id }).from(users).where(eq(users.email, email));
     if (taken) throw new ConflictError(`${email} is already used by another account.`);

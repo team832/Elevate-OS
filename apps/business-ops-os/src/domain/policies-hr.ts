@@ -166,7 +166,7 @@ export const HR_SETTING_DEFINITIONS: DefinitionsFor<typeof hrSettingSchemas> = {
   'eod.deadline_reminder': {
     label: 'End-of-day report reminder',
     description:
-      'Minutes before the deadline at which the "Send task reminders" job reminds, inside Elevate OS, each active person with a scheduled workday (HR attendance) whose report for the day is not yet submitted. Once a day per person; nothing is sent while that job is off. Not set: no reminder.',
+      'Minutes before the deadline at which the "Send task reminders" job reminds, inside Elevate OS, each active person with a scheduled workday (HR attendance) whose report for the day is not yet submitted. Once a day per person; nothing is sent while that job is off. If the job runs less often than this, the reminder comes with its last run before the deadline. Not set: no reminder.',
     defaultValue: { minutesBefore: 60 },
     defaultState: 'proposed',
     source: 'owner request 2026-11-06 (F4-11: reminder 60 minutes before).',

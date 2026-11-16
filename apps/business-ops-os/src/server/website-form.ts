@@ -222,8 +222,9 @@ async function save(
                   notes: [
                     f.message,
                     `Name given: ${f.name}`,
-                    f.city && `City: ${f.city}`,
-                    email?.ok && `Email given: ${email.email}`,
+                    // Notes are read without contact access (D-028), so private fields are named, never copied.
+                    (f.city || email?.ok) &&
+                      'The form also gave a city or email; they are not copied here. Ask on the call.',
                     emailNote,
                   ]
                     .filter(Boolean)

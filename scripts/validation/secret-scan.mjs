@@ -54,7 +54,8 @@ const RULES = [
   },
   {
     name: 'secret-assignment',
-    re: /\b([A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|API_KEY|APIKEY|PRIVATE_KEY)[A-Z0-9_]*)\s*[:=]\s*['"]?([^\s'"`,;]{16,})/i,
+    // The key may be quoted (JSON, `'KEY': '…'`), as in a downloaded OAuth client file.
+    re: /\b([A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|API_KEY|APIKEY|PRIVATE_KEY)[A-Z0-9_]*)['"]?\s*[:=]\s*['"]?([^\s'"`,;]{16,})/i,
     // Code expressions (calls, property access) are not literals; nor, in JavaScript, is anything unquoted.
     check: (m, file) =>
       !PLACEHOLDER.test(m[2]) &&

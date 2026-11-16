@@ -5,6 +5,7 @@ describe('CSV export', () => {
   it.each([
     ['plain', 'plain'],
     ['a,b', '"a,b"'],
+    ['a;=1+1', '"a;=1+1"'], // Excel set to ; as the separator would split it into a formula
     ['say "hi"', '"say ""hi"""'],
     ['two\nlines', '"two\nlines"'],
     ['=HYPERLINK("x")', `"'=HYPERLINK(""x"")"`],

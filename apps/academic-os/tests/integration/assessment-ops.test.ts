@@ -823,6 +823,27 @@ describe('fix round 1: teacher scope on multi-batch rosters, attempts after fina
     });
   });
 
+  it('before the roster (draft, no date) the legacy sheet still shows a teacher only their (batch, subject) rows', async () => {
+    const draft = (
+      await call(createRoute, '', {
+        code: uniq('MBD-'),
+        kind: 'sectional',
+        title: 'Two-batch quant draft (fictional)',
+        academicYear: '2026-27',
+        batchIds: [w.batch.id, b2],
+        subjectId: w.quant.id,
+        maxMarks: '20',
+      })
+    ).data!.assessment.id;
+    expect((await getMarksSheet(ctx.db, actor(t3), draft)).rows).toEqual([]);
+    expect((await getMarksSheet(ctx.db, actor(u.coordinator), draft)).rows.map((r) => r.studentId)).toContain(s.a);
+    await expect(
+      enterMarks(ctx.db, actor(t3), draft, {
+        marks: [{ studentId: s.a!, state: 'scored', manualScore: '5', version: 0 }],
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
   it('validate: a teacher’s issue list names only students whose marks they may see; the coordinator sees every id', async () => {
     const issueIds = async (user: TestUser) =>
       (await validateAssessment(ctx.db, actor(user), multi)).issues.flatMap((i) =>

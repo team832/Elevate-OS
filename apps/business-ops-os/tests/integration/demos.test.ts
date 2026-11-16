@@ -536,6 +536,17 @@ describe('demo days with several classes (acceptance 2)', () => {
     expect((await act(day3, { ...move, startsAt: ist(base + 2, 15) })).status).toBe(400);
   });
 
+  it('moving one class onto another class of its day is refused, as at booking: classes never overlap', async () => {
+    const demo = await bookPlan();
+    const move = { action: 'reschedule', startsAt: ist(base, 12), reason: 'Teacher late' };
+    const r = await callRoute(sessionAction, post(counsellor, move), {
+      id: demo.id,
+      sessionId: demo.sessions[0]!.id, // day 1, 10:00 → onto day 1's 12:00 class
+    });
+    expect(r.status).toBe(400);
+    expect(r.error?.message).toMatch(/must not overlap/);
+  });
+
   it('books 3 days × several classes; a 4th day is refused at booking and when adding a class', async () => {
     const admissionId = await counselledCase(counsellor);
     const four = [...plan(), { dayNumber: 4, startsAt: ist(-3, 10), subject: 'Maths' }];

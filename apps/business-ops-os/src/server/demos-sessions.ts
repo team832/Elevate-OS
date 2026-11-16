@@ -244,6 +244,8 @@ export async function updateDemoSession(
       await logChanges(tx, target, row!, actor, 'reason' in change ? change.reason : null);
       return row!;
     };
+    /** Live classes that do not move with this one (a whole day keeps its own spacing). */
+    let staying: Session[] = [];
     if (input.action === 'reschedule') {
       const all = await tx
         .select()
@@ -252,6 +254,7 @@ export async function updateDemoSession(
       const day = input.wholeDay
         ? all.filter((s) => s.dayNumber === session.dayNumber && s.attendance !== 'cancelled')
         : [session];
+      staying = all.filter((s) => s.attendance !== 'cancelled' && !day.some((d) => d.id === s.id));
       must(
         checkDayDate(
           demoDays(all, demo.plannedDayCount),
@@ -270,6 +273,14 @@ export async function updateDemoSession(
         });
     }
     const after = await apply(session, input);
+    if (
+      staying.some(
+        (s) =>
+          s.startsAt < (after.endsAt ?? after.startsAt) &&
+          (s.endsAt ?? s.startsAt) > after.startsAt,
+      )
+    )
+      throw new ValidationError('Classes must not overlap.');
     if (teacher && teacher.id !== session.teacherStaffId)
       await notifyTeachers(
         tx,

@@ -85,8 +85,8 @@ function leadFlags(now: Date, actor: Actor): Record<LeadFlag, SQL<boolean>> {
   const weekStart = istInstant(istWeekContaining(today).from).toISOString();
   return {
     new_this_week: sql`${opsLeads.firstReceivedAt} >= ${weekStart}`,
-    // An open lead nobody has reached two-way yet (BR-OPS-4).
-    awaiting_contact: sql`(${opsLeads.firstSuccessfulContactAt} is null and (${currentCase.id} is null or ${hasOpenCase}))`,
+    // An open lead nobody has reached two-way yet (BR-OPS-4) and that may be contacted.
+    awaiting_contact: sql`(${opsLeads.firstSuccessfulContactAt} is null and not ${opsLeads.doNotContact} and (${currentCase.id} is null or ${hasOpenCase}))`,
     unassigned: sql`${opsLeads.ownerStaffId} is null`,
     handoff_pending: sql`(${opsLeads.ownerStaffId} is not null and ${opsLeads.acceptedAt} is null)`,
     overdue: openFollowUp(sql`f.due_date < ${today} and ${seen}`),

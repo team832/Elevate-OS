@@ -363,6 +363,16 @@ describe('change login email (brief §3: same person, same account)', () => {
     expect(await audits(target.id, 'user.email_changed')).toHaveLength(0);
   });
 
+  it('refuses a student or parent portal login (409): it would become a staff sign-in', async () => {
+    const [portal] = await ctx.db
+      .insert(users)
+      .values({ email: 'neha.4004@portal.invalid', displayName: 'Neha (fictional)' })
+      .returning();
+    expect((await put(await admin(), portal!.id, 'neha@elevateeducation.in')).status).toBe(409);
+    const [row] = await ctx.db.select().from(users).where(eq(users.id, portal!.id));
+    expect(row?.email).toBe('neha.4004@portal.invalid');
+  });
+
   it('404 for an unknown account', async () => {
     const res = await put(
       await admin(),

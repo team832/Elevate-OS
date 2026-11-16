@@ -130,7 +130,7 @@ describe('reminderPreview says what the job really does', () => {
       'A person gets a reminder 24 hours before a task is due, then every 24 hours while it is overdue, and every 4 hours until they acknowledge a new task.',
     );
     expect(p.personal).toContain('cannot stop due-soon or overdue reminders');
-    expect(p.running).toContain('no scheduler exists');
+    expect(p.running).toContain('switched on under Settings, Background jobs');
     expect(p.running).toContain('Send task reminders');
   });
 

@@ -941,3 +941,39 @@ Also in wave 4: menus and page gates for every new page (FX-MENU2: 144 + 75 + 26
 | `npm run office:build` on snapshot final-1 | exit 0 in 251 s | coordinator |
 | `npm run test:e2e`, `npm run release:package`, `npm run validate` as one command | **Not run** | — |
 | `npm run check` (Elevate) | Not run: the prototype was not changed | — |
+
+## 16 Nov 2026 — full review of the branch against `main`
+
+Six fresh reviewers, one per area (money; privacy and public pages; HR, leave, attendance and jobs; admissions, leads and Marketing; Academic; platform, packages and scripts), each limited to its own files, each defect proven by a test that failed first. The coordinator fixed the cross-area ones. No schema change, no migration, no new permission.
+
+| ID | Defect fixed | Where | Status | Evidence (RED → GREEN) |
+|---|---|---|---|---|
+| 16N-01 | Whoever removed a payroll line (e.g. a deduction from their own payslip) could still approve the run | `server/payroll.ts` `runAuthors` reads `payslip_line.removed` audit rows | Tested | `payroll.test.ts` "refuses who removed a line…": 1 failed → 92 passed |
+| 16N-02 | Portal fee page listed a reversed payment and its reversal as two payments | `server/portal-fees.ts` through `effectiveRecords` | Tested | `receipts.test.ts` "the family portal…": 3 rows → 1; 53 passed with `portal.test.ts` |
+| 16N-03 | Family receipt downloads wrote no audit row | `apps/platform/src/server/portal.ts` (`portal.receipt_downloaded`) | Tested | `portal.test.ts` receipt files: 1 failed → 31 passed |
+| 16N-04 | A teacher could see and save marks for another batch's students before a test's roster existed | `apps/academic-os/.../marks.ts` | Tested | `assessment-ops.test.ts` "before the roster…": RED → 46 passed |
+| 16N-05 | A batch move rewrote the roster of a finalised test | `apps/academic-os/.../placements.ts` | Tested | `bulk-transfer.test.ts` "a move leaves finalised tests alone…": RED → 42 passed |
+| 16N-06 | End-of-day reminder never sent when its lead was shorter than the job interval | `server/eod-reminders.ts` | Tested | `eod-more-detail.test.tsx`: expected 1, got 0 → passed |
+| 16N-07 | A colleague committing a punch file silently dropped rows they could not add and closed the file | `server/attendance-import.ts` (403) | Tested | `attendance-corrections.test.ts`: 200 → 403 |
+| 16N-08 | A punch file showed an HR manager names and times of staff outside their departments | `server/attendance-import.ts` `visibleImport` | Tested | `attendance-corrections.test.ts` "a colleague's file…": `[DEMO-F01, DEMO-T91]` → `[DEMO-T91]`; 25 passed |
+| 16N-09 | A person's monthly report dropped their calls once the lead moved on | `server/lead-calls.ts` | Tested | `targets.test.ts` "a call stays with its caller…": 2 vs 3 → 24 passed |
+| 16N-10 | Moving one demo class could put it on top of another class | `server/demos-sessions.ts` | Tested | `demos.test.ts`: 200 → 400; 23 passed |
+| 16N-11 | Do-not-contact leads counted as "Awaiting first contact" | `server/leads-read.ts` | Tested | `lead-stages.test.ts`: RED → passed |
+| 16N-12 | Website form copied a family's city and email into notes read without contact access (D-028) | `server/website-form.ts` | Tested | `website-form.test.ts`: 1 failed on old code → 76 passed |
+| 16N-13 | An admin could change a portal login's email into a staff address | `apps/platform/src/server/users.ts` `notPortal()` | Tested | `admin-users.test.ts`: 200 → 409; 32 passed |
+| 16N-14 | Secret scan missed secrets under quoted keys (`"client_secret": "…"`) | `scripts/validation/secret-scan.mjs` | Tested | new `apps/platform/tests/unit/secret-scan.test.ts`: 3 failed → 5 passed; repo and four `.next` folders still clean |
+| 16N-15 | A CSV cell holding `;` was not quoted (Excel with `;` as separator splits `a;=1+1` into a formula) | `packages/server-kit/src/csv.ts` | Tested | `csv.test.ts`: 1 failed → 15 passed |
+| 16N-16 | Scrolling RecordTables without a caption were all named "Table" | `RecordTable` names the box from its string headers (`tableName`, shared with DataTable) | Tested | `ui-kit.test.tsx`, `components.test.tsx`: 212 passed |
+| 16N-17 | Reminder help text still said "no scheduler exists yet" | `domain/task-notices.ts` | Tested | `task-notices`, `hr-pages`, `shell-overview` tests: 106 passed |
+
+Parked: `score_import_rows_overwrite_check` passes when `change` is NULL (added to PLT-MIGRATION-0021; the app always sets both); moving a whole demo day can be refused 409 (OPS-DEMO-DAY-MOVE). Owner questions Q58–Q69 in `HANDOFF.md` (register OPS-REVIEW-16NOV-QUESTIONS). Docs corrected: HANDOFF said 0020 waited and 3 checks failed (both done 6 Nov), README, API/ALGORITHMS/DECISIONS payroll wording, SECURITY_AND_PERMISSIONS portal receipts, nine skills.
+
+Not checked: no browser pass and no package of this code; real-PostgreSQL concurrency; the AI score-sheet path; RecordTables without a caption still have no `<caption>` (PLT-TABLE-CAPTIONS narrowed: the scroll box is named).
+
+### Commands run and results (16 Nov 2026)
+| Command | Result |
+|---|---|
+| `npm run validate` (this PC, 2.9 GB free) | typecheck exit 0, lint exit 0; the test stage was stopped by Claude Code for low memory. The one failure it logged, `demos.test.ts` "creates Tanisha…", is a 30 s timeout here with or without the 16N-10 change (31.6 s on the old code) and passed on GitHub on `a63be2b`. Every changed test file passed alone (counts in the table above). Full run: the GitHub check on the commit of this review |
+| `npm run secret-scan` | "OK (2166 files checked, no secrets or .env files found)" |
+| `node build.mjs` (Elevate-Not-Working) | "238 items (owner_decision 84, needs_credentials 7, not_built 115, prototype_limitation 32)" |
+| GitHub check on `a63be2b` (before this review) | success |

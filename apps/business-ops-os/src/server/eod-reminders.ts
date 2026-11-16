@@ -29,7 +29,8 @@ export async function remindEodDeadline(tx: Database, now: Date) {
   const time = s['eod.submission_deadline'].value.time;
   const minutes = s['eod.deadline_reminder'].value.minutesBefore;
   if (!time || !minutes) return 0;
-  const day = reminderDay(now, time, minutes);
+  // A reminder shorter than the job interval would fall between two runs and never go: the last run before the deadline sends it.
+  const day = reminderDay(now, time, Math.max(minutes, s['jobs.task-reminders'].value.everyMinutes));
   const filers = day ? await userIdsHolding(tx, 'ops:tasks:write') : [];
   if (!day || !filers.length) return 0;
   const people = await tx

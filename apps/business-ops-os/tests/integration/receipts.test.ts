@@ -30,6 +30,7 @@ import { POST as addEntry } from '../../src/app/api/v1/fee-plans/[id]/entries/ro
 import { POST as feeAction } from '../../src/app/api/v1/fees/[id]/route';
 import { GET as receiptPdf, POST as issue } from '../../src/app/api/v1/fees/[id]/receipt/route';
 import { financialYearOf } from '../../src/domain/documents';
+import { portalFees } from '../../src/server/portal-fees';
 import { issueReceiptInTx, type ReceiptDocument } from '../../src/server/receipts';
 import { pendingCase, post } from './admissions-fixtures';
 import { activePlan } from './application-fixtures';
@@ -346,5 +347,35 @@ describe('as it stood at the payment; sample series apart', () => {
     expect((await receiptOf(r.data!.id))!.receiptNumber).toBe(
       `ER/${YEAR}/${String(Math.max(...real) + 1).padStart(6, '0')}`,
     );
+  });
+});
+
+describe('the family portal', () => {
+  it('lists neither a reversed payment nor its reversal', async () => {
+    const director = await createTestUser(ctx.db, { roles: ['director'] });
+    const sid = await identity(ctx.db, 'Sample Portal Student');
+    const admission = await caseOf(ctx.db, finance.id, sid, 'enrolled');
+    const plan = await activePlan(ctx.db, director, admission.id, sid, finance.id);
+    const entry = (amountPaise: number) =>
+      callRoute<{ id: string }>(
+        addEntry,
+        post(finance, {
+          kind: 'received',
+          amountPaise,
+          paymentDate: today(),
+          receiptReference: `SAMPLE-PORTAL-${amountPaise}`,
+          method: 'upi',
+        }),
+        { id: plan.id },
+      );
+    const kept = await entry(100_000);
+    const twice = await entry(200_000);
+    const reversal = await callRoute(
+      feeAction,
+      post(finance, { action: 'reverse', reason: 'Entered twice by mistake' }),
+      { id: twice.data!.id },
+    );
+    expect(reversal.status).toBe(201);
+    expect((await portalFees(ctx.db, sid)).payments.map((p) => p.id)).toEqual([kept.data!.id]);
   });
 });

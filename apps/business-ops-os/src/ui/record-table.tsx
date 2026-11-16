@@ -11,6 +11,7 @@ import {
   ActionsHeader,
   SampleBadge,
   scrollRegion,
+  tableName,
   tableWrapClass,
   type Column,
 } from '@elevate/shared-ui';
@@ -120,7 +121,10 @@ export function RecordTable<T>({
   return rowHref ? (
     <RowLinks className={wrap}>{table}</RowLinks>
   ) : (
-    <div className={wrap} {...scrollRegion(caption)}>
+    <div
+      className={wrap}
+      {...scrollRegion(typeof caption === 'string' && caption ? caption : tableName(columns))}
+    >
       {table}
     </div>
   );

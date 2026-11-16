@@ -86,9 +86,10 @@ export async function getMarksSheet(db: Database, actor: Actor, assessmentId: st
   const bounds = await boundsOf(db, a);
   const sheet = { id: a.id, code: a.code, title: a.title, status: a.status, publishedAt: a.publishedAt, rosterManaged: Boolean(a.rosterSnapshotAt) };
   const shownBounds = bounds && { min: formatMarks(bounds.minUnits), max: formatMarks(bounds.maxUnits), negativeAllowed: bounds.negativeAllowed };
-  if (a.rosterSnapshotAt) return { assessment: sheet, bounds: shownBounds, canWithhold: false, canCorrect: canCorrect(actor), rows: await rosterRows(db, a, await markStudentIds(db, scope, a)) };
+  const visible = await markStudentIds(db, scope, a);
+  if (a.rosterSnapshotAt) return { assessment: sheet, bounds: shownBounds, canWithhold: false, canCorrect: canCorrect(actor), rows: await rosterRows(db, a, visible) };
   const attempts = await db.select().from(academicAttempts).where(eq(academicAttempts.assessmentId, a.id));
-  const ids = [...new Set([...(await eligibleStudentIds(db, a)), ...attempts.map((t) => t.studentId as string)])];
+  const ids = [...new Set([...(await eligibleStudentIds(db, a)), ...attempts.map((t) => t.studentId as string)])].filter((id) => !visible || visible.includes(id));
   const students = ids.length ? await db.select({ id: academicStudents.id, code: academicStudents.code, fullName: academicStudents.fullName }).from(academicStudents).where(inArray(academicStudents.id, ids as StudentId[])).orderBy(asc(academicStudents.fullName)) : [];
   const byStudent = new Map(attempts.map((t) => [t.studentId as string, t]));
   return {
@@ -131,6 +132,8 @@ export async function enterMarks(db: Database, actor: Actor, assessmentId: strin
     if (!a) throw new NotFoundError('Assessment not found.');
     const scope = await assertCanMark(tx, actor, a);
     if (a.status === 'cancelled') throw new InvalidStateTransitionError('The assessment is cancelled.');
+    const visible = await markStudentIds(tx, scope, a);
+    const hidden = (ids: readonly string[]) => visible && ids.some((id) => !visible.includes(id));
     if (a.rosterSnapshotAt) {
       const rowReasons = canCorrect(actor) ? Object.fromEntries(input.marks.flatMap((m) => (m.reason ? [[m.studentId, m.reason]] : []))) : {};
       const reason = [...new Set(Object.values(rowReasons))].join('; ') || undefined;
@@ -139,8 +142,7 @@ export async function enterMarks(db: Database, actor: Actor, assessmentId: strin
         if (state === 'withheld') throw new ValidationError('This test’s roster is managed in Tests and mock tests: a result cannot be withheld here.');
         return { studentId: studentId as StudentId, version, ...ROSTER_FACTS[state], score: state === 'scored' ? (manualScore ?? null) : null };
       });
-      const visible = await markStudentIds(tx, scope, a);
-      if (visible && rows.some((r) => !visible.includes(r.studentId))) throw new NotFoundError('Student not found.');
+      if (hidden(rows.map((r) => r.studentId))) throw new NotFoundError('Student not found.');
       const result = await recordScoresLocked(tx, actor, a, { source: 'manual', overwriteVerified: Boolean(reason), reason, rowReasons, rows }).catch((error) => {
         if (error instanceof ConflictError && (error.details as { overwriteRequired?: unknown })?.overwriteRequired)
           throw new ConflictError(canCorrect(actor) ? 'This mark is verified. Say why it changes under Reason for the change; nothing was saved.' : 'This mark is verified. Ask the academic coordinator to change it; nothing was saved.', { details: error.details });
@@ -154,6 +156,7 @@ export async function enterMarks(db: Database, actor: Actor, assessmentId: strin
     const enrolled = new Set(await eligibleStudentIds(tx, a));
     const outsiders = ids.filter((id) => !enrolled.has(id));
     if (outsiders.length) throw new ValidationError('Some students were not placed in the assessment’s batch on its date; nothing was saved.', { details: { studentIds: outsiders } });
+    if (hidden(ids)) throw new NotFoundError('Student not found.');
     const bounds = await boundsOf(tx, a);
     const problems = input.marks.flatMap((m) => {
       if (m.state !== 'scored') return [];

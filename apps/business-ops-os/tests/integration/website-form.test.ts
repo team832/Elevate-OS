@@ -160,7 +160,12 @@ describe('website enquiry form: the same reply, whatever happened', () => {
       sourceCode: 'UNKNOWN',
       interestMode: 'undecided',
     });
-    const f = form({ phone: `+91 ${raw.slice(1, 6)} ${raw.slice(6)}`, name: 'Sample Other Name' });
+    const f = form({
+      phone: `+91 ${raw.slice(1, 6)} ${raw.slice(6)}`,
+      name: 'Sample Other Name',
+      city: 'Sample City',
+      email: 'sample.family@example.test',
+    });
     expect(await reply(f)).toEqual(THANKS);
     expect(await leadsWith(raw)).toHaveLength(1);
     const [after] = await leadsWith(raw);
@@ -168,6 +173,8 @@ describe('website enquiry form: the same reply, whatever happened', () => {
     const added = (await enquiriesOf(lead.id)).find((e) => e.sourceCode === WEBSITE_FORM_SOURCE);
     expect(added).toMatchObject({ consentTextVersion: 'website-v1', createdBy: systemUserId });
     expect(added!.notes).toContain('Name given: Sample Other Name');
+    // Notes reach readers without contact access: private fields are never copied in.
+    expect(added!.notes).not.toMatch(/Sample City|sample\.family/);
   });
 
   it('an email another lead already has: a new lead, flagged for a person to check', async () => {

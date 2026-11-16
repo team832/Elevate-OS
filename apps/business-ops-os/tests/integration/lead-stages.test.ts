@@ -14,6 +14,7 @@ import {
 } from '@elevate/database';
 import { leadsRoutes } from '../../src/leads';
 import { ensureSystemLeadStages } from '../../src/server/lead-stages';
+import { listLeads } from '../../src/server/leads-read';
 import { phone, setupReference, staffUser, type StaffUser } from './fixtures';
 
 const ctx = setupTestDatabase();
@@ -133,6 +134,15 @@ describe('lead stage changes', () => {
     expect(
       (await move(employee, lead.id, 'nurture', 'Parent called back')).data?.doNotContact,
     ).toBe(false);
+  });
+
+  it('a Do not contact lead is not "awaiting first contact" (logging a call to it is refused)', async () => {
+    const lead = await newLead(employee);
+    const awaiting = async () =>
+      (await listLeads(ctx.db, employee, { flag: 'awaiting_contact' })).map((l) => l.id);
+    expect(await awaiting()).toContain(lead.id);
+    await move(employee, lead.id, 'do_not_contact', 'Parent asked');
+    expect(await awaiting()).not.toContain(lead.id);
   });
 });
 

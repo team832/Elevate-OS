@@ -681,4 +681,29 @@ describe('monthly report facts', () => {
     );
     expect((await callRoute(internalMonthlyRoute, authedRequest(manager, url))).status).toBe(401);
   });
+
+  it('a call stays with its caller after the lead is handed on: read as Anika = read by the manager', async () => {
+    const [l4] = await ctx.db
+      .select({ id: opsLeads.id })
+      .from(opsLeads)
+      .where(eq(opsLeads.code, 'LEAD-000004'));
+    const when = new Date('2026-10-08T11:00:00+05:30'); // Anika owned L4 then; Bharat owns it now
+    await ctx.db.insert(opsLeadActivities).values({
+      leadId: l4!.id,
+      kind: 'call',
+      outcome: 'busy',
+      occurredAt: when,
+      staffId: anika.staffId as never,
+      createdBy: anika.id,
+      createdAt: when,
+    });
+    const calls = async (actor: TestUser) =>
+      Object.fromEntries(
+        (
+          await buildMonthlySnapshot(ctx.db, actor, { staffId: anika.staffId, month: '2026-10' })
+        ).callOutcomes.map((r) => [r.key, r.count.value]),
+      );
+    expect(await calls(manager)).toMatchObject({ calls_logged: 3, call_busy: 1 });
+    expect(await calls(anika)).toEqual(await calls(manager));
+  });
 });

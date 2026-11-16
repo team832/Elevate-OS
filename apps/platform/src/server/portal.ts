@@ -337,7 +337,7 @@ export const portalLogout = formHandler(PORTAL_LOGIN, async (request, requestId,
 
 /**
  * GET /api/v1/portal/receipts/{feeRecordId}: the receipt PDF of a payment of one of the login's
- * students; anything else is 404 (never "exists but not yours").
+ * students; anything else is 404 (never "exists but not yours"). Each download is audited.
  */
 export async function portalReceipt(request: Request, feeRecordId: string): Promise<Response> {
   const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
@@ -358,7 +358,17 @@ export async function portalReceipt(request: Request, feeRecordId: string): Prom
         ? await receiptFor(db, feeRecordId)
         : null;
     if (!receipt) return errorResponse(missing, requestId);
-    return new Response(Buffer.from(await renderReceiptPdf(db, feeRecordId, 'a4', false)), {
+    const pdf = await renderReceiptPdf(db, feeRecordId, 'a4', false);
+    await insertAuditEvent(db, {
+      actorUserId: found.user.id,
+      module: 'platform',
+      action: 'portal.receipt_downloaded',
+      entityType: 'fee_record',
+      entityId: feeRecordId,
+      requestId,
+      metadata: { studentId: owner },
+    });
+    return new Response(Buffer.from(pdf), {
       headers: {
         'content-type': 'application/pdf',
         'content-disposition': `attachment; filename="receipt-${receipt.receiptNumber.replace(/[^\w.-]/g, '-')}.pdf"`,

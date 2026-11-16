@@ -23,6 +23,7 @@ import {
 import type { z } from 'zod';
 import { can, requirePermission, type Permission } from '@elevate/authorization';
 import {
+  auditEvents,
   opsLeaveRecords,
   opsPayrollComponents,
   opsPayrollRuns,
@@ -575,7 +576,7 @@ async function eligibleApprovers(tx: Database, run: Run, submitter: string): Pro
   return active.map((u) => u.id);
 }
 
-/** Who wrote a line in the run or a salary structure its payslips use: never its approver. */
+/** Who wrote or removed a line in the run or set a salary structure it uses: never its approver. */
 export async function runAuthors(db: Database, runId: string): Promise<string[]> {
   const rows = await db
     .selectDistinct({ id: opsPayslipLines.createdBy })
@@ -588,6 +589,19 @@ export async function runAuthors(db: Database, runId: string): Promise<string[]>
         .from(opsSalaryStructures)
         .innerJoin(opsPayslips, eq(opsPayslips.structureId, opsSalaryStructures.id))
         .where(eq(opsPayslips.runId, runId)),
+    )
+    .union(
+      // A removed line leaves only its audit row (removeLine).
+      db
+        .selectDistinct({ id: sql<UserId>`${auditEvents.actorUserId}` })
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.entityType, 'payslip_line'),
+            eq(auditEvents.action, 'payslip_line.removed'),
+            sql`${auditEvents.metadata}->>'runId' = ${runId}`,
+          ),
+        ),
     );
   return rows.map((r) => r.id);
 }

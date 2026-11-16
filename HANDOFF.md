@@ -1,10 +1,43 @@
 # Elevate OS — handoff
 
-_Last updated 6 Nov 2026, evening (the 16 features built and reviewed; one database update waiting for you). Earlier on 6 Nov: structure pass, gaps closed, background jobs, files in the database, menus. Before that 31 Oct 2026 (debug pass, release package, leave applications, full sample data). Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
+_Last updated 16 Nov 2026 (full review, 17 errors fixed, questions Q58–Q69). 6 Nov 2026, evening: the 16 features built and reviewed. Earlier on 6 Nov: structure pass, gaps closed, background jobs, files in the database, menus. Before that 31 Oct 2026 (debug pass, release package, leave applications, full sample data). Branch `feature/business-ops-hr-admissions`. Nothing is deployed yet._
 
 ## For the owner (plain language)
 
 **What it is.** Elevate OS is the internal system your staff sign in to. Since 22 Oct 2026 it has three **workspaces**, one per kind of work, each at its own address: Business Operations (enquiries, demos, admissions, students, fees, staff tasks), Academic (teachers and coordinators) and Marketing. A fourth address holds Users & roles. Only `@elevateeducation.in` accounts can use it (D-030).
+
+### Status report — 16 Nov 2026 (full review of everything built, errors fixed)
+
+```
+What's live now: nothing on the internet; nothing is deployed. Your computer's database is up
+  to date; nothing waits for you there.
+What I did:
+- Six fresh reviewers went through all the work since the last merge, one area each. They
+  found and fixed 17 errors, each proven by a check that failed before the fix:
+  - Payroll: someone who deleted a line, such as a deduction from their own payslip, could
+    still approve that month's payroll. Now refused.
+  - Family portal: a payment entered twice and then reversed showed as two payments. Receipt
+    downloads by families are now recorded in the audit.
+  - Privacy: the website form copied a family's email and city into notes that staff without
+    contact access can read; an HR manager could see punch times of staff outside their
+    departments in a colleague's file; a teacher could see another batch's students on a
+    test before its student list was fixed. All closed.
+  - Moving students between batches no longer changes a finished test's student list.
+  - The end-of-day reminder now goes even when its time is shorter than how often the job runs.
+  - A demo class can no longer be moved on top of another class. "Do not contact" leads no
+    longer show as waiting for a first call. A person's own calls stay in their monthly report.
+  - A portal login can no longer be turned into a staff login. The secret check now catches
+    passwords written in quotes. Spreadsheet cells with a semicolon are made safe for Excel.
+- Wrong statements in this handover were corrected: the database update you applied on 6 Nov
+  was still listed as waiting, and 3 failing checks were listed that were fixed that day.
+What I need from you: nothing urgent. When you have time, Q58 to Q69 under "Decisions waiting
+  for you" (each has a safe choice today).
+What's next:
+- Open the changed screens in a browser and build a fresh package (neither done for this work).
+Placeholders still to replace: unchanged.
+```
+
+**Not checked yet (16 Nov 2026).** No screen was opened in a browser for these fixes, no package was built, and "two people at the same moment" cases were not tried on a real database. Full automatic checks: see `IMPLEMENTATION_STATUS.md`, "16 Nov 2026".
 
 ### Status report — 6 Nov 2026, evening (your 16 features are built)
 
@@ -37,6 +70,8 @@ Placeholders still to replace: the placeholders list, plus the wording of certif
 ```
 
 **Not checked yet (6 Nov 2026, evening).** No new screen has been opened in a browser, and the new browser checks have never run. The apps build from this code, but the built apps have not been started and walked through. "Two people at the same moment" cases were tested on a test database that handles one request at a time; only a few (receipts, lead sharing, leave approvals, sign-in limits) were also tried on a real database. The final full run of the automatic checks: 6,806 of 6,809 passed (details in `IMPLEMENTATION_STATUS.md`, "6 Nov 2026").
+
+**Later the same day (6 Nov 2026).** The 3 failed checks and the secret-check warning were fixed, and the GitHub check passed on every commit since. You applied the database update (the check passed 22 of 22), so step 12 is done. Every page was opened on a throwaway copy of the database: 850 page loads across 8 logins on a computer screen and a phone screen, with no error pages. The small fixes made after that walk have not been walked again. The questions now run to Q57.
 
 ### Status report — 6 Nov 2026, morning (structure, gaps closed, background jobs, files, your 16 features)
 
@@ -373,9 +408,9 @@ Placeholders still to replace: see PLACEHOLDERS.md (fees per programme, staff li
 
 ### Steps only you can do
 
-Do step 12 first. The other numbered steps are kept from earlier dates; each says whether it is already done.
+Nothing is waiting for you here today. The numbered steps are kept from earlier dates for another computer; each says whether it is already done.
 
-**12. Bring your database up to date for the 16 new features (6 Nov 2026, not done yet).** Only you can do this, because it changes the database on your computer and I do not touch it. Until you do, `npm run office` and `npm run dev` do not start the apps: they say one database update is waiting and show the commands below. The update only adds new tables and columns; it changes no stored record. It was tried first on a throwaway copy of the database with records like yours, and it went through cleanly. "Type" means: in the Claude Code chat, type the line as shown, starting with `!`. If any step shows an error, stop and send the developer the last lines; nothing is half-applied.
+**12. Bring your database up to date for the 16 new features (6 Nov 2026). Done on your computer on 6 Nov 2026:** backup (162 tables, 6,669 rows), then the update `0020` applied, then the check passed 22 of 22. The steps are kept for another computer. Only you can do this, because it changes the database on your computer and I do not touch it. Until you do, `npm run office` and `npm run dev` do not start the apps: they say one database update is waiting and show the commands below. The update only adds new tables and columns; it changes no stored record. It was tried first on a throwaway copy of the database with records like yours, and it went through cleanly. "Type" means: in the Claude Code chat, type the line as shown, starting with `!`. If any step shows an error, stop and send the developer the last lines; nothing is half-applied.
 1. **Start the database.** Open a terminal in the `elevate-os` folder, run `npm run db:start` and leave it open.
 2. **Take a backup.** Type `! npm run db:backup`. It copies every table into a new folder under `.data/backups` on this computer (not in git). It ends with "saved", the number of tables and rows, and the folder name. The backup holds personal data and password hashes: keep it on this computer and never share it.
 3. **Apply the update.** Type `! npm run db:migrate`. It should say "21 migration file(s) ... applied or already up to date".
@@ -619,6 +654,23 @@ Every answer below is yours to give; nothing waits on it except where it says "s
 | Q55 | Show batch rank and overall rank together on results? | One rank per publication |
 | Q56 | Should task reminders skip people who are on approved leave? | Reminders still go to them |
 | Q57 | Who takes over a leaver's open leads and follow-ups? | Nobody automatically; the hand-over notice lists them |
+
+**New 16 Nov: found by the full review (each has a safe choice today)**
+
+| # | Question | Safe choice used today |
+|---|---|---|
+| Q58 | A director who may approve payroll can cancel their own salary advance, or approve their own unpaid leave, before the payroll is rebuilt. That changes their pay without counting as writing the payroll. Should it stop them approving that month? | It does not stop them |
+| Q59 | If the end-of-day reminder time is shorter than how often the reminder job runs (for example 30 minutes before, job every hour), send it early, or refuse such a setting? | Sent early, on the job's last run before the deadline |
+| Q60 | A punch-device file can be imported only once. Rows about the person importing it, or about staff outside their departments, can then only be typed by hand. Allow a second import of just those rows? | Typed by hand |
+| Q61 | When the website form's phone matches an existing lead, the city and email the family typed are not kept, because enquiry notes are read by staff without access to contact details. Keep them somewhere private instead? | Not kept; the note says they were given; ask on the call |
+| Q62 | Should the family's fee page in the portal list refunds? | Not listed |
+| Q63 | Adding a child to a brother's or sister's guardian login shows the staff member that guardian's name and login, even when they cannot otherwise see that sibling. Acceptable? | Shown |
+| Q64 | The meeting picker shows every student's name to a counsellor, and a counsellor can book a meeting about any student. Keep? | Kept, as before |
+| Q65 | Lead-sharing rules accept any active staff member, including people who cannot read leads. Limit them to people who can? | Any active staff member |
+| Q66 | Downloads of files attached to HR requests and of score-import files are not recorded in the audit (leave letters and staff-private files are). Record them? | Not recorded |
+| Q67 | For a test taken by several batches, Business Operations shows the rank from the result run and the portal shows the rank from the publication; they can differ. Which should both show? | Both hidden while rank display is off |
+| Q68 | Should an admit card's exam room be checked against classes booked in that room? | Not checked |
+| Q69 | Marks the academic coordinator enters before a test's student list is fixed are replaced when the test is finalised. Refuse marks until the list is fixed? | Allowed; replaced at finalise |
 
 **A tip, not a question:** opening a downloaded spreadsheet by double-clicking it in Excel drops leading zeros (for example "077" shows as 77). Use Excel's Data → From Text/CSV instead.
 

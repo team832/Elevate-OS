@@ -77,6 +77,14 @@ export const scrollRegion = (name: ReactNode) =>
     tabIndex: 0,
   }) as const;
 
+/** A table's accessible name: its label, else its string column headers. */
+export const tableName = (columns: readonly { header: ReactNode }[], label?: string) =>
+  label ??
+  columns
+    .map((c) => c.header)
+    .filter((h) => h && typeof h === 'string')
+    .join(', ');
+
 export function DataTable<T>({
   columns,
   rows,
@@ -92,12 +100,7 @@ export function DataTable<T>({
   }
   // One element per value, so a phone card's grid stays label | value.
   const Value = compact ? 'div' : Fragment;
-  const name =
-    label ??
-    columns
-      .map((c) => c.header)
-      .filter((h) => h && typeof h === 'string')
-      .join(', ');
+  const name = tableName(columns, label);
   return (
     <div
       className={tableWrapClass(rows.length)}
@@ -128,7 +131,9 @@ export function DataTable<T>({
                   data-label={typeof c.header === 'string' ? c.header : undefined}
                 >
                   <Value>
-                    {c.render ? c.render(row) : String((row as Record<string, unknown>)[c.key] ?? '')}
+                    {c.render
+                      ? c.render(row)
+                      : String((row as Record<string, unknown>)[c.key] ?? '')}
                     {c === columns[0] && sampleOf?.(row) ? (
                       <>
                         {' '}

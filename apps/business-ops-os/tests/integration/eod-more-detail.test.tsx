@@ -229,6 +229,18 @@ describe('F4-11 EOD deadline reminder (task-reminders job)', () => {
     expect(await remindersOf(a)).toHaveLength(2);
   });
 
+  it('a reminder time shorter than the job interval still reminds once, on the last run before the deadline', async () => {
+    const a = await author();
+    await ctx.db
+      .insert(opsSettings)
+      .values({ key: 'eod.deadline_reminder', value: { minutesBefore: 30 }, decisionState: 'proposed' });
+    // The runner calls the job once a slot of jobs.task-reminders: Proposed every 60 minutes, on the hour IST.
+    for (const t of ['18:00', '19:00', '20:00', '21:00'])
+      await runTaskReminders(ctx.db, { now: ist('2026-09-18', t) });
+    await ctx.db.delete(opsSettings).where(eq(opsSettings.key, 'eod.deadline_reminder'));
+    expect(await remindersOf(a)).toHaveLength(1);
+  });
+
   it('opens in the person’s own workspace, and nothing is sent when no reminder time is set', async () => {
     const links = async () => (await remindersOf(teacher)).map((n) => n.link);
     await runTaskReminders(ctx.db, { now: ist('2026-09-16', '19:30') });

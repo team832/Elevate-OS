@@ -21,6 +21,7 @@ import { hrAttendanceCounts } from '../../src/server/attendance-hr';
 import { attendanceSetup } from '../../src/server/attendance-lists';
 import { POST as leaveRoute } from '../../src/app/api/v1/attendance/leave/route';
 import { correctionAccess } from '../../src/server/attendance-corrections';
+import { getPunchImport } from '../../src/server/attendance-import';
 import { at, attendanceWorld, D1, D2, D3, post, profile } from './attendance-fixture';
 import { staffUser } from './fixtures';
 
@@ -100,7 +101,9 @@ describe('corrections', () => {
       .where(eq(notifications.kind, 'attendance.correction_requested'));
     const about = rows.filter((n) => n.title.includes(w.finance.displayName));
     expect(about.map((n) => n.userId)).toEqual([w.opsMgr.id]); // HR-only managers could only answer 404
-    expect(about[0]!.title).toBe(`${w.finance.displayName} asks to correct attendance for ${fmtDay(D2)}`);
+    expect(about[0]!.title).toBe(
+      `${w.finance.displayName} asks to correct attendance for ${fmtDay(D2)}`,
+    );
   });
 
   it('an operations manager decides a request HR-only managers cannot see', async () => {
@@ -146,7 +149,7 @@ DEMO-F01,${D2} 09:00,in`;
       authedRequest(w.hr, `/ops/api/v1/attendance/imports/${id}`, { method: 'POST', json: {} }),
       { id },
     );
-    expect(commit.data).toMatchObject({ added: 0 });
+    expect(commit.status).toBe(403); // refused, not committed without the row
     const stored = await ctx.db
       .select()
       .from(opsAttendancePunches)
@@ -318,12 +321,46 @@ describe('CSV import', () => {
       authedRequest(w.hr2, `/ops/api/v1/attendance/imports/${id}`, { method: 'POST', json: {} }),
       { id },
     );
-    expect(commit.data).toMatchObject({ added: 0 });
+    expect(commit.status).toBe(403); // refused, not committed without the row
     const stored = await ctx.db
       .select()
       .from(opsAttendancePunches)
       .where(eq(opsAttendancePunches.staffId, w.hr2.staffId));
     expect(stored).toEqual([]);
+  });
+
+  it("a colleague's commit never drops rows they cannot add: refused, and the uploader still adds them", async () => {
+    const preview = await post<Preview>(previewRoute, w.opsMgr, '/imports', {
+      filename: 'office-device.csv',
+      content: `Staff code,Date-time,Direction\nDEMO-H02,${D3} 08:41,in\nDEMO-T92,${D3} 09:07,in`,
+    });
+    expect(preview.data).toMatchObject({ rowsValid: 2 });
+    const id = preview.data!.id;
+    const commit = (u: TestUser) =>
+      callRoute<{ added: number }>(
+        commitRoute,
+        authedRequest(u, `/ops/api/v1/attendance/imports/${id}`, { method: 'POST', json: {} }),
+        { id },
+      );
+    expect((await commit(w.hr2)).status).toBe(403); // one row is about them
+    expect((await commit(w.opsMgr)).data).toMatchObject({ added: 2 });
+  });
+
+  it("a colleague's file shows an HR manager only the rows of staff they manage", async () => {
+    const content = `Staff code,Date-time,Direction\nDEMO-F01,${D3} 08:55,in\nDEMO-T91,${D3} 09:01,in`;
+    const preview = await post<Preview>(previewRoute, w.opsMgr, '/imports', {
+      filename: 'finance-floor.csv',
+      content,
+    });
+    expect(preview.data).toMatchObject({ rowsValid: 2 });
+    const codes = (r: { rows: unknown }) =>
+      (r.rows as { staffCode: string }[]).map((x) => x.staffCode);
+    expect(codes(await getPunchImport(ctx.db, w.hr, preview.data!.id))).toEqual(['DEMO-T91']);
+    const again = await post<{ rows: unknown }>(previewRoute, w.hr, '/imports', {
+      filename: 'same.csv',
+      content,
+    });
+    expect(codes(again.data!)).toEqual(['DEMO-T91']);
   });
 
   it('a row for someone who has left is refused', async () => {

@@ -38,7 +38,7 @@ export const PAYROLL_RULES = [
   'Loss-of-pay amount = monthly gross earnings × loss-of-pay days ÷ days in the month, worked out on whole paise and rounded down once; the part of a paisa left over stays with the staff member, and a whole month of loss of pay equals the gross exactly.',
   'Salary = the salary structure in force on the 1st of the month. Nobody is paid part of a month for joining or leaving in it: add a one-off line.',
   'Advance recovery = the monthly instalment, or what is left of the advance if less, from its first month of recovery; it stops at zero.',
-  'Approval: someone holding payroll approval who did not start or submit the run, add a line to it or set a salary it uses. Approved runs cannot change; correct a mistake with a line in the next month.',
+  'Approval: someone holding payroll approval who did not start or submit the run, add or remove a line in it or set a salary it uses. Approved runs cannot change; correct a mistake with a line in the next month.',
   'No PF, ESI or TDS is worked out. Add them as deductions with the amounts you set.',
 ] as const;
 
@@ -111,7 +111,7 @@ export const NOT_DRAFT =
   'This payroll was submitted, so its lines are fixed. Send it back to draft to change them.';
 export const OWN_RUN = 'You started or submitted this payroll, so someone else approves it.';
 export const RUN_AUTHOR =
-  'You wrote a line in this payroll or set a salary it uses, so someone else approves it.';
+  'You wrote or removed a line in this payroll or set a salary it uses, so someone else approves it.';
 export const NO_APPROVER =
   'Nobody else can approve this payroll: everyone who may approve wrote part of it. Ask the owner to name another approver.';
 

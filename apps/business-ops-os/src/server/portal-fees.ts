@@ -7,6 +7,7 @@ import { and, desc, eq, ne } from 'drizzle-orm';
 import { opsAdmissions, opsFeePlans, opsFeeRecords, type Database } from '@elevate/database';
 import type { StudentIdentityId } from '@elevate/shared-types';
 import { INSTALMENT_STATUS_LABELS } from '../domain/fee-plans';
+import { effectiveRecords } from '../domain/fees';
 import { acceptedVersions } from '../domain/fee-year';
 import { plansWithLedger } from './fee-agreements';
 
@@ -21,6 +22,10 @@ export async function portalFees(db: Database, studentId: string, now = new Date
       amountPaise: opsFeeRecords.amountPaise,
       method: opsFeeRecords.method,
       chargeCategory: opsFeeRecords.chargeCategory,
+      kind: opsFeeRecords.kind,
+      direction: opsFeeRecords.direction,
+      status: opsFeeRecords.status,
+      reversesRecordId: opsFeeRecords.reversesRecordId,
     })
     .from(opsFeeRecords)
     .innerJoin(opsAdmissions, eq(opsAdmissions.id, opsFeeRecords.admissionId))
@@ -49,7 +54,8 @@ export async function portalFees(db: Database, studentId: string, now = new Date
         status: INSTALMENT_STATUS_LABELS[i.status],
       })),
     })),
-    payments,
+    // A reversed payment and its reversal cancel out; the family sees only what counts.
+    payments: effectiveRecords(payments),
   };
 }
 

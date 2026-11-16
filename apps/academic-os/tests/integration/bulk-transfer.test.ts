@@ -167,6 +167,16 @@ describe('moving students (F4-07)', () => {
     expect((await audits([shared, oldOnly, newOnly], 'roster.added')).map((a) => a.entityId)).toEqual([newOnly]);
   });
 
+  it('a move leaves finalised tests alone (their roster changes only by a correction with a reason)', async () => {
+    const target = await batch();
+    const m = await student();
+    const [inNew, inOld] = [await test('2026-12-10', [target.id]), await test('2026-12-11', [w.batch.id])];
+    await ctx.db.update(academicAssessments).set({ status: 'finalised' }).where(inArray(academicAssessments.id, [inNew, inOld] as never[]));
+    expect((await move(body([m.enrolmentId], target.id))).status).toBe(200);
+    expect(await rosterRow(inNew, m.studentId)).toBeUndefined();
+    expect(await rosterRow(inOld, m.studentId)).toMatchObject({ batchId: w.batch.id, removedAt: null });
+  });
+
   it('a student moved back gets the removed row on a future test of that batch restored, not skipped', async () => {
     const target = await batch();
     const m = await student();

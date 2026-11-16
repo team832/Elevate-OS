@@ -186,7 +186,8 @@ export async function proposedCatchUp(db: Database, actor: Actor, fromBatchId: s
  */
 async function refreshFutureRosters(tx: Database, actor: Actor, enrolment: Enrolment, fromBatchId: string, to: Batch, from: string, reason: string): Promise<string[]> {
   const keptOff: string[] = [];
-  const tests = (await datedTests(tx, { from, batchIds: [fromBatchId, to.id] })).filter(({ a }) => a.rosterSnapshotAt);
+  // A finalised test's roster changes only through a correction with a reason (it re-scores and re-publishes).
+  const tests = (await datedTests(tx, { from, batchIds: [fromBatchId, to.id] })).filter(({ a }) => a.rosterSnapshotAt && a.status !== 'finalised');
   if (tests.length === 0) return keptOff;
   const rows = await tx.select().from(R).where(and(eq(R.studentId, enrolment.studentId), inArray(R.assessmentId, tests.map(({ a }) => a.id))));
   const [student] = await tx.select({ fullName: academicStudents.fullName }).from(academicStudents).where(eq(academicStudents.id, enrolment.studentId));

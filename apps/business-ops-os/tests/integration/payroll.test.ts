@@ -594,7 +594,33 @@ describe('an approver wrote nothing in the run (2025)', () => {
     await ok(act(hr, id, 'submit'));
     const refused = await act(director, id, 'approve');
     expect(refused.status).toBe(403);
-    expect(JSON.stringify(refused.error)).toContain('You wrote a line in this payroll');
+    expect(JSON.stringify(refused.error)).toContain('You wrote or removed a line in this payroll');
+    expect((await act(director2, id, 'approve')).status).toBe(200);
+  });
+
+  it('refuses who removed a line, e.g. a deduction from their own payslip', async () => {
+    const { id } = await startRun(hr, '2025-04');
+    const line = await ok(
+      callRoute<{ id: string }>(
+        addLine,
+        post(hr, {
+          staffId: director.staffId,
+          kind: 'deduction',
+          source: 'one_off',
+          label: 'Excess claim',
+          amount: '50,000',
+          note: 'Recovery (test)',
+        }),
+        { id },
+      ),
+    );
+    await ok(
+      callRoute(removeLine, authedRequest(director, '/x', { method: 'DELETE' }), { id: line.id }),
+    );
+    await ok(act(hr, id, 'submit'));
+    const refused = await act(director, id, 'approve');
+    expect(refused.status).toBe(403);
+    expect(JSON.stringify(refused.error)).toContain('removed a line');
     expect((await act(director2, id, 'approve')).status).toBe(200);
   });
 
